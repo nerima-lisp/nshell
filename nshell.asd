@@ -99,6 +99,7 @@
    (:file "infrastructure/terminal/input-read")
    (:file "infrastructure/terminal/input")
    (:file "presentation/input-state-core")
+   (:file "presentation/input-state-copy-plist")
    (:file "presentation/input-state-copy")
    (:file "presentation/input-state-helpers")
    (:file "presentation/input-state-buffer")

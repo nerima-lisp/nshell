@@ -19,33 +19,37 @@
           (cons "nshell" arguments)))
 
 (defun %run-nshell-main (arguments &key input)
+  ; Use file-based I/O to avoid pipe fd exhaustion in hermetic build sandboxes.
+  ; The :output :string approach creates a stdout pipe whose read-fd can become
+  ; invalid (EBADF on select) when fd-stream finalizers race with pipe creation
+  ; after many source files are compiled. Writing to temp files is race-free.
   (let ((root (asdf:system-source-directory :nshell))
         (program (list (current-sbcl-executable)
                        "--noinform"
                        "--eval" "(require :asdf)"
                        "--eval" "(push (truename \"./\") asdf:*central-registry*)"
                        "--eval" (%nshell-main-form arguments))))
-    (flet ((run-main (&key input-stream)
-             (if input-stream
-                 (uiop:run-program
-                  program
-                  :directory root
-                  :input input-stream
-                  :output :string
-                  :error-output :string
-                  :ignore-error-status t)
-                 (uiop:run-program
-                  program
-                  :directory root
-                  :output :string
-                  :error-output :string
-                  :ignore-error-status t))))
-      (multiple-value-bind (stdout stderr exit-code)
-          (if input
-              (with-input-from-string (input-stream input)
-                (run-main :input-stream input-stream))
-              (run-main))
-        (values stdout stderr exit-code)))))
+    (uiop:with-temporary-file (:pathname stdout-file)
+      (uiop:with-temporary-file (:pathname stderr-file)
+        (flet ((run-main (&key input-stream)
+                 (nth-value 2
+                   (uiop:run-program
+                    program
+                    :directory root
+                    :input (or input-stream nil)
+                    :output stdout-file
+                    :error-output stderr-file
+                    :if-output-exists :supersede
+                    :if-error-output-exists :supersede
+                    :ignore-error-status t))))
+          (let ((exit-code
+                  (if input
+                      (with-input-from-string (input-stream input)
+                        (run-main :input-stream input-stream))
+                      (run-main))))
+            (values (uiop:read-file-string stdout-file)
+                    (uiop:read-file-string stderr-file)
+                    exit-code)))))))
 
 (defun %assert-nshell-main-result (arguments expected-output expected-code
                                  &key expected-error input)

@@ -69,7 +69,8 @@
                      "--eval" "(sb-ext:quit :unix-status 0)")
                :directory root
                :output nil
-               :error-output nil)))))
+               :error-output nil
+               :timeout 60)))))
     (is (< elapsed 20.0)
         "Cold ASDF load took ~,3f seconds; expected < 20.0 seconds."
         elapsed)))

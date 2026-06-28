@@ -119,7 +119,7 @@
                    (append (nshell.domain.parsing:command-node-args alias-node)
                            (nshell.domain.parsing:command-node-args command-node))
                    nil
-                   (nshell.domain.parsing::command-node-command-quote-style alias-node))
+                   (nshell.domain.parsing:command-node-command-quote-style alias-node))
                   command-node))
             command-node))
       command-node))

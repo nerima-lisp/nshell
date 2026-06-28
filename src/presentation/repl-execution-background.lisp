@@ -10,7 +10,7 @@
 (defun %prepare-command-node (cmd)
   (let* ((environment (ensure-environment))
          (command (nshell.domain.parsing:command-node-command cmd))
-         (style (nshell.domain.parsing::command-node-command-quote-style cmd))
+         (style (nshell.domain.parsing:command-node-command-quote-style cmd))
          (expanded (nshell.domain.expansion:expand-command-name-fields-by-quote-style
                     command style environment))
          (non-empty (remove "" expanded :test #'string=)))

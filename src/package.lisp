@@ -66,11 +66,12 @@
            #:ast-node-type #:make-command-node #:make-pipeline-node
            #:make-argument-node #:make-operator-node #:make-error-node
                 #:command-node-p #:pipeline-node-p #:sequence-node-p
-                #:command-node-command #:command-node-args
+                #:command-node-command #:command-node-command-quote-style #:command-node-args
                 #:sequence-node-commands #:pipeline-node-commands
                 #:sequence-node-separators
                 #:command-node-arg-values #:ast-node->command-line
                 #:arg-value #:arg-quote-style
+             #:do-sequence-node-command-separator-pairs
              #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch
              #:for-node-p #:for-node-var-name #:for-node-in-values #:for-node-body
              #:while-node-p #:while-node-condition #:while-node-body

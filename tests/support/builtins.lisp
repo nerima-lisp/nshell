@@ -41,6 +41,8 @@
            :redirect-output-error #'nshell.infrastructure.acl:redirect-output-and-error
            :redirect-error-to-output #'nshell.infrastructure.acl:redirect-error-to-output
            :redirect-input #'nshell.infrastructure.acl:redirect-input
+           :redirect-input-string #'nshell.infrastructure.acl:redirect-input-string
+           :redirect-input-document #'nshell.infrastructure.acl:redirect-input-document
            :restore #'nshell.infrastructure.acl:restore-redirects)
      :terminal-fns nil)))
 

@@ -87,26 +87,27 @@
     (error ()
       (values nil (format nil "string: invalid integer for ~a: ~a~%" option value)))))
 
+(defun %string-resolve-attached-value (option short long short-prefix-length long-prefix-length)
+  "Return the integer text attached inline to OPTION (e.g. -N5 or --width=5), or NIL."
+  (cond
+    ((and short-prefix-length
+          (%string-prefix-p short option)
+          (> (length option) short-prefix-length))
+     (subseq option short-prefix-length))
+    ((and long-prefix-length
+          (%string-prefix-p long option)
+          (>= (length option) long-prefix-length)
+          (char= (char option (1- long-prefix-length)) #\=))
+     (subseq option long-prefix-length))))
+
 (defun %string-parse-integer-option-spec (option remaining spec)
-  (let* ((short (%string-option-spec-short spec))
-         (long (%string-option-spec-long spec))
-         (short-prefix-length (%string-option-spec-short-prefix-length spec))
-         (long-prefix-length (%string-option-spec-long-prefix-length spec))
-         (attached-value
-           (cond
-             ((and short-prefix-length
-                   (%string-prefix-p short option)
-                   (> (length option) short-prefix-length))
-              (subseq option short-prefix-length))
-             ((and long-prefix-length
-                   (%string-prefix-p long option)
-                   (>= (length option) long-prefix-length)
-                   (char= (char option (1- long-prefix-length)) #\=))
-              (subseq option long-prefix-length))
-             (t nil)))
-         (separate-value (and (null attached-value)
-                              (rest remaining)
-                              (second remaining))))
+  (let* ((short  (%string-option-spec-short spec))
+         (long   (%string-option-spec-long spec))
+         (attached-value (%string-resolve-attached-value
+                          option short long
+                          (%string-option-spec-short-prefix-length spec)
+                          (%string-option-spec-long-prefix-length spec)))
+         (separate-value (and (null attached-value) (second remaining))))
     (labels ((parse-value (value next-remaining)
                (multiple-value-bind (parsed error)
                    (%string-parse-integer-option option value)
@@ -114,13 +115,10 @@
                      (values nil remaining error)
                      (values parsed next-remaining nil)))))
       (cond
-        (attached-value
-         (parse-value attached-value (rest remaining)))
-        (separate-value
-         (parse-value separate-value (cddr remaining)))
-        (t
-         (values nil remaining
-                 (%required-argument-error "string" option "an integer")))))))
+        (attached-value  (parse-value attached-value (rest remaining)))
+        (separate-value  (parse-value separate-value (cddr remaining)))
+        (t (values nil remaining
+                   (%required-argument-error "string" option "an integer")))))))
 
 (defun %string-option-argument-p (option)
   (and option

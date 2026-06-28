@@ -3,20 +3,18 @@
 
 (test source-function-body-supports-nested-control-flow
   "source keeps nested blocks inside function definitions instead of closing at the first end."
-  (with-builtins-source (output code context
-                                 '("function nested"
-                                   "if true"
-                                   "echo function-inner"
-                                   "else"
-                                   "echo function-else"
-                                   "end"
-                                   "echo function-after"
-                                   "end"
-                                   "nested"
-                                   "echo script-after"))
-    (is (= 0 code))
-    (is (string= (format nil "function-inner~%function-after~%script-after~%")
-                 output))
+  (with-builtins-source-ok (output code context
+                                   '("function nested"
+                                     "if true"
+                                     "echo function-inner"
+                                     "else"
+                                     "echo function-else"
+                                     "end"
+                                     "echo function-after"
+                                     "end"
+                                     "nested"
+                                     "echo script-after"))
+      (format nil "function-inner~%function-after~%script-after~%")
     (is (equal '("if true"
                  "echo function-inner"
                  "else"
@@ -29,11 +27,10 @@
 
 (test source-function-definition-supports-inline-body
   "source registers functions defined on a single line with an inline body."
-  (with-builtins-source (output code context
-                                 '("function foo; echo hi; end"
-                                   "foo"))
-    (is (= 0 code))
-    (is (string= (format nil "hi~%") output))
+  (with-builtins-source-ok (output code context
+                                   '("function foo; echo hi; end"
+                                     "foo"))
+      (format nil "hi~%")
     (is (equal '("echo hi")
                (gethash "foo"
                         (nshell.application:shell-context-function-table
@@ -41,10 +38,9 @@
 
 (test source-function-definition-preserves-trailing-inline-commands
   "source keeps commands that follow an inline function definition on the same line."
-  (with-builtins-source (output code context
-                                 '("function foo; echo hi; end; foo"))
-    (is (= 0 code))
-    (is (string= (format nil "hi~%") output))
+  (with-builtins-source-ok (output code context
+                                   '("function foo; echo hi; end; foo"))
+      (format nil "hi~%")
     (is (equal '("echo hi")
                (gethash "foo"
                         (nshell.application:shell-context-function-table
@@ -52,118 +48,109 @@
 
 (test source-switch-case-executes-matching-clause
   "source executes fish-style switch/case blocks."
-  (with-builtins-source (output code context
-                                 '("switch chocolate"
-                                   "case vanilla"
-                                   "echo plain"
-                                   "case chocolate strawberry"
-                                   "echo sweet"
-                                   "case '*'"
-                                   "echo default"
-                                   "end"))
-    (is (= 0 code))
-    (is (string= (format nil "sweet~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("switch chocolate"
+                                     "case vanilla"
+                                     "echo plain"
+                                     "case chocolate strawberry"
+                                     "echo sweet"
+                                     "case '*'"
+                                     "echo default"
+                                     "end"))
+      (format nil "sweet~%")))
 
 (test source-switch-case-matches-later-pattern-in-clause
   "source matches every fish-style pattern listed on a single case clause."
-  (with-builtins-source (output code context
-                                 '("switch strawberry"
-                                   "case vanilla chocolate"
-                                   "echo plain"
-                                   "case mint strawberry"
-                                   "echo sweet"
-                                   "case '*'"
-                                   "echo default"
-                                   "end"))
-    (is (= 0 code))
-    (is (string= (format nil "sweet~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("switch strawberry"
+                                     "case vanilla chocolate"
+                                     "echo plain"
+                                     "case mint strawberry"
+                                     "echo sweet"
+                                     "case '*'"
+                                     "echo default"
+                                     "end"))
+      (format nil "sweet~%")))
 
 (test source-switch-case-supports-default-pattern
   "source executes the default switch/case clause when no exact pattern matches."
-  (with-builtins-source (output code context
-                                 '("switch mint"
-                                   "case vanilla"
-                                   "echo plain"
-                                   "case chocolate strawberry"
-                                   "echo sweet"
-                                   "case '*'"
-                                   "echo default"
-                                   "end"))
-    (is (= 0 code))
-    (is (string= (format nil "default~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("switch mint"
+                                     "case vanilla"
+                                     "echo plain"
+                                     "case chocolate strawberry"
+                                     "echo sweet"
+                                     "case '*'"
+                                     "echo default"
+                                     "end"))
+      (format nil "default~%")))
 
 (test source-switch-case-supports-glob-patterns
   "source switch/case patterns use the same glob semantics as expansion."
-  (with-builtins-source (output code context
-                                 '("switch plugin42.lisp"
-                                   "case '*.md'"
-                                   "echo markdown"
-                                   "case 'plugin[0-9][0-9].lisp'"
-                                   "echo lisp"
-                                   "case '*'"
-                                   "echo default"
-                                   "end"))
-    (is (= 0 code))
-    (is (string= (format nil "lisp~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("switch plugin42.lisp"
+                                     "case '*.md'"
+                                     "echo markdown"
+                                     "case 'plugin[0-9][0-9].lisp'"
+                                     "echo lisp"
+                                     "case '*'"
+                                     "echo default"
+                                     "end"))
+      (format nil "lisp~%")))
 
 (test source-if-supports-not-command-modifier
   "source lets fish-style if conditions invert command status with not."
-  (with-builtins-source (output code context
-                                 '("if not test -f /tmp/file.txt"
-                                   "echo missing"
-                                   "else"
-                                   "echo exists"
-                                   "end"
-                                   "if not test -f /tmp/missing"
-                                   "echo absent"
-                                   "else"
-                                   "echo present"
-                                   "end"))
-    (is (= 0 code))
-    (is (string= (format nil "exists~%absent~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("if not test -f /tmp/file.txt"
+                                     "echo missing"
+                                     "else"
+                                     "echo exists"
+                                     "end"
+                                     "if not test -f /tmp/missing"
+                                     "echo absent"
+                                     "else"
+                                     "echo present"
+                                     "end"))
+      (format nil "exists~%absent~%")))
 
 (test source-if-supports-else-if-branches
   "source treats fish-style else if as a nested conditional branch."
-  (with-builtins-source (output code context
-                                 '("if false"
-                                   "echo first"
-                                   "else if false"
-                                   "echo second"
-                                   "else"
-                                   "echo fallback"
-                                   "end"
-                                   "if false"
-                                   "echo skip"
-                                   "else if true"
-                                   "echo nested"
-                                   "end"))
-    (is (= 0 code))
-    (is (string= (format nil "fallback~%nested~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("if false"
+                                     "echo first"
+                                     "else if false"
+                                     "echo second"
+                                     "else"
+                                     "echo fallback"
+                                     "end"
+                                     "if false"
+                                     "echo skip"
+                                     "else if true"
+                                     "echo nested"
+                                     "end"))
+      (format nil "fallback~%nested~%")))
 
 (test source-command-substitution-expands-function-output
   "source expands fish-style command substitutions and splits output on newlines."
-  (with-builtins-source (output code context
-                                 '("function produce"
-                                   "echo alpha"
-                                   "echo beta"
-                                   "end"
-                                   "echo before (produce) after"))
-    (is (= 0 code))
-    (is (string= (format nil "before alpha beta after~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("function produce"
+                                     "echo alpha"
+                                     "echo beta"
+                                     "end"
+                                     "echo before (produce) after"))
+      (format nil "before alpha beta after~%")))
 
 (test source-command-substitution-expands-inside-double-quotes
   "source supports embedded command substitutions inside double-quoted words."
-  (with-builtins-source (output code context
-                                 '("echo \"file-(echo main).lisp\""))
-    (is (= 0 code))
-    (is (string= (format nil "file-main.lisp~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("echo \"file-(echo main).lisp\""))
+      (format nil "file-main.lisp~%")))
 
 (test source-command-substitution-expands-inside-compound-word
   "source keeps fish-style command substitutions attached to compound words."
-  (with-builtins-source (output code context
-                                 '("echo prefix=(echo main).lisp suffix=(echo ok)"))
-    (is (= 0 code))
-    (is (string= (format nil "prefix=main.lisp suffix=ok~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("echo prefix=(echo main).lisp suffix=(echo ok)"))
+      (format nil "prefix=main.lisp suffix=ok~%")))
 
 (test source-command-substitution-expands-external-output
   "source expands external command substitution output when capture is available."
@@ -180,17 +167,15 @@
 
 (test source-command-substitution-keeps-non-substitution-dollar-literal
   "source keeps a dollar that is neither arithmetic nor command substitution."
-  (with-builtins-source (output code context
-                                 '("echo price$"))
-    (is (= 0 code))
-    (is (string= (format nil "price$~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("echo price$"))
+      (format nil "price$~%")))
 
 (test source-command-substitution-keeps-single-quoted-words-literal
   "source does not expand command substitutions in single-quoted words."
-  (with-builtins-source (output code context
-                                 '("echo '(echo nope)'"))
-    (is (= 0 code))
-    (is (string= (format nil "(echo nope)~%") output))))
+  (with-builtins-source-ok (output code context
+                                   '("echo '(echo nope)'"))
+      (format nil "(echo nope)~%")))
 
 (test source-expands-command-position-word
   "source expands variables in command position before dispatch."

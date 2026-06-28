@@ -71,13 +71,6 @@ Redirect args (and their targets) are removed from the args list."
     (when (and redirect (eq (car redirect) :<))
       (cdr redirect))))
 
-(defun %input-redirect-string (redirects)
-  "Return (string heredoc-p) for :<<< or :<< redirects."
-  (let ((redirect (%input-redirect-spec redirects)))
-    (cond
-      ((and redirect (eq (car redirect) :<<<)) (values (cdr redirect) t))
-      ((and redirect (eq (car redirect) :<<))  (values (cdr redirect) nil)))))
-
 (defun %output-redirect-spec (redirects)
   "Return (target mode) for the last output redirect, or NIL."
   (let ((redirect (find-if (lambda (r) (member (car r) +output-redirect-kinds+))

@@ -255,45 +255,46 @@ a further leading % selects the longest match instead of the shortest."
           (nshell.domain.environment:make-env-var name (list value) exported)))
   value)
 
+(defun %expand-parameter-length (content env)
+  "Return the string length of ${#NAME} when CONTENT starts with # followed by a bare name.
+Returns NIL when CONTENT is not a length expansion."
+  (when (and (plusp (length content))
+             (char= (char content 0) #\#)
+             (every #'variable-name-char-p (subseq content 1)))
+    (let ((value (nshell.domain.environment:env-get env (subseq content 1))))
+      (princ-to-string (length (or value ""))))))
+
 (defun %expand-braced-parameter (content env)
   "Expand the CONTENT of a ${...} parameter expansion.
 Supports plain ${NAME}, length ${#NAME}, the POSIX default/alternate operators
-${NAME:-word} / :- / := / :+ / :? (a leading colon makes the test fire on unset
+${NAME:-word} / := / :+ / :? (a leading colon makes the test fire on unset
 OR empty), prefix/suffix stripping ${NAME#pat} / ## / % / %% (glob patterns),
 and substitution ${NAME/pat/rep} / // (literal patterns). WORD/patterns are
 themselves variable-expanded. The := operator assigns the expanded word back to
 the shell environment when it fires."
-  (cond
-    ;; ${#NAME} -> length (only when # precedes a bare name, not ${NAME#pat}).
-    ((and (plusp (length content)) (char= (char content 0) #\#)
-          (every #'variable-name-char-p (subseq content 1)))
-     (let ((value (nshell.domain.environment:env-get env (subseq content 1))))
-       (princ-to-string (length (or value "")))))
-    (t
-     (let* ((op-pos (%parameter-name-end content))
-            (name (subseq content 0 op-pos))
-            (rest (subseq content op-pos))
-            (raw (nshell.domain.environment:env-get env name))
-            (set-p (not (null raw)))
-            (value (or raw "")))
-       (if (zerop (length rest))
-           value
-           (let* ((colon (char= (char rest 0) #\:))
-                  (op-index (if colon 1 0))
-                  (op (when (< op-index (length rest)) (char rest op-index)))
-                  (word (expand-variables
-                         (subseq rest (min (length rest) (1+ op-index))) env))
-                  (fire (if colon
-                            (or (not set-p) (zerop (length value)))
-                            (not set-p))))
-             (case op
-               (#\- (if fire word value))
-               (#\= (if fire
-                        (%assign-parameter-default env name word)
-                        value))
-               (#\+ (if fire "" word))
-               (#\? (if fire word value))
-               (#\# (%param-strip-prefix value (subseq rest 1) env))
-               (#\% (%param-strip-suffix value (subseq rest 1) env))
-               (#\/ (%param-substitute value (subseq rest 1) env))
-               (t (concatenate 'string value rest)))))))))
+  (or (%expand-parameter-length content env)
+      (let* ((op-pos (%parameter-name-end content))
+             (name  (subseq content 0 op-pos))
+             (rest  (subseq content op-pos))
+             (raw   (nshell.domain.environment:env-get env name))
+             (set-p (not (null raw)))
+             (value (or raw "")))
+        (if (zerop (length rest))
+            value
+            (let* ((colon          (char= (char rest 0) #\:))
+                   (op-index       (if colon 1 0))
+                   (op             (and (< op-index (length rest)) (char rest op-index)))
+                   (word-text      (subseq rest (min (length rest) (1+ op-index))))
+                   (word           (expand-variables word-text env))
+                   (apply-default-p (if colon
+                                        (or (not set-p) (zerop (length value)))
+                                        (not set-p))))
+              (case op
+                (#\- (if apply-default-p word value))
+                (#\= (if apply-default-p (%assign-parameter-default env name word) value))
+                (#\+ (if apply-default-p "" word))
+                (#\? (if apply-default-p word value))
+                (#\# (%param-strip-prefix value word-text env))
+                (#\% (%param-strip-suffix value word-text env))
+                (#\/ (%param-substitute   value word-text env))
+                (t   (concatenate 'string value rest))))))))

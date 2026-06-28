@@ -149,6 +149,13 @@
      (with-called-source (,output ,code ,context ,lines)
        ,@body)))
 
+(defmacro with-builtins-source-ok ((output code context lines) expected-output &body extra-assertions)
+  "Like WITH-BUILTINS-SOURCE but automatically asserts exit-code=0 and string output equality."
+  `(with-builtins-source (,output ,code ,context ,lines)
+     (is (= 0 ,code))
+     (is (string= ,expected-output ,output))
+     ,@extra-assertions))
+
 (defmacro with-builtins-source-tree ((context root source &key (prefix "nshell-test-source")) &body body)
   `(let ((,context (make-test-builtins-context)))
      (with-test-source-tree (,root ,source :prefix ,prefix)

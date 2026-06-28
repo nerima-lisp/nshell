@@ -22,6 +22,11 @@
 (sb-alien:define-alien-routine ("posix_openpt" %posix-openpt) sb-alien:int
   (flags sb-alien:int))
 
+(sb-alien:define-alien-routine ("execve" %execve) sb-alien:int
+  (path sb-alien:c-string)
+  (argv (* sb-alien:c-string))
+  (envp (* sb-alien:c-string)))
+
 (defun %check-errno (result operation)
   (when (minusp result)
     (error "~a failed with errno ~d" operation (sb-unix::get-errno)))
@@ -116,17 +121,136 @@
   master-fd
   stream)
 
-(defun %set-pty-window-size (slave-stream rows cols)
+(defconstant +pty-child-ready-ok+ 0)
+(defconstant +pty-child-ready-error+ 1)
+
+(defun %pty-close-fd (fd)
+  (when fd
+    (ignore-errors (sb-posix:close fd))))
+
+(defun %pty-child-open-flags ()
+  sb-posix:o-rdwr)
+
+(defun %claim-controlling-terminal (slave-fd pgid)
   (ignore-errors
-    (let ((proc (sb-ext:run-program "/bin/stty"
-                                    (list "rows" (princ-to-string rows)
-                                          "cols" (princ-to-string cols))
-                                    :input slave-stream
-                                    :output nil
-                                    :error nil
-                                    :wait t
-                                    :search nil)))
-      (and proc (zerop (or (sb-ext:process-exit-code proc) 1))))))
+    (%ioctl slave-fd +tiocsctty+ (sb-sys:int-sap 0)))
+  (%check-errno (%tcsetpgrp slave-fd pgid) "tcsetpgrp"))
+
+(defun %redirect-pty-slave (slave-fd)
+  (dotimes (fd 3)
+    (unless (= slave-fd fd)
+      (sb-posix:dup2 slave-fd fd))))
+
+(defun %make-c-string-vector (strings)
+  (let* ((count (length strings))
+         (vector (sb-alien:make-alien sb-alien:c-string (1+ count))))
+    (loop for string in strings
+          for index from 0
+          do (setf (sb-alien:deref vector index) string))
+    (setf (sb-alien:deref vector count) nil)
+    vector))
+
+(defun %free-c-string-vector (vector)
+  (when vector
+    (ignore-errors (sb-alien:free-alien vector))))
+
+(defun %pty-child-fail ()
+  (sb-posix:_exit 127))
+
+(defun %pty-write-ready-byte (fd byte)
+  (let ((buffer (make-array 1
+                            :element-type '(unsigned-byte 8)
+                            :initial-element byte)))
+    (multiple-value-bind (count errno)
+        (sb-unix:unix-write fd buffer 0 1)
+      (declare (ignore errno))
+      (and count (= count 1)))))
+
+(defun %pty-read-ready-byte (fd)
+  (let ((buffer (make-array 1 :element-type '(unsigned-byte 8))))
+    (sb-sys:with-pinned-objects (buffer)
+      (multiple-value-bind (count errno)
+          (sb-unix:unix-read fd (sb-sys:vector-sap buffer) 1)
+        (cond
+          ((null count)
+           (error "PTY child readiness read failed with errno ~d" errno))
+          ((zerop count)
+           (error "PTY child closed readiness pipe before setup completed"))
+          (t
+           (aref buffer 0)))))))
+
+(defun %signal-pty-child-ready (fd byte)
+  (when fd
+    (ignore-errors (%pty-write-ready-byte fd byte))
+    (%pty-close-fd fd)))
+
+(defun %wait-for-pty-child-ready (fd pid)
+  (let ((byte (%pty-read-ready-byte fd)))
+    (unless (= byte +pty-child-ready-ok+)
+      (ignore-errors (sb-posix:waitpid pid 0))
+      (error "PTY child setup failed")))
+  t)
+
+(defun %pty-child-exec (program argv envp master-fd slave-name ready-fd rows cols)
+  (handler-case
+      (progn
+        (%pty-close-fd master-fd)
+        (sb-posix:setsid)
+        (let ((slave-fd (sb-posix:open slave-name (%pty-child-open-flags))))
+          (unwind-protect
+               (progn
+                 (%set-pty-window-size slave-fd rows cols)
+                 (%claim-controlling-terminal slave-fd (sb-posix:getpid))
+                 (%redirect-pty-slave slave-fd)
+                 (%signal-pty-child-ready ready-fd +pty-child-ready-ok+)
+                 (setf ready-fd nil)
+                 (when (> slave-fd 2)
+                   (sb-posix:close slave-fd)
+                   (setf slave-fd nil))
+                 (%execve program argv envp)
+                 (%pty-child-fail))
+            (when slave-fd
+              (%pty-close-fd slave-fd)))))
+    (error ()
+      (%signal-pty-child-ready ready-fd +pty-child-ready-error+)
+      (%pty-child-fail))))
+
+(defun %pty-fork-exec (program args master-fd slave-name rows cols)
+  (let ((argv nil)
+        (envp nil)
+        (ready-read nil)
+        (ready-write nil))
+    (unwind-protect
+         (progn
+           (setf argv (%make-c-string-vector (cons program args))
+                 envp (%make-c-string-vector (%get-environment)))
+           (multiple-value-setq (ready-read ready-write) (sb-posix:pipe))
+           (let ((pid (sb-posix:fork)))
+             (when (zerop pid)
+               (%pty-close-fd ready-read)
+               (%pty-child-exec program argv envp master-fd slave-name ready-write rows cols))
+             (%pty-close-fd ready-write)
+             (setf ready-write nil)
+             (%wait-for-pty-child-ready ready-read pid)
+             (%pty-close-fd ready-read)
+             (setf ready-read nil)
+             pid))
+      (%pty-close-fd ready-read)
+      (%pty-close-fd ready-write)
+      (%free-c-string-vector argv)
+      (%free-c-string-vector envp))))
+
+(defun %set-pty-window-size (slave-fd rows cols)
+  (let ((winsize (sb-alien:make-alien sb-alien:unsigned-short 4)))
+    (unwind-protect
+         (progn
+           (setf (sb-alien:deref winsize 0) rows
+                 (sb-alien:deref winsize 1) cols
+                 (sb-alien:deref winsize 2) 0
+                 (sb-alien:deref winsize 3) 0)
+           (%check-errno (%ioctl slave-fd +tiocswinsz+ (sb-alien:alien-sap winsize))
+                         "ioctl(TIOCSWINSZ)"))
+      (sb-alien:free-alien winsize))))
 
 (defun pty-spawn (program args &key (rows 24) (cols 80))
   "Spawn PROGRAM with ARGS attached to a newly opened PTY."
@@ -136,33 +260,19 @@
   (error "PTY not supported on this platform")
   #+(or darwin linux)
   (multiple-value-bind (master-fd slave-fd slave-name) (open-pty)
-    (declare (ignore slave-name))
-    (let ((slave-stream nil)
-          (master-stream nil))
+    (let ((master-stream nil))
       (handler-case
           (progn
-            (setf slave-stream (make-pty-stream slave-fd))
-            (%set-pty-window-size slave-stream rows cols)
-            (let ((proc (sb-ext:run-program program args
-                                            :input slave-stream
-                                            :output slave-stream
-                                            :error slave-stream
-                                            :wait nil
-                                            :search nil
-                                            :environment (%get-environment))))
-              (close slave-stream)
-              (setf slave-stream nil)
-              (let* ((pid (sb-ext:process-pid proc))
-                     (pgid pid))
-                (ignore-errors (set-process-group pid pgid))
-                (setf master-stream (make-pty-stream master-fd))
-                (make-pty-process :pid pid
-                                  :pgid pgid
-                                  :master-fd master-fd
-                                  :stream master-stream))))
+            (%pty-close-fd slave-fd)
+            (setf slave-fd nil)
+            (let* ((pid (%pty-fork-exec program args master-fd slave-name rows cols))
+                   (pgid pid))
+              (setf master-stream (make-pty-stream master-fd))
+              (make-pty-process :pid pid
+                                :pgid pgid
+                                :master-fd master-fd
+                                :stream master-stream)))
         (error (condition)
-          (when slave-stream
-            (ignore-errors (close slave-stream)))
           (when master-stream
             (ignore-errors (close master-stream)))
           (pty-close master-fd slave-fd)

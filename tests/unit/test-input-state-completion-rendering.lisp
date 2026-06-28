@@ -128,6 +128,21 @@
                       :completion-index -1
                       :suggestion nil))))
 
+(test completion-common-prefix-extension-single-quoted-token-keeps-backslash-raw
+  (let* ((state (input-state
+                 :buffer "cat 'my\\ "
+                 :cursor-pos 9))
+         (candidates '("my\\ file-a.txt" "my\\ file-b.txt")))
+    (multiple-value-bind (new-state extended-p)
+        (nshell.presentation::maybe-extend-completion-common-prefix state
+                                                                    candidates)
+      (is (not (null extended-p)))
+      (is-input-state new-state
+                      :buffer "cat 'my\\ file-"
+                      :cursor-pos 14
+                      :completion-index -1
+                      :suggestion nil))))
+
 (test completion-common-prefix-extension-closed-quoted-token-keeps-closing-quote
   (let* ((state (input-state
                  :buffer "cat \"my\""
@@ -155,5 +170,20 @@
       (is-input-state new-state
                       :buffer "cat my\\ file-"
                       :cursor-pos 13
+                      :completion-index -1
+                      :suggestion nil))))
+
+(test completion-common-prefix-extension-keeps-unquoted-trailing-quote-literal
+  (let* ((state (input-state
+                 :buffer "cat my\""
+                 :cursor-pos 7))
+         (candidates '("my file-a.txt" "my file-b.txt")))
+    (multiple-value-bind (new-state extended-p)
+        (nshell.presentation::maybe-extend-completion-common-prefix state
+                                                                    candidates)
+      (is (null extended-p))
+      (is-input-state new-state
+                      :buffer "cat my\""
+                      :cursor-pos 7
                       :completion-index -1
                       :suggestion nil))))

@@ -1,5 +1,7 @@
 (in-package #:nshell.infrastructure.acl)
 
+(declaim (special *shell-pgid* *foreground-pgid*))
+
 (defun set-process-group (pid pgid)
   "Set PID's process group to PGID."
   (sb-posix:setpgid pid pgid))
@@ -17,6 +19,38 @@
     (when (minusp result)
       (error "tcgetpgrp failed with errno ~d" (sb-unix::get-errno)))
     result))
+
+(defun %current-shell-pgid ()
+  (let ((pgid (and (boundp '*shell-pgid*) *shell-pgid*)))
+    (if (and (integerp pgid) (plusp pgid))
+        pgid
+        (sb-posix:getpid))))
+
+(defun %assign-process-group (pid pgid)
+  (when (and (integerp pid)
+             (plusp pid)
+             (integerp pgid)
+             (plusp pgid))
+    (handler-case
+        (progn
+          (set-process-group pid pgid)
+          pgid)
+      (error () nil))))
+
+(defun %with-foreground-process-group (pgid thunk)
+  (if (not (and (integerp pgid) (plusp pgid)))
+      (funcall thunk)
+      (let ((shell-pgid (%current-shell-pgid))
+            (previous-pgid (ignore-errors (get-foreground-pgroup))))
+        (unwind-protect
+             (progn
+               (setf *foreground-pgid* pgid)
+               (ignore-errors (set-foreground-pgroup pgid))
+               (funcall thunk))
+          (setf *foreground-pgid* 0)
+          (let ((restore-pgid (or previous-pgid shell-pgid)))
+            (when (and (integerp restore-pgid) (plusp restore-pgid))
+              (ignore-errors (set-foreground-pgroup restore-pgid))))))))
 
 (defun make-process-group-leader ()
   "Create a new session and make this process its leader."

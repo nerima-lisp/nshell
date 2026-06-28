@@ -14,6 +14,11 @@
     ("switch" . %group-control-flow-switch)
     ("begin" . %group-control-flow-begin)))
 
+(defstruct (control-flow-frame
+            (:constructor %make-control-flow-frame (keyword)))
+  (keyword nil :type string)
+  (else-seen nil :type boolean))
+
 (defun control-flow-keyword-p (value)
   (and (stringp value)
        (not (null (member value +control-flow-keywords+ :test #'string=)))))
@@ -35,7 +40,16 @@
 (defun %command-from-header-args (header)
   (let ((args (command-node-args header)))
     (when args
-      (make-command-node (arg-value (first args)) (rest args)))))
+      (make-command-node (arg-value (first args))
+                         (rest args)
+                         nil
+                         (arg-quote-style (first args))))))
+
+(defun %else-if-header-p (header)
+  (and (command-node-p header)
+       (let ((args (command-node-args header)))
+         (and args
+              (string= "if" (arg-value (first args)))))))
 
 (defun %consume-control-flow-terminator (nodes keyword)
   (if (and nodes (string= (%command-keyword (first nodes)) keyword))
@@ -46,7 +60,7 @@
   (let ((top (first stack)))
     (cond
       ((stringp top) top)
-      ((consp top) (getf top :keyword))
+      ((control-flow-frame-p top) (control-flow-frame-keyword top))
       (t nil))))
 
 (defun %case-within-switch-p (keyword stack)
@@ -87,17 +101,8 @@
            end)
           diagnostics)))
 
-(defun %control-flow-stack-keyword (stack)
-  (getf (first stack) :keyword))
-
-(defun %control-flow-stack-else-seen-p (stack)
-  (getf (first stack) :else-seen))
-
-(defun %mark-control-flow-stack-else-seen (stack)
-  (setf (getf (first stack) :else-seen) t))
-
 (defun %push-control-flow-frame (stack keyword)
-  (push (list :keyword keyword :else-seen nil) stack))
+  (push (%make-control-flow-frame keyword) stack))
 
 (defun %unexpected-control-flow-diagnostics (cmds input-length)
   (let ((stack nil)
@@ -116,9 +121,10 @@
            (setf stack (%push-control-flow-frame stack keyword)))
           ((and keyword (string= keyword "else"))
            (if (and stack
-                    (string= (%control-flow-stack-keyword stack) "if")
-                    (not (%control-flow-stack-else-seen-p stack)))
-               (%mark-control-flow-stack-else-seen stack)
+                    (string= (control-flow-frame-keyword (first stack)) "if")
+                    (not (control-flow-frame-else-seen (first stack))))
+               (unless (%else-if-header-p cmd)
+                 (setf (control-flow-frame-else-seen (first stack)) t))
                (setf diagnostics
                      (%push-control-flow-diagnostic diagnostics cmd keyword input-length))))
           ((and keyword (string= keyword "end"))
@@ -168,15 +174,21 @@
     (values (funcall builder body)
             (%consume-control-flow-terminator rest "end"))))
 
-(defun %group-control-flow-if-then (condition then-branch rest)
-  (values (make-if-node condition then-branch)
-          (%consume-control-flow-terminator rest "end")))
+(defun %group-control-flow-else-if (condition then-branch rest)
+  (multiple-value-bind (else-if after-else-if)
+      (%group-control-flow-if
+       (cons (%command-from-header-args (first rest))
+             (rest rest)))
+    (values (make-if-node condition then-branch (list else-if))
+            after-else-if)))
 
 (defun %group-control-flow-if-else (condition then-branch rest)
-  (multiple-value-bind (else-branch after-else)
-      (%group-control-flow-body (rest rest) '("end"))
-    (values (make-if-node condition then-branch else-branch)
-            (%consume-control-flow-terminator after-else "end"))))
+  (if (%else-if-header-p (first rest))
+      (%group-control-flow-else-if condition then-branch rest)
+      (multiple-value-bind (else-branch after-else)
+          (%group-control-flow-body (rest rest) '("end"))
+        (values (make-if-node condition then-branch else-branch)
+                (%consume-control-flow-terminator after-else "end")))))
 
 (defun %group-control-flow-if (nodes)
   (let* ((header (first nodes))
@@ -187,17 +199,9 @@
         ((and stop (string= stop "else"))
          (%group-control-flow-if-else condition then-branch rest))
         ((and stop (string= stop "end"))
-         (%group-control-flow-if-then condition then-branch rest))
+         (values (make-if-node condition then-branch)
+                 (%consume-control-flow-terminator rest "end")))
         (t (values (make-if-node condition then-branch) rest))))))
-
-(defun %group-control-flow-case-clause (nodes)
-  (let ((pattern (%command-first-arg-value (first nodes) "*")))
-    (multiple-value-bind (body rest)
-        (%group-control-flow-body (rest nodes) '("end"))
-      (values (list (cons pattern body)) rest))))
-
-(defun %command-arg-values (node)
-  (mapcar #'arg-value (command-node-args node)))
 
 (defun %group-control-flow-for (nodes)
   (let* ((header (first nodes))
@@ -222,30 +226,14 @@
   (let* ((header (first nodes))
          (value (%command-first-arg-value header)))
     (multiple-value-bind (clauses remaining)
-        (%group-control-flow-clauses nodes #'%group-control-flow-case-clause)
+        (%group-control-flow-clauses
+         nodes
+         (lambda (nodes)
+           (let ((pattern (%command-first-arg-value (first nodes) "*")))
+             (multiple-value-bind (body rest)
+                 (%group-control-flow-body (rest nodes) '("end"))
+               (values (list (cons pattern body)) rest)))))
       (values (make-case-node value clauses) remaining))))
-
-(defun %group-control-flow-switch-clause (nodes)
-  (let* ((header (first nodes))
-         (keyword (%command-keyword header)))
-    (if (and keyword (string= keyword "case"))
-        (%group-control-flow-switch-case-clause nodes)
-        (%group-control-flow-switch-default-clause nodes))))
-
-(defun %group-control-flow-switch-case-clause (nodes)
-  (let ((patterns (or (%command-arg-values (first nodes))
-                      '("*"))))
-    (multiple-value-bind (body rest)
-        (%group-control-flow-body (rest nodes) '("case" "end"))
-      (values (mapcar (lambda (pattern)
-                        (cons pattern body))
-                      patterns)
-              rest))))
-
-(defun %group-control-flow-switch-default-clause (nodes)
-  (multiple-value-bind (body rest)
-      (%group-control-flow-body nodes '("case" "end"))
-    (values (list (cons "*" body)) rest)))
 
 (defun %control-flow-grouper (keyword)
   (cdr (assoc keyword +control-flow-grouper-specs+ :test #'string=)))
@@ -254,7 +242,23 @@
   (let* ((header (first nodes))
          (value (%command-first-arg-value header)))
     (multiple-value-bind (clauses remaining)
-        (%group-control-flow-clauses nodes #'%group-control-flow-switch-clause)
+        (%group-control-flow-clauses
+         nodes
+         (lambda (nodes)
+           (let* ((header (first nodes))
+                  (keyword (%command-keyword header)))
+             (if (and keyword (string= keyword "case"))
+                 (let ((patterns (or (command-node-arg-values header)
+                                     '("*"))))
+                   (multiple-value-bind (body rest)
+                       (%group-control-flow-body (rest nodes) '("case" "end"))
+                     (values (mapcar (lambda (pattern)
+                                       (cons pattern body))
+                                     patterns)
+                             rest)))
+                 (multiple-value-bind (body rest)
+                     (%group-control-flow-body nodes '("case" "end"))
+                   (values (list (cons "*" body)) rest))))))
       (values (make-case-node value clauses) remaining))))
 
 (defun %group-control-flow-begin (nodes)
@@ -271,18 +275,36 @@
           (funcall grouper nodes)
           (values (group-control-flow node) (rest nodes))))))
 
+(defun %group-control-flow-sequence (commands separators)
+  (let ((grouped-commands '())
+        (grouped-separators '())
+        (remaining commands)
+        (start-index 0))
+    (loop while remaining
+          do (let ((before remaining))
+               (multiple-value-bind (parsed rest)
+                   (%group-control-flow-next remaining)
+                 (let* ((consumed (- (length before) (length rest)))
+                        (separator-index (+ start-index consumed -1))
+                        (separator (nth separator-index separators)))
+                   (push parsed grouped-commands)
+                   (when separator
+                     (push separator grouped-separators))
+                   (incf start-index consumed)
+                   (setf remaining rest)))))
+    (values (nreverse grouped-commands)
+            (nreverse grouped-separators))))
+
 (defun group-control-flow (ast)
   (cond
     ((sequence-node-p ast)
-     (multiple-value-bind (commands rest stop)
-         (%group-control-flow-body (sequence-node-commands ast) nil)
-       (declare (ignore stop))
-       (declare (ignore rest))
-       (let ((separators (sequence-node-separators ast)))
+     (multiple-value-bind (commands separators)
+         (%group-control-flow-sequence (sequence-node-commands ast)
+                                       (sequence-node-separators ast))
          (if (and (= (length commands) 1)
                   (not (eq :amp (first separators))))
              (first commands)
-             (make-sequence-node commands separators)))))
+             (make-sequence-node commands separators))))
     ((pipeline-node-p ast)
      (make-pipeline-node (mapcar #'group-control-flow (pipeline-node-commands ast))))
     (t ast)))

@@ -65,11 +65,12 @@
            #:token-type #:token-value #:token-start #:token-end #:make-token
            #:ast-node-type #:make-command-node #:make-pipeline-node
            #:make-argument-node #:make-operator-node #:make-error-node
-           #:command-node-p #:pipeline-node-p #:sequence-node-p
+                #:command-node-p #:pipeline-node-p #:sequence-node-p
                 #:command-node-command #:command-node-args
                 #:sequence-node-commands #:pipeline-node-commands
                 #:sequence-node-separators
-                #:command-node-arg-values #:arg-value #:arg-quoted-p #:arg-quote-style
+                #:command-node-arg-values #:ast-node->command-line
+                #:arg-value #:arg-quote-style
              #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch
              #:for-node-p #:for-node-var-name #:for-node-in-values #:for-node-body
              #:while-node-p #:while-node-condition #:while-node-body
@@ -88,36 +89,43 @@
 (defpackage #:nshell.domain.environment
   (:use #:cl)
   (:export #:env-var #:env-var-p #:make-env-var
-           #:env-var-name #:env-var-value #:env-var-exported-p
+           #:env-var-name #:env-var-value #:env-var-values #:env-var-exported-p
            #:environment #:environment-p #:make-environment
            #:environment-vars #:make-default-environment #:inject-os-environment
-           #:env-get #:env-set #:env-unset #:env-export #:env-bindings #:env-list))
+           #:env-get #:env-get-values #:env-set #:env-set-values
+           #:env-unset #:env-export #:env-bindings #:env-list))
 
 (defpackage #:nshell.domain.expansion
   (:use #:cl)
   (:import-from #:nshell.domain.environment #:env-get)
   (:export #:*glob-directory-files-fn* #:*glob-subdirectories-fn*
+           #:glob-match-p
            #:expand-variables #:expand-tilde #:expand-glob #:expand-all
+           #:expand-by-quote-style
+           #:expand-command-name-fields-by-quote-style
            #:expand-double-quoted #:expand-arithmetic #:evaluate-arithmetic
-           #:expand-braces #:*positional-args*))
+           #:expand-braces #:argv-reference-fields #:*positional-args*))
 
   (defpackage #:nshell.domain.completion
   (:use #:cl)
   (:export #:make-candidate #:candidate-text #:candidate-kind
             #:candidate-description #:candidate-score
-            #:make-knowledge-base #:kb-add-command #:kb-add-option #:kb-query
+            #:make-knowledge-base #:kb-add-command #:kb-add-option
+            #:kb-remove-command #:kb-query
             #:make-fact #:make-rule #:fact-p #:rule-p
             #:assert-fact! #:assert-rule! #:prove #:prove-all #:predicate-true-p
             #:+command-path-builtin-specs+
             #:+type-builtin-spec+
             #:builtin-help-entries
             #:builtin-completion-command-specs
+            #:external-completion-command-specs
             #:builtin-rule-facts
             #:builtin-rule-rules
             #:rule-complete
             #:complete
             #:completion-context-for #:completion-context-command
             #:completion-context-argument-prefix
+            #:completion-context-argument-words
             #:completion-context-command-position-p
             #:completion-context-redirection-target-p
             #:completion-filesystem-fns
@@ -183,7 +191,7 @@
             #:shell-context-terminal-cols
             #:lookup-builtin
             #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
-            #:execute-command-node-in-context #:execute-pipeline-node-in-context
+            #:execute-command-node-in-context
             #:execute-ast-in-context
             #:execute-external
             #:expand-command-alias-node
@@ -197,14 +205,17 @@
   (:export #:*exported-environment*
            #:spawn-command #:spawn-pipeline #:spawn-pipeline-async #:wait-job
             #:spawn-async
-            #:kill-process #:os-signal->domain #:redirect-output #:redirect-error #:redirect-input #:restore-redirects #:domain-signal->os
+            #:kill-process #:os-signal->domain
+            #:redirect-output #:redirect-error #:redirect-output-and-error
+            #:redirect-error-to-output
+            #:redirect-input #:redirect-input-document #:redirect-input-string #:restore-redirects #:domain-signal->os
             #:install-signal-handlers
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
             #:make-process-group-leader #:reap-children #:get-terminal-size
-            #:run-external #:run-external-capture
+            #:run-external #:run-external-capture #:process-exit-status-code
             #:with-git-process-fns #:clear-git-status-cache
             #:invalidate-git-status-cache #:get-git-status
             #:get-git-branch #:git-dirty-p))
@@ -251,6 +262,7 @@
             #:input-state-completion-base-cursor
             #:input-state-last-candidates
             #:input-state-suggestion #:input-state-mode
+            #:input-state-vi-visual-anchor
             #:input-state-abbreviation-expander
             #:input-state-kill-ring
             #:input-state-last-argument-start

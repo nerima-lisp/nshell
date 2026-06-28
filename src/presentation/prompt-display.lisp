@@ -78,16 +78,6 @@
         (if (plusp cols) cols 80))
     (error () 80)))
 
-(defun %render-colored-segments (segments theme)
-  (with-output-to-string (s)
-    (dolist (seg segments)
-      (let ((text (car seg))
-            (kind (cdr seg)))
-        (format s "~a~a~C[0m"
-                (theme-color->ansi theme (segment-kind->role kind))
-                text
-                #\Esc)))))
-
 (defun segment-kind->role (kind)
   "Map prompt segment kind to highlight role for theme lookup."
   (case kind
@@ -134,7 +124,15 @@
                 (format t "~C[~dC~a"
                         #\Esc
                         padding
-                        (%render-colored-segments visible-right-segs theme))
+                        (with-output-to-string (s)
+                          (dolist (seg visible-right-segs)
+                            (let ((text (car seg))
+                                  (kind (cdr seg)))
+                              (format s "~a~a~C[0m"
+                                      (theme-color->ansi theme
+                                                          (segment-kind->role kind))
+                                      text
+                                      #\Esc)))))
                 (nshell.infrastructure.terminal:ansi-restore-cursor)))))))
     (finish-output)
     (%segments-visible-width segments)))

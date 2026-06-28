@@ -5,11 +5,6 @@
       (first commands)
       (make-pipeline-node commands)))
 
-(defun %wrap-background-sequence (node last-separator)
-  (if (eq :amp last-separator)
-      (make-sequence-node (list node) '(:amp))
-      node))
-
 (defun %pipeline-separators-p (separators)
   (every (lambda (separator)
            (eq separator :pipe))
@@ -44,20 +39,6 @@
     (make-sequence-node (nreverse sequence-commands)
                         (nreverse sequence-separators))))
 
-(defun %build-single-command-ast (commands separators)
-  (if (eq :amp (first separators))
-      (make-sequence-node commands '(:amp))
-      (first commands)))
-
-(defun %build-pipeline-ast (commands last-separator)
-  (%wrap-background-sequence (make-pipeline-node commands) last-separator))
-
-(defun %build-sequence-ast (commands separators last-separator)
-  (make-sequence-node commands
-                      (if (eq :amp last-separator)
-                          separators
-                          (butlast separators))))
-
 (defun %build-ast-from-command-list (command-list)
   (let* ((commands (mapcar #'first command-list))
          (separators (mapcar #'second command-list))
@@ -65,10 +46,18 @@
     (cond
       ((null commands) nil)
       ((= (length commands) 1)
-       (%build-single-command-ast commands separators))
+       (if (eq :amp (first separators))
+           (make-sequence-node commands '(:amp))
+           (first commands)))
       ((%pipeline-separators-p separators)
-       (%build-pipeline-ast commands last-separator))
+       (let ((node (make-pipeline-node commands)))
+         (if (eq :amp last-separator)
+             (make-sequence-node (list node) '(:amp))
+             node)))
       ((%sequence-separators-p separators)
-       (%build-sequence-ast commands separators last-separator))
+       (make-sequence-node commands
+                           (if (eq :amp last-separator)
+                               separators
+                               (butlast separators))))
       (t
        (%build-mixed-sequence commands separators)))))

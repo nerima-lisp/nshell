@@ -11,6 +11,174 @@
       (is (string= "custom" (nshell.domain.completion:candidate-text (first commands))))
       (is (equal '("--custom") arguments)))))
 
+(test knowledge-base-completes-attached-option-values
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :flags '("--color")
+     :option-values '(("--color" "auto" "always" "never")))
+    (is (equal '("--color=always" "--color=auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --color=a"))))
+    (is (null (nshell.domain.completion:complete kb "tool --missing=a")))))
+
+(test knowledge-base-completes-separate-option-values
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :flags '("--color" "-o")
+     :option-values '(("--color" "auto" "always" "never")
+                      ("-o" "json" "yaml" "wide")))
+    (is (equal '("always" "auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --color a"))))
+    (is (equal '("always" "auto" "never")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --color "))))
+    (is (equal '("yaml")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool -o y"))))
+    (is (equal '("--color")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --"))))))
+
+(test knowledge-base-option-value-completion-dedupes-duplicates
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :flags '("--mode")
+     :option-values '(("--mode" "auto" "auto" "always" "always" "never")))
+    (is (equal '("--mode=always" "--mode=auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode=a"))))
+    (is (equal '("always" "auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode a"))))))
+
+(test knowledge-base-option-value-completion-merges-duplicate-option-specs
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :flags '("--mode")
+     :option-values '(("--mode" "auto")
+                      ("--mode" "always" "auto")
+                      ("--other" "ignored")))
+    (is (equal '("--mode=always" "--mode=auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode=a"))))
+    (is (equal '("always" "auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode a"))))))
+
+(test knowledge-base-option-values-can-be-added-incrementally
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command kb "tool")
+    (nshell.domain.completion:kb-add-option kb "tool" "--mode"
+                                            :values '("fast" "safe"))
+    (is (equal '("--mode=fast")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode=f"))))))
+
+(test knowledge-base-add-option-creates-command-entry
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-option kb "tool" "--mode"
+                                            :values '("fast" "safe"))
+    (is (equal '("--mode")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --"))))
+    (is (equal '("--mode=fast")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode=f"))))))
+
+(test knowledge-base-add-option-merges-repeated-values
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command kb "tool")
+    (nshell.domain.completion:kb-add-option kb "tool" "--mode"
+                                            :values '("fast" "safe"))
+    (nshell.domain.completion:kb-add-option kb "tool" "--mode"
+                                            :values '("safe" "slow"))
+    (is (equal '("--mode=fast")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode=f"))))
+    (is (equal '("safe" "slow")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode s"))))))
+
+(test knowledge-base-add-command-merges-repeated-command-facts
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :subcommands '("run")
+     :flags '("--mode")
+     :option-values '(("--mode" "fast"))
+     :description "first source")
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :subcommands '("test" "run")
+     :flags '("--verbose" "--mode")
+     :option-values '(("--mode" "safe" "fast")
+                      ("--format" "json")))
+    (is (equal '("--mode" "--verbose" "run" "test")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool "))))
+    (is (equal '("--mode=fast")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode=f"))))
+    (is (equal '("safe")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --mode s"))))
+    (is (equal '("--format=json")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --format=j"))))
+    (let ((candidate (completion-candidate-by-text
+                      "tool"
+                      (nshell.domain.completion:complete kb "to"))))
+      (is (not (null candidate)))
+      (is (string= "first source"
+                   (nshell.domain.completion:candidate-description candidate))))))
+
+(test knowledge-base-add-command-updates-description-when-provided
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command kb "tool" :description "first source")
+    (nshell.domain.completion:kb-add-command kb "tool" :description "second source")
+    (let ((candidate (completion-candidate-by-text
+                      "tool"
+                      (nshell.domain.completion:complete kb "to"))))
+      (is (not (null candidate)))
+      (is (string= "second source"
+                   (nshell.domain.completion:candidate-description candidate))))))
+
+(test knowledge-base-add-command-merges-exclusive-option-groups
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :exclusive-options '(("--json" "--yaml" "--json")
+                          ("--single")))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :exclusive-options '(("--json" "--yaml")
+                          ("--compact" "--pretty")))
+    (is (equal '(("--json" "--yaml")
+                 ("--compact" "--pretty"))
+               (getf (nshell.domain.completion:kb-query kb "tool")
+                     :exclusive-options)))))
+
+(test knowledge-base-hides-mutually-exclusive-options-after-selection
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :flags '("--color" "--no-color" "--verbose")
+     :exclusive-options '(("--color" "--no-color")))
+    (is (equal '("--color" "--no-color" "--verbose")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --"))))
+    (is (equal '("--verbose")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --color --"))))
+    (is (equal '("--verbose")
+               (completion-texts
+                (nshell.domain.completion:complete kb "tool --color=always --"))))))
+
 (test knowledge-base-command-completion-carries-description
   (let ((kb (nshell.domain.completion:make-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "deploy" :description "release service")

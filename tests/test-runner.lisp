@@ -4,10 +4,12 @@
 (in-package #:nshell/test)
 
 (defun in-hermetic-sandbox-p ()
-  "True when running inside a hermetic Nix build sandbox, where real OS process
-and PTY facilities (/bin/sh, /bin/cat, a working /dev/pts) are unavailable. Such
-integration tests are skipped here and exercised by the non-sandboxed CI job."
-  (and (uiop:getenv "NIX_BUILD_TOP") t))
+  "True in hermetic Nix builds, not in impure nix develop shells.
+Real OS process and PTY integration tests are skipped only when the surrounding
+environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
+  (and (uiop:getenv "NIX_BUILD_TOP")
+       (not (string= (or (uiop:getenv "IN_NIX_SHELL") "")
+                     "impure"))))
 
 (defmacro skip-in-sandbox (reason &body body)
   "Run BODY only when not in a hermetic sandbox; otherwise skip with REASON."
@@ -46,7 +48,7 @@ integration tests are skipped here and exercised by the non-sandboxed CI job."
                  (nshell::%print-usage stream)))
         (version (with-output-to-string (stream)
                    (nshell::%print-version stream))))
-    (is (search "Usage: nshell [--help] [--version] [-c COMMAND]" usage))
+    (is (search "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]" usage))
     (is (search "stdin is a terminal" usage))
     (is (search "With -c/--command" usage))
     (is (search "nshell v" version)))

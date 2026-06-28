@@ -67,9 +67,11 @@
          :flags '("-a" "--add" "-p" "--position" "command" "anywhere"
                   "-e" "--erase" "-q" "--query" "-l" "--list" "-s" "--show"))
    (list :command "complete"
-         :synopsis "complete -c command [-f flag ...] [-d description]"
+         :synopsis "complete -c command [-f flag ...] [-l option ...] [-s option ...] [-a arguments] [-d description] [-e]"
          :description "define completions"
-         :flags '("-c" "--command" "-f" "--flag" "-d" "--description"))
+         :flags '("-c" "--command" "-f" "--flag" "-l" "--long-option"
+                  "-s" "--short-option" "-a" "--arguments" "-d" "--description"
+                  "-e" "--erase"))
    (list :command "type"
          :synopsis "type [OPTIONS] NAME [...]"
          :description "show command type"
@@ -138,6 +140,74 @@
          :synopsis "not command [args...]"
          :description "invert command status")))
 
+(defparameter +external-command-catalog+
+  (list
+   (list :command "git"
+         :description "distributed version control"
+         :subcommands '((:name "add" :description "stage changes")
+                        "branch"
+                        (:name "checkout" :description "switch branches or restore paths")
+                        "clone"
+                        (:name "commit" :description "record changes")
+                        "diff" "fetch" "log" "merge" "pull" "push" "rebase"
+                        "restore"
+                        (:name "status" :description "show working tree status")
+                        "switch" "tag")
+         :flags '("-C" "-c" "--help" "--version" "--no-pager" "--paginate"))
+   (list :command "docker"
+         :description "manage containers and images"
+         :subcommands '("build" "compose" "exec" "images" "logs" "ps" "pull"
+                        "push" "run" "stop")
+         :flags '("--config" "--context" "--debug" "--help" "--host" "--log-level"
+                  "--tls" "--tlscacert" "--tlscert" "--tlskey" "--version")
+         :option-values '(("--log-level" "debug" "info" "warn" "error" "fatal")))
+   (list :command "kubectl"
+         :description "control Kubernetes clusters"
+         :subcommands '("apply" "config" "create" "delete" "describe" "exec" "get"
+                        "logs" "patch" "port-forward" "rollout" "scale")
+         :flags '("--all-namespaces" "--context" "--help" "--kubeconfig"
+                  "--namespace" "-n" "--output" "-o")
+         :option-values '(("--output" "json" "yaml" "wide" "name")
+                          ("-o" "json" "yaml" "wide" "name"))
+         :exclusive-options '(("--all-namespaces" "--namespace" "-n")))
+   (list :command "nix"
+         :description "Nix package manager"
+         :subcommands '("build" "develop" "flake" "fmt" "profile" "repl" "run"
+                        "search" "shell" "store")
+         :flags '("--accept-flake-config" "--extra-experimental-features" "--help"
+                  "--impure" "--print-build-logs" "-L" "--version"))
+   (list :command "cargo"
+         :description "Rust package manager"
+         :subcommands '("build" "check" "clean" "clippy" "doc" "fmt" "run" "test"
+                        "update")
+         :flags '("--color" "--help" "--manifest-path" "--offline" "--quiet" "-q"
+                  "--verbose" "-v" "--version")
+         :option-values '(("--color" "auto" "always" "never"))
+         :exclusive-options '(("--quiet" "-q" "--verbose" "-v")))
+   (list :command "npm"
+         :description "JavaScript package manager"
+         :subcommands '("ci" "install" "link" "publish" "run" "test" "update"
+                        "version")
+         :flags '("--help" "--global" "-g" "--prefix" "--silent" "--verbose"
+                  "--version"))
+   (list :command "grep"
+         :description "search text by pattern"
+         :flags '("-E" "-F" "-H" "-I" "-R" "-i" "-n" "-q" "-r" "-v" "--color"
+                  "--exclude" "--exclude-dir" "--help")
+         :option-values '(("--color" "auto" "always" "never"))
+         :exclusive-options '(("-E" "-F")))
+   (list :command "find"
+         :description "walk files matching expressions"
+         :flags '("-L" "-H" "-P" "-name" "-iname" "-type" "-maxdepth" "-mindepth"
+                  "-print" "-exec" "-delete"))
+   (list :command "tar"
+         :description "archive files"
+         :flags '("-c" "-x" "-t" "-f" "-v" "-z" "-j" "-J" "--create" "--extract"
+                  "--file" "--gzip" "--help"))
+   (list :command "ssh"
+         :description "OpenSSH remote login"
+         :flags '("-A" "-F" "-J" "-L" "-N" "-R" "-T" "-V" "-i" "-l" "-p" "-v"))))
+
 (defun builtin-command-flag-facts ()
   "Return static flag facts derived from the builtin command catalog."
   (mapcan (lambda (entry)
@@ -147,6 +217,39 @@
                         (list 'has-flag command flag))
                       flags)))
           +builtin-command-catalog+))
+
+(defun catalog-subcommand-name (subcommand)
+  (if (consp subcommand)
+      (getf subcommand :name)
+      subcommand))
+
+(defun catalog-subcommand-description (subcommand)
+  (when (consp subcommand)
+    (getf subcommand :description)))
+
+(defun external-command-rule-facts ()
+  "Return static command, subcommand, and flag facts for common external commands."
+  (mapcan (lambda (entry)
+            (let ((command (getf entry :command))
+                  (description (getf entry :description))
+                  (subcommands (getf entry :subcommands))
+                  (flags (getf entry :flags)))
+              (append (list (list 'completes command command)
+                            (list 'describes command description))
+                      (mapcar (lambda (subcommand)
+                                (list 'completes command
+                                      (catalog-subcommand-name subcommand)))
+                              subcommands)
+                      (mapcan (lambda (subcommand)
+                                (let ((name (catalog-subcommand-name subcommand))
+                                      (description (catalog-subcommand-description subcommand)))
+                                  (when description
+                                    (list (list 'describes name description)))))
+                              subcommands)
+                      (mapcar (lambda (flag)
+                                (list 'has-flag command flag))
+                              flags))))
+          +external-command-catalog+))
 
 (defparameter +command-path-builtin-specs+
   '(("type"
@@ -181,16 +284,32 @@
                   :description (getf entry :description)))
           +builtin-command-catalog+))
 
-(defun builtin-completion-command-specs ()
-  "Return the canonical REPL completion seed derived from builtin help entries."
+(defun completion-command-specs-from-catalog (catalog)
   (mapcar (lambda (entry)
             (let ((command (getf entry :command))
+                  (subcommands (getf entry :subcommands))
                   (flags (getf entry :flags))
+                  (option-values (getf entry :option-values))
+                  (exclusive-options (getf entry :exclusive-options))
                   (description (getf entry :description)))
               (append (list command)
+                      (when subcommands
+                        (list :subcommands
+                              (mapcar #'catalog-subcommand-name subcommands)))
                       (when flags (list :flags flags))
+                      (when option-values (list :option-values option-values))
+                      (when exclusive-options
+                        (list :exclusive-options exclusive-options))
                       (when description (list :description description)))))
-          +builtin-command-catalog+))
+          catalog))
+
+(defun builtin-completion-command-specs ()
+  "Return the canonical REPL completion seed derived from builtin help entries."
+  (completion-command-specs-from-catalog +builtin-command-catalog+))
+
+(defun external-completion-command-specs ()
+  "Return completion-only seed data for common external commands."
+  (completion-command-specs-from-catalog +external-command-catalog+))
 
 (defun builtin-rule-facts ()
   "Return the static facts used to seed builtin completion knowledge."
@@ -205,18 +324,8 @@
                      (list 'describes command description))))
            +builtin-command-catalog+)
    (builtin-command-flag-facts)
-   '((describes "git" "distributed version control")
-     (describes "--help" "show command help")
-     (describes "add" "stage changes")
-     (describes "commit" "record changes")
-     (describes "checkout" "switch branches or restore paths")
-     (describes "status" "show working tree status")
-     (has-flag "ls" "--help")
-     (has-flag "git" "--help")
-     (git-subcommand "add")
-     (git-subcommand "commit")
-     (git-subcommand "checkout")
-     (git-subcommand "status"))))
+   (external-command-rule-facts)
+   '((describes "--help" "show command help"))))
 
 (defun builtin-rule-rules ()
   "Return the static rule forms used by the builtin completion knowledge base."
@@ -226,8 +335,6 @@
      (has-flag ?cmd "--help"))
     ((completes ?cmd ?flag)
      (has-flag ?cmd ?flag))
-    ((completes "git" ?sub)
-     (git-subcommand ?sub))
     ((suggests-file ?input)
      (command-is ?input "source"))))
 

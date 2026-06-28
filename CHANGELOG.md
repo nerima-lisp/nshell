@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Vi-mode char-wise visual selection (`v`) with motion, yank, delete, change,
+  and count-aware editing coverage.
+
+### Fixed
+- Prompt command-duration tracking now records a non-negative millisecond value,
+  including sub-millisecond commands.
+- `source` command substitution scanning now preserves literal
+  non-substitution `$` characters.
+
+### Changed
+- README and man page claims now align with the current 0.4.x status, test-count
+  evidence, vi visual selection, here-document, and here-string support.
+- README testing and contribution guidance now distinguishes hermetic Nix checks
+  from full dev-shell integration coverage and links security reporting.
+- CONTRIBUTING now includes a release checklist for CI gates, binary smoke
+  checks, public docs, manual tag/ref consistency, tarball contents, checksums,
+  and changelog hygiene.
+- README CLI usage now documents script-file execution and trailing `$argv`
+  arguments consistently with `nshell --help` and the man page.
+
 ## [0.4.0] - 2026-06-21
 
 ### Added
@@ -93,9 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `${VAR-default}`, `${VAR:=default}`, `${VAR:+alt}`, `${VAR+alt}`,
   `${VAR:?msg}`, length `${#VAR}`, prefix/suffix stripping `${VAR#pat}` /
   `${VAR##pat}` / `${VAR%pat}` / `${VAR%%pat}` (glob patterns), and substitution
-  `${VAR/pat/rep}` / `${VAR//pat/rep}` (literal patterns). The
-  default/alternate word and patterns are themselves variable-expanded. (The
-  `:=` assignment side effect is not yet performed.)
+  `${VAR/pat/rep}` / `${VAR//pat/rep}` (literal patterns). Default, alternate,
+  assignment words, and patterns are themselves variable-expanded; `${VAR:=word}`
+  assigns the expanded word when its fallback branch is used.
 - `CONTRIBUTING.md`, `SECURITY.md`, GitHub issue templates, and a pull-request
   template.
 - `LICENSE` file (MIT) at the repository root.

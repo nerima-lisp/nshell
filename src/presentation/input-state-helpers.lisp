@@ -33,80 +33,6 @@
 (defun %copy-input-state-or-current (supplied-p value current-value)
   (if supplied-p value current-value))
 
-(defun %copy-input-state-completion-base-buffer (state
-                                                 completion-index-supplied-p
-                                                 completion-index
-                                                 completion-base-supplied-p
-                                                 completion-base-buffer)
-  (cond
-    ((and completion-base-supplied-p
-          (eq completion-base-buffer :clear))
-     nil)
-    ((and completion-base-supplied-p
-          (stringp completion-base-buffer))
-     completion-base-buffer)
-    ((and completion-index-supplied-p
-          (= completion-index -1))
-     nil)
-    (t (input-state-completion-base-buffer state))))
-
-(defun %copy-input-state-completion-base-cursor (state
-                                                 completion-index-supplied-p
-                                                 completion-index
-                                                 completion-base-cursor-supplied-p
-                                                 completion-base-cursor)
-  (cond
-    ((and completion-base-cursor-supplied-p
-          (eq completion-base-cursor :clear))
-     nil)
-    ((and completion-base-cursor-supplied-p
-          (integerp completion-base-cursor))
-     completion-base-cursor)
-    ((and completion-index-supplied-p
-          (= completion-index -1))
-     nil)
-    (t (input-state-completion-base-cursor state))))
-
-(defun %copy-input-state-last-candidates (state
-                                          last-candidates-supplied-p
-                                          last-candidates)
-  (cond
-    ((and last-candidates-supplied-p
-          (eq last-candidates :clear))
-     nil)
-    (last-candidates-supplied-p last-candidates)
-    (t (input-state-last-candidates state))))
-
-(defun %copy-input-state-suggestion (state suggestion suggestion-supplied-p)
-  (cond
-    ((eq suggestion :clear) nil)
-    (suggestion-supplied-p suggestion)
-    (t (input-state-suggestion state))))
-
-(defun %copy-input-state-kill-ring (state kill-ring)
-  (cond
-    ((eq kill-ring :clear) nil)
-    (kill-ring kill-ring)
-    (t (input-state-kill-ring state))))
-
-(defun %copy-input-state-search-query (state search-query)
-  (cond
-    ((eq search-query :clear) "")
-    ((stringp search-query) search-query)
-    (t (input-state-search-query state))))
-
-(defun %copy-input-state-search-original-buffer (state search-original-buffer)
-  (cond
-    ((eq search-original-buffer :clear) "")
-    ((stringp search-original-buffer) search-original-buffer)
-    (t (input-state-search-original-buffer state))))
-
-(defun %copy-input-state-search-original-cursor (state search-original-cursor)
-  (cond
-    ((eq search-original-cursor :clear) nil)
-    ((integerp search-original-cursor) search-original-cursor)
-    (t (input-state-search-original-cursor state))))
-
 (defun %copy-input-state-completion-plist (state
                                            completion-index-supplied-p
                                            completion-index
@@ -121,31 +47,48 @@
   (list :completion-index (if completion-index-supplied-p
                               completion-index
                               (input-state-completion-index state))
-        :completion-base-buffer (%copy-input-state-completion-base-buffer
-                                 state
-                                 completion-index-supplied-p
-                                 completion-index
-                                 completion-base-supplied-p
-                                 completion-base-buffer)
-        :completion-base-cursor (%copy-input-state-completion-base-cursor
-                                 state
-                                 completion-index-supplied-p
-                                 completion-index
-                                 completion-base-cursor-supplied-p
-                                 completion-base-cursor)
-        :last-candidates (%copy-input-state-last-candidates
-                          state
-                          last-candidates-supplied-p
-                          last-candidates)
-        :suggestion (%copy-input-state-suggestion
-                     state
-                     suggestion
-                     suggestion-supplied-p)))
+        :completion-base-buffer (cond
+                                  ((and completion-base-supplied-p
+                                        (eq completion-base-buffer :clear))
+                                   nil)
+                                  ((and completion-base-supplied-p
+                                        (stringp completion-base-buffer))
+                                   completion-base-buffer)
+                                  ((and completion-index-supplied-p
+                                        (= completion-index -1))
+                                   nil)
+                                  (t (input-state-completion-base-buffer state)))
+        :completion-base-cursor (cond
+                                  ((and completion-base-cursor-supplied-p
+                                        (eq completion-base-cursor :clear))
+                                   nil)
+                                  ((and completion-base-cursor-supplied-p
+                                        (integerp completion-base-cursor))
+                                   completion-base-cursor)
+                                  ((and completion-index-supplied-p
+                                        (= completion-index -1))
+                                   nil)
+                                  (t (input-state-completion-base-cursor state)))
+        :last-candidates (cond
+                           ((and last-candidates-supplied-p
+                                 (eq last-candidates :clear))
+                            nil)
+                           (last-candidates-supplied-p last-candidates)
+                           (t (input-state-last-candidates state)))
+        :suggestion (cond
+                      ((eq suggestion :clear) nil)
+                      (suggestion-supplied-p suggestion)
+                      (t (input-state-suggestion state)))))
 
 (defun %copy-input-state-transient-plist (state
-                                         mode
-                                         abbreviation-expander
-                                         kill-ring
+                                          buffer
+                                          mode
+                                          vi-count-supplied-p
+                                          vi-count
+                                          vi-visual-anchor-supplied-p
+                                          vi-visual-anchor
+                                          abbreviation-expander
+                                          kill-ring
                                          last-yank-start-supplied-p
                                          last-yank-start
                                          last-yank-end-supplied-p
@@ -159,9 +102,25 @@
                                          last-argument-index-supplied-p
                                          last-argument-index)
   (list :mode (or mode (input-state-mode state))
+        :vi-count (%copy-input-state-or-current
+                   vi-count-supplied-p
+                   vi-count
+                   (input-state-vi-count state))
+        :vi-visual-anchor (cond
+                             ((and vi-visual-anchor-supplied-p
+                                   (eq vi-visual-anchor :clear))
+                              nil)
+                             (vi-visual-anchor-supplied-p
+                              (and vi-visual-anchor
+                                   (clamp-cursor vi-visual-anchor buffer)))
+                             (t (let ((anchor (input-state-vi-visual-anchor state)))
+                                  (and anchor (clamp-cursor anchor buffer)))))
         :abbreviation-expander (or abbreviation-expander
-                                   (input-state-abbreviation-expander state))
-        :kill-ring (%copy-input-state-kill-ring state kill-ring)
+                                    (input-state-abbreviation-expander state))
+        :kill-ring (cond
+                     ((eq kill-ring :clear) nil)
+                     (kill-ring kill-ring)
+                     (t (input-state-kill-ring state)))
         :last-yank-start (%copy-input-state-or-current
                           last-yank-start-supplied-p
                           last-yank-start
@@ -197,13 +156,20 @@
                                        undo-stack
                                        redo-stack-supplied-p
                                        redo-stack)
-  (list :search-query (%copy-input-state-search-query state search-query)
-        :search-original-buffer (%copy-input-state-search-original-buffer
-                                 state
-                                 search-original-buffer)
-        :search-original-cursor (%copy-input-state-search-original-cursor
-                                 state
-                                 search-original-cursor)
+  (list :search-query (cond
+                        ((eq search-query :clear) "")
+                        ((stringp search-query) search-query)
+                        (t (input-state-search-query state)))
+        :search-original-buffer (cond
+                                  ((eq search-original-buffer :clear) "")
+                                  ((stringp search-original-buffer)
+                                   search-original-buffer)
+                                  (t (input-state-search-original-buffer state)))
+        :search-original-cursor (cond
+                                  ((eq search-original-cursor :clear) nil)
+                                  ((integerp search-original-cursor)
+                                   search-original-cursor)
+                                  (t (input-state-search-original-cursor state)))
         :search-index (if search-index-supplied-p
                           search-index
                           (input-state-search-index state))
@@ -214,6 +180,95 @@
                         redo-stack
                         (input-state-redo-stack state))))
 
+(defun %copy-input-state-initargs (state
+                                   new-buffer
+                                   new-cursor
+                                   completion-index-supplied-p
+                                   completion-index
+                                   completion-base-supplied-p
+                                   completion-base-buffer
+                                   completion-base-cursor-supplied-p
+                                   completion-base-cursor
+                                   last-candidates-supplied-p
+                                   last-candidates
+                                   suggestion-supplied-p
+                                   suggestion
+                                   mode
+                                   vi-count-supplied-p
+                                   vi-count
+                                   vi-visual-anchor-supplied-p
+                                   vi-visual-anchor
+                                   abbreviation-expander
+                                   kill-ring
+                                   last-yank-start-supplied-p
+                                   last-yank-start
+                                   last-yank-end-supplied-p
+                                   last-yank-end
+                                   last-yank-index-supplied-p
+                                   last-yank-index
+                                   last-argument-start-supplied-p
+                                   last-argument-start
+                                   last-argument-end-supplied-p
+                                   last-argument-end
+                                   last-argument-index-supplied-p
+                                   last-argument-index
+                                   search-query
+                                   search-original-buffer
+                                   search-original-cursor
+                                   search-index-supplied-p
+                                   search-index
+                                   undo-stack-supplied-p
+                                   undo-stack
+                                   redo-stack-supplied-p
+                                   redo-stack)
+  (append (list :buffer new-buffer
+                :cursor-pos new-cursor)
+          (%copy-input-state-completion-plist
+           state
+           completion-index-supplied-p
+           completion-index
+           completion-base-supplied-p
+           completion-base-buffer
+           completion-base-cursor-supplied-p
+           completion-base-cursor
+           last-candidates-supplied-p
+           last-candidates
+           suggestion-supplied-p
+           suggestion)
+          (%copy-input-state-transient-plist
+           state
+           new-buffer
+           mode
+           vi-count-supplied-p
+           vi-count
+           vi-visual-anchor-supplied-p
+           vi-visual-anchor
+           abbreviation-expander
+           kill-ring
+           last-yank-start-supplied-p
+           last-yank-start
+           last-yank-end-supplied-p
+           last-yank-end
+           last-yank-index-supplied-p
+           last-yank-index
+           last-argument-start-supplied-p
+           last-argument-start
+           last-argument-end-supplied-p
+           last-argument-end
+           last-argument-index-supplied-p
+           last-argument-index)
+          (%copy-input-state-session-plist
+           state
+           search-query
+           search-original-buffer
+           search-original-cursor
+           search-index-supplied-p
+           search-index
+           undo-stack-supplied-p
+           undo-stack
+           redo-stack-supplied-p
+           redo-stack)))
+
 (defun copy-input-state-with (state &key buffer cursor-pos
                                       (completion-index nil
                                                         completion-index-supplied-p)
@@ -223,9 +278,12 @@
                                                               completion-base-cursor-supplied-p)
                                       (last-candidates nil
                                                        last-candidates-supplied-p)
-                                      (suggestion nil suggestion-supplied-p)
-                                      mode
-                                      abbreviation-expander kill-ring
+                                       (suggestion nil suggestion-supplied-p)
+                                       mode
+                                       (vi-count nil vi-count-supplied-p)
+                                       (vi-visual-anchor nil
+                                                         vi-visual-anchor-supplied-p)
+                                       abbreviation-expander kill-ring
                                       (last-yank-start nil
                                                        last-yank-start-supplied-p)
                                       (last-yank-end nil
@@ -247,48 +305,48 @@
          (new-cursor (clamp-cursor (or cursor-pos (input-state-cursor-pos state))
                                    new-buffer)))
     (apply #'make-input-state
-           (append (list :buffer new-buffer
-                         :cursor-pos new-cursor)
-                   (%copy-input-state-completion-plist
-                    state
-                    completion-index-supplied-p
-                    completion-index
-                    completion-base-supplied-p
-                    completion-base-buffer
-                    completion-base-cursor-supplied-p
-                    completion-base-cursor
-                    last-candidates-supplied-p
-                    last-candidates
-                    suggestion-supplied-p
-                    suggestion)
-                   (%copy-input-state-transient-plist
-                    state
-                    mode
-                    abbreviation-expander
-                    kill-ring
-                    last-yank-start-supplied-p
-                    last-yank-start
-                    last-yank-end-supplied-p
-                    last-yank-end
-                    last-yank-index-supplied-p
-                    last-yank-index
-                    last-argument-start-supplied-p
-                    last-argument-start
-                    last-argument-end-supplied-p
-                    last-argument-end
-                    last-argument-index-supplied-p
-                    last-argument-index)
-                   (%copy-input-state-session-plist
-                    state
-                    search-query
-                    search-original-buffer
-                    search-original-cursor
-                    search-index-supplied-p
-                    search-index
-                    undo-stack-supplied-p
-                    undo-stack
-                    redo-stack-supplied-p
-                    redo-stack)))))
+           (%copy-input-state-initargs
+            state
+            new-buffer
+            new-cursor
+            completion-index-supplied-p
+            completion-index
+            completion-base-supplied-p
+            completion-base-buffer
+            completion-base-cursor-supplied-p
+            completion-base-cursor
+            last-candidates-supplied-p
+            last-candidates
+            suggestion-supplied-p
+            suggestion
+            mode
+            vi-count-supplied-p
+            vi-count
+            vi-visual-anchor-supplied-p
+            vi-visual-anchor
+            abbreviation-expander
+            kill-ring
+            last-yank-start-supplied-p
+            last-yank-start
+            last-yank-end-supplied-p
+            last-yank-end
+            last-yank-index-supplied-p
+            last-yank-index
+            last-argument-start-supplied-p
+            last-argument-start
+            last-argument-end-supplied-p
+            last-argument-end
+            last-argument-index-supplied-p
+            last-argument-index
+            search-query
+            search-original-buffer
+            search-original-cursor
+            search-index-supplied-p
+            search-index
+            undo-stack-supplied-p
+            undo-stack
+            redo-stack-supplied-p
+            redo-stack))))
 
 (defun normalize-input-state (state)
   (copy-input-state-with

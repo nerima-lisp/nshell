@@ -19,6 +19,12 @@
        (null (parse-result-errors result))
        (not (parse-result-incomplete result))))
 
+(defun parse-result-state (result)
+  (cond
+    ((parse-complete-p result) :complete)
+    ((parse-result-incomplete result) :incomplete)
+    ((parse-errors result) :error)))
+
 (defun parse-errors (result)
   (parse-result-errors result))
 
@@ -43,23 +49,22 @@
                (cdr (assoc keyword clauses))))
       (let ((parsed-result (gensym "PARSE-RESULT-")))
         `(let ((,parsed-result (parse-command-line ,line)))
-           (cond
-             ((parse-complete-p ,parsed-result)
+           (case (parse-result-state ,parsed-result)
+             (:complete
               (let ((,result ,parsed-result)
                     (,ast (parse-result-ast ,parsed-result)))
                 (declare (ignorable ,result ,ast))
                 ,@(branch-body :complete)))
-             ((parse-result-incomplete ,parsed-result)
+             (:incomplete
               (let ((,result ,parsed-result)
                     (,ast (parse-result-ast ,parsed-result)))
                 (declare (ignorable ,result ,ast))
                 ,@(branch-body :incomplete)))
-             ((parse-errors ,parsed-result)
+             (:error
               (let ((,result ,parsed-result)
                     (,ast (parse-result-ast ,parsed-result)))
                 (declare (ignorable ,result ,ast))
-                ,@(branch-body :error)))
-             ))))))
+                ,@(branch-body :error))))))))
 
   (defmacro with-complete-command-line ((result ast line) &body body)
     (let ((parsed-result (gensym "PARSE-RESULT-")))
@@ -69,6 +74,7 @@
                  (,ast (parse-result-ast ,parsed-result)))
              (declare (ignorable ,result ,ast))
              ,@body)))))
+  )
 
 (defun %token-diagnostic (kind message token)
   (make-parse-diagnostic kind message

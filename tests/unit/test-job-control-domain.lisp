@@ -7,7 +7,7 @@
          (pipe (nshell.domain.execution:make-pipeline cmd))
          (job (nshell.domain.execution:make-job 1 pipe))
      (id (nshell.domain.job-control:monitor-add-job monitor job)))
-    (is (= 0 id))
+    (is (= 1 id))
     (is (nshell.domain.job-control:monitor-find-job monitor id))))
 
 (test pbt-invalid-job-state-transitions-are-rejected

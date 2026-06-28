@@ -34,6 +34,22 @@
       (is (member "-t" (completion-texts candidates)
                   :test #'string=)))))
 
+(test complete-command-flags-are-completed
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.presentation::seed-repl-completion-knowledge-base kb)
+    (let ((long-options (completion-texts
+                         (nshell.domain.completion:complete kb "complete --")))
+          (short-options (completion-texts
+                          (nshell.domain.completion:complete kb "complete -"))))
+      (is (member "--long-option" long-options :test #'string=))
+      (is (member "--short-option" long-options :test #'string=))
+      (is (member "--arguments" long-options :test #'string=))
+      (is (member "--erase" long-options :test #'string=))
+      (is (member "-l" short-options :test #'string=))
+      (is (member "-s" short-options :test #'string=))
+      (is (member "-a" short-options :test #'string=))
+      (is (member "-e" short-options :test #'string=)))))
+
 (test command-completion-includes-type
   (let ((candidates (nshell.domain.completion:rule-complete
                      nshell.domain.completion::*built-in-rule-knowledge-base*
@@ -77,6 +93,80 @@
     (is (eq :option (nshell.domain.completion:candidate-kind status)))
     (is (string= "show working tree status"
                  (nshell.domain.completion:candidate-description status)))))
+
+(test rule-completion-includes-common-external-command-metadata
+  (let* ((commands (nshell.domain.completion:rule-complete
+                    nshell.domain.completion::*built-in-rule-knowledge-base*
+                    "ku"))
+         (kubectl (completion-candidate-by-text "kubectl" commands))
+         (subcommands (completion-texts
+                       (nshell.domain.completion:rule-complete
+                        nshell.domain.completion::*built-in-rule-knowledge-base*
+                        "git sw")))
+         (flags (completion-texts
+                 (nshell.domain.completion:rule-complete
+                  nshell.domain.completion::*built-in-rule-knowledge-base*
+                  "docker --t"))))
+    (is (not (null kubectl)))
+    (is (string= "control Kubernetes clusters"
+                 (nshell.domain.completion:candidate-description kubectl)))
+    (is (member "switch" subcommands :test #'string=))
+    (is (member "--tls" flags :test #'string=))
+    (is (member "--tlscert" flags :test #'string=))))
+
+(test repl-completion-includes-common-external-option-values
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.presentation::seed-repl-completion-knowledge-base kb)
+    (is (equal '("--color=always" "--color=auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "cargo --color=a"))))
+    (is (equal '("-o=yaml")
+               (completion-texts
+                (nshell.domain.completion:complete kb "kubectl -o=y"))))))
+
+(test repl-completion-includes-common-external-separate-option-values
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.presentation::seed-repl-completion-knowledge-base kb)
+    (is (equal '("always" "auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "cargo --color a"))))
+    (is (equal '("yaml")
+               (completion-texts
+                (nshell.domain.completion:complete kb "kubectl -o y"))))))
+
+(test repl-completion-hides-common-external-mutually-exclusive-options
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.presentation::seed-repl-completion-knowledge-base kb)
+    (let ((after-quiet (completion-texts
+                        (nshell.domain.completion:complete kb "cargo --quiet -"))))
+      (is (not (member "--verbose" after-quiet :test #'string=)))
+      (is (not (member "-v" after-quiet :test #'string=)))
+      (is (member "--help" after-quiet :test #'string=)))
+    (let ((after-all-namespaces
+            (completion-texts
+             (nshell.domain.completion:complete kb "kubectl --all-namespaces --"))))
+      (is (not (member "--namespace" after-all-namespaces :test #'string=)))
+      (is (member "--output" after-all-namespaces :test #'string=)))))
+
+(test builtin-rule-facts-are-single-sourced-from-catalogs
+  (let ((seen (make-hash-table :test #'equal))
+        (duplicates '()))
+    (dolist (fact (nshell.domain.completion::builtin-rule-facts))
+      (let ((key (prin1-to-string fact)))
+        (if (gethash key seen)
+            (pushnew key duplicates :test #'string=)
+            (setf (gethash key seen) t))))
+    (is (null duplicates) duplicates))
+  (let ((git-status (completion-texts
+                     (nshell.domain.completion:rule-complete
+                      nshell.domain.completion::*built-in-rule-knowledge-base*
+                      "git st")))
+        (ls-help (completion-texts
+                  (nshell.domain.completion:rule-complete
+                   nshell.domain.completion::*built-in-rule-knowledge-base*
+                   "ls --"))))
+    (is (member "status" git-status :test #'string=))
+    (is (member "--help" ls-help :test #'string=))))
 
 (test rule-completion-dedupes-multiple-proof-paths
   (let ((kb (make-empty-rule-kb)))

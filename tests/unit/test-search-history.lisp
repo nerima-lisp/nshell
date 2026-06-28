@@ -146,6 +146,34 @@ git status"
         (is (null (nshell.application:drain-events dispatcher)))
         (is (equal '(:history-searched) (nreverse events)))))))
 
+(test interactive-history-search-handles-large-gapped-history
+  "Interactive reverse search keeps ranking with many nonmatching entries."
+  (let ((history (nshell.domain.history:make-command-history :max-entries 7000)))
+    (nshell.domain.history:history-add history "echo setup
+git old")
+    (loop for index below 1500
+          do (nshell.domain.history:history-add
+              history
+              (format nil "make target-~d" index)))
+    (nshell.domain.history:history-add history "printf GIT middle")
+    (loop for index below 1500
+          do (nshell.domain.history:history-add
+              history
+              (format nil "cargo test-~d" index)))
+    (nshell.domain.history:history-add history "git newest")
+    (loop for index below 1500
+          do (nshell.domain.history:history-add
+              history
+              (format nil "echo unrelated-~d" index)))
+    (is (equal '("git newest"
+                 "echo setup
+git old"
+                 "printf GIT middle")
+               (nshell.domain.history:history-entry-texts
+                (nshell.application:interactive-history-search-use-case
+                 history
+                 "git"))))))
+
 (test interactive-history-search-ignores-blank-query
   "Interactive reverse search should not preselect history before the user types."
   (with-history (history "git status" "docker ps")

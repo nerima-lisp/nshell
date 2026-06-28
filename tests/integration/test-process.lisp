@@ -6,10 +6,43 @@
 
 (in-suite process-tests)
 
+(defun %process-test-sbcl-command-node (form)
+  (nshell.domain.parsing:make-command-node
+   (current-sbcl-executable)
+   (list "--noinform"
+         "--non-interactive"
+         "--disable-debugger"
+         "--eval"
+         form)))
+
 (test run-external-echo
   "External echo command executes and returns exit 0"
   (let ((exit (nshell.infrastructure.acl:run-external "echo" '("hello"))))
     (is (= 0 exit))))
+
+(test run-external-large-output-streams-before-wait
+  "Synchronous execution drains stdout before waiting for process exit."
+  (let* ((size 131072)
+         (form (format nil
+                       "(write-string (make-string ~d :initial-element #\\x))"
+                       size))
+         (exit nil)
+         (output
+           (capture-standard-output
+             (setf exit
+                   (nshell.infrastructure.acl:run-external
+                    (current-sbcl-executable)
+                    (list "--noinform"
+                          "--non-interactive"
+                          "--disable-debugger"
+                          "--eval"
+                          form))))))
+    (is (= 0 exit))
+    (is (= size (length output)))
+    (let ((bad-index (position-if-not (lambda (char) (char= #\x char)) output)))
+      (is (null bad-index))
+      (when bad-index
+        (fail "unexpected character at ~d: ~s" bad-index (char output bad-index))))))
 
 (test run-external-capture-echo
   "External command capture returns stdout and exit code."
@@ -17,6 +50,15 @@
       (nshell.infrastructure.acl:run-external-capture "echo" '("hello"))
     (is (= 0 exit))
     (is (string= (format nil "hello~%") output))))
+
+(test run-external-capture-signal-exit-status
+  "External command capture normalizes signaled processes to 128+signal."
+  (multiple-value-bind (output exit)
+      (nshell.infrastructure.acl:run-external-capture
+       "sh"
+       '("-c" "kill -TERM $$"))
+    (is (= 143 exit))
+    (is (string= "" output))))
 
 (test run-external-nonexistent
   "Nonexistent command returns error exit code"
@@ -45,3 +87,98 @@
         (when (sb-ext:process-alive-p proc)
           (ignore-errors
             (sb-ext:process-kill proc 15)))))))
+
+(test spawn-pipeline-pipes-stdout-only-by-default
+  "Pipeline stages pipe stdout only unless stderr is explicitly merged."
+  (let* ((writer (%process-test-sbcl-command-node
+                  "(progn (write-string \"OUT\") (write-string \"ERR\" *error-output*))"))
+         (counter (%process-test-sbcl-command-node
+                   "(let ((count 0)) (loop for ch = (read-char *standard-input* nil nil) while ch do (incf count)) (format t \"~d~%\" count))"))
+         (exit nil)
+         (output (capture-standard-output
+                   (setf exit
+                         (nshell.infrastructure.acl:spawn-pipeline
+                          (list writer counter))))))
+    (is (= 0 exit))
+    (is (string= (format nil "3~%") output))))
+
+(test spawn-pipeline-pipes-stderr-when-explicitly-merged
+  "An explicit 2>&1 redirect merges stderr into the downstream pipeline input."
+  (let* ((writer (%process-test-sbcl-command-node
+                  "(progn (write-string \"OUT\") (write-string \"ERR\" *error-output*))"))
+         (counter (%process-test-sbcl-command-node
+                   "(let ((count 0)) (loop for ch = (read-char *standard-input* nil nil) while ch do (incf count)) (format t \"~d~%\" count))"))
+         (exit nil)
+         (output (capture-standard-output
+                   (setf exit
+                          (nshell.infrastructure.acl:spawn-pipeline
+                          (list writer counter)
+                          :redirects (list (list (cons :2>&1 nil)) nil))))))
+    (is (= 0 exit))
+    (is (string= (format nil "6~%") output))))
+
+(test spawn-pipeline-redirect-dup-before-stdout-redirect-keeps-stderr-on-pipe
+  "2>&1 before a stdout redirect keeps stderr connected to the original pipeline stdout."
+  (with-temporary-output-file (target :prefix "nshell-pipeline-dup-before-out")
+    (let* ((writer (%process-test-sbcl-command-node
+                    "(progn (write-string \"OUT\") (write-string \"ERR\" *error-output*))"))
+           (counter (%process-test-sbcl-command-node
+                     "(let ((count 0)) (loop for ch = (read-char *standard-input* nil nil) while ch do (incf count)) (format t \"~d~%\" count))"))
+           (exit nil)
+           (output (capture-standard-output
+                     (setf exit
+                           (nshell.infrastructure.acl:spawn-pipeline
+                            (list writer counter)
+                            :redirects (list (list (cons :2>&1 nil)
+                                                   (cons :> target))
+                                             nil))))))
+      (is (= 0 exit))
+      (is (string= (format nil "3~%") output))
+      (is (string= "OUT" (uiop:read-file-string target))))))
+
+(test spawn-pipeline-stdout-redirect-before-dup-merges-stderr-into-file
+  "A stdout redirect before 2>&1 merges stderr into the redirected stdout file."
+  (with-temporary-output-file (target :prefix "nshell-pipeline-out-before-dup")
+    (let* ((writer (%process-test-sbcl-command-node
+                    "(progn (write-string \"OUT\") (write-string \"ERR\" *error-output*))"))
+           (counter (%process-test-sbcl-command-node
+                     "(let ((count 0)) (loop for ch = (read-char *standard-input* nil nil) while ch do (incf count)) (format t \"~d~%\" count))"))
+           (exit nil)
+           (output (capture-standard-output
+                     (setf exit
+                           (nshell.infrastructure.acl:spawn-pipeline
+                            (list writer counter)
+                            :redirects (list (list (cons :> target)
+                                                   (cons :2>&1 nil))
+                                             nil))))))
+      (is (= 0 exit))
+      (is (string= (format nil "0~%") output))
+      (is (string= "OUTERR" (uiop:read-file-string target))))))
+
+(test spawn-pipeline-cleans-up-started-processes-after-spawn-failure
+  "A later stage spawn failure should not block on output from already-started stages."
+  (let* ((sleeper (%process-test-sbcl-command-node "(sleep 30)"))
+         (missing (nshell.domain.parsing:make-command-node
+                   "definitely-not-a-real-command-nshell-pipeline"
+                   nil))
+         (start (get-internal-real-time))
+         (exit (nshell.infrastructure.acl:spawn-pipeline
+                (list sleeper missing)))
+         (elapsed (/ (- (get-internal-real-time) start)
+                      internal-time-units-per-second)))
+    (is (= 127 exit))
+    (is (< elapsed 2.0))))
+
+(test spawn-pipeline-async-cleans-up-started-processes-after-spawn-failure
+  "A later async stage spawn failure should terminate already-started stages."
+  (let* ((sleeper (%process-test-sbcl-command-node "(sleep 30)"))
+         (missing (nshell.domain.parsing:make-command-node
+                   "definitely-not-a-real-command-nshell-pipeline"
+                   nil))
+         (start (get-internal-real-time))
+         (procs (nshell.infrastructure.acl:spawn-pipeline-async
+                 (list sleeper missing)))
+         (elapsed (/ (- (get-internal-real-time) start)
+                     internal-time-units-per-second)))
+    (is (null procs))
+    (is (< elapsed 2.0))))

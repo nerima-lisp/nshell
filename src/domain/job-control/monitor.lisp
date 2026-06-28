@@ -2,7 +2,7 @@
 
 (defstruct (job-monitor (:constructor make-job-monitor ()))
   (jobs (make-hash-table) :type hash-table)
-  (next-id 0 :type integer))
+  (next-id 1 :type integer))
 
 (defun monitor-add-job (monitor job)
   (let ((id (job-monitor-next-id monitor)))

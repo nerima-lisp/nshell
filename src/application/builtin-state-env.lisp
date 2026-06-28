@@ -49,10 +49,10 @@
        (unless (second args)
          (return-from %builtin-set (values (%set-usage) 1)))
         (setf (shell-context-environment context)
-              (nshell.domain.environment:env-set
+              (nshell.domain.environment:env-set-values
                (shell-context-environment context)
                (second args)
-               (%string-join (cddr args) " ")
+               (cddr args)
                t))
        (values nil 0))
       ((%set-erase-option-p (first args))
@@ -66,10 +66,10 @@
        (values (%set-usage) 1))
       (t
         (setf (shell-context-environment context)
-              (nshell.domain.environment:env-set
+              (nshell.domain.environment:env-set-values
                (shell-context-environment context)
                (first args)
-               (%string-join (rest args) " ")
+               (rest args)
                nil))
        (values nil 0)))))
 

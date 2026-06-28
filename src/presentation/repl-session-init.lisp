@@ -1,11 +1,6 @@
 ;;; REPL state initialization
 (in-package #:nshell.presentation)
 
-(defun load-history-into-repl ()
-  (let ((saved (nshell.infrastructure.persistence:load-history-file)))
-    (dolist (entry (reverse saved))
-      (nshell.domain.history:history-add *history* entry))))
-
 (defun initialize-repl-state ()
   (setf *running* t
         *last-exit-code* 0
@@ -29,5 +24,6 @@
           (and flag (not (member flag '("" "0" "false" "no") :test #'string-equal)))))
   (install-expansion-filesystem)
   (configure-completion-filesystem)
-  (load-history-into-repl)
+  (dolist (entry (reverse (nshell.infrastructure.persistence:load-history-file)))
+    (nshell.domain.history:history-add *history* entry))
   (seed-repl-completion-knowledge-base *kb*))

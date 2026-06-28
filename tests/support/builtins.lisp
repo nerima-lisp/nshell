@@ -37,6 +37,9 @@
            fns))
      :redirect-fns
      (list :redirect-output #'nshell.infrastructure.acl:redirect-output
+           :redirect-error #'nshell.infrastructure.acl:redirect-error
+           :redirect-output-error #'nshell.infrastructure.acl:redirect-output-and-error
+           :redirect-error-to-output #'nshell.infrastructure.acl:redirect-error-to-output
            :redirect-input #'nshell.infrastructure.acl:redirect-input
            :restore #'nshell.infrastructure.acl:restore-redirects)
      :terminal-fns nil)))
@@ -44,6 +47,21 @@
 (defmacro with-builtins-context ((context) &body body)
   `(let ((,context (make-test-builtins-context)))
      ,@body))
+
+(defmacro with-builtins-context-environment ((context context-form &rest bindings) &body body)
+  (let ((env (gensym "ENV")))
+    `(let ((,context ,context-form))
+       (let ((,env (nshell.application:shell-context-environment ,context)))
+         ,@(mapcar (lambda (binding)
+                     (destructuring-bind (name value &optional (exported-p nil exported-p-supplied-p))
+                         binding
+                       (declare (ignore exported-p-supplied-p))
+                       `(setf ,env
+                              (nshell.domain.environment:env-set
+                               ,env ,name ,value ,exported-p))))
+                   bindings)
+         (setf (nshell.application:shell-context-environment ,context) ,env))
+       ,@body)))
 
 (defun call-builtin (context name args)
   (funcall (nshell.application:lookup-builtin name) context args))
@@ -67,28 +85,37 @@
            (search needle output))
          needles))
 
+(defun %builtin-call-assertions (actual-output actual-code &key code output output-null
+                                                        output-empty contains)
+  (append
+   (when (not (null code))
+     `((is (= ,code ,actual-code))))
+   (when output
+     `((is (string= ,output ,actual-output))))
+   (when output-null
+     `((is (null ,actual-output))))
+   (when output-empty
+     `((is (string= "" ,actual-output))))
+   (when contains
+     `((is (%builtin-output-contains-all-p ,actual-output ,contains))))
+   `((values ,actual-output ,actual-code))))
+
+(defmacro %with-builtin-call-values ((output code) call-form &body body)
+  `(multiple-value-bind (,output ,code) ,call-form
+     ,@body))
+
 (defmacro assert-builtin-call ((context name args) &key code output output-null
                                            output-empty contains)
   (let ((actual-output (gensym "OUTPUT-"))
         (actual-code (gensym "CODE-")))
-    `(multiple-value-bind (,actual-output ,actual-code)
+    `(%with-builtin-call-values (,actual-output ,actual-code)
          (call-builtin ,context ,name ,args)
-       ,@(when (not (null code))
-           `((is (= ,code ,actual-code))))
-       ,@(when output
-           `((is (string= ,output ,actual-output))))
-       ,@(when output-null
-           `((is (null ,actual-output))))
-       ,@(when output-empty
-           `((is (string= "" ,actual-output))))
-       ,@(when contains
-           `((is (%builtin-output-contains-all-p ,actual-output ,contains))))
-       (values ,actual-output ,actual-code))))
-
-(defmacro with-captured-stdout ((stdout) &body body)
-  `(let ((,stdout (with-output-to-string (*standard-output*)
-                   ,@body)))
-     ,stdout))
+       ,@(%builtin-call-assertions actual-output actual-code
+                                   :code code
+                                   :output output
+                                   :output-null output-null
+                                   :output-empty output-empty
+                                   :contains contains))))
 
 (defmacro assert-builtin-call-prints ((context name args)
                                       &key code output-null stdout-contains)
@@ -97,13 +124,11 @@
         (stdout (gensym "STDOUT-")))
     `(let ((,stdout
              (with-output-to-string (*standard-output*)
-               (multiple-value-bind (,actual-output ,actual-code)
-                   (call-builtin ,context ,name ,args)
-                 ,@(when (not (null code))
-                     `((is (= ,code ,actual-code))))
-                 ,@(when output-null
-                     `((is (null ,actual-output))))
-                 (values ,actual-output ,actual-code)))))
+              (%with-builtin-call-values (,actual-output ,actual-code)
+                  (call-builtin ,context ,name ,args)
+                 ,@(%builtin-call-assertions actual-output actual-code
+                                             :code code
+                                             :output-null output-null)))))
        ,@(when stdout-contains
            `((is (%builtin-output-contains-all-p ,stdout ,stdout-contains))))
        ,stdout)))

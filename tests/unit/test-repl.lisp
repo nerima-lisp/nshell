@@ -9,12 +9,6 @@
 (test repl-batch-returns-last-exit-code
   "Batch execution should return the last command status for process exit."
   (with-repl-test-state
-    (with-temporary-function
-        ('nshell.presentation::execute-ast
-         (lambda (ast)
-           (declare (ignore ast))
-           7))
-      (with-input-from-string (*standard-input* (format nil "echo hello~%"))
-        (let ((code (nshell.presentation::run-repl-batch)))
-          (is (= 7 code))
-          (is (= 7 nshell.presentation::*last-exit-code*)))))))
+    (let ((code (nshell.presentation::run-repl-batch :line "false")))
+      (is (= 1 code))
+      (is (= 1 nshell.presentation::*last-exit-code*)))))

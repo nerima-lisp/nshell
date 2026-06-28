@@ -3,9 +3,10 @@
 (defstruct (completion-context
             (:constructor make-completion-context
                 (&key (command "") (argument-prefix "") command-position-p
-                      redirection-target-p)))
+                      (argument-words '()) redirection-target-p)))
   (command "" :type string :read-only t)
   (argument-prefix "" :type string :read-only t)
+  (argument-words '() :type list :read-only t)
   (command-position-p nil :type boolean :read-only t)
   (redirection-target-p nil :type boolean :read-only t))
 
@@ -101,6 +102,16 @@ intervening whitespace are merged."
         unless (nshell.domain.parsing:shell-assignment-word-p source)
           return word))
 
+(defun argument-word-values-after-command (words command-word)
+  (when command-word
+    (loop with seen-command-p = nil
+          for word in words
+          if (eq word command-word)
+            do (setf seen-command-p t)
+          else
+            when seen-command-p
+              collect (completion-word-value word))))
+
 (defun completion-context-for (partial-input)
   (multiple-value-bind (tokens cursor-token incomplete-p)
       (nshell.domain.parsing:tokenize partial-input)
@@ -125,10 +136,13 @@ intervening whitespace are merged."
                       (not command-position-p))
                  (completion-word-value current-word)
                  ""))
+           (argument-words
+             (argument-word-values-after-command words command-word))
            (redirection-target-p
              (redirection-target-position-p segment-tokens current-word cursor)))
       (make-completion-context
        :command command
        :argument-prefix argument-prefix
+       :argument-words argument-words
        :command-position-p command-position-p
        :redirection-target-p redirection-target-p))))

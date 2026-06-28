@@ -59,3 +59,25 @@ git status"
     (is (string= "Git status"
                  (nshell.domain.history:history-previous history "Git")))
     (is (null (nshell.domain.history:history-previous history "Git status")))))
+
+(test history-navigation-handles-large-gapped-prefix-search
+  "Previous and next navigation remain correct when matches are far apart."
+  (let ((history (nshell.domain.history:make-command-history :max-entries 7000)))
+    (nshell.domain.history:history-add history "git old")
+    (loop for i below 3000
+          do (nshell.domain.history:history-add
+              history
+              (format nil "echo ~4,'0D" i)))
+    (nshell.domain.history:history-add history "git newer")
+    (loop for i below 3000
+          do (nshell.domain.history:history-add
+              history
+              (format nil "make ~4,'0D" i)))
+    (is (string= "git newer"
+                 (nshell.domain.history:history-previous history "git")))
+    (is (string= "git old"
+                 (nshell.domain.history:history-previous history "git newer")))
+    (is (string= "git newer"
+                 (nshell.domain.history:history-next history)))
+    (is (string= "git"
+                 (nshell.domain.history:history-next history)))))

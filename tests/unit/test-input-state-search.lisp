@@ -33,9 +33,30 @@
                 :completion-base-cursor 1
                 :last-candidates '("git" "grep"))))
     (with-reduced-input-state (new-state output) (reduce-once state :ctrl-r)
-      (is (eq :search (nshell.presentation:input-state-mode new-state)))
-      (is-completion-session-cleared new-state)
+      (is-search-state-with-completion-cleared new-state
+                                               :mode :search)
       (is (eq :search-start output)))))
+
+(test input-state-history-search-state-preserves-zero-completion-metadata
+  (let ((state (history-search-state
+                :buffer "g"
+                :query "g"
+                :original-buffer "g"
+                :index 0
+                :completion-index 0
+                :completion-base-buffer ""
+                :completion-base-cursor 0
+                :last-candidates '("git"))))
+    (is-search-state state
+                     :mode :search
+                     :query "g"
+                     :original-buffer "g"
+                     :index 0)
+    (is-input-state state
+                    :completion-index 0
+                    :completion-base-buffer ""
+                    :completion-base-cursor 0
+                    :last-candidates '("git"))))
 
 (test input-state-history-search-input-clears-stale-completion-session
   (let ((state (history-search-state
@@ -47,12 +68,11 @@
                 :completion-base-cursor 1
                 :last-candidates '("git" "grep"))))
     (with-reduced-input-state (new-state output) (reduce-once state :char #\s)
-      (is-search-state new-state
-                       :mode :search
-                       :query "s"
-                       :original-buffer "git"
-                       :index 0)
-      (is-completion-session-cleared new-state)
+      (is-search-state-with-completion-cleared new-state
+                                               :mode :search
+                                               :query "s"
+                                               :original-buffer "git"
+                                               :index 0)
       (is (eq :search-update output)))))
 
 (test input-state-history-search-edits-query-not-buffer
@@ -88,13 +108,12 @@
     (with-reduced-input-state (new-state output)
         (reduce-once state :paste nil nil
                      '(:protocol :bracketed :text "atus --short"))
-      (is-search-state new-state
-                       :mode :search
-                       :query "status --short"
-                       :original-buffer "git"
-                       :index 0)
+      (is-search-state-with-completion-cleared new-state
+                                               :mode :search
+                                               :query "status --short"
+                                               :original-buffer "git"
+                                               :index 0)
       (is (string= "git" (nshell.presentation:input-state-buffer new-state)))
-      (is-completion-session-cleared new-state)
       (is (eq :search-update output)))))
 
 (test input-state-history-search-cycles-and-applies-results
@@ -212,8 +231,7 @@
     (with-reduced-input-state (restored output) (reduce-once state :backspace)
       (is (string= "git" (nshell.presentation:input-state-buffer restored)))
       (is (= 3 (nshell.presentation:input-state-cursor-pos restored)))
-      (is-search-session-cleared restored)
-      (is-completion-session-cleared restored)
+      (is-search-session-with-completion-cleared restored)
       (is (eq :suggest-update output)))))
 
 (test input-state-history-search-enter-executes-selected-buffer
@@ -243,8 +261,7 @@
       (is (string= "git status"
                    (nshell.presentation:input-state-buffer accepted)))
       (is (= 10 (nshell.presentation:input-state-cursor-pos accepted)))
-      (is-search-session-cleared accepted)
-      (is-completion-session-cleared accepted)
+      (is-search-session-with-completion-cleared accepted)
       (is (eq :suggest-update output))
       (with-reduced-input-state (edited edit-output) (reduce-once accepted :char #\!)
         (is (string= "git status!"

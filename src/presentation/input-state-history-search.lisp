@@ -2,34 +2,31 @@
 
 (in-package #:nshell.presentation)
 
-(defun %history-search-state-buffer (state buffer cursor)
-  (copy-input-state-clearing-completion state
-                                        :buffer buffer
-                                        :cursor-pos cursor
-                                        :search-index (input-state-search-index state)))
-
 (defun %history-search-original-state (state)
   (let ((original (input-state-search-original-buffer state)))
-    (%history-search-state-buffer
+    (copy-input-state-clearing-completion
      state
-     original
-     (or (input-state-search-original-cursor state)
-         (length original)))))
+     :buffer original
+     :cursor-pos (or (input-state-search-original-cursor state)
+                     (length original))
+     :search-index (input-state-search-index state))))
 
-(defun %apply-history-search-result-state (state matches)
-  (let* ((index (mod (input-state-search-index state) (length matches)))
-         (text (nth index matches)))
-    (%history-search-state-buffer state text (length text))))
-
-(defun %history-search-updated-state (state &rest args)
-  (values (apply #'copy-input-state-clearing-completion state args)
+(defun %history-search-update (state &rest initargs)
+  (values (apply #'copy-input-state-clearing-completion state initargs)
           :search-update))
 
-(defun %finish-history-search (state output)
+(defun %history-search-finish (state &optional (output :suggest-update))
   (values (copy-input-state-with
            (clear-history-search-session-state state)
            :mode :insert)
           output))
+
+(defun %history-search-abort (state)
+  (values (copy-input-state-with
+           (clear-history-search-session-state
+            (%history-search-original-state state))
+           :mode :insert)
+          :suggest-update))
 
 (defun %update-history-search-query (state text)
   (with-normalized-cleared-completion-state (state state)
@@ -40,14 +37,14 @@
           (let ((inserted (if (> (length text) remaining)
                               (subseq text 0 remaining)
                               text)))
-            (%history-search-updated-state
+            (%history-search-update
              state
              :search-query (concatenate 'string query inserted)
              :search-index 0))))))
 
 (defun %move-history-search-selection (state delta)
   (with-normalized-cleared-completion-state (state state)
-    (%history-search-updated-state
+    (%history-search-update
      state
      :search-index (+ (input-state-search-index state) delta))))
 
@@ -55,8 +52,8 @@
   (with-normalized-cleared-completion-state (state state)
     (let ((query (input-state-search-query state)))
       (if (zerop (length query))
-          (cancel-history-search state)
-          (%history-search-updated-state
+          (%history-search-abort state)
+          (%history-search-update
            state
            :search-query (subseq query 0 (1- (length query)))
            :search-index 0)))))
@@ -72,14 +69,15 @@ with wraparound so repeated Ctrl-R can cycle through older matches."
         ((not (eq (input-state-mode state) :search))
          state)
         (matches
-         (%apply-history-search-result-state state matches))
+         (let* ((index (mod (input-state-search-index state) (length matches)))
+                (text (nth index matches)))
+           (copy-input-state-clearing-completion
+            state
+            :buffer text
+            :cursor-pos (length text)
+            :search-index (input-state-search-index state))))
         (t
          (%history-search-original-state state))))))
-
-(defun cancel-history-search (state)
-  (with-normalized-cleared-completion-state (state state)
-    (%finish-history-search (%history-search-original-state state)
-                            :suggest-update)))
 
 (defun reduce-search-input-state (state key-event)
   (case (nshell.domain.input:key-event-type key-event)
@@ -94,9 +92,9 @@ with wraparound so repeated Ctrl-R can cycle through older matches."
     (:backspace (%backspace-history-search-query state))
     ((:ctrl-r :up :ctrl-p) (%move-history-search-selection state 1))
     ((:ctrl-s :down :ctrl-n) (%move-history-search-selection state -1))
-    (:enter (%finish-history-search state :execute))
-    ((:right :ctrl-f) (%finish-history-search state :suggest-update))
-    ((:escape :ctrl-g) (cancel-history-search state))
+    (:enter (%history-search-finish state :execute))
+    ((:right :ctrl-f) (%history-search-finish state))
+    ((:escape :ctrl-g) (%history-search-abort state))
     (:ctrl-l (values state :clear-screen))
     (:ctrl-c (clear-input-state state))
     (otherwise (values state :redraw))))

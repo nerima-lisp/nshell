@@ -17,34 +17,11 @@
      (,wrapper
       ,@body)))
 
-(defun continue-multiline-input (result)
-  (format t "~%")
-  (reset-rendered-prompt-state)
-  (multiple-value-bind (continued-state output)
-      (insert-newline-at-cursor *input-state*
-                                :indent (if (or (nshell.domain.parsing:parse-diagnostic-kind-p
-                                                 result :trailing-continuation)
-                                                (nshell.domain.parsing:parse-diagnostic-kind-p
-                                                 result :unclosed-block))
-                                            2
-                                            0))
-    (declare (ignore output))
-    (setf *input-state* continued-state))
-  (lambda () (render-prompt-cont)))
-
-(defun execute-parsed-input (text ast)
-  (nshell.domain.history:history-add *history* text)
-  (nshell.domain.history:history-reset-navigation *history*)
-  (nshell.infrastructure.persistence:append-history-entry text)
-  (sync-exported-environment)
-  (let ((start-time (get-internal-real-time)))
-    (unwind-protect
-         (setf *last-exit-code* (or (execute-ast ast) 0))
-      (setf *last-command-duration-ms*
-            (let* ((ticks (- (get-internal-real-time) start-time))
-                   (ms (round (* 1000 (/ ticks internal-time-units-per-second)))))
-              (when (plusp ms)
-                ms))))))
+(defun %elapsed-command-duration-ms (start-time end-time)
+  (max 0
+       (round (* 1000
+                 (/ (- end-time start-time)
+                    internal-time-units-per-second)))))
 
 (defun refresh-current-input-state-suggestion (&optional (text (input-state-buffer *input-state*)))
   (let ((completion-path
@@ -55,66 +32,24 @@
                               :knowledge-base *kb*
                               :path completion-path))))
 
-(defun refresh-history-search-state ()
-  (let* ((query (input-state-search-query *input-state*))
-         (entries (nshell.application:interactive-history-search-use-case
-                   *history* query))
-         (texts (nshell.domain.history:history-entry-texts entries)))
-    (setf *input-state*
-          (apply-history-search-results-to-input-state *input-state* texts))))
+(defun %history-last-argument-state (state argument start end index)
+  (copy-input-state-clearing-completion
+   state
+   :buffer (concatenate 'string
+                        (subseq (input-state-buffer state) 0 start)
+                        argument
+                        (subseq (input-state-buffer state) end))
+   :cursor-pos (+ start (length argument))
+   :last-argument-start start
+   :last-argument-end (+ start (length argument))
+   :last-argument-index index))
 
-(defun %apply-history-last-argument-state (old-state new-state output)
-  (when new-state
-    (setf *input-state*
-          (record-undo-transition
-           old-state new-state output
-           (nshell.infrastructure.terminal:make-key-event :alt-dot)))
-    output))
-
-(defun %history-last-argument-matches-buffer-p (buffer start end replace-index)
-  (let ((argument (nshell.domain.history:history-last-argument-at
-                   *history* replace-index)))
-    (and argument
-         (string= argument (subseq buffer start end)))))
-
-(defun %replace-history-last-argument (old-state buffer start end replace-index)
-  (let* ((argument (nshell.domain.history:history-last-argument-at
-                    *history* (1+ replace-index))))
-    (if argument
-        (let* ((new-cursor (+ start (length argument)))
-               (new-buffer (concatenate 'string
-                                        (subseq buffer 0 start)
-                                        argument
-                                        (subseq buffer end))))
-          (%apply-history-last-argument-state
-           old-state
-           (copy-input-state-clearing-completion
-            old-state
-            :buffer new-buffer
-            :cursor-pos new-cursor
-            :last-argument-start start
-            :last-argument-end new-cursor
-            :last-argument-index (1+ replace-index))
-           :suggest-update))
-        :none)))
-
-(defun %insert-history-last-argument-from-history (old-state)
-  (let ((argument (nshell.domain.history:history-last-argument-at
-                   *history* 0)))
-    (if argument
-        (let ((cursor (input-state-cursor-pos old-state)))
-          (multiple-value-bind (inserted-state inserted-output)
-              (insert-string-at-cursor old-state argument)
-            (or (%apply-history-last-argument-state
-                 old-state
-                 (copy-input-state-clearing-completion
-                  inserted-state
-                  :last-argument-start cursor
-                  :last-argument-end (input-state-cursor-pos inserted-state)
-                  :last-argument-index 0)
-                 inserted-output)
-                :none)))
-        :none)))
+(defun %record-history-last-argument-transition (old-state new-state output)
+  (setf *input-state*
+        (record-undo-transition
+         old-state new-state output
+         (nshell.infrastructure.terminal:make-key-event :alt-dot)))
+  output)
 
 (defun insert-history-last-argument ()
   (let* ((old-state *input-state*)
@@ -127,16 +62,41 @@
             (integerp end)
             (integerp index)
             (<= 0 start end (length buffer))
-            (%history-last-argument-matches-buffer-p buffer start end index))
-       (%replace-history-last-argument old-state buffer start end index))
+            (let ((argument (nshell.domain.history:history-last-argument-at
+                             *history* index)))
+              (and argument
+                   (string= argument (subseq buffer start end)))))
+       (let ((argument (nshell.domain.history:history-last-argument-at
+                        *history* (1+ index))))
+         (if argument
+             (let ((new-state (%history-last-argument-state
+                               old-state argument start end (1+ index))))
+               (%record-history-last-argument-transition
+                old-state new-state :suggest-update)
+               :suggest-update)
+             :none)))
       (t
-       (%insert-history-last-argument-from-history old-state)))))
+       (let ((argument (nshell.domain.history:history-last-argument-at
+                        *history* 0)))
+         (if argument
+             (let ((cursor (input-state-cursor-pos old-state)))
+               (multiple-value-bind (inserted-state inserted-output)
+                   (insert-string-at-cursor old-state argument)
+                 (let ((new-state (%history-last-argument-state
+                                   inserted-state argument
+                                   cursor
+                                   (input-state-cursor-pos inserted-state)
+                                   0)))
+                   (%record-history-last-argument-transition
+                    old-state new-state inserted-output)
+                   inserted-output)))
+             :none))))))
 
 (defun %process-execute-output-event ()
   (clear-rendered-completions)
   (let ((text (input-state-buffer *input-state*)))
     (handler-case
-        (if (string= text "")
+      (if (string= text "")
             (with-reset-rendered-prompt-state-and-prompt-cont
               (format t "~%")
               (setf *last-command-duration-ms* nil)
@@ -145,7 +105,17 @@
               (:complete
                (with-reset-rendered-prompt-state-and-prompt-cont
                  (format t "~%")
-                 (execute-parsed-input text ast)
+                 (nshell.domain.history:history-add *history* text)
+                 (nshell.domain.history:history-reset-navigation *history*)
+                 (nshell.infrastructure.persistence:append-history-entry text)
+                 (sync-exported-environment)
+                 (let ((start-time (get-internal-real-time)))
+                   (unwind-protect
+                        (setf *last-exit-code* (or (execute-ast ast) 0))
+                     (setf *last-command-duration-ms*
+                           (%elapsed-command-duration-ms
+                            start-time
+                            (get-internal-real-time)))))
                  (setf *input-state* (make-repl-input-state))))
               (:error
                (with-reset-rendered-prompt-state-and-prompt-cont
@@ -155,7 +125,19 @@
                        *last-command-duration-ms* nil
                        *input-state* (make-repl-input-state))))
               (:incomplete
-               (continue-multiline-input result))))
+               (format t "~%")
+               (reset-rendered-prompt-state)
+               (multiple-value-bind (continued-state output)
+                   (insert-newline-at-cursor *input-state*
+                                             :indent (if (or (nshell.domain.parsing:parse-diagnostic-kind-p
+                                                              result :trailing-continuation)
+                                                             (nshell.domain.parsing:parse-diagnostic-kind-p
+                                                              result :unclosed-block))
+                                                         2
+                                                         0))
+                 (declare (ignore output))
+                 (setf *input-state* continued-state))
+               (lambda () (render-prompt-cont)))))
       (error (condition)
         (with-reset-rendered-prompt-state-and-prompt-cont
           (format t "~%nshell error: ~a~%" condition)
@@ -209,25 +191,30 @@
 
 (define-output-event-handler %process-history-search-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (refresh-history-search-state))
+    (let* ((query (input-state-search-query *input-state*))
+           (entries (nshell.application:interactive-history-search-use-case
+                     *history* query))
+           (texts (nshell.domain.history:history-entry-texts entries)))
+      (setf *input-state*
+            (apply-history-search-results-to-input-state *input-state* texts))))
 
 (define-output-event-handler %process-history-prev-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (let ((entry (nshell.domain.history:history-previous
-                   *history*
-                   (input-state-buffer *input-state*))))
-      (when entry
-        (setf *input-state*
-                (make-repl-input-state :buffer entry :cursor-pos (length entry)))
-        (refresh-current-input-state-suggestion))))
+  (let ((entry (nshell.domain.history:history-previous
+                 *history*
+                 (input-state-buffer *input-state*))))
+    (when entry
+      (setf *input-state*
+            (make-repl-input-state :buffer entry :cursor-pos (length entry)))
+      (refresh-current-input-state-suggestion))))
 
 (define-output-event-handler %process-history-next-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (let ((entry (nshell.domain.history:history-next *history*)))
-      (when entry
-        (setf *input-state*
-                (make-repl-input-state :buffer entry :cursor-pos (length entry)))
-        (refresh-current-input-state-suggestion))))
+  (let ((entry (nshell.domain.history:history-next *history*)))
+    (when entry
+      (setf *input-state*
+            (make-repl-input-state :buffer entry :cursor-pos (length entry)))
+      (refresh-current-input-state-suggestion))))
 
 (define-output-event-handler %process-clear-screen-output-event
     with-reset-rendered-prompt-state-and-prompt-cont

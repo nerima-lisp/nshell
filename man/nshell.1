@@ -6,7 +6,8 @@ nshell \- a modern, fish-inspired interactive shell written in Common Lisp
 .RB [ \-\-help ]
 .RB [ \-\-version ]
 .RB [ \-c
-.IR COMMAND ]
+.IR COMMAND
+.RI [ ARGS .\|.\|.]]
 .RI [ SCRIPT
 .RI [ ARGS .\|.\|.]]
 .SH DESCRIPTION
@@ -22,7 +23,11 @@ standard input in batch mode. With
 .BR \-c ,
 it executes a single
 .I COMMAND
-and exits. Given a
+and exits; any following
+.I ARGS
+are exposed to that command as
+.BR $argv .
+Given a
 .I SCRIPT
 file argument, it runs the script (with multiline blocks); any following
 .I ARGS
@@ -36,10 +41,13 @@ Print a usage summary and exit.
 .BR \-V ", " \-\-version
 Print version information and exit.
 .TP
-.BI \-c " COMMAND" "\fR, \fB\-\-command " COMMAND
+.BI \-c " COMMAND " "[ARGS...]\fR, \fB\-\-command " COMMAND " [ARGS...]"
 Execute
 .I COMMAND
-once in batch mode and exit with its status.
+once in batch mode and exit with its status. Trailing
+.I ARGS
+are exposed as
+.BR $argv .
 .SH KEY BINDINGS
 By default the line editor uses Emacs-style key bindings, including cursor
 motion (\fBC\-a\fR, \fBC\-e\fR, \fBM\-f\fR, \fBM\-b\fR), editing (\fBC\-k\fR,
@@ -51,8 +59,9 @@ Setting the environment variable
 to a non-empty value (other than 0/false/no) enables vi key bindings: press
 .B ESC
 to enter normal mode, which supports motions (\fBh l 0 ^ $ w b e\fR), insert
-entries (\fBi a I A\fR), edits (\fBx D C s\fR), operators (\fBdd cc dw cw\fR),
-and \fBj\fR/\fBk\fR for history.
+entries (\fBi a I A\fR), edits (\fBx D C s\fR), counts, operators
+(\fBdd cc dw cw\fR), char-wise visual selection (\fBv\fR), and \fBj\fR/\fBk\fR
+for history.
 .SH EXPANSIONS
 .B nshell
 performs, in order, brace expansion (\fB{a,b}\fR, \fB{1..5}\fR), tilde
@@ -67,8 +76,9 @@ relatives (\fB:= :+ :?\fR), length \fB${#VAR}\fR, prefix/suffix stripping
 Double quotes suppress globbing and word-splitting but allow variable,
 arithmetic, and command-substitution expansion; single quotes are fully
 literal. File-descriptor redirections \fB2> 2>> 2>&1 &> &>>\fR and the usual
-\fB> >> <\fR are supported, as are pipelines (\fB|\fR), logical operators
-(\fB&& ||\fR), sequencing (\fB;\fR), and background execution (\fB&\fR).
+\fB> >> <\fR are supported, along with here-documents \fB<<\fR and here-strings
+\fB<<<\fR. Pipelines (\fB|\fR), logical operators (\fB&& ||\fR), sequencing
+(\fB;\fR), and background execution (\fB&\fR) are supported.
 .SH CONTROL FLOW
 Fish-style control flow is available: \fBif\fR, \fBfor\fR, \fBwhile\fR,
 \fBswitch\fR, \fBbegin\fR/\fBend\fR, and user-defined \fBfunction\fRs. A

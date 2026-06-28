@@ -41,19 +41,37 @@
   "Send SIGNAL to PID. Negative PID values target process groups."
   (sb-posix:kill pid (%signal-number signal)))
 
+(defun %foreground-process-group-target ()
+  (when (and (integerp *foreground-pgid*)
+             (plusp *foreground-pgid*)
+             (/= *foreground-pgid* *shell-pgid*))
+    *foreground-pgid*))
+
+(defun %send-process-group-signal (pgid signal)
+  (sb-posix:kill (- pgid) signal))
+
+(defun %signal-foreground-process-group (signal)
+  (let ((pgid (%foreground-process-group-target)))
+    (when pgid
+      (handler-case
+          (%send-process-group-signal pgid signal)
+        (error ()
+          (setf *foreground-pgid* 0)))
+      pgid)))
+
 (defun shell-sigint-handler (signal info context)
   "Forward SIGINT to the foreground process group without killing the shell."
   (declare (ignore signal info context))
-  (when (> *foreground-pgid* 0)
-    (sb-posix:kill (- *foreground-pgid*) sb-unix:sigint))
+  (%signal-foreground-process-group sb-unix:sigint)
   (setf *sigint-received* t))
 
 (defun shell-sigtstp-handler (signal info context)
-  "Restore terminal state, then suspend the shell."
+  "Forward SIGTSTP to the foreground process group, or suspend the shell."
   (declare (ignore signal info context))
-  (ignore-errors (nshell.infrastructure.terminal:restore-terminal-mode))
-  (sb-sys:enable-interrupt sb-unix:sigtstp :default)
-  (sb-posix:kill (sb-posix:getpid) sb-unix:sigtstp))
+  (unless (%signal-foreground-process-group sb-unix:sigtstp)
+    (ignore-errors (nshell.infrastructure.terminal:restore-terminal-mode))
+    (sb-sys:enable-interrupt sb-unix:sigtstp :default)
+    (sb-posix:kill (sb-posix:getpid) sb-unix:sigtstp)))
 
 (defun shell-sigchld-handler (signal info context)
   "Record that child process state changed; reaping is done outside the handler."

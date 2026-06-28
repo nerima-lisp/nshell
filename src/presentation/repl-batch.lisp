@@ -1,22 +1,6 @@
 ;;; Batch REPL execution
 (in-package #:nshell.presentation)
 
-(defun handle-batch-line (line)
-  (handler-case
-      (nshell.domain.parsing:with-parsed-command-line-case (result ast line)
-        (:complete
-         (sync-exported-environment)
-         (setf *last-exit-code* (or (execute-ast ast) 0)))
-        (:error
-         (report-parse-diagnostics result *error-output*)
-         (setf *last-exit-code* 2))
-        (:incomplete
-         (report-parse-diagnostics result *error-output*)
-         (setf *last-exit-code* 2)))
-    (error (condition)
-      (format *error-output* "nshell error: ~a~%" condition)
-      (setf *last-exit-code* 1))))
-
 (defun %initialize-batch-state ()
   "Reset the global shell state for a non-interactive (batch or script) run."
   (setf *running* t
@@ -32,14 +16,27 @@
   (install-expansion-filesystem)
   (configure-completion-filesystem))
 
-(defun run-repl-batch (&key line)
-  "Batch (non-interactive) mode: read lines, execute commands, print raw output."
+(defun %run-batch-source-lines (lines)
+  (handler-case
+      (multiple-value-bind (output code)
+          (%execute-with-repl-shell-context
+           (lambda (context)
+             (nshell.application::%source-lines context lines)))
+        (declare (ignore output))
+        (setf *last-exit-code* (or code 0)))
+    (error (condition)
+      (format *error-output* "nshell error: ~a~%" condition)
+      (setf *last-exit-code* 1))))
+
+(defun run-repl-batch (&key line script-args)
+  "Batch (non-interactive) mode: read lines, execute commands, print raw output.
+SCRIPT-ARGS are exposed as $argv for `nshell -c COMMAND ARGS...'."
   (%initialize-batch-state)
-  (if line
-      (handle-batch-line line)
-      (loop for input-line = (read-line *standard-input* nil nil)
-            while (and input-line *running*)
-            do (handle-batch-line input-line)))
+  (let ((nshell.domain.expansion:*positional-args* script-args))
+    (if line
+        (%run-batch-source-lines (list line))
+        (%run-batch-source-lines
+         (nshell.application::%collect-source-lines *standard-input*))))
   *last-exit-code*)
 
 (defun run-repl-script (path &optional script-args)

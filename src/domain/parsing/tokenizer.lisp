@@ -1,16 +1,11 @@
 (in-package #:nshell.domain.parsing)
 
 (defstruct (token (:constructor make-token (type value &optional (start 0) (end 0)
-                                            (quoted-p nil) (quote-style nil))))
+                                            (quote-style nil))))
   (type :word :type keyword :read-only t)
   (value "" :type string :read-only t)
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t)
-  ;; QUOTED-P is retained for backward compatibility and is true only for
-  ;; single-quoted (fully literal) words. QUOTE-STYLE carries the finer
-  ;; distinction needed for correct expansion: NIL (unquoted), :SINGLE, or
-  ;; :DOUBLE. Double-quoted words still expand variables but must not glob.
-  (quoted-p nil :type boolean :read-only t)
   (quote-style nil :type symbol :read-only t))
 
 ;; token-type, token-value, token-start, token-end are auto-generated struct accessors
@@ -45,7 +40,7 @@
   "Characters that separate shell operators.")
 
 (defparameter +shell-command-separator-token-types+
-  '(:pipe :and :or :semicolon :ampersand)
+  '(:pipe :and :or :semicolon :newline :ampersand)
   "Token types that separate shell command segments.")
 
 (defun shell-word-separator-p (ch)
@@ -91,21 +86,21 @@
     (%tokenizer-state-advance state)
     ch))
 
-(defun %tokenizer-state-push-token (state type value start end &optional quoted-p quote-style)
-  (push (make-token type value start end quoted-p quote-style) (tokenizer-state-tokens state)))
+(defun %tokenizer-state-push-token (state type value start end &optional quote-style)
+  (push (make-token type value start end quote-style) (tokenizer-state-tokens state)))
 
-(defun %tokenizer-state-emit-token (state type value &optional quoted-p quote-style)
+(defun %tokenizer-state-emit-token (state type value &optional quote-style)
   (let ((start (tokenizer-state-pos state))
         (width (length value)))
-    (%tokenizer-state-push-token state type value start (+ start width) quoted-p quote-style)
+    (%tokenizer-state-push-token state type value start (+ start width) quote-style)
     (%tokenizer-state-advance state width)))
 
-(defun %tokenizer-balanced-substitution-end (state start)
+(defun %balanced-substitution-end (input start)
   (let ((depth 0)
         (quote nil)
         (escaped nil))
-    (loop for index from start below (tokenizer-state-len state)
-          for ch = (char (tokenizer-state-input state) index)
+    (loop for index from start below (length input)
+          for ch = (char input index)
           do (cond
                (escaped
                 (setf escaped nil))
@@ -122,6 +117,9 @@
                 (decf depth)
                 (when (zerop depth)
                   (return index)))))))
+
+(defun %tokenizer-balanced-substitution-end (state start)
+  (%balanced-substitution-end (tokenizer-state-input state) start))
 
 (defun %tokenizer-read-balanced-command-substitution (state)
   (let* ((start (tokenizer-state-pos state))
@@ -191,6 +189,25 @@
                                  ((char= c #\))
                                   (decf depth)
                                   (when (zerop depth) (return)))))))
+               ;; Keep fish-style command substitution attached when it appears
+               ;; inside a compound word such as prefix(cmd)suffix.
+               ((and (char= ch #\()
+                     (%tokenizer-state-peek state 1)
+                     (char/= (%tokenizer-state-peek state 1) #\))
+                     (%tokenizer-balanced-substitution-end
+                      state (tokenizer-state-pos state)))
+                (let ((depth 0) (quote nil) (escaped nil))
+                  (loop for c = (%tokenizer-state-peek state)
+                        while c
+                        do (push (%tokenizer-state-take state) chars)
+                           (cond (escaped (setf escaped nil))
+                                 ((char= c #\\) (setf escaped t))
+                                 (quote (when (char= c quote) (setf quote nil)))
+                                 ((or (char= c #\') (char= c #\")) (setf quote c))
+                                 ((char= c #\() (incf depth))
+                                 ((char= c #\))
+                                  (decf depth)
+                                  (when (zerop depth) (return)))))))
                ((or (char= ch #\Space) (char= ch #\Tab)
                     (char= ch #\Newline)
                     (char= ch #\|) (char= ch #\>)
@@ -225,7 +242,14 @@
                                    start
                                    (tokenizer-state-pos state)))))
 
-(defun %tokenizer-read-delimited (state delimiter &key escape-p quoted-p quote-style)
+(defun %tokenizer-double-quoted-escape-character-p (ch)
+  (or (char= ch #\\)
+      (char= ch #\")
+      (char= ch #\$)
+      (char= ch #\`)
+      (char= ch #\Newline)))
+
+(defun %tokenizer-read-delimited (state delimiter &key escape-p quote-style)
   (let ((start (tokenizer-state-pos state))
         (chars '()))
     (%tokenizer-state-advance state)
@@ -236,9 +260,13 @@
                 (return))
                ((and escape-p (char= ch #\\))
                 (%tokenizer-state-advance state)
-                (when (< (tokenizer-state-pos state) (tokenizer-state-len state))
-                  (push (%tokenizer-state-peek state) chars)
-                  (%tokenizer-state-advance state)))
+                (if (< (tokenizer-state-pos state) (tokenizer-state-len state))
+                    (let ((escaped (%tokenizer-state-peek state)))
+                      (unless (%tokenizer-double-quoted-escape-character-p escaped)
+                        (push #\\ chars))
+                      (push escaped chars)
+                      (%tokenizer-state-advance state))
+                    (push #\\ chars)))
                (t
                 (push ch chars)
                 (%tokenizer-state-advance state))))
@@ -248,18 +276,18 @@
           (%tokenizer-state-advance state)
           (%tokenizer-state-push-token state :word (coerce (nreverse chars) 'string)
                                        start (tokenizer-state-pos state)
-                                       quoted-p quote-style))
+                                       quote-style))
         (progn
           (setf (tokenizer-state-incomplete state) t)
           (%tokenizer-state-push-token state :error (coerce (nreverse chars) 'string) start (tokenizer-state-pos state))))))
 
 (defun %tokenizer-read-single-quoted (state)
-  (%tokenizer-read-delimited state #\' :quoted-p t :quote-style :single))
+  (%tokenizer-read-delimited state #\' :quote-style :single))
 
 (defun %tokenizer-read-double-quoted (state)
   ;; Double quotes suppress globbing and word-splitting but still permit
-  ;; variable/command expansion, so they are NOT marked QUOTED-P (literal);
-  ;; the :DOUBLE quote-style drives glob suppression during expansion.
+  ;; variable/command expansion, so the :DOUBLE quote-style drives glob
+  ;; suppression during expansion.
   (%tokenizer-read-delimited state #\" :escape-p t :quote-style :double))
 
 (defun %tokenizer-read-comment (state)
@@ -270,6 +298,9 @@
 
 (defun %tokenizer-handle-whitespace (state)
   (%tokenizer-state-advance state))
+
+(defun %tokenizer-handle-newline (state)
+  (%tokenizer-state-emit-token state :newline (string #\Newline)))
 
 (defun %tokenizer-handle-ampersand (state)
   (let ((next (%tokenizer-state-peek state 1)))
@@ -318,10 +349,20 @@ The current character is a single digit immediately followed by > or <."
       (%tokenizer-state-emit-token state :redirect ">")))
 
 (defun %tokenizer-handle-left-angle (state)
-  (if (and (%tokenizer-state-peek state 1)
-           (char= (%tokenizer-state-peek state 1) #\())
-      (%tokenizer-read-balanced-process-substitution state)
-      (%tokenizer-state-emit-token state :redirect "<")))
+  (cond
+    ((and (%tokenizer-state-peek state 1)
+          (char= (%tokenizer-state-peek state 1) #\())
+     (%tokenizer-read-balanced-process-substitution state))
+    ((and (%tokenizer-state-peek state 1)
+          (%tokenizer-state-peek state 2)
+          (char= (%tokenizer-state-peek state 1) #\<)
+          (char= (%tokenizer-state-peek state 2) #\<))
+     (%tokenizer-state-emit-token state :redirect "<<<"))
+    ((and (%tokenizer-state-peek state 1)
+          (char= (%tokenizer-state-peek state 1) #\<))
+     (%tokenizer-state-emit-token state :redirect "<<"))
+    (t
+     (%tokenizer-state-emit-token state :redirect "<"))))
 
 (defun %tokenizer-handle-left-paren (state)
   (if (and (%tokenizer-state-peek state 1)
@@ -369,7 +410,9 @@ The current character is a single digit immediately followed by > or <."
 (defun tokenize-into-state (state)
   (loop while (< (tokenizer-state-pos state) (tokenizer-state-len state))
         do (let ((ch (%tokenizer-state-peek state)))
-             (cond ((or (char= ch #\Space) (char= ch #\Tab) (char= ch #\Newline))
+             (cond ((char= ch #\Newline)
+                    (%tokenizer-handle-newline state))
+                   ((or (char= ch #\Space) (char= ch #\Tab))
                     (%tokenizer-handle-whitespace state))
                    ((char= ch #\#)
                     (%tokenizer-handle-comment state))

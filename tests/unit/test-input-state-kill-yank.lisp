@@ -3,18 +3,17 @@
 (in-suite input-state-tests)
 
 (test input-state-ctrl-w-kills-previous-word-into-kill-ring
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "git checkout main"
                 :cursor-pos 17
                 :completion-index 2
                 :suggestion " ignored")))
     (with-reduced-input-state (new-state output) (reduce-once state :ctrl-w)
-      (is-input-state
+      (is-input-state-with-completion-cleared
        new-state
        :buffer "git checkout "
        :cursor-pos 13
        :kill-ring '("main"))
-      (is-completion-session-cleared new-state)
       (is (eq :suggest-update output)))))
 
 (test input-state-ctrl-w-preserves-trailing-whitespace-in-kill-ring
@@ -30,18 +29,17 @@
       (is (eq :suggest-update output)))))
 
 (test input-state-alt-backspace-kills-previous-word
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "git checkout main"
                 :cursor-pos 17
                 :completion-index 1
                 :suggestion " ignored")))
     (with-reduced-input-state (new-state output) (reduce-once state :alt-backspace)
-      (is-input-state
+      (is-input-state-with-completion-cleared
        new-state
        :buffer "git checkout "
        :cursor-pos 13
        :kill-ring '("main"))
-      (is-completion-session-cleared new-state)
       (is (eq :suggest-update output)))))
 
 (test input-state-alt-backspace-treats-shell-operators-as-word-boundaries
@@ -81,18 +79,17 @@
       (is (eq :suggest-update output)))))
 
 (test input-state-alt-d-kills-next-word
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "echo   hello world"
                 :cursor-pos 4
                 :completion-index 1
                 :suggestion " ignored")))
     (with-reduced-input-state (new-state output) (reduce-once state :alt-d)
-      (is-input-state
+      (is-input-state-with-completion-cleared
        new-state
        :buffer "echo world"
        :cursor-pos 4
        :kill-ring '("   hello"))
-      (is-completion-session-cleared new-state)
       (is (eq :suggest-update output))))
   (let ((state (input-state
                 :buffer "echo hello world"

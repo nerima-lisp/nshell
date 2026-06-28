@@ -26,12 +26,25 @@
     ,@body))
 
 (defmacro with-temporary-function ((symbol function) &body body)
-  `(let ((original-function (symbol-function ,symbol)))
-     (unwind-protect
-          (progn
-            (setf (symbol-function ,symbol) ,function)
-            ,@body)
-       (setf (symbol-function ,symbol) original-function))))
+  `(with-temporary-functions ((,symbol ,function))
+     ,@body))
+
+(defmacro with-temporary-functions (bindings &body body)
+  (let ((saved-bindings nil)
+        (setup-forms nil)
+        (restore-forms nil))
+    (dolist (binding bindings)
+      (destructuring-bind (symbol function) binding
+        (let ((original (gensym "ORIGINAL-FUNCTION-")))
+          (push `(,original (symbol-function ,symbol)) saved-bindings)
+          (push `(setf (symbol-function ,symbol) ,function) setup-forms)
+          (push `(setf (symbol-function ,symbol) ,original) restore-forms))))
+    `(let ,(nreverse saved-bindings)
+       (unwind-protect
+            (progn
+              ,@(nreverse setup-forms)
+              ,@body)
+         ,@(nreverse restore-forms)))))
 
 (defmacro with-stable-repl-prompt ((&key (width 4) (text "ns> ")) &body body)
   `(with-temporary-function
@@ -94,30 +107,17 @@
         finally (return (and (probe-file path)
                              (string= expected (uiop:read-file-string path))))))
 
-(defun call-with-captured-output (thunk)
-  (let ((results nil))
-    (values
-     (capture-standard-output
-       (setf results (multiple-value-list (funcall thunk))))
-     results)))
-
 (defun call-repl-builtin (command args)
   (let ((builtin-p nil)
         (code nil))
-    (multiple-value-bind (output results)
-        (call-with-captured-output
-         (lambda ()
-           (multiple-value-setq (builtin-p code)
-             (nshell.presentation::execute-builtin
-              (nshell.domain.parsing:make-command-node command args)))))
-      (declare (ignore results))
+    (let ((output (capture-standard-output
+                    (multiple-value-setq (builtin-p code)
+                      (nshell.presentation::execute-builtin
+                       (nshell.domain.parsing:make-command-node command args))))))
       (values output builtin-p code))))
 
 (defun call-repl-execute-ast (ast)
   (let ((code nil))
-    (multiple-value-bind (output results)
-        (call-with-captured-output
-         (lambda ()
-           (setf code (nshell.presentation::execute-ast ast))))
-      (declare (ignore results))
+    (let ((output (capture-standard-output
+                    (setf code (nshell.presentation::execute-ast ast)))))
       (values output code))))

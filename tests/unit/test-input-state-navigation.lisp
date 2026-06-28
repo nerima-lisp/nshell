@@ -21,6 +21,15 @@
         (with-reduced-input-state (bounded-right-state) (reduce-once end-state :right)
           (is-input-state bounded-right-state :cursor-pos 3))))))
 
+(test input-state-page-navigation-requests-history-traversal
+  (let ((state (input-state :buffer "git" :cursor-pos 3)))
+    (with-reduced-input-state (prev-state prev-output) (reduce-once state :page-up)
+      (is-input-state prev-state :buffer "git" :cursor-pos 3)
+      (is (eq :history-prev prev-output)))
+    (with-reduced-input-state (next-state next-output) (reduce-once state :page-down)
+      (is-input-state next-state :buffer "git" :cursor-pos 3)
+      (is (eq :history-next next-output)))))
+
 (test input-state-cursor-moves-clear-autosuggestion
   (let ((state (input-state
                 :buffer "git status"

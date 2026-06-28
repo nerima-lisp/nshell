@@ -4,6 +4,8 @@
   '((">" . :>)
     (">>" . :>>)
     ("<" . :<)
+    ("<<" . :<<)
+    ("<<<" . :<<<)
     ("1>" . :>)
     ("1>>" . :>>)
     ("2>" . :2>)
@@ -21,6 +23,7 @@
     (:and :token-type :and :text "&&" :continues t)
     (:or :token-type :or :text "||" :continues t)
     (:semi :token-type :semicolon :text ";")
+    (:semi :token-type :newline :text "newline")
     (:amp :token-type :ampersand :text "&")))
 
 (defun %separator-rule (separator)

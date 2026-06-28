@@ -62,6 +62,8 @@
   (1 . :home)
   (3 . :delete)
   (4 . :end)
+  (5 . :page-up)
+  (6 . :page-down)
   (7 . :home)
   (8 . :end)
   (200 . :bracketed-paste-start)

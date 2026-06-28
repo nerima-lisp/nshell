@@ -13,8 +13,8 @@
          (id1 (nshell.domain.job-control:monitor-add-job monitor job1))
          (id2 (nshell.domain.job-control:monitor-add-job monitor job2)))
     (is (not (= id1 id2)))
-    (is (= 0 id1))
-    (is (= 1 id2))))
+    (is (= 1 id1))
+    (is (= 2 id2))))
 
 (test job-state-transitions-created-running-stopped-completed
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))

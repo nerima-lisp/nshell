@@ -6,6 +6,11 @@
         (nshell.domain.completion:completion-context-command context)
         (nshell.domain.completion:completion-context-argument-prefix context))))
 
+(defun %autosuggest-closed-quoted-token-p (input start end)
+  (and (< start end)
+       (member (char input start) '(#\" #\') :test #'char=)
+       (char= (char input start) (char input (1- end)))))
+
 (defun completion-suggestion (knowledge-base input &key path)
   (when (and knowledge-base
              (not (nshell.domain.parsing:shell-input-blank-p input)))
@@ -36,7 +41,8 @@
                        (escaped-text (nshell.presentation::%completion-insertion-text
                                       text
                                       :quote-context quote-context)))
-                  (subseq escaped-text (length escaped-prefix)))))))
+                  (unless (%autosuggest-closed-quoted-token-p input token-start token-end)
+                    (subseq escaped-text (length escaped-prefix))))))))
       (error () nil))))
 
 (defun compute-suggestion (history input &key knowledge-base path)

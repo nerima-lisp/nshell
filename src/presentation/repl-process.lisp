@@ -4,8 +4,9 @@
 (defparameter *background-proc-alive-p* #'sb-ext:process-alive-p
   "Function used to determine whether a background process is still running.")
 
-(defparameter *background-proc-exit-code* #'sb-ext:process-exit-code
-  "Function used to read the exit code from a completed background process.")
+(defparameter *background-proc-exit-code*
+  #'nshell.infrastructure.acl:process-exit-status-code
+  "Function used to read the shell-compatible exit code from a completed background process.")
 
 (defun reap-background-jobs ()
   (let ((completed-jobs nil))

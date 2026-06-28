@@ -50,15 +50,23 @@
         (when (and tail (not (keywordp tail)))
           (princ-to-string tail))))))
 
+(defun pathname-file-component-name (path)
+  "Return a raw file component name for PATH without pathname syntax escaping."
+  (let ((name (pathname-name path))
+        (type (pathname-type path)))
+    (when (and name (not (keywordp name)))
+      (let ((base (princ-to-string name)))
+        (when (< 0 (length base))
+          (if (and type (not (eq type :unspecific)) (not (keywordp type)))
+              (concatenate 'string base "." (princ-to-string type))
+              base))))))
+
 (defun entry-path-name (entry)
   "Return a display basename for a pathname or string ENTRY."
   (cond
     ((pathnamep entry)
-     (let ((file-name (file-namestring entry)))
-       (cond
-         ((and file-name (< 0 (length file-name))) file-name)
-         ((pathname-last-directory-component entry))
-         (t nil))))
+     (or (pathname-file-component-name entry)
+         (pathname-last-directory-component entry)))
     ((stringp entry)
      (let* ((trimmed (trim-trailing-path-separators entry))
             (separator (position-if #'path-separator-p trimmed :from-end t)))

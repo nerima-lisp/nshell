@@ -2,9 +2,15 @@
 (in-package #:nshell.presentation)
 
 (defun seed-repl-completion-knowledge-base (knowledge-base)
-  (dolist (spec (nshell.domain.completion:builtin-completion-command-specs)
+  (dolist (spec (append (nshell.domain.completion:builtin-completion-command-specs)
+                        (nshell.domain.completion:external-completion-command-specs))
                 knowledge-base)
-    (destructuring-bind (command &key flags description) spec
+    (destructuring-bind (command &key subcommands flags option-values exclusive-options
+                         description &allow-other-keys)
+        spec
       (nshell.domain.completion:kb-add-command knowledge-base command
+                                               :subcommands subcommands
                                                :flags flags
+                                               :option-values option-values
+                                               :exclusive-options exclusive-options
                                                :description description))))

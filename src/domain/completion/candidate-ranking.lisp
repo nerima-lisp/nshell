@@ -43,20 +43,17 @@
                  (completion-candidate< prefix left right))))
 
 (defun merge-candidates (&rest candidate-lists)
-  (let ((seen (make-hash-table :test #'equal))
+  (let ((cells-by-text (make-hash-table :test #'equal))
         (results nil))
     (dolist (candidates candidate-lists)
       (dolist (candidate candidates)
         (let ((text (candidate-text candidate)))
-          (let ((current (gethash text seen)))
+          (let ((cell (gethash text cells-by-text)))
             (cond
-              ((null current)
-               (setf (gethash text seen) candidate)
+              ((null cell)
                (push candidate results))
-              ((better-duplicate-candidate-p candidate current)
-               (setf (gethash text seen) candidate)
-               (setf results (cons candidate
-                                   (remove text results
-                                           :key #'candidate-text
-                                           :test #'string=)))))))))
+              ((better-duplicate-candidate-p candidate (car cell))
+               (setf (car cell) candidate)))
+            (unless cell
+              (setf (gethash text cells-by-text) results))))))
     results))

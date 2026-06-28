@@ -20,21 +20,37 @@
             (when (and count (plusp count))
               (octets->string buffer count))))))))
 
-(defun pty-test-read-until (fd needle &key (attempts 20))
+(defun pty-test-read-until (fd needle &key (attempts 20) (sleep-seconds 0.05))
   (let ((output ""))
     (dotimes (i attempts output)
       (let ((chunk (pty-test-read-available fd)))
         (when chunk
           (setf output (concatenate 'string output chunk))
           (when (search needle output :test #'char-equal)
-            (return output)))))))
+            (return output)))
+        (unless chunk
+          (sleep sleep-seconds))))))
 
 (defun pty-test-close-process (pty)
   (when pty
     (ignore-errors
       (nshell.infrastructure.acl:kill-process
+       (- (nshell.infrastructure.acl:pty-process-pgid pty)) :sigcont))
+    (ignore-errors
+      (nshell.infrastructure.acl:kill-process
        (- (nshell.infrastructure.acl:pty-process-pgid pty)) :sigterm))
     (ignore-errors (close (nshell.infrastructure.acl:pty-process-stream pty)))))
+
+(defun pty-test-wait-for-state (pid states &key (attempts 40) (untraced t))
+  (loop repeat attempts
+        for status = (multiple-value-list
+                      (nshell.infrastructure.acl:wait-job
+                       pid
+                       :untraced untraced
+                       :nohang t))
+        when (member (second status) states)
+          do (return status)
+        do (sleep 0.05)))
 
 (test pty-spawn-creates-process-with-master-fd
   "PTY-SPAWN starts a subprocess and exposes its PTY master fd."
@@ -125,3 +141,64 @@
                    do (return)
                  do (sleep 0.05)))
       (pty-test-close-process pty))))
+
+(test pty-spawn-delivers-terminal-generated-sigint
+  "PTY-SPAWN delivers master-written ETX as SIGINT to the foreground process group."
+  #-(or darwin linux)
+  (skip "PTY tests are only supported on Darwin and Linux")
+  #+(or darwin linux)
+  (skip-in-sandbox "requires /bin/sh"
+  (let ((pty nil))
+    (unwind-protect
+         (progn
+           (setf pty (nshell.infrastructure.acl:pty-spawn
+                      "/bin/sh"
+                      '("-c" "trap 'echo got-int; exit 42' INT; echo ready; while :; do sleep 1; done")))
+           (is (search "ready"
+                       (pty-test-read-until
+                        (nshell.infrastructure.acl:pty-process-master-fd pty)
+                        "ready")))
+           (nshell.infrastructure.acl:pty-write
+            (nshell.infrastructure.acl:pty-process-master-fd pty)
+            (string (code-char 3)))
+           (is (search "got-int"
+                       (pty-test-read-until
+                        (nshell.infrastructure.acl:pty-process-master-fd pty)
+                        "got-int")))
+           (let ((status (pty-test-wait-for-state
+                          (nshell.infrastructure.acl:pty-process-pid pty)
+                          '(:exited))))
+             (is (not (null status)))
+             (is (eq (second status) :exited))
+             (is (= (third status) 42))))
+      (pty-test-close-process pty)))))
+
+(test pty-spawn-delivers-terminal-generated-sigtstp
+  "PTY-SPAWN delivers master-written SUB as SIGTSTP to the foreground process group."
+  #-(or darwin linux)
+  (skip "PTY tests are only supported on Darwin and Linux")
+  #+(or darwin linux)
+  (skip-in-sandbox "requires /bin/sh"
+  (let ((pty nil))
+    (unwind-protect
+         (progn
+           (setf pty (nshell.infrastructure.acl:pty-spawn
+                      "/bin/sh"
+                      '("-c" "trap 'echo got-tstp; kill -STOP $$' TSTP; echo ready; while :; do sleep 1; done")))
+           (is (search "ready"
+                       (pty-test-read-until
+                        (nshell.infrastructure.acl:pty-process-master-fd pty)
+                        "ready")))
+           (nshell.infrastructure.acl:pty-write
+            (nshell.infrastructure.acl:pty-process-master-fd pty)
+            (string (code-char 26)))
+           (is (search "got-tstp"
+                       (pty-test-read-until
+                        (nshell.infrastructure.acl:pty-process-master-fd pty)
+                        "got-tstp")))
+           (let ((status (pty-test-wait-for-state
+                          (nshell.infrastructure.acl:pty-process-pid pty)
+                          '(:stopped))))
+             (is (not (null status)))
+             (is (eq (second status) :stopped))))
+      (pty-test-close-process pty)))))

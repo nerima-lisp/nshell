@@ -159,6 +159,38 @@ git status --short")
                       input
                       :knowledge-base kb)))))))
 
+(test autosuggest-keeps-double-quoted-literal-backslash-prefix
+  (let ((history (nshell.domain.history:make-command-history))
+        (kb (nshell.domain.completion:make-knowledge-base)))
+    (with-file-completion-adapters
+        ((lambda (dir)
+           (declare (ignore dir))
+           (list (make-pathname :name "my\\ file" :type "lisp")))
+         (lambda (dir)
+           (declare (ignore dir))
+           nil))
+      (is (string= "file.lisp"
+                   (nshell.presentation:compute-suggestion
+                    history
+                    "source \"my\\ "
+                    :knowledge-base kb))))))
+
+(test autosuggest-does-not-append-outside-closed-quoted-token
+  (let ((history (nshell.domain.history:make-command-history))
+        (kb (nshell.domain.completion:make-knowledge-base)))
+    (with-file-completion-adapters
+        ((lambda (dir)
+           (declare (ignore dir))
+           (list #p"my file.lisp"))
+         (lambda (dir)
+           (declare (ignore dir))
+           nil))
+      (dolist (input '("source 'my'" "source \"my\""))
+        (is (null (nshell.presentation:compute-suggestion
+                   history
+                   input
+                   :knowledge-base kb)))))))
+
 (test autosuggest-completes-source-filesystem-arguments
   (let ((history (nshell.domain.history:make-command-history))
         (kb (nshell.domain.completion:make-knowledge-base)))

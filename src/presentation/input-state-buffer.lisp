@@ -21,10 +21,6 @@
         (values state :none)
         (commit-buffer-edit (%splice-buffer buffer cursor (1+ cursor))))))
 
-(defun move-cursor-to (state position)
-  (with-normalized-input-state (state state)
-    (values (copy-input-state-with state :cursor-pos position) :redraw)))
-
 (defun move-cursor-clearing-suggestion (state delta)
   (with-normalized-input-state (state state)
     (values (copy-input-state-with state
@@ -45,7 +41,9 @@
            (copy-input-state-clearing-completion state
                                                  :buffer ""
                                                  :cursor-pos 0
-                                                 :mode :insert))
+                                                 :mode :insert
+                                                 :vi-count nil
+                                                 :vi-visual-anchor :clear))
           :redraw))
 
 (defun insert-char-at-cursor (state ch)

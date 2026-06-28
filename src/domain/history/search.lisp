@@ -20,7 +20,7 @@
   (let ((text (history-entry-text entry)))
     (if case-sensitive
         (search query text)
-        (search (string-downcase query) (string-downcase text)))))
+        (search query text :test #'char-equal))))
 
 (defun line-starts-with-p (text query line-start line-end case-sensitive)
   (let ((query-end (+ line-start (length query))))

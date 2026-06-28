@@ -4,24 +4,88 @@
   (let ((spec (%command-path-spec command)))
     (if args
         (let ((exit-code 0))
-          (values
-           (with-output-to-string (out)
-             (dolist (name args)
-               (multiple-value-bind (kind text)
-                   (%describe-command-path
-                    context name
-                    (lambda (missing-name)
-                      (%format-command-path-missing spec missing-name)))
-                 (case kind
-                   (:builtin
-                    (format out (getf spec :builtin-format) name))
-                   (:path
-                    (format out (getf spec :path-format) name text))
-                   (otherwise
-                    (setf exit-code 1)
-                    (write-string text out))))))
-           exit-code))
+          (labels ((emit-name (out name)
+                     (multiple-value-bind (kind text)
+                         (resolve-command-path context name)
+                       (case kind
+                         (:builtin
+                          (format out (getf spec :builtin-format) name)
+                          t)
+                         (:path
+                          (format out (getf spec :path-format) name text)
+                          t)
+                         (otherwise
+                          (write-string
+                           (format nil "~a: ~a~%"
+                                   (getf spec :missing-prefix)
+                                   (format nil (getf spec :missing-format) name))
+                           out)
+                          nil)))))
+            (values
+             (with-output-to-string (out)
+               (dolist (name args)
+                 (unless (emit-name out name)
+                   (setf exit-code 1))))
+             exit-code)))
         (%builtin-usage command (getf spec :usage)))))
+
+(defun %builtin-type-mode (options)
+  (cond
+    ((%type-options-query-p options) :query)
+    ((%type-options-path-p options) :path)
+    ((%type-options-force-path-p options) :force-path)
+    ((%type-options-type-p options) :type)
+    (t :default)))
+
+(defun %builtin-type-query (context names options)
+  (let ((exit-code 1))
+    (dolist (name names exit-code)
+      (when (%type-command-candidates context name options)
+        (setf exit-code 0)))))
+
+(defun %builtin-type-emit-candidate (out spec name candidate options mode)
+  (case mode
+    (:type
+     (format out "~a~%"
+             (ecase (first candidate)
+               (:alias "alias")
+               (:function "function")
+               (:abbreviation "abbreviation")
+               (:builtin "builtin")
+               (:path "file"))))
+    (:path
+     (case (first candidate)
+       (:builtin
+        (format out (getf spec :path-builtin-format) name))
+       (:path
+        (format out (getf spec :path-only-format)
+                (second candidate)))))
+    (:force-path
+     (when (eq (first candidate) :path)
+       (format out (getf spec :path-only-format)
+               (second candidate))))
+    (otherwise
+     (%write-type-candidate out spec name candidate options))))
+
+(defun %builtin-type-emit-candidates (out spec name candidates options mode)
+  (dolist (candidate (if (%type-options-all-p options)
+                         candidates
+                         (list (first candidates))))
+    (%builtin-type-emit-candidate out spec name candidate options mode)))
+
+(defun %builtin-type-render (context names spec options mode)
+  (let ((exit-code 1))
+    (values
+     (with-output-to-string (out)
+       (dolist (name names)
+         (let ((candidates (%type-command-candidates context name options)))
+           (cond
+             (candidates
+              (setf exit-code 0)
+              (%builtin-type-emit-candidates out spec name candidates options mode))
+             ((eq mode :default)
+              (write-string (format nil (getf spec :missing-format) name) out))))))
+     exit-code)))
 
 (defun %builtin-type (context args)
   (let ((spec nshell.domain.completion:+type-builtin-spec+))
@@ -35,51 +99,10 @@
         ((null names)
          (%type-usage))
         (t
-         (let ((exit-code 1)
-               (mode (cond
-                       ((%type-options-query-p options) :query)
-                       ((%type-options-path-p options) :path)
-                       ((%type-options-force-path-p options) :force-path)
-                       ((%type-options-type-p options) :type)
-                       (t :default))))
-           (labels ((emit-candidates (name candidates out)
-                      (setf exit-code 0)
-                      (dolist (candidate (if (%type-options-all-p options)
-                                             candidates
-                                             (list (first candidates))))
-                        (case mode
-                          (:type
-                           (format out "~a~%"
-                                   (%type-kind-label (first candidate))))
-                          (:path
-                           (case (first candidate)
-                             (:builtin
-                              (format out (getf spec :path-builtin-format) name))
-                             (:path
-                              (format out (getf spec :path-only-format)
-                                      (second candidate)))))
-                          (:force-path
-                           (when (eq (first candidate) :path)
-                             (format out (getf spec :path-only-format)
-                                     (second candidate))))
-                          (otherwise
-                           (%write-type-candidate out spec name candidate options))))))
-             (if (eq mode :query)
-                 (progn
-                   (dolist (name names)
-                     (when (%type-command-candidates context name options)
-                       (setf exit-code 0)))
-                   (values nil exit-code))
-                 (let ((output
-                         (with-output-to-string (out)
-                           (dolist (name names)
-                             (let ((candidates (%type-command-candidates context name options)))
-                               (cond
-                                 (candidates
-                                  (emit-candidates name candidates out))
-                                 ((eq mode :default)
-                                  (write-string (%format-command-type-missing spec name) out))))))))
-                  (values output exit-code))))))))))
+         (let ((mode (%builtin-type-mode options)))
+           (if (eq mode :query)
+               (values nil (%builtin-type-query context names options))
+               (%builtin-type-render context names spec options mode))))))))
 
 (defun %builtin-which (context args)
   (%builtin-command-path context args "which"))
@@ -94,7 +117,9 @@
                   (nshell.domain.parsing:make-command-node
                    (nshell.domain.parsing:command-node-command alias-node)
                    (append (nshell.domain.parsing:command-node-args alias-node)
-                           (nshell.domain.parsing:command-node-args command-node)))
+                           (nshell.domain.parsing:command-node-args command-node))
+                   nil
+                   (nshell.domain.parsing::command-node-command-quote-style alias-node))
                   command-node))
             command-node))
       command-node))

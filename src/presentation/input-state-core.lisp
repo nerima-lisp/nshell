@@ -10,9 +10,10 @@
 vi normal mode. Set from configuration or the NSHELL_VI_MODE environment.")
 
 (deftype input-mode ()
-  "Input reducer modes. :VI-COMMAND is vi normal mode; :VI-D and :VI-C are the
-transient operator-pending states after pressing d or c in normal mode."
-  '(member :insert :search :vi-command :vi-d :vi-c))
+  "Input reducer modes. :VI-COMMAND is vi normal mode; :VI-VISUAL is vi
+char-wise visual selection mode; :VI-D and :VI-C are transient
+operator-pending states after pressing d or c in normal mode."
+  '(member :insert :search :vi-command :vi-visual :vi-d :vi-c))
 
 (deftype output-event ()
   "Events emitted by `reduce-input-state' for an outer, effectful REPL loop."
@@ -25,11 +26,13 @@ transient operator-pending states after pressing d or c in normal mode."
                                             (completion-index -1)
                                             (completion-base-buffer nil)
                                             (completion-base-cursor nil)
-                                            (last-candidates nil)
-                                            suggestion
-                                            (mode :insert)
-                                            (abbreviation-expander nil)
-                                            (kill-ring nil)
+                                             (last-candidates nil)
+                                             suggestion
+                                             (mode :insert)
+                                             (vi-count nil)
+                                             (vi-visual-anchor nil)
+                                             (abbreviation-expander nil)
+                                             (kill-ring nil)
                                             (last-yank-start nil)
                                             (last-yank-end nil)
                                             (last-yank-index nil)
@@ -49,15 +52,17 @@ the buffer length. COMPLETION-INDEX and LAST-CANDIDATES model fish-style
 completion cycling. COMPLETION-BASE-BUFFER keeps the buffer that produced
 the current candidate list so cycling replaces the same token repeatedly.
 COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
-SUGGESTION is the gray autosuggestion tail, if any. MODE is either :INSERT
-or :SEARCH. ABBREVIATION-EXPANDER is an optional function from the token
-before cursor to its replacement string. KILL-RING stores killed text for
-later yank operations. LAST-ARGUMENT-* stores the editable span created by the
-last Alt-. history insertion so repeated Alt-. can replace it with older
-arguments. SEARCH-QUERY, SEARCH-ORIGINAL-BUFFER, SEARCH-ORIGINAL-CURSOR, and
-SEARCH-INDEX model an effect-free reverse history search; the outer REPL
-supplies matching history rows. UNDO-STACK and REDO-STACK store editable line
-snapshots for fish/readline-style local editing undo."
+  SUGGESTION is the gray autosuggestion tail, if any. MODE is one of the
+  reducer modes in INPUT-MODE. VI-COUNT stores a pending numeric argument in vi
+  command/operator mode. VI-VISUAL-ANCHOR stores the fixed end of a char-wise
+  visual selection while MODE is :VI-VISUAL. ABBREVIATION-EXPANDER is an optional function from the
+  token before cursor to its replacement string. KILL-RING stores killed text
+  for later yank operations. LAST-ARGUMENT-* stores the editable span created by
+  the last Alt-. history insertion so repeated Alt-. can replace it with older
+  arguments. SEARCH-QUERY, SEARCH-ORIGINAL-BUFFER, SEARCH-ORIGINAL-CURSOR, and
+  SEARCH-INDEX model an effect-free reverse history search; the outer REPL
+  supplies matching history rows. UNDO-STACK and REDO-STACK store editable line
+  snapshots for fish/readline-style local editing undo."
   (buffer "" :type string)
   (cursor-pos 0 :type integer)
   (completion-index -1 :type integer)
@@ -66,6 +71,8 @@ snapshots for fish/readline-style local editing undo."
   (last-candidates nil :type list)
   (suggestion nil :type (or null string))
   (mode :insert :type input-mode)
+  (vi-count nil :type (or null integer))
+  (vi-visual-anchor nil :type (or null integer))
   (abbreviation-expander nil :type (or null function))
   (kill-ring nil :type list)
   (last-yank-start nil :type (or null integer))

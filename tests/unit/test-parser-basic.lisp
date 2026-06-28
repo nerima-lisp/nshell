@@ -34,19 +34,33 @@
   (with-complete-ast (ast "echo plain \"$FOO\" '*'")
     (let ((args (nshell.domain.parsing:command-node-args ast)))
       (is (= 3 (length args)))
-      ;; Unquoted word: no quote style, stored as a bare string.
-      (is (null (nshell.domain.parsing:arg-quote-style (first args))))
-      ;; Double-quoted: expandable (not arg-quoted-p) but flagged :double.
-      (is (eq :double (nshell.domain.parsing:arg-quote-style (second args))))
-      (is (not (nshell.domain.parsing:arg-quoted-p (second args))))
-      ;; Single-quoted: fully literal.
-      (is (eq :single (nshell.domain.parsing:arg-quote-style (third args))))
-      (is (nshell.domain.parsing:arg-quoted-p (third args))))))
+      (assert-arg-quote-styles args nil :double :single))))
+
+(test parse-records-quote-style-for-command-word
+  "Command-position quote style is retained so execution can expand it consistently."
+  (with-complete-ast (ast "\"$CMD\" plain")
+    (is (eq :double
+            (nshell.domain.parsing::command-node-command-quote-style ast))))
+  (with-complete-ast (ast "'$CMD' plain")
+    (is (eq :single
+            (nshell.domain.parsing::command-node-command-quote-style ast))))
+  (with-complete-ast (ast "$CMD plain")
+    (is (null
+         (nshell.domain.parsing::command-node-command-quote-style ast)))))
 
 (test parse-pipeline
   (with-complete-ast (ast "ls | grep foo")
     (is (nshell.domain.parsing:pipeline-node-p ast))
     (is (= 2 (length (nshell.domain.parsing:pipeline-node-commands ast))))))
+
+(test ast-node-command-line-renders-command-and-pipeline
+  "AST command-line rendering should match the background job display text."
+  (with-complete-ast (command "printf %s bg")
+    (is (string= "printf %s bg"
+                 (nshell.domain.parsing:ast-node->command-line command))))
+  (with-complete-ast (pipeline "printf %s bg-pipe | cat")
+    (is (string= "printf %s bg-pipe | cat"
+                 (nshell.domain.parsing:ast-node->command-line pipeline)))))
 
 (test parse-mixed-sequence-and-pipeline
   (with-complete-ast (ast "echo one | cat; echo two")
@@ -56,6 +70,13 @@
          (first (nshell.domain.parsing:sequence-node-commands ast))))
     (is (nshell.domain.parsing:command-node-p
          (second (nshell.domain.parsing:sequence-node-commands ast))))
+    (is (equal '(:semi)
+               (nshell.domain.parsing:sequence-node-separators ast)))))
+
+(test parse-newline-sequence
+  (with-complete-ast (ast (format nil "echo one~%echo two"))
+    (is (nshell.domain.parsing:sequence-node-p ast))
+    (is (= 2 (length (nshell.domain.parsing:sequence-node-commands ast))))
     (is (equal '(:semi)
                (nshell.domain.parsing:sequence-node-separators ast)))))
 
@@ -69,6 +90,41 @@
     (is (nshell.domain.parsing:command-node-p ast))
     (is (equal '("hello" (">" . nil) "out.txt")
                (nshell.domain.parsing:command-node-args ast)))))
+
+(test parse-here-string-redirect
+  (with-complete-command-line (result ast "cat <<< hello")
+    (is (null (nshell.domain.parsing:parse-errors result)))
+    (is (nshell.domain.parsing:command-node-p ast))
+    (is (equal '(("<<<" . nil) "hello")
+               (nshell.domain.parsing:command-node-args ast)))))
+
+(test parse-here-document-redirect
+  (with-complete-command-line (result ast (format nil "cat << EOF~%hello~%EOF"))
+    (is (null (nshell.domain.parsing:parse-errors result)))
+    (is (nshell.domain.parsing:command-node-p ast))
+    (is (equal `(("<<" . nil) ,(format nil "hello~%"))
+               (nshell.domain.parsing:command-node-args ast)))))
+
+(test parse-here-document-preserves-tail-command
+  (with-complete-command-line (result ast
+                                      (format nil "cat << EOF~%hello~%EOF~%echo done"))
+    (is (null (nshell.domain.parsing:parse-errors result)))
+    (is (nshell.domain.parsing:sequence-node-p ast))
+    (is (= 2 (length (nshell.domain.parsing:sequence-node-commands ast))))
+    (is (equal '(:semi)
+               (nshell.domain.parsing:sequence-node-separators ast)))
+    (let ((first-command (first (nshell.domain.parsing:sequence-node-commands ast)))
+          (second-command (second (nshell.domain.parsing:sequence-node-commands ast))))
+      (is (equal `(("<<" . nil) ,(format nil "hello~%"))
+                 (nshell.domain.parsing:command-node-args first-command)))
+      (is (string= "echo"
+                   (nshell.domain.parsing:command-node-command second-command)))
+      (is (equal '("done")
+                 (nshell.domain.parsing:command-node-args second-command))))))
+
+(test parse-incomplete-here-document
+  (with-parsed-command-line (result (format nil "cat << EOF~%hello"))
+    (is (nshell.domain.parsing:parse-result-incomplete result))))
 
 (test parse-escaped-space-word
   (with-complete-command-line (result ast "echo hello\\ world")

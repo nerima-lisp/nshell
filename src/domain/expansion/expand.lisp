@@ -140,161 +140,6 @@ name."
   (or (position-if-not #'variable-name-char-p content)
       (length content)))
 
-(defun %string-replace (value old new global)
-  "Replace OLD (a literal substring) with NEW in VALUE, the first occurrence only
-unless GLOBAL is true."
-  (if (zerop (length old))
-      value
-      (with-output-to-string (out)
-        (loop with start = 0
-              for pos = (search old value :start2 start)
-              while pos
-              do (write-string (subseq value start pos) out)
-                 (write-string new out)
-                 (setf start (+ pos (length old)))
-                 (unless global
-                   (write-string (subseq value start) out)
-                   (return))
-              finally (write-string (subseq value start) out)))))
-
-(defun %param-strip-prefix (value rest env)
-  "Strip a glob-matching prefix from VALUE. REST is the text after the first #;
-a further leading # selects the longest match instead of the shortest."
-  (let* ((longest (and (plusp (length rest)) (char= (char rest 0) #\#)))
-         (pattern (expand-variables (subseq rest (if longest 1 0)) env)))
-    (if (zerop (length pattern))
-        value
-        (dolist (i (if longest
-                       (loop for i from (length value) downto 0 collect i)
-                       (loop for i from 0 to (length value) collect i))
-                   value)
-          (when (glob-match-p pattern (subseq value 0 i))
-            (return (subseq value i)))))))
-
-(defun %param-strip-suffix (value rest env)
-  "Strip a glob-matching suffix from VALUE. REST is the text after the first %;
-a further leading % selects the longest match instead of the shortest."
-  (let* ((longest (and (plusp (length rest)) (char= (char rest 0) #\%)))
-         (pattern (expand-variables (subseq rest (if longest 1 0)) env))
-         (len (length value)))
-    (if (zerop (length pattern))
-        value
-        (dolist (i (if longest
-                       (loop for i from 0 to len collect i)
-                       (loop for i from len downto 0 collect i))
-                   value)
-          (when (glob-match-p pattern (subseq value i))
-            (return (subseq value 0 i)))))))
-
-(defun %param-substitute (value rest env)
-  "Substitute within VALUE for ${VAR/pat/rep}. REST is the text after the first
-/; a further leading / replaces all occurrences. PAT is matched literally."
-  (let* ((global (and (plusp (length rest)) (char= (char rest 0) #\/)))
-         (body (subseq rest (if global 1 0)))
-         (slash (position #\/ body))
-         (pat (expand-variables (if slash (subseq body 0 slash) body) env))
-         (rep (expand-variables (if slash (subseq body (1+ slash)) "") env)))
-    (%string-replace value pat rep global)))
-
-(defun %expand-braced-parameter (content env)
-  "Expand the CONTENT of a ${...} parameter expansion.
-Supports plain ${NAME}, length ${#NAME}, the POSIX default/alternate operators
-${NAME:-word} / :- / := / :+ / :? (a leading colon makes the test fire on unset
-OR empty), prefix/suffix stripping ${NAME#pat} / ## / % / %% (glob patterns),
-and substitution ${NAME/pat/rep} / // (literal patterns). WORD/patterns are
-themselves variable-expanded. The := assignment side effect is not performed."
-  (cond
-    ;; ${#NAME} -> length (only when # precedes a bare name, not ${NAME#pat}).
-    ((and (plusp (length content)) (char= (char content 0) #\#)
-          (every #'variable-name-char-p (subseq content 1)))
-     (let ((value (nshell.domain.environment:env-get env (subseq content 1))))
-       (princ-to-string (length (or value "")))))
-    (t
-     (let* ((op-pos (%parameter-name-end content))
-            (name (subseq content 0 op-pos))
-            (rest (subseq content op-pos))
-            (raw (nshell.domain.environment:env-get env name))
-            (set-p (not (null raw)))
-            (value (or raw "")))
-       (if (zerop (length rest))
-           value
-           (let* ((colon (char= (char rest 0) #\:))
-                  (op-index (if colon 1 0))
-                  (op (when (< op-index (length rest)) (char rest op-index)))
-                  (word (expand-variables
-                         (subseq rest (min (length rest) (1+ op-index))) env))
-                  (fire (if colon
-                            (or (not set-p) (zerop (length value)))
-                            (not set-p))))
-             (case op
-               ((#\- #\=) (if fire word value))
-               (#\+ (if fire "" word))
-               (#\? (if fire word value))
-               (#\# (%param-strip-prefix value (subseq rest 1) env))
-               (#\% (%param-strip-suffix value (subseq rest 1) env))
-               (#\/ (%param-substitute value (subseq rest 1) env))
-               (t (concatenate 'string value rest)))))))))
-
-(defvar *positional-args* nil
-  "List of function arguments used to expand the fish-style $argv and $argv[N].
-Bound dynamically by the function-call machinery for the duration of a function
-body; NIL at top level.")
-
-(defun %argv-index-ref (input end len)
-  "If INPUT has an [N] index immediately after a name ending at END, return
-\(values element-string next-index); otherwise (values NIL END). N is 1-based."
-  (if (and (< end len) (char= (char input end) #\[))
-      (let ((close (position #\] input :start (1+ end))))
-        (if close
-            (let ((n (ignore-errors
-                       (parse-integer input :start (1+ end) :end close
-                                            :junk-allowed nil))))
-              (if (and n (plusp n))
-                  (values (or (nth (1- n) *positional-args*) "") (1+ close))
-                  (values "" (1+ close))))
-            (values nil end)))
-      (values nil end)))
-
-(defun expand-variables (input env)
-  "Expand $VAR and ${VAR} occurrences in INPUT using ENV. Also expands the
-fish-style argument list $argv and indexed $argv[N] from *POSITIONAL-ARGS*
-\(bare $argv joins with spaces here; a bare unquoted $argv is split into separate
-words by the argument expander). POSIX positional $1..$9 are NOT special and stay
-literal, matching fish. Undefined variables expand to the empty string."
-  (with-output-to-string (out)
-    (loop with len = (length input)
-          for i from 0 below len
-          for ch = (char input i)
-          do (cond
-               ((char/= ch #\$) (write-char ch out))
-               ((>= (1+ i) len) (write-char ch out))
-               ((char= (char input (1+ i)) #\{)
-                (let ((end (position #\} input :start (+ i 2))))
-                  (if end
-                      (progn
-                        (write-string
-                         (%expand-braced-parameter (subseq input (+ i 2) end) env)
-                         out)
-                        (setf i end))
-                      (write-char ch out))))
-               ((variable-name-start-p (char input (1+ i)))
-                (let* ((start (1+ i))
-                       (end (loop for j from (1+ i) below len
-                                  while (variable-name-char-p (char input j))
-                                  finally (return j)))
-                       (name (subseq input start end)))
-                  (cond
-                    ((string= name "argv")
-                     (multiple-value-bind (element next) (%argv-index-ref input end len)
-                       (cond
-                         (element (write-string element out) (setf i (1- next)))
-                         (t (write-string (format nil "~{~a~^ ~}" *positional-args*) out)
-                            (setf i (1- end))))))
-                    (t
-                     (write-string (or (nshell.domain.environment:env-get env name) "") out)
-                     (setf i (1- end))))))
-               (t (write-char ch out))))))
-
 (defun starts-with-p (prefix string)
   (and (<= (length prefix) (length string))
        (string= prefix string :end2 (length prefix))))
@@ -334,6 +179,28 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
         (if matches
             (sort (mapcar #'namestring matches) #'string<)
             (list pattern)))))
+
+(defun %first-glob-index (pattern)
+  (position-if #'glob-char-p pattern))
+
+(defun %expand-glob-with-prefix (pattern)
+  "Expand assignment-like compound words such as label=*.txt as label=file.txt."
+  (let* ((glob-index (%first-glob-index pattern))
+         (equals (and glob-index
+                      (position #\= pattern :end glob-index :from-end t)))
+         (path-equals (and equals
+                           (position #\/ pattern :end equals :from-end t))))
+    (if (or (null equals) path-equals)
+        (expand-glob pattern)
+        (let* ((prefix (subseq pattern 0 (1+ equals)))
+               (suffix (subseq pattern (1+ equals)))
+               (expanded (expand-glob suffix)))
+          (if (and (= 1 (length expanded))
+                   (string= suffix (first expanded)))
+              (list pattern)
+              (mapcar (lambda (entry)
+                        (concatenate 'string prefix entry))
+                      expanded))))))
 
 (defun %find-matching-brace (string start)
   "Return the index of the #\} matching the #\{ at START, or NIL if unbalanced."
@@ -403,18 +270,3 @@ no valid range is left literal, matching shell behavior."
                                        append (loop for suf in (expand-braces suffix)
                                                     collect (concatenate 'string
                                                                          prefix opt-exp suf)))))))))))
-
-(defun expand-all (input env)
-  "Apply brace, tilde, arithmetic, variable, and glob expansion to INPUT,
-returning the (possibly multiple) resulting fields."
-  (loop for braced in (expand-braces input)
-        append (expand-glob
-                (expand-variables
-                 (expand-arithmetic (expand-tilde braced env) env) env))))
-
-(defun expand-double-quoted (input env)
-  "Expand INPUT as the contents of a double-quoted string.
-Arithmetic ($((...))) and variables are expanded, but tilde, globbing, and
-word-splitting are suppressed (POSIX semantics), so the result is always a
-single string. Command substitution is applied by the caller before this."
-  (expand-variables (expand-arithmetic input env) env))

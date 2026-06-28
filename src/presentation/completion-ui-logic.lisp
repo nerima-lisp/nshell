@@ -110,15 +110,22 @@
     (:double
      (%completion-double-quoted-insertion-text text))))
 
-(defun %completion-unescape-token (text)
+(defun %completion-unescape-token (text &key quote-context)
   (with-output-to-string (out)
     (let ((escaped nil))
       (loop for ch across text
             do (cond
                  (escaped
-                  (write-char ch out)
+                  (if (or (null quote-context)
+                          (and (eq quote-context :double)
+                               (%completion-double-quoted-escape-character-p ch)))
+                      (write-char ch out)
+                      (progn
+                        (write-char #\\ out)
+                        (write-char ch out)))
                   (setf escaped nil))
-                 ((char= ch #\\)
+                 ((and (char= ch #\\)
+                       (not (eq quote-context :single)))
                   (setf escaped t))
                  (t
                   (write-char ch out))))
@@ -162,12 +169,15 @@
 
 (defun %completion-token-body-bounds (input start end)
   (let ((body-start start)
-        (body-end end))
-    (when (and (< body-start body-end)
-               (member (char input body-start) '(#\" #\') :test #'char=))
+        (body-end end)
+        (quote-char (and (< start end)
+                         (member (char input start) '(#\" #\') :test #'char=)
+                         (char input start))))
+    (when quote-char
       (incf body-start))
-    (when (and (< body-start body-end)
-               (member (char input (1- body-end)) '(#\" #\') :test #'char=))
+    (when (and quote-char
+               (< body-start body-end)
+               (char= (char input (1- body-end)) quote-char))
       (decf body-end))
     (values body-start body-end)))
 
@@ -183,12 +193,14 @@
             (multiple-value-bind (body-start body-end)
                 (%completion-token-body-bounds buffer start end)
               (let* ((token (subseq buffer body-start body-end))
-                     (raw-token (%completion-unescape-token token)))
+                     (quote-context (%completion-quote-context buffer start end))
+                     (raw-token (%completion-unescape-token
+                                 token
+                                 :quote-context quote-context)))
                 (if (and (> (length prefix) (length raw-token))
                          (<= (length raw-token) (length prefix))
                          (string= raw-token (subseq prefix 0 (length raw-token))))
-                  (let* ((quote-context (%completion-quote-context buffer start end))
-                         (insertion (%completion-insertion-text prefix
+                  (let* ((insertion (%completion-insertion-text prefix
                                                                 :quote-context quote-context))
                          (new-buffer (%completion-splice-with-quote-context
                                       buffer start end insertion

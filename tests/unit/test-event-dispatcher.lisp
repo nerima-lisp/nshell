@@ -11,8 +11,7 @@
 
 (test dispatcher-drains-events-in-fifo-order-per-type
   "Events published for a type are delivered in FIFO order."
-  (let ((dispatcher (nshell.application:make-event-dispatcher))
-        (seen nil))
+  (let ((dispatcher (nshell.application:make-event-dispatcher)))
     (with-event-capture (seen dispatcher :type-a) (nshell.domain.events:domain-event-timestamp event)
       (nshell.application:publish-event dispatcher (nshell.domain.events:make-domain-event :type-a 1))
       (nshell.application:publish-event dispatcher (nshell.domain.events:make-domain-event :type-a 2))
@@ -22,8 +21,7 @@
 
 (test dispatcher-filters-events-by-type
   "Handlers only receive events for their subscribed type."
-  (let ((dispatcher (nshell.application:make-event-dispatcher))
-        (seen nil))
+  (let ((dispatcher (nshell.application:make-event-dispatcher)))
     (with-event-capture (seen dispatcher :type-x) (nshell.domain.events:domain-event-type event)
       (nshell.application:publish-event dispatcher (test-event :type-x))
       (nshell.application:publish-event dispatcher (test-event :type-y))
@@ -33,9 +31,7 @@
 
 (test dispatcher-delivers-to-multiple-handlers
   "Multiple handlers subscribed to the same type see all matching events."
-  (let ((dispatcher (nshell.application:make-event-dispatcher))
-        (first-handler nil)
-        (second-handler nil))
+  (let ((dispatcher (nshell.application:make-event-dispatcher)))
     (with-event-capture (first-handler dispatcher :type-a) (nshell.domain.events:domain-event-type event)
       (with-event-capture (second-handler dispatcher :type-a) (nshell.domain.events:domain-event-type event)
         (nshell.application:publish-event dispatcher (test-event :type-a))
@@ -57,8 +53,7 @@
 
 (test dispatcher-isolates-handler-errors
   "A failing handler is collected as an error and does not block siblings."
-  (let ((dispatcher (nshell.application:make-event-dispatcher))
-        (seen nil))
+  (let ((dispatcher (nshell.application:make-event-dispatcher)))
     (nshell.application:subscribe dispatcher :type-a
                                   (lambda (event)
                                     (declare (ignore event))

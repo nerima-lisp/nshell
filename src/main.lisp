@@ -18,35 +18,40 @@
 
 (defun %cli-action (arguments)
   "Classify top-level CLI arguments."
-  (cond ((or (member "--help" arguments :test #'string=)
-             (member "-h" arguments :test #'string=))
-         :help)
-        ((or (member "--version" arguments :test #'string=)
-             (member "-V" arguments :test #'string=))
-         :version)
-        ((and (= (length arguments) 2)
-              (or (string= (first arguments) "-c")
-                  (string= (first arguments) "--command")))
-         :command)
-        ((null arguments)
-         :run)
-        ;; A leading non-flag argument names a script file to execute; any
-        ;; remaining arguments become the script's $argv.
-        ((not (%flag-argument-p (first arguments)))
-         :script)
-        (t
-         :invalid)))
+  (if (null arguments)
+      :run
+      (let ((first-argument (first arguments)))
+        (cond ((or (string= first-argument "--help")
+                   (string= first-argument "-h"))
+               :help)
+              ((or (string= first-argument "--version")
+                   (string= first-argument "-V"))
+               :version)
+              ((and (>= (length arguments) 2)
+                    (or (string= first-argument "-c")
+                        (string= first-argument "--command")))
+               :command)
+              ;; A leading non-flag argument names a script file to execute; any
+              ;; remaining arguments become the script's $argv.
+              ((not (%flag-argument-p first-argument))
+               :script)
+              (t
+               :invalid)))))
 
 (defun %cli-command (arguments)
   "Return the command string for command mode."
   (second arguments))
 
+(defun %cli-command-arguments (arguments)
+  "Return trailing arguments for command mode."
+  (cddr arguments))
+
 (defun %print-usage (&optional (stream *standard-output*))
-  (format stream "Usage: nshell [--help] [--version] [-c COMMAND] [SCRIPT [ARGS...]]~%")
+  (format stream "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]~%")
   (format stream "~%")
   (format stream "Without arguments, nshell starts an interactive shell when~%")
   (format stream "stdin is a terminal and reads batch input from stdin otherwise.~%")
-  (format stream "With -c/--command, nshell executes COMMAND once in batch mode.~%")
+  (format stream "With -c/--command, nshell executes COMMAND once in batch mode (ARGS are $argv).~%")
   (format stream "With a SCRIPT file argument, nshell runs the script (ARGS are $argv).~%"))
 
 (defun %print-version (&optional (stream *standard-output*))
@@ -71,7 +76,8 @@
                   0)
                  (:command
                   (nshell.presentation::run-repl-batch
-                   :line (%cli-command arguments)))
+                   :line (%cli-command arguments)
+                   :script-args (%cli-command-arguments arguments)))
                  (:script
                   (nshell.presentation::run-repl-script
                    (first arguments) (rest arguments)))

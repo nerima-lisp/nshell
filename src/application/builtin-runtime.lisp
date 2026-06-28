@@ -95,6 +95,21 @@
      (concatenate 'string directory command))
     (t (concatenate 'string directory "/" command))))
 
+(defun %resolve-command-path-candidates (context command)
+  (cond
+    ((%command-has-directory-p command)
+     (when (%stat-path context command)
+       (list command)))
+    (t
+     (let ((path (or (and (shell-context-environment context)
+                          (nshell.domain.environment:env-get
+                           (shell-context-environment context) "PATH"))
+                     "")))
+       (loop for directory in (%split-path path)
+             for candidate = (%join-path-name directory command)
+             when (%stat-path context candidate)
+               collect candidate)))))
+
 (defun %stat-path (context path)
   (handler-case
       (funcall (%filesystem-fn context :stat) path)
@@ -119,37 +134,19 @@
   "Return COMMAND's executable path from builtins or PATH, or NIL."
   (cond
     ((lookup-builtin command) (values :builtin command))
-    ((%command-has-directory-p command)
-     (when (%stat-path context command)
-       (values :path command)))
     (t
-     (let ((path (or (and (shell-context-environment context)
-                          (nshell.domain.environment:env-get
-                           (shell-context-environment context) "PATH"))
-                     "")))
-       (loop for directory in (%split-path path)
-             for candidate = (%join-path-name directory command)
-             when (%stat-path context candidate)
-               do (return (values :path candidate)))))))
+     (let ((candidates (%resolve-command-path-candidates context command)))
+       (when candidates
+         (values :path (first candidates)))))))
 
 (defun %command-path-spec (command)
   (cdr (assoc command nshell.domain.completion:+command-path-builtin-specs+
               :test #'string=)))
 
-(defun %describe-command-path (context command missing-formatter)
-  (multiple-value-bind (kind location) (resolve-command-path context command)
-    (case kind
-      (:builtin (values :builtin command))
-      (:path (values :path location))
-      (otherwise (values nil (funcall missing-formatter command))))))
-
-(defun %format-command-path-missing (spec command)
-  (format nil "~a: ~a~%"
-          (getf spec :missing-prefix)
-          (format nil (getf spec :missing-format) command)))
-
-(defun %format-command-type-missing (spec command)
-  (format nil (getf spec :missing-format) command))
+(defun %execute-function-command-in-context (context function-body args)
+  ;; Expose the call arguments to the function body as $argv / $argv[N].
+  (let ((nshell.domain.expansion:*positional-args* args))
+    (%source-lines context function-body)))
 
 (defstruct %type-options
   (all-p nil)
@@ -187,19 +184,12 @@
     (t nil)))
 
 (defun %type-color-enabled-p (option)
-  (cond
-    ((string= option "--color") t)
-    ((and (>= (length option) 8)
-          (string= option "--color=" :end1 8 :end2 8))
-     (let ((value (subseq option 8)))
-       (cond
-         ((string= value "never") nil)
-         ((or (string= value "always")
-              (string= value "auto"))
-          t)
-         (t
-          nil))))
-     (t nil)))
+  (or (string= option "--color")
+      (and (>= (length option) 8)
+           (string= option "--color=" :end1 8 :end2 8)
+           (let ((value (subseq option 8)))
+             (or (string= value "always")
+                 (string= value "auto"))))))
 
 (defun %string-lines (text)
   (loop with start = 0
@@ -263,19 +253,9 @@
     (values options remaining nil nil)))
 
 (defun %resolve-type-path-candidates (context command)
-  (cond
-    ((%command-has-directory-p command)
-     (when (%stat-path context command)
-       (list (list :path command))))
-    (t
-     (let ((path (or (and (shell-context-environment context)
-                          (nshell.domain.environment:env-get
-                           (shell-context-environment context) "PATH"))
-                     "")))
-       (loop for directory in (%split-path path)
-             for candidate = (%join-path-name directory command)
-              when (%stat-path context candidate)
-                collect (list :path candidate))))))
+  (mapcar (lambda (candidate)
+            (list :path candidate))
+          (%resolve-command-path-candidates context command)))
 
 (defun %type-command-shell-shadowed-p (context command)
   (or (nth-value 1 (gethash command (shell-context-alias-table context)))
@@ -288,58 +268,69 @@
 (defun %type-command-source-path (context command)
   (nth-value 0 (gethash command (shell-context-function-source-table context))))
 
-(defun %type-command-candidates (context command options)
-  (let ((candidates nil))
-    (labels ((add-candidate (kind text)
-               (push (list kind text) candidates))
-              (add-path-candidates (path-candidates)
-                (dolist (candidate (if (%type-options-all-p options)
-                                       path-candidates
-                                       (let ((first (first path-candidates)))
-                                         (when first (list first)))))
-                  (add-candidate (first candidate) (second candidate)))))
-      (cond
-        ((%type-options-force-path-p options)
-         (add-path-candidates (%resolve-type-path-candidates context command)))
-        ((%type-options-path-p options)
-         (let ((source-path (%type-command-source-path context command))
-               (shell-shadowed-p (%type-command-shell-shadowed-p context command))
-               (builtin-present-p (%type-command-builtin-present-p command)))
-           (when (and builtin-present-p (not shell-shadowed-p))
-             (add-candidate :builtin command))
-           (when source-path
-             (add-candidate :path source-path))
-           (unless (or source-path shell-shadowed-p builtin-present-p)
-             (add-path-candidates (%resolve-type-path-candidates context command)))
-           (when (and (null candidates) shell-shadowed-p)
-             (add-candidate :shadowed nil))))
-        (t
-         (multiple-value-bind (alias alias-present-p)
-             (gethash command (shell-context-alias-table context))
-           (when alias-present-p
-             (add-candidate :alias alias)))
-         (unless (%type-options-no-functions-p options)
-           (multiple-value-bind (function-body function-present-p)
-               (gethash command (shell-context-function-table context))
-             (when function-present-p
-               (add-candidate :function function-body))))
-         (multiple-value-bind (abbreviation abbreviation-present-p)
-             (gethash command (shell-context-abbreviation-table context))
-           (when abbreviation-present-p
-             (add-candidate :abbreviation
-                            (%abbreviation-expansion abbreviation))))
-         (when (%type-command-builtin-present-p command)
-           (add-candidate :builtin command))
-         (add-path-candidates (%resolve-type-path-candidates context command)))))
+(defun %type-add-candidate (candidates kind text)
+  (cons (list kind text) candidates))
+
+(defun %type-add-path-candidates (candidates options path-candidates)
+  (dolist (candidate (if (%type-options-all-p options)
+                         path-candidates
+                         (let ((first (first path-candidates)))
+                           (when first (list first)))))
+    (setf candidates (%type-add-candidate candidates
+                                          (first candidate)
+                                          (second candidate))))
+  candidates)
+
+(defun %type-command-candidates-for-path-option (context command options)
+  (let ((candidates nil)
+        (source-path (%type-command-source-path context command))
+        (shell-shadowed-p (%type-command-shell-shadowed-p context command))
+        (builtin-present-p (%type-command-builtin-present-p command)))
+    (when (and builtin-present-p (not shell-shadowed-p))
+      (setf candidates (%type-add-candidate candidates :builtin command)))
+    (when source-path
+      (setf candidates (%type-add-candidate candidates :path source-path)))
+    (unless (or source-path shell-shadowed-p builtin-present-p)
+      (setf candidates (%type-add-path-candidates candidates
+                                                  options
+                                                  (%resolve-type-path-candidates context command))))
+    (when (and (null candidates) shell-shadowed-p)
+      (setf candidates (%type-add-candidate candidates :shadowed nil)))
     (nreverse candidates)))
 
-(defun %type-kind-label (kind)
-  (ecase kind
-    (:alias "alias")
-    (:function "function")
-    (:abbreviation "abbreviation")
-    (:builtin "builtin")
-    (:path "file")))
+(defun %type-command-candidates-for-default-option (context command options)
+  (let ((candidates nil))
+    (multiple-value-bind (alias alias-present-p)
+        (gethash command (shell-context-alias-table context))
+      (when alias-present-p
+        (setf candidates (%type-add-candidate candidates :alias alias))))
+    (unless (%type-options-no-functions-p options)
+      (multiple-value-bind (function-body function-present-p)
+          (gethash command (shell-context-function-table context))
+        (when function-present-p
+          (setf candidates (%type-add-candidate candidates :function function-body)))))
+    (multiple-value-bind (abbreviation abbreviation-present-p)
+        (gethash command (shell-context-abbreviation-table context))
+      (when abbreviation-present-p
+        (setf candidates (%type-add-candidate candidates :abbreviation
+                                              (%abbreviation-expansion abbreviation)))))
+    (when (%type-command-builtin-present-p command)
+      (setf candidates (%type-add-candidate candidates :builtin command)))
+    (setf candidates (%type-add-path-candidates candidates
+                                                options
+                                                (%resolve-type-path-candidates context command)))
+    (nreverse candidates)))
+
+(defun %type-command-candidates (context command options)
+  (cond
+    ((%type-options-force-path-p options)
+     (%type-add-path-candidates nil
+                                options
+                                (%resolve-type-path-candidates context command)))
+    ((%type-options-path-p options)
+     (%type-command-candidates-for-path-option context command options))
+    (t
+     (%type-command-candidates-for-default-option context command options))))
 
 (defun %write-type-candidate (out spec name candidate options)
   (destructuring-bind (kind text) candidate
@@ -361,30 +352,13 @@
       (:path
        (format out (getf spec :path-format) name text)))))
 
-(defun %describe-command-type (context command missing-formatter)
-  (multiple-value-bind (alias alias-present-p)
-      (gethash command (shell-context-alias-table context))
-    (if alias-present-p
-        (values :alias alias)
-        (multiple-value-bind (function-body function-present-p)
-            (gethash command (shell-context-function-table context))
-          (if function-present-p
-              (values :function function-body)
-              (multiple-value-bind (abbreviation abbreviation-present-p)
-                  (gethash command (shell-context-abbreviation-table context))
-                (if abbreviation-present-p
-                    (values :abbreviation (%abbreviation-expansion abbreviation))
-                    (%describe-command-path context command missing-formatter))))))))
-
 (defun %execute-command-by-name-in-context (context command args)
   (multiple-value-bind (function-body function-present-p)
       (gethash command (shell-context-function-table context))
     (let ((handler (lookup-builtin command)))
       (cond
         (function-present-p
-         ;; Expose the call arguments to the function body as $argv / $argv[N].
-         (let ((nshell.domain.expansion:*positional-args* args))
-           (%source-lines context function-body)))
+         (%execute-function-command-in-context context function-body args))
         (handler
          (funcall handler context args))
         (t

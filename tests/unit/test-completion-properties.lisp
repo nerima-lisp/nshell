@@ -144,6 +144,75 @@
            (string= description
                     (nshell.domain.completion:candidate-description (first merged)))))))
 
+(test completion-merge-handles-large-duplicate-set-with-best-candidate
+  (let* ((low (nshell.domain.completion:make-candidate "zz-large-tool"
+                                                       :description ""
+                                                       :score 1))
+         (unique-candidates
+           (loop for i below 2000
+                 collect (nshell.domain.completion:make-candidate
+                          (format nil "zz-large-tool-~4,'0d" i)
+                          :score 1)))
+         (high (nshell.domain.completion:make-candidate "zz-large-tool"
+                                                        :description "fast path"
+                                                        :score 100))
+         (merged (nshell.domain.completion::merge-candidates
+                  (cons low unique-candidates)
+                  (list high)))
+         (winner (completion-candidate-by-text "zz-large-tool" merged)))
+    (is (= 2001 (length merged)))
+    (is (not (null winner)))
+    (is (= 100 (nshell.domain.completion:candidate-score winner)))
+    (is (string= "fast path"
+                 (nshell.domain.completion:candidate-description winner)))))
+
+(test knowledge-base-argument-completion-handles-large-duplicate-flag-set
+  (let ((kb (nshell.domain.completion:make-knowledge-base))
+        (flags '()))
+    (dotimes (i 2000)
+      (push "--shared" flags)
+      (push (format nil "--unique-~4,'0d" i) flags))
+    (nshell.domain.completion:kb-add-command
+     kb
+     "zz-large-args"
+     :flags (nreverse flags))
+    (let ((texts (completion-texts
+                  (nshell.domain.completion:complete kb "zz-large-args --"))))
+      (is (= 2001 (length texts)))
+      (is (= 1 (count "--shared" texts :test #'string=)))
+      (is (string= "--shared" (first texts)))
+      (is (string= "--unique-1999" (car (last texts)))))))
+
+(test knowledge-base-option-value-completion-handles-large-duplicate-value-set
+  (let ((kb (nshell.domain.completion:make-knowledge-base))
+        (values '()))
+    (dotimes (i 2000)
+      (push "shared" values)
+      (push (format nil "unique-~4,'0d" i) values))
+    (nshell.domain.completion:kb-add-command
+     kb
+     "zz-large-option-values"
+     :flags '("--mode")
+     :option-values (list (cons "--mode" (nreverse values))))
+    (let ((attached-texts
+            (completion-texts
+             (nshell.domain.completion:complete
+              kb
+              "zz-large-option-values --mode=")))
+          (separate-texts
+            (completion-texts
+             (nshell.domain.completion:complete
+              kb
+              "zz-large-option-values --mode "))))
+      (is (= 2001 (length attached-texts)))
+      (is (= 1 (count "--mode=shared" attached-texts :test #'string=)))
+      (is (string= "--mode=shared" (first attached-texts)))
+      (is (string= "--mode=unique-1999" (car (last attached-texts))))
+      (is (= 2001 (length separate-texts)))
+      (is (= 1 (count "shared" separate-texts :test #'string=)))
+      (is (string= "shared" (first separate-texts)))
+      (is (string= "unique-1999" (car (last separate-texts)))))))
+
 (test pbt-argument-completion-is-shell-token-aware
   (check-property (:trials 50)
       ((suffix (gen-command-prefix :min-length 1 :max-length 8) nil)
@@ -176,12 +245,23 @@
     (is (not (nshell.domain.completion:completion-context-command-position-p context)))
     (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
 
+(test completion-context-for-double-quoted-backslash-space-keeps-literal-prefix
+  (let ((context (nshell.domain.completion:completion-context-for "git \"ch\\ ")))
+    (is (string= "git"
+                 (nshell.domain.completion:completion-context-command context)))
+    (is (string= "ch\\ "
+                 (nshell.domain.completion:completion-context-argument-prefix context)))
+    (is (not (nshell.domain.completion:completion-context-command-position-p context)))
+    (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
+
 (test completion-context-for-leading-assignment-words-uses-real-command
   (let ((context (nshell.domain.completion:completion-context-for "FOO=bar git ch")))
     (is (string= "git"
                  (nshell.domain.completion:completion-context-command context)))
     (is (string= "ch"
                  (nshell.domain.completion:completion-context-argument-prefix context)))
+    (is (equal '("ch")
+               (nshell.domain.completion:completion-context-argument-words context)))
     (is (not (nshell.domain.completion:completion-context-command-position-p context)))
     (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
 
@@ -196,8 +276,30 @@
                      (nshell.domain.completion:completion-context-command context)))
         (is (string= expected-prefix
                      (nshell.domain.completion:completion-context-argument-prefix context)))
+        (is (equal (list expected-prefix)
+                   (nshell.domain.completion:completion-context-argument-words context)))
         (is (not (nshell.domain.completion:completion-context-command-position-p context)))
         (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))))
+
+(test completion-context-keeps-segment-local-argument-words
+  (let ((context (nshell.domain.completion:completion-context-for
+                  "FOO=bar git --color a")))
+    (is (string= "git"
+                 (nshell.domain.completion:completion-context-command context)))
+    (is (string= "a"
+                 (nshell.domain.completion:completion-context-argument-prefix context)))
+    (is (equal '("--color" "a")
+               (nshell.domain.completion:completion-context-argument-words context)))))
+
+(test completion-context-argument-words-respect-command-separators
+  (let ((context (nshell.domain.completion:completion-context-for
+                  "echo ignored; kubectl -o ")))
+    (is (string= "kubectl"
+                 (nshell.domain.completion:completion-context-command context)))
+    (is (string= ""
+                 (nshell.domain.completion:completion-context-argument-prefix context)))
+    (is (equal '("-o")
+               (nshell.domain.completion:completion-context-argument-words context)))))
 
 (test pbt-redirection-target-completion-does-not-leak-command-options
   (check-property (:trials 50)

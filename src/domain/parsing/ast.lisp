@@ -6,8 +6,10 @@
   (span nil :type list :read-only t))
 
 (defstruct (command-node (:include ast-node)
-                         (:constructor make-command-node (command args &optional span)))
+                         (:constructor make-command-node
+                             (command args &optional span command-quote-style)))
   (command "" :type string :read-only t)
+  (command-quote-style nil :type (member nil :single :double) :read-only t)
   (args nil :type list :read-only t))
 
 (defstruct (pipeline-node (:include ast-node)
@@ -20,6 +22,17 @@
    SEPARATORS is a list of :semi, :amp, :and, or :or keywords, one per command except the last."
   (commands nil :type list :read-only t)
   (separators nil :type list :read-only t))
+
+(defun %sequence-node-command-separator-pairs (node)
+  (let ((separators (copy-list (sequence-node-separators node))))
+    (loop for command in (sequence-node-commands node)
+          collect (cons command (pop separators)))))
+
+(defmacro do-sequence-node-command-separator-pairs ((command separator node &optional result) &body body)
+  `(dolist (pair (%sequence-node-command-separator-pairs ,node) ,result)
+     (let ((,command (car pair))
+           (,separator (cdr pair)))
+       ,@body)))
 
 (defstruct (if-node (:include ast-node)
                     (:constructor make-if-node (condition then-branch &optional else-branch span)))
@@ -72,18 +85,27 @@
   (if (consp arg) (car arg) arg))
 
 (defun arg-quote-style (arg)
-  "Return the quote style of ARG: :SINGLE, :DOUBLE, or NIL (unquoted).
+  "Return the quote style of ARG: NIL, :SINGLE, or :DOUBLE.
 Bare-string args and redirect-target conses are unquoted."
-  (and (consp arg) (cdr arg)))
-
-(defun arg-quoted-p (arg)
-  "Return T only when ARG was single-quoted and must not be expanded at all.
-Double-quoted args still undergo variable/command expansion (but no globbing),
-so they are deliberately excluded here."
-  (let ((style (arg-quote-style arg)))
-    ;; Treat legacy T (older single-quote encoding) as :SINGLE for safety.
-    (or (eq style :single) (eq style t))))
+  (when (consp arg)
+    (let ((style (cdr arg)))
+      (case style
+        ((nil :single :double) style)
+        (t (error "Invalid quote style ~S in arg ~S" style arg))))))
 
 (defun command-node-arg-values (node)
   "Return all args as plain strings (unwrapping cons cells)."
   (mapcar #'arg-value (command-node-args node)))
+
+(defun ast-node->command-line (ast)
+  "Render a command or pipeline AST node as a shell command line string."
+  (cond
+    ((command-node-p ast)
+     (format nil "~{~a~^ ~}"
+             (cons (command-node-command ast)
+                   (command-node-arg-values ast))))
+    ((pipeline-node-p ast)
+     (format nil "~{~a~^ | ~}"
+             (mapcar #'ast-node->command-line
+                     (pipeline-node-commands ast))))
+    (t "")))

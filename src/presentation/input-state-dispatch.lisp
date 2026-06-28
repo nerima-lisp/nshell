@@ -2,6 +2,52 @@
 
 (in-package #:nshell.presentation)
 
+(defun %start-history-search (state)
+  (with-normalized-cleared-completion-state (state state)
+    (values (copy-input-state-clearing-completion
+             state
+             :mode :search
+             :search-query ""
+             :search-original-buffer (input-state-buffer state)
+             :search-original-cursor (input-state-cursor-pos state)
+             :search-index 0)
+            :search-start)))
+
+(defun %delete-or-quit-input-state (state)
+  (if (string= "" (input-state-buffer state))
+      (values state :quit)
+      (delete-char-at-cursor state)))
+
+(defun %escape-input-state (state)
+  (if *vi-mode-enabled*
+      (values (vi-enter-command-mode state) :redraw)
+      (values (clear-completion-session-state state) :redraw)))
+
+(defun %move-cursor-to-eol-or-accept-suggestion (state)
+  (with-normalized-input-state (state state)
+    (if (input-state-at-eol-p state)
+        (accept-suggestion-at-eol state)
+        (values (copy-input-state-with state
+                                       :cursor-pos (length (input-state-buffer state)))
+                :redraw))))
+
+(defun %redraw-input-state (state)
+  (values state :redraw))
+
+(defun %kill-to-eol (state)
+  (with-normalized-cleared-completion-state (state state)
+    (%kill-range state
+                 (input-state-cursor-pos state)
+                 (length (input-state-buffer state))
+                 (input-state-cursor-pos state))))
+
+(defun %kill-to-bol (state)
+  (with-normalized-cleared-completion-state (state state)
+    (%kill-range state
+                 0
+                 (input-state-cursor-pos state)
+                 0)))
+
 (defun reduce-insert-input-state (state key-event)
   (case (nshell.domain.input:key-event-type key-event)
     (:char (let ((ch (nshell.domain.input:key-event-char key-event)))
@@ -15,45 +61,20 @@
     (:backspace (backspace-before-cursor state))
     (:delete (delete-char-at-cursor state))
     (:ctrl-c (clear-input-state state))
-    (:ctrl-d (if (string= "" (input-state-buffer state))
-                 (values state :quit)
-                 (delete-char-at-cursor state)))
-    ((:ctrl-r :ctrl-s)
-     (with-normalized-cleared-completion-state (state state)
-       (values (copy-input-state-clearing-completion
-                state
-                :mode :search
-                :search-query ""
-                :search-original-buffer (input-state-buffer state)
-                :search-original-cursor (input-state-cursor-pos state)
-                :search-index 0)
-               :search-start)))
+    (:ctrl-d (%delete-or-quit-input-state state))
+    ((:ctrl-r :ctrl-s) (%start-history-search state))
     ((:ctrl-f :right) (accept-suggestion-at-eol state))
-    (:escape (if *vi-mode-enabled*
-                 (values (vi-enter-command-mode state) :redraw)
-                 (values (clear-completion-session-state state) :redraw)))
-    (:ctrl-g (values (clear-completion-session-state state) :redraw))
+    (:escape (%escape-input-state state))
+    (:ctrl-g (%redraw-input-state (clear-completion-session-state state)))
     ((:ctrl-b :left) (move-cursor-clearing-suggestion state -1))
     ((:ctrl-a :home) (move-cursor-to-clearing-suggestion state 0))
-    ((:ctrl-e :end)
-     (with-normalized-input-state (state state)
-       (if (input-state-at-eol-p state)
-           (accept-suggestion-at-eol state)
-           (move-cursor-to state (length (input-state-buffer state))))))
-    (:ctrl-k (with-normalized-cleared-completion-state (state state)
-               (%kill-range state
-                            (input-state-cursor-pos state)
-                            (length (input-state-buffer state))
-                            (input-state-cursor-pos state))))
+    ((:ctrl-e :end) (%move-cursor-to-eol-or-accept-suggestion state))
+    (:ctrl-k (%kill-to-eol state))
     (:ctrl-l (values state :clear-screen))
-    ((:ctrl-n :down) (values state :history-next))
-    ((:ctrl-p :up) (values state :history-prev))
+    ((:ctrl-n :down :page-down) (values state :history-next))
+    ((:ctrl-p :up :page-up) (values state :history-prev))
     (:ctrl-t (transpose-chars-around-cursor state))
-    (:ctrl-u (with-normalized-cleared-completion-state (state state)
-               (%kill-range state
-                            0
-                            (input-state-cursor-pos state)
-                            0)))
+    (:ctrl-u (%kill-to-bol state))
     (:ctrl-w (backward-kill-word state))
     (:ctrl-y (yank-last-kill state))
     (:ctrl-underscore (undo-input-state state))
@@ -77,5 +98,5 @@
       :shift-alt-ctrl-up :shift-alt-ctrl-down :shift-alt-ctrl-left
       :shift-alt-ctrl-right
       :mouse)
-     (values state :redraw))
+     (%redraw-input-state state))
     (otherwise (values state :none))))

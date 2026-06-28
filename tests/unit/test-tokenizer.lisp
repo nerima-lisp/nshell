@@ -23,6 +23,14 @@
     (is (= 4 (length tokens)))
     (is (eq :pipe (nshell.domain.parsing:token-type (second tokens))))))
 
+(test newline-separates-commands
+  (with-tokenized-input (tokens cursor incomplete) (format nil "echo one~%echo two")
+    (declare (ignore cursor incomplete))
+    (is (= 5 (length tokens)))
+    (is (eq :newline (nshell.domain.parsing:token-type (third tokens))))
+    (is (string= (string #\Newline)
+                 (nshell.domain.parsing:token-value (third tokens))))))
+
 (test redirect
   (with-tokenized-input (tokens cursor incomplete) "echo hello > file.txt"
     (declare (ignore cursor incomplete))
@@ -32,6 +40,12 @@
   (with-tokenized-input (tokens cursor incomplete) "echo \"hello world\""
     (declare (ignore cursor incomplete))
     (is (string= "hello world" (nshell.domain.parsing:token-value (second tokens))))))
+
+(test double-quoted-backslash-before-space-is-literal
+  (with-tokenized-input (tokens cursor incomplete) "echo \"my\\ file\""
+    (declare (ignore cursor incomplete))
+    (is (= 2 (length tokens)))
+    (is (string= "my\\ file" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test escaped-space-word
   (with-tokenized-input (tokens cursor incomplete) "echo hello\\ world"
@@ -68,6 +82,20 @@
     (is (eq :redirect (nshell.domain.parsing:token-type (first tokens))))
     (is (string= ">" (nshell.domain.parsing:token-value (first tokens))))))
 
+(test here-string-redirect
+  (with-tokenized-input (tokens cursor incomplete) "cat <<< hello"
+    (declare (ignore cursor incomplete))
+    (is (= 3 (length tokens)))
+    (is (eq :redirect (nshell.domain.parsing:token-type (second tokens))))
+    (is (string= "<<<" (nshell.domain.parsing:token-value (second tokens))))))
+
+(test here-document-redirect
+  (with-tokenized-input (tokens cursor incomplete) "cat << EOF"
+    (declare (ignore cursor incomplete))
+    (is (= 3 (length tokens)))
+    (is (eq :redirect (nshell.domain.parsing:token-type (second tokens))))
+    (is (string= "<<" (nshell.domain.parsing:token-value (second tokens))))))
+
 (test bare-parentheses-tokenize-with-progress
   (with-tokenized-input (tokens cursor incomplete) "()"
     (declare (ignore cursor incomplete))
@@ -82,6 +110,15 @@
     (is (= 2 (length tokens)))
     (is (eq :word (nshell.domain.parsing:token-type (second tokens))))
     (is (string= "(echo ok)" (nshell.domain.parsing:token-value (second tokens))))))
+
+(test command-substitution-stays-attached-inside-word
+  (with-tokenized-input (tokens cursor incomplete) "echo prefix=(echo ok).txt"
+    (declare (ignore cursor))
+    (is (null incomplete))
+    (is (= 2 (length tokens)))
+    (is (eq :word (nshell.domain.parsing:token-type (second tokens))))
+    (is (string= "prefix=(echo ok).txt"
+                 (nshell.domain.parsing:token-value (second tokens))))))
 
 (test trailing-backslash-is-incomplete
   (with-tokenized-input (tokens cursor incomplete) "echo \\"

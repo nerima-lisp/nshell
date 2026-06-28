@@ -21,10 +21,10 @@
         (is (search "beta" output))
         (is (not (search "$item" output)))))))
 
-(test repl-execute-parsed-input-records-command-duration
-  "Interactive execution records the elapsed runtime for the rendered prompt."
+(test repl-execute-output-event-records-command-duration
+  "Interactive execution records the elapsed runtime through the output event path."
   (with-repl-test-state
-    (let ((ast (nshell.domain.parsing:make-command-node "echo" (list "done"))))
+    (with-repl-input-state (:buffer "echo done" :cursor-pos 9)
       (with-temporary-function
           ('nshell.infrastructure.persistence:append-history-entry
            (lambda (text)
@@ -35,10 +35,15 @@
                (declare (ignore ignored-ast))
                (sleep 0.05)
                0))
-          (nshell.presentation::execute-parsed-input "echo done" ast)))
-      (is (integerp nshell.presentation::*last-command-duration-ms*))
-      (is (> nshell.presentation::*last-command-duration-ms* 0))
-      (is (= 0 nshell.presentation::*last-exit-code*)))))
+          (capture-process-output-event :execute))))
+    (is (integerp nshell.presentation::*last-command-duration-ms*))
+    (is (>= nshell.presentation::*last-command-duration-ms* 0))
+    (is (= 0 nshell.presentation::*last-exit-code*))))
+
+(test repl-command-duration-allows-sub-millisecond-execution
+  "Sub-millisecond commands should be recorded as a non-negative integer duration."
+  (is (= 0 (nshell.presentation::%elapsed-command-duration-ms 100 100)))
+  (is (integerp (nshell.presentation::%elapsed-command-duration-ms 100 100))))
 
 (test repl-executes-user-function-in-current-context
   "Interactive command execution should invoke user-defined functions."
@@ -49,6 +54,35 @@
           (call-repl-execute-ast ast)
         (is (= 0 code))
         (is (string= (format nil "from-function~%") output))))))
+
+(test repl-expands-command-position-word
+  "Interactive foreground execution expands variables in command position before dispatch."
+  (with-repl-test-state
+    (setf nshell.presentation::*environment*
+          (nshell.domain.environment:env-set
+           nshell.presentation::*environment*
+           "CMD" "echo" nil))
+    (with-complete-command-line (result ast "$CMD repl-word")
+      (is (null (nshell.domain.parsing:parse-errors result)))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (is (= 0 code))
+        (is (string= (format nil "repl-word~%") output))))))
+
+(test repl-rejects-multi-field-command-position-expansion
+  "Interactive foreground execution should not dispatch an ambiguous expanded command name."
+  (with-repl-test-state
+    (setf nshell.presentation::*environment*
+          (nshell.domain.environment:env-set
+           nshell.presentation::*environment*
+           "CMD" "echo split" nil))
+    (with-complete-command-line (result ast "$CMD repl-word")
+      (is (null (nshell.domain.parsing:parse-errors result)))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (is (= 127 code))
+        (is (string= (format nil "nshell: $CMD: command name expansion produced 2 fields~%")
+                     output))))))
 
 (test repl-pipeline-feeds-builtin-output-to-read
   "Interactive pipelines should feed builtin output into later builtin stages in-process."
@@ -77,6 +111,34 @@
         (is (= 0 code))
         (is (string= "" output))
         (is (string= "function-value"
+                     (nshell.domain.environment:env-get
+                      nshell.presentation::*environment*
+                      "captured")))))))
+
+(test repl-here-string-feeds-builtin-stdin
+  "Here-strings should feed interactive builtin stdin with a trailing newline."
+  (with-repl-test-state
+    (with-complete-command-line (result ast "read captured <<< inline-value")
+      (is (null (nshell.domain.parsing:parse-errors result)))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (is (= 0 code))
+        (is (string= "" output))
+        (is (string= "inline-value"
+                     (nshell.domain.environment:env-get
+                      nshell.presentation::*environment*
+                      "captured")))))))
+
+(test repl-here-document-feeds-builtin-stdin
+  "Here-documents should feed interactive builtin stdin without adding bytes."
+  (with-repl-test-state
+    (with-complete-command-line (result ast (format nil "read captured << EOF~%inline-doc~%EOF"))
+      (is (null (nshell.domain.parsing:parse-errors result)))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (is (= 0 code))
+        (is (string= "" output))
+        (is (string= "inline-doc"
                      (nshell.domain.environment:env-get
                       nshell.presentation::*environment*
                       "captured")))))))

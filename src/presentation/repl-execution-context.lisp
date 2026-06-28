@@ -23,7 +23,11 @@
 (defparameter +repl-redirect-fns+
   (list :redirect-output #'nshell.infrastructure.acl:redirect-output
         :redirect-error #'nshell.infrastructure.acl:redirect-error
+        :redirect-output-error #'nshell.infrastructure.acl:redirect-output-and-error
+        :redirect-error-to-output #'nshell.infrastructure.acl:redirect-error-to-output
         :redirect-input #'nshell.infrastructure.acl:redirect-input
+        :redirect-input-document #'nshell.infrastructure.acl:redirect-input-document
+        :redirect-input-string #'nshell.infrastructure.acl:redirect-input-string
         :restore #'nshell.infrastructure.acl:restore-redirects))
 
 (defun %make-repl-shell-context ()
@@ -67,9 +71,3 @@
       (when output
         (write-string output))
       (values output (or code 0)))))
-
-(defun %execute-foreground-ast-in-context (ast)
-  (nth-value 1
-             (%execute-with-repl-shell-context
-              (lambda (context)
-                (nshell.application:execute-ast-in-context context ast)))))

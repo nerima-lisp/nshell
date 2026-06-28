@@ -319,6 +319,10 @@ counterexample. No external shrinking library is used."
   `(nshell.domain.parsing:with-parsed-command-line (,result ,line)
      ,@body))
 
+(defmacro assert-arg-quote-styles (args &rest styles)
+  `(is (equal ',styles
+              (mapcar #'nshell.domain.parsing:arg-quote-style ,args))))
+
 (defmacro with-complete-command-line ((result ast line) &body body)
   `(nshell.domain.parsing:with-complete-command-line (,result ,ast ,line)
      ,@body))

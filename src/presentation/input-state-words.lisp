@@ -10,9 +10,9 @@
                         (char buffer (1- scan-limit))))
             do (decf scan-limit))
       (let ((ranges (shell-token-ranges-before buffer scan-limit)))
-        (if ranges
-            (move-cursor-to-clearing-suggestion state (caar (last ranges)))
-            (move-cursor-to-clearing-suggestion state 0))))))
+        (move-cursor-to-clearing-suggestion
+         state
+         (if ranges (caar (last ranges)) 0))))))
 
 (defun move-word-right (state)
   (with-input-buffer (state buffer pos) state

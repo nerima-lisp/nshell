@@ -17,24 +17,19 @@
                  :kill-ring (cons killed (input-state-kill-ring state)))
                 :suggest-update))))
 
-(defun %kill-word (state range-fn)
+(defun backward-kill-word (state)
   (with-normalized-cleared-completion-state (state state)
     (let ((cursor (input-state-cursor-pos state)))
-      (multiple-value-bind (start end)
-          (funcall range-fn (input-state-buffer state) cursor)
-        (%kill-range state start end start)))))
-
-(defun backward-kill-word (state)
-  (%kill-word state
-              (lambda (buffer cursor)
-                (let ((start (previous-kill-word-start buffer cursor)))
-                  (values start cursor)))))
+      (let ((start (previous-kill-word-start (input-state-buffer state) cursor)))
+        (%kill-range state start cursor start)))))
 
 (defun forward-kill-word (state)
-  (%kill-word state
-              (lambda (buffer cursor)
-                (values cursor
-                        (next-kill-word-end buffer cursor)))))
+  (with-normalized-cleared-completion-state (state state)
+    (let ((cursor (input-state-cursor-pos state)))
+      (%kill-range state
+                   cursor
+                   (next-kill-word-end (input-state-buffer state) cursor)
+                   cursor))))
 
 (defun yank-last-kill (state)
   (with-normalized-cleared-completion-state (state state)

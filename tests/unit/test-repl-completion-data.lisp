@@ -129,6 +129,25 @@
                  (nshell.domain.completion:complete kb "string --"))
                 :test #'string=))))
 
+(test repl-completion-seeds-common-external-command-metadata
+  "Completion-only external command data should seed REPL command, subcommand, and flag facts."
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.presentation::seed-repl-completion-knowledge-base kb)
+    (let ((kubectl (completion-candidate-by-text
+                    "kubectl"
+                    (nshell.domain.completion:complete kb "ku"))))
+      (is (not (null kubectl)))
+      (is (string= "control Kubernetes clusters"
+                   (nshell.domain.completion:candidate-description kubectl))))
+    (is (member "switch"
+                (completion-texts
+                 (nshell.domain.completion:complete kb "git sw"))
+                :test #'string=))
+    (is (member "--tls"
+                (completion-texts
+                 (nshell.domain.completion:complete kb "docker --t"))
+                :test #'string=))))
+
 (test type-command-flags-follow-the-catalog
   "The type command should expose every catalogued flag through REPL completion."
   (let* ((type-entry (find "type"

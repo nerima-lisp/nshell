@@ -14,8 +14,8 @@
                      (or (command-history-navigate-prefix history)
                          current-prefix)))
          (start (if (< idx 0) 0 (1+ idx))))
-    (loop for i from start below (length entries)
-          for entry = (nth i entries)
+    (loop for entry in (nthcdr start entries)
+          for i from start
           for text = (entry-text entry)
           when (%history-prefix-match-p prefix text)
             do (when (< idx 0)
@@ -30,16 +30,21 @@
   (let ((idx (command-history-navigate-index history))
         (prefix (command-history-navigate-prefix history)))
     (if (> idx 0)
-        (loop for i from (1- idx) downto 0
-              for entry = (nth i (command-history-entries history))
-              for text = (entry-text entry)
-              when (%history-prefix-match-p (or prefix "") text)
-                do (setf (command-history-navigate-index history) i)
-                   (return text)
-              finally
-                 (let ((origin (command-history-navigate-origin history)))
-                   (%history-clear-navigation history)
-                   (return origin)))
+        (let ((matched-index nil)
+              (matched-text nil))
+          (loop for entry in (command-history-entries history)
+                for i from 0 below idx
+                for text = (entry-text entry)
+                when (%history-prefix-match-p (or prefix "") text)
+                  do (setf matched-index i
+                           matched-text text))
+          (if matched-index
+              (progn
+                (setf (command-history-navigate-index history) matched-index)
+                matched-text)
+              (let ((origin (command-history-navigate-origin history)))
+                (%history-clear-navigation history)
+                origin)))
         (let ((origin (command-history-navigate-origin history)))
           (%history-clear-navigation history)
           origin))))

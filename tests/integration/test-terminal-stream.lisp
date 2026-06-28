@@ -68,6 +68,8 @@
                   ("[H" . :home)
                   ("[F" . :end)
                   ("[3~" . :delete)
+                  ("[5~" . :page-up)
+                  ("[6~" . :page-down)
                   ("[Z" . :shift-tab)))
     (let ((event (single-key-event-from-string (esc-sequence (car case)))))
       (is (eq (cdr case)

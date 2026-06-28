@@ -27,7 +27,7 @@
         (:buffer "xあy" :cursor-pos 2))))
 
 (test input-state-space-expands-abbreviation-before-cursor
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "gco"
                 :cursor-pos 3
                 :completion-index 2
@@ -41,7 +41,9 @@
         (reduce-once state :char #\Space)
         :suggest-update
         (:buffer "git checkout " :cursor-pos 13)
-      (is-completion-session-cleared new-state))))
+      (is-input-state-with-completion-cleared new-state
+                                              :buffer "git checkout "
+                                              :cursor-pos 13))))
 
 (test input-state-space-keeps-quoted-abbreviation-literal
   (let ((state (input-state
@@ -122,10 +124,10 @@
            (expansion (concatenate 'string "expanded-" token))
            (buffer (concatenate 'string prefix token suffix))
            (cursor (+ (length prefix) (length token)))
-           (state (input-state
-                   :buffer buffer
-                   :cursor-pos cursor
-                   :completion-index 2
+            (state (completion-session-state
+                    :buffer buffer
+                    :cursor-pos cursor
+                    :completion-index 2
                    :suggestion " ignored"
                    :abbreviation-expander
                    (lambda (candidate)
@@ -140,7 +142,7 @@
          (is-completion-session-cleared new-state)))))
 
 (test input-state-paste-inserts-text-at-cursor
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "echo  done"
                 :cursor-pos 5
                 :completion-index 1
@@ -153,7 +155,9 @@
         :suggest-update
         (:buffer (format nil "echo hello~%world done")
          :cursor-pos 16)
-      (is-completion-session-cleared new-state))))
+      (is-input-state-with-completion-cleared new-state
+                                              :buffer (format nil "echo hello~%world done")
+                                              :cursor-pos 16))))
 
 (test input-state-paste-normalizes-crlf-and-cr-newlines
   (let* ((paste-text (format nil "git status~C~Cpwd~Cls"

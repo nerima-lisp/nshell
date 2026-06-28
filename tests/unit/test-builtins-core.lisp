@@ -2,11 +2,6 @@
 
 (in-suite builtin-tests)
 
-(defmacro assert-command-path-builtin (context command-name builtin-text missing-text)
-  `(assert-builtin-call (,context ,command-name '("echo" "missing"))
-     :code 1
-     :contains '(,builtin-text ,missing-text)))
-
 (test type-and-which-resolve-builtins-aliases-functions-and-path
   "type reports aliases, functions, builtins, and commands discovered through PATH."
   (with-builtins-context (context)
@@ -36,9 +31,9 @@
       :code 0
       :output "hi is a function
 ")
-    (assert-command-path-builtin context "which"
-      "shell built-in command"
-      "no missing in PATH")))
+    (assert-builtin-call (context "which" '("echo" "missing"))
+      :code 1
+      :contains '("shell built-in command" "no missing in PATH"))))
 
 (test builtin-registry-exposes-executable-builtins-at-load-time
   "lookup-builtin returns the executable builtin handlers immediately after load."
@@ -221,7 +216,8 @@ echo is /usr/bin/echo
          (monitor (nshell.application:shell-context-job-monitor context))
          (job (make-test-job 0 "sleep"))
          (job-id (nshell.domain.job-control:monitor-add-job monitor job)))
-    (let ((nshell.application:*job-monitor* monitor))
+    (let ((nshell.application:*job-monitor*
+            (nshell.domain.job-control:make-job-monitor)))
       (assert-builtin-call (context "bg" (list (format nil "~d" job-id)))
         :code 0
         :output-null t)
@@ -239,6 +235,25 @@ echo is /usr/bin/echo
         :code 1
         :output-null t
         :stdout-contains '("fg: no such job: 42")))))
+
+(test jobs-and-disown-builtins-use-context-monitor
+  "jobs/disown builtins operate on the shell context monitor, not the global monitor."
+  (let* ((context (make-test-builtins-context))
+         (monitor (nshell.application:shell-context-job-monitor context))
+         (job (make-test-job 0 "sleep" :args '("10")))
+         (job-id (nshell.domain.job-control:monitor-add-job monitor job)))
+    (let ((nshell.application:*job-monitor*
+            (nshell.domain.job-control:make-job-monitor)))
+      (assert-builtin-call (context "jobs" nil)
+        :code 0
+        :contains (list (format nil "[~d]" job-id) "Created" "sleep 10"))
+      (assert-builtin-call (context "disown" (list (format nil "~d" job-id)))
+        :code 0
+        :output-null t)
+      (is (null (nshell.domain.job-control:monitor-find-job monitor job-id)))
+      (assert-builtin-call (context "disown" (list (format nil "~d" job-id)))
+        :code 1
+        :output (format nil "disown: job [~d] not found~%" job-id)))))
 
 (test count-reports-number-of-arguments
   "count prints the argument count, exiting 0 when non-empty and 1 when empty."
@@ -627,10 +642,15 @@ echo is /usr/bin/echo
     (let ((env (nshell.application:shell-context-environment context)))
       (is (string= "one two"
                    (nshell.domain.environment:env-get env "NSHELL_TEST_EXPORTED")))
+      (is (equal '("one" "two")
+                 (nshell.domain.environment:env-get-values env "NSHELL_TEST_EXPORTED")))
       (is (string= "alpha beta"
                    (nshell.domain.environment:env-get env "NSHELL_TEST_LOCAL")))
+      (is (equal '("alpha" "beta")
+                 (nshell.domain.environment:env-get-values env "NSHELL_TEST_LOCAL")))
       (is (string= ""
                    (nshell.domain.environment:env-get env "NSHELL_TEST_EMPTY")))
+      (is (null (nshell.domain.environment:env-get-values env "NSHELL_TEST_EMPTY")))
       (is (equal '("NSHELL_TEST_EXPORTED" . "one two")
                  (assoc "NSHELL_TEST_EXPORTED"
                         (nshell.domain.environment:env-list env)
@@ -783,7 +803,25 @@ echo is /usr/bin/echo
       (is (not (null command)))
       (is (string= "release service"
                    (nshell.domain.completion:candidate-description command)))
-      (is (equal '("--dry-run" "--target") arguments)))))
+      (is (equal '("--dry-run" "--target") arguments)))
+    (multiple-value-bind (output code)
+        (call-builtin context "complete"
+                      '("-c" "deploy" "-l" "color" "-s" "o"
+                        "-a" "always auto never"))
+      (is (null output))
+      (is (= 0 code)))
+    (let* ((kb (nshell.application:shell-context-knowledge-base context))
+           (candidates (nshell.domain.completion:complete kb "deploy --color=")))
+      (is (equal '("--color=always" "--color=auto" "--color=never")
+                 (mapcar #'nshell.domain.completion:candidate-text candidates))))
+    (let* ((kb (nshell.application:shell-context-knowledge-base context))
+           (candidates (nshell.domain.completion:complete kb "deploy --color a")))
+      (is (equal '("always" "auto")
+                 (mapcar #'nshell.domain.completion:candidate-text candidates))))
+    (let* ((kb (nshell.application:shell-context-knowledge-base context))
+           (candidates (nshell.domain.completion:complete kb "deploy -o n")))
+      (is (equal '("never")
+                 (mapcar #'nshell.domain.completion:candidate-text candidates))))))
 
 (test complete-builtin-rejects-missing-command
   "complete requires an explicit command name."
@@ -793,6 +831,31 @@ echo is /usr/bin/echo
       (is (= 1 code))
       (is (search "usage" output)))))
 
+(test complete-builtin-erases-command-completions
+  "complete -e removes session completion metadata for a command."
+  (with-builtins-context (context)
+    (let ((command "__nshell-deploy"))
+      (multiple-value-bind (output code)
+          (call-builtin context "complete"
+                        (list "-c" command "-f" "--dry-run"
+                              "-l" "color" "-a" "always auto"
+                              "-d" "test-only deploy command"))
+        (is (null output))
+        (is (= 0 code)))
+      (let ((kb (nshell.application:shell-context-knowledge-base context)))
+        (is (not (null (nshell.domain.completion:kb-query kb command)))))
+      (multiple-value-bind (output code)
+          (call-builtin context "complete" (list "-c" command "--erase"))
+        (is (null output))
+        (is (= 0 code)))
+      (let ((kb (nshell.application:shell-context-knowledge-base context)))
+        (is (null (nshell.domain.completion:kb-query kb command)))
+        (is (not (member command
+                         (mapcar #'nshell.domain.completion:candidate-text
+                                 (nshell.domain.completion:complete
+                                  kb "__nshell-"))
+                         :test #'string=)))))))
+
 (test complete-builtin-rejects-missing-arguments
   "complete reports missing arguments for each required option."
   (with-builtins-context (context)
@@ -801,6 +864,12 @@ echo is /usr/bin/echo
       (("--command") :code 2 :output (format nil "complete: --command requires command~%"))
       (("-f") :code 2 :output (format nil "complete: -f requires flag~%"))
       (("--flag") :code 2 :output (format nil "complete: --flag requires flag~%"))
+      (("-l") :code 2 :output (format nil "complete: -l requires option~%"))
+      (("--long-option") :code 2 :output (format nil "complete: --long-option requires option~%"))
+      (("-s") :code 2 :output (format nil "complete: -s requires option~%"))
+      (("--short-option") :code 2 :output (format nil "complete: --short-option requires option~%"))
+      (("-a") :code 2 :output (format nil "complete: -a requires arguments~%"))
+      (("--arguments") :code 2 :output (format nil "complete: --arguments requires arguments~%"))
       (("-d") :code 2 :output (format nil "complete: -d requires description~%"))
       (("--description") :code 2 :output (format nil "complete: --description requires description~%")))))
 

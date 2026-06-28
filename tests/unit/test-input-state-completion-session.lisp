@@ -3,25 +3,23 @@
 (in-suite input-state-tests)
 
 (test input-state-edit-after-completion-list-clears-stale-candidates
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "g"
                 :cursor-pos 1
                 :completion-index -1
                 :last-candidates '("git" "grep"))))
     (multiple-value-bind (edited edit-output) (reduce-once state :char #\x)
-      (is-input-state edited
-                      :buffer "gx"
-                      :cursor-pos 2)
-      (is-completion-session-cleared edited)
+      (is-input-state-with-completion-cleared edited
+                                              :buffer "gx"
+                                              :cursor-pos 2)
       (is (eq :suggest-update edit-output))
       (multiple-value-bind (tabbed tab-output) (reduce-once edited :tab)
-        (is-input-state tabbed
-                        :buffer "gx")
-        (is-completion-session-cleared tabbed)
+        (is-input-state-with-completion-cleared tabbed
+                                                :buffer "gx")
         (is (eq :complete tab-output))))))
 
 (test input-state-copy-clearing-completion-with-buffer-replaces-buffer-and-clears-session
-  (let* ((state (input-state
+  (let* ((state (completion-session-state
                  :buffer "g"
                  :cursor-pos 1
                  :completion-index 2
@@ -39,7 +37,7 @@
     (is-completion-session-cleared new-state)))
 
 (test input-state-escape-clears-completion-session-without-editing
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "g"
                 :cursor-pos 1
                 :completion-index 0
@@ -48,14 +46,13 @@
                 :last-candidates '("git" "grep")
                 :suggestion "it status")))
     (multiple-value-bind (new-state output) (reduce-once state :escape)
-      (is-input-state new-state
-                      :buffer "g"
-                      :cursor-pos 1)
-      (is-completion-session-cleared new-state)
+      (is-input-state-with-completion-cleared new-state
+                                              :buffer "g"
+                                              :cursor-pos 1)
       (is (eq :redraw output)))))
 
 (test input-state-ctrl-g-clears-completion-session-without-editing
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "git"
                 :cursor-pos 2
                 :completion-index 1
@@ -64,14 +61,13 @@
                 :last-candidates '("git" "grep")
                 :suggestion " status")))
     (multiple-value-bind (new-state output) (reduce-once state :ctrl-g)
-      (is-input-state new-state
-                      :buffer "git"
-                      :cursor-pos 2)
-      (is-completion-session-cleared new-state)
+      (is-input-state-with-completion-cleared new-state
+                                              :buffer "git"
+                                              :cursor-pos 2)
       (is (eq :redraw output)))))
 
 (test input-state-ctrl-c-clears-completion-session-on-empty-buffer
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer ""
                 :cursor-pos 0
                 :completion-index 0
@@ -79,14 +75,13 @@
                 :completion-base-cursor 0
                 :last-candidates '("git"))))
     (multiple-value-bind (new-state output) (reduce-once state :ctrl-c)
-      (is-input-state new-state
-                      :buffer ""
-                      :cursor-pos 0)
-      (is-completion-session-cleared new-state)
+      (is-input-state-with-completion-cleared new-state
+                                              :buffer ""
+                                              :cursor-pos 0)
       (is (eq :redraw output)))))
 
 (test input-state-ctrl-l-preserves-completion-session
-  (let ((state (input-state
+  (let ((state (completion-session-state
                 :buffer "g"
                 :cursor-pos 1
                 :completion-index 0

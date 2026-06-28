@@ -11,7 +11,30 @@
   (let* ((env (nshell.domain.environment:make-environment))
          (updated (nshell.domain.environment:env-set env "FOO" "bar" nil)))
     (is (string= "bar" (nshell.domain.environment:env-get updated "FOO")))
+    (is (equal '("bar") (nshell.domain.environment:env-get-values updated "FOO")))
     (is (null (nshell.domain.environment:env-get env "FOO")))))
+
+(test env-set-values-preserves-list-elements
+  "Structured environment values preserve fish-style list elements losslessly."
+  (let* ((env (nshell.domain.environment:make-environment))
+         (updated (nshell.domain.environment:env-set-values
+                   env "FILES" '("hello world" "tail") nil)))
+    (is (string= "hello world tail"
+                 (nshell.domain.environment:env-get updated "FILES")))
+    (is (equal '("hello world" "tail")
+               (nshell.domain.environment:env-get-values updated "FILES")))
+    (is (null (nshell.domain.environment:env-get-values env "FILES")))))
+
+(test make-env-var-derives-scalar-view-from-values
+  "The constructor keeps structured values and derives the scalar view on demand."
+  (let* ((values (list "hello world" "tail"))
+         (var (nshell.domain.environment:make-env-var "FILES" values nil)))
+    (setf (first values) "changed")
+    (is (equal '("hello world" "tail")
+               (nshell.domain.environment:env-var-values var)))
+    (is (string= "hello world tail"
+                 (nshell.domain.environment:env-var-value var)))
+    (is (not (nshell.domain.environment:env-var-exported-p var)))))
 
 (test env-unset-removes-variable
   "Unsetting a variable removes it from the environment."
@@ -27,6 +50,18 @@
          (exported (nshell.domain.environment:env-export with-var "FOO")))
     (is (equal '("FOO" . "bar")
                (assoc "FOO" (nshell.domain.environment:env-list exported) :test #'string=)))))
+
+(test env-export-preserves-list-values
+  "Exporting a variable preserves its structured list values."
+  (let* ((env (nshell.domain.environment:make-environment))
+         (with-var (nshell.domain.environment:env-set-values
+                    env "FILES" '("hello world" "tail") nil))
+         (exported (nshell.domain.environment:env-export with-var "FILES")))
+    (is (equal '("hello world" "tail")
+               (nshell.domain.environment:env-get-values exported "FILES")))
+    (is (equal '("FILES" . "hello world tail")
+               (assoc "FILES" (nshell.domain.environment:env-list exported)
+                      :test #'string=)))))
 
 (test env-list-only-returns-exported-vars
   "Only exported variables are included in ENV-LIST."

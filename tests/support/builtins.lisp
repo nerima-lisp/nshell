@@ -156,6 +156,26 @@
      (is (string= ,expected-output ,output))
      ,@extra-assertions))
 
+(defmacro with-stubbed-command-executor ((&rest cases) &body body)
+  "Stub %execute-command-by-name-in-context with a CASES dispatch table.
+Each case is (command-string &body side-effects-and-return), where the last
+form should return (values output exit-code).  Example:
+  (with-stubbed-command-executor
+      ((\"errcmd\" (write-line \"err\" *error-output*) (values \"out~%\" 7)))
+    body)"
+  (let ((ctx  (gensym "CTX-"))
+        (cmd  (gensym "CMD-"))
+        (args (gensym "ARGS-")))
+    `(with-temporary-function
+         ('nshell.application::%execute-command-by-name-in-context
+          (lambda (,ctx ,cmd ,args)
+            (declare (ignore ,ctx ,args))
+            (cond ,@(mapcar (lambda (c)
+                              (destructuring-bind (command-str &body c-body) c
+                                `((string= ,cmd ,command-str) ,@c-body)))
+                            cases))))
+       ,@body)))
+
 (defmacro with-builtins-source-tree ((context root source &key (prefix "nshell-test-source")) &body body)
   `(let ((,context (make-test-builtins-context)))
      (with-test-source-tree (,root ,source :prefix ,prefix)

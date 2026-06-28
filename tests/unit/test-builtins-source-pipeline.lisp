@@ -61,13 +61,10 @@
     (let ((target (merge-pathnames "stderr.txt" root)))
       (write-test-lines source
                         (list (format nil "errcmd 2> ~a" (namestring target))))
-      (with-temporary-function
-          ('nshell.application::%execute-command-by-name-in-context
-           (lambda (_context command args)
-             (declare (ignore _context args))
-             (when (string= command "errcmd")
-               (write-line "stderr-line" *error-output*)
-               (values (format nil "stdout-line~%") 7))))
+      (with-stubbed-command-executor
+          (("errcmd"
+            (write-line "stderr-line" *error-output*)
+            (values (format nil "stdout-line~%") 7)))
         (multiple-value-bind (output code)
             (call-source-file context source)
           (is (= 7 code))
@@ -80,13 +77,10 @@
     (let ((target (merge-pathnames "combined.txt" root)))
       (write-test-lines source
                         (list (format nil "errcmd &> ~a" (namestring target))))
-      (with-temporary-function
-          ('nshell.application::%execute-command-by-name-in-context
-           (lambda (_context command args)
-             (declare (ignore _context args))
-             (when (string= command "errcmd")
-               (write-line "stderr-line" *error-output*)
-               (values (format nil "stdout-line~%") 7))))
+      (with-stubbed-command-executor
+          (("errcmd"
+            (write-line "stderr-line" *error-output*)
+            (values (format nil "stdout-line~%") 7)))
         (multiple-value-bind (output code)
             (call-source-file context source)
           (let ((contents (uiop:read-file-string target)))
@@ -101,13 +95,10 @@
     (let ((target (merge-pathnames "combined.txt" root)))
       (write-test-lines source
                         (list (format nil "errcmd > ~a 2>&1" (namestring target))))
-      (with-temporary-function
-          ('nshell.application::%execute-command-by-name-in-context
-           (lambda (_context command args)
-             (declare (ignore _context args))
-             (when (string= command "errcmd")
-               (write-line "stderr-line" *error-output*)
-               (values (format nil "stdout-line~%") 7))))
+      (with-stubbed-command-executor
+          (("errcmd"
+            (write-line "stderr-line" *error-output*)
+            (values (format nil "stdout-line~%") 7)))
         (multiple-value-bind (output code)
             (call-source-file context source)
           (let ((contents (uiop:read-file-string target)))

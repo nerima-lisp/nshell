@@ -24,27 +24,11 @@
                        :max-length max-length))
 
 (defmacro with-path-command-adapters ((directory-files-fn executable-p-fn) &body body)
-  `(let ((old-directory-files-fn nshell.domain.completion:*path-command-directory-files-fn*)
-         (old-executable-p-fn nshell.domain.completion:*path-command-executable-p-fn*))
-     (unwind-protect
-          (progn
-            (setf nshell.domain.completion:*path-command-directory-files-fn* ,directory-files-fn)
-            (setf nshell.domain.completion:*path-command-executable-p-fn* ,executable-p-fn)
-            ,@body)
-       (setf nshell.domain.completion:*path-command-directory-files-fn* old-directory-files-fn)
-       (setf nshell.domain.completion:*path-command-executable-p-fn* old-executable-p-fn))))
+  `(let ((nshell.domain.completion:*path-command-directory-files-fn* ,directory-files-fn)
+         (nshell.domain.completion:*path-command-executable-p-fn* ,executable-p-fn))
+     ,@body))
 
 (defmacro with-file-completion-adapters ((directory-files-fn subdirectories-fn) &body body)
-  `(let ((old-directory-files-fn nshell.domain.completion:*file-completion-directory-files-fn*)
-         (old-subdirectories-fn nshell.domain.completion:*file-completion-subdirectories-fn*))
-     (unwind-protect
-          (progn
-            (setf nshell.domain.completion:*file-completion-directory-files-fn*
-                  ,directory-files-fn)
-            (setf nshell.domain.completion:*file-completion-subdirectories-fn*
-                  ,subdirectories-fn)
-            ,@body)
-       (setf nshell.domain.completion:*file-completion-directory-files-fn*
-             old-directory-files-fn)
-       (setf nshell.domain.completion:*file-completion-subdirectories-fn*
-             old-subdirectories-fn))))
+  `(let ((nshell.domain.completion:*file-completion-directory-files-fn* ,directory-files-fn)
+         (nshell.domain.completion:*file-completion-subdirectories-fn* ,subdirectories-fn))
+     ,@body))

@@ -1,37 +1,44 @@
 (in-package #:nshell.application)
 
+(defun %string-collect-lines (texts preserve-newlines-p allow-empty-p)
+  "Filter TEXTS into a flat ordered list of non-empty lines.
+Trailing newlines are stripped unless PRESERVE-NEWLINES-P.
+Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
+  (let ((has-non-empty nil)
+        (lines nil))
+    (dolist (text texts)
+      (dolist (line (%string-lines
+                     (if preserve-newlines-p
+                         text
+                         (%string-trim-trailing-newlines text))))
+        (unless (and (not preserve-newlines-p)
+                     (not allow-empty-p)
+                     (%string-empty-p line))
+          (unless (%string-empty-p line)
+            (setf has-non-empty t))
+          (push line lines))))
+    (values (nreverse lines) has-non-empty)))
+
 (defun %builtin-string-collect (context args)
   (declare (ignore context))
   (let ((allow-empty-p nil)
         (preserve-newlines-p nil)
         (remaining args))
-    (multiple-value-bind (next-remaining error)
-        (%string-parse-option-stream
-         remaining "string"
-         +string-collect-flag-option-specs+ nil
-         (%string-flag-option-handler (name remaining)
-           (allow-empty
-            (setf allow-empty-p t))
-           (no-newline
-            (setf preserve-newlines-p t)))
-         (%string-integer-option-handler (name parsed next-remaining)))
+    (with-string-options (next-remaining error
+                          remaining "string"
+                          +string-collect-flag-option-specs+ nil
+                          (%string-flag-option-handler (name remaining)
+                            (allow-empty
+                             (setf allow-empty-p t))
+                            (no-newline
+                             (setf preserve-newlines-p t)))
+                          (%string-integer-option-handler (name parsed next-remaining)))
       (when error
         (return-from %builtin-string-collect (values error 1)))
       (setf remaining next-remaining))
-    (let ((has-non-empty nil)
-          (lines nil))
-      (dolist (text remaining)
-        (dolist (line (%string-lines
-                       (if preserve-newlines-p
-                           text
-                           (%string-trim-trailing-newlines text))))
-          (unless (and (not preserve-newlines-p)
-                       (not allow-empty-p)
-                       (%string-empty-p line))
-            (unless (%string-empty-p line)
-              (setf has-non-empty t))
-            (push line lines))))
-      (values (%string-emit-lines (nreverse lines))
+    (multiple-value-bind (lines has-non-empty)
+        (%string-collect-lines remaining preserve-newlines-p allow-empty-p)
+      (values (%string-emit-lines lines)
               (if has-non-empty 0 1)))))
 
 (define-string-line-builtin %builtin-string-length
@@ -76,18 +83,17 @@
   (let ((quiet-p nil)
         (all-p nil)
         (ignore-case-p nil))
-    (multiple-value-bind (remaining error)
-        (%string-parse-option-stream
-         remaining builtin
-         flag-specs nil
-         (%string-flag-option-handler (name remaining)
-           (quiet
-            (setf quiet-p t))
-           (all
-            (setf all-p t))
-           (ignore-case
-            (setf ignore-case-p t)))
-         (%string-integer-option-handler (name parsed next-remaining)))
+    (with-string-options (remaining error
+                          remaining builtin
+                          flag-specs nil
+                          (%string-flag-option-handler (name remaining)
+                            (quiet
+                             (setf quiet-p t))
+                            (all
+                             (setf all-p t))
+                            (ignore-case
+                             (setf ignore-case-p t)))
+                          (%string-integer-option-handler (name parsed next-remaining)))
       (values quiet-p all-p ignore-case-p remaining error))))
 
 (defun %string-pattern-builtin (args flag-specs required-args collector)
@@ -152,21 +158,20 @@
         (max-length nil)
         (quiet-p nil)
         (no-newline-p nil))
-    (multiple-value-bind (next-remaining error)
-        (%string-parse-option-stream
-         remaining "string"
-         +string-repeat-flag-option-specs+
-         +string-repeat-integer-option-specs+
-         (%string-flag-option-handler (name remaining)
-           (quiet
-            (setf quiet-p t))
-           (no-newline
-            (setf no-newline-p t)))
-         (%string-integer-option-handler (name parsed next-remaining)
-           (count
-            (setf repeat-count parsed))
-           (max
-            (setf max-length parsed))))
+    (with-string-options (next-remaining error
+                          remaining "string"
+                          +string-repeat-flag-option-specs+
+                          +string-repeat-integer-option-specs+
+                          (%string-flag-option-handler (name remaining)
+                            (quiet
+                             (setf quiet-p t))
+                            (no-newline
+                             (setf no-newline-p t)))
+                          (%string-integer-option-handler (name parsed next-remaining)
+                            (count
+                             (setf repeat-count parsed))
+                            (max
+                             (setf max-length parsed))))
       (values repeat-count max-length quiet-p no-newline-p next-remaining error))))
 
 (defun %string-repeat-bare-count-usage-p (repeat-count max-length remaining)
@@ -214,21 +219,20 @@
         (length nil)
         (end nil)
         (quiet-p nil))
-    (multiple-value-bind (remaining error)
-        (%string-parse-option-stream
-         remaining "string"
-         +string-sub-flag-option-specs+
-         +string-sub-integer-option-specs+
-         (%string-flag-option-handler (name remaining)
-           (quiet
-            (setf quiet-p t)))
-         (%string-integer-option-handler (name parsed next-remaining)
-           (start
-            (setf start parsed))
-           (length
-            (setf length parsed))
-           (end
-            (setf end parsed))))
+    (with-string-options (remaining error
+                          remaining "string"
+                          +string-sub-flag-option-specs+
+                          +string-sub-integer-option-specs+
+                          (%string-flag-option-handler (name remaining)
+                            (quiet
+                             (setf quiet-p t)))
+                          (%string-integer-option-handler (name parsed next-remaining)
+                            (start
+                             (setf start parsed))
+                            (length
+                             (setf length parsed))
+                            (end
+                             (setf end parsed))))
       (values start length end quiet-p remaining error))))
 
 (defun %string-sub-normalize-start (start length)

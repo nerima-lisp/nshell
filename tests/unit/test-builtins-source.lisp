@@ -219,3 +219,30 @@
                                  (nshell.application:shell-context-process-registry
                                   context))))))))))))
 
+(test comment-or-blank-source-line-p-skips-empty-and-hash-lines
+  "comment-or-blank-source-line-p returns true for blank lines, comments, and shebangs."
+  (flet ((cbp (line) (nshell.application::%comment-or-blank-source-line-p line)))
+    (is (cbp ""))
+    (is (cbp "  "))
+    (is (cbp "# a comment"))
+    (is (cbp "#!/usr/bin/env nshell"))
+    (is (not (cbp "echo hello")))
+    (is (not (cbp "x=1")))))
+
+(test function-start-p-detects-function-keyword-and-returns-name
+  "function-start-p returns the function name when a line starts with 'function NAME'."
+  (flet ((fst (line) (nshell.application::%function-start-p line)))
+    (is (string= "greet" (fst "function greet")))
+    (is (string= "greet" (fst "function greet --description 'say hi'")))
+    (is (null             (fst "echo hello")))
+    (is (null             (fst "# function foo")))))
+
+(test source-definition-line-depth-delta-counts-opening-and-end-keywords
+  "source-definition-line-depth-delta returns +1 for block openers, -1 for end."
+  (flet ((delta (line) (nshell.application::%source-definition-line-depth-delta line)))
+    (is (= +1 (delta "if true")))
+    (is (= +1 (delta "for x in a b")))
+    (is (= -1 (delta "end")))
+    (is (=  0 (delta "echo hello")))
+    (is (=  0 (delta "")))))
+

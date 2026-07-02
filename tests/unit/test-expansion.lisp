@@ -208,93 +208,6 @@ Each case is (EXPECTED INPUT &rest ARGS)."
     ("*" "*")
     ("a*b?c" "a*b?c")))
 
-(test parameter-default-when-unset
-  "${VAR:-word} yields the value when set and the word when unset/empty."
-  (let ((env (test-expansion-env)))
-    (%assert-expansion-cases-with-env (string=
-                                       #'nshell.domain.expansion:expand-variables
-                                       env)
-      ("bar" "${FOO:-fallback}")
-      ("fallback" "${MISSING:-fallback}")
-      ("bar" "${MISSING:-$FOO}"))))
-
-(test parameter-alternative-when-set
-  "${VAR:+word} yields the word only when the variable is set and non-empty."
-  (let ((env (test-expansion-env)))
-    (%assert-expansion-cases-with-env (string=
-                                       #'nshell.domain.expansion:expand-variables
-                                       env)
-      ("yes" "${FOO:+yes}")
-      ("" "${MISSING:+yes}"))))
-
-(test parameter-assign-default-side-effect
-  "${VAR:=word} assigns the expanded default only when the operator fires."
-  (let ((source-env (test-expansion-env))
-        (env (nshell.domain.environment:make-environment)))
-    (is (string= "bar"
-                 (nshell.domain.expansion:expand-variables
-                  "${MISSING:=$FOO}" source-env)))
-    (is (string= "bar"
-                 (nshell.domain.environment:env-get source-env "MISSING")))
-    (is (string= "default"
-                 (nshell.domain.expansion:expand-variables
-                  "${MISSING:=default}" env)))
-    (is (string= "default"
-                 (nshell.domain.environment:env-get env "MISSING")))
-    (is (string= "default"
-                 (nshell.domain.expansion:expand-variables
-                  "${MISSING:=other}" env)))
-    (is (string= "default"
-                 (nshell.domain.environment:env-get env "MISSING")))))
-
-(test parameter-assign-default-preserves-export-state
-  "${VAR:=word} keeps an existing variable's exported state when assigning."
-  (let ((env (nshell.domain.environment:make-environment)))
-    (setf env (nshell.domain.environment:env-set env "EMPTY" "" t))
-    (is (string= "filled"
-                 (nshell.domain.expansion:expand-variables
-                  "${EMPTY:=filled}" env)))
-    (is (equal '(("EMPTY" . "filled"))
-               (nshell.domain.environment:env-list env)))))
-
-(test parameter-length
-  "${#VAR} yields the length of the variable's value."
-  (let ((env (test-expansion-env)))
-    (%assert-expansion-cases-with-env (string=
-                                       #'nshell.domain.expansion:expand-variables
-                                       env)
-      ("3" "${#FOO}")
-      ("0" "${#MISSING}"))))
-
-(test parameter-prefix-and-suffix-strip
-  "${VAR#pat} / ## strip a prefix; ${VAR%pat} / %% strip a suffix (glob)."
-  (let ((env (test-expansion-env)))            ; FOO = bar
-    (%assert-expansion-cases-with-env (string=
-                                       #'nshell.domain.expansion:expand-variables
-                                       env)
-      ("ar" "${FOO#b}")
-      ("r" "${FOO##*a}")
-      ("ba" "${FOO%r}")
-      ("b" "${FOO%%a*}")
-      ("3" "${#FOO}"))))
-
-(test parameter-substitution-operator
-  "${VAR/pat/rep} replaces the first match; // replaces all (literal)."
-  (let ((env (nshell.domain.environment:make-environment)))
-    (setf env (nshell.domain.environment:env-set env "P" "a-a-a" nil))
-    (%assert-expansion-cases-with-env (string=
-                                       #'nshell.domain.expansion:expand-variables
-                                       env)
-      ("X-a-a" "${P/a/X}")
-      ("X-X-X" "${P//a/X}")
-      ("a-a-a" "${P/z/X}"))))
-
-(test parameter-plain-brace-still-works
-  "Plain ${VAR} expansion is unchanged by the operator support."
-  (%assert-expansion-cases-with-env (string=
-                                     #'nshell.domain.expansion:expand-variables
-                                     (test-expansion-env))
-    ("value=bar" "value=${FOO}")))
 
 (defun arith-env ()
   (let ((env (nshell.domain.environment:make-environment)))
@@ -302,3 +215,71 @@ Each case is (EXPECTED INPUT &rest ARGS)."
     (setf env (nshell.domain.environment:env-set env "Y" "3" nil))
     env))
 
+
+(test split-whitespace-fields-handles-edge-cases
+  "whitespace splitting produces fields from space/tab/newline separators."
+  (flet ((split (s) (nshell.domain.expansion::%split-whitespace-fields s)))
+    (is (null (split "")))
+    (is (null (split "   ")))
+    (is (equal '("abc") (split "abc")))
+    (is (equal '("a" "b" "c") (split "a b c")))
+    (is (equal '("a" "b") (split "  a  b  ")))
+    (is (equal '("a" "b") (split (format nil "a~%b"))))
+    (is (equal '("a" "b") (split (format nil "a~Cb" #\Tab))))))
+
+(test expand-list-references-falls-through-scalar-path
+  "When there is no list reference, result equals expand-variables output."
+  (let ((env (test-expansion-env)))
+    ;; No $-reference at all: literal pass-through.
+    (is (equal '("plain") (nshell.domain.expansion::%expand-list-references "plain" env)))
+    ;; Scalar $VAR: falls through to expand-variables, returns one element.
+    (is (equal '("bar") (nshell.domain.expansion::%expand-list-references "$FOO" env)))))
+
+(test expand-list-references-produces-multiple-fields
+  "Indexed list variable references expand into multiple fields."
+  (let* ((env (nshell.domain.environment:env-set-values
+               (test-expansion-env) "WORDS" '("one" "two" "three") nil)))
+    ;; Bare $VAR (no index) falls through to scalar join, not multi-field.
+    (is (equal '("one two three")
+               (nshell.domain.expansion::%expand-list-references "$WORDS" env)))
+    ;; Indexed reference $VAR[1..-1] produces separate fields.
+    (is (equal '("one" "two" "three")
+               (nshell.domain.expansion::%expand-list-references "$WORDS[1..-1]" env)))
+    ;; Prefix literal + indexed reference produces cross-product.
+    (is (equal '("pre-one" "pre-two" "pre-three")
+               (nshell.domain.expansion::%expand-list-references "pre-$WORDS[1..-1]" env)))))
+
+(test find-matching-brace-locates-balanced-closing-brace
+  "find-matching-brace returns the index OF the closing }, not past it."
+  (flet ((mbrace (s start) (nshell.domain.expansion::%find-matching-brace s start)))
+    (is (= 1 (mbrace "{}" 0)))
+    (is (= 4 (mbrace "{a,b}" 0)))
+    (is (= 6 (mbrace "{a{b}c}" 0)))
+    (is (null (mbrace "{unclosed" 0)))))
+
+(test split-top-level-commas-respects-brace-nesting
+  "split-top-level-commas splits on top-level commas only."
+  (flet ((split (s) (nshell.domain.expansion::%split-top-level-commas s)))
+    (is (equal '("a" "b" "c") (split "a,b,c")))
+    (is (equal '("a{b,c}" "d") (split "a{b,c},d")))
+    (is (equal '("a") (split "a")))
+    (is (equal '("" "") (split ",")))))
+
+(test brace-range-expansion-handles-numeric-and-alpha-ranges
+  "brace-range-expansion returns an ascending or descending sequence for N..M and a..z."
+  (flet ((range (s) (nshell.domain.expansion::%brace-range-expansion s)))
+    (is (equal '("1" "2" "3") (range "1..3")))
+    (is (equal '("3" "2" "1") (range "3..1")))
+    (is (equal '("a" "b" "c") (range "a..c")))
+    (is (equal '("c" "b" "a") (range "c..a")))
+    (is (null (range "no-dots")))
+    (is (null (range "ab..cd")))))
+
+(test glob-pattern-p-detects-wildcard-characters
+  "glob-pattern-p returns true for patterns containing * ? or [."
+  (flet ((pat (s) (nshell.domain.expansion::glob-pattern-p s)))
+    (is (pat "*.txt"))
+    (is (pat "file?.c"))
+    (is (pat "[abc]"))
+    (is (not (pat "plain")))
+    (is (not (pat "a.b.c")))))

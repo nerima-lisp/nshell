@@ -2,6 +2,53 @@
 
 (in-suite completion-rules-tests)
 
+(test case-sensitive-prefix-p-matches-exact-case-leading-substring
+  "case-sensitive-prefix-p returns true only when prefix matches the start of text exactly."
+  (flet ((pre (prefix text)
+           (nshell.domain.completion::case-sensitive-prefix-p prefix text)))
+    (is (pre "" "anything"))
+    (is (pre "check" "checkout"))
+    (is (pre "git" "git"))
+    (is (not (pre "Git" "git")))
+    (is (not (pre "checkout" "check")))))
+
+(test candidate-description-present-p-tests-non-empty-description
+  "candidate-description-present-p returns true only when description is non-empty."
+  (is (nshell.domain.completion::candidate-description-present-p
+       (nshell.domain.completion:make-candidate "tool" :description "does stuff")))
+  (is (not (nshell.domain.completion::candidate-description-present-p
+            (nshell.domain.completion:make-candidate "tool" :description ""))))
+  (is (not (nshell.domain.completion::candidate-description-present-p
+            (nshell.domain.completion:make-candidate "tool")))))
+
+(test completion-rank-score-applies-exact-and-prefix-bonuses
+  "completion-rank-score stacks bonuses: exact (+100000), prefix (+10000), described (+1000)."
+  (flet ((score (prefix text &key (description "") (base 0))
+           (nshell.domain.completion::completion-rank-score
+            prefix
+            (nshell.domain.completion:make-candidate text :description description :score base))))
+    ;; exact match: base + 100000 + 10000 (prefix) + 1000 (described)
+    (is (= 111000 (score "git" "git" :description "v-ctrl")))
+    ;; prefix-only (not exact): base + 10000
+    (is (= 10000  (score "git" "gitk")))
+    ;; no bonus: just base
+    (is (= 5      (score "git" "awk" :base 5)))))
+
+(test better-duplicate-candidate-p-prefers-higher-score-then-description
+  "better-duplicate-candidate-p returns true when candidate is strictly better than current."
+  (flet ((make (text &key (score 0) (description ""))
+           (nshell.domain.completion:make-candidate text :score score :description description))
+         (better (a b)
+           (nshell.domain.completion::better-duplicate-candidate-p a b)))
+    ;; higher score wins unconditionally
+    (is (better (make "t" :score 10) (make "t" :score 5)))
+    (is (not (better (make "t" :score 5) (make "t" :score 10))))
+    ;; equal score: description present beats absent
+    (is (better (make "t" :description "info") (make "t")))
+    (is (not (better (make "t") (make "t" :description "info"))))
+    ;; equal score, both described or both bare: not better
+    (is (not (better (make "t" :description "a") (make "t" :description "b"))))))
+
 (test pbt-path-command-completion-is-prefixed-and-deduped
   (let ((kb (nshell.domain.completion:make-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "git")

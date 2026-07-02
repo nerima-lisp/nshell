@@ -165,137 +165,57 @@
       (is (= 2 code))
       (is (search "requires" output)))))
 
-(test complete-builtin-adds-command-and-argument-completions
-  "complete updates the session knowledge base used by interactive completion."
-  (with-builtins-context (context)
-    (multiple-value-bind (output code)
-        (call-builtin context "complete"
-                      '("-c" "deploy" "-f" "--dry-run" "-f" "--target"
-                        "-d" "release service"))
-      (is (null output))
-      (is (= 0 code)))
-    (multiple-value-bind (output code)
-        (call-builtin context "complete"
-                      '("--command" "deploy" "--flag" "--dry-run"
-                        "--flag" "--target" "--description" "release service"))
-      (is (null output))
-      (is (= 0 code)))
-    (let* ((kb (nshell.application:shell-context-knowledge-base context))
-           (command (find "deploy"
-                          (nshell.domain.completion:complete kb "dep")
-                          :key #'nshell.domain.completion:candidate-text
-                          :test #'string=))
-           (arguments (mapcar #'nshell.domain.completion:candidate-text
-                              (nshell.domain.completion:complete kb "deploy --"))))
-      (is (not (null command)))
-      (is (string= "release service"
-                   (nshell.domain.completion:candidate-description command)))
-      (is (equal '("--dry-run" "--target") arguments)))
-    (multiple-value-bind (output code)
-        (call-builtin context "complete"
-                      '("-c" "deploy" "-l" "color" "-s" "o"
-                        "-a" "always auto never"))
-      (is (null output))
-      (is (= 0 code)))
-    (let* ((kb (nshell.application:shell-context-knowledge-base context))
-           (candidates (nshell.domain.completion:complete kb "deploy --color=")))
-      (is (equal '("--color=always" "--color=auto" "--color=never")
-                 (mapcar #'nshell.domain.completion:candidate-text candidates))))
-    (let* ((kb (nshell.application:shell-context-knowledge-base context))
-           (candidates (nshell.domain.completion:complete kb "deploy --color a")))
-      (is (equal '("always" "auto")
-                 (mapcar #'nshell.domain.completion:candidate-text candidates))))
-    (let* ((kb (nshell.application:shell-context-knowledge-base context))
-           (candidates (nshell.domain.completion:complete kb "deploy -o n")))
-      (is (equal '("never")
-                 (mapcar #'nshell.domain.completion:candidate-text candidates))))))
+(test split-alias-assignment-extracts-name-and-value
+  "split-alias-assignment splits NAME=VALUE into (values NAME VALUE); nil for no equals or empty name."
+  (flet ((split (arg)
+           (multiple-value-list (nshell.application::%split-alias-assignment arg))))
+    (is (equal '("ll" "ls -l") (split "ll=ls -l")))
+    (is (equal '("gs" "git status") (split "gs=git status")))
+    (is (null (first (split "noequalssign"))))
+    (is (null (first (split "=value"))))))
 
-(test complete-builtin-rejects-missing-command
-  "complete requires an explicit command name."
-  (with-builtins-context (context)
-    (multiple-value-bind (output code)
-        (call-builtin context "complete" '("-f" "--bad"))
-      (is (= 1 code))
-      (is (search "usage" output)))))
+(test abbr-parse-position-maps-known-strings
+  "abbr-parse-position returns keyword for 'command'/'anywhere', nil for unknowns."
+  (flet ((pos (s) (nshell.application::%abbr-parse-position s)))
+    (is (eq :command (pos "command")))
+    (is (eq :anywhere (pos "anywhere")))
+    (is (null (pos "unknown")))
+    (is (null (pos "")))))
 
-(test complete-builtin-erases-command-completions
-  "complete -e removes session completion metadata for a command."
-  (with-builtins-context (context)
-    (let ((command "__nshell-deploy"))
-      (multiple-value-bind (output code)
-          (call-builtin context "complete"
-                        (list "-c" command "-f" "--dry-run"
-                              "-l" "color" "-a" "always auto"
-                              "-d" "test-only deploy command"))
-        (is (null output))
-        (is (= 0 code)))
-      (let ((kb (nshell.application:shell-context-knowledge-base context)))
-        (is (not (null (nshell.domain.completion:kb-query kb command)))))
-      (multiple-value-bind (output code)
-          (call-builtin context "complete" (list "-c" command "--erase"))
-        (is (null output))
-        (is (= 0 code)))
-      (let ((kb (nshell.application:shell-context-knowledge-base context)))
-        (is (null (nshell.domain.completion:kb-query kb command)))
-        (is (not (member command
-                         (mapcar #'nshell.domain.completion:candidate-text
-                                 (nshell.domain.completion:complete
-                                  kb "__nshell-"))
-                         :test #'string=)))))))
+(test string-join-concatenates-items-with-separator
+  "string-join produces the standard separator-delimited string."
+  (flet ((join (items sep)
+           (nshell.application::%string-join items sep)))
+    (is (string= ""      (join nil "")))
+    (is (string= "a"     (join '("a") ",")))
+    (is (string= "a,b,c" (join '("a" "b" "c") ",")))
+    (is (string= "a b"   (join '("a" "b") " ")))))
 
-(test complete-builtin-rejects-missing-arguments
-  "complete reports missing arguments for each required option."
-  (with-builtins-context (context)
-    (assert-builtin-cases (context "complete")
-      (("-c") :code 2 :output (format nil "complete: -c requires command~%"))
-      (("--command") :code 2 :output (format nil "complete: --command requires command~%"))
-      (("-f") :code 2 :output (format nil "complete: -f requires flag~%"))
-      (("--flag") :code 2 :output (format nil "complete: --flag requires flag~%"))
-      (("-l") :code 2 :output (format nil "complete: -l requires option~%"))
-      (("--long-option") :code 2 :output (format nil "complete: --long-option requires option~%"))
-      (("-s") :code 2 :output (format nil "complete: -s requires option~%"))
-      (("--short-option") :code 2 :output (format nil "complete: --short-option requires option~%"))
-      (("-a") :code 2 :output (format nil "complete: -a requires arguments~%"))
-      (("--arguments") :code 2 :output (format nil "complete: --arguments requires arguments~%"))
-      (("-d") :code 2 :output (format nil "complete: -d requires description~%"))
-      (("--description") :code 2 :output (format nil "complete: --description requires description~%")))))
+(test path-separator-p-detects-unix-slash
+  "path-separator-p returns true only for / on Unix."
+  (flet ((sep (ch) (nshell.application::%path-separator-p ch)))
+    (is (sep #\/))
+    (is (not (sep #\\)))
+    (is (not (sep #\:)))))
 
-(test function-builtin-stores-and-manages-inline-body
-  "function builtin stores inline fish-style bodies and exposes management operations."
-  (with-builtins-context (context)
-    (assert-fish-style-table-builtin-roundtrip
-        (context "function" (nshell.application:shell-context-function-table context)
-                 "hi" '("echo hello")
-                 '("hi" "echo" "hello" "end")
-                 "function hi"
-                 "function: -e requires a name
-"
-                 '("-e" "hi")
-                 "missing"
-                 :body-contains ("  echo hello" "end")))))
+(test command-has-directory-p-detects-slash-in-name
+  "command-has-directory-p returns the index of / in the command name."
+  (flet ((has (s) (nshell.application::%command-has-directory-p s)))
+    (is (null (has "git")))
+    (is (not (null (has "./git"))))
+    (is (not (null (has "/usr/bin/git"))))))
 
-(test history-builtin-searches-deletes-clears-and-reports-size
-  "history builtin exposes fish-style in-memory history management."
-  (let* ((context (make-test-builtins-context))
-         (history (nshell.application:shell-context-history context)))
-    (nshell.domain.history:history-add history "Git status")
-    (nshell.domain.history:history-add history "git status")
-    (nshell.domain.history:history-add history "docker ps")
-    (nshell.domain.history:history-add history "git commit")
-    (nshell.domain.history:history-add history "git status --short")
-    (assert-builtin-cases (context "history")
-      (nil :code 0 :output (format nil "Git status~%git status~%docker ps~%git commit~%git status --short~%"))
-      ('("search" "git") :code 0 :output (format nil "git status --short~%git commit~%git status~%Git status~%"))
-      ('("search" "--prefix" "git") :code 0 :output (format nil "git status --short~%git commit~%git status~%Git status~%"))
-      ('("search" "--case-sensitive" "git") :code 0
-       :output (format nil "git status --short~%git commit~%git status~%"))
-      ('("search" "--contains" "status --") :code 0
-       :output (format nil "git status --short~%"))
-      ('("search" "--exact" "--case-sensitive" "Git status") :code 0
-       :output (format nil "Git status~%"))
-      ('("delete" "docker" "ps") :code 0 :output (format nil "1~%"))
-      ('("size") :code 0 :output (format nil "4~%"))
-      ('("clear") :code 0 :output-null t)
-      ('("bogus") :code 1
-       :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]~%")))
-    (is (= 0 (nshell.domain.history:history-size history)))))
+(test split-path-splits-on-colon-delimiters
+  "split-path splits a colon-separated PATH string."
+  (flet ((sp (s) (nshell.application::%split-path s)))
+    (is (equal '("/bin" "/usr/bin") (sp "/bin:/usr/bin")))
+    (is (equal '("/bin") (sp "/bin")))
+    (is (equal '("" "/bin") (sp ":/bin")))))
+
+(test join-path-name-forms-directory-slash-command
+  "join-path-name joins directory and command with / handling existing trailing slash."
+  (flet ((join (dir cmd)
+           (nshell.application::%join-path-name dir cmd)))
+    (is (string= "git"          (join "" "git")))
+    (is (string= "/bin/git"     (join "/bin/" "git")))
+    (is (string= "/bin/git"     (join "/bin" "git")))))

@@ -83,30 +83,23 @@ negative indexes count from the end, and $argv[A..B] returns an inclusive range.
     (t
      (values nil nil))))
 
-(defun %argv-index-ref (input end len)
-  "If INPUT has an argv index immediately after a name ending at END, return
-\(values field-string next-index); otherwise (values NIL END)."
+(defun %bracket-index-ref (input end len fields-fn)
+  "Return (values joined-field next-index) when a [SPEC] bracket follows END.
+Returns (values nil end) when there is no bracket or when it is unbalanced."
   (if (and (< end len) (char= (char input end) #\[))
       (let ((close (position #\] input :start (1+ end))))
         (if close
-            (values (%join-fields
-                     (%argv-spec-fields (subseq input (1+ end) close)))
+            (values (%join-fields (funcall fields-fn (subseq input (1+ end) close)))
                     (1+ close))
             (values nil end)))
       (values nil end)))
 
+(defun %argv-index-ref (input end len)
+  (%bracket-index-ref input end len #'%argv-spec-fields))
+
 (defun %variable-index-ref (input name env end len)
-  "If INPUT has an index immediately after NAME, return the joined list fields."
-  (if (and (< end len) (char= (char input end) #\[))
-      (let ((close (position #\] input :start (1+ end))))
-        (if close
-            (values (%join-fields
-                     (%variable-spec-fields name
-                                            (subseq input (1+ end) close)
-                                            env))
-                    (1+ close))
-            (values nil end)))
-      (values nil end)))
+  (%bracket-index-ref input end len
+                      (lambda (spec) (%variable-spec-fields name spec env))))
 
 (defun %argv-reference-at (input start len)
   "Return (values fields next-index recognized-p) for a $argv reference at START."

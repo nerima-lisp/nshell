@@ -223,4 +223,21 @@ git status --short")
                      (nshell.presentation:compute-suggestion
                       history
                       input
-                      :knowledge-base kb)))))))
+                      :knowledge-base kb))))))
+
+(test autosuggest-closed-quoted-token-p-detects-matching-delimiters
+  "autosuggest-closed-quoted-token-p returns true when the token is fully quoted."
+  (flet ((cq (input start end)
+           (nshell.presentation::%autosuggest-closed-quoted-token-p input start end)))
+    (is      (cq "'foo'" 0 5))
+    (is      (cq "\"foo\"" 0 5))
+    (is (not (cq "'foo"  0 4)))
+    (is (not (cq "foo"   0 3)))
+    (is (not (cq "''"    0 1)))))
+
+(test accept-suggestion-appends-suggestion-to-input
+  "accept-suggestion concatenates current input with the tab-suggestion suffix."
+  (is (string= "git checkout"
+               (nshell.presentation:accept-suggestion "git " "checkout")))
+  (is (string= "git "
+               (nshell.presentation:accept-suggestion "git " "")))))

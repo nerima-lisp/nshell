@@ -168,3 +168,65 @@
       (is-vi-visual-state swapped
                           :cursor-pos 0
                           :vi-visual-anchor 2))))
+
+(test vi-a-I-C-s-enter-insert-or-change
+  "a appends after cursor, I inserts at line start, C changes to end, s substitutes."
+  ;; ESC on cursor-pos 2 moves it to 1 (pos=1 throughout this test).
+  (with-vi-command-state (cmd (input-state :buffer "abcdef" :cursor-pos 2))
+    ;; a: insert at pos+1 = 2 (one past the char under cursor).
+    (with-reduced-input-state (app) (reduce-once cmd :char #\a)
+      (is-input-state app :mode :insert :cursor-pos 2))
+    ;; I: insert at line start (always column 0).
+    (with-reduced-input-state (ins) (reduce-once cmd :char #\I)
+      (is-input-state ins :mode :insert :cursor-pos 0))
+    ;; C: kill from pos=1 to end, leaving "a", cursor stays at 1.
+    (with-reduced-input-state (changed) (reduce-once cmd :char #\C)
+      (is-input-state changed :buffer "a" :mode :insert :cursor-pos 1))
+    ;; s: kill one char at pos=1 ("b"), leaving "acdef", cursor at 1.
+    (with-reduced-input-state (sub) (reduce-once cmd :char #\s)
+      (is-input-state sub :buffer "acdef" :mode :insert :cursor-pos 1))))
+
+(test vi-e-and-caret-motions
+  "e moves to word-end position; ^ moves unconditionally to column 0."
+  (with-vi-command-state (cmd (input-state :buffer "one two three" :cursor-pos 0))
+    ;; e: advance to last char of first word (index 2).
+    (with-reduced-input-state (end1) (reduce-once cmd :char #\e)
+      (is-vi-command-state end1 :cursor-pos 2))
+    ;; ^ is always line-start (contrast with 0, which accumulates count when active).
+    (with-vi-command-state (mid (input-state :buffer "hello" :cursor-pos 4))
+      (with-reduced-input-state (start) (reduce-once mid :char #\^)
+        (is-vi-command-state start :cursor-pos 0)))))
+
+(test vi-visual-insert-exits-visual-before-entering-insert
+  "i and a in visual mode cancel the selection and enter insert mode."
+  (with-vi-visual-state (cmd (input-state :buffer "abcdef" :cursor-pos 1) visual)
+    ;; Move right to select "ab" then press i to cancel visual and insert.
+    (with-reduced-input-states visual (((moved) :char #\l)
+                                       ((inserted) :char #\i))
+      (is-input-state inserted :mode :insert :vi-visual-anchor nil))
+    ;; a in visual: same cancel, cursor advances by 1.
+    (with-reduced-input-states visual (((moved) :char #\l)
+                                       ((appended) :char #\a))
+      (is-input-state appended :mode :insert :vi-visual-anchor nil))))
+
+(test vi-counted-position-applies-step-n-times
+  "vi-counted-position applies the step function COUNT times to the initial position."
+  (flet ((cnt (pos count step)
+           (nshell.presentation::%vi-counted-position pos count step)))
+    (is (= 5  (cnt 0 5 #'1+)))
+    (is (= 0  (cnt 5 5 #'1-)))
+    (is (= 3  (cnt 3 0 #'1+)))
+    (is (= 7  (cnt 3 2 (lambda (p) (+ p 2)))))))
+
+(test vi-accumulate-count-builds-multi-digit-repeat-count
+  "vi-accumulate-count prefixes existing count with new digit (like typing 12 = 1 then 2)."
+  (flet ((accum (state digit)
+           (nshell.presentation::input-state-vi-count
+            (nshell.presentation::%vi-accumulate-count state digit))))
+    (let ((base (input-state :buffer "")))
+      (is (= 3   (accum base #\3)))
+      (is (= 31  (accum (nshell.presentation::%vi-accumulate-count base #\3) #\1)))
+      (is (= 312 (accum (nshell.presentation::%vi-accumulate-count
+                         (nshell.presentation::%vi-accumulate-count base #\3)
+                         #\1)
+                        #\2))))))

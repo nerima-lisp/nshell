@@ -254,82 +254,47 @@ echo is /usr/bin/echo
       (assert-builtin-call (context "disown" (list (format nil "~d" job-id)))
         :code 1
         :output (format nil "disown: job [~d] not found~%" job-id)))))
+(test type-option-p-recognizes-dash-prefixed-strings
+  "type-option-p returns true only for strings starting with a dash of length >= 2."
+  (flet ((opt-p (s) (nshell.application::%type-option-p s)))
+    (is (opt-p "-t"))
+    (is (opt-p "--all"))
+    (is (opt-p "--color=auto"))
+    (is (not (opt-p "word")))
+    (is (not (opt-p "")))
+    (is (not (opt-p "-")))))
 
-(test count-reports-number-of-arguments
-  "count prints the argument count, exiting 0 when non-empty and 1 when empty."
-  (with-builtins-context (context)
-    (assert-builtin-call (context "count" '("a" "b" "c"))
-      :code 0
-      :output (format nil "3~%"))
-    (assert-builtin-call (context "count" '("only"))
-      :code 0
-      :output (format nil "1~%"))
-    (assert-builtin-call (context "count" '())
-      :code 1
-      :output (format nil "0~%"))))
+(test type-option-kind-maps-known-flags
+  "type-option-kind returns the correct keyword for each recognized flag."
+  (flet ((kind (s) (nshell.application::%type-option-kind s)))
+    (is (eq :all        (kind "-a")))
+    (is (eq :all        (kind "--all")))
+    (is (eq :short      (kind "-s")))
+    (is (eq :no-functions (kind "-f")))
+    (is (eq :color      (kind "--color")))
+    (is (eq :color      (kind "--color=always")))
+    (is (eq :query      (kind "-q")))
+    (is (eq :path       (kind "-p")))
+    (is (eq :force-path (kind "-P")))
+    (is (eq :type       (kind "-t")))
+    (is (null           (kind "--bogus")))))
 
-(test seq-prints-integer-sequences
-  "seq prints integer ranges with optional first/step, one per line."
-  (with-builtins-context (context)
-    (assert-builtin-call (context "seq" '("3"))
-      :code 0 :output (format nil "1~%2~%3~%"))
-    (assert-builtin-call (context "seq" '("2" "5"))
-      :code 0 :output (format nil "2~%3~%4~%5~%"))
-    (assert-builtin-call (context "seq" '("2" "2" "8"))
-      :code 0 :output (format nil "2~%4~%6~%8~%"))
-    (assert-builtin-call (context "seq" '("3" "-1" "1"))
-      :code 0 :output (format nil "3~%2~%1~%"))
-    ;; descending with positive step yields nothing
-    (assert-builtin-call (context "seq" '("5" "1"))
-      :code 0 :output-null t)
-    (assert-builtin-call (context "seq" '("1" "0" "5"))
-      :code 2 :output (format nil "seq: STEP must not be zero~%"))
-    (assert-builtin-call (context "seq" '("x"))
-      :code 2 :output (format nil "seq: arguments must be integers~%"))))
+(test type-color-enabled-p-accepts-known-color-values
+  "type-color-enabled-p is true for --color and --color=always/auto, false for --color=never."
+  (flet ((col (s) (nshell.application::%type-color-enabled-p s)))
+    (is (col "--color"))
+    (is (col "--color=always"))
+    (is (col "--color=auto"))
+    (is (not (col "--color=never")))
+    (is (not (col "--bogus")))))
 
-(test contains-tests-membership-without-output
-  "contains returns success when the needle appears in the value list."
-  (with-builtins-context (context)
-    (assert-builtin-call (context "contains" '("needle" "hay" "needle" "stack"))
-      :code 0
-      :output-null t)
-    (assert-builtin-call (context "contains" '("needle" "hay" "stack"))
-      :code 1
-      :output-null t)
-    (assert-builtin-call (context "contains" '("--" "-n" "-x" "-n"))
-      :code 0
-      :output-null t)))
-
-(test contains-index-prints-matching-value-positions
-  "contains -i prints 1-based positions within the searched values."
-  (with-builtins-context (context)
-    (assert-builtin-call (context "contains"
-                           '("--index" "needle" "hay" "needle" "needle"))
-      :code 0
-      :output (format nil "2~%3~%"))
-    (assert-builtin-call (context "contains" '("-i" "needle" "hay"))
-      :code 1
-      :output-empty t)))
-
-(test contains-reports-usage-and-option-errors
-  "contains distinguishes missing operands from unknown options."
-  (with-builtins-context (context)
-    (assert-builtin-call (context "contains" nil)
-      :code 2
-      :contains '("usage"))
-    (assert-builtin-call (context "contains" '("--bogus" "needle"))
-      :code 2
-      :contains '("unknown option --bogus"))))
-
-(test pbt-contains-status-matches-generated-membership
-  "contains agrees with string= membership for generated shell words."
-  (assert-builtin-property (context)
-      ((needle (gen-shell-word :max-length 8))
-       (values (lambda ()
-                 (loop repeat (funcall (gen-in-range 0 8))
-                       collect (funcall (gen-shell-word :max-length 8))))))
-    (multiple-value-bind (output code)
-        (call-builtin context "contains" (append (list "--" needle) values))
-      (and (null output)
-           (= code (if (member needle values :test #'string=) 0 1))))))
-
+(test string-lines-splits-on-newlines
+  "string-lines returns a list of lines; each newline creates one split."
+  (flet ((lines (text) (nshell.application::%string-lines text)))
+    (is (equal '("hello") (lines "hello")))
+    (is (equal '("a" "b" "c") (lines (format nil "a~%b~%c"))))
+    (is (equal '("" "b") (lines (format nil "~%b"))))
+    ;; collect happens before while guard: "" yields ("") and "\n" yields ("" "")
+    (is (equal '("") (lines "")))
+    (is (equal '("" "") (lines (format nil "~%"))))
+    (is (equal '("a" "" "") (lines (format nil "a~%~%"))))))

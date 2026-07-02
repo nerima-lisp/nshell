@@ -93,6 +93,50 @@
   (is (null (nshell.domain.completion::word-like-token-p
              (nshell.domain.parsing:make-token :pipe "|")))))
 
+(test starts-with-p-performs-case-insensitive-prefix-match
+  "starts-with-p returns true when text starts with prefix (case-folded)."
+  (flet ((swp (prefix text)
+           (nshell.domain.completion::starts-with-p prefix text)))
+    (is (swp "" "anything"))
+    (is (swp "git" "git checkout"))
+    (is (swp "GIT" "git checkout"))
+    (is (not (swp "gitx" "git")))
+    (is (not (swp "checkout" "git")))))
+
+(test redirection-token-p-recognizes-redirect-type
+  "redirection-token-p returns true only for :redirect tokens."
+  (flet ((redir (type)
+           (nshell.domain.completion::redirection-token-p
+            (nshell.domain.parsing:make-token type ""))))
+    (is (redir :redirect))
+    (is (not (redir :pipe)))
+    (is (not (redir :word)))
+    (is (not (redir :newline)))))
+
+(test command-segment-tokens-returns-tokens-after-last-separator
+  "command-segment-tokens strips everything up to and including the last separator."
+  (flet ((seg (input)
+           (nshell.domain.completion::command-segment-tokens
+            (nshell.domain.parsing:tokenize input))))
+    ;; no separator: whole token list returned
+    (is (= 2 (length (seg "git checkout"))))
+    ;; after &&: only "git" and "ch" returned
+    (is (= 2 (length (seg "echo a && git ch"))))
+    ;; after semicolon
+    (is (= 1 (length (seg "a ; b"))))))
+
+(test shell-completion-words-merges-adjacent-word-tokens
+  "shell-completion-words combines adjacent word-like tokens into single logical words."
+  (flet ((words (input)
+           (mapcar #'nshell.domain.completion::completion-word-value
+                   (nshell.domain.completion::shell-completion-words
+                    (nshell.domain.parsing:tokenize input)))))
+    (is (equal '("git" "checkout") (words "git checkout")))
+    ;; pipe is not word-like so it triggers a flush
+    (is (equal '("ls" "foo") (words "ls | foo")))
+    ;; multiple args
+    (is (equal '("git" "--color" "status") (words "git --color status")))))
+
 (test pbt-filesystem-redirection-completion-preserves-prefix
   (check-property (:trials 50)
       ((prefix (gen-command-prefix :min-length 1 :max-length 4) nil))
@@ -118,3 +162,42 @@
                       (member (nshell.domain.completion:candidate-kind candidate)
                               '(:file :directory)))
                     candidates))))))
+
+(test path-separator-p-detects-forward-slash
+  "path-separator-p returns true only for / (path separator on Unix)."
+  (flet ((sep (ch) (nshell.domain.completion::path-separator-p ch)))
+    (is (sep #\/))
+    (is (not (sep #\:)))
+    (is (not (sep #\a)))))
+
+(test command-prefix-has-directory-p-detects-slash-in-prefix
+  "command-prefix-has-directory-p returns the slash position when one is present."
+  (flet ((has-dir (s)
+           (nshell.domain.completion::command-prefix-has-directory-p s)))
+    (is (null (has-dir "git")))
+    (is (not (null (has-dir "./git"))))
+    (is (not (null (has-dir "/usr/bin/git"))))))
+
+(test split-path-splits-colon-separated-directories
+  "split-path splits a colon-separated PATH into a list of directory strings."
+  (flet ((sp (s) (nshell.domain.completion::split-path s)))
+    (is (equal '("/bin" "/usr/bin") (sp "/bin:/usr/bin")))
+    (is (equal '("/bin") (sp "/bin")))
+    (is (equal '("" "/bin") (sp ":/bin")))))
+
+(test trim-trailing-path-separators-removes-trailing-slashes
+  "trim-trailing-path-separators strips trailing / unless the string is only slashes."
+  (flet ((trim (s) (nshell.domain.completion::trim-trailing-path-separators s)))
+    (is (string= "/usr/bin" (trim "/usr/bin/")))
+    (is (string= "/usr/bin" (trim "/usr/bin")))
+    ;; single slash preserved (only-separator case)
+    (is (string= "/" (trim "/")))))
+
+(test split-file-completion-prefix-splits-on-last-slash
+  "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."
+  (flet ((split (s)
+           (multiple-value-list
+            (nshell.domain.completion::split-file-completion-prefix s))))
+    (is (equal '("" "foo")      (split "foo")))
+    (is (equal '("/usr/" "bin") (split "/usr/bin")))
+    (is (equal '("src/" "")     (split "src/")))))

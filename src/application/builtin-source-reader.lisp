@@ -27,15 +27,6 @@
                        "; ")
                    line)))
 
-(defun %parse-source-line (source)
-  (nshell.domain.parsing:with-parsed-command-line-case (result ast source)
-    (:complete
-     result)
-    (:error
-     result)
-    (:incomplete
-     result)))
-
 (defun %collect-source-lines (stream)
   (loop for line = (read-line stream nil nil)
         while line
@@ -43,6 +34,8 @@
 
 (defparameter +source-definition-opening-keywords+
   '("if" "for" "while" "switch" "begin" "function"))
+
+(defparameter +source-definition-end-keyword+ "end")
 
 (defun %source-line-segments (line)
   (multiple-value-bind (tokens)
@@ -98,7 +91,7 @@
                                 :test #'string=))
                (incf delta))
              (when (and (stringp value)
-                        (string= value "end"))
+                        (string= value +source-definition-end-keyword+))
                (decf delta))
              (setf expect-command nil))
             ((member type '(:semicolon :and :or :ampersand :pipe))
@@ -178,10 +171,10 @@
 (defun %source-lines-handle-source-form (context line remaining output)
   (let ((text line)
         (tail remaining)
-        (result (%parse-source-line line)))
+        (result (nshell.domain.parsing:parse-command-line line)))
     (loop while (and tail (%source-line-needs-more-input-p result))
           do (setf text (%append-source-continuation text (pop tail) result)
-                   result (%parse-source-line text)))
+                   result (nshell.domain.parsing:parse-command-line text)))
     (if (nshell.domain.parsing:parse-complete-p result)
         (multiple-value-bind (chunk exit-code)
             (%execute-source-line context text)

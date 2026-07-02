@@ -90,25 +90,27 @@
           finally (when (< start (length text))
                     (write-string text out :start start)))))
 
-(defun %completion-double-quoted-insertion-text (text)
-  (with-output-to-string (out)
-    (loop for ch across text
-          do (when (%completion-double-quoted-escape-character-p ch)
-               (write-char #\\ out))
-             (write-char ch out))))
+(defmacro %define-escape-formatter (name predicate)
+  "Generate a function NAME that writes TEXT with each char matching PREDICATE
+preceded by a backslash."
+  `(defun ,name (text)
+     (with-output-to-string (out)
+       (loop for ch across text
+             do (when (,predicate ch)
+                  (write-char #\\ out))
+                (write-char ch out)))))
+
+(%define-escape-formatter %completion-unquoted-insertion-text
+  %completion-escape-character-p)
+
+(%define-escape-formatter %completion-double-quoted-insertion-text
+  %completion-double-quoted-escape-character-p)
 
 (defun %completion-insertion-text (text &key quote-context)
   (ecase quote-context
-    ((nil)
-     (with-output-to-string (out)
-       (loop for ch across text
-             do (when (%completion-escape-character-p ch)
-                  (write-char #\\ out))
-                (write-char ch out))))
-    (:single
-     (%completion-single-quoted-insertion-text text))
-    (:double
-     (%completion-double-quoted-insertion-text text))))
+    ((nil)    (%completion-unquoted-insertion-text text))
+    (:single  (%completion-single-quoted-insertion-text text))
+    (:double  (%completion-double-quoted-insertion-text text))))
 
 (defun %completion-unescape-token (text &key quote-context)
   (with-output-to-string (out)

@@ -112,50 +112,45 @@ or NIL at end of input."
 (defun %arith-nonzero (n)
   (if (zerop n) (error "nshell: division by zero in arithmetic expression") n))
 
-(defun %arith-mul (p)
-  (let ((left (%arith-unary p)))
-    (loop
-      (cond
-        ((%arith-eat-op p "*") (setf left (* left (%arith-unary p))))
-        ((%arith-eat-op p "/") (setf left (truncate left (%arith-nonzero (%arith-unary p)))))
-        ((%arith-eat-op p "%") (setf left (rem left (%arith-nonzero (%arith-unary p)))))
-        (t (return left))))))
-
-(defun %arith-add (p)
-  (let ((left (%arith-mul p)))
-    (loop
-      (cond
-        ((%arith-eat-op p "+") (setf left (+ left (%arith-mul p))))
-        ((%arith-eat-op p "-") (setf left (- left (%arith-mul p))))
-        (t (return left))))))
-
 (defun %arith-bool (n) (if n 1 0))
 
-(defun %arith-cmp (p)
-  (let ((left (%arith-add p)))
-    (loop
-      (cond
-        ((%arith-eat-op p "<=") (setf left (%arith-bool (<= left (%arith-add p)))))
-        ((%arith-eat-op p ">=") (setf left (%arith-bool (>= left (%arith-add p)))))
-        ((%arith-eat-op p "==") (setf left (%arith-bool (= left (%arith-add p)))))
-        ((%arith-eat-op p "!=") (setf left (%arith-bool (/= left (%arith-add p)))))
-        ((%arith-eat-op p "<") (setf left (%arith-bool (< left (%arith-add p)))))
-        ((%arith-eat-op p ">") (setf left (%arith-bool (> left (%arith-add p)))))
-        (t (return left))))))
+;; Each binary tier is a Prolog-style rule table: (operator . semantic-action).
+;; define-arith-binary generates the left-associative loop from the table.
+(defmacro define-arith-binary (name higher-prec &rest op-rules)
+  "Generate a left-associative binary-operator parsing function from OP-RULES.
+Each rule is (op-string expr) where LEFT is the accumulated left-side value."
+  (let ((left (gensym "LEFT-")))
+    `(defun ,name (p)
+       (let ((,left (,higher-prec p)))
+         (loop (cond ,@(mapcar (lambda (rule)
+                                 (destructuring-bind (op expr) rule
+                                   `((%arith-eat-op p ,op)
+                                     (setf ,left ,(subst left 'left expr)))))
+                               op-rules)
+                     (t (return ,left))))))))
 
-(defun %arith-and (p)
-  (let ((left (%arith-cmp p)))
-    (loop while (%arith-eat-op p "&&")
-          do (setf left (%arith-bool (and (not (zerop left))
-                                          (not (zerop (%arith-cmp p)))))))
-    left))
+(define-arith-binary %arith-mul %arith-unary
+  ("*" (* left (%arith-unary p)))
+  ("/" (truncate left (%arith-nonzero (%arith-unary p))))
+  ("%" (rem left (%arith-nonzero (%arith-unary p)))))
 
-(defun %arith-or (p)
-  (let ((left (%arith-and p)))
-    (loop while (%arith-eat-op p "||")
-          do (setf left (%arith-bool (or (not (zerop left))
-                                         (not (zerop (%arith-and p)))))))
-    left))
+(define-arith-binary %arith-add %arith-mul
+  ("+" (+ left (%arith-mul p)))
+  ("-" (- left (%arith-mul p))))
+
+(define-arith-binary %arith-cmp %arith-add
+  ("<=" (%arith-bool (<= left (%arith-add p))))
+  (">=" (%arith-bool (>= left (%arith-add p))))
+  ("==" (%arith-bool (= left (%arith-add p))))
+  ("!=" (%arith-bool (/= left (%arith-add p))))
+  ("<"  (%arith-bool (< left (%arith-add p))))
+  (">"  (%arith-bool (> left (%arith-add p)))))
+
+(define-arith-binary %arith-and %arith-cmp
+  ("&&" (%arith-bool (and (not (zerop left)) (not (zerop (%arith-cmp p)))))))
+
+(define-arith-binary %arith-or %arith-and
+  ("||" (%arith-bool (or (not (zerop left)) (not (zerop (%arith-and p)))))))
 
 (defun evaluate-arithmetic (expression env)
   "Evaluate EXPRESSION (a string) as shell integer arithmetic, returning an

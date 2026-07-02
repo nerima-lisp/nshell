@@ -206,3 +206,92 @@
               "definitely-not-a-real-command"
               nil)))
     (is (= 127 (nshell.application:execute-pipeline-use-case ast nil)))))
+
+(test trim-command-substitution-output-strips-trailing-newlines
+  "Trailing \\n and \\r characters are removed; nil input becomes empty string."
+  (flet ((trim (s) (nshell.application::%trim-command-substitution-output s)))
+    (is (string= "" (trim nil)))
+    (is (string= "" (trim "")))
+    (is (string= "hello" (trim "hello")))
+    (is (string= "hello" (trim (format nil "hello~%"))))
+    (is (string= "hello" (trim (format nil "hello~%~%"))))
+    (is (string= "hello" (trim (format nil "hello~C~%" #\Return))))
+    (is (string= "" (trim (format nil "~%~%"))))
+    (is (string= (format nil "a~%b") (trim (format nil "a~%b~%")))
+        "Only trailing newlines stripped, not internal ones")))
+
+(test command-substitution-fields-splits-on-newlines
+  "Output is split on internal newlines after trailing newlines are stripped."
+  (flet ((fields (s) (nshell.application::%command-substitution-fields s)))
+    (is (null (fields nil)))
+    (is (null (fields "")))
+    (is (null (fields (format nil "~%~%"))))
+    (is (equal '("hello") (fields "hello")))
+    (is (equal '("hello") (fields (format nil "hello~%"))))
+    (is (equal '("hello" "world") (fields (format nil "hello~%world"))))
+    (is (equal '("hello" "world") (fields (format nil "hello~%world~%"))))
+    (is (equal '("" "world") (fields (format nil "~%world"))))))
+
+(test command-substitution-fields-returns-nil-on-parse-error
+  "A command string with a parse error returns nil without executing."
+  (let ((context (make-test-builtins-context)))
+    (is (null (nshell.application::%execute-command-substitution-fields
+               context "| echo parse-error-command")))))
+
+(test command-substitution-fields-returns-nil-on-incomplete-input
+  "An incomplete command substitution string returns nil without executing."
+  (let ((context (make-test-builtins-context)))
+    (is (null (nshell.application::%execute-command-substitution-fields
+               context "echo 'unterminated")))))
+
+(test command-substitution-fields-returns-nil-on-timeout
+  "A blocking command substitution logs a timeout to stderr and returns nil."
+  (let ((context (make-test-builtins-context))
+        (result :sentinel)
+        (error-text nil))
+    (setf error-text
+          (with-output-to-string (*error-output*)
+            (let ((nshell.application::*command-substitution-timeout* 0.001))
+              (with-temporary-function
+                  ('nshell.application::execute-ast-in-context
+                   (lambda (ctx ast)
+                     (declare (ignore ctx ast))
+                     (sleep 5)
+                     (values "" 0)))
+                (setf result
+                      (nshell.application::%execute-command-substitution-fields
+                       context "echo hello"))))))
+    (is (null result))
+    (is (search "timed out" error-text))))
+
+(test paren-balanced-end-finds-matching-close-paren
+  "paren-balanced-end returns index past the balancing ) or nil when unbalanced."
+  (flet ((bal (text start) (nshell.application::%paren-balanced-end text start)))
+    (is (= 2 (bal "()" 0)))
+    (is (= 7 (bal "(a (b))" 0)))
+    (is (null (bal "(unclosed" 0)))
+    (is (= 4 (bal "x(a)y" 1)))))
+
+(test append-command-substitution-char-extends-each-part
+  "append-command-substitution-char appends the character to every part string."
+  (flet ((app (parts ch)
+           (nshell.application::%append-command-substitution-char parts ch)))
+    (is (equal '("a") (app '("") #\a)))
+    (is (equal '("xa" "ya") (app '("x" "y") #\a)))
+    (is (equal '("$") (app '("") #\$)))))
+
+(test append-command-substitution-string-extends-each-part
+  "append-command-substitution-string appends a string to every part."
+  (flet ((app (parts s)
+           (nshell.application::%append-command-substitution-string parts s)))
+    (is (equal '("abc") (app '("") "abc")))
+    (is (equal '("xabc" "yabc") (app '("x" "y") "abc")))))
+
+(test append-command-substitution-fields-cross-products-parts-and-fields
+  "append-command-substitution-fields produces the full cross-product of parts x fields."
+  (flet ((app (parts fields)
+           (nshell.application::%append-command-substitution-fields parts fields)))
+    (is (equal '("one" "two") (app '("") '("one" "two"))))
+    (is (equal '("xone" "xtwo" "yone" "ytwo") (app '("x" "y") '("one" "two"))))
+    ;; nil fields → same as ("") → each part unchanged
+    (is (equal '("x" "y") (app '("x" "y") nil)))))

@@ -174,3 +174,16 @@
                 do (setf previous-end end))
           "Tokenizer produced non-monotonic or out-of-bounds spans for ~s"
           input))))
+
+(test tokenizer-double-quoted-escape-character-p-identifies-special-chars
+  "Inside double quotes, only \\, \", $, ` and newline require backslash escaping."
+  (flet ((esc (ch)
+           (nshell.domain.parsing::%tokenizer-double-quoted-escape-character-p ch)))
+    (is (esc #\\))
+    (is (esc #\"))
+    (is (esc #\$))
+    (is (esc #\`))
+    (is (esc #\Newline))
+    (is (not (esc #\Space)))
+    (is (not (esc #\a)))
+    (is (not (esc #\!)))))

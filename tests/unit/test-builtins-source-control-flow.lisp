@@ -220,3 +220,39 @@
       (is (string= (format nil "nshell: $CMD: command name expansion produced 2 fields~%")
                    output)))))
 
+(test source-if-without-else-returns-zero-on-failure
+  "if with a failing condition and no else branch exits 0 with no output."
+  (with-builtins-source-ok (output code context
+                                   '("if false"
+                                     "echo should-not-run"
+                                     "end"))
+      ""))
+
+(test source-switch-case-no-match-returns-zero
+  "switch with no matching clause exits 0 with no output."
+  (with-builtins-source-ok (output code context
+                                   '("switch unmatched"
+                                     "case vanilla"
+                                     "echo vanilla"
+                                     "case chocolate"
+                                     "echo chocolate"
+                                     "end"))
+      ""))
+
+(test source-begin-end-executes-body-in-current-context
+  "begin/end runs its body and accumulates output like an inline block."
+  (with-builtins-source-ok (output code context
+                                   '("begin"
+                                     "echo first"
+                                     "echo second"
+                                     "end"))
+      (format nil "first~%second~%")))
+
+(test source-for-with-empty-values-runs-no-iterations
+  "for loop with no in-values iterates zero times, producing no output."
+  (with-builtins-source-ok (output code context
+                                   '("for x in"
+                                     "echo $x"
+                                     "end"))
+      ""))
+

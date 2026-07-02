@@ -42,6 +42,21 @@
            (case ,name)
            ,next-remaining))))
 
+;; Macro that binds the new remaining-args and option-error after parsing.
+;; OPTION-ERROR is NIL on success; the caller decides how to handle it.
+(defmacro with-string-options ((next-remaining-var option-error-var
+                                remaining builtin flag-specs integer-specs
+                                on-flag on-integer)
+                               &body body)
+  "Parse REMAINING with %string-parse-option-stream, binding results as
+NEXT-REMAINING-VAR (updated remaining args) and OPTION-ERROR-VAR (NIL or
+an error string). BODY runs with both variables in scope."
+  `(multiple-value-bind (,next-remaining-var ,option-error-var)
+       (%string-parse-option-stream ,remaining ,builtin
+                                    ,flag-specs ,integer-specs
+                                    ,on-flag ,on-integer)
+     ,@body))
+
 (defun %builtin-string-summary (separator &key manipulation-only-p)
   (format nil "string ~a"
           (%string-join

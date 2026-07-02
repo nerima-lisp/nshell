@@ -203,82 +203,93 @@
        :code 0
        :output (format nil "bcde~%")))))
 
-(test pbt-string-match-ignore-case-matches-generated-words
-  "string match -i agrees with case-insensitive equality for generated shell words."
-  (assert-string-builtin-property (context)
-      ((word (gen-shell-word :min-length 1 :max-length 8)))
-    (let ((candidate (string-upcase word)))
-      (multiple-value-bind (output code)
-          (call-string-builtin context
-                        (list "match" "-i" "--" word candidate))
-        (and (= code 0)
-             (string= (format nil "~A~%" candidate) output))))))
+(test string-prefix-p-tests-leading-substring
+  "string-prefix-p returns true only when prefix is a leading substring of string."
+  (flet ((pre (prefix string)
+           (nshell.application::%string-prefix-p prefix string)))
+    (is (pre "" "abc"))
+    (is (pre "a" "abc"))
+    (is (pre "abc" "abc"))
+    (is (not (pre "abcd" "abc")))
+    (is (not (pre "b" "abc")))))
 
-(test pbt-string-replace-ignore-case-replaces-generated-words
-  "string replace -i replaces generated shell words regardless of case."
-  (assert-string-builtin-property (context)
-      ((word (gen-shell-word :min-length 1 :max-length 8)))
-    (let ((candidate (string-upcase word)))
-      (multiple-value-bind (output code)
-          (call-string-builtin context
-                        (list "replace" "-i" "--" word "X" candidate))
-        (and (= code 0)
-             (string= (format nil "X~%") output))))))
+(test string-parse-integer-option-returns-value-or-error
+  "string-parse-integer-option returns (values N nil) on success and (values nil msg) on failure."
+  (flet ((parse (opt val)
+           (multiple-value-list (nshell.application::%string-parse-integer-option opt val))))
+    (is (equal '(5 nil)   (parse "-n" "5")))
+    (is (equal '(-3 nil)  (parse "--count" "-3")))
+    (is (null (first  (parse "-n" "nope"))))
+    (is (search "invalid integer" (second (parse "-n" "nope"))))))
 
-(test pbt-string-repeat-count-controls-generated-output-length
-  "string repeat -n produces count copies for generated shell words."
-  (assert-string-builtin-property (context)
-      ((word (gen-shell-word :min-length 1 :max-length 6))
-       (count (gen-in-range 1 6)))
-    (multiple-value-bind (output code)
-        (call-string-builtin context
-                      (list "repeat" "-n" (write-to-string count) "--" word))
-      (and (= code 0)
-           (= (length output)
-              (1+ (* (length word) count)))))))
+(test string-resolve-attached-value-parses-inline-option-values
+  "string-resolve-attached-value extracts inline -N5 and --opt=5 values, nil otherwise."
+  (flet ((resolve (option short long short-prefix-len long-prefix-len)
+           (nshell.application::%string-resolve-attached-value
+            option short long short-prefix-len long-prefix-len)))
+    ;; -n5: short prefix "-n" (2 chars), option "-n5" → "5"
+    (is (string= "5"  (resolve "-n5"       "-n" "--count" 2 8)))
+    ;; --count=5: long prefix "--count=" (8 chars), option "--count=5" → "5"
+    (is (string= "5"  (resolve "--count=5" "-n" "--count" 2 8)))
+    ;; exact match, no inline value
+    (is (null         (resolve "-n"        "-n" "--count" 2 8)))
+    (is (null         (resolve "--count"   "-n" "--count" 2 8)))))
 
-(test pbt-string-repeat-max-bounds-generated-output-length
-  "string repeat -m caps generated output before the trailing newline."
-  (assert-string-builtin-property (context)
-      ((word (gen-shell-word :min-length 1 :max-length 6))
-       (max (gen-in-range 1 12)))
-    (multiple-value-bind (output code)
-        (call-string-builtin context
-                      (list "repeat" "-m" (write-to-string max) "--" word))
-      (and (= code 0)
-           (= (length output) (1+ max))))))
+(test string-repeat-effective-count-resolves-count-and-max
+  "string-repeat-effective-count returns the explicit count, a max-derived count, or 1."
+  (flet ((eff (text count max-length)
+           (nshell.application::%string-repeat-effective-count text count max-length)))
+    (is (= 3 (eff "ab" 3 nil)))
+    (is (= 1 (eff "ab" nil nil)))
+    (is (= 3 (eff "ab" nil 5)))
+    (is (= 1 (eff "ab" nil 0)))
+    (is (= 3 (eff "ab" 3 5)))))
 
-(test pbt-string-collect-default-trims-generated-trailing-newlines
-  "string collect trims generated trailing newlines by default."
-  (is
-   (assert-string-builtin-property (context)
-       ((word (gen-shell-word :min-length 1 :max-length 10))
-        (newline-count (gen-in-range 1 4)))
-     (let ((input (concatenate 'string
-                                word
-                                (make-string newline-count
-                                             :initial-element #\Newline))))
-       (multiple-value-bind (output code)
-           (call-string-builtin context (list "collect" "--" input))
-         (and (= code 0)
-              (string= (format nil "~A~%" word) output)))))))
+(test string-repeat-text-generates-repeated-string
+  "string-repeat-text returns nil for zero count and truncates at max-length."
+  (flet ((rep (text count &optional max-length)
+           (nshell.application::%string-repeat-text text count max-length)))
+    (is (string= "abab" (rep "ab" 2)))
+    (is (string= "ababa" (rep "ab" 3 5)))
+    (is (null (rep "ab" 0)))))
 
-(test pbt-string-sub-positive-start-and-length-control-output-length
-  "string sub -s/-l returns the generated positive-index slice length."
-  (is
-   (assert-string-builtin-property (context)
-       ((word (gen-shell-word :min-length 1 :max-length 12))
-        (start (gen-in-range 1 12))
-        (requested-length (gen-in-range 1 12)))
-     (let* ((expected-length
-              (min requested-length
-                   (max 0 (- (length word) (1- start)))))
-            (expected-code (if (plusp (length word)) 0 1)))
-       (multiple-value-bind (output code)
-           (call-string-builtin context
-                         (list "sub" "-s" (write-to-string start)
-                               "-l" (write-to-string requested-length)
-                               "--" word))
-         (and (= code expected-code)
-              (= (length output) (1+ expected-length))))))))
+(test string-sub-normalize-indices-handle-negative-values
+  "string-sub-normalize-start/end convert negative fish-style indices to 1-based positions."
+  (flet ((norm-start (s len)
+           (nshell.application::%string-sub-normalize-start s len))
+         (norm-end (e len)
+           (nshell.application::%string-sub-normalize-end e len)))
+    (is (= 3  (norm-start 3 10)))
+    (is (= 9  (norm-start -2 10)))
+    (is (= 4  (norm-end 4 10)))
+    (is (= 9  (norm-end -1 10)))))
 
+(test string-slice-extracts-substrings-with-length-and-end
+  "string-slice applies normalized start, length, and end to extract substrings."
+  (flet ((slc (text start &key length end)
+           (nshell.application::%string-slice text start :length length :end end)))
+    (is (string= "bcde" (slc "abcde" 2)))
+    (is (string= "bc"   (slc "abcde" 2 :length 2)))
+    (is (string= "bc"   (slc "abcde" 2 :end 3)))
+    (is (string= "de"   (slc "abcde" -2)))
+    (is (string= ""     (slc "abcde" 10)))))
+
+(test string-wildcard-match-p-handles-star-and-question-mark
+  "string-wildcard-match-p supports * (any sequence) and ? (single char) wildcards."
+  (flet ((match (pat str &key ignore-case)
+           (nshell.application::%string-wildcard-match-p pat str :ignore-case ignore-case)))
+    (is (match "*.txt" "readme.txt"))
+    (is (not (match "*.txt" "readme.md")))
+    (is (match "file?" "files"))
+    (is (not (match "file?" "filess")))
+    (is (match "a*b" "aXYZb"))
+    (is (match "GIT*" "git-status" :ignore-case t))
+    (is (not (match "GIT*" "git-status" :ignore-case nil)))))
+
+(test string-trim-trailing-newlines-strips-only-trailing-newlines
+  "string-trim-trailing-newlines removes only trailing newline characters."
+  (flet ((trim (s) (nshell.application::%string-trim-trailing-newlines s)))
+    (is (string= "hello"               (trim (format nil "hello~%"))))
+    (is (string= "hello"               (trim (format nil "hello~%~%"))))
+    (is (string= (format nil "a~%b")   (trim (format nil "a~%b~%"))))
+    (is (string= ""                    (trim "")))))

@@ -51,9 +51,11 @@
                  :search-index 4))
          (clear (nshell.presentation::completion-session-clear))
          (cleared (nshell.presentation::apply-completion-session-clear state clear)))
-    (is (nshell.presentation::%completion-session-clear-p clear))
+    (is (nshell.presentation::%input-session-clear-p clear))
+    (is (eq :completion
+            (nshell.presentation::%input-session-clear-kind clear)))
     (is (not (listp clear)))
-    (is (not (fboundp 'nshell.presentation::make-completion-session-clear)))
+    (is (not (fboundp 'nshell.presentation::make-input-session-clear)))
     (is-input-state cleared
                     :buffer "git"
                     :cursor-pos 2)
@@ -63,6 +65,12 @@
                      :original-buffer "git"
                      :original-cursor 3
                      :index 4)))
+
+(test input-completion-session-clear-rejects-history-search-clear
+  (signals error
+    (nshell.presentation::apply-completion-session-clear
+     (input-state)
+     (nshell.presentation::history-search-session-clear))))
 
 (test input-state-escape-clears-completion-session-without-editing
   (let ((state (completion-session-state

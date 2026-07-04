@@ -32,36 +32,56 @@
     (= (input-state-cursor-pos state)
        (length (input-state-buffer state)))))
 
-(defstruct (%completion-session-clear
-            (:constructor %make-completion-session-clear ())
-            (:conc-name %completion-session-clear-)))
+(defstruct (%input-session-clear
+            (:constructor %make-input-session-clear (kind overrides))
+            (:conc-name %input-session-clear-))
+  kind
+  overrides)
 
-(defstruct (%history-search-session-clear
-            (:constructor %make-history-search-session-clear ())
-            (:conc-name %history-search-session-clear-)))
+(defun %completion-session-clear-overrides ()
+  (list :completion-index -1
+        :completion-base-buffer :clear
+        :completion-base-cursor :clear
+        :last-candidates :clear
+        :suggestion :clear))
+
+(defun %history-search-session-clear-overrides ()
+  (list :search-query :clear
+        :search-original-buffer :clear
+        :search-original-cursor :clear
+        :search-index 0))
+
+(defun %assert-input-session-clear-kind (clear kind)
+  (unless (and (%input-session-clear-p clear)
+               (eq kind (%input-session-clear-kind clear)))
+    (error "Expected input session clear kind ~S, got ~S"
+           kind
+           clear))
+  clear)
 
 (defun completion-session-clear ()
-  (%make-completion-session-clear))
+  (%make-input-session-clear :completion
+                             (%completion-session-clear-overrides)))
 
 (defun history-search-session-clear ()
-  (%make-history-search-session-clear))
+  (%make-input-session-clear :history-search
+                             (%history-search-session-clear-overrides)))
+
+(defun apply-input-session-clear (state clear)
+  (check-type clear %input-session-clear)
+  (apply #'copy-input-state-with
+         state
+         (%input-session-clear-overrides clear)))
 
 (defun apply-completion-session-clear (state clear)
-  (declare (ignore clear))
-  (copy-input-state-with state
-                         :completion-index -1
-                         :completion-base-buffer :clear
-                         :completion-base-cursor :clear
-                         :last-candidates :clear
-                         :suggestion :clear))
+  (apply-input-session-clear
+   state
+   (%assert-input-session-clear-kind clear :completion)))
 
 (defun apply-history-search-session-clear (state clear)
-  (declare (ignore clear))
-  (copy-input-state-with state
-                         :search-query :clear
-                         :search-original-buffer :clear
-                         :search-original-cursor :clear
-                         :search-index 0))
+  (apply-input-session-clear
+   state
+   (%assert-input-session-clear-kind clear :history-search)))
 
 (defun clear-completion-session-state (state)
   (apply-completion-session-clear state (completion-session-clear)))

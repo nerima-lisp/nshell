@@ -12,6 +12,14 @@
 (defun %required-argument-error (builtin option requirement)
   (format nil "~a: ~a requires ~a~%" builtin option requirement))
 
+(defun %builtin-option-p (arg names)
+  (member arg names :test #'string=))
+
+(defun %builtin-option-like-p (arg)
+  (and arg
+       (> (length arg) 1)
+       (char= (char arg 0) #\-)))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defmacro %with-option-arguments ((remaining option)
                                     on-sentinel
@@ -26,8 +34,7 @@
                    (setf ,remaining (rest ,remaining))
                    ,on-sentinel)
                   ,@clauses
-                  ((and (> (length ,option) 1)
-                        (char= (char ,option 0) #\-))
+                  ((%builtin-option-like-p ,option)
                    ,on-unknown)
                   (t ,on-operand)))))
 

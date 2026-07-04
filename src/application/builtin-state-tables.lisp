@@ -19,11 +19,11 @@
                  (destructuring-bind (kind &rest rest) clause
                    (ecase kind
                      (:empty
-                      `((null ,args)
-                        ,@rest))
+                     `((null ,args)
+                       ,@rest))
                      (:option
                       (destructuring-bind (names &body body) rest
-                        `((member (first ,args) ',names :test #'string=)
+                        `((%builtin-option-p (first ,args) ',names)
                           ,@body)))
                      (:default
                       `(t
@@ -156,9 +156,8 @@
   (labels ((parse (remaining position)
              (cond
                ((and remaining
-                     (member (first remaining)
-                             '("-p" "--position")
-                             :test #'string=))
+                     (%builtin-option-p (first remaining)
+                                        '("-p" "--position")))
                 (multiple-value-bind (parsed next-remaining error)
                     (%abbr-ensure-position-argument remaining)
                   (if error

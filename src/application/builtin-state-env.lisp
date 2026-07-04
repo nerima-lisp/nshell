@@ -19,13 +19,13 @@
   (%builtin-usage "set" "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name..."))
 
 (defun %set-export-option-p (arg)
-  (member arg '("-x" "--export") :test #'string=))
+  (%builtin-option-p arg '("-x" "--export")))
 
 (defun %set-erase-option-p (arg)
-  (member arg '("-e" "--erase") :test #'string=))
+  (%builtin-option-p arg '("-e" "--erase")))
 
 (defun %set-query-option-p (arg)
-  (member arg '("-q" "--query") :test #'string=))
+  (%builtin-option-p arg '("-q" "--query")))
 
 (defun %format-set-variable (var)
   (format nil "set ~:[~;-x ~]~a ~a~%"
@@ -61,8 +61,7 @@
       ((%set-query-option-p (first args))
        (with-set-name-argument "-q"
          (%query-set-variables context (rest args))))
-      ((and (plusp (length (first args)))
-            (char= #\- (char (first args) 0)))
+      ((%builtin-option-like-p (first args))
        (values (%set-usage) 1))
       (t
         (setf (shell-context-environment context)

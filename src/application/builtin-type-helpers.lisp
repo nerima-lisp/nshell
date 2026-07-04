@@ -16,24 +16,22 @@
   (%builtin-usage "type" "type [OPTIONS] NAME [...]" code))
 
 (defun %type-option-p (option)
-  (and option
-       (>= (length option) 2)
-       (char= (char option 0) #\-)))
+  (%builtin-option-like-p option))
 
 (defun %type-option-kind (option)
   (cond
-    ((member option '("-a" "--all") :test #'string=) :all)
-    ((member option '("-s" "--short") :test #'string=) :short)
-    ((member option '("-f" "--no-functions") :test #'string=) :no-functions)
+    ((%builtin-option-p option '("-a" "--all")) :all)
+    ((%builtin-option-p option '("-s" "--short")) :short)
+    ((%builtin-option-p option '("-f" "--no-functions")) :no-functions)
     ((or (string= option "--color")
          (and (>= (length option) 8)
               (string= option "--color=" :end1 8 :end2 8)))
      :color)
-    ((member option '("-q" "--query" "--quiet") :test #'string=) :query)
-    ((member option '("-p" "--path") :test #'string=) :path)
-    ((member option '("-P" "--force-path") :test #'string=) :force-path)
-    ((member option '("-t" "--type") :test #'string=) :type)
-    ((member option '("-h" "--help") :test #'string=) :help)
+    ((%builtin-option-p option '("-q" "--query" "--quiet")) :query)
+    ((%builtin-option-p option '("-p" "--path")) :path)
+    ((%builtin-option-p option '("-P" "--force-path")) :force-path)
+    ((%builtin-option-p option '("-t" "--type")) :type)
+    ((%builtin-option-p option '("-h" "--help")) :help)
     (t nil)))
 
 (defun %type-color-enabled-p (option)

@@ -191,6 +191,17 @@
     (is (string= "a,b,c" (join '("a" "b" "c") ",")))
     (is (string= "a b"   (join '("a" "b") " ")))))
 
+(test builtin-option-helpers-cover-common-cli-flag-shape
+  "Builtin option helpers centralize string flag matching and option token detection."
+  (is (nshell.application::%builtin-option-p "-q" '("-q" "--query")))
+  (is (nshell.application::%builtin-option-p "--query" '("-q" "--query")))
+  (is (not (nshell.application::%builtin-option-p "-x" '("-q" "--query"))))
+  (is (nshell.application::%builtin-option-like-p "-q"))
+  (is (nshell.application::%builtin-option-like-p "--query"))
+  (is (not (nshell.application::%builtin-option-like-p "-")))
+  (is (not (nshell.application::%builtin-option-like-p "name")))
+  (is (not (nshell.application::%builtin-option-like-p nil))))
+
 (test path-separator-p-detects-unix-slash
   "path-separator-p returns true only for / on Unix."
   (flet ((sep (ch) (nshell.domain.completion:path-separator-p ch)))

@@ -53,6 +53,8 @@
 (test redirect-spec-entry-projects-table-shape
   "Redirect spec entries isolate raw table shape from parser data queries."
   (let ((entry (nshell.domain.parsing::%redirect-spec-entry "2>&1")))
+    (is (every #'nshell.domain.parsing::%redirect-spec-entry-p
+               nshell.domain.parsing::+redirect-specs+))
     (is (nshell.domain.parsing::%redirect-spec-entry-p entry))
     (is (string= "2>&1"
                  (nshell.domain.parsing::%redirect-spec-entry-text entry)))

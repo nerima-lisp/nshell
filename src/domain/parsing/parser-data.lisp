@@ -1,27 +1,28 @@
 (in-package #:nshell.domain.parsing)
 
-(defparameter +redirect-specs+
-  '((">" . :>)
-    (">>" . :>>)
-    ("<" . :<)
-    ("<<" . :<<)
-    ("<<<" . :<<<)
-    ("1>" . :>)
-    ("1>>" . :>>)
-    ("2>" . :2>)
-    ("2>>" . :2>>)
-    ("2>&1" . :2>&1)
-    ("&>" . :&>)
-    ("&>>" . :&>>)))
-
-(defparameter +redirect-fd-dup-specs+
-  '(:2>&1)
-  "Redirect specs that duplicate a descriptor and so take no file target.")
-
 (defstruct (%redirect-spec-entry
             (:constructor %make-redirect-spec-entry (text kind)))
   text
   kind)
+
+(defparameter +redirect-specs+
+  (list
+   (%make-redirect-spec-entry ">" :>)
+   (%make-redirect-spec-entry ">>" :>>)
+   (%make-redirect-spec-entry "<" :<)
+   (%make-redirect-spec-entry "<<" :<<)
+   (%make-redirect-spec-entry "<<<" :<<<)
+   (%make-redirect-spec-entry "1>" :>)
+   (%make-redirect-spec-entry "1>>" :>>)
+   (%make-redirect-spec-entry "2>" :2>)
+   (%make-redirect-spec-entry "2>>" :2>>)
+   (%make-redirect-spec-entry "2>&1" :2>&1)
+   (%make-redirect-spec-entry "&>" :&>)
+   (%make-redirect-spec-entry "&>>" :&>>)))
+
+(defparameter +redirect-fd-dup-specs+
+  '(:2>&1)
+  "Redirect specs that duplicate a descriptor and so take no file target.")
 
 (defstruct (%redirect-facts
             (:constructor %make-redirect-facts
@@ -81,10 +82,10 @@
    (%make-redirect-kind-fact-spec :&>> nil t t t)))
 
 (defun %redirect-spec-entry (text)
-  (let ((spec (and text
-                   (assoc text +redirect-specs+ :test #'string=))))
-    (when spec
-      (%make-redirect-spec-entry (car spec) (cdr spec)))))
+  (and text
+       (find text +redirect-specs+
+             :key #'%redirect-spec-entry-text
+             :test #'string=)))
 
 (defun %redirect-entry-from-raw (redirect)
   (when redirect

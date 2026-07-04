@@ -2,6 +2,20 @@
 
 (in-suite prompt-tests)
 
+(test prompt-raw-constructors-are-internal-boundaries
+  (let ((pm (nshell.domain.prompting:make-prompt-model
+             :hostname "h"
+             :cwd "/repo/"
+             :segments (list (nshell.domain.prompting:make-prompt-segment "h" :host))))
+        (segment (nshell.domain.prompting:make-prompt-segment "main" :git)))
+    (is (string= "h" (nshell.domain.prompting:prompt-hostname pm)))
+    (is (equal '("h" . :host)
+               (first (nshell.domain.prompting:render-prompt-model pm))))
+    (is (string= "main" (nshell.domain.prompting:prompt-segment-text segment)))
+    (is (eq :git (nshell.domain.prompting:prompt-segment-kind segment)))
+    (is (fboundp 'nshell.domain.prompting::%make-prompt-model))
+    (is (fboundp 'nshell.domain.prompting::%make-prompt-segment))))
+
 (test git-segment-resolves-branch-and-dirty-marker
   "A :git segment is resolved through the domain git status resolver."
   (let ((nshell.domain.prompting:*git-status-resolver*

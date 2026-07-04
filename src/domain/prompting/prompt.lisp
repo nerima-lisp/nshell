@@ -15,7 +15,7 @@
       (format nil "~2,'0d:~2,'0d" hour min)))
   "Function returning the right-prompt time text, or NIL to omit it.")
 
-(defstruct (prompt-model (:constructor make-prompt-model (&key hostname cwd directory exit-code duration-ms segments right-segments)))
+(defstruct (prompt-model (:constructor %make-prompt-model (&key hostname cwd directory exit-code duration-ms segments right-segments)))
   "Pure data model for rendering a shell prompt."
   (hostname "localhost" :type string :read-only t)
   (cwd "/" :type string :read-only t)
@@ -25,10 +25,23 @@
   (segments nil :type list :read-only t)
   (right-segments nil :type list :read-only t))
 
-(defstruct (prompt-segment (:constructor make-prompt-segment (text kind)))
+(defstruct (prompt-segment (:constructor %make-prompt-segment (text kind)))
   "A segment of the prompt (left or right)."
   (text "" :type string :read-only t)
   (kind :literal :type keyword :read-only t))
+
+(defun make-prompt-model (&key hostname cwd directory exit-code duration-ms segments right-segments)
+  (%make-prompt-model
+   :hostname hostname
+   :cwd cwd
+   :directory directory
+   :exit-code exit-code
+   :duration-ms duration-ms
+   :segments segments
+   :right-segments right-segments))
+
+(defun make-prompt-segment (text kind)
+  (%make-prompt-segment text kind))
 
 (defun prompt-hostname (pm) (prompt-model-hostname pm))
 (defun prompt-cwd (pm) (prompt-model-cwd pm))

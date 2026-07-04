@@ -79,7 +79,11 @@
         (output-policy
           (nshell.domain.parsing::%redirect-target-policy ">"))
         (stderr-policy
-          (nshell.domain.parsing::%redirect-target-policy "2>")))
+          (nshell.domain.parsing::%redirect-target-policy "2>"))
+        (all-output-policy
+          (nshell.domain.parsing::%redirect-target-policy "&>"))
+        (all-output-append-policy
+          (nshell.domain.parsing::%redirect-target-policy "&>>")))
     (is (nshell.domain.parsing::%redirect-target-policy-p fd-dup-policy))
     (is (eq :2>&1
             (nshell.domain.parsing::%redirect-target-policy-kind
@@ -90,9 +94,15 @@
          output-policy))
     (is (nshell.domain.parsing::%redirect-target-policy-target-required-p
          stderr-policy))
+    (is (nshell.domain.parsing::%redirect-target-policy-target-required-p
+         all-output-policy))
+    (is (nshell.domain.parsing::%redirect-target-policy-target-required-p
+         all-output-append-policy))
     (is (nshell.domain.parsing::%redirect-target-required-p ">"))
     (is (nshell.domain.parsing::%redirect-target-required-p "2>"))
     (is (nshell.domain.parsing::%redirect-targetless-p "2>&1"))
+    (is (not (fboundp
+              'nshell.domain.parsing::%redirect-target-policy-from-kind)))
     (is (null (nshell.domain.parsing::%redirect-target-policy nil)))
     (is (null (nshell.domain.parsing::%redirect-target-policy
                "not-a-redirect")))

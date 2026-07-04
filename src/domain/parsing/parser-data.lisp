@@ -70,17 +70,14 @@
          (not (null (member kind +redirect-fd-dup-specs+
                             :test #'eq))))))))
 
-(defun %redirect-target-policy-from-kind (kind)
-  (when kind
+(defun %redirect-target-policy-from-facts (facts)
+  (when facts
     (%make-redirect-target-policy
-     kind
-     (null (member kind +redirect-fd-dup-specs+ :test #'eq)))))
+     (%redirect-facts-kind facts)
+     (not (%redirect-facts-fd-dup-p facts)))))
 
 (defun %redirect-target-policy (text)
-  (let ((facts (%redirect-facts text)))
-    (and facts
-         (%redirect-target-policy-from-kind
-          (%redirect-facts-kind facts)))))
+  (%redirect-target-policy-from-facts (%redirect-facts text)))
 
 (defun %redirect-target-required-p (text)
   (let ((policy (%redirect-target-policy text)))

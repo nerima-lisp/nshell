@@ -325,9 +325,23 @@ applying REDIRECTS from left to right."
   (separator nil :read-only t)
   (separator-token nil :read-only t))
 
-(defun %reduced-command-entry-from-reducer-entry (entry)
+(defstruct (%reducer-entry-shape
+            (:constructor %make-reducer-entry-shape
+                (command separator separator-token)))
+  (command nil :read-only t)
+  (separator nil :read-only t)
+  (separator-token nil :read-only t))
+
+(defun %reducer-entry-shape-from-entry (entry)
   (destructuring-bind (command separator separator-token) entry
-    (%make-reduced-command-entry command separator separator-token)))
+    (%make-reducer-entry-shape command separator separator-token)))
+
+(defun %reduced-command-entry-from-reducer-entry (entry)
+  (let ((shape (%reducer-entry-shape-from-entry entry)))
+    (%make-reduced-command-entry
+     (%reducer-entry-shape-command shape)
+     (%reducer-entry-shape-separator shape)
+     (%reducer-entry-shape-separator-token shape))))
 
 (defun %reduced-command-entries-from-reducer-entries (entries)
   (mapcar #'%reduced-command-entry-from-reducer-entry entries))

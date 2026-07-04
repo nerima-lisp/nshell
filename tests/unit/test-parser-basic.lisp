@@ -567,6 +567,27 @@
             (first (nshell.domain.parsing:sequence-node-commands
                     background-ast))))))
 
+(test parser-data-projects-raw-reducer-entry-shape
+  "Parser data owns raw reducer-entry shape before reduced command construction."
+  (let* ((command (nshell.domain.parsing:make-command-node "echo" '("hi")))
+         (separator-token (nshell.domain.parsing:make-token :pipe "|" 7 8))
+         (shape
+           (nshell.domain.parsing::%reducer-entry-shape-from-entry
+            (list command :pipe separator-token)))
+         (entry
+           (nshell.domain.parsing::%reduced-command-entry-from-reducer-entry
+            (list command :pipe separator-token))))
+    (is (nshell.domain.parsing::%reducer-entry-shape-p shape))
+    (is (eq command
+            (nshell.domain.parsing::%reducer-entry-shape-command shape)))
+    (is (eq :pipe
+            (nshell.domain.parsing::%reducer-entry-shape-separator shape)))
+    (is (eq separator-token
+            (nshell.domain.parsing::%reducer-entry-shape-separator-token
+             shape)))
+    (is (nshell.domain.parsing::%reduced-command-entry-p entry))
+    (is (not (listp entry)))))
+
 (test parser-assembly-projects-command-list-boundary
   "Parser assembly should project command-list pairs before AST construction."
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))

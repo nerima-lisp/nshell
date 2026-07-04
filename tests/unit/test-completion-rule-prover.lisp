@@ -114,23 +114,29 @@
   (is (fboundp 'nshell.domain.completion::%rule-solution-binding-projection-present-p))
   (is (fboundp 'nshell.domain.completion::%rule-solution-set-projection-first-solution)))
 
-(test rule-data-projection-boundaries-name-domain-parts
-  (let ((fact (nshell.domain.completion::make-fact-from-spec
-               '(completes "git" "status")))
-        (rule (nshell.domain.completion::make-rule-from-spec
-               '((completes "git" ?completion) (git-subcommand ?completion))))
-        (goal '(test-builtin-string= "git" "git")))
-    (is (eq 'completes (nshell.domain.completion::fact-predicate fact)))
-    (is (equal '("git" "status") (nshell.domain.completion::fact-args fact)))
-    (is (equal '(completes "git" ?completion)
-               (nshell.domain.completion::rule-head rule)))
-    (is (equal '((git-subcommand ?completion))
-               (nshell.domain.completion::rule-body rule)))
-    (is (eq 'test-builtin-string=
-            (nshell.domain.completion::goal-predicate goal)))
-    (is (equal '("git" "git")
-               (nshell.domain.completion::goal-arguments goal)))
-    (is (not (fboundp 'nshell.domain.completion::make-proof-search)))))
+(test rule-data-spec-projections-feed-proof-search
+  (let ((kb (nshell.domain.completion::make-empty-rule-knowledge-base)))
+    (nshell.domain.completion:assert-fact!
+     kb
+     (nshell.domain.completion::%make-fact-from-spec
+      '(git-subcommand "status")))
+    (nshell.domain.completion:assert-rule!
+     kb
+     (nshell.domain.completion::%make-rule-from-spec
+      '((completes "git" ?completion) (git-subcommand ?completion))))
+    (let ((solutions (nshell.domain.completion:prove-all
+                      kb
+                      '(completes "git" ?completion))))
+      (is (= 1 (length solutions)))
+      (is (string= "status"
+                   (solution-binding '?completion (first solutions)))))))
+
+(test rule-data-spec-builders-are-internal-boundaries
+  (is (not (fboundp 'nshell.domain.completion::make-fact-from-spec)))
+  (is (not (fboundp 'nshell.domain.completion::make-rule-from-spec)))
+  (is (fboundp 'nshell.domain.completion::%make-fact-from-spec))
+  (is (fboundp 'nshell.domain.completion::%make-rule-from-spec))
+  (is (not (fboundp 'nshell.domain.completion::make-proof-search))))
 
 (test logic-form-pair-projects-conversion-boundary
   (let* ((env (make-hash-table :test #'eq))

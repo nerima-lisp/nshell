@@ -46,11 +46,11 @@
 (defun goal-arguments (goal)
   (rest goal))
 
-(defun make-fact-from-spec (spec)
+(defun %make-fact-from-spec (spec)
   (make-fact :predicate (fact-spec-predicate spec)
              :args (fact-spec-args spec)))
 
-(defun make-rule-from-spec (spec)
+(defun %make-rule-from-spec (spec)
   (make-rule :head (rule-spec-head spec)
              :body (rule-spec-body spec)))
 
@@ -214,7 +214,7 @@
 
 (defparameter *built-in-rule-knowledge-base*
   (%make-rule-knowledge-base
-   :facts (mapcar #'make-fact-from-spec
+   :facts (mapcar #'%make-fact-from-spec
                   (builtin-rule-facts))
-   :rules (mapcar #'make-rule-from-spec
+   :rules (mapcar #'%make-rule-from-spec
                   (builtin-rule-rules))))

@@ -22,6 +22,12 @@
   (accepted-text "" :type string :read-only t)
   (ignored-p nil :type boolean :read-only t))
 
+(defstruct (history-search-transition
+            (:constructor %make-history-search-transition (state output))
+            (:conc-name %history-search-transition-))
+  (state nil :read-only t)
+  (output :none :type symbol :read-only t))
+
 (defun history-search-query-insertion-query (insertion)
   (%history-search-query-insertion-query insertion))
 
@@ -30,6 +36,19 @@
 
 (defun history-search-query-insertion-ignored-p (insertion)
   (%history-search-query-insertion-ignored-p insertion))
+
+(defun history-search-transition-state (transition)
+  (%history-search-transition-state transition))
+
+(defun history-search-transition-output (transition)
+  (%history-search-transition-output transition))
+
+(defun history-search-transition (state output)
+  (%make-history-search-transition state output))
+
+(defun commit-history-search-transition (transition)
+  (values (history-search-transition-state transition)
+          (history-search-transition-output transition)))
 
 (defun history-search-edit-plan (edit)
   (%history-search-edit-plan edit))
@@ -125,11 +144,20 @@
     (%history-search-original-state state))
    :mode :insert))
 
+(defun history-search-finished-transition (state output)
+  (history-search-transition (%history-search-finished-state state) output))
+
+(defun history-search-cancelled-transition (state)
+  (history-search-transition (%history-search-cancelled-state state)
+                             :suggest-update))
+
 (defun %history-search-finish (state &optional (output :suggest-update))
-  (values (%history-search-finished-state state) output))
+  (commit-history-search-transition
+   (history-search-finished-transition state output)))
 
 (defun %history-search-abort (state)
-  (values (%history-search-cancelled-state state) :suggest-update))
+  (commit-history-search-transition
+   (history-search-cancelled-transition state)))
 
 (defun %update-history-search-query (state text)
   (commit-history-search-edit state (make-history-search-query-edit text)))

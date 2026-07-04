@@ -215,6 +215,52 @@
                        (nshell.presentation::history-search-query-insertion-query
                         insertion))))))))
 
+(test input-state-history-search-transition-commits-finish-and-cancel
+  "History-search finish/cancel output should pass through a typed transition boundary."
+  (let ((state (history-search-state
+                :buffer "git status"
+                :cursor-pos 10
+                :query "st"
+                :original-buffer "git"
+                :original-cursor 3
+                :index 1)))
+    (let ((finished (nshell.presentation::history-search-finished-transition
+                     state :execute)))
+      (is (nshell.presentation::history-search-transition-p finished))
+      (is (fboundp 'nshell.presentation::%make-history-search-transition))
+      (is (not (fboundp 'nshell.presentation::make-history-search-transition)))
+      (is (eq :execute
+              (nshell.presentation::history-search-transition-output finished)))
+      (is (eq :insert
+              (nshell.presentation:input-state-mode
+               (nshell.presentation::history-search-transition-state finished))))
+      (multiple-value-bind (finished-state finished-output)
+          (nshell.presentation::commit-history-search-transition finished)
+        (is (eq :execute finished-output))
+        (is-input-state finished-state
+                        :mode :insert
+                        :buffer "git status"
+                        :cursor-pos 10)
+        (is (string= ""
+                     (nshell.presentation:input-state-search-query
+                      finished-state)))))
+    (let ((cancelled (nshell.presentation::history-search-cancelled-transition
+                      state)))
+      (is (nshell.presentation::history-search-transition-p cancelled))
+      (is (eq :suggest-update
+              (nshell.presentation::history-search-transition-output
+               cancelled)))
+      (multiple-value-bind (cancelled-state cancelled-output)
+          (nshell.presentation::commit-history-search-transition cancelled)
+        (is (eq :suggest-update cancelled-output))
+        (is-input-state cancelled-state
+                        :mode :insert
+                        :buffer "git"
+                        :cursor-pos 3)
+        (is (string= ""
+                     (nshell.presentation:input-state-search-query
+                      cancelled-state)))))))
+
 (test input-state-history-search-edits-query-not-buffer
   (with-reduced-input-state (search-state)
       (reduce-once (input-state :buffer "git" :cursor-pos 3)

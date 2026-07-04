@@ -82,7 +82,7 @@
                               :flags '("--mode" "--json" "--yaml")
                               :option-values '(("--mode" "fast" "safe"))
                               :exclusive-options '(("--json" "--yaml")))))
-         (spec (first (nshell.domain.completion::completion-command-specs-from-catalog
+         (spec (first (nshell.domain.completion::%completion-command-specs-from-catalog
                        catalog))))
     (is (equal "zz" (first spec)))
     (is (equal '("run" "test") (getf (rest spec) :subcommands)))
@@ -105,26 +105,26 @@
                      :flags '("--mode")
                      :option-values '(("--mode" "fast" "safe"))
                      :exclusive-options '(("--json" "--yaml"))))
-         (projection (nshell.domain.completion::catalog-entry-command-projection
+         (projection (nshell.domain.completion::%catalog-entry-command-projection
                       entry)))
     (is (equal "zz"
-               (nshell.domain.completion::catalog-command-projection-command
+               (nshell.domain.completion::%catalog-command-projection-command
                 projection)))
     (is (not (fboundp 'nshell.domain.completion::make-catalog-command-projection)))
     (is (equal '("run" (:name "test" :description "run tests"))
-               (nshell.domain.completion::catalog-command-projection-subcommands
+               (nshell.domain.completion::%catalog-command-projection-subcommands
                 projection)))
     (is (equal '(:command "zz"
                  :synopsis "zz [subcommand]"
                  :description "synthetic command")
-               (nshell.domain.completion::catalog-help-entry projection)))
+               (nshell.domain.completion::%catalog-help-entry projection)))
     (is (equal '("zz"
                  :subcommands ("run" "test")
                  :flags ("--mode")
                  :option-values (("--mode" "fast" "safe"))
                  :exclusive-options (("--json" "--yaml"))
                  :description "synthetic command")
-               (nshell.domain.completion::catalog-completion-command-spec
+               (nshell.domain.completion::%catalog-completion-command-spec
                 projection)))
     (is (equal '((nshell.domain.completion::completes "zz" "zz")
                  (nshell.domain.completion::describes "zz" "synthetic command")
@@ -132,8 +132,81 @@
                  (nshell.domain.completion::completes "zz" "test")
                  (nshell.domain.completion::describes "test" "run tests")
                  (nshell.domain.completion::has-flag "zz" "--mode"))
-               (nshell.domain.completion::catalog-command-with-subcommand-rule-facts
+               (nshell.domain.completion::%catalog-command-with-subcommand-rule-facts
                 projection)))))
+
+(test catalog-derived-data-helpers-are-internal-boundaries
+  "Catalog-derived-data helpers should not leave unprefixed compatibility symbols."
+  (labels ((defined-symbol-p (name)
+             (multiple-value-bind (symbol status)
+                 (find-symbol name "NSHELL.DOMAIN.COMPLETION")
+               (and status (fboundp symbol)))))
+    (dolist (old-name '("CATALOG-SUBCOMMAND-NAME"
+                        "CATALOG-SUBCOMMAND-DESCRIPTION"
+                        "CATALOG-COMMAND"
+                        "CATALOG-DESCRIPTION"
+                        "CATALOG-SYNOPSIS"
+                        "CATALOG-SUBCOMMANDS"
+                        "CATALOG-FLAGS"
+                        "CATALOG-OPTION-VALUES"
+                        "CATALOG-EXCLUSIVE-OPTIONS"
+                        "CATALOG-COMMAND-PROJECTION-P"
+                        "CATALOG-COMMAND-PROJECTION-COMMAND"
+                        "CATALOG-COMMAND-PROJECTION-DESCRIPTION"
+                        "CATALOG-COMMAND-PROJECTION-SYNOPSIS"
+                        "CATALOG-COMMAND-PROJECTION-SUBCOMMANDS"
+                        "CATALOG-COMMAND-PROJECTION-FLAGS"
+                        "CATALOG-COMMAND-PROJECTION-OPTION-VALUES"
+                        "CATALOG-COMMAND-PROJECTION-EXCLUSIVE-OPTIONS"
+                        "CATALOG-ENTRY-COMMAND-PROJECTION"
+                        "CATALOG-COMMAND-PROJECTIONS"
+                        "CATALOG-COMMAND-FACT"
+                        "CATALOG-DESCRIPTION-FACT"
+                        "CATALOG-FLAG-FACTS"
+                        "CATALOG-SUBCOMMAND-COMPLETION-FACTS"
+                        "CATALOG-SUBCOMMAND-DESCRIPTION-FACTS"
+                        "CATALOG-COMMAND-RULE-FACTS"
+                        "CATALOG-COMMAND-WITH-SUBCOMMAND-RULE-FACTS"
+                        "CATALOG-HELP-ENTRY"
+                        "CATALOG-COMPLETION-METADATA"
+                        "CATALOG-COMPLETION-COMMAND-SPEC"
+                        "BUILTIN-COMMAND-FLAG-FACTS"
+                        "EXTERNAL-COMMAND-RULE-FACTS"
+                        "COMPLETION-COMMAND-SPECS-FROM-CATALOG"))
+      (is (not (defined-symbol-p old-name))))
+    (dolist (internal-name '("%CATALOG-SUBCOMMAND-NAME"
+                             "%CATALOG-SUBCOMMAND-DESCRIPTION"
+                             "%CATALOG-COMMAND"
+                             "%CATALOG-DESCRIPTION"
+                             "%CATALOG-SYNOPSIS"
+                             "%CATALOG-SUBCOMMANDS"
+                             "%CATALOG-FLAGS"
+                             "%CATALOG-OPTION-VALUES"
+                             "%CATALOG-EXCLUSIVE-OPTIONS"
+                             "%CATALOG-COMMAND-PROJECTION-P"
+                             "%CATALOG-COMMAND-PROJECTION-COMMAND"
+                             "%CATALOG-COMMAND-PROJECTION-DESCRIPTION"
+                             "%CATALOG-COMMAND-PROJECTION-SYNOPSIS"
+                             "%CATALOG-COMMAND-PROJECTION-SUBCOMMANDS"
+                             "%CATALOG-COMMAND-PROJECTION-FLAGS"
+                             "%CATALOG-COMMAND-PROJECTION-OPTION-VALUES"
+                             "%CATALOG-COMMAND-PROJECTION-EXCLUSIVE-OPTIONS"
+                             "%CATALOG-ENTRY-COMMAND-PROJECTION"
+                             "%CATALOG-COMMAND-PROJECTIONS"
+                             "%CATALOG-COMMAND-FACT"
+                             "%CATALOG-DESCRIPTION-FACT"
+                             "%CATALOG-FLAG-FACTS"
+                             "%CATALOG-SUBCOMMAND-COMPLETION-FACTS"
+                             "%CATALOG-SUBCOMMAND-DESCRIPTION-FACTS"
+                             "%CATALOG-COMMAND-RULE-FACTS"
+                             "%CATALOG-COMMAND-WITH-SUBCOMMAND-RULE-FACTS"
+                             "%CATALOG-HELP-ENTRY"
+                             "%CATALOG-COMPLETION-METADATA"
+                             "%CATALOG-COMPLETION-COMMAND-SPEC"
+                             "%BUILTIN-COMMAND-FLAG-FACTS"
+                             "%EXTERNAL-COMMAND-RULE-FACTS"
+                             "%COMPLETION-COMMAND-SPECS-FROM-CATALOG"))
+      (is (defined-symbol-p internal-name)))))
 
 (test command-catalog-entry-projection-boundaries-preserve-explicit-empty-properties
   "Static catalog normalization should preserve explicitly present NIL metadata."

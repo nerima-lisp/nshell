@@ -433,6 +433,17 @@
                  (nshell.domain.parsing:command-node-arg-values
                   (first nested-else)))))))
 
+(test control-flow-grouper-entry-projects-spec-table
+  "Control-flow grouper entries should own raw spec table lookup."
+  (let ((entry (nshell.domain.parsing::%control-flow-grouper-entry "if")))
+    (is (nshell.domain.parsing::%control-flow-grouper-entry-p entry))
+    (is (string= "if"
+                 (nshell.domain.parsing::%control-flow-grouper-entry-keyword
+                  entry)))
+    (is (eq 'nshell.domain.parsing::%group-control-flow-if
+            (nshell.domain.parsing::%control-flow-grouper-entry-grouper
+             entry)))))
+
 (test control-flow-grouping-route-projects-block-grouper-policy
   "Control-flow grouping should classify block routes before invoking groupers."
   (flet ((route-grouper (keyword)

@@ -178,15 +178,27 @@
   (%make-control-flow-switch-case-patterns
    (or (command-node-arg-values header) '("*"))))
 
+(defstruct (%control-flow-grouper-entry
+            (:constructor %make-control-flow-grouper-entry (keyword grouper)))
+  (keyword nil :type (or null string) :read-only t)
+  (grouper nil :read-only t))
+
+(defun %control-flow-grouper-entry (keyword)
+  (let ((entry (assoc keyword +control-flow-grouper-specs+ :test #'string=)))
+    (when entry
+      (%make-control-flow-grouper-entry (car entry) (cdr entry)))))
+
 (defstruct (%control-flow-grouping-route
             (:constructor %make-control-flow-grouping-route (keyword grouper)))
   (keyword nil :type (or null string) :read-only t)
   (grouper nil :read-only t))
 
 (defun %control-flow-grouping-route (keyword)
-  (let ((grouper (cdr (assoc keyword +control-flow-grouper-specs+ :test #'string=))))
-    (when grouper
-      (%make-control-flow-grouping-route keyword grouper))))
+  (let ((entry (%control-flow-grouper-entry keyword)))
+    (when entry
+      (%make-control-flow-grouping-route
+       (%control-flow-grouper-entry-keyword entry)
+       (%control-flow-grouper-entry-grouper entry)))))
 
 (defun %control-flow-grouper (keyword)
   (let ((route (%control-flow-grouping-route keyword)))

@@ -43,9 +43,8 @@
   (let* ((old-entries (command-history-entries history))
          (new-entries
            (remove-if (lambda (entry)
-                        (if case-sensitive
-                            (string= text (entry-text entry))
-                            (string-equal text (entry-text entry))))
+                        (%history-text-equal-p (entry-text entry) text
+                                               :case-sensitive case-sensitive))
                       old-entries))
          (deleted (- (length old-entries) (length new-entries))))
     (%history-replace-entries history new-entries)

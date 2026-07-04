@@ -2,8 +2,8 @@
 
 (defun %history-prefix-match-p (prefix text)
   "Return true when TEXT matches PREFIX for history navigation."
-  (history-match-line-prefix (make-history-entry text) prefix
-                             :case-sensitive (some #'upper-case-p prefix)))
+  (%history-line-prefix-p text prefix
+                          :case-sensitive (%history-text-case-sensitive-p prefix)))
 
 (defun %history-navigation-current-prefix (history current-prefix)
   (or (command-history-navigate-prefix history)

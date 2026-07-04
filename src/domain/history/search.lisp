@@ -2,42 +2,23 @@
 
 (defun history-match-prefix (entry query &key case-sensitive)
   "True if ENTRY text starts with QUERY."
-  (let ((text (history-entry-text entry)))
-    (if case-sensitive
-        (and (>= (length text) (length query))
-             (string= text query :end1 (length query)))
-        (and (>= (length text) (length query))
-             (string-equal text query :end1 (length query))))))
+  (%history-text-prefix-p (history-entry-text entry) query
+                          :case-sensitive case-sensitive))
 
 (defun history-match-exact (entry query &key case-sensitive)
   "True if ENTRY text exactly matches QUERY."
-  (if case-sensitive
-      (string= (history-entry-text entry) query)
-      (string-equal (history-entry-text entry) query)))
+  (%history-text-equal-p (history-entry-text entry) query
+                         :case-sensitive case-sensitive))
 
 (defun history-match-contains (entry query &key case-sensitive)
   "True if ENTRY text contains QUERY."
-  (let ((text (history-entry-text entry)))
-    (if case-sensitive
-        (search query text)
-        (search query text :test #'char-equal))))
-
-(defun line-starts-with-p (text query line-start line-end case-sensitive)
-  (let ((query-end (+ line-start (length query))))
-    (and (<= query-end line-end)
-         (if case-sensitive
-             (string= text query :start1 line-start :end1 query-end)
-             (string-equal text query :start1 line-start :end1 query-end)))))
+  (%history-text-contains-p (history-entry-text entry) query
+                            :case-sensitive case-sensitive))
 
 (defun history-match-line-prefix (entry query &key case-sensitive)
   "True if any line in ENTRY text starts with QUERY."
-  (let ((text (history-entry-text entry)))
-    (loop with line-start = 0
-          for newline = (position #\Newline text :start line-start)
-          for line-end = (or newline (length text))
-          thereis (line-starts-with-p text query line-start line-end case-sensitive)
-          while newline
-          do (setf line-start (1+ newline)))))
+  (%history-line-prefix-p (history-entry-text entry) query
+                          :case-sensitive case-sensitive))
 
 (defun history-entry-line-prefix-suffix (entry query &key case-sensitive)
   "Return the suffix after QUERY for the first ENTRY line starting with QUERY."
@@ -45,7 +26,14 @@
     (loop with line-start = 0
           for newline = (position #\Newline text :start line-start)
           for line-end = (or newline (length text))
-          when (line-starts-with-p text query line-start line-end case-sensitive)
+          when (and (<= (+ line-start (length query)) line-end)
+                    (if case-sensitive
+                        (string= text query
+                                 :start1 line-start
+                                 :end1 (+ line-start (length query)))
+                        (string-equal text query
+                                      :start1 line-start
+                                      :end1 (+ line-start (length query)))))
             return (subseq text (+ line-start (length query)) line-end)
           while newline
           do (setf line-start (1+ newline)))))

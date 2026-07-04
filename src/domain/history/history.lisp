@@ -107,6 +107,42 @@ word-like tokens are merged before command/argument classification."
         (command-history-navigate-origin history) nil)
   history)
 
+(defun %history-text-case-sensitive-p (text)
+  (some #'upper-case-p text))
+
+(defun %history-text-prefix-p (text prefix &key case-sensitive)
+  (let ((prefix-length (length prefix)))
+    (and (<= prefix-length (length text))
+         (if case-sensitive
+             (string= text prefix :end1 prefix-length)
+             (string-equal text prefix :end1 prefix-length)))))
+
+(defun %history-text-equal-p (text query &key case-sensitive)
+  (if case-sensitive
+      (string= text query)
+      (string-equal text query)))
+
+(defun %history-text-contains-p (text query &key case-sensitive)
+  (if case-sensitive
+      (search query text)
+      (search query text :test #'char-equal)))
+
+(defun %history-line-prefix-p (text query &key case-sensitive)
+  (let ((query-length (length query)))
+    (loop with line-start = 0
+          for newline = (position #\Newline text :start line-start)
+          for line-end = (or newline (length text))
+          thereis (and (<= (+ line-start query-length) line-end)
+                       (if case-sensitive
+                           (string= text query
+                                    :start1 line-start
+                                    :end1 (+ line-start query-length))
+                           (string-equal text query
+                                         :start1 line-start
+                                         :end1 (+ line-start query-length))))
+          while newline
+          do (setf line-start (1+ newline)))))
+
 (defun %history-last-argument-reset-for-separator (state)
   (setf (%history-last-argument-scan-state-last-argument state) nil
         (%history-last-argument-scan-state-skip-redirect-target state) nil

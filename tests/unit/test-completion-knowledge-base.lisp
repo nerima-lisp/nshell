@@ -254,16 +254,42 @@
 
 (test argument-words-without-value-prefix-removes-in-progress-value-word
   (is (equal '("--mode")
-             (nshell.domain.completion::argument-words-without-value-prefix
+             (nshell.domain.completion::%argument-words-without-value-prefix
               '("--mode" "fa")
               "fa")))
   (is (equal '("--mode")
-             (nshell.domain.completion::argument-words-without-value-prefix
+             (nshell.domain.completion::%argument-words-without-value-prefix
               '("--mode")
               "")))
-  (is (null (nshell.domain.completion::previous-option-for-value-prefix
+  (is (null (nshell.domain.completion::%previous-option-for-value-prefix
              '("fa")
              "fa"))))
+
+(test argument-candidate-helpers-are-internal-boundaries
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (is (not (defined-symbol-p "UNIQUE-ENTRY-ARGUMENT-NAMES")))
+    (is (not (defined-symbol-p "LATEST-ARGUMENT-WORD")))
+    (is (not (defined-symbol-p "ARGUMENT-WORDS-BEFORE-LATEST")))
+    (is (not (defined-symbol-p "ARGUMENT-WORDS-WITHOUT-VALUE-PREFIX")))
+    (is (not (defined-symbol-p "PREVIOUS-OPTION-FOR-VALUE-PREFIX")))
+    (is (not (defined-symbol-p "OPTION-TOKEN-MATCHES-P")))
+    (is (not (defined-symbol-p "EXCLUSIVE-OPTION-BLOCKED-P")))
+    (is (not (defined-symbol-p "AVAILABLE-ENTRY-ARGUMENT-NAMES")))
+    (is (not (defined-symbol-p "ARGUMENT-NAME-CANDIDATE")))
+    (is (not (defined-symbol-p "ENTRY-ARGUMENT-NAME-CANDIDATES"))))
+  (is (fboundp 'nshell.domain.completion::%unique-entry-argument-names))
+  (is (fboundp 'nshell.domain.completion::%latest-argument-word))
+  (is (fboundp 'nshell.domain.completion::%argument-words-before-latest))
+  (is (fboundp
+       'nshell.domain.completion::%argument-words-without-value-prefix))
+  (is (fboundp
+       'nshell.domain.completion::%previous-option-for-value-prefix))
+  (is (fboundp 'nshell.domain.completion::%option-token-matches-p))
+  (is (fboundp 'nshell.domain.completion::%exclusive-option-blocked-p))
+  (is (fboundp 'nshell.domain.completion::%available-entry-argument-names))
+  (is (fboundp 'nshell.domain.completion::%argument-name-candidate))
+  (is (fboundp 'nshell.domain.completion::%entry-argument-name-candidates)))
 
 (test kb-option-value-spec-projection-boundaries-name-domain-parts
   (let ((spec '("--mode" "fast" "safe")))

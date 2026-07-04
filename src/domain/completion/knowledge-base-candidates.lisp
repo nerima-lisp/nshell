@@ -41,7 +41,7 @@
          (push (command-entry-candidate name entry) results))))
     (nreverse results)))
 
-(defun unique-entry-argument-names (entry)
+(defun %unique-entry-argument-names (entry)
   (let ((seen (make-hash-table :test #'equal))
         (names '()))
     (dolist (source (list (%candidate-entry-flag-specs entry)
@@ -151,29 +151,29 @@
                            option
                            value)))))))
 
-(defun latest-argument-word (words)
+(defun %latest-argument-word (words)
   (loop for word in words
         finally (return word)))
 
-(defun argument-words-before-latest (words)
+(defun %argument-words-before-latest (words)
   (loop for remaining on words
         while (rest remaining)
         collect (first remaining)))
 
-(defun argument-words-without-value-prefix (words prefix)
-  (let ((latest-word (latest-argument-word words)))
+(defun %argument-words-without-value-prefix (words prefix)
+  (let ((latest-word (%latest-argument-word words)))
     (if (and latest-word
              (not (string= prefix ""))
              (string= latest-word prefix))
-        (argument-words-before-latest words)
+        (%argument-words-before-latest words)
         words)))
 
-(defun previous-option-for-value-prefix (argument-words prefix)
-  (latest-argument-word
-   (argument-words-without-value-prefix argument-words prefix)))
+(defun %previous-option-for-value-prefix (argument-words prefix)
+  (%latest-argument-word
+   (%argument-words-without-value-prefix argument-words prefix)))
 
 (defun %parse-separate-option-value-prefix (argument-words prefix)
-  (let ((option (previous-option-for-value-prefix argument-words prefix)))
+  (let ((option (%previous-option-for-value-prefix argument-words prefix)))
     (when option
       (%make-separate-option-value-prefix option prefix))))
 
@@ -188,35 +188,41 @@
       (%separate-option-value-prefix-option separate-prefix)
       (%separate-option-value-prefix-value-prefix separate-prefix)))))
 
-(defun option-token-matches-p (option token)
+(defun %option-token-matches-p (option token)
   (or (string= option token)
       (and (< (length option) (length token))
            (starts-with-p option token)
            (char= (char token (length option)) #\=))))
 
-(defun exclusive-option-blocked-p (entry option argument-words)
+(defun %exclusive-option-blocked-p (entry option argument-words)
   (some (lambda (group)
           (and (member option group :test #'string=)
                (some (lambda (selected-option)
                        (some (lambda (word)
-                               (option-token-matches-p selected-option word))
+                               (%option-token-matches-p selected-option word))
                              argument-words))
                      group)))
         (%candidate-entry-exclusive-option-groups entry)))
 
-(defun available-entry-argument-names (entry prefix argument-words)
-  (loop for name in (unique-entry-argument-names entry)
+(defun %available-entry-argument-names (entry prefix argument-words)
+  (loop for name in (%unique-entry-argument-names entry)
         when (and (starts-with-p prefix name)
-                  (not (exclusive-option-blocked-p entry name argument-words)))
+                  (not (%exclusive-option-blocked-p
+                        entry
+                        name
+                        argument-words)))
           collect name))
 
-(defun argument-name-candidate (name)
+(defun %argument-name-candidate (name)
   (make-candidate name :kind :option :description ""))
 
-(defun entry-argument-name-candidates (entry prefix argument-words)
+(defun %entry-argument-name-candidates (entry prefix argument-words)
   (sorted-candidates-by-text
-   (loop for name in (available-entry-argument-names entry prefix argument-words)
-         collect (argument-name-candidate name))))
+   (loop for name in (%available-entry-argument-names
+                      entry
+                      prefix
+                      argument-words)
+         collect (%argument-name-candidate name))))
 
 (defun knowledge-base-argument-candidates (kb command prefix &key argument-words)
   (let ((entry (%kb-command-entry kb command)))
@@ -225,4 +231,4 @@
           (%separate-option-value-candidates
            entry
            (%parse-separate-option-value-prefix argument-words prefix))
-          (entry-argument-name-candidates entry prefix argument-words)))))
+          (%entry-argument-name-candidates entry prefix argument-words)))))

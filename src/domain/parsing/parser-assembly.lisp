@@ -1,12 +1,25 @@
 (in-package #:nshell.domain.parsing)
 
+(defstruct (%command-list-cardinality
+            (:constructor %make-command-list-cardinality
+                (single-command single-command-p)))
+  (single-command nil :read-only t)
+  (single-command-p nil :type boolean :read-only t))
+
+(defun %command-list-cardinality (commands)
+  (if (and commands (null (rest commands)))
+      (%make-command-list-cardinality (first commands) t)
+      (%make-command-list-cardinality nil nil)))
+
 (defun %single-command-p (commands)
-  (and commands (null (rest commands))))
+  (%command-list-cardinality-single-command-p
+   (%command-list-cardinality commands)))
 
 (defun %pipeline-or-command-node (commands)
-  (if (%single-command-p commands)
-      (first commands)
-      (make-pipeline-node commands)))
+  (let ((cardinality (%command-list-cardinality commands)))
+    (if (%command-list-cardinality-single-command-p cardinality)
+        (%command-list-cardinality-single-command cardinality)
+        (make-pipeline-node commands))))
 
 (defstruct (%pipeline-group
             (:constructor %make-pipeline-group (commands)))
@@ -64,7 +77,9 @@
    (%command-list-entries-from-reduced-entries entries)))
 
 (defun %command-list-assembly-single-command (assembly)
-  (first (%command-list-assembly-commands assembly)))
+  (%command-list-cardinality-single-command
+   (%command-list-cardinality
+    (%command-list-assembly-commands assembly))))
 
 (defun %command-list-assembly-background-p (assembly)
   (%background-separator-p

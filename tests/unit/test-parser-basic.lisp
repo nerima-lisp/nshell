@@ -454,6 +454,28 @@
             (nshell.domain.parsing::%command-list-assembly-last-separator
              assembly)))))
 
+(test parser-assembly-command-list-cardinality-owns-single-command-projection
+  "Command-list cardinality should own raw single-command list projection."
+  (let* ((command (nshell.domain.parsing:make-command-node "echo" '("hi")))
+         (projection
+           (nshell.domain.parsing::%command-list-cardinality
+            (list command))))
+    (is (nshell.domain.parsing::%command-list-cardinality-p projection))
+    (is (nshell.domain.parsing::%command-list-cardinality-single-command-p
+         projection))
+    (is (eq command
+            (nshell.domain.parsing::%command-list-cardinality-single-command
+             projection))))
+  (let ((projection
+          (nshell.domain.parsing::%command-list-cardinality
+           (list (nshell.domain.parsing:make-command-node "echo" nil)
+                 (nshell.domain.parsing:make-command-node "grep" nil)))))
+    (is (nshell.domain.parsing::%command-list-cardinality-p projection))
+    (is (not (nshell.domain.parsing::%command-list-cardinality-single-command-p
+              projection)))
+    (is (null (nshell.domain.parsing::%command-list-cardinality-single-command
+               projection)))))
+
 (test parser-assembly-projects-single-command-intent
   "Single-command assembly should expose command and background intent."
   (let* ((command (nshell.domain.parsing:make-command-node "sleep" '("1")))

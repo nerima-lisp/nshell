@@ -23,3 +23,16 @@
       ;; Cleanup
       (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
       (when (probe-file test-path) (delete-file test-path)))))
+
+(test file-history-missing-file
+  "Loading a missing history file returns NIL."
+  (let* ((test-path (format nil "/tmp/nshell-test-history-missing-~d.lisp"
+                            (random 1000000))))
+    (unwind-protect
+         (progn
+           (setf nshell.infrastructure.persistence:*history-file-path-override*
+                 (pathname test-path))
+           (when (probe-file test-path) (delete-file test-path))
+           (is (null (nshell.infrastructure.persistence:load-history-file))))
+      (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+      (when (probe-file test-path) (delete-file test-path)))))

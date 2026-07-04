@@ -294,7 +294,7 @@
   (:use #:cl)
   (:export #:*history-file-path-override*
            #:load-history-file #:append-history-entry
-           #:vacuum-history #:history-file-path
+           #:history-file-path
            #:load-config #:save-config #:config-file-path))
 
 ;; -- Presentation packages ----------------------------------

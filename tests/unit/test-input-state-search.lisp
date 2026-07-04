@@ -127,8 +127,8 @@
              (nshell.presentation::make-history-search-query-edit "atus"))
            (query-plan (nshell.presentation::history-search-edit-plan
                         query-edit)))
-      (is (nshell.presentation::history-search-edit-p query-edit))
-      (is (nshell.presentation::history-search-edit-plan-p query-plan))
+      (is (nshell.presentation::%history-search-edit-p query-edit))
+      (is (nshell.presentation::%history-search-edit-plan-p query-plan))
       (is (eq :query
               (nshell.presentation::history-search-edit-plan-kind query-plan)))
       (is (string= "atus"
@@ -136,6 +136,8 @@
                     query-plan)))
       (is (= 0
              (nshell.presentation::history-search-edit-plan-delta query-plan)))
+      (is (not (fboundp 'nshell.presentation::history-search-edit-p)))
+      (is (not (fboundp 'nshell.presentation::history-search-edit-plan-p)))
       (is (not (fboundp 'nshell.presentation::make-history-search-edit-plan))))
     (with-reduced-input-state (query-state query-output)
         (nshell.presentation::commit-history-search-edit
@@ -189,7 +191,7 @@
            (nshell.presentation::history-search-query-insertion-for-text
             query
             "bcd")))
-    (is (nshell.presentation::history-search-query-insertion-p insertion))
+    (is (nshell.presentation::%history-search-query-insertion-p insertion))
     (is (not (nshell.presentation::history-search-query-insertion-ignored-p
               insertion)))
     (is (string= "b"
@@ -201,6 +203,7 @@
     (is (string= (concatenate 'string query "b")
                  (nshell.presentation::history-search-query-insertion-query
                   insertion)))
+    (is (not (fboundp 'nshell.presentation::history-search-query-insertion-p)))
     (is (not (fboundp 'nshell.presentation::make-history-search-query-insertion)))))
 
 (test input-state-history-search-query-insertion-ignores-invalid-or-full-input
@@ -234,8 +237,9 @@
                 :index 1)))
     (let ((finished (nshell.presentation::history-search-finished-transition
                      state :execute)))
-      (is (nshell.presentation::history-search-transition-p finished))
+      (is (nshell.presentation::%history-search-transition-p finished))
       (is (fboundp 'nshell.presentation::%make-history-search-transition))
+      (is (not (fboundp 'nshell.presentation::history-search-transition-p)))
       (is (not (fboundp 'nshell.presentation::make-history-search-transition)))
       (is (eq :execute
               (nshell.presentation::history-search-transition-output finished)))
@@ -254,7 +258,7 @@
                       finished-state)))))
     (let ((cancelled (nshell.presentation::history-search-cancelled-transition
                       state)))
-      (is (nshell.presentation::history-search-transition-p cancelled))
+      (is (nshell.presentation::%history-search-transition-p cancelled))
       (is (eq :suggest-update
               (nshell.presentation::history-search-transition-output
                cancelled)))
@@ -280,8 +284,9 @@
                 (input-key-event :ctrl-r)))
         (execute (nshell.presentation::history-search-key-command-for-event
                   (input-key-event :enter))))
-    (is (nshell.presentation::history-search-key-command-p typed))
+    (is (nshell.presentation::%history-search-key-command-p typed))
     (is (not (listp typed)))
+    (is (not (fboundp 'nshell.presentation::history-search-key-command-p)))
     (is (not (fboundp 'nshell.presentation::make-history-search-key-command)))
     (is (eq :query
             (nshell.presentation::history-search-key-command-kind typed)))

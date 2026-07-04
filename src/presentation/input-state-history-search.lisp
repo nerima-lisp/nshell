@@ -2,19 +2,19 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (history-search-edit-plan
+(defstruct (%history-search-edit-plan
             (:constructor %make-history-search-edit-plan (&key kind text delta))
             (:conc-name %history-search-edit-plan-))
   (kind :query :read-only t)
   (text "" :read-only t)
   (delta 0 :read-only t))
 
-(defstruct (history-search-edit
+(defstruct (%history-search-edit
             (:constructor %make-history-search-edit (plan))
             (:conc-name %history-search-edit-))
   (plan (error "PLAN is required.") :read-only t))
 
-(defstruct (history-search-query-insertion
+(defstruct (%history-search-query-insertion
             (:constructor %make-history-search-query-insertion
                 (&key query accepted-text ignored-p))
             (:conc-name %history-search-query-insertion-))
@@ -22,13 +22,13 @@
   (accepted-text "" :type string :read-only t)
   (ignored-p nil :type boolean :read-only t))
 
-(defstruct (history-search-transition
+(defstruct (%history-search-transition
             (:constructor %make-history-search-transition (state output))
             (:conc-name %history-search-transition-))
   (state nil :read-only t)
   (output :none :type symbol :read-only t))
 
-(defstruct (history-search-key-command
+(defstruct (%history-search-key-command
             (:constructor %make-history-search-key-command
                 (&key kind text delta output))
             (:conc-name %history-search-key-command-))

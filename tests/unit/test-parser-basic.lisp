@@ -89,6 +89,44 @@
     (is (null (nshell.domain.parsing::%redirect-targetless-p
                "not-a-redirect")))))
 
+(test redirect-execution-classification-projects-effective-specs
+  "Execution redirect classification belongs to parser-domain data."
+  (let ((redirects '((:< . "in.txt")
+                     (:> . "out.txt")
+                     (:>> . "append.txt")
+                     (:2>&1 . nil))))
+    (is (nshell.domain.parsing:redirect-input-kind-p :<))
+    (is (nshell.domain.parsing:redirect-output-kind-p :&>))
+    (is (nshell.domain.parsing:redirect-stderr-kind-p :2>&1))
+    (is (nshell.domain.parsing:redirect-append-kind-p :>>))
+    (is (equal '(:< . "in.txt")
+               (nshell.domain.parsing:redirect-input-spec redirects)))
+    (is (string= "in.txt"
+                 (nshell.domain.parsing:redirect-input-file-target redirects)))
+    (multiple-value-bind (target mode)
+        (nshell.domain.parsing:redirect-output-spec redirects)
+      (is (string= "append.txt" target))
+      (is (eq :append mode)))
+    (multiple-value-bind (kind target mode)
+        (nshell.domain.parsing:redirect-stderr-spec redirects)
+      (is (eq :merge kind))
+      (is (null target))
+      (is (null mode)))
+    (is (nshell.domain.parsing:redirect-output-p redirects))))
+
+(test redirect-output-destinations-preserve-left-to-right-effects
+  "Domain output destination resolution owns shell-significant redirect order."
+  (multiple-value-bind (stdout-target stdout-mode stderr-target stderr-mode)
+      (nshell.domain.parsing:redirect-output-destinations
+       '((:2> . "early.err")
+         (:> . "out.txt")
+         (:2>&1 . nil)
+         (:>> . "later.out")))
+    (is (string= "later.out" stdout-target))
+    (is (eq :append stdout-mode))
+    (is (string= "out.txt" stderr-target))
+    (is (eq :supersede stderr-mode))))
+
 (test split-command-node-redirects-preserves-dangling-operator
   "A trailing redirect operator should remain part of the command arguments."
   (multiple-value-bind (clean redirects)

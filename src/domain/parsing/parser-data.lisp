@@ -18,6 +18,15 @@
   '(:2>&1)
   "Redirect specs that duplicate a descriptor and so take no file target.")
 
+(defparameter +input-redirect-kinds+ '(:< :<< :<<<)
+  "Redirect kinds that provide input to a command stage.")
+
+(defparameter +output-redirect-kinds+ '(:> :>> :&> :&>>)
+  "Redirect kinds that capture output from a command stage.")
+
+(defparameter +stderr-redirect-kinds+ '(:2> :2>> :2>&1 :&> :&>>)
+  "Redirect kinds that affect the standard error stream.")
+
 (defstruct (%redirect-spec-entry
             (:constructor %make-redirect-spec-entry (text kind)))
   text
@@ -73,6 +82,83 @@
   (let ((policy (%redirect-target-policy text)))
     (and policy
          (not (%redirect-target-policy-target-required-p policy)))))
+
+(defun redirect-input-kind-p (kind)
+  (not (null (member kind +input-redirect-kinds+ :test #'eq))))
+
+(defun redirect-output-kind-p (kind)
+  (not (null (member kind +output-redirect-kinds+ :test #'eq))))
+
+(defun redirect-stderr-kind-p (kind)
+  (not (null (member kind +stderr-redirect-kinds+ :test #'eq))))
+
+(defun redirect-append-kind-p (kind)
+  (not (null (member kind '(:>> :2>> :&>>) :test #'eq))))
+
+(defun %redirect-mode (kind)
+  (if (redirect-append-kind-p kind) :append :supersede))
+
+(defun %last-redirect-matching (redirects predicate)
+  (find-if (lambda (redirect)
+             (and redirect
+                  (funcall predicate (car redirect))))
+           redirects :from-end t))
+
+(defun redirect-input-spec (redirects)
+  "Return the last input redirect from REDIRECTS, or NIL."
+  (%last-redirect-matching redirects #'redirect-input-kind-p))
+
+(defun redirect-input-file-target (redirects)
+  "Return the file path for the last :< input redirect, or NIL."
+  (let ((redirect (redirect-input-spec redirects)))
+    (when (and redirect (eq (car redirect) :<))
+      (cdr redirect))))
+
+(defun redirect-output-spec (redirects)
+  "Return (target mode) for the last stdout redirect, or NIL."
+  (let ((redirect (%last-redirect-matching redirects #'redirect-output-kind-p)))
+    (when redirect
+      (values (cdr redirect) (%redirect-mode (car redirect))))))
+
+(defun redirect-stderr-spec (redirects)
+  "Return (kind target mode) for stderr handling: :MERGE, :FILE, or NIL."
+  (let ((redirect (%last-redirect-matching redirects #'redirect-stderr-kind-p)))
+    (when redirect
+      (case (car redirect)
+        (:2>&1 (values :merge nil nil))
+        ((:2> :2>> :&> :&>>)
+         (values :file (cdr redirect) (%redirect-mode (car redirect))))))))
+
+(defun redirect-output-p (redirects)
+  (not (null (%last-redirect-matching redirects #'redirect-output-kind-p))))
+
+(defun redirect-output-destinations (redirects)
+  "Return stdout/stderr file destinations as four values.
+The values are stdout-target, stdout-mode, stderr-target, and stderr-mode after
+applying REDIRECTS from left to right."
+  (let ((stdout-target nil)
+        (stdout-mode :supersede)
+        (stderr-target nil)
+        (stderr-mode :supersede))
+    (dolist (redirect redirects)
+      (case (car redirect)
+        ((:> :>>)
+         (setf stdout-target (cdr redirect)
+               stdout-mode (%redirect-mode (car redirect))))
+        ((:&> :&>>)
+         (let ((mode (%redirect-mode (car redirect))))
+           (setf stdout-target (cdr redirect)
+                 stdout-mode mode
+                 stderr-target (cdr redirect)
+                 stderr-mode mode)))
+        ((:2> :2>>)
+         (setf stderr-target (cdr redirect)
+               stderr-mode (%redirect-mode (car redirect))))
+        (:2>&1
+         (setf stderr-target stdout-target
+               stderr-mode stdout-mode))
+        (t nil)))
+    (values stdout-target stdout-mode stderr-target stderr-mode)))
 
 (defparameter +separator-rules+
   '((:pipe :token-type :pipe :text "|" :continues t)

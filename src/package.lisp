@@ -66,6 +66,11 @@
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
            #:+redirect-specs+ #:+redirect-fd-dup-specs+
+           #:redirect-input-kind-p #:redirect-output-kind-p #:redirect-stderr-kind-p
+           #:redirect-append-kind-p #:redirect-input-spec
+           #:redirect-input-file-target #:redirect-output-spec
+           #:redirect-stderr-spec #:redirect-output-p
+           #:redirect-output-destinations
            #:tokenization-result-p
            #:tokenization-result-tokens
            #:tokenization-result-cursor-token

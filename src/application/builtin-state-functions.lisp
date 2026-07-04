@@ -7,18 +7,19 @@
       (format out "  ~a~%" line))
     (format out "end~%")))
 
-(defun %store-function-body (context table name args)
+(defun %store-function-body (context name args)
   (let ((body-line (%string-join
                     (if (and (rest args)
                              (string= (car (last args)) "end"))
                         (butlast (rest args))
                         (rest args))
                     " ")))
-    (setf (gethash name table)
-          (if (string= body-line "")
-              nil
-              (list body-line)))
-    (remhash name (shell-context-function-source-table context))
+    (%store-shell-function-definition context
+                                      name
+                                      (if (string= body-line "")
+                                          nil
+                                          (list body-line))
+                                      nil)
     (values nil 0)))
 
 (defun %format-functions (table &optional names)
@@ -44,6 +45,6 @@
        (values nil (%table-query-status table (rest args))))
       (:default
        (if (rest args)
-           (%store-function-body context table (first args) args)
+           (%store-function-body context (first args) args)
            (values (%format-functions table args)
                    (%table-query-status table (list (first args)))))))))

@@ -32,6 +32,14 @@
   (terminal-rows 24 :type integer)
   (terminal-cols 80 :type integer))
 
+(defun %store-shell-function-definition (context name body-lines source-path)
+  (setf (gethash name (shell-context-function-table context)) body-lines)
+  (if source-path
+      (setf (gethash name (shell-context-function-source-table context))
+            source-path)
+      (remhash name (shell-context-function-source-table context)))
+  body-lines)
+
 (defmethod nshell.domain.completion:completion-filesystem-fns ((context shell-context))
   "Return filesystem adapter functions used by domain completion."
   (shell-context-filesystem-fns context))

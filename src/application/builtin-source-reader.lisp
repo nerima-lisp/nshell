@@ -115,10 +115,7 @@
 (defun %source-function-definition-finish (context name body inline-lines remaining source-path)
   (let ((function-body (nreverse body))
         (tail (append inline-lines remaining)))
-    (setf (gethash name (shell-context-function-table context))
-          function-body
-          (gethash name (shell-context-function-source-table context))
-          source-path)
+    (%store-shell-function-definition context name function-body source-path)
     (values tail nil 0 nil)))
 
 (defun %source-function-definition-scan (context name body inline-lines remaining depth source-path)

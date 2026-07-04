@@ -4,13 +4,14 @@
 
 (test job-monitor-raw-constructor-is-internal-boundary
   (let ((monitor (nshell.domain.job-control:make-job-monitor)))
-    (is (hash-table-p (nshell.domain.job-control::job-monitor-jobs monitor)))
-    (is (= 1 (nshell.domain.job-control::job-monitor-next-id monitor)))
+    (is (hash-table-p (nshell.domain.job-control::job-monitor-jobs-table monitor)))
+    (is (= 1 (nshell.domain.job-control::job-monitor-next-id-int monitor)))
     (is (fboundp 'nshell.domain.job-control::%make-job-monitor))))
 
 (test monitor-collection-shape-is-internal-boundary
   "Job monitor exposes ordered traversal, not hash-table or alist shape."
-  (dolist (name '("MONITOR-JOBS" "MONITOR-ENTRIES"))
+  (dolist (name '("MONITOR-JOBS" "MONITOR-ENTRIES"
+                  "JOB-MONITOR-JOBS-TABLE" "JOB-MONITOR-NEXT-ID-INT"))
     (multiple-value-bind (_symbol status)
         (find-symbol name "NSHELL.DOMAIN.JOB-CONTROL")
       (declare (ignore _symbol))
@@ -26,6 +27,25 @@
                (mapcar #'test-monitor-entry-job-id entries)))
     (is (equal (list second-job first-job)
                (mapcar #'test-monitor-entry-job entries)))))
+
+(test monitor-map-jobs-uses-stable-id-snapshot
+  "Monitor traversal is ordered by a stable id snapshot and skips jobs removed before visitation."
+  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+         (first-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "first")))
+         (second-id (nshell.domain.job-control:monitor-add-job
+                     monitor (make-test-job 0 "second")))
+         (third-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "third")))
+         (visited nil))
+    (nshell.domain.job-control:monitor-map-jobs
+     monitor
+     (lambda (job-id job)
+       (declare (ignore job))
+       (push job-id visited)
+       (when (= job-id first-id)
+         (nshell.domain.job-control:monitor-remove-job monitor second-id))))
+    (is (equal (list first-id third-id) (nreverse visited)))))
 
 (test monitor-creates-jobs
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))

@@ -1,17 +1,35 @@
 (in-package #:nshell.domain.job-control)
 
 (defstruct (job-monitor (:constructor %make-job-monitor ()))
-  (jobs (make-hash-table) :type hash-table)
-  (next-id 1 :type integer))
+  (jobs-table (make-hash-table) :type hash-table)
+  (next-id-int 1 :type integer))
 
 (defun make-job-monitor ()
   (%make-job-monitor))
 
-(defun monitor-add-job (monitor job)
-  (let ((id (job-monitor-next-id monitor)))
-    (setf (gethash id (job-monitor-jobs monitor)) job)
-    (incf (job-monitor-next-id monitor))
+(defun %monitor-jobs-table (monitor)
+  (job-monitor-jobs-table monitor))
+
+(defun %monitor-next-id (monitor)
+  (job-monitor-next-id-int monitor))
+
+(defun %allocate-monitor-id (monitor)
+  (let ((id (%monitor-next-id monitor)))
+    (incf (job-monitor-next-id-int monitor))
     id))
+
+(defun %store-monitor-job (monitor job-id job)
+  (setf (gethash job-id (%monitor-jobs-table monitor)) job)
+  job-id)
+
+(defun %monitor-job-ids (monitor)
+  (sort (loop for job-id being the hash-keys of (%monitor-jobs-table monitor)
+              collect job-id)
+        #'<))
+
+(defun monitor-add-job (monitor job)
+  (let ((id (%allocate-monitor-id monitor)))
+    (%store-monitor-job monitor id job)))
 
 (defun monitor-add-background-job (monitor pids command-line)
   (when pids
@@ -21,7 +39,7 @@
       (monitor-add-job monitor job))))
 
 (defun %monitor-job (monitor job-id)
-  (gethash job-id (job-monitor-jobs monitor)))
+  (gethash job-id (%monitor-jobs-table monitor)))
 
 (defun %record-terminal-exit-code (job exit-code)
   (nshell.domain.execution:job-record-terminal-exit-code job exit-code))
@@ -36,17 +54,17 @@
       (%transition-monitored-job job state exit-code))))
 
 (defun monitor-map-jobs (monitor function)
-  "Call FUNCTION with each public job id and job, ordered by job id."
-  (dolist (job-id (sort (loop for k being the hash-keys of (job-monitor-jobs monitor)
-                              collect k)
-                        #'<))
-    (funcall function job-id (%monitor-job monitor job-id))))
+  "Call FUNCTION with each existing public job id and job from an ordered id snapshot."
+  (dolist (job-id (%monitor-job-ids monitor))
+    (let ((job (%monitor-job monitor job-id)))
+      (when job
+        (funcall function job-id job)))))
 
 (defun monitor-find-job (monitor job-id)
   (%monitor-job monitor job-id))
 
 (defun monitor-remove-job (monitor job-id)
-  (remhash job-id (job-monitor-jobs monitor)))
+  (remhash job-id (%monitor-jobs-table monitor)))
 
 (defun suspend-job (monitor job-id kont)
   (declare (ignore kont))

@@ -104,6 +104,30 @@
     (is (eq job (nshell.domain.execution:job-record-terminal-exit-code job 7)))
     (is (= 7 (nshell.domain.execution:job-exit-code job)))))
 
+(test job-control-query-normalizes-process-group-id
+  "Job control queries expose only usable process-group ids."
+  (let ((job (make-test-job 0 "sleep" :pgid 4321))
+        (invalid-job (make-test-job 1 "sleep" :pgid 0)))
+    (is (nshell.domain.execution:valid-process-group-id-p 4321))
+    (is (not (nshell.domain.execution:valid-process-group-id-p 0)))
+    (is (not (nshell.domain.execution:valid-process-group-id-p nil)))
+    (is (= 4321 (nshell.domain.execution:job-control-pgid job)))
+    (is (null (nshell.domain.execution:job-control-pgid invalid-job)))))
+
+(test job-command-display-string-prefers-recorded-command-line
+  "Job display command is a domain query over runtime metadata and pipeline fallback."
+  (let* ((recorded (make-test-job 0 "sleep" :args '("10")))
+         (cmd (nshell.domain.execution:make-command "echo" '("hello")))
+         (pipeline-only (nshell.domain.execution:make-job
+                         1
+                         (nshell.domain.execution:make-pipeline cmd))))
+    (nshell.domain.execution:job-register-background-processes
+     recorded '(4321) "sleep 10 &")
+    (is (string= "sleep 10 &"
+                 (nshell.domain.execution:job-command-display-string recorded)))
+    (is (string= "echo hello"
+                 (nshell.domain.execution:job-command-display-string pipeline-only)))))
+
 (test job-completed-p-recognizes-done
   "Terminal done state is treated as completed."
   (let* ((cmd (nshell.domain.execution:make-command "ls"))

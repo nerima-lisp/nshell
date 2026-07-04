@@ -18,9 +18,6 @@
       (setf (symbol-value symbol) (or pgid 0))))
   (values))
 
-(defun %valid-job-pgid-p (pgid)
-  (and (integerp pgid) (plusp pgid)))
-
 (defun %continue-process-group (pgid)
   (sb-posix:kill (- pgid) sb-unix:sigcont))
 
@@ -30,8 +27,8 @@
   (declare (ignore process-registry terminal-fns))
   (let ((job (%require-job job-id job-monitor)))
     (when job
-      (let ((pgid (nshell.domain.execution:job-pgid job)))
-        (when (%valid-job-pgid-p pgid)
+      (let ((pgid (nshell.domain.execution:job-control-pgid job)))
+        (when pgid
           (setf *foreground-job-pgid* pgid)
           (unwind-protect
                (progn
@@ -52,8 +49,8 @@
   "Continue JOB-ID in the background."
   (let ((job (%require-job job-id job-monitor)))
     (when job
-      (let ((pgid (nshell.domain.execution:job-pgid job)))
-        (when (%valid-job-pgid-p pgid)
+      (let ((pgid (nshell.domain.execution:job-control-pgid job)))
+        (when pgid
           (%continue-process-group pgid))
         (nshell.domain.job-control:background-job job-monitor job-id)
         (when dispatcher
@@ -97,19 +94,12 @@
   (let ((pgid (or *foreground-job-pgid*
                   (ignore-errors (nshell.infrastructure.acl:get-foreground-pgroup)))))
     (when (and pgid
-               (%valid-job-pgid-p pgid)
+               (nshell.domain.execution:valid-process-group-id-p pgid)
                (/= pgid *shell-pgid*))
       pgid)))
 
 (defun %job-command-string (job)
-  (or (and (> (length (nshell.domain.execution:job-command-line job)) 0)
-           (nshell.domain.execution:job-command-line job))
-      (let ((pipeline (nshell.domain.execution:job-pipeline job)))
-        (if pipeline
-            (format nil "~{~{~a~^ ~}~^ | ~}"
-                    (mapcar #'nshell.domain.execution:command-to-list
-                            (nshell.domain.execution:pipeline-commands pipeline)))
-            ""))))
+  (nshell.domain.execution:job-command-display-string job))
 
 (defun %status-label (job)
   (case (nshell.domain.execution:job-state job)
@@ -153,7 +143,7 @@
            (error condition)))))))
 
 (defun %wait-job-pgid (job job-id job-monitor)
-  (let* ((pgid (nshell.domain.execution:job-pgid job))
+  (let* ((pgid (nshell.domain.execution:job-control-pgid job))
          (known-pids (nshell.domain.execution:job-known-pids job))
          (pending-pids (copy-list known-pids))
          (last-pid (nshell.domain.execution:job-last-pid job))

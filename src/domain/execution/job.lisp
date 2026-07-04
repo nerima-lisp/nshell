@@ -57,6 +57,25 @@
     (setf (job-exit-code job) exit-code))
   job)
 
+(defun valid-process-group-id-p (pgid)
+  (and (integerp pgid) (plusp pgid)))
+
+(defun job-control-pgid (job)
+  (let ((pgid (job-pgid job)))
+    (when (valid-process-group-id-p pgid)
+      pgid)))
+
+(defun job-command-display-string (job)
+  (let ((command-line (job-command-line job)))
+    (if (plusp (length command-line))
+        command-line
+        (let ((pipeline (job-pipeline job)))
+          (if pipeline
+              (format nil "~{~{~a~^ ~}~^ | ~}"
+                      (mapcar #'command-to-list
+                              (pipeline-commands pipeline)))
+              "")))))
+
 (defun job-known-pids (job)
   (remove-if-not (lambda (pid)
                    (and (integerp pid) (plusp pid)))

@@ -325,7 +325,8 @@
             #:apply-history-search-results-to-input-state
             #:reduce-input-state #:insert-newline-at-cursor
             #:output-event
-            #:run-repl #:trampoline #:render-prompt
+            #:run-repl #:run-repl-batch #:run-repl-script
+            #:trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion
              #:render-completions #:cycle-completion #:apply-completion
              #:highlight-line #:highlight-span

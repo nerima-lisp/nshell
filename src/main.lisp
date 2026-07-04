@@ -76,11 +76,11 @@
                   (%print-version)
                   0)
                  (:command
-                  (nshell.presentation::run-repl-batch
+                  (nshell.presentation:run-repl-batch
                    :line (%cli-command arguments)
                    :script-args (%cli-command-arguments arguments)))
                  (:script
-                  (nshell.presentation::run-repl-script
+                  (nshell.presentation:run-repl-script
                    (first arguments) (rest arguments)))
                  (:invalid
                   (%print-usage *error-output*)
@@ -91,7 +91,7 @@
                         (%print-version)
                         (nshell.presentation:run-repl)
                         0)
-                      (nshell.presentation::run-repl-batch))))
+                      (nshell.presentation:run-repl-batch))))
              (error (error)
                (%fatal-error error)))))
     (sb-ext:quit :unix-status (or exit-code 0))))

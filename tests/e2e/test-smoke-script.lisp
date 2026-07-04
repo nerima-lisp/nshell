@@ -9,7 +9,7 @@
       (write-string (format nil "function show~%echo hi $argv[1]~%end~%for i in (seq 1 2)~%echo n=$i~%end~%show $argv~%")
                     out))
     (let ((output (capture-standard-output
-                    (nshell.presentation::run-repl-script path '("World")))))
+                    (nshell.presentation:run-repl-script path '("World")))))
       (is (search "n=1" output))
       (is (search "n=2" output))
       (is (search "hi World" output)))))
@@ -224,4 +224,3 @@
   (%assert-nshell-main-result '("-c" "type echo")
                               "echo is a shell builtin"
                               0))
-

@@ -6,9 +6,15 @@
 
 (in-suite repl-tests)
 
+(test repl-entrypoints-are-public
+  "CLI-facing REPL entrypoints should be exported presentation APIs."
+  (is (fboundp 'nshell.presentation:run-repl))
+  (is (fboundp 'nshell.presentation:run-repl-batch))
+  (is (fboundp 'nshell.presentation:run-repl-script)))
+
 (test repl-batch-returns-last-exit-code
   "Batch execution should return the last command status for process exit."
   (with-repl-test-state
-    (let ((code (nshell.presentation::run-repl-batch :line "false")))
+    (let ((code (nshell.presentation:run-repl-batch :line "false")))
       (is (= 1 code))
       (is (= 1 nshell.presentation::*last-exit-code*)))))

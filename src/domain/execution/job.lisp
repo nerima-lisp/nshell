@@ -38,3 +38,11 @@
 (defun job-stopped-p (job) (eq (job-state-kw job) :stopped))
 (defun job-completed-p (job)
   (not (null (member (job-state-kw job) '(:completed :done)))))
+
+(defun job-known-pids (job)
+  (remove-if-not (lambda (pid)
+                   (and (integerp pid) (plusp pid)))
+                 (job-pids job)))
+
+(defun job-last-pid (job)
+  (car (last (job-known-pids job))))

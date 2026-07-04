@@ -120,14 +120,6 @@
       (ignore-errors
         (nshell.infrastructure.acl:set-foreground-pgroup (or previous *shell-pgid*))))))
 
-(defun %job-known-pids (job)
-  (remove-if-not (lambda (pid)
-                   (and (integerp pid) (plusp pid)))
-                 (nshell.domain.execution:job-pids job)))
-
-(defun %job-last-pid (job)
-  (car (last (%job-known-pids job))))
-
 (defun %wait-job-pgid-event (pgid)
   (handler-case
       (multiple-value-bind (pid status)
@@ -153,9 +145,9 @@
 
 (defun %wait-job-pgid (job job-id job-monitor)
   (let* ((pgid (nshell.domain.execution:job-pgid job))
-         (known-pids (%job-known-pids job))
+         (known-pids (nshell.domain.execution:job-known-pids job))
          (pending-pids (copy-list known-pids))
-         (last-pid (%job-last-pid job))
+         (last-pid (nshell.domain.execution:job-last-pid job))
          (last-stage-status nil)
          (latest-status nil))
     (labels ((record-completion (pid status-code)

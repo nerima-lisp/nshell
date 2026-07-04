@@ -168,17 +168,3 @@
     (is (string= "Done"    (label :completed)))
     (is (string= "Done"    (label :done)))
     (is (string= "Created" (label :created)))))
-
-(test job-known-pids-filters-positive-integers
-  "job-known-pids returns only positive integer pids, discarding nil and zero."
-  (let ((job (make-test-job 0 "sleep")))
-    (setf (nshell.domain.execution:job-pids job) '(111 nil 222 0 333))
-    (is (equal '(111 222 333) (nshell.application::%job-known-pids job)))))
-
-(test job-last-pid-returns-last-known-pid
-  "job-last-pid returns the last positive-integer pid, or nil when none exist."
-  (let ((job (make-test-job 0 "sleep")))
-    (setf (nshell.domain.execution:job-pids job) '(111 222 333))
-    (is (= 333 (nshell.application::%job-last-pid job)))
-    (setf (nshell.domain.execution:job-pids job) nil)
-    (is (null (nshell.application::%job-last-pid job)))))

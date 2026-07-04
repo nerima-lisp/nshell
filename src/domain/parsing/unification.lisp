@@ -25,6 +25,24 @@
 (defun %binding-entry-for-var (var bindings)
   (%binding-entry-from-pair (assoc var bindings :test #'eq)))
 
+(defstruct (%cons-term
+            (:constructor %make-cons-term (head tail)))
+  (head nil :read-only t)
+  (tail nil :read-only t))
+
+(defun %cons-term-from-raw (term)
+  (when (consp term)
+    (%make-cons-term (car term) (cdr term))))
+
+(defstruct (%goal-cursor
+            (:constructor %make-goal-cursor (goal rest)))
+  (goal nil :read-only t)
+  (rest nil :read-only t))
+
+(defun %goal-cursor-from-goals (goals)
+  (when goals
+    (%make-goal-cursor (car goals) (cdr goals))))
+
 (defun lookup-var (var bindings)
   (let ((entry (%binding-entry-for-var var bindings)))
     (if entry
@@ -49,8 +67,9 @@
      (let ((val (lookup-var term bindings)))
        (if (eq val term) nil (occurs-check var val bindings))))
     ((consp term)
-     (or (occurs-check var (car term) bindings)
-         (occurs-check var (cdr term) bindings)))
+     (let ((cons-term (%cons-term-from-raw term)))
+       (or (occurs-check var (%cons-term-head cons-term) bindings)
+           (occurs-check var (%cons-term-tail cons-term) bindings))))
     (t nil)))
 
 (defun %bind-var (var value bindings)
@@ -61,10 +80,16 @@
 (declaim (ftype (function (t t &optional t) t) unify))
 
 (defun %unify-conses (x y bindings)
-  (let ((car-bindings (unify (car x) (car y) bindings)))
-    (if (%unify-failed-p car-bindings)
+  (let* ((x-term (%cons-term-from-raw x))
+         (y-term (%cons-term-from-raw y))
+         (head-bindings (unify (%cons-term-head x-term)
+                               (%cons-term-head y-term)
+                               bindings)))
+    (if (%unify-failed-p head-bindings)
         *unify-fail*
-        (unify (cdr x) (cdr y) car-bindings))))
+        (unify (%cons-term-tail x-term)
+               (%cons-term-tail y-term)
+               head-bindings))))
 
 (defun unify (x y &optional (bindings '()))
   "Unify X and Y under BINDINGS. Returns bindings on success, *UNIFY-FAIL* on failure.
@@ -86,12 +111,11 @@ Use UNIFY-P to check success."
 (defun %backtrack (goals bindings)
   (if (null goals)
       (values bindings t)
-      (let ((goal (car goals))
-            (rest (cdr goals)))
-        (let ((result (funcall goal bindings)))
+      (let ((cursor (%goal-cursor-from-goals goals)))
+        (let ((result (funcall (%goal-cursor-goal cursor) bindings)))
           (if (unify-p result)
               (multiple-value-bind (final-bindings succeeded-p)
-                  (%backtrack rest result)
+                  (%backtrack (%goal-cursor-rest cursor) result)
                 (if succeeded-p
                     (values final-bindings t)
                     (values nil nil)))
@@ -105,5 +129,8 @@ Use UNIFY-P to check success."
 (defun walk (term bindings)
   (let ((resolved (%resolve-term term bindings)))
     (cond ((var-p resolved) resolved)
-          ((consp resolved) (cons (walk (car resolved) bindings) (walk (cdr resolved) bindings)))
+          ((consp resolved)
+           (let ((cons-term (%cons-term-from-raw resolved)))
+             (cons (walk (%cons-term-head cons-term) bindings)
+                   (walk (%cons-term-tail cons-term) bindings))))
           (t resolved))))

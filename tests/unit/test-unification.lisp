@@ -37,6 +37,14 @@
     (is (eq y (nshell.domain.parsing::%binding-entry-value entry)))
     (is (null (nshell.domain.parsing::%binding-entry-for-var y bindings)))))
 
+(test cons-term-projects-recursive-term-shape
+  "Recursive unification paths should project raw cons terms once."
+  (let ((term (nshell.domain.parsing::%cons-term-from-raw '(head . tail))))
+    (is (nshell.domain.parsing::%cons-term-p term))
+    (is (eq 'head (nshell.domain.parsing::%cons-term-head term)))
+    (is (eq 'tail (nshell.domain.parsing::%cons-term-tail term)))
+    (is (null (nshell.domain.parsing::%cons-term-from-raw 'atom)))))
+
 (test unify-lists
   (let* ((x (nshell.domain.parsing:make-var "X"))
          (b (nshell.domain.parsing:unify (list x 'b) '(a b))))
@@ -70,6 +78,18 @@
          (result (nshell.domain.parsing:backtrack (list noop-goal bind-goal))))
     (is (nshell.domain.parsing:unify-p result))
     (is (= 42 (nshell.domain.parsing:walk x result)))))
+
+(test goal-cursor-projects-backtracking-goal-list
+  "Backtracking should project the current goal and remaining goals through a cursor."
+  (let* ((first-goal (lambda (bindings) bindings))
+         (second-goal (lambda (bindings) bindings))
+         (cursor (nshell.domain.parsing::%goal-cursor-from-goals
+                  (list first-goal second-goal))))
+    (is (nshell.domain.parsing::%goal-cursor-p cursor))
+    (is (eq first-goal (nshell.domain.parsing::%goal-cursor-goal cursor)))
+    (is (eq second-goal
+            (first (nshell.domain.parsing::%goal-cursor-rest cursor))))
+    (is (null (nshell.domain.parsing::%goal-cursor-from-goals nil)))))
 
 (test walk-resolves-chain
   (let* ((x (nshell.domain.parsing:make-var "X"))

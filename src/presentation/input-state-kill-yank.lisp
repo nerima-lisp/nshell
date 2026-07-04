@@ -75,6 +75,32 @@
                    (next-kill-word-end (input-state-buffer state) cursor)
                    cursor))))
 
+(defstruct (kill-ring-selection
+            (:constructor %make-kill-ring-selection (index text))
+            (:conc-name %kill-ring-selection-))
+  (index 0 :type fixnum :read-only t)
+  (text "" :type string :read-only t))
+
+(defun kill-ring-selection-index (selection)
+  (%kill-ring-selection-index selection))
+
+(defun kill-ring-selection-text (selection)
+  (%kill-ring-selection-text selection))
+
+(defun kill-ring-first-selection (state)
+  (let ((ring (input-state-kill-ring state)))
+    (when ring
+      (%make-kill-ring-selection 0 (first ring)))))
+
+(defun kill-ring-selection-at (ring index)
+  (when (and ring index (<= 0 index) (< index (length ring)))
+    (%make-kill-ring-selection index (nth index ring))))
+
+(defun kill-ring-next-selection (ring selection)
+  (let ((next-index (mod (1+ (kill-ring-selection-index selection))
+                         (length ring))))
+    (%make-kill-ring-selection next-index (nth next-index ring))))
+
 (defstruct (yank-edit-plan
             (:constructor %make-yank-edit-plan (start text buffer cursor-pos))
             (:conc-name %yank-edit-plan-))
@@ -104,16 +130,17 @@
   (%yank-edit-plan-cursor-pos plan))
 
 (defun yank-edit-for-state (state)
-  (let ((killed (first (input-state-kill-ring state))))
-    (when killed
+  (let ((selection (kill-ring-first-selection state)))
+    (when selection
       (let* ((buffer (input-state-buffer state))
              (cursor (input-state-cursor-pos state))
-             (insertion (buffer-insertion-at-cursor buffer cursor killed)))
+             (text (kill-ring-selection-text selection))
+             (insertion (buffer-insertion-at-cursor buffer cursor text)))
         (when insertion
           (%make-yank-edit
            (%make-yank-edit-plan
             cursor
-            killed
+            text
             (buffer-insertion-result insertion buffer)
             (buffer-insertion-cursor-pos insertion))))))))
 
@@ -180,23 +207,22 @@
          (start (input-state-last-yank-start state))
          (end (input-state-last-yank-end state))
          (index (input-state-last-yank-index state)))
-    (when (and ring
-               start
-               end
-               index
-               (<= 0 start)
-               (< start end)
-               (<= end (length buffer))
-               (= end (input-state-cursor-pos state))
-               (< index (length ring))
-               (string= (subseq buffer start end)
-                        (nth index ring)))
-      (let ((next-index (mod (1+ index) (length ring))))
-        (%make-yank-pop-edit
-         (%make-yank-pop-edit-plan start
-                                   end
-                                   next-index
-                                   (nth next-index ring)))))))
+    (let ((selection (kill-ring-selection-at ring index)))
+      (when (and selection
+                 start
+                 end
+                 (<= 0 start)
+                 (< start end)
+                 (<= end (length buffer))
+                 (= end (input-state-cursor-pos state))
+                 (string= (subseq buffer start end)
+                          (kill-ring-selection-text selection)))
+        (let ((next-selection (kill-ring-next-selection ring selection)))
+          (%make-yank-pop-edit
+           (%make-yank-pop-edit-plan start
+                                     end
+                                     (kill-ring-selection-index next-selection)
+                                     (kill-ring-selection-text next-selection))))))))
 
 (defun commit-yank-pop-edit (state edit)
   (let* ((plan (yank-pop-edit-plan edit))

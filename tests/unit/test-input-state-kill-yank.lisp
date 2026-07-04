@@ -27,6 +27,28 @@
        (nshell.presentation::%make-kill-edit
         (nshell.presentation::%make-kill-edit-plan 3 3 3)))))
 
+(test input-state-kill-ring-selection-projects-entry-boundary
+  (let* ((state (input-state :kill-ring '("one" "two")))
+         (selection (nshell.presentation::kill-ring-first-selection state))
+         (next-selection
+           (nshell.presentation::kill-ring-next-selection
+            (nshell.presentation::input-state-kill-ring state)
+            selection)))
+    (is (nshell.presentation::kill-ring-selection-p selection))
+    (is (fboundp 'nshell.presentation::%make-kill-ring-selection))
+    (is (fboundp 'nshell.presentation::kill-ring-selection-index))
+    (is (fboundp 'nshell.presentation::kill-ring-selection-text))
+    (is (not (fboundp 'nshell.presentation::make-kill-ring-selection)))
+    (is (= 0 (nshell.presentation::kill-ring-selection-index selection)))
+    (is (string= "one"
+                 (nshell.presentation::kill-ring-selection-text selection)))
+    (is (= 1 (nshell.presentation::kill-ring-selection-index next-selection)))
+    (is (string= "two"
+                 (nshell.presentation::kill-ring-selection-text next-selection)))
+    (is (not (nshell.presentation::kill-ring-first-selection
+              (input-state :kill-ring nil))))
+    (is (not (nshell.presentation::kill-ring-selection-at nil 0)))))
+
 (test input-state-yank-edit-commits-insertion-and-yank-metadata
   (let* ((state (completion-session-state
                  :buffer "echo "

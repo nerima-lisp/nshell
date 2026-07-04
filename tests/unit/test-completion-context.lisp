@@ -288,8 +288,10 @@
   "Filesystem completion query construction should not expose unprefixed helpers."
   (is (fboundp 'nshell.domain.completion::%make-file-completion-prefix-projection))
   (is (fboundp 'nshell.domain.completion::%make-path-command-query))
+  (is (fboundp 'nshell.domain.completion::%make-empty-filesystem-candidate-set))
   (is (not (fboundp 'nshell.domain.completion::make-file-completion-prefix-projection)))
-  (is (not (fboundp 'nshell.domain.completion::make-path-command-query))))
+  (is (not (fboundp 'nshell.domain.completion::make-path-command-query)))
+  (is (not (fboundp 'nshell.domain.completion::make-filesystem-candidate-set))))
 
 (test split-file-completion-prefix-splits-on-last-slash
   "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."
@@ -308,17 +310,20 @@
                  (nshell.domain.completion::file-completion-prefix-projection-file-prefix
                   projection)))))
 
-(test filesystem-candidate-set-add-deduplicates-by-text
-  (let* ((set (nshell.domain.completion::make-filesystem-candidate-set))
-         (first (nshell.domain.completion:make-candidate "bin/tool"
-                                                         :kind :file
-                                                         :score 60))
-         (duplicate (nshell.domain.completion:make-candidate "bin/tool"
-                                                             :kind :directory
-                                                             :score 70)))
-    (is (eq set (nshell.domain.completion::filesystem-candidate-set-add set first)))
-    (is (eq set (nshell.domain.completion::filesystem-candidate-set-add set duplicate)))
-    (let ((candidates
-            (nshell.domain.completion::filesystem-candidate-set-candidates set)))
-      (is (= 1 (length candidates)))
-      (is (eq first (first candidates))))))
+(test file-candidates-from-directory-deduplicates-by-candidate-text
+  (with-file-completion-adapters
+      ((lambda (dir)
+         (declare (ignore dir))
+         (list #p"tool" #p"tool"))
+       (lambda (dir)
+         (declare (ignore dir))
+         nil))
+    (let* ((candidates
+             (nshell.domain.completion::file-candidates-from-directory
+              "to"
+              :include-files t
+              :include-directories nil))
+           (texts (completion-texts candidates)))
+      (is (equal '("tool") texts))
+      (is (eq :file (nshell.domain.completion:candidate-kind
+                     (first candidates)))))))

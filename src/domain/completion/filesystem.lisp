@@ -156,22 +156,23 @@
   (include-files t :type boolean :read-only t)
   (include-directories t :type boolean :read-only t))
 
-(defstruct (filesystem-candidate-set
-            (:constructor %make-filesystem-candidate-set (seen candidates)))
+(defstruct (%filesystem-candidate-set
+            (:constructor %make-filesystem-candidate-set (seen candidates))
+            (:conc-name %filesystem-candidate-set-))
   (seen (make-hash-table :test #'equal) :read-only t)
   (candidates nil :type list))
 
-(defun make-filesystem-candidate-set ()
+(defun %make-empty-filesystem-candidate-set ()
   (%make-filesystem-candidate-set (make-hash-table :test #'equal) nil))
 
-(defun filesystem-candidate-set-add (set candidate)
+(defun %filesystem-candidate-set-add (set candidate)
   (when candidate
     (let ((text (candidate-text candidate))
-          (seen (filesystem-candidate-set-seen set)))
+          (seen (%filesystem-candidate-set-seen set)))
       (unless (gethash text seen)
         (setf (gethash text seen) t
-              (filesystem-candidate-set-candidates set)
-              (cons candidate (filesystem-candidate-set-candidates set))))))
+              (%filesystem-candidate-set-candidates set)
+              (cons candidate (%filesystem-candidate-set-candidates set))))))
   set)
 
 (defun path-command-query-active-p (query)
@@ -199,7 +200,7 @@
 (defun add-path-command-directory-candidates (directory prefix candidates)
   (handler-case
       (dolist (entry (list-path-command-directory directory) candidates)
-        (filesystem-candidate-set-add
+        (%filesystem-candidate-set-add
          candidates
          (path-command-entry-candidate entry prefix)))
     (error () candidates)))
@@ -209,13 +210,13 @@
   (let ((query (%make-path-command-query path prefix)))
     (if (not (path-command-query-active-p query))
         nil
-        (let ((candidates (make-filesystem-candidate-set)))
+        (let ((candidates (%make-empty-filesystem-candidate-set)))
           (dolist (directory (split-path (path-command-query-path query)))
             (add-path-command-directory-candidates
              directory
              (path-command-query-prefix query)
              candidates))
-          (sort (filesystem-candidate-set-candidates candidates)
+          (sort (%filesystem-candidate-set-candidates candidates)
                 #'string<
                 :key #'candidate-text)))))
 
@@ -249,7 +250,7 @@
 
 (defun add-file-completion-entries (entries kind query candidates)
   (dolist (entry entries candidates)
-    (filesystem-candidate-set-add
+    (%filesystem-candidate-set-add
      candidates
      (file-completion-entry-candidate entry kind query))))
 
@@ -259,7 +260,7 @@
                 prefix
                 include-files
                 include-directories))
-        (candidates (make-filesystem-candidate-set)))
+        (candidates (%make-empty-filesystem-candidate-set)))
     (when (file-completion-query-include-directories query)
       (add-file-completion-entries
        (safe-file-completion-list *file-completion-subdirectories-fn*
@@ -274,7 +275,7 @@
        :file
        query
        candidates))
-    (filesystem-candidate-set-candidates candidates)))
+    (%filesystem-candidate-set-candidates candidates)))
 
 (defun completion-filesystem-mode (context)
   "Return the filesystem completion mode implied by CONTEXT."

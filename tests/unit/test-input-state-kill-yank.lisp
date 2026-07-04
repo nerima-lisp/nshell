@@ -3,12 +3,19 @@
 (in-suite input-state-tests)
 
 (test input-state-kill-edit-projects-buffer-and-killed-text
-  (let ((edit (nshell.presentation::%make-kill-edit 5 10 5))
-        (buffer "echo hello world"))
+  (let* ((plan (nshell.presentation::%make-kill-edit-plan 5 10 5))
+         (edit (nshell.presentation::%make-kill-edit plan))
+         (buffer "echo hello world"))
+    (is (nshell.presentation::kill-edit-plan-p plan))
     (is (nshell.presentation::kill-edit-p edit))
-    (is (= 5 (nshell.presentation::kill-edit-start edit)))
-    (is (= 10 (nshell.presentation::kill-edit-end edit)))
-    (is (= 5 (nshell.presentation::kill-edit-cursor-pos edit)))
+    (is (eq plan (nshell.presentation::kill-edit-plan edit)))
+    (is (= 5 (nshell.presentation::kill-edit-plan-start plan)))
+    (is (= 10 (nshell.presentation::kill-edit-plan-end plan)))
+    (is (= 5 (nshell.presentation::kill-edit-plan-cursor-pos plan)))
+    (is (not (fboundp 'nshell.presentation::make-kill-edit-plan)))
+    (is (not (fboundp 'nshell.presentation::kill-edit-start)))
+    (is (not (fboundp 'nshell.presentation::kill-edit-end)))
+    (is (not (fboundp 'nshell.presentation::kill-edit-cursor-pos)))
     (is (not (nshell.presentation::kill-edit-empty-p edit)))
     (is (string= "hello"
                  (nshell.presentation::kill-edit-killed-text edit buffer)))
@@ -17,7 +24,8 @@
 
 (test input-state-kill-edit-detects-empty-range
   (is (nshell.presentation::kill-edit-empty-p
-       (nshell.presentation::%make-kill-edit 3 3 3))))
+       (nshell.presentation::%make-kill-edit
+        (nshell.presentation::%make-kill-edit-plan 3 3 3)))))
 
 (test input-state-yank-edit-commits-insertion-and-yank-metadata
   (let* ((state (completion-session-state
@@ -28,10 +36,18 @@
                  :kill-ring '("one")))
          (edit (nshell.presentation::yank-edit-for-state state)))
     (is (nshell.presentation::yank-edit-p edit))
-    (is (= 5 (nshell.presentation::yank-edit-start edit)))
-    (is (string= "one" (nshell.presentation::yank-edit-text edit)))
-    (is (string= "echo one" (nshell.presentation::yank-edit-buffer edit)))
-    (is (= 8 (nshell.presentation::yank-edit-cursor-pos edit)))
+    (let ((plan (nshell.presentation::yank-edit-plan edit)))
+      (is (nshell.presentation::yank-edit-plan-p plan))
+      (is (= 5 (nshell.presentation::yank-edit-plan-start plan)))
+      (is (string= "one" (nshell.presentation::yank-edit-plan-text plan)))
+      (is (string= "echo one"
+                   (nshell.presentation::yank-edit-plan-buffer plan)))
+      (is (= 8 (nshell.presentation::yank-edit-plan-cursor-pos plan)))
+      (is (not (fboundp 'nshell.presentation::make-yank-edit-plan)))
+      (is (not (fboundp 'nshell.presentation::yank-edit-start)))
+      (is (not (fboundp 'nshell.presentation::yank-edit-text)))
+      (is (not (fboundp 'nshell.presentation::yank-edit-buffer)))
+      (is (not (fboundp 'nshell.presentation::yank-edit-cursor-pos))))
     (with-reduced-input-state (new-state output)
         (nshell.presentation::commit-yank-edit state edit)
       (is-input-state-with-completion-cleared
@@ -232,14 +248,23 @@
                  :last-yank-index 0))
          (edit (nshell.presentation::yank-pop-edit-for-state state)))
     (is (nshell.presentation::yank-pop-edit-p edit))
-    (is (= 5 (nshell.presentation::yank-pop-edit-start edit)))
-    (is (= 8 (nshell.presentation::yank-pop-edit-end edit)))
-    (is (= 1 (nshell.presentation::yank-pop-edit-next-index edit)))
-    (is (= 8 (nshell.presentation::yank-pop-edit-cursor-pos edit)))
-    (is (string= "two"
-                 (nshell.presentation::yank-pop-edit-replacement edit)))
-    (is (string= "echo two"
-                 (nshell.presentation::yank-pop-edit-buffer edit "echo one")))))
+    (let ((plan (nshell.presentation::yank-pop-edit-plan edit)))
+      (is (nshell.presentation::yank-pop-edit-plan-p plan))
+      (is (= 5 (nshell.presentation::yank-pop-edit-plan-start plan)))
+      (is (= 8 (nshell.presentation::yank-pop-edit-plan-end plan)))
+      (is (= 1 (nshell.presentation::yank-pop-edit-plan-next-index plan)))
+      (is (= 8 (nshell.presentation::yank-pop-edit-plan-cursor-pos plan)))
+      (is (string= "two"
+                   (nshell.presentation::yank-pop-edit-plan-replacement plan)))
+      (is (string= "echo two"
+                   (nshell.presentation::yank-pop-edit-plan-buffer
+                    plan
+                    "echo one")))
+      (is (not (fboundp 'nshell.presentation::make-yank-pop-edit-plan)))
+      (is (not (fboundp 'nshell.presentation::yank-pop-edit-start)))
+      (is (not (fboundp 'nshell.presentation::yank-pop-edit-end)))
+      (is (not (fboundp 'nshell.presentation::yank-pop-edit-next-index)))
+      (is (not (fboundp 'nshell.presentation::yank-pop-edit-replacement))))))
 
 (test input-state-yank-pop-edit-rejects-stale-yank-metadata
   (is (null (nshell.presentation::yank-pop-edit-for-state

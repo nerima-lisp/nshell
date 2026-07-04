@@ -1,5 +1,19 @@
 (in-package #:nshell.domain.parsing)
 
+(defstruct (%reduced-command-entry
+            (:constructor %make-reduced-command-entry
+                (command separator separator-token)))
+  (command nil :read-only t)
+  (separator nil :read-only t)
+  (separator-token nil :read-only t))
+
+(defun %reduced-command-entry-from-reducer-entry (entry)
+  (destructuring-bind (command separator separator-token) entry
+    (%make-reduced-command-entry command separator separator-token)))
+
+(defun %reduced-command-entries-from-reducer-entries (entries)
+  (mapcar #'%reduced-command-entry-from-reducer-entry entries))
+
 (defstruct (%command-list-components
             (:constructor %make-command-list-components
                 (commands separators separator-tokens)))
@@ -7,11 +21,11 @@
   (separators nil :type list :read-only t)
   (separator-tokens nil :type list :read-only t))
 
-(defun %command-list-components-from-list (cmd-list)
+(defun %command-list-components-from-reduced-entries (entries)
   (%make-command-list-components
-   (mapcar #'first cmd-list)
-   (mapcar #'second cmd-list)
-   (mapcar #'third cmd-list)))
+   (mapcar #'%reduced-command-entry-command entries)
+   (mapcar #'%reduced-command-entry-separator entries)
+   (mapcar #'%reduced-command-entry-separator-token entries)))
 
 (defun %last-list-element (items)
   (car (last items)))
@@ -24,13 +38,16 @@
   (separator-tokens nil :type list :read-only t)
   (ast nil :read-only t))
 
-(defun %reduced-command-stream-from-list (cmd-list)
-  (let ((components (%command-list-components-from-list cmd-list)))
+(defun %reduced-command-stream-from-reducer-entries (reducer-entries)
+  (let* ((entries
+           (%reduced-command-entries-from-reducer-entries reducer-entries))
+         (components
+           (%command-list-components-from-reduced-entries entries)))
     (%make-reduced-command-stream
      (%command-list-components-commands components)
      (%command-list-components-separators components)
      (%command-list-components-separator-tokens components)
-     (%build-ast-from-command-list cmd-list))))
+     (%build-ast-from-command-list reducer-entries))))
 
 (defun %reduced-command-stream-last-separator (stream)
   (%last-list-element (%reduced-command-stream-separators stream)))
@@ -111,7 +128,7 @@
 
 (defun %parse-result-from-token-reduction-result (reduction incomplete input-length)
   (%parse-result-from-reduced-command-stream
-   (%reduced-command-stream-from-list
+   (%reduced-command-stream-from-reducer-entries
     (%token-reduction-result-commands reduction))
    (%token-reduction-result-errors reduction)
    incomplete

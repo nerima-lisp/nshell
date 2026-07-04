@@ -615,7 +615,7 @@
   "Public parser orchestration projects reduced command streams before diagnostics."
   (let* ((command (nshell.domain.parsing:make-command-node "echo" nil))
          (separator-token (nshell.domain.parsing:make-token :pipe "|" 5 6))
-         (stream (nshell.domain.parsing::%reduced-command-stream-from-list
+         (stream (nshell.domain.parsing::%reduced-command-stream-from-reducer-entries
                   (list (list command :pipe separator-token)))))
     (is (equal (list command)
                (nshell.domain.parsing::%reduced-command-stream-commands stream)))
@@ -643,14 +643,19 @@
                (first diagnostics)))))))
 
 (test parser-projects-command-list-components-boundary
-  "Parser orchestration projects raw reducer triples before stream construction."
+  "Parser orchestration projects typed reducer entries before stream construction."
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" nil))
          (second-command (nshell.domain.parsing:make-command-node "cat" nil))
          (separator-token (nshell.domain.parsing:make-token :pipe "|" 5 6))
-         (components
-           (nshell.domain.parsing::%command-list-components-from-list
+         (entries
+           (nshell.domain.parsing::%reduced-command-entries-from-reducer-entries
             (list (list first-command :pipe separator-token)
-                  (list second-command nil nil)))))
+                  (list second-command nil nil))))
+         (components
+           (nshell.domain.parsing::%command-list-components-from-reduced-entries
+            entries)))
+    (is (every #'nshell.domain.parsing::%reduced-command-entry-p entries))
+    (is (not (some #'listp entries)))
     (is (nshell.domain.parsing::%command-list-components-p components))
     (is (equal (list first-command second-command)
                (nshell.domain.parsing::%command-list-components-commands

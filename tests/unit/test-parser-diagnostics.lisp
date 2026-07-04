@@ -89,7 +89,7 @@
   (let* ((command (nshell.domain.parsing:make-command-node "if" '("true")))
          (separator-token (nshell.domain.parsing:make-token :pipe "|" 8 9))
          (stream
-           (nshell.domain.parsing::%reduced-command-stream-from-list
+           (nshell.domain.parsing::%reduced-command-stream-from-reducer-entries
             (list (list command :pipe separator-token))))
          (input
            (nshell.domain.parsing::%structural-diagnostics-input-from-stream

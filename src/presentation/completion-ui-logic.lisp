@@ -153,6 +153,14 @@ preceded by a backslash."
   (start 0 :type fixnum :read-only t)
   (end 0 :type fixnum :read-only t))
 
+(defstruct (completion-token-context
+            (:constructor %make-completion-token-context
+                (bounds body-bounds quote-context raw-token)))
+  (bounds nil :read-only t)
+  (body-bounds nil :read-only t)
+  (quote-context nil :read-only t)
+  (raw-token "" :type string :read-only t))
+
 (defun %completion-token-bounds (input cursor)
   (let* ((limit (length input))
          (cursor (max 0 (min cursor limit))))
@@ -191,6 +199,19 @@ preceded by a backslash."
       (decf body-end))
     (%make-completion-token-slice body-start body-end)))
 
+(defun %completion-token-context (input cursor)
+  (let* ((bounds (%completion-token-bounds input cursor))
+         (body-bounds (%completion-token-body-bounds input bounds))
+         (start (completion-token-slice-start bounds))
+         (end (completion-token-slice-end bounds))
+         (body-start (completion-token-slice-start body-bounds))
+         (body-end (completion-token-slice-end body-bounds))
+         (quote-context (%completion-quote-context input start end))
+         (raw-token (%completion-unescape-token
+                     (subseq input body-start body-end)
+                     :quote-context quote-context)))
+    (%make-completion-token-context bounds body-bounds quote-context raw-token)))
+
 (defun maybe-extend-completion-common-prefix (state candidates)
   "Apply an unambiguous completion prefix, if CANDIDATES advance the token."
   (with-normalized-input-state (state state)
@@ -199,17 +220,12 @@ preceded by a backslash."
           (prefix (completion-common-prefix candidates)))
       (if (null prefix)
         (values state nil)
-          (let* ((token-bounds (%completion-token-bounds buffer cursor))
-                 (body-bounds (%completion-token-body-bounds buffer token-bounds))
+          (let* ((context (%completion-token-context buffer cursor))
+                 (token-bounds (completion-token-context-bounds context))
                  (start (completion-token-slice-start token-bounds))
                  (end (completion-token-slice-end token-bounds))
-                 (body-start (completion-token-slice-start body-bounds))
-                 (body-end (completion-token-slice-end body-bounds))
-                 (token (subseq buffer body-start body-end))
-                 (quote-context (%completion-quote-context buffer start end))
-                 (raw-token (%completion-unescape-token
-                             token
-                             :quote-context quote-context)))
+                 (quote-context (completion-token-context-quote-context context))
+                 (raw-token (completion-token-context-raw-token context)))
             (if (and (> (length prefix) (length raw-token))
                      (<= (length raw-token) (length prefix))
                      (string= raw-token (subseq prefix 0 (length raw-token))))
@@ -232,10 +248,11 @@ preceded by a backslash."
     (if (zerop n) 0 (mod (1+ current) n))))
 
 (defun apply-completion (input candidate &key (cursor (length input)))
-  (let* ((token-bounds (%completion-token-bounds input cursor))
+  (let* ((context (%completion-token-context input cursor))
+         (token-bounds (completion-token-context-bounds context))
          (start (completion-token-slice-start token-bounds))
          (end (completion-token-slice-end token-bounds))
-         (quote-context (%completion-quote-context input start end))
+         (quote-context (completion-token-context-quote-context context))
          (text (%completion-insertion-text (%candidate-text candidate)
                                            :quote-context quote-context))
          (new-buffer (%completion-splice-with-quote-context

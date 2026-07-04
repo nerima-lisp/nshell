@@ -251,6 +251,19 @@
     (is (= 5 (nshell.presentation::completion-token-slice-start empty-bounds)))
     (is (= 5 (nshell.presentation::completion-token-slice-end empty-bounds)))))
 
+(test completion-token-context-captures-raw-token-and-quote-state
+  "completion-token-context centralizes bounds, quote state, and raw token extraction."
+  (let ((context (nshell.presentation::%completion-token-context "cat 'my\\ " 9)))
+    (is (nshell.presentation::completion-token-context-p context))
+    (is (eq :single
+            (nshell.presentation::completion-token-context-quote-context context)))
+    (is (string= "my\\ "
+                 (nshell.presentation::completion-token-context-raw-token context)))
+    (is (= 5 (nshell.presentation::completion-token-slice-start
+              (nshell.presentation::completion-token-context-body-bounds context))))
+    (is (= 9 (nshell.presentation::completion-token-slice-end
+              (nshell.presentation::completion-token-context-body-bounds context))))))
+
 (test common-prefix-two-finds-shared-leading-substring
   "common-prefix-two returns the longest common prefix of two strings."
   (flet ((pre (a b) (nshell.presentation::%common-prefix-two a b)))

@@ -32,15 +32,17 @@
             (when (and (<= (length prefix) (length text))
                        (string-equal prefix text :end2 (length prefix))
                        (< (length prefix) (length text)))
-              (let* ((token-bounds (nshell.presentation::%completion-token-bounds
-                                     input
-                                     (length input)))
+              (let* ((context (nshell.presentation::%completion-token-context
+                               input
+                               (length input)))
+                     (token-bounds (nshell.presentation::completion-token-context-bounds
+                                    context))
                      (token-start (nshell.presentation::completion-token-slice-start
-                                    token-bounds))
+                                   token-bounds))
                      (token-end (nshell.presentation::completion-token-slice-end
-                                  token-bounds))
-                     (quote-context (nshell.presentation::%completion-quote-context
-                                      input token-start token-end))
+                                 token-bounds))
+                     (quote-context (nshell.presentation::completion-token-context-quote-context
+                                     context))
                      (escaped-prefix (nshell.presentation::%completion-insertion-text
                                       prefix
                                       :quote-context quote-context))

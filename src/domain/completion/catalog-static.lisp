@@ -1,55 +1,56 @@
 ; Static alist catalogs: builtin commands, external commands, and format specs.
 (in-package #:nshell.domain.completion)
 
-(defstruct (catalog-entry-property-projection
+(defstruct (%catalog-entry-property-projection
             (:constructor %make-catalog-entry-property-projection
-                (key value present-p)))
+                (key value present-p))
+            (:conc-name %catalog-entry-property-projection-))
   key
   value
   present-p)
 
-(defun catalog-entry-property-projection (entry property)
+(defun %project-catalog-entry-property (entry property)
   (loop for (key value) on entry by #'cddr
         when (eq key property)
           return (%make-catalog-entry-property-projection key value t)
         finally (return (%make-catalog-entry-property-projection
                          property nil nil))))
 
-(defun catalog-entry-property-key (projection)
-  (catalog-entry-property-projection-key projection))
+(defun %catalog-entry-property-key (projection)
+  (%catalog-entry-property-projection-key projection))
 
-(defun catalog-entry-property-present-p (entry property)
-  (catalog-entry-property-projection-present-p
-   (catalog-entry-property-projection entry property)))
+(defun %catalog-entry-property-present-p (entry property)
+  (%catalog-entry-property-projection-present-p
+   (%project-catalog-entry-property entry property)))
 
-(defun catalog-entry-property-value (entry property)
-  (catalog-entry-property-projection-value
-   (catalog-entry-property-projection entry property)))
+(defun %catalog-entry-property-value (entry property)
+  (%catalog-entry-property-projection-value
+   (%project-catalog-entry-property entry property)))
 
-(defun catalog-entry-command (entry)
-  (catalog-entry-property-value entry :command))
+(defun %catalog-entry-command (entry)
+  (%catalog-entry-property-value entry :command))
 
-(defun command-catalog-preserved-properties ()
+(defun %command-catalog-preserved-properties ()
   '(:synopsis :description :subcommands :flags :option-values :exclusive-options))
 
-(defun catalog-entry-property (entry property)
-  (when (catalog-entry-property-present-p entry property)
-    (list property (catalog-entry-property-value entry property))))
+(defun %catalog-entry-property (entry property)
+  (when (%catalog-entry-property-present-p entry property)
+    (list property (%catalog-entry-property-value entry property))))
 
-(defun command-catalog-entry (entry)
-  (let ((command (catalog-entry-command entry)))
+(defun %command-catalog-entry (entry)
+  (let ((command (%catalog-entry-command entry)))
     (unless (stringp command)
       (error "Command catalog entry requires a string :command: ~S" entry))
     (append (list :command command)
             (mapcan (lambda (property)
-                      (catalog-entry-property entry property))
-                    (command-catalog-preserved-properties)))))
+                      (%catalog-entry-property entry property))
+                    (%command-catalog-preserved-properties)))))
 
-(defun command-catalog (entries)
-  (mapcar #'command-catalog-entry entries))
+(defun %command-catalog (entries)
+  (mapcar #'%command-catalog-entry entries))
 
 (defparameter +builtin-command-catalog+
-  (command-catalog
+  (%command-catalog
    (list
    (list :command "echo"
          :synopsis "echo [string ...]"
@@ -173,7 +174,7 @@
          :description "invert command status"))))
 
 (defparameter +external-command-catalog+
-  (command-catalog
+  (%command-catalog
    (list
    (list :command "git"
          :description "distributed version control"

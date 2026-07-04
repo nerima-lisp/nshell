@@ -137,33 +137,71 @@
 
 (test command-catalog-entry-projection-boundaries-preserve-explicit-empty-properties
   "Static catalog normalization should preserve explicitly present NIL metadata."
-  (let ((entry (nshell.domain.completion::command-catalog-entry
+  (let ((entry (nshell.domain.completion::%command-catalog-entry
                 (list :command "zz"
                       :description "synthetic command"
                       :flags nil
                       :option-values nil))))
-    (is (equal "zz" (nshell.domain.completion::catalog-entry-command entry)))
-    (is (nshell.domain.completion::catalog-entry-property-present-p entry :flags))
-    (is (nshell.domain.completion::catalog-entry-property-present-p entry :option-values))
+    (is (equal "zz" (nshell.domain.completion::%catalog-entry-command entry)))
+    (is (nshell.domain.completion::%catalog-entry-property-present-p entry :flags))
+    (is (nshell.domain.completion::%catalog-entry-property-present-p entry :option-values))
     (is (equal (list :flags nil)
-               (nshell.domain.completion::catalog-entry-property entry :flags)))
+               (nshell.domain.completion::%catalog-entry-property entry :flags)))
     (let ((flags-projection
-            (nshell.domain.completion::catalog-entry-property-projection
+            (nshell.domain.completion::%project-catalog-entry-property
              entry :flags))
           (synopsis-projection
-            (nshell.domain.completion::catalog-entry-property-projection
+            (nshell.domain.completion::%project-catalog-entry-property
              entry :synopsis)))
       (is (eq :flags
-              (nshell.domain.completion::catalog-entry-property-key
+              (nshell.domain.completion::%catalog-entry-property-key
                flags-projection)))
-      (is (nshell.domain.completion::catalog-entry-property-projection-present-p
+      (is (nshell.domain.completion::%catalog-entry-property-projection-present-p
            flags-projection))
-      (is (not (nshell.domain.completion::catalog-entry-property-projection-present-p
+      (is (not (nshell.domain.completion::%catalog-entry-property-projection-present-p
                 synopsis-projection)))
-      (is (null (nshell.domain.completion::catalog-entry-property-projection-value
+      (is (null (nshell.domain.completion::%catalog-entry-property-projection-value
                  flags-projection))))
     (is (equal '(:synopsis :description :subcommands :flags :option-values :exclusive-options)
-               (nshell.domain.completion::command-catalog-preserved-properties)))))
+               (nshell.domain.completion::%command-catalog-preserved-properties)))))
+
+(test command-catalog-static-helper-boundaries-are-internal
+  "Static catalog helpers should only exist behind percent-prefixed boundaries."
+  (labels ((defined-symbol-p (name)
+             (multiple-value-bind (symbol status)
+                 (find-symbol name "NSHELL.DOMAIN.COMPLETION")
+               (and status (or (fboundp symbol)
+                               (ignore-errors
+                                (typep (symbol-value symbol) 'function)))))))
+    (dolist (old-name '("CATALOG-ENTRY-PROPERTY-PROJECTION"
+                        "MAKE-CATALOG-ENTRY-PROPERTY-PROJECTION"
+                        "CATALOG-ENTRY-PROPERTY-PROJECTION-KEY"
+                        "CATALOG-ENTRY-PROPERTY-PROJECTION-VALUE"
+                        "CATALOG-ENTRY-PROPERTY-PROJECTION-PRESENT-P"
+                        "CATALOG-ENTRY-PROPERTY-KEY"
+                        "CATALOG-ENTRY-PROPERTY-PRESENT-P"
+                        "CATALOG-ENTRY-PROPERTY-VALUE"
+                        "CATALOG-ENTRY-COMMAND"
+                        "COMMAND-CATALOG-PRESERVED-PROPERTIES"
+                        "CATALOG-ENTRY-PROPERTY"
+                        "COMMAND-CATALOG-ENTRY"
+                        "COMMAND-CATALOG"))
+      (is (not (defined-symbol-p old-name))))
+    (dolist (internal-name '("%MAKE-CATALOG-ENTRY-PROPERTY-PROJECTION"
+                             "%CATALOG-ENTRY-PROPERTY-PROJECTION-P"
+                             "%CATALOG-ENTRY-PROPERTY-PROJECTION-KEY"
+                             "%CATALOG-ENTRY-PROPERTY-PROJECTION-VALUE"
+                             "%CATALOG-ENTRY-PROPERTY-PROJECTION-PRESENT-P"
+                             "%PROJECT-CATALOG-ENTRY-PROPERTY"
+                             "%CATALOG-ENTRY-PROPERTY-KEY"
+                             "%CATALOG-ENTRY-PROPERTY-PRESENT-P"
+                             "%CATALOG-ENTRY-PROPERTY-VALUE"
+                             "%CATALOG-ENTRY-COMMAND"
+                             "%COMMAND-CATALOG-PRESERVED-PROPERTIES"
+                             "%CATALOG-ENTRY-PROPERTY"
+                             "%COMMAND-CATALOG-ENTRY"
+                             "%COMMAND-CATALOG"))
+      (is (defined-symbol-p internal-name)))))
 
 (test pbt-builtin-catalog-projects-into-help-and-repl-seed
   "Each builtin catalog entry should project consistently into help and REPL seed data."

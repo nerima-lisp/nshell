@@ -73,33 +73,9 @@
         (values nil
                 (funcall (%process-fn context :run-external) command args)))))
 
-(defun %path-separator-p (char)
-  (or (char= char #\/)
-      #+windows (char= char #\\)
-      #-windows nil))
-
-(defun %command-has-directory-p (command)
-  (position-if #'%path-separator-p command))
-
-(defun %split-path (path)
-  (let ((start 0)
-        (parts nil))
-    (loop for pos = (position #\: path :start start)
-          do (push (subseq path start pos) parts)
-          while pos
-          do (setf start (1+ pos)))
-    (nreverse parts)))
-
-(defun %join-path-name (directory command)
-  (cond
-    ((string= directory "") command)
-    ((char= (char directory (1- (length directory))) #\/)
-     (concatenate 'string directory command))
-    (t (concatenate 'string directory "/" command))))
-
 (defun %resolve-command-path-candidates (context command)
   (cond
-    ((%command-has-directory-p command)
+    ((nshell.domain.completion:command-prefix-has-directory-p command)
      (when (%stat-path context command)
        (list command)))
     (t
@@ -107,8 +83,9 @@
                           (nshell.domain.environment:env-get
                            (shell-context-environment context) "PATH"))
                      "")))
-       (loop for directory in (%split-path path)
-             for candidate = (%join-path-name directory command)
+       (loop for directory in (nshell.domain.completion:split-path path)
+             for candidate = (nshell.domain.completion:join-directory-command
+                              directory command :empty-directory "")
              when (%stat-path context candidate)
                collect candidate)))))
 

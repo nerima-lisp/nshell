@@ -17,6 +17,14 @@
           do (setf start (1+ pos)))
     (nreverse parts)))
 
+(defun join-directory-command (directory command &key (empty-directory directory))
+  (let ((dir (if (string= directory "") empty-directory directory)))
+    (cond
+      ((string= dir "") command)
+      ((path-separator-p (char dir (1- (length dir))))
+       (concatenate 'string dir command))
+      (t (concatenate 'string dir "/" command)))))
+
 (defun entry-command-name (entry)
   (let ((name (if (pathnamep entry)
                   (file-namestring entry)

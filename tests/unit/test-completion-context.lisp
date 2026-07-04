@@ -239,7 +239,7 @@
 
 (test path-separator-p-detects-forward-slash
   "path-separator-p returns true only for / (path separator on Unix)."
-  (flet ((sep (ch) (nshell.domain.completion::path-separator-p ch)))
+  (flet ((sep (ch) (nshell.domain.completion:path-separator-p ch)))
     (is (sep #\/))
     (is (not (sep #\:)))
     (is (not (sep #\a)))))
@@ -247,17 +247,27 @@
 (test command-prefix-has-directory-p-detects-slash-in-prefix
   "command-prefix-has-directory-p returns the slash position when one is present."
   (flet ((has-dir (s)
-           (nshell.domain.completion::command-prefix-has-directory-p s)))
+           (nshell.domain.completion:command-prefix-has-directory-p s)))
     (is (null (has-dir "git")))
     (is (not (null (has-dir "./git"))))
     (is (not (null (has-dir "/usr/bin/git"))))))
 
 (test split-path-splits-colon-separated-directories
   "split-path splits a colon-separated PATH into a list of directory strings."
-  (flet ((sp (s) (nshell.domain.completion::split-path s)))
+  (flet ((sp (s) (nshell.domain.completion:split-path s)))
     (is (equal '("/bin" "/usr/bin") (sp "/bin:/usr/bin")))
     (is (equal '("/bin") (sp "/bin")))
     (is (equal '("" "/bin") (sp ":/bin")))))
+
+(test join-directory-command-handles-empty-directory-policy
+  "join-directory-command keeps empty PATH element policy explicit at call sites."
+  (flet ((join (directory command &key (empty-directory directory))
+           (nshell.domain.completion:join-directory-command
+            directory command :empty-directory empty-directory)))
+    (is (string= "git" (join "" "git" :empty-directory "")))
+    (is (string= "./git" (join "" "git" :empty-directory ".")))
+    (is (string= "/bin/git" (join "/bin/" "git")))
+    (is (string= "/bin/git" (join "/bin" "git")))))
 
 (test trim-trailing-path-separators-removes-trailing-slashes
   "trim-trailing-path-separators strips trailing / unless the string is only slashes."

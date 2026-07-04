@@ -80,38 +80,22 @@
                     (string= prefix entry :end2 (length prefix)))
             return (subseq entry (length prefix)))))
 
-(defun %command-contains-slash-p (command)
-  (find #\/ command :test #'char=))
-
 (defun %executable-file-p (path)
   (and (probe-file path)
        (ignore-errors
         (not (zerop (logand (sb-posix:stat-mode (sb-posix:stat path))
                             #o111))))))
 
-(defun %join-directory-command (directory command)
-  (let ((dir (if (string= directory "") "." directory)))
-    (if (and (plusp (length dir))
-             (char= (char dir (1- (length dir))) #\/))
-        (concatenate 'string dir command)
-        (concatenate 'string dir "/" command))))
-
-(defun %split-search-path (path)
-  (loop with start = 0
-        for position = (position #\: path :start start)
-        collect (subseq path start position)
-        while position
-        do (setf start (1+ position))))
-
 (defun %resolve-external-command (command &optional (environment (%get-environment)))
   (cond
-    ((%command-contains-slash-p command)
+    ((nshell.domain.completion:command-prefix-has-directory-p command)
      (and (%executable-file-p command) command))
     (t
-     (loop for directory in (%split-search-path
+     (loop for directory in (nshell.domain.completion:split-path
                              (or (%environment-value "PATH" environment)
                                  "/bin:/usr/bin"))
-           for candidate = (%join-directory-command directory command)
+           for candidate = (nshell.domain.completion:join-directory-command
+                            directory command :empty-directory ".")
            when (%executable-file-p candidate)
              return candidate))))
 

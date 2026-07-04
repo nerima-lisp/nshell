@@ -45,6 +45,23 @@
         (push value seen)
         (push value result)))))
 
+(defstruct (%option-value-spec-list-projection
+            (:constructor %make-option-value-spec-list-projection
+                (option values valid-p))
+            (:conc-name %option-value-spec-list-projection-))
+  option
+  values
+  valid-p)
+
+(defun %project-option-value-spec-list (spec)
+  (if (consp spec)
+      (let ((option (first spec)))
+        (%make-option-value-spec-list-projection
+         option
+         (rest spec)
+         (stringp option)))
+      (%make-option-value-spec-list-projection nil nil nil)))
+
 (defstruct (%kb-option-value-spec-projection
             (:constructor %make-kb-option-value-spec-projection
                 (option values valid-p))
@@ -54,12 +71,11 @@
   valid-p)
 
 (defun %kb-option-value-spec-projection (spec)
-  (if (consp spec)
-      (%make-kb-option-value-spec-projection
-       (first spec)
-       (rest spec)
-       (stringp (first spec)))
-      (%make-kb-option-value-spec-projection nil nil nil)))
+  (let ((projection (%project-option-value-spec-list spec)))
+    (%make-kb-option-value-spec-projection
+     (%option-value-spec-list-projection-option projection)
+     (%option-value-spec-list-projection-values projection)
+     (%option-value-spec-list-projection-valid-p projection))))
 
 (defun %kb-option-value-spec-option (spec)
   (%kb-option-value-spec-projection-option

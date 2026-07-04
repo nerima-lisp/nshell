@@ -102,12 +102,11 @@
   valid-p)
 
 (defun %project-entry-option-value-spec (spec)
-  (if (consp spec)
-      (%make-entry-option-value-spec-projection
-       (first spec)
-       (rest spec)
-       (stringp (first spec)))
-      (%make-entry-option-value-spec-projection nil nil nil)))
+  (let ((projection (%project-option-value-spec-list spec)))
+    (%make-entry-option-value-spec-projection
+     (%option-value-spec-list-projection-option projection)
+     (%option-value-spec-list-projection-values projection)
+     (%option-value-spec-list-projection-valid-p projection))))
 
 (defun %entry-option-value-spec-option (spec)
   (%entry-option-value-spec-projection-option

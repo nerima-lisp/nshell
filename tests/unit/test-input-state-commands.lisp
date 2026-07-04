@@ -219,6 +219,39 @@
   (is (null (nshell.presentation::char-transposition-at-cursor "a" 1)))
   (is (null (nshell.presentation::char-transposition-at-cursor "ab" 0))))
 
+(test input-state-word-transform-edit-projects-token-replacement
+  (let ((edit (nshell.presentation::word-transform-edit-at-cursor
+               "echo hello tail"
+               5
+               #'string-upcase)))
+    (is (nshell.presentation::word-transform-edit-p edit))
+    (is (fboundp 'nshell.presentation::%make-word-transform-edit))
+    (is (fboundp 'nshell.presentation::%word-transform-edit-start))
+    (is (not (fboundp 'nshell.presentation::make-word-transform-edit)))
+    (is (= 5 (nshell.presentation::word-transform-edit-start edit)))
+    (is (= 10 (nshell.presentation::word-transform-edit-end edit)))
+    (is (string= "HELLO"
+                 (nshell.presentation::word-transform-edit-replacement edit)))
+    (is (string= "echo HELLO tail"
+                 (nshell.presentation::word-transform-edit-buffer
+                  edit
+                  "echo hello tail")))
+    (is (= 10 (nshell.presentation::word-transform-edit-cursor-pos edit))))
+  (let ((edit (nshell.presentation::word-transform-edit-at-cursor
+               "echo hello"
+               0
+               (lambda (word)
+                 (concatenate 'string word "-suffix")))))
+    (is (string= "echo-suffix hello"
+                 (nshell.presentation::word-transform-edit-buffer
+                  edit
+                  "echo hello")))
+    (is (= 11 (nshell.presentation::word-transform-edit-cursor-pos edit))))
+  (is (null (nshell.presentation::word-transform-edit-at-cursor
+             "   "
+             0
+             #'string-upcase))))
+
 (test input-state-word-transposition-projects-token-swap
   (let ((transposition (nshell.presentation::word-transposition-at-cursor
                         "echo one two" 9)))

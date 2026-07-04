@@ -32,22 +32,52 @@
             do (incf pos))
       (move-cursor-to-clearing-suggestion state pos))))
 
+(defstruct (word-transform-edit
+            (:constructor %make-word-transform-edit (start end replacement))
+            (:conc-name %word-transform-edit-))
+  (start 0 :type fixnum :read-only t)
+  (end 0 :type fixnum :read-only t)
+  (replacement "" :type string :read-only t))
+
+(defun word-transform-edit-start (edit)
+  (%word-transform-edit-start edit))
+
+(defun word-transform-edit-end (edit)
+  (%word-transform-edit-end edit))
+
+(defun word-transform-edit-replacement (edit)
+  (%word-transform-edit-replacement edit))
+
+(defun word-transform-edit-at-cursor (buffer cursor transform)
+  (let ((range (shell-token-range-at-or-after-cursor buffer cursor)))
+    (when range
+      (%make-word-transform-edit
+       (shell-token-range-start range)
+       (shell-token-range-end range)
+       (funcall transform
+                (subseq buffer
+                        (shell-token-range-start range)
+                        (shell-token-range-end range)))))))
+
+(defun word-transform-edit-buffer (edit buffer)
+  (concatenate 'string
+               (subseq buffer 0 (word-transform-edit-start edit))
+               (word-transform-edit-replacement edit)
+               (subseq buffer (word-transform-edit-end edit))))
+
+(defun word-transform-edit-cursor-pos (edit)
+  (+ (word-transform-edit-start edit)
+     (length (word-transform-edit-replacement edit))))
+
 (defun transform-word-at-cursor (state transform)
   "Apply TRANSFORM to the shell token at or after the cursor."
   (with-buffer-edit (state buffer cursor) state
-    (let ((range (shell-token-range-at-or-after-cursor buffer cursor)))
-      (if (null range)
+    (let ((edit (word-transform-edit-at-cursor buffer cursor transform)))
+      (if (null edit)
           (values state :none)
-          (let* ((start (shell-token-range-start range))
-                 (end (shell-token-range-end range))
-                 (word (subseq buffer start end))
-                 (new-word (funcall transform word))
-                 (new-buffer (concatenate 'string
-                                          (subseq buffer 0 start)
-                                          new-word
-                                          (subseq buffer end))))
-            (commit-buffer-edit new-buffer
-                                :cursor-pos (+ start (length new-word))))))))
+          (commit-buffer-edit
+           (word-transform-edit-buffer edit buffer)
+           :cursor-pos (word-transform-edit-cursor-pos edit))))))
 
 (defun capitalize-token-text (text)
   "Capitalize the first alphabetic character in TEXT and downcase the rest."

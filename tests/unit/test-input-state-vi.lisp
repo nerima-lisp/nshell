@@ -230,3 +230,82 @@
                          (nshell.presentation::%vi-accumulate-count base #\3)
                          #\1)
                         #\2))))))
+
+(test vi-visual-yank-edit-projects-selection-through-commit
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 2
+                             :mode :vi-visual
+                             :vi-visual-anchor 0
+                             :kill-ring '("old")
+                             :completion-index 1
+                             :completion-base-buffer "abc"
+                             :completion-base-cursor 1
+                             :last-candidates '("alpha")
+                             :suggestion "ab"))
+         (edit (nshell.presentation::vi-visual-yank-edit-for-range state 0 3 0)))
+    (is (nshell.presentation::vi-visual-yank-edit-p edit))
+    (is (fboundp 'nshell.presentation::%make-vi-visual-yank-edit))
+    (is (not (fboundp 'nshell.presentation::make-vi-visual-yank-edit)))
+    (is (= 0 (nshell.presentation::vi-visual-yank-edit-cursor edit)))
+    (is (string= "abc" (nshell.presentation::vi-visual-yank-edit-selected edit)))
+    (multiple-value-bind (committed output)
+        (nshell.presentation::commit-vi-visual-yank-edit state edit)
+      (is (eq :redraw output))
+      (is-vi-command-state committed
+                           :buffer "abcdef"
+                           :cursor-pos 0
+                           :kill-ring '("abc" "old"))
+      (is-completion-session-cleared committed))))
+
+(test vi-visual-yank-edit-empty-selection-preserves-kill-ring
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 3
+                             :mode :vi-visual
+                             :vi-visual-anchor 3
+                             :kill-ring '("old")))
+         (edit (nshell.presentation::vi-visual-yank-edit-for-range state 3 3 3)))
+    (is (string= "" (nshell.presentation::vi-visual-yank-edit-selected edit)))
+    (multiple-value-bind (committed output)
+        (nshell.presentation::commit-vi-visual-yank-edit state edit)
+      (is (eq :redraw output))
+      (is-vi-command-state committed
+                           :buffer "abcdef"
+                           :cursor-pos 3
+                           :kill-ring '("old")))))
+
+(test vi-visual-anchor-swap-edit-projects-cursor-and-anchor-through-commit
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 4
+                             :mode :vi-visual
+                             :vi-count 2
+                             :vi-visual-anchor 1))
+         (edit (nshell.presentation::vi-visual-anchor-swap-edit-for-state state)))
+    (is (nshell.presentation::vi-visual-anchor-swap-edit-p edit))
+    (is (fboundp 'nshell.presentation::%make-vi-visual-anchor-swap-edit))
+    (is (not (fboundp 'nshell.presentation::make-vi-visual-anchor-swap-edit)))
+    (is (= 4 (nshell.presentation::vi-visual-anchor-swap-edit-cursor edit)))
+    (is (= 1 (nshell.presentation::vi-visual-anchor-swap-edit-anchor edit)))
+    (multiple-value-bind (committed output)
+        (nshell.presentation::commit-vi-visual-anchor-swap-edit state edit)
+      (is (eq :redraw output))
+      (is-vi-visual-state committed
+                          :buffer "abcdef"
+                          :cursor-pos 1
+                          :vi-visual-anchor 4)
+      (is (null (nshell.presentation::input-state-vi-count committed))))))
+
+(test vi-visual-anchor-swap-edit-uses-cursor-when-anchor-is-missing
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 3
+                             :mode :vi-visual
+                             :vi-visual-anchor nil))
+         (edit (nshell.presentation::vi-visual-anchor-swap-edit-for-state state)))
+    (is (= 3 (nshell.presentation::vi-visual-anchor-swap-edit-cursor edit)))
+    (is (= 3 (nshell.presentation::vi-visual-anchor-swap-edit-anchor edit)))
+    (multiple-value-bind (committed output)
+        (nshell.presentation::commit-vi-visual-anchor-swap-edit state edit)
+      (is (eq :redraw output))
+      (is-vi-visual-state committed
+                          :buffer "abcdef"
+                          :cursor-pos 3
+                          :vi-visual-anchor 3))))

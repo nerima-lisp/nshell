@@ -140,29 +140,71 @@
          (end (min (length buffer) (1+ (max anchor cursor)))))
     (values start end)))
 
-(defun %vi-yank-into (state start end cursor)
+(defstruct (vi-visual-yank-edit
+             (:constructor %make-vi-visual-yank-edit (cursor selected))
+             (:conc-name %vi-visual-yank-edit-))
+  (cursor 0 :type fixnum :read-only t)
+  (selected "" :type string :read-only t))
+
+(defun vi-visual-yank-edit-for-range (state start end cursor)
   (let* ((buffer (input-state-buffer state))
          (start (max 0 (min start (length buffer))))
          (end (max start (min end (length buffer))))
-         (selected (subseq buffer start end)))
+         (cursor (max 0 (min cursor (length buffer)))))
+    (%make-vi-visual-yank-edit cursor (subseq buffer start end))))
+
+(defun vi-visual-yank-edit-cursor (edit)
+  (%vi-visual-yank-edit-cursor edit))
+
+(defun vi-visual-yank-edit-selected (edit)
+  (%vi-visual-yank-edit-selected edit))
+
+(defun commit-vi-visual-yank-edit (state edit)
+  (let ((selected (vi-visual-yank-edit-selected edit)))
     (values (copy-input-state-with
              (%vi-command-state state
                                 :clear-completion-p t
-                                :cursor-pos cursor)
+                                :cursor-pos (vi-visual-yank-edit-cursor edit))
              :kill-ring (if (zerop (length selected))
                             (input-state-kill-ring state)
                             (cons selected (input-state-kill-ring state))))
             :redraw)))
 
+(defun %vi-yank-into (state start end cursor)
+  (commit-vi-visual-yank-edit
+   state
+   (vi-visual-yank-edit-for-range state start end cursor)))
+
+(defstruct (vi-visual-anchor-swap-edit
+             (:constructor %make-vi-visual-anchor-swap-edit (cursor anchor))
+             (:conc-name %vi-visual-anchor-swap-edit-))
+  (cursor 0 :type fixnum :read-only t)
+  (anchor 0 :type fixnum :read-only t))
+
+(defun vi-visual-anchor-swap-edit-for-state (state)
+  (%make-vi-visual-anchor-swap-edit
+   (input-state-cursor-pos state)
+   (or (input-state-vi-visual-anchor state)
+       (input-state-cursor-pos state))))
+
+(defun vi-visual-anchor-swap-edit-cursor (edit)
+  (%vi-visual-anchor-swap-edit-cursor edit))
+
+(defun vi-visual-anchor-swap-edit-anchor (edit)
+  (%vi-visual-anchor-swap-edit-anchor edit))
+
+(defun commit-vi-visual-anchor-swap-edit (state edit)
+  (values (copy-input-state-with
+           state
+           :cursor-pos (vi-visual-anchor-swap-edit-anchor edit)
+           :vi-count nil
+           :vi-visual-anchor (vi-visual-anchor-swap-edit-cursor edit))
+          :redraw))
+
 (defun %vi-swap-visual-anchor (state)
-  (let ((cursor (input-state-cursor-pos state))
-        (anchor (or (input-state-vi-visual-anchor state)
-                    (input-state-cursor-pos state))))
-    (values (copy-input-state-with state
-                                   :cursor-pos anchor
-                                   :vi-count nil
-                                   :vi-visual-anchor cursor)
-            :redraw)))
+  (commit-vi-visual-anchor-swap-edit
+   state
+   (vi-visual-anchor-swap-edit-for-state state)))
 
 (defun vi-enter-command-mode (state)
   "Switch STATE to vi normal mode, moving the cursor left one as vi does on ESC."

@@ -21,6 +21,11 @@
     (is (nshell.domain.parsing:unify-p b))
     (is (eq 'hello (nshell.domain.parsing:walk x b)))))
 
+(test logic-variable-raw-constructor-is-internal-boundary
+  (let ((x (nshell.domain.parsing:make-var "X")))
+    (is (nshell.domain.parsing:var-p x))
+    (is (fboundp 'nshell.domain.parsing::%make-var))))
+
 (test binding-entry-projects-association-shape
   "Binding lookup should project alist storage before resolving variables."
   (let* ((x (nshell.domain.parsing:make-var "X"))

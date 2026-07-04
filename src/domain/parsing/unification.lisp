@@ -1,9 +1,12 @@
 (in-package #:nshell.domain.parsing)
 
 (defstruct (logic-var
-            (:constructor make-var (name))
+            (:constructor %make-var (name))
             (:predicate var-p))
   name)
+
+(defun make-var (name)
+  (%make-var name))
 
 (defvar *unify-fail* (cons :fail :fail))
 

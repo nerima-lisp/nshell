@@ -228,8 +228,43 @@
       (is (= 31  (accum (nshell.presentation::%vi-accumulate-count base #\3) #\1)))
       (is (= 312 (accum (nshell.presentation::%vi-accumulate-count
                          (nshell.presentation::%vi-accumulate-count base #\3)
-                         #\1)
-                        #\2))))))
+                        #\1)
+                       #\2))))))
+
+(test vi-visual-selection-projects-inclusive-anchor-range
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 1
+                             :mode :vi-visual
+                             :vi-visual-anchor 4))
+         (selection (nshell.presentation::vi-visual-selection-for-state state)))
+    (is (nshell.presentation::vi-visual-selection-p selection))
+    (is (fboundp 'nshell.presentation::%make-vi-visual-selection))
+    (is (not (fboundp 'nshell.presentation::make-vi-visual-selection)))
+    (is (= 1 (nshell.presentation::vi-visual-selection-start selection)))
+    (is (= 5 (nshell.presentation::vi-visual-selection-end selection)))
+    (is (= 1 (nshell.presentation::vi-visual-selection-cursor selection)))))
+
+(test vi-visual-selection-kill-commit-uses-selection-cursor
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 4
+                             :mode :vi-visual
+                             :vi-visual-anchor 1
+                             :kill-ring '("old")
+                             :completion-index 1
+                             :completion-base-buffer "abcdef"
+                             :completion-base-cursor 4
+                             :last-candidates '("alpha")
+                             :suggestion "tail"))
+         (selection (nshell.presentation::vi-visual-selection-for-state state)))
+    (multiple-value-bind (committed output)
+        (nshell.presentation::commit-vi-visual-kill-selection
+         state selection :vi-command)
+      (is (eq :redraw output))
+      (is-vi-command-state committed
+                           :buffer "af"
+                           :cursor-pos 1
+                           :kill-ring '("bcde" "old"))
+      (is-completion-session-cleared committed))))
 
 (test vi-visual-yank-edit-projects-selection-through-commit
   (let* ((state (input-state :buffer "abcdef"

@@ -140,6 +140,27 @@
          (end (min (length buffer) (1+ (max anchor cursor)))))
     (values start end)))
 
+(defstruct (vi-visual-selection
+             (:constructor %make-vi-visual-selection (start end cursor))
+             (:conc-name %vi-visual-selection-))
+  (start 0 :type fixnum :read-only t)
+  (end 0 :type fixnum :read-only t)
+  (cursor 0 :type fixnum :read-only t))
+
+(defun vi-visual-selection-for-state (state)
+  (multiple-value-bind (start end)
+      (%vi-visual-range state)
+    (%make-vi-visual-selection start end start)))
+
+(defun vi-visual-selection-start (selection)
+  (%vi-visual-selection-start selection))
+
+(defun vi-visual-selection-end (selection)
+  (%vi-visual-selection-end selection))
+
+(defun vi-visual-selection-cursor (selection)
+  (%vi-visual-selection-cursor selection))
+
 (defstruct (vi-visual-yank-edit
              (:constructor %make-vi-visual-yank-edit (cursor selected))
              (:conc-name %vi-visual-yank-edit-))
@@ -170,10 +191,14 @@
                             (cons selected (input-state-kill-ring state))))
             :redraw)))
 
-(defun %vi-yank-into (state start end cursor)
+(defun commit-vi-visual-yank-selection (state selection)
   (commit-vi-visual-yank-edit
    state
-   (vi-visual-yank-edit-for-range state start end cursor)))
+   (vi-visual-yank-edit-for-range
+    state
+    (vi-visual-selection-start selection)
+    (vi-visual-selection-end selection)
+    (vi-visual-selection-cursor selection))))
 
 (defstruct (vi-visual-anchor-swap-edit
              (:constructor %make-vi-visual-anchor-swap-edit (cursor anchor))
@@ -226,6 +251,13 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
                 (%vi-insert-state killed-state :cursor-pos cursor))
             :redraw)))
 
+(defun commit-vi-visual-kill-selection (state selection end-mode)
+  (%vi-kill-into state
+                 (vi-visual-selection-start selection)
+                 (vi-visual-selection-end selection)
+                 (vi-visual-selection-cursor selection)
+                 end-mode))
+
 (defun %reduce-vi-normal (state ch)
   "Handle a single character CH in vi normal mode."
   (let ((pos (input-state-cursor-pos state))
@@ -263,17 +295,14 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
       ((#\v) (values (%vi-leave-visual state) :redraw))
       ((#\o) (%vi-swap-visual-anchor state))
       ((#\d #\x)
-       (multiple-value-bind (start end)
-           (%vi-visual-range state)
-         (%vi-kill-into state start end start :vi-command)))
+       (commit-vi-visual-kill-selection
+        state (vi-visual-selection-for-state state) :vi-command))
       ((#\c #\s)
-       (multiple-value-bind (start end)
-           (%vi-visual-range state)
-         (%vi-kill-into state start end start :insert)))
+       (commit-vi-visual-kill-selection
+        state (vi-visual-selection-for-state state) :insert))
       ((#\y)
-       (multiple-value-bind (start end)
-           (%vi-visual-range state)
-         (%vi-yank-into state start end start)))
+       (commit-vi-visual-yank-selection
+        state (vi-visual-selection-for-state state)))
       ((#\i) (values (%vi-enter-insert (%vi-leave-visual state)) :redraw))
       ((#\a) (values (%vi-enter-insert (%vi-leave-visual state)
                                        (min len (1+ pos)))

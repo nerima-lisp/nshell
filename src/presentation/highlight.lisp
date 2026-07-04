@@ -1,10 +1,21 @@
 (in-package #:nshell.presentation)
 
 ;; Highlight data tables and span type.
-(defstruct (highlight-span (:constructor %make-highlight-span (start end role)))
+(defstruct (highlight-span
+            (:constructor %make-highlight-span (start end role))
+            (:conc-name %highlight-span-))
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t)
   (role :normal :type keyword :read-only t))
+
+(defun highlight-span-start (span)
+  (%highlight-span-start span))
+
+(defun highlight-span-end (span)
+  (%highlight-span-end span))
+
+(defun highlight-span-role (span)
+  (%highlight-span-role span))
 
 (defvar *builtin-commands*
   '("echo" "pwd" "ls" "cd" "exit" "fg" "bg" "jobs" "disown"

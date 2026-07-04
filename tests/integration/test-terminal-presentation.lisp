@@ -56,6 +56,19 @@
   (is (not (fboundp 'nshell.presentation::make-highlight-span)))
   (is (fboundp 'nshell.presentation::%make-highlight-span)))
 
+(test terminal-highlight-span-raw-accessors-stay-internal
+  "Highlight span projections stay behind explicit public accessors."
+  (let ((span (first (nshell.presentation:highlight-line "| echo nope"))))
+    (is (fboundp 'nshell.presentation::%highlight-span-start))
+    (is (fboundp 'nshell.presentation::%highlight-span-end))
+    (is (fboundp 'nshell.presentation::%highlight-span-role))
+    (is (= (nshell.presentation:highlight-span-start span)
+           (nshell.presentation::%highlight-span-start span)))
+    (is (= (nshell.presentation:highlight-span-end span)
+           (nshell.presentation::%highlight-span-end span)))
+    (is (eq (nshell.presentation:highlight-span-role span)
+            (nshell.presentation::%highlight-span-role span)))))
+
 (test terminal-highlight-uses-public-ansi-boundary
   "Presentation color rendering depends on the terminal ANSI public contract."
   (is (fboundp 'nshell.infrastructure.terminal:ansi-color-code))

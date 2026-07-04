@@ -1,6 +1,6 @@
 (in-package #:nshell.presentation)
 
-(defstruct (rendered-position
+(defstruct (%rendered-position
             (:constructor %make-rendered-position (row column))
             (:conc-name %rendered-position-))
   (row 0 :type fixnum :read-only t)

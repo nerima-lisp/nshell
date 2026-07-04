@@ -23,9 +23,11 @@
           :prompt-width 12))))
 
 (test repl-rendered-position-accessors-stay-behind-public-projections
-  "Rendered position storage readers should stay internal to presentation rendering."
+  "Rendered position storage readers and predicates should stay internal to presentation rendering."
   (let ((position (nshell.presentation::%rendered-buffer-position "abc" 3 12
                                                                   :terminal-width 10)))
+    (is (nshell.presentation::%rendered-position-p position))
+    (is (not (fboundp 'nshell.presentation::rendered-position-p)))
     (is (fboundp 'nshell.presentation::%rendered-position-row))
     (is (fboundp 'nshell.presentation::%rendered-position-column))
     (is (not (fboundp 'nshell.presentation::make-rendered-position)))

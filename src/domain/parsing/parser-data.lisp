@@ -160,14 +160,6 @@ applying REDIRECTS from left to right."
         (t nil)))
     (values stdout-target stdout-mode stderr-target stderr-mode)))
 
-(defparameter +separator-rules+
-  '((:pipe :token-type :pipe :text "|" :continues t)
-    (:and :token-type :and :text "&&" :continues t)
-    (:or :token-type :or :text "||" :continues t)
-    (:semi :token-type :semicolon :text ";")
-    (:semi :token-type :newline :text "newline")
-    (:amp :token-type :ampersand :text "&")))
-
 (defstruct (%separator-facts
             (:constructor %make-separator-facts
                 (kind token-type text continues-p)))
@@ -184,20 +176,21 @@ applying REDIRECTS from left to right."
   text
   continues-p)
 
-(defun %separator-rule-entry-from-rule (rule)
-  (when rule
-    (let ((data (rest rule)))
-      (%make-separator-rule-entry
-       (first rule)
-       (getf data :token-type)
-       (getf data :text)
-       (not (null (getf data :continues)))))))
+(defparameter +separator-rules+
+  (list (%make-separator-rule-entry :pipe :pipe "|" t)
+        (%make-separator-rule-entry :and :and "&&" t)
+        (%make-separator-rule-entry :or :or "||" t)
+        (%make-separator-rule-entry :semi :semicolon ";" nil)
+        (%make-separator-rule-entry :semi :newline "newline" nil)
+        (%make-separator-rule-entry :amp :ampersand "&" nil)))
 
 (defun %separator-rule (separator)
-  (find separator +separator-rules+ :key #'first :test #'eq))
+  (find separator +separator-rules+
+        :key #'%separator-rule-entry-kind
+        :test #'eq))
 
 (defun %separator-rule-entry (separator)
-  (or (%separator-rule-entry-from-rule (%separator-rule separator))
+  (or (%separator-rule separator)
       (and separator
            (%make-separator-rule-entry
             separator
@@ -207,8 +200,7 @@ applying REDIRECTS from left to right."
 
 (defun %separator-rule-entry-from-token-type (token-type)
   (when token-type
-    (loop for rule in +separator-rules+
-          for entry = (%separator-rule-entry-from-rule rule)
+    (loop for entry in +separator-rules+
           when (eq token-type (%separator-rule-entry-token-type entry))
             return entry)))
 

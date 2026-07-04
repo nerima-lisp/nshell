@@ -180,6 +180,11 @@
   "Separator rule entries are the projection boundary for parser separator specs."
   (let ((pipe-entry (nshell.domain.parsing::%separator-rule-entry :pipe))
         (pipe-facts (nshell.domain.parsing::%separator-facts :pipe)))
+    (is (every #'nshell.domain.parsing::%separator-rule-entry-p
+               nshell.domain.parsing::+separator-rules+))
+    (is (notany #'listp nshell.domain.parsing::+separator-rules+))
+    (is (not (fboundp
+              'nshell.domain.parsing::%separator-rule-entry-from-rule)))
     (is (nshell.domain.parsing::%separator-rule-entry-p pipe-entry))
     (is (eq :pipe
             (nshell.domain.parsing::%separator-rule-entry-kind pipe-entry)))

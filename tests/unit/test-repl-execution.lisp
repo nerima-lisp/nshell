@@ -157,43 +157,23 @@
 (test repl-sequence-and-short-circuits-on-failure
   "Interactive `&&` sequences should stop after the first failing command."
   (with-repl-test-state
-    (let ((calls nil))
-      (with-temporary-function
-          ('nshell.presentation::execute-command-node
-           (lambda (ast)
-             (let ((command (nshell.domain.parsing:command-node-command ast)))
-               (push command calls)
-               (if (string= command "first")
-                   3
-                   0))))
-          (let ((ast (nshell.domain.parsing::make-sequence-node
-                      (list (nshell.domain.parsing:make-command-node "first" nil)
-                            (nshell.domain.parsing:make-command-node "second" nil))
-                      '(:and))))
-            (multiple-value-bind (output code)
-                (call-repl-execute-ast ast)
-              (declare (ignore output))
-              (is (= 3 code)))
-            (is (equal '("first") (nreverse calls))))))))
+    (let ((ast (nshell.domain.parsing::make-sequence-node
+                (list (nshell.domain.parsing:make-command-node "false" nil)
+                      (nshell.domain.parsing:make-command-node "echo" (list "second")))
+                '(:and))))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (is (= 1 code))
+        (is (string= "" output))))))
 
 (test repl-sequence-or-short-circuits-on-success
   "Interactive `||` sequences should stop after the first successful command."
   (with-repl-test-state
-    (let ((calls nil))
-      (with-temporary-function
-          ('nshell.presentation::execute-command-node
-           (lambda (ast)
-             (let ((command (nshell.domain.parsing:command-node-command ast)))
-               (push command calls)
-               (if (string= command "first")
-                   0
-                   5))))
-          (let ((ast (nshell.domain.parsing::make-sequence-node
-                      (list (nshell.domain.parsing:make-command-node "first" nil)
-                            (nshell.domain.parsing:make-command-node "second" nil))
-                      '(:or))))
-            (multiple-value-bind (output code)
-                (call-repl-execute-ast ast)
-              (declare (ignore output))
-              (is (= 0 code)))
-            (is (equal '("first") (nreverse calls))))))))
+    (let ((ast (nshell.domain.parsing::make-sequence-node
+                (list (nshell.domain.parsing:make-command-node "true" nil)
+                      (nshell.domain.parsing:make-command-node "echo" (list "second")))
+                '(:or))))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (is (= 0 code))
+        (is (string= "" output))))))

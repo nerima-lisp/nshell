@@ -2,37 +2,51 @@
 
 (in-suite repl-tests)
 
-(test repl-background-preparation-expands-command-position-word
-  "Background preparation expands the command word before spawning."
+(test repl-background-execution-expands-command-position-word
+  "Background execution expands the command word before spawning."
   (with-repl-test-state
-    (repl-test-set-env "CMD" "echo")
-    (with-complete-command-line (result ast "$CMD bg-word")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (cmd redirects error)
-          (nshell.presentation::%prepare-command-node ast)
-        (is (null error))
-        (is (null redirects))
-        (is (string= "echo"
-                     (nshell.domain.parsing:command-node-command cmd)))
-        (is (equal '("bg-word")
-                   (nshell.domain.parsing:command-node-arg-values cmd)))))))
+    (let ((nshell.application:*job-monitor*
+            (nshell.domain.job-control:make-job-monitor)))
+      (repl-test-set-env "CMD" "true")
+      (with-complete-command-line (result ast "$CMD bg-word")
+        (is (null (nshell.domain.parsing:parse-errors result)))
+        (let ((sequence (nshell.domain.parsing::make-sequence-node
+                         (list ast)
+                         '(:amp))))
+          (multiple-value-bind (output-text code)
+              (call-repl-execute-ast sequence)
+            (is (string= "" output-text))
+            (is (= 0 code)))
+          (let* ((entries (nshell.domain.job-control:monitor-entries
+                           nshell.application:*job-monitor*))
+                 (job (cdar entries)))
+            (is (= 1 (length entries)))
+            (is (string= "true bg-word"
+                         (nshell.domain.execution:job-command-display-string
+                          job)))))))))
 
-(test repl-background-preparation-rejects-ambiguous-command-position-expansion
-  "Background preparation rejects empty or multi-field command name expansion."
+(test repl-background-execution-rejects-ambiguous-command-position-expansion
+  "Background execution rejects empty or multi-field command name expansion."
   (dolist (case '(("" 0)
                   ("echo split" 2)))
     (destructuring-bind (value expected-fields) case
       (with-repl-test-state
-        (repl-test-set-env "CMD" value)
-        (with-complete-command-line (result ast "$CMD bg-word")
-          (is (null (nshell.domain.parsing:parse-errors result)))
-          (multiple-value-bind (cmd redirects error)
-              (nshell.presentation::%prepare-command-node ast)
-            (is (null cmd))
-            (is (null redirects))
-            (is (string= (format nil "nshell: $CMD: command name expansion produced ~d fields~%"
-                                 expected-fields)
-                         error))))))))
+        (let ((nshell.application:*job-monitor*
+                (nshell.domain.job-control:make-job-monitor)))
+          (repl-test-set-env "CMD" value)
+          (with-complete-command-line (result ast "$CMD bg-word")
+            (is (null (nshell.domain.parsing:parse-errors result)))
+            (let ((sequence (nshell.domain.parsing::make-sequence-node
+                             (list ast)
+                             '(:amp))))
+              (multiple-value-bind (output-text code)
+                  (call-repl-execute-ast sequence)
+                (is (= 127 code))
+                (is (string= (format nil "nshell: $CMD: command name expansion produced ~d fields~%"
+                                      expected-fields)
+                             output-text))
+                (is (null (nshell.domain.job-control:monitor-entries
+                           nshell.application:*job-monitor*)))))))))))
 
 (test repl-background-command-applies-redirections
   "Background commands should apply redirects before spawning the process."

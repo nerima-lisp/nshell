@@ -136,28 +136,43 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
 
 (defun %spawn-background-node-in-context (context command)
   "Spawn COMMAND (command-node or pipeline-node) asynchronously and register a job."
-  (if (nshell.domain.parsing:pipeline-node-p command)
-      (let ((commands (nshell.domain.parsing:pipeline-node-commands command)))
-        (multiple-value-bind (clean-commands redirects)
-            (%extract-pipeline-redirects commands)
-          (let* ((clean-pipeline (nshell.domain.parsing:make-pipeline-node
-                                  clean-commands))
-                 (processes (nshell.infrastructure.acl:spawn-pipeline-async
-                             clean-commands :redirects redirects))
-                 (command-line (nshell.domain.parsing:ast-node->command-line
-                                clean-pipeline)))
-            (when processes
-              (%register-background-job context processes command-line)))))
-      (multiple-value-bind (clean-command redirects)
-          (%extract-command-redirects command)
-        (let* ((cmd (nshell.domain.parsing:command-node-command clean-command))
-               (args (nshell.domain.parsing:command-node-arg-values clean-command))
-               (command-line (nshell.domain.parsing:ast-node->command-line
-                              clean-command))
-               (process (nshell.infrastructure.acl:spawn-async
-                         cmd args :redirects redirects)))
-          (when process
-            (%register-background-job context process command-line))))))
+  (cond
+    ((nshell.domain.parsing:pipeline-node-p command)
+     (multiple-value-bind (expanded-commands error)
+         (%expand-command-nodes-in-context
+          context
+          (nshell.domain.parsing:pipeline-node-commands command))
+       (if error
+           (values error 127)
+           (multiple-value-bind (clean-commands redirects)
+               (%extract-pipeline-redirects expanded-commands)
+             (let* ((clean-pipeline (nshell.domain.parsing:make-pipeline-node
+                                     clean-commands))
+                    (processes (nshell.infrastructure.acl:spawn-pipeline-async
+                                clean-commands :redirects redirects))
+                    (command-line (nshell.domain.parsing:ast-node->command-line
+                                   clean-pipeline)))
+               (when processes
+                 (%register-background-job context processes command-line))
+               (values nil 0))))))
+    ((nshell.domain.parsing:command-node-p command)
+     (multiple-value-bind (expanded-command error)
+         (%expand-command-node-in-context context command)
+       (if error
+           (values error 127)
+           (multiple-value-bind (clean-command redirects)
+               (%extract-command-redirects expanded-command)
+             (let* ((cmd (nshell.domain.parsing:command-node-command clean-command))
+                    (args (nshell.domain.parsing:command-node-arg-values clean-command))
+                    (command-line (nshell.domain.parsing:ast-node->command-line
+                                   clean-command))
+                    (process (nshell.infrastructure.acl:spawn-async
+                              cmd args :redirects redirects)))
+               (when process
+                 (%register-background-job context process command-line))
+               (values nil 0))))))
+    (t
+     (values "nshell: cannot run construct in background~%" 1))))
 
 (defun %execute-sequence-node-in-context (context ast)
   (%with-output-code-accumulator (output code)
@@ -167,7 +182,9 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
         ;; :amp (&) spawns asynchronously and continues without blocking.
         ;; :and (&&) stops on failure; :or (||) stops on success.
         (if (eq :amp separator)
-            (%spawn-background-node-in-context context command)
+            (%collect-execution-result
+             (output code)
+             (%spawn-background-node-in-context context command))
             (progn
               (%collect-execution-result
                (output code)

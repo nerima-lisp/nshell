@@ -94,6 +94,11 @@
   (setf (%token-reduction-state-pending-redirect-token state) tok)
   state)
 
+(defun %token-reduction-state-mark-pending-separator (state separator token)
+  (setf (%token-reduction-state-pending-sep state) separator
+        (%token-reduction-state-pending-sep-token state) token)
+  state)
+
 (defstruct (%token-reduction-diagnostic-policy
             (:constructor %make-token-reduction-diagnostic-policy
                 (kind message)))
@@ -177,8 +182,7 @@
   (if (%token-reduction-state-current-cmd state)
       (progn
         (%record-missing-redirect-target state)
-        (setf (%token-reduction-state-pending-sep state) separator
-              (%token-reduction-state-pending-sep-token state) token)
+        (%token-reduction-state-mark-pending-separator state separator token)
         (%flush-token-reduction-command state))
       (unless (eq (token-type token) :newline)
         (%token-reduction-state-record-diagnostic-message

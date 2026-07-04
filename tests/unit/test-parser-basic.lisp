@@ -1181,6 +1181,19 @@
          (nshell.domain.parsing::%token-reduction-state-pending-redirect-token
           state)))))
 
+(test parser-reduction-state-updates-pending-separator
+  "Token reduction state owns pending separator lifecycle transitions."
+  (let* ((separator-token (nshell.domain.parsing:make-token :pipe "|" 0 1))
+         (state (nshell.domain.parsing::%make-token-reduction-state)))
+    (is (eq state
+            (nshell.domain.parsing::%token-reduction-state-mark-pending-separator
+             state :pipe separator-token)))
+    (is (eq :pipe
+            (nshell.domain.parsing::%token-reduction-state-pending-sep state)))
+    (is (eq separator-token
+            (nshell.domain.parsing::%token-reduction-state-pending-sep-token
+             state)))))
+
 (test parser-reduction-state-folds-token-stream
   "Token stream reduction folds tokens through an explicit state boundary."
   (let* ((state

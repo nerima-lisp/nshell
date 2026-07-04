@@ -6,6 +6,13 @@
 
 (in-suite environment-tests)
 
+(defun env-entry-value (entries name)
+  (let ((entry (find name entries
+                     :key #'nshell.domain.environment:env-entry-name
+                     :test #'string=)))
+    (when entry
+      (nshell.domain.environment:env-entry-value entry))))
+
 (test env-set-and-get-roundtrip
   "Variables set in an environment can be retrieved."
   (let* ((env (nshell.domain.environment:make-environment))
@@ -47,8 +54,9 @@
   (let* ((env (nshell.domain.environment:make-environment))
          (with-var (nshell.domain.environment:env-set env "FOO" "bar" nil))
          (exported (nshell.domain.environment:env-export with-var "FOO")))
-    (is (equal '("FOO" . "bar")
-               (assoc "FOO" (nshell.domain.environment:env-list exported) :test #'string=)))))
+    (is (string= "bar"
+                 (env-entry-value (nshell.domain.environment:env-list exported)
+                                  "FOO")))))
 
 (test env-export-preserves-list-values
   "Exporting a variable preserves its structured list values."
@@ -58,19 +66,20 @@
          (exported (nshell.domain.environment:env-export with-var "FILES")))
     (is (equal '("hello world" "tail")
                (nshell.domain.environment:env-get-values exported "FILES")))
-    (is (equal '("FILES" . "hello world tail")
-               (assoc "FILES" (nshell.domain.environment:env-list exported)
-                      :test #'string=)))))
+    (is (string= "hello world tail"
+                 (env-entry-value (nshell.domain.environment:env-list exported)
+                                  "FILES")))))
 
 (test env-list-only-returns-exported-vars
   "Only exported variables are included in ENV-LIST."
   (let* ((env (nshell.domain.environment:make-environment))
          (env (nshell.domain.environment:env-set env "LOCAL" "no" nil))
          (env (nshell.domain.environment:env-set env "EXPORTED" "yes" t))
-         (pairs (nshell.domain.environment:env-list env)))
-    (is (null (assoc "LOCAL" pairs :test #'string=)))
-    (is (equal '("EXPORTED" . "yes")
-               (assoc "EXPORTED" pairs :test #'string=)))))
+         (entries (nshell.domain.environment:env-list env)))
+    (is (null (find "LOCAL" entries
+                    :key #'nshell.domain.environment:env-entry-name
+                    :test #'string=)))
+    (is (string= "yes" (env-entry-value entries "EXPORTED")))))
 
 (test env-bindings-returns-all-vars-sorted-with-export-state
   "ENV-BINDINGS exposes local and exported variables for shell-local display."

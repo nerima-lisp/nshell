@@ -2,8 +2,10 @@
 (in-package #:nshell.presentation)
 
 (defun exported-environment-strings ()
-  (mapcar (lambda (pair)
-            (format nil "~a=~a" (car pair) (cdr pair)))
+  (mapcar (lambda (entry)
+            (format nil "~a=~a"
+                    (nshell.domain.environment:env-entry-name entry)
+                    (nshell.domain.environment:env-entry-value entry)))
           (nshell.domain.environment:env-list *environment*)))
 
 (defun sync-exported-environment ()

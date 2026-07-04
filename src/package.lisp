@@ -110,7 +110,8 @@
            #:env-defined-p #:env-exported-p #:env-unset #:env-export
            #:env-assign-default! #:env-binding-name #:env-binding-value
            #:env-binding-values #:env-binding-exported-p
-           #:env-bindings #:env-list))
+           #:env-bindings #:env-entry #:env-entry-p
+           #:env-entry-name #:env-entry-value #:env-list))
 
 (defpackage #:nshell.domain.expansion
   (:use #:cl)

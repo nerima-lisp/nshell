@@ -49,8 +49,12 @@
     (is (string= "filled"
                  (nshell.domain.expansion:expand-variables
                   "${EMPTY:=filled}" env)))
-    (is (equal '(("EMPTY" . "filled"))
-               (nshell.domain.environment:env-list env)))))
+    (let ((entries (nshell.domain.environment:env-list env)))
+      (is (= 1 (length entries)))
+      (is (string= "EMPTY"
+                   (nshell.domain.environment:env-entry-name (first entries))))
+      (is (string= "filled"
+                   (nshell.domain.environment:env-entry-value (first entries)))))))
 
 (test parameter-length
   "${#VAR} yields the length of the variable's value."

@@ -43,6 +43,12 @@ The scalar string view is derived from VALUES on demand."
   "Return true when BINDING is exported."
   (%env-binding-exported-p binding))
 
+(defstruct (env-entry
+            (:constructor %make-env-entry (name value)))
+  "Read-only projection of an exported environment variable."
+  (name "" :type string :read-only t)
+  (value "" :type string :read-only t))
+
 (defstruct (environment (:constructor %make-environment (vars)))
   "A collection of shell environment variables keyed by name."
   (vars (make-hash-table :test #'equal) :type hash-table :read-only t))
@@ -178,10 +184,10 @@ which apply to the active shell environment object."
     (sort bindings #'string< :key #'env-binding-name)))
 
 (defun env-list (env)
-  "Return exported variables in ENV as a list of (NAME . VALUE) pairs."
-  (let ((pairs nil))
+  "Return exported variables in ENV as ENV-ENTRY values sorted by name."
+  (let ((entries nil))
     (maphash (lambda (name var)
                (when (env-var-exported-p var)
-                 (push (cons name (env-var-value var)) pairs)))
+                 (push (%make-env-entry name (env-var-value var)) entries)))
              (environment-vars env))
-    (sort pairs #'string< :key #'car)))
+    (sort entries #'string< :key #'env-entry-name)))

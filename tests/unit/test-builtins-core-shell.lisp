@@ -22,11 +22,14 @@
     (assert-builtin-call (context "export" '("NSHELL_EXPORT_ME"))
       :code 0
       :output-null t)
-    (is (equal '("NSHELL_EXPORT_ME" . "visible")
-               (assoc "NSHELL_EXPORT_ME"
-                      (nshell.domain.environment:env-list
-                       (nshell.application:shell-context-environment context))
-                      :test #'string=)))))
+    (let ((entry (find "NSHELL_EXPORT_ME"
+                       (nshell.domain.environment:env-list
+                        (nshell.application:shell-context-environment context))
+                       :key #'nshell.domain.environment:env-entry-name
+                       :test #'string=)))
+      (is (nshell.domain.environment:env-entry-p entry))
+      (is (string= "visible"
+                   (nshell.domain.environment:env-entry-value entry))))))
 
 (test set-supports-fish-style-options-and-multiple-values
   "set supports fish-style export, erase, query, listing, and multi-token values."
@@ -53,10 +56,13 @@
       (is (string= ""
                    (nshell.domain.environment:env-get env "NSHELL_TEST_EMPTY")))
       (is (null (nshell.domain.environment:env-get-values env "NSHELL_TEST_EMPTY")))
-      (is (equal '("NSHELL_TEST_EXPORTED" . "one two")
-                 (assoc "NSHELL_TEST_EXPORTED"
-                        (nshell.domain.environment:env-list env)
-                        :test #'string=))))
+      (let ((entry (find "NSHELL_TEST_EXPORTED"
+                         (nshell.domain.environment:env-list env)
+                         :key #'nshell.domain.environment:env-entry-name
+                         :test #'string=)))
+        (is (nshell.domain.environment:env-entry-p entry))
+        (is (string= "one two"
+                     (nshell.domain.environment:env-entry-value entry)))))
     (assert-builtin-cases (context "set")
       (("--query" "NSHELL_TEST_EXPORTED" "NSHELL_TEST_LOCAL")
        :code 0

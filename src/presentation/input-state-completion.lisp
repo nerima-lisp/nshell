@@ -21,6 +21,47 @@
                          count))))
     (values base-buffer base-cursor index (nth index candidates))))
 
+(defstruct (completion-cycle-edit
+            (:constructor %make-completion-cycle-edit
+                (base-buffer base-cursor index buffer cursor))
+            (:conc-name %completion-cycle-edit-))
+  (base-buffer "" :type string :read-only t)
+  (base-cursor 0 :type fixnum :read-only t)
+  (index 0 :type fixnum :read-only t)
+  (buffer "" :type string :read-only t)
+  (cursor 0 :type fixnum :read-only t))
+
+(defun completion-cycle-edit-for-selection (base-buffer base-cursor index candidate)
+  (multiple-value-bind (buffer cursor)
+      (apply-completion base-buffer candidate :cursor base-cursor)
+    (%make-completion-cycle-edit base-buffer base-cursor index buffer cursor)))
+
+(defun completion-cycle-edit-buffer (edit)
+  (%completion-cycle-edit-buffer edit))
+
+(defun completion-cycle-edit-cursor-pos (edit)
+  (%completion-cycle-edit-cursor edit))
+
+(defun completion-cycle-edit-index (edit)
+  (%completion-cycle-edit-index edit))
+
+(defun completion-cycle-edit-base-buffer (edit)
+  (%completion-cycle-edit-base-buffer edit))
+
+(defun completion-cycle-edit-base-cursor (edit)
+  (%completion-cycle-edit-base-cursor edit))
+
+(defun commit-completion-cycle-edit (state edit)
+  (copy-input-state-with state
+                         :suggestion :clear
+                         :buffer (completion-cycle-edit-buffer edit)
+                         :cursor-pos (completion-cycle-edit-cursor-pos edit)
+                         :completion-index (completion-cycle-edit-index edit)
+                         :completion-base-buffer
+                         (completion-cycle-edit-base-buffer edit)
+                         :completion-base-cursor
+                         (completion-cycle-edit-base-cursor edit)))
+
 (defun cycle-completion-state (state direction)
   (with-normalized-input-state (state state)
     (let ((candidates (input-state-last-candidates state)))
@@ -28,13 +69,11 @@
           (values state :complete)
           (multiple-value-bind (base-buffer base-cursor index candidate)
               (%completion-cycle-selection state direction candidates)
-            (multiple-value-bind (buffer cursor)
-                (apply-completion base-buffer candidate :cursor base-cursor)
-              (values (copy-input-state-with state
-                                             :suggestion :clear
-                                             :buffer buffer
-                                             :cursor-pos cursor
-                                             :completion-index index
-                                             :completion-base-buffer base-buffer
-                                             :completion-base-cursor base-cursor)
-                      :complete)))))))
+            (values (commit-completion-cycle-edit
+                     state
+                     (completion-cycle-edit-for-selection
+                      base-buffer
+                      base-cursor
+                      index
+                      candidate))
+                    :complete))))))

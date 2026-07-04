@@ -191,9 +191,21 @@
                  :last-candidates (list "abcdef")
                  :suggestion "def"))
          (edit (nshell.presentation::make-buffer-clear-edit))
+         (plan (nshell.presentation::buffer-clear-edit-plan edit))
          (committed (nshell.presentation::commit-buffer-clear-edit state edit)))
     (is (nshell.presentation::buffer-clear-edit-p edit))
+    (is (nshell.presentation::buffer-clear-plan-p plan))
+    (is (eq plan (nshell.presentation::buffer-clear-edit-plan edit)))
     (is (fboundp 'nshell.presentation::%make-buffer-clear-edit))
+    (is (fboundp 'nshell.presentation::%make-buffer-clear-plan))
+    (is (string= "" (nshell.presentation::buffer-clear-plan-buffer plan)))
+    (is (= 0 (nshell.presentation::buffer-clear-plan-cursor-pos plan)))
+    (is (eq :insert (nshell.presentation::buffer-clear-plan-mode plan)))
+    (is (null (nshell.presentation::buffer-clear-plan-vi-count plan)))
+    (is (eq :clear
+            (nshell.presentation::buffer-clear-plan-vi-visual-anchor plan)))
+    (is (nshell.presentation::buffer-clear-plan-clear-completion-p plan))
+    (is (nshell.presentation::buffer-clear-plan-clear-history-search-p plan))
     (is-input-state-with-completion-cleared committed
                                             :buffer ""
                                             :cursor-pos 0

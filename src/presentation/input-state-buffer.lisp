@@ -134,22 +134,79 @@
                          :suggestion :clear
                          :cursor-pos (cursor-move-edit-cursor-pos edit)))
 
+(defstruct (buffer-clear-plan
+             (:constructor %make-buffer-clear-plan
+                 (&key buffer cursor-pos mode vi-count vi-visual-anchor
+                       clear-completion-p clear-history-search-p))
+             (:conc-name %buffer-clear-plan-))
+  (buffer "" :type string :read-only t)
+  (cursor-pos 0 :type fixnum :read-only t)
+  (mode :insert :read-only t)
+  (vi-count nil :read-only t)
+  (vi-visual-anchor :clear :read-only t)
+  (clear-completion-p t :type boolean :read-only t)
+  (clear-history-search-p t :type boolean :read-only t))
+
+(defun make-buffer-clear-plan ()
+  (%make-buffer-clear-plan
+   :buffer ""
+   :cursor-pos 0
+   :mode :insert
+   :vi-count nil
+   :vi-visual-anchor :clear
+   :clear-completion-p t
+   :clear-history-search-p t))
+
+(defun buffer-clear-plan-buffer (plan)
+  (%buffer-clear-plan-buffer plan))
+
+(defun buffer-clear-plan-cursor-pos (plan)
+  (%buffer-clear-plan-cursor-pos plan))
+
+(defun buffer-clear-plan-mode (plan)
+  (%buffer-clear-plan-mode plan))
+
+(defun buffer-clear-plan-vi-count (plan)
+  (%buffer-clear-plan-vi-count plan))
+
+(defun buffer-clear-plan-vi-visual-anchor (plan)
+  (%buffer-clear-plan-vi-visual-anchor plan))
+
+(defun buffer-clear-plan-clear-completion-p (plan)
+  (%buffer-clear-plan-clear-completion-p plan))
+
+(defun buffer-clear-plan-clear-history-search-p (plan)
+  (%buffer-clear-plan-clear-history-search-p plan))
+
 (defstruct (buffer-clear-edit
-             (:constructor %make-buffer-clear-edit ())
-             (:conc-name %buffer-clear-edit-)))
+             (:constructor %make-buffer-clear-edit (plan))
+             (:conc-name %buffer-clear-edit-))
+  plan)
 
 (defun make-buffer-clear-edit ()
-  (%make-buffer-clear-edit))
+  (%make-buffer-clear-edit (make-buffer-clear-plan)))
+
+(defun buffer-clear-edit-plan (edit)
+  (%buffer-clear-edit-plan edit))
+
+(defun apply-buffer-clear-plan (state plan)
+  (let ((state (copy-input-state-with state
+                                      :buffer (buffer-clear-plan-buffer plan)
+                                      :cursor-pos
+                                      (buffer-clear-plan-cursor-pos plan)
+                                      :mode (buffer-clear-plan-mode plan)
+                                      :vi-count
+                                      (buffer-clear-plan-vi-count plan)
+                                      :vi-visual-anchor
+                                      (buffer-clear-plan-vi-visual-anchor plan))))
+    (when (buffer-clear-plan-clear-completion-p plan)
+      (setf state (clear-completion-session-state state)))
+    (if (buffer-clear-plan-clear-history-search-p plan)
+        (clear-history-search-session-state state)
+        state)))
 
 (defun commit-buffer-clear-edit (state edit)
-  (declare (ignore edit))
-  (clear-history-search-session-state
-   (copy-input-state-clearing-completion state
-                                         :buffer ""
-                                         :cursor-pos 0
-                                         :mode :insert
-                                         :vi-count nil
-                                         :vi-visual-anchor :clear)))
+  (apply-buffer-clear-plan state (buffer-clear-edit-plan edit)))
 
 (defun backspace-before-cursor (state)
   (with-buffer-edit (state buffer cursor) state

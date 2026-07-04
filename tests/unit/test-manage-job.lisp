@@ -104,12 +104,11 @@
 (test wait-job-pgid-waits-for-known-pipeline-pids
   "Foreground wait reaps every known pipeline PID and uses the last stage status."
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (job (make-test-job 0 "producer" :pgid 111))
+         (job (make-test-job 0 "producer" :pgid 111 :pids '(111 222)))
          (job-id (nshell.domain.job-control:monitor-add-job monitor job))
          (events '((222 :exited 7)
                    (111 :exited 0)))
          (waited-pids nil))
-    (setf (nshell.domain.execution:job-pids job) '(111 222))
     (with-temporary-function
         ('nshell.application::%wait-job-pgid-event
          (lambda (pgid)
@@ -129,11 +128,10 @@
 (test wait-job-pgid-stops-on-stopped-event
   "Foreground wait preserves stopped jobs instead of completing a partially stopped pipeline."
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (job (make-test-job 0 "sleep" :pgid 111))
+         (job (make-test-job 0 "sleep" :pgid 111 :pids '(111 222)))
          (job-id (nshell.domain.job-control:monitor-add-job monitor job))
          (events '((111 :stopped nil)
                    (222 :exited 0))))
-    (setf (nshell.domain.execution:job-pids job) '(111 222))
     (with-temporary-function
         ('nshell.application::%wait-job-pgid-event
          (lambda (pgid)

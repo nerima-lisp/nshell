@@ -120,22 +120,6 @@
                                    :output-empty output-empty
                                    :contains contains))))
 
-(defmacro assert-builtin-call-prints ((context name args)
-                                      &key code output-null stdout-contains)
-  (let ((actual-output (gensym "OUTPUT-"))
-        (actual-code (gensym "CODE-"))
-        (stdout (gensym "STDOUT-")))
-    `(let ((,stdout
-             (with-output-to-string (*standard-output*)
-              (%with-builtin-call-values (,actual-output ,actual-code)
-                  (call-builtin ,context ,name ,args)
-                 ,@(%builtin-call-assertions actual-output actual-code
-                                             :code code
-                                             :output-null output-null)))))
-       ,@(when stdout-contains
-           `((is (%builtin-output-contains-all-p ,stdout ,stdout-contains))))
-       ,stdout)))
-
 (defmacro assert-builtin-property ((context &key (trials '*pbt-default-trials*)) bindings &body body)
   `(let ((,context (make-test-builtins-context)))
      (check-property (:trials ,trials)

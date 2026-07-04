@@ -164,14 +164,15 @@
   `(dolist (,line ,lines)
      ,@body))
 
-(defun make-test-job (id command &key (args nil) (pgid 0))
+(defun make-test-job (id command &key (args nil) (pgid 0) (pids nil))
   (let* ((cmd (nshell.domain.execution:make-command command args))
          (pipeline (nshell.domain.execution:make-pipeline cmd))
          (job (nshell.domain.execution:make-job id pipeline)))
     (setf (nshell.domain.execution:job-command-line job)
           (format nil "~{~a~^ ~}"
                   (nshell.domain.execution:command-to-list cmd))
-          (nshell.domain.execution:job-pgid job) pgid)
+          (nshell.domain.execution:job-pgid job) pgid
+          (nshell.domain.execution:job-pids job) (copy-list pids))
     job))
 
 (defun test-source-path (prefix)

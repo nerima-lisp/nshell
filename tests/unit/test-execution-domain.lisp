@@ -99,15 +99,13 @@
 
 (test job-known-pids-filters-positive-integers
   "Job PID queries return only positive integer pids."
-  (let ((job (make-test-job 0 "sleep")))
-    (setf (nshell.domain.execution:job-pids job) '(111 nil 222 0 333))
+  (let ((job (make-test-job 0 "sleep" :pids '(111 nil 222 0 333))))
     (is (equal '(111 222 333)
                (nshell.domain.execution:job-known-pids job)))))
 
 (test job-last-pid-returns-last-known-pid
   "Job PID queries expose the last positive-integer pid, or nil when none exist."
-  (let ((job (make-test-job 0 "sleep")))
-    (setf (nshell.domain.execution:job-pids job) '(111 222 333))
+  (let ((job (make-test-job 0 "sleep" :pids '(111 222 333)))
+        (empty-job (make-test-job 1 "sleep")))
     (is (= 333 (nshell.domain.execution:job-last-pid job)))
-    (setf (nshell.domain.execution:job-pids job) nil)
-    (is (null (nshell.domain.execution:job-last-pid job)))))
+    (is (null (nshell.domain.execution:job-last-pid empty-job)))))

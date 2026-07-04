@@ -58,7 +58,7 @@
     (is (zerop (nshell.domain.execution:job-pgid job)))))
 
 (test job-state-transitions
-  "Job state can transition through valid states"
+  "Job state transitions are owned by the job aggregate."
   (let* ((cmd (nshell.domain.execution:make-command "ls"))
          (pipe (nshell.domain.execution:make-pipeline cmd))
          (job (nshell.domain.execution:make-job 42 pipe)))
@@ -68,6 +68,17 @@
     (is (nshell.domain.execution:job-stopped-p job))
     (nshell.domain.execution:job-state-transition job :completed)
     (is (eq t (nshell.domain.execution:job-completed-p job)))))
+
+(test terminal-job-state-cannot-return-to-active
+  "Completed jobs are terminal and cannot be restarted by callers."
+  (let* ((cmd (nshell.domain.execution:make-command "ls"))
+         (pipe (nshell.domain.execution:make-pipeline cmd))
+         (job (nshell.domain.execution:make-job 42 pipe)))
+    (nshell.domain.execution:job-state-transition job :running)
+    (nshell.domain.execution:job-state-transition job :completed)
+    (signals error
+      (nshell.domain.execution:job-state-transition job :running))
+    (is (eq :completed (nshell.domain.execution:job-state job)))))
 
 (test job-completed-p-recognizes-done
   "Terminal done state is treated as completed."

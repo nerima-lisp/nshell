@@ -16,9 +16,21 @@
 (defun job-pipeline (j) (job-pipeline-pipe j))
 (defun job-state-valid-p (state)
   (not (null (member state '(:created :running :stopped :background :completed :done)))))
+
+(defun %terminal-job-state-p (state)
+  (not (null (member state '(:completed :done)))))
+
+(defun %job-state-transition-valid-p (current-state new-state)
+  (or (eq current-state new-state)
+      (not (%terminal-job-state-p current-state))))
+
 (defun job-state-transition (job new-state)
   (unless (job-state-valid-p new-state)
     (error "Invalid job state: ~s" new-state))
+  (unless (%job-state-transition-valid-p (job-state-kw job) new-state)
+    (error "Invalid job state transition: ~s -> ~s"
+           (job-state-kw job)
+           new-state))
   (unless (eq (job-state-kw job) new-state)
     (setf (job-state-kw job) new-state))
   job)

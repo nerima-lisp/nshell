@@ -76,7 +76,8 @@
                 #:command-node-command #:command-node-command-quote-style #:command-node-args
                 #:sequence-node-commands #:pipeline-node-commands
                 #:sequence-node-separators
-                #:command-node-arg-values #:ast-node->command-line
+                #:command-node-arg-values #:split-command-node-redirects
+                #:split-command-nodes-redirects #:ast-node->command-line
                 #:arg-value #:arg-quote-style
              #:do-sequence-node-command-separator-pairs
              #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch

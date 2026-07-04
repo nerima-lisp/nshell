@@ -179,27 +179,6 @@
       (is (string= (format nil "0~%") output))
       (is (string= "OUTERR" (uiop:read-file-string target))))))
 
-(test execute-command-redirect-extraction-preserves-dangling-operator
-  "A trailing redirect operator should remain part of the command arguments."
-  (multiple-value-bind (clean redirects)
-      (nshell.application::%extract-command-redirects
-       (nshell.domain.parsing:make-command-node "echo" (list "hello" ">")))
-      (is (equal '("hello" ">")
-                 (nshell.domain.parsing:command-node-args clean)))
-      (is (null redirects))))
-
-(test execute-command-redirect-extraction-preserves-left-to-right-order
-  "Redirect extraction preserves shell-significant left-to-right order."
-  (multiple-value-bind (clean redirects)
-      (nshell.application::%extract-command-redirects
-       (nshell.domain.parsing:make-command-node
-        "cmd"
-        (list "arg" "2>&1" ">" "out" "2>" "err")))
-    (is (equal '("arg")
-               (nshell.domain.parsing:command-node-args clean)))
-    (is (equal '((:2>&1 . nil) (:> . "out") (:2> . "err"))
-               redirects))))
-
 (test execute-pipeline-use-case-returns-127-for-missing-command
   "A pipeline with an unresolvable command reports a non-zero spawn failure."
   (let ((ast (nshell.domain.parsing:make-command-node

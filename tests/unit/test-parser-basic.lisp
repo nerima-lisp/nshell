@@ -89,6 +89,27 @@
     (is (null (nshell.domain.parsing::%redirect-targetless-p
                "not-a-redirect")))))
 
+(test split-command-node-redirects-preserves-dangling-operator
+  "A trailing redirect operator should remain part of the command arguments."
+  (multiple-value-bind (clean redirects)
+      (nshell.domain.parsing:split-command-node-redirects
+       (nshell.domain.parsing:make-command-node "echo" (list "hello" ">")))
+    (is (equal '("hello" ">")
+               (nshell.domain.parsing:command-node-args clean)))
+    (is (null redirects))))
+
+(test split-command-node-redirects-preserves-left-to-right-order
+  "Redirect extraction preserves shell-significant left-to-right order."
+  (multiple-value-bind (clean redirects)
+      (nshell.domain.parsing:split-command-node-redirects
+       (nshell.domain.parsing:make-command-node
+        "cmd"
+        (list "arg" "2>&1" ">" "out" "2>" "err")))
+    (is (equal '("arg")
+               (nshell.domain.parsing:command-node-args clean)))
+    (is (equal '((:2>&1 . nil) (:> . "out") (:2> . "err"))
+               redirects))))
+
 (test separator-rule-entry-projects-separator-facts
   "Separator rule entries are the projection boundary for parser separator specs."
   (let ((pipe-entry (nshell.domain.parsing::%separator-rule-entry :pipe))

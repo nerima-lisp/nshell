@@ -22,41 +22,11 @@
 (defun %extract-command-redirects (cmd-node)
   "Split CMD-NODE args into (clean-command-node redirects).
 Redirect args (and their targets) are removed from the args list."
-  (let ((clean nil)
-        (redirects nil)
-        (args (nshell.domain.parsing:command-node-args cmd-node)))
-    (loop with index = 0
-          with limit = (length args)
-          while (< index limit)
-          for arg = (nth index args)
-          for value = (nshell.domain.parsing:arg-value arg)
-          for spec = (assoc value nshell.domain.parsing:+redirect-specs+ :test #'string=)
-          do (cond
-               ((and spec (member (cdr spec) nshell.domain.parsing:+redirect-fd-dup-specs+))
-                (push (cons (cdr spec) nil) redirects)
-                (incf index))
-               ((and spec (< (1+ index) limit))
-                (let ((target (nshell.domain.parsing:arg-value (nth (1+ index) args))))
-                  (push (cons (cdr spec) target) redirects)
-                  (incf index 2)))
-               (t
-                (push arg clean)
-                (incf index))))
-    (values (nshell.domain.parsing:make-command-node
-             (nshell.domain.parsing:command-node-command cmd-node)
-             (nreverse clean))
-            (nreverse redirects))))
+  (nshell.domain.parsing:split-command-node-redirects cmd-node))
 
 (defun %extract-pipeline-redirects (commands)
   "Split each command in COMMANDS into (clean-commands per-stage-redirects)."
-  (let ((clean-commands nil)
-        (redirects nil))
-    (dolist (command commands)
-      (multiple-value-bind (clean-command command-redirects)
-          (%extract-command-redirects command)
-        (push clean-command clean-commands)
-        (push command-redirects redirects)))
-    (values (nreverse clean-commands) (nreverse redirects))))
+  (nshell.domain.parsing:split-command-nodes-redirects commands))
 
 ;; -- Logic: redirect spec lookup -------------------------------------
 

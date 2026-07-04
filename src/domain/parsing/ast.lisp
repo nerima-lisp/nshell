@@ -165,6 +165,47 @@ Bare-string args and redirect-target conses are unquoted."
   "Return all args as plain strings (unwrapping cons cells)."
   (mapcar #'arg-value (command-node-args node)))
 
+(defun split-command-node-redirects (cmd-node)
+  "Split CMD-NODE into (clean-command-node redirects).
+Redirect operator args and their targets are removed from the clean command."
+  (let ((clean nil)
+        (redirects nil)
+        (args (command-node-args cmd-node)))
+    (loop with index = 0
+          with limit = (length args)
+          while (< index limit)
+          for arg = (nth index args)
+          for value = (arg-value arg)
+          for spec = (assoc value +redirect-specs+ :test #'string=)
+          do (cond
+               ((and spec (member (cdr spec) +redirect-fd-dup-specs+))
+                (push (cons (cdr spec) nil) redirects)
+                (incf index))
+               ((and spec (< (1+ index) limit))
+                (let ((target (arg-value (nth (1+ index) args))))
+                  (push (cons (cdr spec) target) redirects)
+                  (incf index 2)))
+               (t
+                (push arg clean)
+                (incf index))))
+    (values (make-command-node
+             (command-node-command cmd-node)
+             (nreverse clean)
+             (ast-node-span cmd-node)
+             (command-node-command-quote-style cmd-node))
+            (nreverse redirects))))
+
+(defun split-command-nodes-redirects (commands)
+  "Split each command in COMMANDS into (clean-commands per-stage-redirects)."
+  (let ((clean-commands nil)
+        (redirects nil))
+    (dolist (command commands)
+      (multiple-value-bind (clean-command command-redirects)
+          (split-command-node-redirects command)
+        (push clean-command clean-commands)
+        (push command-redirects redirects)))
+    (values (nreverse clean-commands) (nreverse redirects))))
+
 (defun ast-node->command-line (ast)
   "Render a command or pipeline AST node as a shell command line string."
   (cond

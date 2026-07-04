@@ -19,7 +19,7 @@
             (is (= 0 code)))
           (let* ((entries (collect-monitor-entries
                            nshell.application:*job-monitor*))
-                 (job (cdar entries)))
+                 (job (test-monitor-entry-job (first entries))))
             (is (= 1 (length entries)))
             (is (string= "true bg-word"
                          (nshell.domain.execution:job-command-display-string
@@ -65,7 +65,7 @@
             (is (wait-for-file-content output "bg"))
             (let* ((entries (collect-monitor-entries
                              nshell.application:*job-monitor*))
-                   (job (cdar entries)))
+                   (job (test-monitor-entry-job (first entries))))
               (is (= 1 (length entries)))
               (is (string= "printf %s bg"
                            (nshell.domain.execution:job-command-display-string
@@ -95,7 +95,7 @@
             (is (wait-for-file-content output "bg-pipe"))
             (let* ((entries (collect-monitor-entries
                              nshell.application:*job-monitor*))
-                   (job (cdar entries)))
+                   (job (test-monitor-entry-job (first entries))))
               (is (= 1 (length entries)))
               (is (= 2 (length (nshell.domain.execution:job-pids job))))
               (is (nshell.domain.execution:job-background-p job))

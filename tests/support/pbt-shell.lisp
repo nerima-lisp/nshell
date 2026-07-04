@@ -177,12 +177,16 @@
           (nshell.domain.execution:job-pids job) (copy-list pids))
     job))
 
+(defstruct (test-monitor-entry (:constructor make-test-monitor-entry (job-id job)))
+  (job-id 0 :type integer :read-only t)
+  (job nil :read-only t))
+
 (defun collect-monitor-entries (monitor)
   (let (entries)
     (nshell.domain.job-control:monitor-map-jobs
      monitor
      (lambda (job-id job)
-       (push (cons job-id job) entries)))
+       (push (make-test-monitor-entry job-id job) entries)))
     (nreverse entries)))
 
 (defun test-source-path (prefix)

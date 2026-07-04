@@ -21,8 +21,11 @@
          (second-id (nshell.domain.job-control:monitor-add-job monitor second-job))
          (first-id (nshell.domain.job-control:monitor-add-job monitor first-job))
          (entries (collect-monitor-entries monitor)))
-    (is (equal (list second-id first-id) (mapcar #'car entries)))
-    (is (equal (list second-job first-job) (mapcar #'cdr entries)))))
+    (is (every #'test-monitor-entry-p entries))
+    (is (equal (list second-id first-id)
+               (mapcar #'test-monitor-entry-job-id entries)))
+    (is (equal (list second-job first-job)
+               (mapcar #'test-monitor-entry-job entries)))))
 
 (test monitor-creates-jobs
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))

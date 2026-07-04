@@ -150,8 +150,8 @@
                                (nshell.application:shell-context-job-monitor
                                 context)))
                      (entry (first entries))
-                     (job-id (car entry))
-                     (job (cdr entry)))
+                     (job-id (test-monitor-entry-job-id entry))
+                     (job (test-monitor-entry-job entry)))
                 (is (= 1 (length entries)))
                 (is (equal '(4321) (nshell.domain.execution:job-pids job)))
                 (is (= 4321 (nshell.domain.execution:job-pgid job)))
@@ -205,8 +205,8 @@
                                (nshell.application:shell-context-job-monitor
                                 context)))
                      (entry (first entries))
-                     (job-id (car entry))
-                     (job (cdr entry)))
+                     (job-id (test-monitor-entry-job-id entry))
+                     (job (test-monitor-entry-job entry)))
                 (is (= 1 (length entries)))
                 (is (equal '(4321 4322)
                            (nshell.domain.execution:job-pids job)))

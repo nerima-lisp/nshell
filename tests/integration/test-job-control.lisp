@@ -33,7 +33,8 @@
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
          (job (make-test-job 0 "echo" :args '("hello"))))
     (nshell.domain.job-control:monitor-add-job monitor job)
-    (let ((returned (mapcar #'cdr (collect-monitor-entries monitor))))
+    (let ((returned (mapcar #'test-monitor-entry-job
+                            (collect-monitor-entries monitor))))
       (is (= 1 (length returned)))
       (is (search "echo hello"
                   (nshell.domain.execution:job-command-line (first returned)))))))

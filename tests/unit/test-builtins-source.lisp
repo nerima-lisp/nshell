@@ -146,7 +146,7 @@
                 (nshell.application::%execute-sequence-node-in-context context ast)
               (is (= 0 code))
               (is (string= (format nil "second~%") output))
-              (let* ((entries (nshell.domain.job-control:monitor-entries
+              (let* ((entries (collect-monitor-entries
                                (nshell.application:shell-context-job-monitor
                                 context)))
                      (entry (first entries))
@@ -201,7 +201,7 @@
                 (nshell.application::%execute-sequence-node-in-context context ast)
               (is (= 0 code))
               (is (string= (format nil "third~%") output))
-              (let* ((entries (nshell.domain.job-control:monitor-entries
+              (let* ((entries (collect-monitor-entries
                                (nshell.application:shell-context-job-monitor
                                 context)))
                      (entry (first entries))

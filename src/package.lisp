@@ -166,7 +166,7 @@
   (:use #:cl)
   (:export #:make-job-monitor #:monitor-add-job #:monitor-add-background-job
             #:monitor-update
-            #:monitor-jobs #:monitor-entries #:monitor-find-job
+            #:monitor-map-jobs #:monitor-find-job
             #:monitor-remove-job
             #:suspend-job #:resume-job #:foreground-job #:background-job
             #:complete-job))

@@ -60,12 +60,15 @@
 
 (defun jobs (&optional (job-monitor *job-monitor*))
   "Return current job listings without writing to the terminal."
-  (mapcar (lambda (entry)
-            (let ((job (cdr entry)))
-              (make-job-listing (car entry)
-                                (%status-label job)
-                                (%job-command-string job))))
-          (nshell.domain.job-control:monitor-entries job-monitor)))
+  (let (listings)
+    (nshell.domain.job-control:monitor-map-jobs
+     job-monitor
+     (lambda (job-id job)
+       (push (make-job-listing job-id
+                               (%status-label job)
+                               (%job-command-string job))
+             listings)))
+    (nreverse listings)))
 
 (defun format-job-listing (listing &optional stream)
   "Render LISTING in the user-facing jobs format."

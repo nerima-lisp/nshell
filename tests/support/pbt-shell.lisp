@@ -177,6 +177,14 @@
           (nshell.domain.execution:job-pids job) (copy-list pids))
     job))
 
+(defun collect-monitor-entries (monitor)
+  (let (entries)
+    (nshell.domain.job-control:monitor-map-jobs
+     monitor
+     (lambda (job-id job)
+       (push (cons job-id job) entries)))
+    (nreverse entries)))
+
 (defun test-source-path (prefix)
   (merge-pathnames
    (make-pathname :name prefix :type "lisp")

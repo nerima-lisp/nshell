@@ -17,7 +17,7 @@
               (call-repl-execute-ast sequence)
             (is (string= "" output-text))
             (is (= 0 code)))
-          (let* ((entries (nshell.domain.job-control:monitor-entries
+          (let* ((entries (collect-monitor-entries
                            nshell.application:*job-monitor*))
                  (job (cdar entries)))
             (is (= 1 (length entries)))
@@ -45,7 +45,7 @@
                 (is (string= (format nil "nshell: $CMD: command name expansion produced ~d fields~%"
                                       expected-fields)
                              output-text))
-                (is (null (nshell.domain.job-control:monitor-entries
+                (is (null (collect-monitor-entries
                            nshell.application:*job-monitor*)))))))))))
 
 (test repl-background-command-applies-redirections
@@ -63,7 +63,7 @@
                 (call-repl-execute-ast ast)
               (declare (ignore output-text code)))
             (is (wait-for-file-content output "bg"))
-            (let* ((entries (nshell.domain.job-control:monitor-entries
+            (let* ((entries (collect-monitor-entries
                              nshell.application:*job-monitor*))
                    (job (cdar entries)))
               (is (= 1 (length entries)))
@@ -93,7 +93,7 @@
                 (call-repl-execute-ast ast)
               (declare (ignore output-text code)))
             (is (wait-for-file-content output "bg-pipe"))
-            (let* ((entries (nshell.domain.job-control:monitor-entries
+            (let* ((entries (collect-monitor-entries
                              nshell.application:*job-monitor*))
                    (job (cdar entries)))
               (is (= 1 (length entries)))

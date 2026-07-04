@@ -8,6 +8,22 @@
     (is (= 1 (nshell.domain.job-control::job-monitor-next-id monitor)))
     (is (fboundp 'nshell.domain.job-control::%make-job-monitor))))
 
+(test monitor-collection-shape-is-internal-boundary
+  "Job monitor exposes ordered traversal, not hash-table or alist shape."
+  (dolist (name '("MONITOR-JOBS" "MONITOR-ENTRIES"))
+    (multiple-value-bind (_symbol status)
+        (find-symbol name "NSHELL.DOMAIN.JOB-CONTROL")
+      (declare (ignore _symbol))
+      (is (not (eq :external status)))))
+  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+         (second-job (make-test-job 0 "second"))
+         (first-job (make-test-job 1 "first"))
+         (second-id (nshell.domain.job-control:monitor-add-job monitor second-job))
+         (first-id (nshell.domain.job-control:monitor-add-job monitor first-job))
+         (entries (collect-monitor-entries monitor)))
+    (is (equal (list second-id first-id) (mapcar #'car entries)))
+    (is (equal (list second-job first-job) (mapcar #'cdr entries)))))
+
 (test monitor-creates-jobs
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
          (cmd (nshell.domain.execution:make-command "ls"))

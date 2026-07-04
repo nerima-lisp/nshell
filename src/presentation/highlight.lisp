@@ -1,7 +1,7 @@
 (in-package #:nshell.presentation)
 
 ;; Highlight data tables and span type.
-(defstruct (highlight-span (:constructor make-highlight-span (start end role)))
+(defstruct (highlight-span (:constructor %make-highlight-span (start end role)))
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t)
   (role :normal :type keyword :read-only t))
@@ -78,7 +78,7 @@
                 (when (eq type :word) (setf first-word nil))
                 (when (member type +operator-token-types+ :test #'eq)
                   (setf first-word t))
-                (make-highlight-span
+                (%make-highlight-span
                  (nshell.domain.parsing:token-start tok)
                  (nshell.domain.parsing:token-end tok)
                  role)))

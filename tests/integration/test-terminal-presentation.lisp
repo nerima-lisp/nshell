@@ -51,6 +51,11 @@
     (is (= 0 (nshell.presentation:highlight-span-start first-span)))
     (is (= 1 (nshell.presentation:highlight-span-end first-span)))))
 
+(test terminal-highlight-span-constructor-is-internal-boundary
+  "Highlight spans are produced by highlight-line rather than public raw construction."
+  (is (not (fboundp 'nshell.presentation::make-highlight-span)))
+  (is (fboundp 'nshell.presentation::%make-highlight-span)))
+
 (test terminal-screen-render-roundtrip-with-input-state
   "Decoded input can update presentation state and render through the virtual screen."
   (let* ((state (input-state))

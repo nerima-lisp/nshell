@@ -52,42 +52,53 @@
      (word-motion-target-cursor-pos
       (word-motion-target-right buffer cursor)))))
 
-(defstruct (word-transform-edit
-            (:constructor %make-word-transform-edit (start end replacement))
-            (:conc-name %word-transform-edit-))
+(defstruct (word-transform-plan
+            (:constructor %make-word-transform-plan (start end replacement))
+            (:conc-name %word-transform-plan-))
   (start 0 :type fixnum :read-only t)
   (end 0 :type fixnum :read-only t)
   (replacement "" :type string :read-only t))
 
-(defun word-transform-edit-start (edit)
-  (%word-transform-edit-start edit))
+(defstruct (word-transform-edit
+            (:constructor %make-word-transform-edit (plan))
+            (:conc-name %word-transform-edit-))
+  (plan (error "PLAN is required.") :type word-transform-plan :read-only t))
 
-(defun word-transform-edit-end (edit)
-  (%word-transform-edit-end edit))
+(defun word-transform-edit-plan (edit)
+  (%word-transform-edit-plan edit))
 
-(defun word-transform-edit-replacement (edit)
-  (%word-transform-edit-replacement edit))
+(defun word-transform-plan-start (plan)
+  (%word-transform-plan-start plan))
+
+(defun word-transform-plan-end (plan)
+  (%word-transform-plan-end plan))
+
+(defun word-transform-plan-replacement (plan)
+  (%word-transform-plan-replacement plan))
 
 (defun word-transform-edit-at-cursor (buffer cursor transform)
   (let ((range (shell-token-range-at-or-after-cursor buffer cursor)))
     (when range
       (%make-word-transform-edit
-       (shell-token-range-start range)
-       (shell-token-range-end range)
-       (funcall transform
-                (subseq buffer
-                        (shell-token-range-start range)
-                        (shell-token-range-end range)))))))
+       (%make-word-transform-plan
+        (shell-token-range-start range)
+        (shell-token-range-end range)
+        (funcall transform
+                 (subseq buffer
+                         (shell-token-range-start range)
+                         (shell-token-range-end range))))))))
 
 (defun word-transform-edit-buffer (edit buffer)
-  (concatenate 'string
-               (subseq buffer 0 (word-transform-edit-start edit))
-               (word-transform-edit-replacement edit)
-               (subseq buffer (word-transform-edit-end edit))))
+  (let ((plan (word-transform-edit-plan edit)))
+    (concatenate 'string
+                 (subseq buffer 0 (word-transform-plan-start plan))
+                 (word-transform-plan-replacement plan)
+                 (subseq buffer (word-transform-plan-end plan)))))
 
 (defun word-transform-edit-cursor-pos (edit)
-  (+ (word-transform-edit-start edit)
-     (length (word-transform-edit-replacement edit))))
+  (let ((plan (word-transform-edit-plan edit)))
+    (+ (word-transform-plan-start plan)
+       (length (word-transform-plan-replacement plan)))))
 
 (defun transform-word-at-cursor (state transform)
   "Apply TRANSFORM to the shell token at or after the cursor."
@@ -123,10 +134,10 @@
   "Capitalize the shell token at or after the cursor."
   (transform-word-at-cursor state #'capitalize-token-text))
 
-(defstruct (word-transposition
-            (:constructor %make-word-transposition
+(defstruct (word-transposition-plan
+            (:constructor %make-word-transposition-plan
                 (left-start left-end middle-start middle-end right-start right-end))
-            (:conc-name %word-transposition-))
+            (:conc-name %word-transposition-plan-))
   (left-start 0 :type fixnum :read-only t)
   (left-end 0 :type fixnum :read-only t)
   (middle-start 0 :type fixnum :read-only t)
@@ -134,23 +145,31 @@
   (right-start 0 :type fixnum :read-only t)
   (right-end 0 :type fixnum :read-only t))
 
-(defun word-transposition-left-start (transposition)
-  (%word-transposition-left-start transposition))
+(defstruct (word-transposition
+            (:constructor %make-word-transposition (plan))
+            (:conc-name %word-transposition-))
+  (plan (error "PLAN is required.") :type word-transposition-plan :read-only t))
 
-(defun word-transposition-left-end (transposition)
-  (%word-transposition-left-end transposition))
+(defun word-transposition-plan (transposition)
+  (%word-transposition-plan transposition))
 
-(defun word-transposition-middle-start (transposition)
-  (%word-transposition-middle-start transposition))
+(defun word-transposition-plan-left-start (plan)
+  (%word-transposition-plan-left-start plan))
 
-(defun word-transposition-middle-end (transposition)
-  (%word-transposition-middle-end transposition))
+(defun word-transposition-plan-left-end (plan)
+  (%word-transposition-plan-left-end plan))
 
-(defun word-transposition-right-start (transposition)
-  (%word-transposition-right-start transposition))
+(defun word-transposition-plan-middle-start (plan)
+  (%word-transposition-plan-middle-start plan))
 
-(defun word-transposition-right-end (transposition)
-  (%word-transposition-right-end transposition))
+(defun word-transposition-plan-middle-end (plan)
+  (%word-transposition-plan-middle-end plan))
+
+(defun word-transposition-plan-right-start (plan)
+  (%word-transposition-plan-right-start plan))
+
+(defun word-transposition-plan-right-end (plan)
+  (%word-transposition-plan-right-end plan))
 
 (defun word-transposition-at-cursor (buffer cursor)
   (let ((right-range (shell-token-range-at-or-after-cursor buffer cursor)))
@@ -160,35 +179,38 @@
                          (shell-token-range-start right-range))))
         (when left-range
           (%make-word-transposition
-           (shell-token-range-start left-range)
-           (shell-token-range-end left-range)
-           (shell-token-range-end left-range)
-           (shell-token-range-start right-range)
-           (shell-token-range-start right-range)
-           (shell-token-range-end right-range)))))))
+           (%make-word-transposition-plan
+            (shell-token-range-start left-range)
+            (shell-token-range-end left-range)
+            (shell-token-range-end left-range)
+            (shell-token-range-start right-range)
+            (shell-token-range-start right-range)
+            (shell-token-range-end right-range))))))))
 
 (defun word-transposition-buffer (transposition buffer)
-  (concatenate 'string
-               (subseq buffer 0 (word-transposition-left-start transposition))
-               (subseq buffer
-                       (word-transposition-right-start transposition)
-                       (word-transposition-right-end transposition))
-               (subseq buffer
-                       (word-transposition-middle-start transposition)
-                       (word-transposition-middle-end transposition))
-               (subseq buffer
-                       (word-transposition-left-start transposition)
-                       (word-transposition-left-end transposition))
-               (subseq buffer (word-transposition-right-end transposition))))
+  (let ((plan (word-transposition-plan transposition)))
+    (concatenate 'string
+                 (subseq buffer 0 (word-transposition-plan-left-start plan))
+                 (subseq buffer
+                         (word-transposition-plan-right-start plan)
+                         (word-transposition-plan-right-end plan))
+                 (subseq buffer
+                         (word-transposition-plan-middle-start plan)
+                         (word-transposition-plan-middle-end plan))
+                 (subseq buffer
+                         (word-transposition-plan-left-start plan)
+                         (word-transposition-plan-left-end plan))
+                 (subseq buffer (word-transposition-plan-right-end plan)))))
 
 (defun word-transposition-cursor-pos (transposition)
-  (+ (word-transposition-left-start transposition)
-     (- (word-transposition-right-end transposition)
-        (word-transposition-right-start transposition))
-     (- (word-transposition-middle-end transposition)
-        (word-transposition-middle-start transposition))
-     (- (word-transposition-left-end transposition)
-        (word-transposition-left-start transposition))))
+  (let ((plan (word-transposition-plan transposition)))
+    (+ (word-transposition-plan-left-start plan)
+       (- (word-transposition-plan-right-end plan)
+          (word-transposition-plan-right-start plan))
+       (- (word-transposition-plan-middle-end plan)
+          (word-transposition-plan-middle-start plan))
+       (- (word-transposition-plan-left-end plan)
+          (word-transposition-plan-left-start plan)))))
 
 (defun transpose-words-around-cursor (state)
   (with-buffer-edit (state buffer cursor) state

@@ -311,18 +311,25 @@
   (is (null (nshell.presentation::char-transposition-at-cursor "ab" 0))))
 
 (test input-state-word-transform-edit-projects-token-replacement
-  (let ((edit (nshell.presentation::word-transform-edit-at-cursor
-               "echo hello tail"
-               5
-               #'string-upcase)))
+  (let* ((edit (nshell.presentation::word-transform-edit-at-cursor
+                "echo hello tail"
+                5
+                #'string-upcase))
+         (plan (nshell.presentation::word-transform-edit-plan edit)))
     (is (nshell.presentation::word-transform-edit-p edit))
+    (is (nshell.presentation::word-transform-plan-p plan))
+    (is (eq plan (nshell.presentation::word-transform-edit-plan edit)))
     (is (fboundp 'nshell.presentation::%make-word-transform-edit))
-    (is (fboundp 'nshell.presentation::%word-transform-edit-start))
+    (is (fboundp 'nshell.presentation::%make-word-transform-plan))
     (is (not (fboundp 'nshell.presentation::make-word-transform-edit)))
-    (is (= 5 (nshell.presentation::word-transform-edit-start edit)))
-    (is (= 10 (nshell.presentation::word-transform-edit-end edit)))
+    (is (not (fboundp 'nshell.presentation::make-word-transform-plan)))
+    (is (not (fboundp 'nshell.presentation::word-transform-edit-start)))
+    (is (not (fboundp 'nshell.presentation::word-transform-edit-end)))
+    (is (not (fboundp 'nshell.presentation::word-transform-edit-replacement)))
+    (is (= 5 (nshell.presentation::word-transform-plan-start plan)))
+    (is (= 10 (nshell.presentation::word-transform-plan-end plan)))
     (is (string= "HELLO"
-                 (nshell.presentation::word-transform-edit-replacement edit)))
+                 (nshell.presentation::word-transform-plan-replacement plan)))
     (is (string= "echo HELLO tail"
                  (nshell.presentation::word-transform-edit-buffer
                   edit
@@ -344,18 +351,28 @@
              #'string-upcase))))
 
 (test input-state-word-transposition-projects-token-swap
-  (let ((transposition (nshell.presentation::word-transposition-at-cursor
-                        "echo one two" 9)))
+  (let* ((transposition (nshell.presentation::word-transposition-at-cursor
+                         "echo one two" 9))
+         (plan (nshell.presentation::word-transposition-plan transposition)))
     (is (nshell.presentation::word-transposition-p transposition))
+    (is (nshell.presentation::word-transposition-plan-p plan))
+    (is (eq plan (nshell.presentation::word-transposition-plan transposition)))
     (is (fboundp 'nshell.presentation::%make-word-transposition))
-    (is (fboundp 'nshell.presentation::%word-transposition-left-start))
+    (is (fboundp 'nshell.presentation::%make-word-transposition-plan))
     (is (not (fboundp 'nshell.presentation::make-word-transposition)))
-    (is (= 5 (nshell.presentation::word-transposition-left-start transposition)))
-    (is (= 8 (nshell.presentation::word-transposition-left-end transposition)))
-    (is (= 8 (nshell.presentation::word-transposition-middle-start transposition)))
-    (is (= 9 (nshell.presentation::word-transposition-middle-end transposition)))
-    (is (= 9 (nshell.presentation::word-transposition-right-start transposition)))
-    (is (= 12 (nshell.presentation::word-transposition-right-end transposition)))
+    (is (not (fboundp 'nshell.presentation::make-word-transposition-plan)))
+    (is (not (fboundp 'nshell.presentation::word-transposition-left-start)))
+    (is (not (fboundp 'nshell.presentation::word-transposition-left-end)))
+    (is (not (fboundp 'nshell.presentation::word-transposition-middle-start)))
+    (is (not (fboundp 'nshell.presentation::word-transposition-middle-end)))
+    (is (not (fboundp 'nshell.presentation::word-transposition-right-start)))
+    (is (not (fboundp 'nshell.presentation::word-transposition-right-end)))
+    (is (= 5 (nshell.presentation::word-transposition-plan-left-start plan)))
+    (is (= 8 (nshell.presentation::word-transposition-plan-left-end plan)))
+    (is (= 8 (nshell.presentation::word-transposition-plan-middle-start plan)))
+    (is (= 9 (nshell.presentation::word-transposition-plan-middle-end plan)))
+    (is (= 9 (nshell.presentation::word-transposition-plan-right-start plan)))
+    (is (= 12 (nshell.presentation::word-transposition-plan-right-end plan)))
     (is (string= "echo two one"
                  (nshell.presentation::word-transposition-buffer
                   transposition

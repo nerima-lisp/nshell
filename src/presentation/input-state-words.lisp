@@ -12,7 +12,9 @@
       (let ((ranges (shell-token-ranges-before buffer scan-limit)))
         (move-cursor-to-clearing-suggestion
          state
-         (if ranges (caar (last ranges)) 0))))))
+         (if ranges
+             (shell-token-range-start (car (last ranges)))
+             0))))))
 
 (defun move-word-right (state)
   (with-input-buffer (state buffer pos) state

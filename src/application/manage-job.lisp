@@ -157,24 +157,23 @@
                    (setf last-stage-status status-code)))
                (when (and pid pending-pids)
                  (setf pending-pids (remove pid pending-pids :test #'=))))
-             (complete-job ()
+             (finish-job ()
                (let ((status-code (or last-stage-status latest-status)))
-                 (nshell.domain.job-control:monitor-update
-                  job-monitor job-id :completed status-code))))
+                 (nshell.domain.job-control:complete-job
+                  job-monitor job-id status-code))))
       (loop
         (multiple-value-bind (pid state status-code)
             (%wait-job-pgid-event pgid)
           (case state
             (:stopped
-             (nshell.domain.job-control:monitor-update
-              job-monitor job-id :stopped)
+             (nshell.domain.job-control:suspend-job job-monitor job-id nil)
              (return job))
             ((:exited :signaled)
              (record-completion pid status-code)
              (when (and known-pids (null pending-pids))
-               (return (complete-job))))
+               (return (finish-job))))
             (:no-child
-             (return (complete-job)))
+             (return (finish-job)))
             (:interrupted)
             (:unknown)))))))
 

@@ -2,17 +2,17 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (kill-edit-plan
+(defstruct (%kill-edit-plan
             (:constructor %make-kill-edit-plan (start end cursor-pos))
             (:conc-name %kill-edit-plan-))
   (start 0 :type fixnum :read-only t)
   (end 0 :type fixnum :read-only t)
   (cursor-pos 0 :type fixnum :read-only t))
 
-(defstruct (kill-edit
+(defstruct (%kill-edit
             (:constructor %make-kill-edit (plan))
             (:conc-name %kill-edit-))
-  (plan (error "PLAN is required.") :type kill-edit-plan :read-only t))
+  (plan (error "PLAN is required.") :type %kill-edit-plan :read-only t))
 
 (defun kill-edit-plan (edit)
   (%kill-edit-plan edit))
@@ -75,7 +75,7 @@
                    (next-kill-word-end (input-state-buffer state) cursor)
                    cursor))))
 
-(defstruct (kill-ring-selection
+(defstruct (%kill-ring-selection
             (:constructor %make-kill-ring-selection (index text))
             (:conc-name %kill-ring-selection-))
   (index 0 :type fixnum :read-only t)
@@ -101,7 +101,7 @@
                          (length ring))))
     (%make-kill-ring-selection next-index (nth next-index ring))))
 
-(defstruct (yank-edit-plan
+(defstruct (%yank-edit-plan
             (:constructor %make-yank-edit-plan (start text buffer cursor-pos))
             (:conc-name %yank-edit-plan-))
   (start 0 :type fixnum :read-only t)
@@ -109,10 +109,10 @@
   (buffer "" :type string :read-only t)
   (cursor-pos 0 :type fixnum :read-only t))
 
-(defstruct (yank-edit
+(defstruct (%yank-edit
             (:constructor %make-yank-edit (plan))
             (:conc-name %yank-edit-))
-  (plan (error "PLAN is required.") :type yank-edit-plan :read-only t))
+  (plan (error "PLAN is required.") :type %yank-edit-plan :read-only t))
 
 (defun yank-edit-plan (edit)
   (%yank-edit-plan edit))
@@ -162,7 +162,7 @@
           (commit-yank-edit state edit)
           (values state :none)))))
 
-(defstruct (yank-pop-edit-plan
+(defstruct (%yank-pop-edit-plan
             (:constructor %make-yank-pop-edit-plan
                 (start end next-index replacement))
             (:conc-name %yank-pop-edit-plan-))
@@ -171,10 +171,10 @@
   (next-index 0 :type fixnum :read-only t)
   (replacement "" :type string :read-only t))
 
-(defstruct (yank-pop-edit
+(defstruct (%yank-pop-edit
             (:constructor %make-yank-pop-edit (plan))
             (:conc-name %yank-pop-edit-))
-  (plan (error "PLAN is required.") :type yank-pop-edit-plan :read-only t))
+  (plan (error "PLAN is required.") :type %yank-pop-edit-plan :read-only t))
 
 (defun yank-pop-edit-plan (edit)
   (%yank-pop-edit-plan edit))

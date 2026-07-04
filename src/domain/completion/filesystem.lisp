@@ -78,7 +78,7 @@
     (t nil)))
 
 (defstruct (file-completion-prefix-projection
-            (:constructor make-file-completion-prefix-projection
+            (:constructor %make-file-completion-prefix-projection
                 (directory-prefix file-prefix)))
   (directory-prefix "" :type string :read-only t)
   (file-prefix "" :type string :read-only t))
@@ -87,10 +87,10 @@
   "Project a raw file completion PREFIX into directory and file-prefix parts."
   (let ((separator (position-if #'path-separator-p prefix :from-end t)))
     (if separator
-        (make-file-completion-prefix-projection
+        (%make-file-completion-prefix-projection
          (subseq prefix 0 (1+ separator))
          (subseq prefix (1+ separator)))
-        (make-file-completion-prefix-projection "" prefix))))
+        (%make-file-completion-prefix-projection "" prefix))))
 
 (defun split-file-completion-prefix (prefix)
   "Split PREFIX into a directory prefix and basename prefix."
@@ -135,7 +135,7 @@
   "Function called with a directory pathname to list directory completion candidates.")
 
 (defstruct (path-command-query
-            (:constructor make-path-command-query (path prefix)))
+            (:constructor %make-path-command-query (path prefix)))
   (path nil :type (or null string) :read-only t)
   (prefix "" :type string :read-only t))
 
@@ -198,7 +198,7 @@
 
 (defun command-candidates-from-path (path prefix)
   "Return executable command candidates from PATH that start with PREFIX."
-  (let ((query (make-path-command-query path prefix)))
+  (let ((query (%make-path-command-query path prefix)))
     (if (not (path-command-query-active-p query))
         nil
         (let ((candidates (make-filesystem-candidate-set)))

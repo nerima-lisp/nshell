@@ -269,6 +269,13 @@
                  (entry-name (make-pathname :directory '(:absolute "tmp" "project")))))
     (is (null (entry-name (make-pathname :directory '(:absolute)))))))
 
+(test filesystem-query-constructors-are-internal-boundaries
+  "Filesystem completion query construction should not expose unprefixed helpers."
+  (is (fboundp 'nshell.domain.completion::%make-file-completion-prefix-projection))
+  (is (fboundp 'nshell.domain.completion::%make-path-command-query))
+  (is (not (fboundp 'nshell.domain.completion::make-file-completion-prefix-projection)))
+  (is (not (fboundp 'nshell.domain.completion::make-path-command-query))))
+
 (test split-file-completion-prefix-splits-on-last-slash
   "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."
   (flet ((split (s)

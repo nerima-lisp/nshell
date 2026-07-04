@@ -1,97 +1,19 @@
 ; Input state copy-with-overrides: initargs assembler and public copy-input-state-with API.
 (in-package #:nshell.presentation)
 
-(defun %copy-input-state-initargs (state
-                                   new-buffer
+(defun %copy-input-state-initargs (new-buffer
                                    new-cursor
-                                   completion-index-supplied-p
-                                   completion-index
-                                   completion-base-supplied-p
-                                   completion-base-buffer
-                                   completion-base-cursor-supplied-p
-                                   completion-base-cursor
-                                   last-candidates-supplied-p
-                                   last-candidates
-                                   suggestion-supplied-p
-                                   suggestion
-                                   mode
-                                   vi-count-supplied-p
-                                   vi-count
-                                   vi-visual-anchor-supplied-p
-                                   vi-visual-anchor
-                                   abbreviation-expander
-                                   kill-ring
-                                   last-yank-start-supplied-p
-                                   last-yank-start
-                                   last-yank-end-supplied-p
-                                   last-yank-end
-                                   last-yank-index-supplied-p
-                                   last-yank-index
-                                   last-argument-start-supplied-p
-                                   last-argument-start
-                                   last-argument-end-supplied-p
-                                   last-argument-end
-                                   last-argument-index-supplied-p
-                                   last-argument-index
-                                   search-query
-                                   search-original-buffer
-                                   search-original-cursor
-                                   search-index-supplied-p
-                                   search-index
-                                   undo-stack-supplied-p
-                                   undo-stack
-                                   redo-stack-supplied-p
-                                   redo-stack)
+                                   completion-values
+                                   transient-values
+                                   session-values)
   (append (list :buffer new-buffer
                 :cursor-pos new-cursor)
-          (%copy-input-state-completion-initargs
-           (%copy-input-state-completion-values
-            state
-            completion-index-supplied-p
-            completion-index
-            completion-base-supplied-p
-            completion-base-buffer
-            completion-base-cursor-supplied-p
-            completion-base-cursor
-            last-candidates-supplied-p
-            last-candidates
-            suggestion-supplied-p
-            suggestion))
-          (%copy-input-state-transient-initargs
-           (%copy-input-state-transient-values
-            state
-            new-buffer
-            mode
-            vi-count-supplied-p
-            vi-count
-            vi-visual-anchor-supplied-p
-            vi-visual-anchor
-            abbreviation-expander
-            kill-ring
-            last-yank-start-supplied-p
-            last-yank-start
-            last-yank-end-supplied-p
-            last-yank-end
-            last-yank-index-supplied-p
-            last-yank-index
-            last-argument-start-supplied-p
-            last-argument-start
-            last-argument-end-supplied-p
-            last-argument-end
-            last-argument-index-supplied-p
-            last-argument-index))
-          (%copy-input-state-session-initargs
-           (%copy-input-state-session-values
-            state
-            search-query
-            search-original-buffer
-            search-original-cursor
-            search-index-supplied-p
-            search-index
-            undo-stack-supplied-p
-            undo-stack
-            redo-stack-supplied-p
-            redo-stack))))
+            (%copy-input-state-completion-initargs
+             completion-values)
+            (%copy-input-state-transient-initargs
+             transient-values)
+            (%copy-input-state-session-initargs
+             session-values)))
 
 (defun copy-input-state-with (state &key buffer cursor-pos
                                       (completion-index nil
@@ -126,13 +48,11 @@
                                       (undo-stack nil undo-stack-supplied-p)
                                       (redo-stack nil redo-stack-supplied-p))
   (let* ((new-buffer (or buffer (input-state-buffer state)))
-         (new-cursor (clamp-cursor (or cursor-pos (input-state-cursor-pos state))
-                                   new-buffer)))
-    (apply #'make-input-state
-           (%copy-input-state-initargs
+          (new-cursor (clamp-cursor (or cursor-pos (input-state-cursor-pos state))
+                                     new-buffer))
+         (completion-values
+           (%copy-input-state-completion-values
             state
-            new-buffer
-            new-cursor
             completion-index-supplied-p
             completion-index
             completion-base-supplied-p
@@ -142,7 +62,11 @@
             last-candidates-supplied-p
             last-candidates
             suggestion-supplied-p
-            suggestion
+            suggestion))
+         (transient-values
+           (%copy-input-state-transient-values
+            state
+            new-buffer
             mode
             vi-count-supplied-p
             vi-count
@@ -161,7 +85,10 @@
             last-argument-end-supplied-p
             last-argument-end
             last-argument-index-supplied-p
-            last-argument-index
+            last-argument-index))
+         (session-values
+           (%copy-input-state-session-values
+            state
             search-query
             search-original-buffer
             search-original-cursor
@@ -170,7 +97,14 @@
             undo-stack-supplied-p
             undo-stack
             redo-stack-supplied-p
-            redo-stack))))
+            redo-stack)))
+    (apply #'make-input-state
+             (%copy-input-state-initargs
+              new-buffer
+              new-cursor
+              completion-values
+              transient-values
+              session-values))))
 
 (defun normalize-input-state (state)
   (copy-input-state-with

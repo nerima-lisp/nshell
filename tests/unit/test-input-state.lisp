@@ -32,8 +32,68 @@
                         "%COPY-INPUT-STATE-SESSION-INITARGS"
                         "%INPUT-STATE-COMPLETION-COPY"
                         "%INPUT-STATE-TRANSIENT-COPY"
-                        "%INPUT-STATE-SESSION-COPY"))
-      (is (present-p new-name)))))
+                          "%INPUT-STATE-SESSION-COPY"))
+        (is (present-p new-name)))))
+
+(test input-state-copy-initargs-assemble-group-values
+  (let ((completion
+          (nshell.presentation::%make-input-state-completion-copy
+           :completion-index 3
+           :completion-base-buffer "base"
+           :completion-base-cursor 4
+           :last-candidates '("one" "two")
+           :suggestion "suggest"))
+        (transient
+          (nshell.presentation::%make-input-state-transient-copy
+           :mode :vi-c
+           :vi-count 9
+           :vi-visual-anchor 7
+           :abbreviation-expander 'expand
+           :kill-ring '("kill")
+           :last-yank-start 1
+           :last-yank-end 2
+           :last-yank-index 3
+           :last-argument-start 4
+           :last-argument-end 5
+           :last-argument-index 6))
+        (session
+          (nshell.presentation::%make-input-state-session-copy
+           :search-query "query"
+           :search-original-buffer "original"
+           :search-original-cursor 8
+           :search-index 11
+           :undo-stack '(:undo)
+           :redo-stack '(:redo))))
+    (is (equal '(:buffer "text"
+                 :cursor-pos 2
+                 :completion-index 3
+                 :completion-base-buffer "base"
+                 :completion-base-cursor 4
+                 :last-candidates ("one" "two")
+                 :suggestion "suggest"
+                 :mode :vi-c
+                 :vi-count 9
+                 :vi-visual-anchor 7
+                 :abbreviation-expander expand
+                 :kill-ring ("kill")
+                 :last-yank-start 1
+                 :last-yank-end 2
+                 :last-yank-index 3
+                 :last-argument-start 4
+                 :last-argument-end 5
+                 :last-argument-index 6
+                 :search-query "query"
+                 :search-original-buffer "original"
+                 :search-original-cursor 8
+                 :search-index 11
+                 :undo-stack (:undo)
+                 :redo-stack (:redo))
+               (nshell.presentation::%copy-input-state-initargs
+                "text"
+                2
+                completion
+                transient
+                session)))))
 
 (test input-edit-snapshot-is-private-value
   (let* ((state (nshell.presentation:make-input-state :buffer "abc"

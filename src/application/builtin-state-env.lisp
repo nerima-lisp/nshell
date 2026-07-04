@@ -1,10 +1,14 @@
 (in-package #:nshell.application)
 
+(defun %update-shell-environment (context update-fn &rest args)
+  (setf (shell-context-environment context)
+        (apply update-fn (shell-context-environment context) args)))
+
 (defun %erase-set-variables (context names)
   (dolist (name names)
-    (setf (shell-context-environment context)
-          (nshell.domain.environment:env-unset
-           (shell-context-environment context) name)))
+    (%update-shell-environment context
+                               #'nshell.domain.environment:env-unset
+                               name))
   (values nil 0))
 
 (defun %query-set-variables (context names)
@@ -48,12 +52,11 @@
       ((%set-export-option-p (first args))
        (unless (second args)
          (return-from %builtin-set (values (%set-usage) 1)))
-        (setf (shell-context-environment context)
-              (nshell.domain.environment:env-set-values
-               (shell-context-environment context)
-               (second args)
-               (cddr args)
-               t))
+       (%update-shell-environment context
+                                  #'nshell.domain.environment:env-set-values
+                                  (second args)
+                                  (cddr args)
+                                  t)
        (values nil 0))
       ((%set-erase-option-p (first args))
        (with-set-name-argument "-e"
@@ -64,21 +67,20 @@
       ((%builtin-option-like-p (first args))
        (values (%set-usage) 1))
       (t
-        (setf (shell-context-environment context)
-              (nshell.domain.environment:env-set-values
-               (shell-context-environment context)
-               (first args)
-               (rest args)
-               nil))
+       (%update-shell-environment context
+                                  #'nshell.domain.environment:env-set-values
+                                  (first args)
+                                  (rest args)
+                                  nil)
        (values nil 0)))))
 
 (defun %builtin-export (context args)
   (if args
       (progn
-        (setf (shell-context-environment context)
-              (nshell.domain.environment:env-export
-               (shell-context-environment context) (first args)))
-      (values nil 0))
+        (%update-shell-environment context
+                                   #'nshell.domain.environment:env-export
+                                   (first args))
+        (values nil 0))
       (%builtin-usage "export" "export name")))
 
 (defun %builtin-read (context args)
@@ -99,8 +101,10 @@
     (let ((line (read-line *standard-input* nil nil)))
       (if line
           (progn
-            (setf (shell-context-environment context)
-                  (nshell.domain.environment:env-set
-                   (shell-context-environment context) variable line nil))
+            (%update-shell-environment context
+                                       #'nshell.domain.environment:env-set
+                                       variable
+                                       line
+                                       nil)
             (values nil 0))
           (values nil 1)))))

@@ -167,6 +167,98 @@
     (is (= 2
            (nshell.presentation::%input-edit-snapshot-cursor-pos snapshot)))))
 
+(test input-undo-stack-step-is-private-value
+  (let* ((base (nshell.presentation:make-input-state :buffer "ab"
+                                                     :cursor-pos 2))
+         (previous-state (nshell.presentation:make-input-state :buffer "a"
+                                                               :cursor-pos 1))
+         (next-state (nshell.presentation:make-input-state :buffer "abc"
+                                                           :cursor-pos 3))
+         (previous (nshell.presentation::input-edit-snapshot previous-state))
+         (next (nshell.presentation::input-edit-snapshot next-state))
+         (undo-state (nshell.presentation::copy-input-state-with
+                      base
+                      :undo-stack (list previous)
+                      :redo-stack nil))
+         (redo-state (nshell.presentation::copy-input-state-with
+                      base
+                      :undo-stack nil
+                      :redo-stack (list next)))
+         (undo-step (nshell.presentation::undo-stack-step-for-direction
+                     undo-state
+                     :undo))
+         (redo-step (nshell.presentation::undo-stack-step-for-direction
+                     redo-state
+                     :redo)))
+    (is (nshell.presentation::%undo-stack-step-p undo-step))
+    (is (not (listp undo-step)))
+    (is (eq previous
+            (nshell.presentation::%undo-stack-step-snapshot undo-step)))
+    (is (null (nshell.presentation::%undo-stack-step-undo-stack undo-step)))
+    (is (= 1
+           (length (nshell.presentation::%undo-stack-step-redo-stack
+                    undo-step))))
+    (is (nshell.presentation::%input-edit-snapshot-p
+         (first (nshell.presentation::%undo-stack-step-redo-stack
+                 undo-step))))
+    (is (nshell.presentation::%undo-stack-step-p redo-step))
+    (is (not (listp redo-step)))
+    (is (eq next
+            (nshell.presentation::%undo-stack-step-snapshot redo-step)))
+    (is (= 1
+           (length (nshell.presentation::%undo-stack-step-undo-stack
+                    redo-step))))
+    (is (null (nshell.presentation::%undo-stack-step-redo-stack redo-step)))
+    (is (not (fboundp 'nshell.presentation::make-undo-stack-step)))))
+
+(test input-undo-recording-step-is-private-value
+  (let* ((old-state (nshell.presentation:make-input-state :buffer "ab"
+                                                          :cursor-pos 2))
+         (new-state (nshell.presentation:make-input-state :buffer "abc"
+                                                          :cursor-pos 3))
+         (existing-state (nshell.presentation:make-input-state :buffer "a"
+                                                               :cursor-pos 1))
+         (redo-state (nshell.presentation:make-input-state :buffer "abcd"
+                                                           :cursor-pos 4))
+         (existing (nshell.presentation::input-edit-snapshot existing-state))
+         (redo (nshell.presentation::input-edit-snapshot redo-state))
+         (new-state-with-history
+           (nshell.presentation::copy-input-state-with
+            new-state
+            :undo-stack (list existing)
+            :redo-stack (list redo)))
+         (step (nshell.presentation::undo-recording-step-for-transition
+                old-state
+                new-state-with-history
+                :suggest-update
+                (input-key-event :char #\c)))
+         (recorded (nshell.presentation::apply-undo-recording-step
+                    new-state-with-history
+                    step))
+         (ignored (nshell.presentation::undo-recording-step-for-transition
+                   old-state
+                   new-state-with-history
+                   :suggest-update
+                   (input-key-event :ctrl-underscore))))
+    (is (nshell.presentation::%undo-recording-step-p step))
+    (is (not (listp step)))
+    (is (= 2
+           (length (nshell.presentation::%undo-recording-step-undo-stack
+                    step))))
+    (is (string= "ab"
+                 (nshell.presentation::%input-edit-snapshot-buffer
+                  (first (nshell.presentation::%undo-recording-step-undo-stack
+                          step)))))
+    (is (eq existing
+            (second (nshell.presentation::%undo-recording-step-undo-stack
+                     step))))
+    (is (null (nshell.presentation::%undo-recording-step-redo-stack step)))
+    (is (= 2
+           (length (nshell.presentation::input-state-undo-stack recorded))))
+    (is (null (nshell.presentation::input-state-redo-stack recorded)))
+    (is (null ignored))
+    (is (not (fboundp 'nshell.presentation::make-undo-recording-step)))))
+
 (test input-state-finalize-transition-keeps-ctrl-l-session-state
   (let ((state (input-state
                 :buffer "git st"

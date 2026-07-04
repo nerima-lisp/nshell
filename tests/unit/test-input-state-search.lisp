@@ -112,6 +112,47 @@
                                                  :index 0)
         (is (eq :search-update backspace-output))))))
 
+(test input-state-history-search-query-insertion-truncates-to-buffer-limit
+  (let* ((limit nshell.presentation::+max-input-buffer-size+)
+         (query (make-string (1- limit) :initial-element #\a))
+         (insertion
+           (nshell.presentation::history-search-query-insertion-for-text
+            query
+            "bcd")))
+    (is (nshell.presentation::history-search-query-insertion-p insertion))
+    (is (not (nshell.presentation::history-search-query-insertion-ignored-p
+              insertion)))
+    (is (string= "b"
+                 (nshell.presentation::history-search-query-insertion-accepted-text
+                  insertion)))
+    (is (= limit
+           (length
+            (nshell.presentation::history-search-query-insertion-query insertion))))
+    (is (string= (concatenate 'string query "b")
+                 (nshell.presentation::history-search-query-insertion-query
+                  insertion)))
+    (is (not (fboundp 'nshell.presentation::make-history-search-query-insertion)))))
+
+(test input-state-history-search-query-insertion-ignores-invalid-or-full-input
+  (let* ((limit nshell.presentation::+max-input-buffer-size+)
+         (full-query (make-string limit :initial-element #\q)))
+    (dolist (case `(("git" nil)
+                    ("git" "")
+                    (,full-query "x")))
+      (destructuring-bind (query text) case
+        (let ((insertion
+                (nshell.presentation::history-search-query-insertion-for-text
+                 query
+                 text)))
+          (is (nshell.presentation::history-search-query-insertion-ignored-p
+               insertion))
+          (is (string= ""
+                       (nshell.presentation::history-search-query-insertion-accepted-text
+                        insertion)))
+          (is (string= query
+                       (nshell.presentation::history-search-query-insertion-query
+                        insertion))))))))
+
 (test input-state-history-search-edits-query-not-buffer
   (with-reduced-input-state (search-state)
       (reduce-once (input-state :buffer "git" :cursor-pos 3)

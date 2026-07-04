@@ -8,6 +8,23 @@
   text
   delta)
 
+(defstruct (history-search-query-insertion
+            (:constructor %make-history-search-query-insertion
+                (&key query accepted-text ignored-p))
+            (:conc-name %history-search-query-insertion-))
+  (query "" :type string :read-only t)
+  (accepted-text "" :type string :read-only t)
+  (ignored-p nil :type boolean :read-only t))
+
+(defun history-search-query-insertion-query (insertion)
+  (%history-search-query-insertion-query insertion))
+
+(defun history-search-query-insertion-accepted-text (insertion)
+  (%history-search-query-insertion-accepted-text insertion))
+
+(defun history-search-query-insertion-ignored-p (insertion)
+  (%history-search-query-insertion-ignored-p insertion))
+
 (defun make-history-search-query-edit (text)
   (%make-history-search-edit :kind :query :text text))
 
@@ -16,6 +33,23 @@
 
 (defun make-history-search-backspace-edit ()
   (%make-history-search-edit :kind :backspace))
+
+(defun history-search-query-insertion-for-text (query text)
+  (let ((remaining (- +max-input-buffer-size+ (length query))))
+    (if (or (not (stringp text))
+            (zerop (length text))
+            (<= remaining 0))
+        (%make-history-search-query-insertion
+         :query query
+         :accepted-text ""
+         :ignored-p t)
+        (let ((accepted-text (if (> (length text) remaining)
+                                 (subseq text 0 remaining)
+                                 text)))
+          (%make-history-search-query-insertion
+           :query (concatenate 'string query accepted-text)
+           :accepted-text accepted-text
+           :ignored-p nil)))))
 
 (defun %history-search-original-state (state)
   (let ((original (input-state-search-original-buffer state)))
@@ -34,18 +68,16 @@
   (with-normalized-cleared-completion-state (state state)
     (ecase (history-search-edit-kind edit)
       (:query
-       (let* ((text (history-search-edit-text edit))
-              (query (input-state-search-query state))
-              (remaining (- +max-input-buffer-size+ (length query))))
-         (if (or (not (stringp text)) (zerop (length text)) (<= remaining 0))
+       (let ((insertion
+               (history-search-query-insertion-for-text
+                (input-state-search-query state)
+                (history-search-edit-text edit))))
+         (if (history-search-query-insertion-ignored-p insertion)
              (values state :none)
-             (let ((inserted (if (> (length text) remaining)
-                                 (subseq text 0 remaining)
-                                 text)))
-               (%history-search-update
-                state
-                :search-query (concatenate 'string query inserted)
-                :search-index 0)))))
+             (%history-search-update
+              state
+              :search-query (history-search-query-insertion-query insertion)
+              :search-index 0))))
       (:selection
        (%history-search-update
         state

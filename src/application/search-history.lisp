@@ -1,5 +1,10 @@
 (in-package #:nshell.application)
 
+(defstruct (%interactive-history-candidate
+            (:constructor %make-interactive-history-candidate (text entry)))
+  (text "" :type string :read-only t)
+  (entry nil :read-only t))
+
 (defun %interactive-history-search-matches (history query)
   (when (and query (not (nshell.domain.parsing:shell-input-blank-p
                          query
@@ -29,11 +34,13 @@
               (setf (gethash text line-prefix-texts) t)
               (push entry line-prefix-matches))
             (when (contains-match-p text)
-              (push (cons text entry) contains-candidates)))))
+              (push (%make-interactive-history-candidate text entry)
+                    contains-candidates)))))
       (append (nreverse line-prefix-matches)
-              (loop for (text . entry) in (nreverse contains-candidates)
+              (loop for candidate in (nreverse contains-candidates)
+                    for text = (%interactive-history-candidate-text candidate)
                     unless (gethash text line-prefix-texts)
-                      collect entry)))))
+                      collect (%interactive-history-candidate-entry candidate))))))
 
 (defun history-suggestion (history input &optional dispatcher)
   (unless (nshell.domain.parsing:shell-input-blank-p input)

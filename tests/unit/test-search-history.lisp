@@ -174,6 +174,12 @@ git old"
                  history
                  "git"))))))
 
+(test interactive-history-search-candidate-uses-typed-boundary
+  "Contains fallback candidates should stay behind a typed internal boundary."
+  (is (fboundp 'nshell.application::%make-interactive-history-candidate))
+  (is (fboundp 'nshell.application::%interactive-history-candidate-text))
+  (is (fboundp 'nshell.application::%interactive-history-candidate-entry)))
+
 (test interactive-history-search-ignores-blank-query
   "Interactive reverse search should not preselect history before the user types."
   (with-history (history "git status" "docker ps")

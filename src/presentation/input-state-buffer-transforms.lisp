@@ -2,24 +2,48 @@
 
 (in-package #:nshell.presentation)
 
+(defparameter *sudo-prefix-text* "sudo ")
+(defparameter *sudo-command-text* "sudo")
+
+(defstruct (sudo-prefix-operation
+             (:constructor %make-sudo-prefix-operation (kind))
+             (:conc-name %sudo-prefix-operation-))
+  (kind :insert-prefix :type keyword :read-only t))
+
+(defun sudo-prefix-operation-kind (operation)
+  (%sudo-prefix-operation-kind operation))
+
+(defun sudo-prefix-operation-for-buffer (buffer)
+  (cond
+    ((string= buffer *sudo-command-text*)
+     (%make-sudo-prefix-operation :remove-command))
+    ((and (>= (length buffer) (length *sudo-prefix-text*))
+          (string= (subseq buffer 0 (length *sudo-prefix-text*))
+                   *sudo-prefix-text*))
+     (%make-sudo-prefix-operation :remove-prefix))
+    (t
+     (%make-sudo-prefix-operation :insert-prefix))))
+
 (defstruct (sudo-prefix-edit
              (:constructor %make-sudo-prefix-edit (splice cursor-delta))
              (:conc-name %sudo-prefix-edit-))
   splice
   (cursor-delta 0 :type fixnum :read-only t))
 
-(defun sudo-prefix-edit-for-buffer (buffer)
-  (let ((prefix "sudo "))
-    (cond
-      ((string= buffer "sudo")
-       (%make-sudo-prefix-edit (make-buffer-splice 0 4) -4))
-      ((and (>= (length buffer) (length prefix))
-            (string= (subseq buffer 0 (length prefix)) prefix))
-       (%make-sudo-prefix-edit (make-buffer-splice 0 (length prefix))
-                               (- (length prefix))))
-      (t
-       (%make-sudo-prefix-edit (make-buffer-splice 0 0 prefix)
-                               (length prefix))))))
+(defun sudo-prefix-edit-for-operation (operation)
+  (case (sudo-prefix-operation-kind operation)
+    (:remove-command
+     (%make-sudo-prefix-edit
+      (make-buffer-splice 0 (length *sudo-command-text*))
+      (- (length *sudo-command-text*))))
+    (:remove-prefix
+     (%make-sudo-prefix-edit
+      (make-buffer-splice 0 (length *sudo-prefix-text*))
+      (- (length *sudo-prefix-text*))))
+    (:insert-prefix
+     (%make-sudo-prefix-edit
+      (make-buffer-splice 0 0 *sudo-prefix-text*)
+      (length *sudo-prefix-text*)))))
 
 (defun sudo-prefix-edit-buffer (edit buffer)
   (buffer-splice-result (%sudo-prefix-edit-splice edit) buffer))
@@ -29,7 +53,8 @@
 
 (defun toggle-sudo-prefix (state)
   (with-buffer-edit (state buffer cursor) state
-    (let ((edit (sudo-prefix-edit-for-buffer buffer)))
+    (let* ((operation (sudo-prefix-operation-for-buffer buffer))
+           (edit (sudo-prefix-edit-for-operation operation)))
       (commit-buffer-edit (sudo-prefix-edit-buffer edit buffer)
                           :cursor-pos (sudo-prefix-edit-cursor-pos edit cursor)))))
 

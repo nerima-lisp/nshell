@@ -32,23 +32,53 @@
         :suggest-update
         (:buffer "" :cursor-pos 0))))
 
+(test input-state-sudo-prefix-operation-classifies-buffer
+  (let ((insert (nshell.presentation::sudo-prefix-operation-for-buffer "apt update"))
+        (remove-prefix (nshell.presentation::sudo-prefix-operation-for-buffer
+                        "sudo apt update"))
+        (remove-command (nshell.presentation::sudo-prefix-operation-for-buffer
+                         "sudo")))
+    (is (nshell.presentation::sudo-prefix-operation-p insert))
+    (is (eq :insert-prefix
+            (nshell.presentation::sudo-prefix-operation-kind insert)))
+    (is (eq :remove-prefix
+            (nshell.presentation::sudo-prefix-operation-kind remove-prefix)))
+    (is (eq :remove-command
+            (nshell.presentation::sudo-prefix-operation-kind remove-command)))))
+
+(test input-state-sudo-prefix-operation-raw-accessors-stay-internal
+  "sudo-prefix-operation exposes explicit readers; generated slot readers stay internal."
+  (let ((operation (nshell.presentation::sudo-prefix-operation-for-buffer "apt update")))
+    (is (fboundp 'nshell.presentation::%sudo-prefix-operation-kind))
+    (is (not (eq (symbol-function
+                  'nshell.presentation::sudo-prefix-operation-kind)
+                 (symbol-function
+                  'nshell.presentation::%sudo-prefix-operation-kind))))
+    (is (not (fboundp 'nshell.presentation::make-sudo-prefix-operation)))
+    (is (not (fboundp 'nshell.presentation::sudo-prefix-edit-for-buffer)))
+    (is (eq :insert-prefix
+            (nshell.presentation::sudo-prefix-operation-kind operation)))))
+
 (test input-state-sudo-prefix-edit-projects-buffer-and-cursor
-  (let ((edit (nshell.presentation::sudo-prefix-edit-for-buffer "apt update")))
-    (is (nshell.presentation::sudo-prefix-edit-p edit))
-    (is (not (fboundp 'nshell.presentation::make-sudo-prefix-edit)))
-    (is (string= "sudo apt update"
-                 (nshell.presentation::sudo-prefix-edit-buffer edit
-                                                               "apt update")))
-    (is (= 8 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 3))))
-  (let ((edit (nshell.presentation::sudo-prefix-edit-for-buffer "sudo apt update")))
-    (is (string= "apt update"
-                 (nshell.presentation::sudo-prefix-edit-buffer edit
-                                                               "sudo apt update")))
-    (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 3))))
-  (let ((edit (nshell.presentation::sudo-prefix-edit-for-buffer "sudo")))
-    (is (string= ""
-                 (nshell.presentation::sudo-prefix-edit-buffer edit "sudo")))
-    (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 4)))))
+  (labels ((edit-for (buffer)
+             (nshell.presentation::sudo-prefix-edit-for-operation
+              (nshell.presentation::sudo-prefix-operation-for-buffer buffer))))
+    (let ((edit (edit-for "apt update")))
+      (is (nshell.presentation::sudo-prefix-edit-p edit))
+      (is (not (fboundp 'nshell.presentation::make-sudo-prefix-edit)))
+      (is (string= "sudo apt update"
+                   (nshell.presentation::sudo-prefix-edit-buffer edit
+                                                                 "apt update")))
+      (is (= 8 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 3))))
+    (let ((edit (edit-for "sudo apt update")))
+      (is (string= "apt update"
+                   (nshell.presentation::sudo-prefix-edit-buffer edit
+                                                                 "sudo apt update")))
+      (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 3))))
+    (let ((edit (edit-for "sudo")))
+      (is (string= ""
+                   (nshell.presentation::sudo-prefix-edit-buffer edit "sudo")))
+      (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 4))))))
 
 (test input-state-ctrl-p-and-ctrl-n-request-history-navigation
   (let ((state (completion-session-state

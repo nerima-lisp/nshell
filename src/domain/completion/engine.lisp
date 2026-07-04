@@ -40,27 +40,27 @@
 (defun %project-rule-solution-set (solutions)
   (%make-rule-solution-set-projection (first solutions)))
 
-(defun solution-value (variable solution)
+(defun %rule-solution-value (variable solution)
   (%rule-solution-binding-projection-value
    (%project-rule-solution-binding variable solution)))
 
-(defun first-solution-value (variable solutions)
+(defun %first-rule-solution-value (variable solutions)
   (let ((solution (%rule-solution-set-projection-first-solution
                    (%project-rule-solution-set solutions))))
     (when solution
-      (solution-value variable solution))))
+      (%rule-solution-value variable solution))))
 
-(defun completion-description (kb-rules value)
+(defun %completion-description (kb-rules value)
   (when (stringp value)
     (let* ((solutions (prove-all kb-rules (list 'describes value '?description)))
-           (description (first-solution-value '?description solutions)))
+           (description (%first-rule-solution-value '?description solutions)))
       (when (stringp description)
         description))))
 
-(defun candidates-from-rule-solutions (solutions variable kind &key (prefix "") description-fn)
+(defun %candidates-from-rule-solutions (solutions variable kind &key (prefix "") description-fn)
   (sort (%merge-candidates
          (loop for solution in solutions
-               for value = (solution-value variable solution)
+               for value = (%rule-solution-value variable solution)
                for description = (and description-fn
                                       (funcall description-fn value))
                when (and (stringp value) (%starts-with-p prefix value))
@@ -68,7 +68,7 @@
                                          :kind kind
                                          :description (or description ""))))
         #'string<
-        :key #'candidate-text))
+         :key #'candidate-text))
 
 (defun %rule-complete-query (kb-rules query)
   (let* ((context (completion-query-context query))
@@ -76,7 +76,7 @@
          (arg-prefix (completion-query-arg-prefix query))
          (argument-position-p (%completion-query-argument-position-p query)))
     (flet ((candidate-description-for (value)
-             (completion-description kb-rules value)))
+             (%completion-description kb-rules value)))
       (cond
         ((completion-context-redirection-target-p context)
          (list (make-candidate arg-prefix :kind :file :description "file")))
@@ -87,14 +87,14 @@
               (prove-all kb-rules (list 'suggests-file command)))
          (list (make-candidate "" :kind :file :description "file")))
         (argument-position-p
-         (candidates-from-rule-solutions
+         (%candidates-from-rule-solutions
           (prove-all kb-rules (list 'completes command '?completion))
           '?completion
           :option
           :prefix arg-prefix
           :description-fn #'candidate-description-for))
         (t
-         (candidates-from-rule-solutions
+         (%candidates-from-rule-solutions
            (prove-all kb-rules '(completes ?command ?completion))
            '?command
            :command

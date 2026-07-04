@@ -80,25 +80,31 @@
       (is (= 1 (length solutions)))
       (is (string= "ls" (solution-binding '?command (first solutions)))))))
 
-(test first-solution-value-selects-first-rule-solution-value
-  (let ((solutions (list (list (cons '?description "primary"))
-                         (list (cons '?description "fallback")))))
-    (is (string= "primary"
-                 (nshell.domain.completion::solution-value
-                  '?description
-                  (first solutions))))
-    (is (null (nshell.domain.completion::solution-value
-               '?missing
-               (first solutions))))
-    (is (string= "primary"
-                 (nshell.domain.completion::first-solution-value
-                  '?description solutions)))
-    (is (null (nshell.domain.completion::first-solution-value
-               '?missing solutions)))
-    (is (null (nshell.domain.completion::first-solution-value
-               '?description nil)))))
+(test rule-completion-projects-solution-values-through-candidates
+  (let ((kb (make-empty-rule-kb)))
+    (nshell.domain.completion:assert-fact!
+     kb
+     (nshell.domain.completion:make-fact :predicate 'nshell.domain.completion::completes
+                                         :args '("git" "status")))
+    (nshell.domain.completion:assert-fact!
+     kb
+     (nshell.domain.completion:make-fact :predicate 'nshell.domain.completion::describes
+                                         :args '("git" "version control")))
+    (let ((candidates (nshell.domain.completion:rule-complete kb "gi")))
+      (is (= 1 (length candidates)))
+      (is (string= "git" (nshell.domain.completion:candidate-text (first candidates))))
+      (is (string= "version control"
+                   (nshell.domain.completion:candidate-description (first candidates)))))))
 
 (test rule-solution-projections-are-internal-boundaries
+  (is (not (fboundp 'nshell.domain.completion::solution-value)))
+  (is (not (fboundp 'nshell.domain.completion::first-solution-value)))
+  (is (not (fboundp 'nshell.domain.completion::completion-description)))
+  (is (not (fboundp 'nshell.domain.completion::candidates-from-rule-solutions)))
+  (is (fboundp 'nshell.domain.completion::%rule-solution-value))
+  (is (fboundp 'nshell.domain.completion::%first-rule-solution-value))
+  (is (fboundp 'nshell.domain.completion::%completion-description))
+  (is (fboundp 'nshell.domain.completion::%candidates-from-rule-solutions))
   (is (not (fboundp 'nshell.domain.completion::make-rule-solution-binding-projection)))
   (is (not (fboundp 'nshell.domain.completion::make-rule-solution-set-projection)))
   (is (not (fboundp 'nshell.domain.completion::project-rule-solution-binding)))

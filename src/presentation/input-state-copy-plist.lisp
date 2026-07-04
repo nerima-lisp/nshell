@@ -4,31 +4,43 @@
 (defun clamp-cursor (position buffer)
   (max 0 (min position (length buffer))))
 
-(defun %copy-input-state-or-current (supplied-p value current-value)
-  (if supplied-p value current-value))
+(defstruct (input-state-copy-override
+            (:constructor %make-input-state-copy-override (kind value))
+            (:conc-name %input-state-copy-override-))
+  kind
+  value)
 
-(defun %copy-input-state-clearable-or-current (supplied-p value current-value
-                                               &optional (clear-value nil)
-                                               acceptp)
+(defun input-state-copy-override-kind (override)
+  (%input-state-copy-override-kind override))
+
+(defun input-state-copy-override-value (override)
+  (%input-state-copy-override-value override))
+
+(defun input-state-copy-override-for (supplied-p value)
   (cond
-    ((and supplied-p (eq value :clear)) clear-value)
-    ((and supplied-p (or (null acceptp)
-                         (funcall acceptp value)))
-     value)
-    (t current-value)))
+    ((not supplied-p) (%make-input-state-copy-override :current nil))
+    ((eq value :clear) (%make-input-state-copy-override :clear nil))
+    (t (%make-input-state-copy-override :value value))))
 
-(defun %copy-input-state-clearable-value-or-current (value current-value
-                                                     &optional (clear-value nil))
+(defun input-state-copy-optional-value-override (value)
   (cond
-    ((eq value :clear) clear-value)
-    (value value)
-    (t current-value)))
+    ((eq value :clear) (%make-input-state-copy-override :clear nil))
+    (value (%make-input-state-copy-override :value value))
+    (t (%make-input-state-copy-override :current nil))))
 
-(defun %copy-input-state-clamped-anchor-or-current (supplied-p value current-value buffer)
-  (let ((anchor (cond
-                  ((and supplied-p (eq value :clear)) nil)
-                  (supplied-p value)
-                  (t current-value))))
+(defun input-state-copy-override-resolve (override current-value
+                                          &key (clear-value nil) acceptp)
+  (case (input-state-copy-override-kind override)
+    (:current current-value)
+    (:clear clear-value)
+    (:value (let ((value (input-state-copy-override-value override)))
+              (if (or (null acceptp)
+                      (funcall acceptp value))
+                  value
+                  current-value)))))
+
+(defun input-state-copy-anchor-override-resolve (override current-value buffer)
+  (let ((anchor (input-state-copy-override-resolve override current-value)))
     (and anchor (clamp-cursor anchor buffer))))
 
 (defstruct (%input-state-completion-copy
@@ -90,32 +102,31 @@
    :completion-base-buffer (if (and completion-index-supplied-p
                                     (= completion-index -1))
                                nil
-                               (%copy-input-state-clearable-or-current
-                                completion-base-supplied-p
-                                completion-base-buffer
+                               (input-state-copy-override-resolve
+                                (input-state-copy-override-for
+                                 completion-base-supplied-p
+                                 completion-base-buffer)
                                 (input-state-completion-base-buffer state)
-                                nil
-                                #'stringp))
+                                :acceptp #'stringp))
    :completion-base-cursor (if (and completion-index-supplied-p
                                     (= completion-index -1))
                                nil
-                               (%copy-input-state-clearable-or-current
-                                completion-base-cursor-supplied-p
-                                completion-base-cursor
+                               (input-state-copy-override-resolve
+                                (input-state-copy-override-for
+                                 completion-base-cursor-supplied-p
+                                 completion-base-cursor)
                                 (input-state-completion-base-cursor state)
-                                nil
-                                #'integerp))
-   :last-candidates (%copy-input-state-clearable-or-current
-                     last-candidates-supplied-p
-                     last-candidates
+                                :acceptp #'integerp))
+   :last-candidates (input-state-copy-override-resolve
+                     (input-state-copy-override-for
+                      last-candidates-supplied-p
+                      last-candidates)
                      (input-state-last-candidates state))
-   :suggestion (cond
-                 ((not suggestion-supplied-p)
-                  (input-state-suggestion state))
-                 ((or (null suggestion)
-                      (eq suggestion :clear))
-                  nil)
-                 (t suggestion))))
+   :suggestion (input-state-copy-override-resolve
+                (input-state-copy-override-for
+                 suggestion-supplied-p
+                 suggestion)
+                (input-state-suggestion state))))
 
 (defun %copy-input-state-transient-values (state
                                            buffer
@@ -140,43 +151,51 @@
                                            last-argument-index)
   (%make-input-state-transient-copy
    :mode (or mode (input-state-mode state))
-   :vi-count (%copy-input-state-or-current
-              vi-count-supplied-p
-              vi-count
+   :vi-count (input-state-copy-override-resolve
+              (input-state-copy-override-for
+               vi-count-supplied-p
+               vi-count)
               (input-state-vi-count state))
-   :vi-visual-anchor (%copy-input-state-clamped-anchor-or-current
-                      vi-visual-anchor-supplied-p
-                      vi-visual-anchor
+   :vi-visual-anchor (input-state-copy-anchor-override-resolve
+                      (input-state-copy-override-for
+                       vi-visual-anchor-supplied-p
+                       vi-visual-anchor)
                       (input-state-vi-visual-anchor state)
                       buffer)
    :abbreviation-expander (or abbreviation-expander
                                (input-state-abbreviation-expander state))
-   :kill-ring (%copy-input-state-clearable-value-or-current
-               kill-ring
+   :kill-ring (input-state-copy-override-resolve
+               (input-state-copy-optional-value-override kill-ring)
                (input-state-kill-ring state))
-   :last-yank-start (%copy-input-state-or-current
-                     last-yank-start-supplied-p
-                     last-yank-start
+   :last-yank-start (input-state-copy-override-resolve
+                     (input-state-copy-override-for
+                      last-yank-start-supplied-p
+                      last-yank-start)
                      (input-state-last-yank-start state))
-   :last-yank-end (%copy-input-state-or-current
-                   last-yank-end-supplied-p
-                   last-yank-end
+   :last-yank-end (input-state-copy-override-resolve
+                   (input-state-copy-override-for
+                    last-yank-end-supplied-p
+                    last-yank-end)
                    (input-state-last-yank-end state))
-   :last-yank-index (%copy-input-state-or-current
-                     last-yank-index-supplied-p
-                     last-yank-index
+   :last-yank-index (input-state-copy-override-resolve
+                     (input-state-copy-override-for
+                      last-yank-index-supplied-p
+                      last-yank-index)
                      (input-state-last-yank-index state))
-   :last-argument-start (%copy-input-state-or-current
-                         last-argument-start-supplied-p
-                         last-argument-start
+   :last-argument-start (input-state-copy-override-resolve
+                         (input-state-copy-override-for
+                          last-argument-start-supplied-p
+                          last-argument-start)
                          (input-state-last-argument-start state))
-   :last-argument-end (%copy-input-state-or-current
-                       last-argument-end-supplied-p
-                       last-argument-end
+   :last-argument-end (input-state-copy-override-resolve
+                       (input-state-copy-override-for
+                        last-argument-end-supplied-p
+                        last-argument-end)
                        (input-state-last-argument-end state))
-   :last-argument-index (%copy-input-state-or-current
-                         last-argument-index-supplied-p
-                         last-argument-index
+   :last-argument-index (input-state-copy-override-resolve
+                         (input-state-copy-override-for
+                          last-argument-index-supplied-p
+                          last-argument-index)
                          (input-state-last-argument-index state))))
 
 (defun %copy-input-state-session-values (state
@@ -190,16 +209,18 @@
                                          redo-stack-supplied-p
                                          redo-stack)
   (%make-input-state-session-copy
-   :search-query (%copy-input-state-clearable-value-or-current
-                  search-query
+   :search-query (input-state-copy-override-resolve
+                  (input-state-copy-optional-value-override search-query)
                   (input-state-search-query state)
-                  "")
-   :search-original-buffer (%copy-input-state-clearable-value-or-current
-                            search-original-buffer
+                  :clear-value "")
+   :search-original-buffer (input-state-copy-override-resolve
+                            (input-state-copy-optional-value-override
+                             search-original-buffer)
                             (input-state-search-original-buffer state)
-                            "")
-   :search-original-cursor (%copy-input-state-clearable-value-or-current
-                            search-original-cursor
+                            :clear-value "")
+   :search-original-cursor (input-state-copy-override-resolve
+                            (input-state-copy-optional-value-override
+                             search-original-cursor)
                             (input-state-search-original-cursor state))
    :search-index (if search-index-supplied-p
                      search-index

@@ -22,7 +22,11 @@
                                     (find-class symbol nil))))))
     (dolist (old-name '("%COPY-INPUT-STATE-COMPLETION-PLIST"
                         "%COPY-INPUT-STATE-TRANSIENT-PLIST"
-                        "%COPY-INPUT-STATE-SESSION-PLIST"))
+                        "%COPY-INPUT-STATE-SESSION-PLIST"
+                        "%COPY-INPUT-STATE-OR-CURRENT"
+                        "%COPY-INPUT-STATE-CLEARABLE-OR-CURRENT"
+                        "%COPY-INPUT-STATE-CLEARABLE-VALUE-OR-CURRENT"
+                        "%COPY-INPUT-STATE-CLAMPED-ANCHOR-OR-CURRENT"))
       (is (not (present-p old-name))))
     (dolist (new-name '("%COPY-INPUT-STATE-COMPLETION-VALUES"
                         "%COPY-INPUT-STATE-TRANSIENT-VALUES"
@@ -30,11 +34,59 @@
                         "%COPY-INPUT-STATE-COMPLETION-INITARGS"
                         "%COPY-INPUT-STATE-TRANSIENT-INITARGS"
                         "%COPY-INPUT-STATE-SESSION-INITARGS"
+                        "INPUT-STATE-COPY-OVERRIDE"
+                        "%MAKE-INPUT-STATE-COPY-OVERRIDE"
+                        "INPUT-STATE-COPY-OVERRIDE-KIND"
+                        "INPUT-STATE-COPY-OVERRIDE-VALUE"
+                        "INPUT-STATE-COPY-OVERRIDE-FOR"
+                        "INPUT-STATE-COPY-OPTIONAL-VALUE-OVERRIDE"
+                        "INPUT-STATE-COPY-OVERRIDE-RESOLVE"
+                        "INPUT-STATE-COPY-ANCHOR-OVERRIDE-RESOLVE"
                         "%INPUT-STATE-COPY-SPEC"
                         "%INPUT-STATE-COMPLETION-COPY"
                         "%INPUT-STATE-TRANSIENT-COPY"
                         "%INPUT-STATE-SESSION-COPY"))
       (is (present-p new-name)))))
+
+(test input-state-copy-override-values-resolve-copy-decisions
+  (let ((current (nshell.presentation::input-state-copy-override-for nil "ignored"))
+        (clear (nshell.presentation::input-state-copy-override-for t :clear))
+        (value (nshell.presentation::input-state-copy-override-for t "new"))
+        (optional-current
+          (nshell.presentation::input-state-copy-optional-value-override nil)))
+    (is (nshell.presentation::input-state-copy-override-p current))
+    (is (eq :current
+            (nshell.presentation::input-state-copy-override-kind current)))
+    (is (eq :clear
+            (nshell.presentation::input-state-copy-override-kind clear)))
+    (is (eq :value
+            (nshell.presentation::input-state-copy-override-kind value)))
+    (is (string= "old"
+                 (nshell.presentation::input-state-copy-override-resolve
+                  current
+                  "old")))
+    (is (null (nshell.presentation::input-state-copy-override-resolve
+               clear
+               "old")))
+    (is (string= "new"
+                 (nshell.presentation::input-state-copy-override-resolve
+                  value
+                  "old"
+                  :acceptp #'stringp)))
+    (is (string= "old"
+                 (nshell.presentation::input-state-copy-override-resolve
+                  value
+                  "old"
+                  :acceptp #'integerp)))
+    (is (string= "old"
+                 (nshell.presentation::input-state-copy-override-resolve
+                  optional-current
+                  "old")))
+    (is (= 3
+           (nshell.presentation::input-state-copy-anchor-override-resolve
+            (nshell.presentation::input-state-copy-override-for t 99)
+            0
+            "abc")))))
 
 (test input-state-copy-initargs-assemble-group-values
   (let* ((completion

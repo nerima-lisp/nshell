@@ -25,6 +25,23 @@
     (is (equal '("echo" "hello" "world")
                (nshell.domain.execution:command-to-list cmd)))))
 
+(test command-projections-are-domain-owned
+  "Command name and argument projections cannot mutate command state."
+  (let* ((args (list "hello" "world"))
+         (cmd (nshell.domain.execution:make-command "echo" args))
+         (name-view (nshell.domain.execution:command-name cmd))
+         (args-view (nshell.domain.execution:command-args cmd))
+         (list-view (nshell.domain.execution:command-to-list cmd)))
+    (setf (first args) "caller-mutated")
+    (setf (char name-view 0) #\x)
+    (setf (first args-view) "projection-mutated")
+    (setf (second list-view) "list-mutated")
+    (is (string= "echo" (nshell.domain.execution:command-name cmd)))
+    (is (equal '("hello" "world")
+               (nshell.domain.execution:command-args cmd)))
+    (is (equal '("echo" "hello" "world")
+               (nshell.domain.execution:command-to-list cmd)))))
+
 ;;; Pipeline tests
 (test pipeline-creation
   "Pipeline can be created with multiple commands"

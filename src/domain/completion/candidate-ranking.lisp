@@ -14,34 +14,37 @@
   score
   described-p)
 
-(defstruct (candidate-merge-slot
-            (:constructor %make-candidate-merge-slot (results-cell)))
+(defstruct (%candidate-merge-slot
+            (:constructor %make-candidate-merge-slot (results-cell))
+            (:conc-name %candidate-merge-slot-))
   results-cell)
 
-(defstruct (candidate-merge-slot-projection
+(defstruct (%candidate-merge-slot-projection
             (:constructor %make-candidate-merge-slot-projection
-                (current-candidate results-cell)))
+                (current-candidate results-cell))
+            (:conc-name %candidate-merge-slot-projection-))
   current-candidate
   results-cell)
 
-(defun project-candidate-merge-slot (slot)
-  (let ((results-cell (candidate-merge-slot-results-cell slot)))
+(defun %project-candidate-merge-slot (slot)
+  (let ((results-cell (%candidate-merge-slot-results-cell slot)))
     (%make-candidate-merge-slot-projection
      (first results-cell)
      results-cell)))
 
-(defun candidate-merge-slot-candidate (slot)
-  (candidate-merge-slot-projection-current-candidate
-   (project-candidate-merge-slot slot)))
+(defun %candidate-merge-slot-candidate (slot)
+  (%candidate-merge-slot-projection-current-candidate
+   (%project-candidate-merge-slot slot)))
 
-(defun candidate-merge-slot-replace-candidate (slot candidate)
-  (let ((projection (project-candidate-merge-slot slot)))
-    (setf (first (candidate-merge-slot-projection-results-cell projection))
+(defun %candidate-merge-slot-replace-candidate (slot candidate)
+  (let ((projection (%project-candidate-merge-slot slot)))
+    (setf (first (%candidate-merge-slot-projection-results-cell projection))
           candidate))
   slot)
 
-(defstruct (candidate-merge-state
-            (:constructor %make-candidate-merge-state (cells-by-text results)))
+(defstruct (%candidate-merge-state
+            (:constructor %make-candidate-merge-state (cells-by-text results))
+            (:conc-name %candidate-merge-state-))
   cells-by-text
   results)
 
@@ -118,25 +121,25 @@
   (duplicate-candidate-quality> (duplicate-candidate-quality candidate)
                                 (duplicate-candidate-quality current)))
 
-(defun candidate-merge-state-add (state candidate)
+(defun %candidate-merge-state-add (state candidate)
   (let* ((text (candidate-text candidate))
-         (cells-by-text (candidate-merge-state-cells-by-text state))
+         (cells-by-text (%candidate-merge-state-cells-by-text state))
          (slot (gethash text cells-by-text)))
     (cond
       ((null slot)
-       (let ((new-results (cons candidate (candidate-merge-state-results state))))
+       (let ((new-results (cons candidate (%candidate-merge-state-results state))))
          (setf (gethash text cells-by-text) (%make-candidate-merge-slot new-results)
-               (candidate-merge-state-results state) new-results)
+               (%candidate-merge-state-results state) new-results)
          state))
       ((better-duplicate-candidate-p candidate
-                                     (candidate-merge-slot-candidate slot))
-       (candidate-merge-slot-replace-candidate slot candidate)
+                                     (%candidate-merge-slot-candidate slot))
+       (%candidate-merge-slot-replace-candidate slot candidate)
        state)
       (t
        state))))
 
-(defun merge-candidate (candidate state)
-  (candidate-merge-state-add state candidate))
+(defun %merge-candidate (candidate state)
+  (%candidate-merge-state-add state candidate))
 
 (defun rank-candidates (prefix candidates)
   (stable-sort (copy-list candidates)
@@ -147,5 +150,5 @@
   (let ((state (%make-empty-candidate-merge-state)))
     (dolist (candidates candidate-lists)
       (dolist (candidate candidates)
-        (merge-candidate candidate state)))
-    (candidate-merge-state-results state)))
+        (%merge-candidate candidate state)))
+    (%candidate-merge-state-results state)))

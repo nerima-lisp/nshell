@@ -49,52 +49,55 @@
     ;; equal score, both described or both bare: not better
     (is (not (better (make "t" :description "a") (make "t" :description "b"))))))
 
-(test candidate-merge-state-add-keeps-indexed-winner
-  (let* ((state (nshell.domain.completion::%make-empty-candidate-merge-state))
-         (low (nshell.domain.completion:make-candidate "dup" :score 1))
-         (high (nshell.domain.completion:make-candidate
-                "dup" :score 5 :description "winner")))
-    (is (eq state (nshell.domain.completion::candidate-merge-state-add state low)))
-    (is (eq state (nshell.domain.completion::candidate-merge-state-add state high)))
-    (let ((results (nshell.domain.completion::candidate-merge-state-results state)))
-      (is (= 1 (length results)))
-      (is (= 5 (nshell.domain.completion:candidate-score (first results))))
-      (is (string= "winner"
-                   (nshell.domain.completion:candidate-description (first results)))))))
-
-(test candidate-merge-slot-projects-result-cell-boundary
+(test merge-candidates-keeps-indexed-winner
   (let* ((low (nshell.domain.completion:make-candidate "dup" :score 1))
+         (high (nshell.domain.completion:make-candidate
+                "dup" :score 5 :description "winner"))
+         (results (nshell.domain.completion::merge-candidates
+                   (list low)
+                   (list high))))
+    (is (= 1 (length results)))
+    (is (= 5 (nshell.domain.completion:candidate-score (first results))))
+    (is (string= "winner"
+                 (nshell.domain.completion:candidate-description (first results))))))
+
+(test merge-candidates-replaces-duplicate-in-original-position
+  (let* ((low (nshell.domain.completion:make-candidate "dup" :score 1))
+         (other (nshell.domain.completion:make-candidate "other" :score 2))
          (high (nshell.domain.completion:make-candidate "dup" :score 5))
-         (results-cell (list low))
-         (slot (nshell.domain.completion::%make-candidate-merge-slot results-cell)))
-    (let ((projection
-            (nshell.domain.completion::project-candidate-merge-slot slot)))
-      (is (eq low
-              (nshell.domain.completion::candidate-merge-slot-projection-current-candidate
-               projection)))
-      (is (eq results-cell
-              (nshell.domain.completion::candidate-merge-slot-projection-results-cell
-               projection))))
-    (is (eq low (nshell.domain.completion::candidate-merge-slot-candidate slot)))
-    (is (eq slot
-            (nshell.domain.completion::candidate-merge-slot-replace-candidate
-             slot high)))
-    (is (eq high (nshell.domain.completion::candidate-merge-slot-candidate slot)))
-    (is (eq high (first results-cell)))))
+         (results (nshell.domain.completion::merge-candidates
+                   (list low other high))))
+    (is (= 2 (length results)))
+    (is (string= "other"
+                 (nshell.domain.completion:candidate-text (first results))))
+    (is (eq high (second results)))))
 
 (test candidate-ranking-constructors-are-internal-boundaries
   (flet ((internal-symbol-p (name)
-           (not (null (find-symbol name '#:nshell.domain.completion)))))
+           (not (null (find-symbol name '#:nshell.domain.completion))))
+         (internal-function-p (name)
+           (let ((symbol (find-symbol name '#:nshell.domain.completion)))
+             (and symbol (fboundp symbol)))))
     (is (not (internal-symbol-p "MAKE-CANDIDATE-RANKING")))
     (is (not (internal-symbol-p "MAKE-DUPLICATE-CANDIDATE-QUALITY")))
     (is (not (internal-symbol-p "MAKE-CANDIDATE-MERGE-SLOT")))
     (is (not (internal-symbol-p "MAKE-CANDIDATE-MERGE-SLOT-PROJECTION")))
     (is (not (internal-symbol-p "MAKE-CANDIDATE-MERGE-STATE")))
+    (is (not (internal-function-p "CANDIDATE-MERGE-STATE-ADD")))
+    (is (not (internal-function-p "MERGE-CANDIDATE")))
+    (is (not (internal-function-p "PROJECT-CANDIDATE-MERGE-SLOT")))
+    (is (not (internal-function-p "CANDIDATE-MERGE-SLOT-CANDIDATE")))
+    (is (not (internal-function-p "CANDIDATE-MERGE-SLOT-REPLACE-CANDIDATE")))
     (is (internal-symbol-p "%MAKE-CANDIDATE-RANKING"))
     (is (internal-symbol-p "%MAKE-DUPLICATE-CANDIDATE-QUALITY"))
     (is (internal-symbol-p "%MAKE-CANDIDATE-MERGE-SLOT"))
     (is (internal-symbol-p "%MAKE-CANDIDATE-MERGE-SLOT-PROJECTION"))
-    (is (internal-symbol-p "%MAKE-EMPTY-CANDIDATE-MERGE-STATE"))))
+    (is (internal-symbol-p "%MAKE-EMPTY-CANDIDATE-MERGE-STATE"))
+    (is (internal-function-p "%CANDIDATE-MERGE-STATE-ADD"))
+    (is (internal-function-p "%MERGE-CANDIDATE"))
+    (is (internal-function-p "%PROJECT-CANDIDATE-MERGE-SLOT"))
+    (is (internal-function-p "%CANDIDATE-MERGE-SLOT-CANDIDATE"))
+    (is (internal-function-p "%CANDIDATE-MERGE-SLOT-REPLACE-CANDIDATE"))))
 
 (test pbt-path-command-completion-is-prefixed-and-deduped
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

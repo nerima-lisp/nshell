@@ -10,15 +10,17 @@
   (command-position-p nil :type boolean :read-only t)
   (redirection-target-p nil :type boolean :read-only t))
 
-(defstruct (completion-word
-            (:constructor %make-completion-word (value start end)))
+(defstruct (%completion-word
+            (:constructor %make-completion-word (value start end))
+            (:conc-name %completion-word-))
   (value "" :type string :read-only t)
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t))
 
-(defstruct (completion-input-analysis
+(defstruct (%completion-input-analysis
             (:constructor %make-completion-input-analysis
-                (partial-input cursor segment-tokens words current-word command-word)))
+                (partial-input cursor segment-tokens words current-word command-word))
+            (:conc-name %completion-input-analysis-))
   (partial-input "" :type string :read-only t)
   (cursor 0 :type integer :read-only t)
   (segment-tokens '() :type list :read-only t)
@@ -36,19 +38,19 @@
             (:conc-name %completion-word-stream-projection-))
   (latest-word nil :read-only t))
 
-(defun starts-with-p (prefix text)
+(defun %starts-with-p (prefix text)
   (and (>= (length text) (length prefix))
        (string-equal prefix text :end2 (length prefix))))
 
-(defun word-like-token-p (token)
+(defun %word-like-token-p (token)
   (not (null (member (nshell.domain.parsing:token-type token)
                      '(:word :error)
                      :test #'eq))))
 
-(defun redirection-token-p (token)
+(defun %redirection-token-p (token)
   (eq :redirect (nshell.domain.parsing:token-type token)))
 
-(defun command-segment-tokens (tokens)
+(defun %command-segment-tokens (tokens)
   "Return tokens in the command segment currently being completed."
   (let ((last-separator (position-if #'nshell.domain.parsing:shell-command-separator-token-p
                                      tokens
@@ -57,7 +59,7 @@
         (subseq tokens (1+ last-separator))
         tokens)))
 
-(defun shell-completion-words (tokens)
+(defun %shell-completion-words (tokens)
   "Coalesce adjacent parser word tokens into shell words.
 
 The tokenizer already emits escaped-space words as single tokens, but quoted
@@ -76,7 +78,7 @@ intervening whitespace are merged."
                        words)
                  (setf current-value nil))))
       (dolist (token tokens)
-        (if (word-like-token-p token)
+        (if (%word-like-token-p token)
             (let ((value (nshell.domain.parsing:token-value token))
                   (start (nshell.domain.parsing:token-start token))
                   (end (nshell.domain.parsing:token-end token)))
@@ -97,37 +99,37 @@ intervening whitespace are merged."
       (flush-current))
     (nreverse words)))
 
-(defun token-ending-before-position (tokens position)
+(defun %token-ending-before-position (tokens position)
   (find-if (lambda (token)
              (<= (nshell.domain.parsing:token-end token) position))
            tokens
            :from-end t))
 
-(defun redirection-target-position-p (tokens current-word cursor)
+(defun %redirection-target-position-p (tokens current-word cursor)
   (let ((previous-token
-          (token-ending-before-position
+          (%token-ending-before-position
            tokens
            (if current-word
-               (completion-word-start current-word)
+               (%completion-word-start current-word)
                cursor))))
     (and previous-token
-         (redirection-token-p previous-token))))
+         (%redirection-token-p previous-token))))
 
 (defun %project-completion-command-word (partial-input words)
   "Return the first non-assignment completion word in WORDS."
   (%make-completion-command-word-projection
    (loop for word in words
          for source = (subseq partial-input
-                              (completion-word-start word)
-                              (completion-word-end word))
+                              (%completion-word-start word)
+                              (%completion-word-end word))
          unless (nshell.domain.parsing:shell-assignment-word-p source)
            return word)))
 
-(defun command-word (partial-input words)
+(defun %command-word (partial-input words)
   (%completion-command-word-projection-word
    (%project-completion-command-word partial-input words)))
 
-(defun argument-word-values-after-command (words command-word)
+(defun %argument-word-values-after-command (words command-word)
   (when command-word
     (loop with seen-command-p = nil
           for word in words
@@ -135,31 +137,31 @@ intervening whitespace are merged."
             do (setf seen-command-p t)
           else
             when seen-command-p
-              collect (completion-word-value word))))
+              collect (%completion-word-value word))))
 
 (defun %project-completion-word-stream (words)
   (%make-completion-word-stream-projection
    (loop for word in words
          finally (return word))))
 
-(defun latest-completion-word (words)
+(defun %latest-completion-word (words)
   (%completion-word-stream-projection-latest-word
    (%project-completion-word-stream words)))
 
-(defun current-completion-word-at-cursor (words cursor)
-  (let ((last-word (latest-completion-word words)))
+(defun %current-completion-word-at-cursor (words cursor)
+  (let ((last-word (%latest-completion-word words)))
     (and last-word
-         (= cursor (completion-word-end last-word))
+         (= cursor (%completion-word-end last-word))
          last-word)))
 
-(defun analyze-completion-input (partial-input)
+(defun %analyze-completion-input (partial-input)
   (let* ((tokenization (nshell.domain.parsing:tokenize partial-input))
          (tokens (nshell.domain.parsing:tokenization-result-tokens tokenization))
          (cursor (length partial-input))
-         (segment-tokens (command-segment-tokens tokens))
-         (words (shell-completion-words segment-tokens))
-         (current-word (current-completion-word-at-cursor words cursor))
-         (command-word (command-word partial-input words)))
+         (segment-tokens (%command-segment-tokens tokens))
+         (words (%shell-completion-words segment-tokens))
+         (current-word (%current-completion-word-at-cursor words cursor))
+         (command-word (%command-word partial-input words)))
     (%make-completion-input-analysis partial-input
                                      cursor
                                      segment-tokens
@@ -170,46 +172,46 @@ intervening whitespace are merged."
 (defun %completion-command-position-p (command-word current-word cursor)
   (or (null command-word)
       (and (eq current-word command-word)
-           (= cursor (completion-word-end command-word)))))
+           (= cursor (%completion-word-end command-word)))))
 
-(defun completion-analysis-command-position-p (analysis)
+(defun %completion-analysis-command-position-p (analysis)
   (%completion-command-position-p
-   (completion-input-analysis-command-word analysis)
-   (completion-input-analysis-current-word analysis)
-   (completion-input-analysis-cursor analysis)))
+   (%completion-input-analysis-command-word analysis)
+   (%completion-input-analysis-current-word analysis)
+   (%completion-input-analysis-cursor analysis)))
 
-(defun completion-analysis-command (analysis)
-  (let ((command-word (completion-input-analysis-command-word analysis)))
+(defun %completion-analysis-command (analysis)
+  (let ((command-word (%completion-input-analysis-command-word analysis)))
     (if command-word
-        (completion-word-value command-word)
+        (%completion-word-value command-word)
         "")))
 
-(defun completion-analysis-argument-prefix (analysis command-position-p)
-  (let ((current-word (completion-input-analysis-current-word analysis)))
+(defun %completion-analysis-argument-prefix (analysis command-position-p)
+  (let ((current-word (%completion-input-analysis-current-word analysis)))
     (if (and current-word
              (not command-position-p))
-        (completion-word-value current-word)
+        (%completion-word-value current-word)
         "")))
 
-(defun completion-analysis-argument-words (analysis)
-  (argument-word-values-after-command
-   (completion-input-analysis-words analysis)
-   (completion-input-analysis-command-word analysis)))
+(defun %completion-analysis-argument-words (analysis)
+  (%argument-word-values-after-command
+   (%completion-input-analysis-words analysis)
+   (%completion-input-analysis-command-word analysis)))
 
-(defun completion-analysis-redirection-target-p (analysis)
-  (redirection-target-position-p
-   (completion-input-analysis-segment-tokens analysis)
-   (completion-input-analysis-current-word analysis)
-   (completion-input-analysis-cursor analysis)))
+(defun %completion-analysis-redirection-target-p (analysis)
+  (%redirection-target-position-p
+   (%completion-input-analysis-segment-tokens analysis)
+   (%completion-input-analysis-current-word analysis)
+   (%completion-input-analysis-cursor analysis)))
 
-(defun completion-context-from-analysis (analysis)
-  (let* ((command-position-p (completion-analysis-command-position-p analysis))
-         (command (completion-analysis-command analysis))
+(defun %completion-context-from-analysis (analysis)
+  (let* ((command-position-p (%completion-analysis-command-position-p analysis))
+         (command (%completion-analysis-command analysis))
          (argument-prefix
-           (completion-analysis-argument-prefix analysis command-position-p))
-         (argument-words (completion-analysis-argument-words analysis))
+           (%completion-analysis-argument-prefix analysis command-position-p))
+         (argument-words (%completion-analysis-argument-words analysis))
          (redirection-target-p
-           (completion-analysis-redirection-target-p analysis)))
+           (%completion-analysis-redirection-target-p analysis)))
     (%make-completion-context
      :command command
      :argument-prefix argument-prefix
@@ -218,5 +220,5 @@ intervening whitespace are merged."
      :redirection-target-p redirection-target-p)))
 
 (defun completion-context-for (partial-input)
-  (completion-context-from-analysis
-   (analyze-completion-input partial-input)))
+  (%completion-context-from-analysis
+   (%analyze-completion-input partial-input)))

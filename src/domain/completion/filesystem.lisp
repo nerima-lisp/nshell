@@ -196,7 +196,7 @@
 (defun %path-command-entry-candidate (entry prefix)
   (let ((name (%entry-command-name entry)))
     (when (and name
-               (starts-with-p prefix name)
+               (%starts-with-p prefix name)
                (%executable-candidate-p entry))
       (make-candidate name :kind :command))))
 
@@ -237,7 +237,7 @@
   (let ((name (%entry-path-name entry)))
     (when (and name
                (not (string= name ""))
-               (starts-with-p (%file-completion-query-name-prefix query) name))
+               (%starts-with-p (%file-completion-query-name-prefix query) name))
       (let* ((raw-text (concatenate 'string
                                     (%file-completion-query-directory-prefix query)
                                     name))

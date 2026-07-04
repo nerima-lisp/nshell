@@ -278,7 +278,7 @@
 (defun %completion-help-option-value-specs (options values)
   (when values
     (loop for option in options
-          when (starts-with-p "--" option)
+          when (%starts-with-p "--" option)
             collect (%make-kb-option-value-spec option values))))
 
 (defun %completion-help-command-facts (help-text)

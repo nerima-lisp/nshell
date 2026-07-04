@@ -29,7 +29,7 @@
   (%sorted-candidates-by-text
    (loop for entry in +builtin-command-catalog+
          for name = (%candidate-entry-command-name entry)
-         when (starts-with-p prefix name)
+         when (%starts-with-p prefix name)
            collect (%command-entry-candidate name entry))))
 
 (defun knowledge-base-command-candidates (kb prefix)
@@ -37,7 +37,7 @@
     (%map-kb-commands
      kb
      (lambda (name entry)
-       (when (starts-with-p prefix name)
+       (when (%starts-with-p prefix name)
          (push (%command-entry-candidate name entry) results))))
     (nreverse results)))
 
@@ -122,7 +122,7 @@
 (defun %matching-entry-option-values (entry option value-prefix)
   (loop for value in (%entry-option-values entry option)
         when (and (stringp value)
-                  (starts-with-p value-prefix value))
+                  (%starts-with-p value-prefix value))
           collect value))
 
 (defun %option-value-candidate (text)
@@ -179,7 +179,7 @@
 
 (defun %separate-option-value-candidates (entry separate-prefix)
   (when (and separate-prefix
-             (not (starts-with-p "-"
+             (not (%starts-with-p "-"
                                   (%separate-option-value-prefix-value-prefix
                                    separate-prefix))))
     (%option-value-candidates
@@ -191,7 +191,7 @@
 (defun %option-token-matches-p (option token)
   (or (string= option token)
       (and (< (length option) (length token))
-           (starts-with-p option token)
+           (%starts-with-p option token)
            (char= (char token (length option)) #\=))))
 
 (defun %exclusive-option-blocked-p (entry option argument-words)
@@ -206,7 +206,7 @@
 
 (defun %available-entry-argument-names (entry prefix argument-words)
   (loop for name in (%unique-entry-argument-names entry)
-        when (and (starts-with-p prefix name)
+        when (and (%starts-with-p prefix name)
                   (not (%exclusive-option-blocked-p
                         entry
                         name

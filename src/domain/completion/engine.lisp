@@ -63,7 +63,7 @@
                for value = (solution-value variable solution)
                for description = (and description-fn
                                       (funcall description-fn value))
-               when (and (stringp value) (starts-with-p prefix value))
+               when (and (stringp value) (%starts-with-p prefix value))
                  collect (make-candidate value
                                          :kind kind
                                          :description (or description ""))))

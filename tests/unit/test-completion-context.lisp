@@ -130,24 +130,77 @@
 
 (test completion-context-constructors-are-internal-boundaries
   "Completion context construction should not expose legacy unprefixed helper names."
-  (is (not (fboundp 'nshell.domain.completion::make-completion-context)))
-  (is (not (fboundp 'nshell.domain.completion::make-completion-word)))
-  (is (not (fboundp 'nshell.domain.completion::make-completion-input-analysis)))
-  (is (not (fboundp 'nshell.domain.completion::make-completion-command-word-projection)))
-  (is (not (fboundp 'nshell.domain.completion::make-completion-word-stream-projection)))
-  (is (not (fboundp 'nshell.domain.completion::project-completion-command-word)))
-  (is (not (fboundp 'nshell.domain.completion::project-completion-word-stream)))
-  (is (not (fboundp 'nshell.domain.completion::completion-command-word-projection-word)))
-  (is (not (fboundp 'nshell.domain.completion::completion-word-stream-projection-latest-word)))
-  (is (fboundp 'nshell.domain.completion::%make-completion-context))
-  (is (fboundp 'nshell.domain.completion::%make-completion-word))
-  (is (fboundp 'nshell.domain.completion::%make-completion-input-analysis))
-  (is (fboundp 'nshell.domain.completion::%make-completion-command-word-projection))
-  (is (fboundp 'nshell.domain.completion::%make-completion-word-stream-projection))
-  (is (fboundp 'nshell.domain.completion::%project-completion-command-word))
-  (is (fboundp 'nshell.domain.completion::%project-completion-word-stream))
-  (is (fboundp 'nshell.domain.completion::%completion-command-word-projection-word))
-  (is (fboundp 'nshell.domain.completion::%completion-word-stream-projection-latest-word)))
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (dolist (name '("%MAKE-COMPLETION-CONTEXT"
+                    "%MAKE-COMPLETION-WORD"
+                    "%MAKE-COMPLETION-INPUT-ANALYSIS"
+                    "%MAKE-COMPLETION-COMMAND-WORD-PROJECTION"
+                    "%MAKE-COMPLETION-WORD-STREAM-PROJECTION"
+                    "%PROJECT-COMPLETION-COMMAND-WORD"
+                    "%PROJECT-COMPLETION-WORD-STREAM"
+                    "%STARTS-WITH-P"
+                    "%WORD-LIKE-TOKEN-P"
+                    "%REDIRECTION-TOKEN-P"
+                    "%COMMAND-SEGMENT-TOKENS"
+                    "%SHELL-COMPLETION-WORDS"
+                    "%TOKEN-ENDING-BEFORE-POSITION"
+                    "%REDIRECTION-TARGET-POSITION-P"
+                    "%COMMAND-WORD"
+                    "%ARGUMENT-WORD-VALUES-AFTER-COMMAND"
+                    "%LATEST-COMPLETION-WORD"
+                    "%CURRENT-COMPLETION-WORD-AT-CURSOR"
+                    "%ANALYZE-COMPLETION-INPUT"
+                    "%COMPLETION-COMMAND-POSITION-P"
+                    "%COMPLETION-ANALYSIS-COMMAND-POSITION-P"
+                    "%COMPLETION-ANALYSIS-COMMAND"
+                    "%COMPLETION-ANALYSIS-ARGUMENT-PREFIX"
+                    "%COMPLETION-ANALYSIS-ARGUMENT-WORDS"
+                    "%COMPLETION-ANALYSIS-REDIRECTION-TARGET-P"
+                    "%COMPLETION-CONTEXT-FROM-ANALYSIS"
+                    "%COMPLETION-WORD-VALUE"
+                    "%COMPLETION-WORD-START"
+                    "%COMPLETION-WORD-END"
+                    "%COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"
+                    "%COMPLETION-COMMAND-WORD-PROJECTION-WORD"
+                    "%COMPLETION-WORD-STREAM-PROJECTION-LATEST-WORD"))
+      (is (fboundp (find-symbol name '#:nshell.domain.completion))))
+    (dolist (name '("MAKE-COMPLETION-CONTEXT"
+                    "MAKE-COMPLETION-WORD"
+                    "MAKE-COMPLETION-INPUT-ANALYSIS"
+                    "MAKE-COMPLETION-COMMAND-WORD-PROJECTION"
+                    "MAKE-COMPLETION-WORD-STREAM-PROJECTION"
+                    "PROJECT-COMPLETION-COMMAND-WORD"
+                    "PROJECT-COMPLETION-WORD-STREAM"
+                    "COMPLETION-WORD-VALUE"
+                    "COMPLETION-WORD-START"
+                    "COMPLETION-WORD-END"
+                    "COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"
+                    "COMPLETION-COMMAND-WORD-PROJECTION-WORD"
+                    "COMPLETION-WORD-STREAM-PROJECTION-LATEST-WORD"))
+      (is (not (defined-symbol-p name))))
+    (dolist (name '("STARTS-WITH-P"
+                    "WORD-LIKE-TOKEN-P"
+                    "REDIRECTION-TOKEN-P"
+                    "COMMAND-SEGMENT-TOKENS"
+                    "SHELL-COMPLETION-WORDS"
+                    "TOKEN-ENDING-BEFORE-POSITION"
+                    "REDIRECTION-TARGET-POSITION-P"
+                    "COMMAND-WORD"
+                    "ARGUMENT-WORD-VALUES-AFTER-COMMAND"
+                    "LATEST-COMPLETION-WORD"
+                    "CURRENT-COMPLETION-WORD-AT-CURSOR"
+                    "ANALYZE-COMPLETION-INPUT"
+                    "COMPLETION-COMMAND-POSITION-P"
+                    "COMPLETION-ANALYSIS-COMMAND-POSITION-P"
+                    "COMPLETION-ANALYSIS-COMMAND"
+                    "COMPLETION-ANALYSIS-ARGUMENT-PREFIX"
+                    "COMPLETION-ANALYSIS-ARGUMENT-WORDS"
+                    "COMPLETION-ANALYSIS-REDIRECTION-TARGET-P"
+                    "COMPLETION-CONTEXT-FROM-ANALYSIS"))
+      (multiple-value-bind (symbol status)
+          (find-symbol name '#:nshell.domain.completion)
+        (is (not (and status (fboundp symbol))))))))
 
 (test completion-query-constructor-is-internal-boundary
   "Completion query construction should stay behind completion-query-for."
@@ -155,40 +208,40 @@
   (is (fboundp 'nshell.domain.completion::%make-completion-query)))
 
 (test completion-context-word-like-token-p-returns-canonical-booleans
-  (is (eq t (nshell.domain.completion::word-like-token-p
+  (is (eq t (nshell.domain.completion::%word-like-token-p
              (nshell.domain.parsing:make-token :word "git"))))
-  (is (eq t (nshell.domain.completion::word-like-token-p
+  (is (eq t (nshell.domain.completion::%word-like-token-p
              (nshell.domain.parsing:make-token :error "git"))))
-  (is (null (nshell.domain.completion::word-like-token-p
+  (is (null (nshell.domain.completion::%word-like-token-p
              (nshell.domain.parsing:make-token :pipe "|")))))
 
-(test starts-with-p-performs-case-insensitive-prefix-match
-  "starts-with-p returns true when text starts with prefix (case-folded)."
+(test completion-context-starts-with-p-performs-case-insensitive-prefix-match
+  "%starts-with-p returns true when text starts with prefix (case-folded)."
   (flet ((swp (prefix text)
-           (nshell.domain.completion::starts-with-p prefix text)))
+           (nshell.domain.completion::%starts-with-p prefix text)))
     (is (swp "" "anything"))
     (is (swp "git" "git checkout"))
     (is (swp "GIT" "git checkout"))
     (is (not (swp "gitx" "git")))
     (is (not (swp "checkout" "git")))))
 
-(test redirection-token-p-recognizes-redirect-type
-  "redirection-token-p returns true only for :redirect tokens."
+(test completion-context-redirection-token-p-recognizes-redirect-type
+  "%redirection-token-p returns true only for :redirect tokens."
   (flet ((redir (type)
-           (nshell.domain.completion::redirection-token-p
+           (nshell.domain.completion::%redirection-token-p
             (nshell.domain.parsing:make-token type ""))))
     (is (redir :redirect))
     (is (not (redir :pipe)))
     (is (not (redir :word)))
     (is (not (redir :newline)))))
 
-(test command-segment-tokens-returns-tokens-after-last-separator
-  "command-segment-tokens strips everything up to and including the last separator."
+(test completion-context-command-segment-tokens-returns-tokens-after-last-separator
+  "%command-segment-tokens strips everything up to and including the last separator."
   (flet ((tokens (input)
            (nshell.domain.parsing:tokenization-result-tokens
             (nshell.domain.parsing:tokenize input))))
     (flet ((seg (input)
-             (nshell.domain.completion::command-segment-tokens
+             (nshell.domain.completion::%command-segment-tokens
               (tokens input))))
       ;; no separator: whole token list returned
       (is (= 2 (length (seg "git checkout"))))
@@ -197,14 +250,14 @@
       ;; after semicolon
       (is (= 1 (length (seg "a ; b")))))))
 
-(test shell-completion-words-merges-adjacent-word-tokens
-  "shell-completion-words combines adjacent word-like tokens into single logical words."
+(test completion-context-shell-completion-words-merges-adjacent-word-tokens
+  "%shell-completion-words combines adjacent word-like tokens into single logical words."
   (flet ((tokens (input)
            (nshell.domain.parsing:tokenization-result-tokens
             (nshell.domain.parsing:tokenize input))))
     (flet ((words (input)
-             (mapcar #'nshell.domain.completion::completion-word-value
-                     (nshell.domain.completion::shell-completion-words
+             (mapcar #'nshell.domain.completion::%completion-word-value
+                     (nshell.domain.completion::%shell-completion-words
                       (tokens input)))))
       (is (equal '("git" "checkout") (words "git checkout")))
       ;; pipe is not word-like so it triggers a flush

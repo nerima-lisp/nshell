@@ -214,7 +214,7 @@
          collect (argument-name-candidate name))))
 
 (defun knowledge-base-argument-candidates (kb command prefix &key argument-words)
-  (let ((entry (kb-query kb command)))
+  (let ((entry (%kb-command-entry kb command)))
     (when entry
       (or (attached-option-value-candidates entry prefix)
           (separate-option-value-candidates

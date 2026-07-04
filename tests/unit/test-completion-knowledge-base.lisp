@@ -341,8 +341,8 @@
                           ("--compact" "--pretty")))
     (is (equal '(("--json" "--yaml")
                  ("--compact" "--pretty"))
-               (getf (nshell.domain.completion:kb-query kb "tool")
-                     :exclusive-options)))))
+               (nshell.domain.completion:kb-command-exclusive-options
+                kb "tool")))))
 
 (test knowledge-base-hides-mutually-exclusive-options-after-selection
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
@@ -507,6 +507,31 @@
     (is (equal '(("--mode" "fast" "safe"))
                (nshell.domain.completion::%kb-command-entry-option-values
                 entry)))))
+
+(test knowledge-base-query-api-does-not-expose-entry-plist
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :subcommands '("run")
+     :flags '("--mode")
+     :option-values '(("--mode" "fast"))
+     :exclusive-options '(("--json" "--yaml"))
+     :description "tool command")
+    (is (not (fboundp 'nshell.domain.completion::kb-query)))
+    (is (nshell.domain.completion:kb-command-present-p kb "tool"))
+    (is (not (nshell.domain.completion:kb-command-present-p kb "missing")))
+    (is (equal '("run")
+               (nshell.domain.completion:kb-command-subcommands kb "tool")))
+    (is (equal '("--mode")
+               (nshell.domain.completion:kb-command-flags kb "tool")))
+    (is (equal '(("--mode" "fast"))
+               (nshell.domain.completion:kb-command-option-values kb "tool")))
+    (is (equal '(("--json" "--yaml"))
+               (nshell.domain.completion:kb-command-exclusive-options
+                kb "tool")))
+    (is (string= "tool command"
+                 (nshell.domain.completion:kb-command-description
+                  kb "tool")))))
 
 (test normalize-kb-exclusive-option-groups-filters-singletons-and-deduplicates
   "normalize drops singleton groups and deduplicates values within each group."

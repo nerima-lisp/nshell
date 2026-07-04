@@ -123,6 +123,27 @@
 (defun %kb-command-entry-description (entry)
   (getf entry :description))
 
+(defun %kb-command-entry (kb cmd-name)
+  (and kb (gethash cmd-name (%knowledge-base-commands kb))))
+
+(defun kb-command-present-p (kb cmd-name)
+  (not (null (%kb-command-entry kb cmd-name))))
+
+(defun kb-command-subcommands (kb cmd-name)
+  (%kb-command-entry-subcommands (%kb-command-entry kb cmd-name)))
+
+(defun kb-command-flags (kb cmd-name)
+  (%kb-command-entry-flags (%kb-command-entry kb cmd-name)))
+
+(defun kb-command-option-values (kb cmd-name)
+  (%kb-command-entry-option-values (%kb-command-entry kb cmd-name)))
+
+(defun kb-command-exclusive-options (kb cmd-name)
+  (%kb-command-entry-exclusive-options (%kb-command-entry kb cmd-name)))
+
+(defun kb-command-description (kb cmd-name)
+  (%kb-command-entry-description (%kb-command-entry kb cmd-name)))
+
 (defun %merge-kb-command-entry-facts
     (entry &key subcommands flags option-values exclusive-options description)
   (setf (getf entry :subcommands)
@@ -282,6 +303,3 @@
 
 (defun kb-remove-command (kb cmd-name)
   (remhash cmd-name (%knowledge-base-commands kb)))
-
-(defun kb-query (kb cmd-name)
-  (gethash cmd-name (%knowledge-base-commands kb)))

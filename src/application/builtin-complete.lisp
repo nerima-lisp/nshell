@@ -150,22 +150,27 @@
        (values nil 0))
       (t
        (let* ((kb (shell-context-knowledge-base context))
-              (entry (and kb (nshell.domain.completion:kb-query kb command)))
               (option-flags (append long-options short-options))
               (generic-arguments (and (null option-flags) arguments))
               (merged-subcommands
-                (%complete-merge-strings generic-arguments (getf entry :subcommands)))
+                (%complete-merge-strings
+                 generic-arguments
+                 (nshell.domain.completion:kb-command-subcommands kb command)))
               (merged-flags
                 (%complete-merge-strings (append flags option-flags)
-                                         (getf entry :flags)))
+                                         (nshell.domain.completion:kb-command-flags
+                                          kb command)))
               (merged-option-values
-                (%complete-merge-option-values (getf entry :option-values)
-                                               option-flags
-                                               arguments)))
+                (%complete-merge-option-values
+                 (nshell.domain.completion:kb-command-option-values kb command)
+                 option-flags
+                 arguments))
+              (existing-description
+                (nshell.domain.completion:kb-command-description kb command)))
          (nshell.domain.completion:kb-add-command
           kb command
           :subcommands merged-subcommands
           :flags merged-flags
           :option-values merged-option-values
-          :description (or description (getf entry :description)))
+          :description (or description existing-description))
          (values nil 0))))))

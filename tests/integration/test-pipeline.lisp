@@ -56,8 +56,7 @@
 (test completion-knowledge-base-integration
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "git" :subcommands '("status") :flags '("-m"))
-    (let ((entry (nshell.domain.completion:kb-query kb "git")))
-      (is (not (null entry))))))
+    (is (nshell.domain.completion:kb-command-present-p kb "git"))))
 
 (test path-command-completion-uses-directory-adapter-integration
   (let* ((root (merge-pathnames (format nil "nshell-path-completion-~a/" (gensym))

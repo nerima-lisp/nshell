@@ -126,7 +126,10 @@
             #:candidate-description #:candidate-score
             #:make-empty-knowledge-base #:kb-add-command #:kb-add-command-from-help
             #:kb-add-option
-            #:kb-remove-command #:kb-query
+            #:kb-remove-command #:kb-command-present-p
+            #:kb-command-subcommands #:kb-command-flags
+            #:kb-command-option-values #:kb-command-exclusive-options
+            #:kb-command-description
             #:make-fact #:make-rule #:fact-p #:rule-p
             #:assert-fact! #:assert-rule! #:prove #:prove-all #:predicate-true-p
             #:+command-path-builtin-specs+

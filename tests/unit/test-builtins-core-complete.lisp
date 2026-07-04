@@ -66,13 +66,13 @@
         (is (null output))
         (is (= 0 code)))
       (let ((kb (nshell.application:shell-context-knowledge-base context)))
-        (is (not (null (nshell.domain.completion:kb-query kb command)))))
+        (is (nshell.domain.completion:kb-command-present-p kb command)))
       (multiple-value-bind (output code)
           (call-builtin context "complete" (list "-c" command "--erase"))
         (is (null output))
         (is (= 0 code)))
       (let ((kb (nshell.application:shell-context-knowledge-base context)))
-        (is (null (nshell.domain.completion:kb-query kb command)))
+        (is (not (nshell.domain.completion:kb-command-present-p kb command)))
         (is (not (member command
                          (mapcar #'nshell.domain.completion:candidate-text
                                  (nshell.domain.completion:complete

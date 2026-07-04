@@ -214,6 +214,11 @@
     (is (string= "printf %s bg-pipe | cat"
                  (nshell.domain.parsing:ast-node->command-line pipeline)))))
 
+(test ast-node-base-constructor-is-internal-boundary
+  "The raw base AST constructor is internal; callers use concrete node factories."
+  (is (not (fboundp 'nshell.domain.parsing::make-ast-node)))
+  (is (fboundp 'nshell.domain.parsing::%make-ast-node)))
+
 (test ast-node-constructors-copy-list-slots
   "AST constructors should not share mutable list slots with callers."
   (let* ((args (list "one"))

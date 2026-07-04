@@ -4,7 +4,7 @@
 (defun %copy-ast-list (items)
   (copy-list (or items '())))
 
-(defstruct (ast-node (:constructor make-ast-node (type &optional span)))
+(defstruct (ast-node (:constructor %make-ast-node (type &optional span)))
   (type :unknown :type keyword :read-only t)
   (span nil :type list :read-only t))
 

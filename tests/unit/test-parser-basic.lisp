@@ -576,11 +576,13 @@
   "Mixed sequence assembly should expose command boundaries as value objects."
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
          (second-command (nshell.domain.parsing:make-command-node "cat" nil))
-         (pairs (nshell.domain.parsing::%command-separator-pairs
-                 (list first-command second-command)
-                 '(:pipe :and)))
+         (source (nshell.domain.parsing::%make-command-separator-pair-source
+                  (list first-command second-command)
+                  '(:pipe :and)))
+         (pairs (nshell.domain.parsing::%command-separator-pairs source))
          (first-pair (first pairs))
          (second-pair (second pairs)))
+    (is (nshell.domain.parsing::%command-separator-pair-source-p source))
     (is (= 2 (length pairs)))
     (is (nshell.domain.parsing::%command-separator-pair-p first-pair))
     (is (eq first-command

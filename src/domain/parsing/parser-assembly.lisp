@@ -116,12 +116,16 @@
   (command nil :read-only t)
   (separator nil :read-only t))
 
-(defun %command-separator-pairs (commands separators)
-  (let ((remaining-separators (copy-list separators)))
-    (loop for command in commands
-          collect (%make-command-separator-pair
-                   command
-                   (pop remaining-separators)))))
+(defstruct (%command-separator-pair-source
+            (:constructor %make-command-separator-pair-source
+                (commands separators)))
+  (commands nil :type list :read-only t)
+  (separators nil :type list :read-only t))
+
+(defun %command-separator-pairs (source)
+  (loop for command in (%command-separator-pair-source-commands source)
+        for separator in (%command-separator-pair-source-separators source)
+        collect (%make-command-separator-pair command separator)))
 
 (defstruct (%mixed-sequence-assembly
             (:constructor %make-mixed-sequence-assembly
@@ -136,8 +140,9 @@
 
 (defun %mixed-sequence-assembly-pairs (assembly)
   (%command-separator-pairs
-   (%mixed-sequence-assembly-commands assembly)
-   (%mixed-sequence-assembly-separators assembly)))
+   (%make-command-separator-pair-source
+    (%mixed-sequence-assembly-commands assembly)
+    (%mixed-sequence-assembly-separators assembly))))
 
 (defstruct (%pending-pipeline-group
             (:constructor %make-pending-pipeline-group

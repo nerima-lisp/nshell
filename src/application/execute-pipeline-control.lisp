@@ -176,9 +176,11 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
 
 (defun %execute-sequence-node-in-context (context ast)
   (%with-output-code-accumulator (output code)
-    (dolist (pair (nshell.domain.parsing:sequence-node-command-separator-pairs ast))
-      (let ((command (car pair))
-            (separator (cdr pair)))
+    (dolist (entry (nshell.domain.parsing:sequence-node-command-separators ast))
+      (let ((command
+              (nshell.domain.parsing:sequence-node-command-separator-command entry))
+            (separator
+              (nshell.domain.parsing:sequence-node-command-separator-separator entry)))
         ;; :amp (&) spawns asynchronously and continues without blocking.
         ;; :and (&&) stops on failure; :or (||) stops on success.
         (if (eq :amp separator)

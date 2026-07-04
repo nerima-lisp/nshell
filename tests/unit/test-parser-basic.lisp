@@ -427,19 +427,31 @@
     (setf (car body) body-replacement)
     (is (eq body-original (first (nshell.domain.parsing:begin-end-node-body node))))))
 
-(test sequence-node-command-separator-pairs-project-copied-node-state
-  "Sequence traversal should expose command/separator pairs without leaking AST state."
+(test sequence-node-command-separators-project-copied-node-state
+  "Sequence traversal should expose typed command/separator entries without leaking AST state."
   (let* ((left (nshell.domain.parsing:make-command-node "echo" '("left")))
          (right (nshell.domain.parsing:make-command-node "echo" '("right")))
          (sequence (nshell.domain.parsing::make-sequence-node
                     (list left right)
                     (list :semi :amp)))
-         (pairs (nshell.domain.parsing:sequence-node-command-separator-pairs sequence)))
-    (is (= 2 (length pairs)))
-    (is (eq left (caar pairs)))
-    (is (eq :semi (cdar pairs)))
-    (is (eq right (caadr pairs)))
-    (is (eq :amp (cdadr pairs)))))
+         (entries (nshell.domain.parsing:sequence-node-command-separators sequence))
+         (first-entry (first entries))
+         (second-entry (second entries)))
+    (is (= 2 (length entries)))
+    (is (nshell.domain.parsing:sequence-node-command-separator-p first-entry))
+    (is (eq left
+            (nshell.domain.parsing:sequence-node-command-separator-command
+             first-entry)))
+    (is (eq :semi
+            (nshell.domain.parsing:sequence-node-command-separator-separator
+             first-entry)))
+    (is (nshell.domain.parsing:sequence-node-command-separator-p second-entry))
+    (is (eq right
+            (nshell.domain.parsing:sequence-node-command-separator-command
+             second-entry)))
+    (is (eq :amp
+            (nshell.domain.parsing:sequence-node-command-separator-separator
+             second-entry)))))
 
 (test parser-assembly-builds-single-command-boundaries
   "Parser assembly should keep background metadata out of command nodes."

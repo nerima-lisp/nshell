@@ -40,25 +40,16 @@
                        (%copy-ast-list separators)
                        span))
 
-(defstruct (%sequence-node-command-separator
+(defstruct (sequence-node-command-separator
             (:constructor %make-sequence-node-command-separator (command separator)))
   (command nil :read-only t)
   (separator nil :read-only t))
 
-(defun %make-sequence-node-command-separator-entry (command separator)
-  (%make-sequence-node-command-separator command separator))
-
-(defun %sequence-node-command-separators (node)
+(defun sequence-node-command-separators (node)
+  "Return SEQUENCE-NODE-COMMAND-SEPARATOR values for NODE in command order."
   (let ((separators (copy-list (sequence-node-separators node))))
     (loop for command in (sequence-node-commands node)
-          collect (%make-sequence-node-command-separator-entry command (pop separators)))))
-
-(defun sequence-node-command-separator-pairs (node)
-  "Return (command . separator) pairs for NODE in command order."
-  (mapcar (lambda (entry)
-            (cons (%sequence-node-command-separator-command entry)
-                  (%sequence-node-command-separator-separator entry)))
-          (%sequence-node-command-separators node)))
+          collect (%make-sequence-node-command-separator command (pop separators)))))
 
 (defstruct (if-node (:include ast-node)
                     (:constructor %make-if-node

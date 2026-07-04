@@ -82,7 +82,11 @@
                 #:command-node-arg-values #:split-command-node-redirects
                 #:split-command-nodes-redirects #:ast-node->command-line
                 #:arg-value #:arg-quote-style
-             #:sequence-node-command-separator-pairs
+                #:sequence-node-command-separator
+                #:sequence-node-command-separator-p
+                #:sequence-node-command-separator-command
+                #:sequence-node-command-separator-separator
+                #:sequence-node-command-separators
              #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch
              #:for-node-p #:for-node-var-name #:for-node-in-values #:for-node-body
              #:while-node-p #:while-node-condition #:while-node-body

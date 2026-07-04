@@ -110,6 +110,28 @@
     (is (null (nshell.domain.parsing::%redirect-targetless-p
                "not-a-redirect")))))
 
+(test redirect-kind-facts-project-classification
+  "Redirect kind facts should own input/output/stderr/append classification."
+  (let ((input-facts (nshell.domain.parsing::%redirect-kind-facts :<))
+        (stderr-append-facts (nshell.domain.parsing::%redirect-kind-facts :2>>))
+        (all-output-append-facts (nshell.domain.parsing::%redirect-kind-facts :&>>)))
+    (is (nshell.domain.parsing::%redirect-kind-facts-p input-facts))
+    (is (nshell.domain.parsing::%redirect-kind-facts-input-p input-facts))
+    (is (not (nshell.domain.parsing::%redirect-kind-facts-output-p input-facts)))
+    (is (not (nshell.domain.parsing::%redirect-kind-facts-stderr-p input-facts)))
+    (is (nshell.domain.parsing::%redirect-kind-facts-stderr-p
+         stderr-append-facts))
+    (is (nshell.domain.parsing::%redirect-kind-facts-append-p
+         stderr-append-facts))
+    (is (nshell.domain.parsing::%redirect-kind-facts-output-p
+         all-output-append-facts))
+    (is (nshell.domain.parsing::%redirect-kind-facts-stderr-p
+         all-output-append-facts))
+    (is (nshell.domain.parsing::%redirect-kind-facts-append-p
+         all-output-append-facts))
+    (is (null (nshell.domain.parsing::%redirect-kind-facts nil)))
+    (is (null (nshell.domain.parsing::%redirect-kind-facts :unknown)))))
+
 (test redirect-execution-classification-projects-effective-specs
   "Execution redirect classification belongs to parser-domain data."
   (let ((redirects '((:< . "in.txt")
@@ -120,6 +142,13 @@
     (is (nshell.domain.parsing:redirect-output-kind-p :&>))
     (is (nshell.domain.parsing:redirect-stderr-kind-p :2>&1))
     (is (nshell.domain.parsing:redirect-append-kind-p :>>))
+    (is (nshell.domain.parsing:redirect-append-kind-p :2>>))
+    (is (nshell.domain.parsing:redirect-output-kind-p :&>>))
+    (is (nshell.domain.parsing:redirect-stderr-kind-p :&>>))
+    (is (not (nshell.domain.parsing:redirect-input-kind-p nil)))
+    (is (not (nshell.domain.parsing:redirect-output-kind-p :unknown)))
+    (is (not (nshell.domain.parsing:redirect-stderr-kind-p :unknown)))
+    (is (not (nshell.domain.parsing:redirect-append-kind-p :unknown)))
     (multiple-value-bind (kind target)
         (nshell.domain.parsing:redirect-input-spec redirects)
       (is (eq :< kind))

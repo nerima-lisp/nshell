@@ -18,15 +18,6 @@
   '(:2>&1)
   "Redirect specs that duplicate a descriptor and so take no file target.")
 
-(defparameter +input-redirect-kinds+ '(:< :<< :<<<)
-  "Redirect kinds that provide input to a command stage.")
-
-(defparameter +output-redirect-kinds+ '(:> :>> :&> :&>>)
-  "Redirect kinds that capture output from a command stage.")
-
-(defparameter +stderr-redirect-kinds+ '(:2> :2>> :2>&1 :&> :&>>)
-  "Redirect kinds that affect the standard error stream.")
-
 (defstruct (%redirect-spec-entry
             (:constructor %make-redirect-spec-entry (text kind)))
   text
@@ -45,10 +36,31 @@
   kind
   target-required-p)
 
+(defstruct (%redirect-kind-facts
+            (:constructor %make-redirect-kind-facts
+                (kind input-p output-p stderr-p append-p)))
+  kind
+  input-p
+  output-p
+  stderr-p
+  append-p)
+
 (defstruct (%redirect-entry
             (:constructor %make-redirect-entry (kind target)))
   kind
   target)
+
+(defparameter +redirect-kind-fact-specs+
+  '((:< t nil nil nil)
+    (:<< t nil nil nil)
+    (:<<< t nil nil nil)
+    (:> nil t nil nil)
+    (:>> nil t nil t)
+    (:2> nil nil t nil)
+    (:2>> nil nil t t)
+    (:2>&1 nil nil t nil)
+    (:&> nil t t nil)
+    (:&>> nil t t t)))
 
 (defun %redirect-spec-entry (text)
   (let ((spec (and text
@@ -89,20 +101,45 @@
     (and policy
          (not (%redirect-target-policy-target-required-p policy)))))
 
+(defun %redirect-kind-facts (kind)
+  (let ((spec (and kind
+                   (assoc kind +redirect-kind-fact-specs+ :test #'eq))))
+    (when spec
+      (destructuring-bind (stored-kind input-p output-p stderr-p append-p)
+          spec
+        (%make-redirect-kind-facts
+         stored-kind
+         input-p
+         output-p
+         stderr-p
+         append-p)))))
+
 (defun redirect-input-kind-p (kind)
-  (not (null (member kind +input-redirect-kinds+ :test #'eq))))
+  (let ((facts (%redirect-kind-facts kind)))
+    (and facts
+         (%redirect-kind-facts-input-p facts))))
 
 (defun redirect-output-kind-p (kind)
-  (not (null (member kind +output-redirect-kinds+ :test #'eq))))
+  (let ((facts (%redirect-kind-facts kind)))
+    (and facts
+         (%redirect-kind-facts-output-p facts))))
 
 (defun redirect-stderr-kind-p (kind)
-  (not (null (member kind +stderr-redirect-kinds+ :test #'eq))))
+  (let ((facts (%redirect-kind-facts kind)))
+    (and facts
+         (%redirect-kind-facts-stderr-p facts))))
 
 (defun redirect-append-kind-p (kind)
-  (not (null (member kind '(:>> :2>> :&>>) :test #'eq))))
+  (let ((facts (%redirect-kind-facts kind)))
+    (and facts
+         (%redirect-kind-facts-append-p facts))))
 
 (defun %redirect-mode (kind)
-  (if (redirect-append-kind-p kind) :append :supersede))
+  (let ((facts (%redirect-kind-facts kind)))
+    (if (and facts
+             (%redirect-kind-facts-append-p facts))
+        :append
+        :supersede)))
 
 (defun %last-redirect-entry-matching (redirects predicate)
   (loop for redirect in (reverse redirects)

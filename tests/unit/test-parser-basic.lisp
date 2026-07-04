@@ -69,10 +69,7 @@
     (is (eq :>> (nshell.domain.parsing::%redirect-entry-kind entry)))
     (is (string= "out.txt"
                  (nshell.domain.parsing::%redirect-entry-target entry)))
-    (is (equal '(:>> . "out.txt")
-               (nshell.domain.parsing::%redirect-entry-to-raw entry)))
-    (is (null (nshell.domain.parsing::%redirect-entry-from-raw nil)))
-    (is (null (nshell.domain.parsing::%redirect-entry-to-raw nil)))))
+    (is (null (nshell.domain.parsing::%redirect-entry-from-raw nil)))))
 
 (test redirect-target-policy-projects-target-requirement
   "Redirect target policy owns which redirect specs consume a target."
@@ -112,8 +109,10 @@
     (is (nshell.domain.parsing:redirect-output-kind-p :&>))
     (is (nshell.domain.parsing:redirect-stderr-kind-p :2>&1))
     (is (nshell.domain.parsing:redirect-append-kind-p :>>))
-    (is (equal '(:< . "in.txt")
-               (nshell.domain.parsing:redirect-input-spec redirects)))
+    (multiple-value-bind (kind target)
+        (nshell.domain.parsing:redirect-input-spec redirects)
+      (is (eq :< kind))
+      (is (string= "in.txt" target)))
     (is (string= "in.txt"
                  (nshell.domain.parsing:redirect-input-file-target redirects)))
     (multiple-value-bind (target mode)

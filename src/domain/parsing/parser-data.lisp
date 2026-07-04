@@ -60,11 +60,6 @@
   (when redirect
     (%make-redirect-entry (car redirect) (cdr redirect))))
 
-(defun %redirect-entry-to-raw (entry)
-  (and entry
-       (cons (%redirect-entry-kind entry)
-             (%redirect-entry-target entry))))
-
 (defun %redirect-facts (text)
   (let ((entry (%redirect-spec-entry text)))
     (when entry
@@ -119,13 +114,12 @@
                   (funcall predicate (%redirect-entry-kind entry)))
           return entry))
 
-(defun %last-redirect-matching (redirects predicate)
-  (%redirect-entry-to-raw
-   (%last-redirect-entry-matching redirects predicate)))
-
 (defun redirect-input-spec (redirects)
-  "Return the last input redirect from REDIRECTS, or NIL."
-  (%last-redirect-matching redirects #'redirect-input-kind-p))
+  "Return kind and target for the last input redirect in REDIRECTS."
+  (let ((entry (%last-redirect-entry-matching redirects #'redirect-input-kind-p)))
+    (when entry
+      (values (%redirect-entry-kind entry)
+              (%redirect-entry-target entry)))))
 
 (defun redirect-input-file-target (redirects)
   "Return the file path for the last :< input redirect, or NIL."
@@ -152,7 +146,7 @@
                  (%redirect-mode (%redirect-entry-kind entry))))))))
 
 (defun redirect-output-p (redirects)
-  (not (null (%last-redirect-matching redirects #'redirect-output-kind-p))))
+  (not (null (%last-redirect-entry-matching redirects #'redirect-output-kind-p))))
 
 (defun redirect-output-destinations (redirects)
   "Return stdout/stderr file destinations as four values.

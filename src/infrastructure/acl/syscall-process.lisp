@@ -104,23 +104,24 @@
   (let ((redirect-streams nil))
     (unwind-protect
          (handler-case
-             (let* ((input-redirect (nshell.domain.parsing:redirect-input-spec redirects))
-                    (input (cond
-                             ((and input-redirect (eq (car input-redirect) :<))
-                              (let ((stream (open (cdr input-redirect)
-                                                  :direction :input
-                                                  :if-does-not-exist :error)))
-                                (push stream redirect-streams)
-                                stream))
-                             ((and input-redirect (eq (car input-redirect) :<<<))
-                              (let ((stream (%here-string-stream (cdr input-redirect))))
-                                (push stream redirect-streams)
-                                stream))
-                             ((and input-redirect (eq (car input-redirect) :<<))
-                              (let ((stream (%here-document-stream (cdr input-redirect))))
-                                (push stream redirect-streams)
-                                stream))
-                             (t *standard-input*)))
+             (multiple-value-bind (input-kind input-target)
+                 (nshell.domain.parsing:redirect-input-spec redirects)
+               (let* ((input (cond
+                               ((eq input-kind :<)
+                                (let ((stream (open input-target
+                                                    :direction :input
+                                                    :if-does-not-exist :error)))
+                                  (push stream redirect-streams)
+                                  stream))
+                               ((eq input-kind :<<<)
+                                (let ((stream (%here-string-stream input-target)))
+                                  (push stream redirect-streams)
+                                  stream))
+                               ((eq input-kind :<<)
+                                (let ((stream (%here-document-stream input-target)))
+                                  (push stream redirect-streams)
+                                  stream))
+                               (t *standard-input*)))
                     (output
                       (multiple-value-bind (output-target output-mode)
                           (nshell.domain.parsing:redirect-output-spec redirects)
@@ -132,8 +133,8 @@
                               (push stream redirect-streams)
                               stream)
                             t)))
-                    (environment (%get-environment))
-                    (resolved-cmd (%resolve-external-command cmd environment)))
+                      (environment (%get-environment))
+                      (resolved-cmd (%resolve-external-command cmd environment)))
                (unless resolved-cmd
                  (format *error-output* "~a" (%external-command-not-found-message cmd))
                  (return-from spawn-async nil))
@@ -149,7 +150,7 @@
                      (when (plusp pid)
                        (handler-case (set-process-group pid pid)
                          (error ()))))
-                   proc)))
+                   proc))))
            (error (err)
              (format *error-output* "nshell: ~a: ~a~%" cmd err)
              nil))

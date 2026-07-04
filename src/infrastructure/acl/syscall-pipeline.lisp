@@ -65,42 +65,43 @@
                                 &key (default-output :stream))
   (let ((input-pipe-stream nil)
         (output-pipe-stream nil))
-    (let* ((input-redirect (nshell.domain.parsing:redirect-input-spec stage-redirects))
-           (input (cond
-                   ((and input-redirect (eq (car input-redirect) :<))
-                    (let ((stream (open (cdr input-redirect)
-                                        :direction :input
-                                        :if-does-not-exist :error)))
-                      (push stream redirect-streams)
-                      stream))
-                   ((and input-redirect (eq (car input-redirect) :<<<))
-                    (let ((stream (%here-string-stream (cdr input-redirect))))
-                      (push stream redirect-streams)
-                      stream))
-                   ((and input-redirect (eq (car input-redirect) :<<))
-                    (let ((stream (%here-document-stream (cdr input-redirect))))
-                      (push stream redirect-streams)
-                      stream))
-                   (prev-pipe
-                    (let ((fd (first prev-pipe)))
-                      (when fd
-                        (setf input-pipe-stream
-                              (sb-sys:make-fd-stream fd
-                                                     :input t
-                                                     :buffering :line))
-                        (setf (first prev-pipe) nil)
-                        input-pipe-stream)))
-                   (t t))))
-      (multiple-value-bind (output error-output resolved-output-pipe-stream redirect-streams)
-          (%pipeline-output-streams stage-redirects next-pipe redirect-streams
-                                    :default-output default-output)
-        (setf output-pipe-stream resolved-output-pipe-stream)
-        (values input
-                output
-                error-output
-                input-pipe-stream
-                output-pipe-stream
-                redirect-streams)))))
+    (multiple-value-bind (input-kind input-target)
+        (nshell.domain.parsing:redirect-input-spec stage-redirects)
+      (let ((input (cond
+                     ((eq input-kind :<)
+                      (let ((stream (open input-target
+                                          :direction :input
+                                          :if-does-not-exist :error)))
+                        (push stream redirect-streams)
+                        stream))
+                     ((eq input-kind :<<<)
+                      (let ((stream (%here-string-stream input-target)))
+                        (push stream redirect-streams)
+                        stream))
+                     ((eq input-kind :<<)
+                      (let ((stream (%here-document-stream input-target)))
+                        (push stream redirect-streams)
+                        stream))
+                     (prev-pipe
+                      (let ((fd (first prev-pipe)))
+                        (when fd
+                          (setf input-pipe-stream
+                                (sb-sys:make-fd-stream fd
+                                                       :input t
+                                                       :buffering :line))
+                          (setf (first prev-pipe) nil)
+                          input-pipe-stream)))
+                     (t t))))
+        (multiple-value-bind (output error-output resolved-output-pipe-stream redirect-streams)
+            (%pipeline-output-streams stage-redirects next-pipe redirect-streams
+                                      :default-output default-output)
+          (setf output-pipe-stream resolved-output-pipe-stream)
+          (values input
+                  output
+                  error-output
+                  input-pipe-stream
+                  output-pipe-stream
+                  redirect-streams))))))
 
 (defun %close-new-redirect-streams (redirect-streams previous-redirect-streams)
   (loop for streams on redirect-streams

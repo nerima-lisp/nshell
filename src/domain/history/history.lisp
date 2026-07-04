@@ -28,6 +28,13 @@
             (:constructor %make-history-logical-word-cursor (remaining)))
   (remaining nil :type list))
 
+(defstruct (%history-last-argument-scan-state
+            (:constructor %make-history-last-argument-scan-state (logical-word-cursor)))
+  (last-argument nil :type (or null string))
+  (skip-redirect-target nil :type boolean)
+  (seen-command-word nil :type boolean)
+  (logical-word-cursor nil :type %history-logical-word-cursor :read-only t))
+
 (defun %history-token-window-from-remaining (remaining)
   (%make-history-token-window (first remaining) (second remaining)))
 
@@ -100,6 +107,62 @@ word-like tokens are merged before command/argument classification."
         (command-history-navigate-origin history) nil)
   history)
 
+(defun %history-last-argument-reset-for-separator (state)
+  (setf (%history-last-argument-scan-state-last-argument state) nil
+        (%history-last-argument-scan-state-skip-redirect-target state) nil
+        (%history-last-argument-scan-state-seen-command-word state) nil)
+  state)
+
+(defun %history-last-argument-note-command-word (state)
+  (setf (%history-last-argument-scan-state-seen-command-word state) t)
+  state)
+
+(defun %history-last-argument-note-argument (state argument)
+  (setf (%history-last-argument-scan-state-last-argument state) argument)
+  state)
+
+(defun %history-last-argument-clear-redirect-target (state)
+  (setf (%history-last-argument-scan-state-skip-redirect-target state) nil)
+  state)
+
+(defun %history-last-argument-handle-word (state line token token-window)
+  (let ((word (%history-logical-word-cursor-consume-matching-token
+               (%history-last-argument-scan-state-logical-word-cursor state)
+               token)))
+    (when word
+      (cond
+        ((%history-fd-redirection-designator-p
+          token
+          (%history-token-window-next token-window))
+         state)
+        ((%history-last-argument-scan-state-skip-redirect-target state)
+         (%history-last-argument-clear-redirect-target state))
+        ((and (not (%history-last-argument-scan-state-seen-command-word state))
+              (nshell.domain.parsing:shell-assignment-word-p
+               (%history-word-source line word)))
+         state)
+        ((not (%history-last-argument-scan-state-seen-command-word state))
+         (%history-last-argument-note-command-word state))
+        (t
+         (%history-last-argument-note-argument
+          state
+          (%history-word-source line word)))))))
+
+(defun %history-last-argument-handle-token (state line token token-window)
+  (cond
+    ((and (%history-last-argument-scan-state-skip-redirect-target state)
+          (eq (nshell.domain.parsing:token-type token) :ampersand))
+     state)
+    ((nshell.domain.parsing:shell-command-separator-token-p token)
+     (%history-last-argument-reset-for-separator state))
+    ((%history-redirect-token-p token)
+     (setf (%history-last-argument-scan-state-skip-redirect-target state) t)
+     state)
+    ((%history-word-token-p token)
+     (%history-last-argument-handle-word state line token token-window))
+    (t
+     state)))
+
 (declaim (ftype (function (t integer) (or null string))
                 history-last-argument-at))
 
@@ -109,54 +172,25 @@ word-like tokens are merged before command/argument classification."
 Command words and redirection targets are not considered arguments. For
 pipelines and command lists, the result is scoped to the final command segment."
   (when (and (stringp line) (plusp (length line)))
-    (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
-                   (nshell.domain.parsing:tokenize line))))
-      (loop with last-argument = nil
-            with skip-redirect-target = nil
-            with seen-command-word = nil
-            with logical-word-cursor = (%make-history-logical-word-cursor
-                                        (%history-logical-words tokens))
-            for remaining on tokens
-            for token-window = (%history-token-window-from-remaining remaining)
-            for token = (%history-token-window-current token-window)
-            do (cond
-                 ((and skip-redirect-target
-                       (eq (nshell.domain.parsing:token-type token) :ampersand))
-                  nil)
-                 ((nshell.domain.parsing:shell-command-separator-token-p token)
-                  (setf last-argument nil
-                        skip-redirect-target nil
-                        seen-command-word nil))
-                 ((%history-redirect-token-p token)
-                  (setf skip-redirect-target t))
-                 ((%history-word-token-p token)
-                  (let ((word (%history-logical-word-cursor-consume-matching-token
-                               logical-word-cursor token)))
-                    (when word
-                      (cond
-                        ((%history-fd-redirection-designator-p
-                          token
-                          (%history-token-window-next token-window))
-                         nil)
-                        (skip-redirect-target
-                         (setf skip-redirect-target nil))
-                        ((and (not seen-command-word)
-                              (nshell.domain.parsing:shell-assignment-word-p
-                               (%history-word-source line word)))
-                         nil)
-                        ((not seen-command-word)
-                         (setf seen-command-word t))
-                        (t
-                         (setf last-argument (%history-word-source line word))))))))
-            finally (return last-argument)))))
+    (let* ((tokens (nshell.domain.parsing:tokenization-result-tokens
+                    (nshell.domain.parsing:tokenize line)))
+           (state (%make-history-last-argument-scan-state
+                   (%make-history-logical-word-cursor
+                    (%history-logical-words tokens)))))
+      (do ((remaining tokens (rest remaining)))
+          ((endp remaining)
+           (%history-last-argument-scan-state-last-argument state))
+        (let* ((token-window (%history-token-window-from-remaining remaining))
+               (token (%history-token-window-current token-window)))
+          (%history-last-argument-handle-token state line token token-window))))))
 
 (defun history-last-argument-at (history index)
   "Return INDEX-th most recent insertable last argument in HISTORY, or NIL."
   (when (and (integerp index) (not (minusp index)))
-    (loop for entry in (command-history-entries history)
-          for argument = (command-line-last-argument (entry-text entry))
-          when argument
-            if (zerop index)
-              return argument
-            else
-              do (decf index))))
+    (do ((entries (command-history-entries history) (rest entries)))
+        ((endp entries) nil)
+      (let ((argument (command-line-last-argument (entry-text (first entries)))))
+        (when argument
+          (if (zerop index)
+              (return argument)
+              (decf index)))))))

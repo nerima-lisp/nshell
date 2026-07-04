@@ -29,6 +29,18 @@
                (nshell.domain.history:history-entry-texts
                 (nshell.domain.history:history-all history))))))
 
+(test history-merge
+  "History merge keeps newest-first order and deduplicates by text."
+  (let ((history (history-with-lines "local" "shared"))
+        (incoming (history-with-lines "shared" "remote")))
+    (nshell.domain.history:history-merge
+     history
+     (nshell.domain.history:history-all incoming))
+    (is (= 3 (nshell.domain.history:history-size history)))
+    (is (equal '("remote" "shared" "local")
+               (nshell.domain.history:history-entry-texts
+                (nshell.domain.history:history-all history))))))
+
 (test history-delete-and-clear
   "History entries can be deleted exactly and cleared."
   (let ((history (history-with-lines "git status" "git commit")))

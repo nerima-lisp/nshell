@@ -212,6 +212,19 @@ preceded by a backslash."
                      :quote-context quote-context)))
     (%make-completion-token-context bounds body-bounds quote-context raw-token)))
 
+(defun %completion-replace-token (input context replacement)
+  (let* ((token-bounds (completion-token-context-bounds context))
+         (start (completion-token-slice-start token-bounds))
+         (end (completion-token-slice-end token-bounds))
+         (quote-context (completion-token-context-quote-context context)))
+    (%completion-splice-with-quote-context input start end replacement
+                                            :quote-context quote-context)))
+
+(defun %completion-prefix-extends-token-p (prefix context)
+  (let ((raw-token (completion-token-context-raw-token context)))
+    (and (> (length prefix) (length raw-token))
+         (string= raw-token (subseq prefix 0 (length raw-token))))))
+
 (defun maybe-extend-completion-common-prefix (state candidates)
   "Apply an unambiguous completion prefix, if CANDIDATES advance the token."
   (with-normalized-input-state (state state)
@@ -219,27 +232,20 @@ preceded by a backslash."
           (cursor (input-state-cursor-pos state))
           (prefix (completion-common-prefix candidates)))
       (if (null prefix)
-        (values state nil)
-          (let* ((context (%completion-token-context buffer cursor))
-                 (token-bounds (completion-token-context-bounds context))
-                 (start (completion-token-slice-start token-bounds))
-                 (end (completion-token-slice-end token-bounds))
-                 (quote-context (completion-token-context-quote-context context))
-                 (raw-token (completion-token-context-raw-token context)))
-            (if (and (> (length prefix) (length raw-token))
-                     (<= (length raw-token) (length prefix))
-                     (string= raw-token (subseq prefix 0 (length raw-token))))
-              (let* ((insertion (%completion-insertion-text prefix
-                                                            :quote-context quote-context))
-                     (new-buffer (%completion-splice-with-quote-context
-                                  buffer start end insertion
-                                  :quote-context quote-context)))
+          (values state nil)
+          (let ((context (%completion-token-context buffer cursor)))
+            (if (%completion-prefix-extends-token-p prefix context)
+                (multiple-value-bind (new-buffer new-cursor)
+                    (%completion-replace-token
+                     buffer
+                     context
+                     (%completion-insertion-text
+                      prefix
+                      :quote-context (completion-token-context-quote-context context)))
                   (values (copy-input-state-clearing-completion
                            state
                            :buffer new-buffer
-                           :cursor-pos (+ start
-                                          (if quote-context 1 0)
-                                          (length insertion)))
+                           :cursor-pos new-cursor)
                           t))
                 (values state nil)))))))
 
@@ -249,16 +255,7 @@ preceded by a backslash."
 
 (defun apply-completion (input candidate &key (cursor (length input)))
   (let* ((context (%completion-token-context input cursor))
-         (token-bounds (completion-token-context-bounds context))
-         (start (completion-token-slice-start token-bounds))
-         (end (completion-token-slice-end token-bounds))
-         (quote-context (completion-token-context-quote-context context))
-         (text (%completion-insertion-text (%candidate-text candidate)
-                                           :quote-context quote-context))
-         (new-buffer (%completion-splice-with-quote-context
-                      input start end text
-                      :quote-context quote-context)))
-    (values new-buffer
-            (+ start
-               (if quote-context 1 0)
-               (length text)))))
+         (text (%completion-insertion-text
+                (%candidate-text candidate)
+                :quote-context (completion-token-context-quote-context context))))
+    (%completion-replace-token input context text)))

@@ -1,16 +1,30 @@
 (in-package #:nshell.domain.history)
 
+(defun %history-cap-entries (history entries)
+  (subseq entries 0 (min (length entries)
+                         (command-history-max-entries history))))
+
+(defun %history-unique-entries (entries)
+  (let ((seen (make-hash-table :test #'equal)))
+    (loop for entry in entries
+          for text = (entry-text entry)
+          unless (gethash text seen)
+            do (setf (gethash text seen) t)
+            and collect entry)))
+
+(defun %history-replace-entries (history entries &key clear-navigation-p)
+  (setf (command-history-entries history)
+        (%history-cap-entries history entries))
+  (when clear-navigation-p
+    (%history-clear-navigation history))
+  history)
+
 (defun history-add (history text &optional exit-code)
   "Add TEXT to HISTORY and keep the newest entry for duplicate command text."
   (let* ((entry (make-history-entry text (get-universal-time) exit-code))
-         (existing (remove-if (lambda (candidate)
-                                (entry-equal-p candidate entry))
-                              (command-history-entries history)))
-         (new-entries (cons entry existing)))
-    (setf (command-history-entries history)
-          (subseq new-entries 0 (min (length new-entries)
-                                     (command-history-max-entries history))))
-    history))
+         (new-entries (%history-unique-entries
+                       (cons entry (command-history-entries history)))))
+    (%history-replace-entries history new-entries)))
 
 (defun history-all (history)
   "Return all history entries, most recent first."
@@ -22,8 +36,7 @@
 
 (defun history-clear (history)
   "Remove all entries from HISTORY and reset transient navigation."
-  (setf (command-history-entries history) nil)
-  (%history-clear-navigation history))
+  (%history-replace-entries history nil :clear-navigation-p t))
 
 (defun history-delete (history text &key (case-sensitive t))
   "Delete entries whose text exactly matches TEXT and return the deleted count."
@@ -35,7 +48,7 @@
                             (string-equal text (entry-text entry))))
                       old-entries))
          (deleted (- (length old-entries) (length new-entries))))
-    (setf (command-history-entries history) new-entries)
+    (%history-replace-entries history new-entries)
     (when (plusp deleted)
       (%history-clear-navigation history))
     deleted))
@@ -46,14 +59,9 @@
 
 (defun history-dedup (history)
   "Remove duplicate entries from HISTORY, keeping the most recent entries."
-  (let ((seen (make-hash-table :test #'equal)))
-    (setf (command-history-entries history)
-          (remove-if-not (lambda (entry)
-                           (let ((text (history-entry-text entry)))
-                             (unless (gethash text seen)
-                               (setf (gethash text seen) t))))
-                         (command-history-entries history)))
-    history))
+  (%history-replace-entries history
+                            (%history-unique-entries
+                             (command-history-entries history))))
 
 (defun history-merge (history entries)
   "Merge ENTRIES into HISTORY, preserving newest-first de-duplicated order."

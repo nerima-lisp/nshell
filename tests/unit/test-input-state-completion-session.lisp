@@ -97,3 +97,16 @@
                       :completion-base-cursor 1
                       :last-candidates '("git" "grep"))
       (is (eq :clear-screen output)))))
+
+(test completion-output-helper-validates-rendered-completion-session
+  (let ((state (completion-session-state
+                :buffer "git status"
+                :cursor-pos 10
+                :completion-index 0
+                :completion-base-buffer "git st"
+                :completion-base-cursor 6
+                :last-candidates '("status" "stash"))))
+    (is (nshell.presentation::%completion-session-valid-p state))
+    (is (not (nshell.presentation::%completion-session-valid-p
+              (nshell.presentation::copy-input-state-with
+               state :buffer "git stash"))))))

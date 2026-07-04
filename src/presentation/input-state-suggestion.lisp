@@ -168,10 +168,18 @@ fish-style autosuggestion word acceptance for tails such as \" status --short\".
          (remaining (subseq suggestion accept-end)))
     (%make-suggestion-acceptance accepted remaining)))
 
-(defun append-suggestion-to-input-state (state suggestion)
+(defun commit-suggestion-acceptance (state acceptance)
   (commit-suggestion-append-edit
    state
-   (suggestion-append-edit-for-state state suggestion "")))
+   (suggestion-append-edit-for-state
+    state
+    (suggestion-acceptance-accepted acceptance)
+    (suggestion-acceptance-remaining acceptance))))
+
+(defun append-suggestion-to-input-state (state suggestion)
+  (commit-suggestion-acceptance
+   state
+   (%make-suggestion-acceptance suggestion "")))
 
 (defun accept-suggestion-at-eol (state)
   (with-normalized-input-state (state state)
@@ -185,11 +193,7 @@ fish-style autosuggestion word acceptance for tails such as \" status --short\".
   (with-normalized-input-state (state state)
     (let ((suggestion (input-state-suggestion state)))
       (if (and suggestion (input-state-at-eol-p state))
-          (let* ((acceptance (next-suggestion-acceptance suggestion))
-                 (edit (suggestion-append-edit-for-state
-                        state
-                        (suggestion-acceptance-accepted acceptance)
-                        (suggestion-acceptance-remaining acceptance))))
-            (values (commit-suggestion-append-edit state edit)
+          (let ((acceptance (next-suggestion-acceptance suggestion)))
+            (values (commit-suggestion-acceptance state acceptance)
                     :suggest-update))
           (move-word-right state)))))

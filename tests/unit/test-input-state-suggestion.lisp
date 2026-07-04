@@ -251,6 +251,31 @@
       (is (null (nshell.presentation::suggestion-append-edit-remaining
                  finished-edit))))))
 
+(test input-state-suggestion-acceptance-commit-applies-state-transition
+  "Reducers should commit suggestion acceptance rather than assembling append edits inline."
+  (let* ((state (completion-session-state
+                 :buffer "git"
+                 :cursor-pos 3
+                 :suggestion " status --short"
+                 :completion-index 0
+                 :completion-base-buffer "git"
+                 :completion-base-cursor 3
+                 :last-candidates '("status")))
+         (acceptance (nshell.presentation::next-suggestion-acceptance
+                      (nshell.presentation:input-state-suggestion state)))
+         (new-state (nshell.presentation::commit-suggestion-acceptance
+                     state
+                     acceptance)))
+    (is (fboundp 'nshell.presentation::commit-suggestion-acceptance))
+    (is-input-state new-state
+                    :buffer "git status"
+                    :cursor-pos 10
+                    :suggestion " --short"
+                    :completion-index -1
+                    :completion-base-buffer nil
+                    :completion-base-cursor nil
+                    :last-candidates nil)))
+
 (test input-state-suggestion-word-like-token-p-returns-canonical-booleans
   (is (eq t (nshell.presentation::suggestion-word-like-token-p
              (nshell.domain.parsing:make-token :word "git"))))

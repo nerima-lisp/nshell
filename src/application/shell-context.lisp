@@ -40,6 +40,11 @@
       (remhash name (shell-context-function-source-table context)))
   body-lines)
 
+(defun %remove-shell-function-definition (context name)
+  (remhash name (shell-context-function-table context))
+  (remhash name (shell-context-function-source-table context))
+  context)
+
 (defun %store-shell-process-registry-entry (context job-id processes)
   (setf (gethash job-id (shell-context-process-registry context)) processes)
   processes)

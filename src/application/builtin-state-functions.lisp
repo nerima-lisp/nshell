@@ -36,11 +36,9 @@
        (values (%format-functions table) 0))
       (:option ("-e" "--erase")
        (%with-required-argument (%builtin-function args "function" "-e" "a name" 2)
-         (%table-erase-names
-          table
-          (rest args)
-          :on-erase (lambda (name)
-                      (remhash name (shell-context-function-source-table context))))))
+         (dolist (name (rest args))
+           (%remove-shell-function-definition context name))
+         (values nil 0)))
       (:option ("-q" "--query")
        (values nil (%table-query-status table (rest args))))
       (:default

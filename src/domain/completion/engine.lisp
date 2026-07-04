@@ -22,29 +22,31 @@
                             (when filesystem-mode
                               (filesystem-candidates-for-mode filesystem-mode arg-prefix)))))
 
-(defstruct (rule-solution-binding-projection
-             (:constructor %make-rule-solution-binding-projection (value present-p)))
+(defstruct (%rule-solution-binding-projection
+             (:constructor %make-rule-solution-binding-projection (value present-p))
+             (:conc-name %rule-solution-binding-projection-))
   value
   present-p)
 
-(defstruct (rule-solution-set-projection
-             (:constructor %make-rule-solution-set-projection (first-solution)))
+(defstruct (%rule-solution-set-projection
+             (:constructor %make-rule-solution-set-projection (first-solution))
+             (:conc-name %rule-solution-set-projection-))
   first-solution)
 
-(defun project-rule-solution-binding (variable solution)
+(defun %project-rule-solution-binding (variable solution)
   (let ((binding (assoc variable solution)))
     (%make-rule-solution-binding-projection (cdr binding) (not (null binding)))))
 
-(defun project-rule-solution-set (solutions)
+(defun %project-rule-solution-set (solutions)
   (%make-rule-solution-set-projection (first solutions)))
 
 (defun solution-value (variable solution)
-  (rule-solution-binding-projection-value
-   (project-rule-solution-binding variable solution)))
+  (%rule-solution-binding-projection-value
+   (%project-rule-solution-binding variable solution)))
 
 (defun first-solution-value (variable solutions)
-  (let ((solution (rule-solution-set-projection-first-solution
-                   (project-rule-solution-set solutions))))
+  (let ((solution (%rule-solution-set-projection-first-solution
+                   (%project-rule-solution-set solutions))))
     (when solution
       (solution-value variable solution))))
 

@@ -80,36 +80,39 @@
       (is (= 1 (length solutions)))
       (is (string= "ls" (solution-binding '?command (first solutions)))))))
 
-(test first-solution-value-projects-rule-solution-boundary
+(test first-solution-value-selects-first-rule-solution-value
   (let ((solutions (list (list (cons '?description "primary"))
                          (list (cons '?description "fallback")))))
-    (let ((binding
-            (nshell.domain.completion::project-rule-solution-binding
-             '?description
-             (first solutions)))
-          (missing
-            (nshell.domain.completion::project-rule-solution-binding
-             '?missing
-             (first solutions)))
-          (solution-set
-            (nshell.domain.completion::project-rule-solution-set solutions)))
-      (is (string= "primary"
-                   (nshell.domain.completion::rule-solution-binding-projection-value
-                    binding)))
-      (is (nshell.domain.completion::rule-solution-binding-projection-present-p
-           binding))
-      (is (not (nshell.domain.completion::rule-solution-binding-projection-present-p
-                missing)))
-      (is (equal (first solutions)
-                 (nshell.domain.completion::rule-solution-set-projection-first-solution
-                  solution-set)))
-      (is (not (fboundp 'nshell.domain.completion::make-rule-solution-binding-projection)))
-      (is (not (fboundp 'nshell.domain.completion::make-rule-solution-set-projection))))
+    (is (string= "primary"
+                 (nshell.domain.completion::solution-value
+                  '?description
+                  (first solutions))))
+    (is (null (nshell.domain.completion::solution-value
+               '?missing
+               (first solutions))))
     (is (string= "primary"
                  (nshell.domain.completion::first-solution-value
                   '?description solutions)))
     (is (null (nshell.domain.completion::first-solution-value
+               '?missing solutions)))
+    (is (null (nshell.domain.completion::first-solution-value
                '?description nil)))))
+
+(test rule-solution-projections-are-internal-boundaries
+  (is (not (fboundp 'nshell.domain.completion::make-rule-solution-binding-projection)))
+  (is (not (fboundp 'nshell.domain.completion::make-rule-solution-set-projection)))
+  (is (not (fboundp 'nshell.domain.completion::project-rule-solution-binding)))
+  (is (not (fboundp 'nshell.domain.completion::project-rule-solution-set)))
+  (is (not (fboundp 'nshell.domain.completion::rule-solution-binding-projection-value)))
+  (is (not (fboundp 'nshell.domain.completion::rule-solution-binding-projection-present-p)))
+  (is (not (fboundp 'nshell.domain.completion::rule-solution-set-projection-first-solution)))
+  (is (fboundp 'nshell.domain.completion::%make-rule-solution-binding-projection))
+  (is (fboundp 'nshell.domain.completion::%make-rule-solution-set-projection))
+  (is (fboundp 'nshell.domain.completion::%project-rule-solution-binding))
+  (is (fboundp 'nshell.domain.completion::%project-rule-solution-set))
+  (is (fboundp 'nshell.domain.completion::%rule-solution-binding-projection-value))
+  (is (fboundp 'nshell.domain.completion::%rule-solution-binding-projection-present-p))
+  (is (fboundp 'nshell.domain.completion::%rule-solution-set-projection-first-solution)))
 
 (test rule-data-projection-boundaries-name-domain-parts
   (let ((fact (nshell.domain.completion::make-fact-from-spec

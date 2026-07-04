@@ -75,6 +75,43 @@
                                                :index 0)
       (is (eq :search-update output)))))
 
+(test input-state-history-search-edit-boundary-commits-session-intent
+  (let ((state (history-search-state
+                :buffer "git"
+                :query "st"
+                :original-buffer "git"
+                :index 2
+                :completion-index 0
+                :completion-base-buffer "g"
+                :completion-base-cursor 1
+                :last-candidates '("git" "grep"))))
+    (with-reduced-input-state (query-state query-output)
+        (nshell.presentation::commit-history-search-edit
+         state
+         (nshell.presentation::make-history-search-query-edit "atus"))
+      (is-search-state-with-completion-cleared query-state
+                                               :mode :search
+                                               :query "status"
+                                               :original-buffer "git"
+                                               :index 0)
+      (is (eq :search-update query-output))
+      (with-reduced-input-state (selection-state selection-output)
+          (nshell.presentation::commit-history-search-edit
+           query-state
+           (nshell.presentation::make-history-search-selection-edit 1))
+        (is (= 1 (nshell.presentation:input-state-search-index selection-state)))
+        (is (eq :search-update selection-output)))
+      (with-reduced-input-state (backspace-state backspace-output)
+          (nshell.presentation::commit-history-search-edit
+           query-state
+           (nshell.presentation::make-history-search-backspace-edit))
+        (is-search-state-with-completion-cleared backspace-state
+                                                 :mode :search
+                                                 :query "statu"
+                                                 :original-buffer "git"
+                                                 :index 0)
+        (is (eq :search-update backspace-output))))))
+
 (test input-state-history-search-edits-query-not-buffer
   (with-reduced-input-state (search-state)
       (reduce-once (input-state :buffer "git" :cursor-pos 3)

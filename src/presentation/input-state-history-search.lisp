@@ -2,6 +2,21 @@
 
 (in-package #:nshell.presentation)
 
+(defstruct (history-search-edit
+            (:constructor %make-history-search-edit (&key kind text delta)))
+  kind
+  text
+  delta)
+
+(defun make-history-search-query-edit (text)
+  (%make-history-search-edit :kind :query :text text))
+
+(defun make-history-search-selection-edit (delta)
+  (%make-history-search-edit :kind :selection :delta delta))
+
+(defun make-history-search-backspace-edit ()
+  (%make-history-search-edit :kind :backspace))
+
 (defun %history-search-original-state (state)
   (let ((original (input-state-search-original-buffer state)))
     (copy-input-state-clearing-completion
@@ -14,6 +29,36 @@
 (defun %history-search-update (state &rest initargs)
   (values (apply #'copy-input-state-clearing-completion state initargs)
           :search-update))
+
+(defun commit-history-search-edit (state edit)
+  (with-normalized-cleared-completion-state (state state)
+    (ecase (history-search-edit-kind edit)
+      (:query
+       (let* ((text (history-search-edit-text edit))
+              (query (input-state-search-query state))
+              (remaining (- +max-input-buffer-size+ (length query))))
+         (if (or (not (stringp text)) (zerop (length text)) (<= remaining 0))
+             (values state :none)
+             (let ((inserted (if (> (length text) remaining)
+                                 (subseq text 0 remaining)
+                                 text)))
+               (%history-search-update
+                state
+                :search-query (concatenate 'string query inserted)
+                :search-index 0)))))
+      (:selection
+       (%history-search-update
+        state
+        :search-index (+ (input-state-search-index state)
+                         (history-search-edit-delta edit))))
+      (:backspace
+       (let ((query (input-state-search-query state)))
+         (if (zerop (length query))
+             (%history-search-abort state)
+             (%history-search-update
+              state
+              :search-query (subseq query 0 (1- (length query)))
+              :search-index 0)))))))
 
 (defun %history-search-finished-state (state)
   (copy-input-state-with
@@ -33,34 +78,13 @@
   (values (%history-search-cancelled-state state) :suggest-update))
 
 (defun %update-history-search-query (state text)
-  (with-normalized-cleared-completion-state (state state)
-    (let* ((query (input-state-search-query state))
-           (remaining (- +max-input-buffer-size+ (length query))))
-      (if (or (not (stringp text)) (zerop (length text)) (<= remaining 0))
-          (values state :none)
-          (let ((inserted (if (> (length text) remaining)
-                              (subseq text 0 remaining)
-                              text)))
-            (%history-search-update
-             state
-             :search-query (concatenate 'string query inserted)
-             :search-index 0))))))
+  (commit-history-search-edit state (make-history-search-query-edit text)))
 
 (defun %move-history-search-selection (state delta)
-  (with-normalized-cleared-completion-state (state state)
-    (%history-search-update
-     state
-     :search-index (+ (input-state-search-index state) delta))))
+  (commit-history-search-edit state (make-history-search-selection-edit delta)))
 
 (defun %backspace-history-search-query (state)
-  (with-normalized-cleared-completion-state (state state)
-    (let ((query (input-state-search-query state)))
-      (if (zerop (length query))
-          (%history-search-abort state)
-          (%history-search-update
-           state
-           :search-query (subseq query 0 (1- (length query)))
-           :search-index 0)))))
+  (commit-history-search-edit state (make-history-search-backspace-edit)))
 
 (defun %history-search-matched-state (state text)
   (copy-input-state-clearing-completion

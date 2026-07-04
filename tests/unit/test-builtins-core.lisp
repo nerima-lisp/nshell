@@ -211,7 +211,7 @@ echo is /usr/bin/echo
       (is (equal '("external-cmd" ("one" "two")) seen)))))
 
 (test fg-and-bg-builtins-propagate-status-and-missing-job-errors
-  "fg/bg builtins return job status and surface missing-job failures."
+  "fg/bg builtins return job status and missing-job failures."
   (let* ((context (make-test-builtins-context))
          (monitor (nshell.application:shell-context-job-monitor context))
          (job (make-test-job 0 "sleep"))
@@ -227,14 +227,12 @@ echo is /usr/bin/echo
   (let ((context (make-test-builtins-context))
         (monitor (nshell.domain.job-control:make-job-monitor)))
     (let ((nshell.application:*job-monitor* monitor))
-      (assert-builtin-call-prints (context "bg" '("42"))
+      (assert-builtin-call (context "bg" '("42"))
         :code 1
-        :output-null t
-        :stdout-contains '("bg: no such job: 42"))
-      (assert-builtin-call-prints (context "fg" '("42"))
+        :output (format nil "bg: no such job: 42~%"))
+      (assert-builtin-call (context "fg" '("42"))
         :code 1
-        :output-null t
-        :stdout-contains '("fg: no such job: 42")))))
+        :output (format nil "fg: no such job: 42~%")))))
 
 (test jobs-and-disown-builtins-use-context-monitor
   "jobs/disown builtins operate on the shell context monitor, not the global monitor."

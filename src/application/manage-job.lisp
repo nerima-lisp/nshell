@@ -28,7 +28,7 @@
                     (job-monitor *job-monitor*))
   "Move JOB-ID to the foreground, wait for it, then restore the shell PGID."
   (declare (ignore process-registry terminal-fns))
-  (let ((job (%require-job job-id "fg" job-monitor)))
+  (let ((job (%require-job job-id job-monitor)))
     (when job
       (let ((pgid (nshell.domain.execution:job-pgid job)))
         (when (%valid-job-pgid-p pgid)
@@ -50,7 +50,7 @@
 
 (defun bg (job-id &optional dispatcher (job-monitor *job-monitor*))
   "Continue JOB-ID in the background."
-  (let ((job (%require-job job-id "bg" job-monitor)))
+  (let ((job (%require-job job-id job-monitor)))
     (when job
       (let ((pgid (nshell.domain.execution:job-pgid job)))
         (when (%valid-job-pgid-p pgid)
@@ -186,8 +186,5 @@
             (:interrupted)
             (:unknown)))))))
 
-(defun %require-job (job-id command &optional (job-monitor *job-monitor*))
-  (or (nshell.domain.job-control:monitor-find-job job-monitor job-id)
-      (progn
-        (format t "~a: no such job: ~a~%" command job-id)
-        nil)))
+(defun %require-job (job-id &optional (job-monitor *job-monitor*))
+  (nshell.domain.job-control:monitor-find-job job-monitor job-id))

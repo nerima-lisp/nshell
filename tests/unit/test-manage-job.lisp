@@ -51,16 +51,21 @@
     (is (nshell.application:disown job-id monitor))
     (is (null (nshell.domain.job-control:monitor-find-job monitor job-id)))))
 
-(test missing-job-commands-return-nil-and-report
-  "BG/FG report missing jobs instead of signaling application errors."
+(test missing-job-commands-return-nil-without-output
+  "BG/FG return NIL for missing jobs without rendering user-facing errors."
   (let ((empty-monitor (nshell.domain.job-control:make-job-monitor))
         (nshell.application:*job-monitor* (nshell.domain.job-control:make-job-monitor)))
-    (let ((bg-output (with-output-to-string (*standard-output*)
-                       (is (null (nshell.application:bg 42 nil empty-monitor)))))
-          (fg-output (with-output-to-string (*standard-output*)
-                       (is (null (nshell.application:fg 42 nil nil nil empty-monitor))))))
-      (is (search "bg: no such job: 42" bg-output))
-      (is (search "fg: no such job: 42" fg-output)))))
+    (let (bg-result
+          fg-result)
+      (let ((bg-output (with-output-to-string (*standard-output*)
+                         (setf bg-result (nshell.application:bg 42 nil empty-monitor))))
+            (fg-output (with-output-to-string (*standard-output*)
+                         (setf fg-result
+                               (nshell.application:fg 42 nil nil nil empty-monitor)))))
+        (is (null bg-result))
+        (is (null fg-result))
+        (is (string= "" bg-output))
+        (is (string= "" fg-output))))))
 
 (test fg-clears-foreground-pgid-when-wait-fails
   "FG does not leave stale foreground process-group state after wait errors."

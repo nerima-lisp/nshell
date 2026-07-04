@@ -5,19 +5,28 @@
       (or (parse-integer (first args) :junk-allowed t) 0)
       0))
 
+(defun %missing-job-output (command job-id)
+  (format nil "~a: no such job: ~a~%" command job-id))
+
 (defun %builtin-fg (context args)
-  (let ((job (fg (%parse-job-id args)
-                 (shell-context-dispatcher context)
-                 (shell-context-process-registry context)
-                 (shell-context-terminal-fns context)
-                 (shell-context-job-monitor context))))
-    (values nil (if job 0 1))))
+  (let* ((job-id (%parse-job-id args))
+         (job (fg job-id
+                  (shell-context-dispatcher context)
+                  (shell-context-process-registry context)
+                  (shell-context-terminal-fns context)
+                  (shell-context-job-monitor context))))
+    (if job
+        (values nil 0)
+        (values (%missing-job-output "fg" job-id) 1))))
 
 (defun %builtin-bg (context args)
-  (let ((job (bg (%parse-job-id args)
-                 (shell-context-dispatcher context)
-                 (shell-context-job-monitor context))))
-    (values nil (if job 0 1))))
+  (let* ((job-id (%parse-job-id args))
+         (job (bg job-id
+                  (shell-context-dispatcher context)
+                  (shell-context-job-monitor context))))
+    (if job
+        (values nil 0)
+        (values (%missing-job-output "bg" job-id) 1))))
 
 (defun %builtin-jobs (context args)
   (declare (ignore args))

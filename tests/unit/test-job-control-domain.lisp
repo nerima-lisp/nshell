@@ -17,6 +17,19 @@
     (is (= 1 id))
     (is (nshell.domain.job-control:monitor-find-job monitor id))))
 
+(test monitor-add-background-job-initializes-tracked-job
+  "Background job registration owns the job aggregate initialization."
+  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+         (id (nshell.domain.job-control:monitor-add-background-job
+              monitor '(4321 4322) "left | right"))
+         (job (nshell.domain.job-control:monitor-find-job monitor id)))
+    (is (= 1 id))
+    (is (equal '(4321 4322) (nshell.domain.execution:job-pids job)))
+    (is (= 4321 (nshell.domain.execution:job-pgid job)))
+    (is (string= "left | right" (nshell.domain.execution:job-command-line job)))
+    (is (nshell.domain.execution:job-background-p job))
+    (is (eq :running (nshell.domain.execution:job-state job)))))
+
 (test monitor-update-returns-nil-for-missing-job
   "Missing job IDs are outside the monitor aggregate and produce no update."
   (let ((monitor (nshell.domain.job-control:make-job-monitor)))

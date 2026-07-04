@@ -135,16 +135,10 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
   (let* ((proc-list (if (listp processes) processes (list processes)))
          (pids (delete nil (mapcar #'%background-process-pid proc-list))))
     (when pids
-      (let ((job (nshell.domain.execution:make-job 0 nil)))
-        (setf (nshell.domain.execution:job-pids job) pids
-              (nshell.domain.execution:job-pgid job) (first pids)
-              (nshell.domain.execution:job-command-line job) command-line
-              (nshell.domain.execution:job-background-p job) t)
-        (nshell.domain.execution:job-state-transition job :running)
-        (let ((job-id (nshell.domain.job-control:monitor-add-job
-                       (shell-context-job-monitor context) job)))
-          (setf (gethash job-id (shell-context-process-registry context)) processes)
-          job-id)))))
+      (let ((job-id (nshell.domain.job-control:monitor-add-background-job
+                     (shell-context-job-monitor context) pids command-line)))
+        (setf (gethash job-id (shell-context-process-registry context)) processes)
+        job-id))))
 
 (defun %spawn-background-node-in-context (context command)
   "Spawn COMMAND (command-node or pipeline-node) asynchronously and register a job."

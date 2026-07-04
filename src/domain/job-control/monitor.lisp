@@ -13,6 +13,16 @@
     (incf (job-monitor-next-id monitor))
     id))
 
+(defun monitor-add-background-job (monitor pids command-line)
+  (when pids
+    (let ((job (nshell.domain.execution:make-job 0 nil)))
+      (setf (nshell.domain.execution:job-pids job) (copy-list pids)
+            (nshell.domain.execution:job-pgid job) (first pids)
+            (nshell.domain.execution:job-command-line job) command-line
+            (nshell.domain.execution:job-background-p job) t)
+      (nshell.domain.execution:job-state-transition job :running)
+      (monitor-add-job monitor job))))
+
 (defun %monitor-job (monitor job-id)
   (gethash job-id (job-monitor-jobs monitor)))
 

@@ -17,13 +17,9 @@
          (nshell.presentation::*completion-rendered-lines* 0)
          (nshell.presentation::*prompt-rendered-lines* 0)
          (nshell.presentation::*prompt-rendered-cursor-row* 0)
-         (nshell.presentation::*environment* (nshell.domain.environment:make-environment))
-         (nshell.presentation::*aliases* (make-hash-table :test #'equal))
-         (nshell.presentation::*abbreviations* (make-hash-table :test #'equal))
-         (nshell.presentation::*functions* (make-hash-table :test #'equal))
-         (nshell.presentation::*function-sources* (make-hash-table :test #'equal))
-         (nshell.presentation::*proc-registry* (make-hash-table :test #'eql)))
-    ,@body))
+         (nshell.presentation::*environment* (nshell.domain.environment:make-environment)))
+     (nshell.presentation::with-fresh-repl-state-tables
+       ,@body)))
 
 (defmacro with-temporary-function ((symbol function) &body body)
   `(with-temporary-functions ((,symbol ,function))

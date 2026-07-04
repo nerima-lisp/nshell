@@ -13,12 +13,8 @@
         *prompt-rendered-lines* 0
         *prompt-rendered-cursor-row* 0
         *environment* (nshell.domain.environment:inject-os-environment
-                       (nshell.domain.environment:make-default-environment))
-        *aliases* (make-hash-table :test #'equal)
-        *abbreviations* (make-hash-table :test #'equal)
-        *functions* (make-hash-table :test #'equal)
-        *function-sources* (make-hash-table :test #'equal)
-        *proc-registry* (make-hash-table :test #'eql))
+                       (nshell.domain.environment:make-default-environment)))
+  (%reset-repl-state-tables)
   (setf *vi-mode-enabled*
         (let ((flag (uiop:getenv "NSHELL_VI_MODE")))
           (and flag (not (member flag '("" "0" "false" "no") :test #'string-equal)))))

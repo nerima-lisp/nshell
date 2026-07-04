@@ -5,6 +5,19 @@
   (loop for kont = (funcall thunk) then (funcall kont) while kont))
 
 ;; REPL State
+(defun %make-repl-name-table ()
+  (make-hash-table :test #'equal))
+
+(defun %make-repl-process-registry ()
+  (make-hash-table :test #'eql))
+
+(defun %make-repl-state-tables ()
+  (values (%make-repl-name-table)
+          (%make-repl-name-table)
+          (%make-repl-name-table)
+          (%make-repl-name-table)
+          (%make-repl-process-registry)))
+
 (defvar *running* nil)
 (defvar *last-exit-code* 0)
 (defvar *last-command-duration-ms* nil)
@@ -16,9 +29,27 @@
 (defvar *prompt-rendered-lines* 0)
 (defvar *prompt-rendered-cursor-row* 0)
 (defvar *environment* nil)
-(defvar *aliases* (make-hash-table :test #'equal))
-(defvar *abbreviations* (make-hash-table :test #'equal))
-(defvar *functions* (make-hash-table :test #'equal))
-(defvar *function-sources* (make-hash-table :test #'equal))
-(defvar *proc-registry* (make-hash-table :test #'eql)
+(defvar *aliases* (%make-repl-name-table))
+(defvar *abbreviations* (%make-repl-name-table))
+(defvar *functions* (%make-repl-name-table))
+(defvar *function-sources* (%make-repl-name-table))
+(defvar *proc-registry* (%make-repl-process-registry)
   "Maps job-id -> SBCL process object or process list for status checking.")
+
+(defun %reset-repl-state-tables ()
+  (multiple-value-setq (*aliases*
+                        *abbreviations*
+                        *functions*
+                        *function-sources*
+                        *proc-registry*)
+    (%make-repl-state-tables))
+  (values))
+
+(defmacro with-fresh-repl-state-tables (&body body)
+  `(multiple-value-bind (*aliases*
+                         *abbreviations*
+                         *functions*
+                         *function-sources*
+                         *proc-registry*)
+       (%make-repl-state-tables)
+     ,@body))

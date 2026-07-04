@@ -7,12 +7,8 @@
         *last-exit-code* 0
         *last-command-duration-ms* nil
         *environment* (nshell.domain.environment:inject-os-environment
-                       (nshell.domain.environment:make-default-environment))
-        *aliases* (make-hash-table :test #'equal)
-        *abbreviations* (make-hash-table :test #'equal)
-        *functions* (make-hash-table :test #'equal)
-        *function-sources* (make-hash-table :test #'equal)
-        *proc-registry* (make-hash-table :test #'eql))
+                       (nshell.domain.environment:make-default-environment)))
+  (%reset-repl-state-tables)
   (install-expansion-filesystem)
   (configure-completion-filesystem))
 

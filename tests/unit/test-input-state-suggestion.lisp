@@ -212,6 +212,37 @@
     (is (string= (nshell.presentation::%suggestion-acceptance-remaining acceptance)
                  (nshell.presentation::suggestion-acceptance-remaining acceptance)))))
 
+(test input-state-suggestion-append-edit-stays-behind-public-projections
+  "Autosuggestion insertion should expose buffer, cursor, and remaining projections."
+  (let* ((state (input-state
+                 :buffer "git"
+                 :cursor-pos 3
+                 :suggestion " status --short"))
+         (acceptance (nshell.presentation::next-suggestion-acceptance
+                      (nshell.presentation:input-state-suggestion state)))
+         (edit (nshell.presentation::suggestion-append-edit-for-state
+                state
+                (nshell.presentation::suggestion-acceptance-accepted acceptance)
+                (nshell.presentation::suggestion-acceptance-remaining acceptance))))
+    (is (fboundp 'nshell.presentation::%make-suggestion-append-edit))
+    (is (fboundp 'nshell.presentation::%suggestion-append-edit-splice))
+    (is (not (fboundp 'nshell.presentation::make-suggestion-append-edit)))
+    (is (string= "git status"
+                 (nshell.presentation::suggestion-append-edit-buffer
+                  edit
+                  (nshell.presentation:input-state-buffer state))))
+    (is (= 10
+           (nshell.presentation::suggestion-append-edit-cursor-pos edit)))
+    (is (string= " --short"
+                 (nshell.presentation::suggestion-append-edit-remaining edit)))
+    (let ((finished-edit
+            (nshell.presentation::suggestion-append-edit-for-state
+             state
+             (nshell.presentation:input-state-suggestion state)
+             "")))
+      (is (null (nshell.presentation::suggestion-append-edit-remaining
+                 finished-edit))))))
+
 (test input-state-suggestion-word-like-token-p-returns-canonical-booleans
   (is (eq t (nshell.presentation::suggestion-word-like-token-p
              (nshell.domain.parsing:make-token :word "git"))))

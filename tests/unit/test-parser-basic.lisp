@@ -655,15 +655,22 @@
   "Mixed sequence pipe flushing should expose accumulator state as one value object."
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
          (second-command (nshell.domain.parsing:make-command-node "cat" nil))
+         (pending-group
+           (nshell.domain.parsing::%pending-pipeline-group-push
+            (nshell.domain.parsing::%pending-pipeline-group-push
+             (nshell.domain.parsing::%empty-pending-pipeline-group)
+             first-command)
+            second-command))
          (flush
            (nshell.domain.parsing::%flush-mixed-sequence-pipe-group
-            nil
-            (list second-command first-command)))
-         (sequence-commands
-           (nshell.domain.parsing::%mixed-sequence-pipe-flush-sequence-commands
-            flush)))
+             nil
+             pending-group))
+          (sequence-commands
+            (nshell.domain.parsing::%mixed-sequence-pipe-flush-sequence-commands
+             flush)))
     (is (nshell.domain.parsing::%mixed-sequence-pipe-flush-p flush))
-    (is (null
+    (is (nshell.domain.parsing::%pending-pipeline-group-p pending-group))
+    (is (nshell.domain.parsing::%pending-pipeline-group-empty-p
          (nshell.domain.parsing::%mixed-sequence-pipe-flush-pipe-group
           flush)))
     (is (= 1 (length sequence-commands)))

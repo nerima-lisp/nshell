@@ -139,29 +139,48 @@
    (%mixed-sequence-assembly-commands assembly)
    (%mixed-sequence-assembly-separators assembly)))
 
+(defstruct (%pending-pipeline-group
+            (:constructor %make-pending-pipeline-group
+                (commands)))
+  (commands nil :type list :read-only t))
+
+(defun %empty-pending-pipeline-group ()
+  (%make-pending-pipeline-group nil))
+
+(defun %pending-pipeline-group-empty-p (group)
+  (null (%pending-pipeline-group-commands group)))
+
+(defun %pending-pipeline-group-push (group command)
+  (%make-pending-pipeline-group
+   (cons command (%pending-pipeline-group-commands group))))
+
+(defun %pending-pipeline-group-ast (group)
+  (%pipeline-group-ast
+   (%pipeline-group-from-reversed
+    (%pending-pipeline-group-commands group))))
+
 (defstruct (%mixed-sequence-pipe-flush
             (:constructor %make-mixed-sequence-pipe-flush
                 (sequence-commands pipe-group)))
   (sequence-commands nil :type list :read-only t)
-  (pipe-group nil :type list :read-only t))
+  (pipe-group nil :read-only t))
 
 (defun %flush-mixed-sequence-pipe-group (sequence-commands pipe-group)
-  (if pipe-group
+  (if (not (%pending-pipeline-group-empty-p pipe-group))
       (%make-mixed-sequence-pipe-flush
-       (cons (%pipeline-group-ast
-              (%pipeline-group-from-reversed pipe-group))
-             sequence-commands)
-       nil)
+       (cons (%pending-pipeline-group-ast pipe-group) sequence-commands)
+       (%empty-pending-pipeline-group))
       (%make-mixed-sequence-pipe-flush sequence-commands pipe-group)))
 
 (defun %build-mixed-sequence (assembly)
   (let ((sequence-commands nil)
         (sequence-separators nil)
-        (pipe-group nil))
+        (pipe-group (%empty-pending-pipeline-group)))
     (loop for pair in (%mixed-sequence-assembly-pairs assembly)
           for command = (%command-separator-pair-command pair)
           for separator = (%command-separator-pair-separator pair)
-          do (push command pipe-group)
+          do (setf pipe-group
+                   (%pending-pipeline-group-push pipe-group command))
              (when (%sequence-boundary-separator-p separator)
                (let ((flush (%flush-mixed-sequence-pipe-group
                              sequence-commands

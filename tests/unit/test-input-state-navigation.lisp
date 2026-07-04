@@ -191,6 +191,28 @@
     (is (= 5 (nshell.presentation::shell-token-range-start range)))
     (is (= 8 (nshell.presentation::shell-token-range-end range)))))
 
+(test word-motion-targets-are-value-objects
+  (let ((left (nshell.presentation::word-motion-target-left "git checkout main" 17))
+        (right (nshell.presentation::word-motion-target-right "git checkout main" 4))
+        (empty-left (nshell.presentation::word-motion-target-left "" 0))
+        (empty-right (nshell.presentation::word-motion-target-right "" 0)))
+    (is (nshell.presentation::word-motion-target-p left))
+    (is (= 13 (nshell.presentation::word-motion-target-cursor-pos left)))
+    (is (nshell.presentation::word-motion-target-p right))
+    (is (= 13 (nshell.presentation::word-motion-target-cursor-pos right)))
+    (is (= 0 (nshell.presentation::word-motion-target-cursor-pos empty-left)))
+    (is (= 0 (nshell.presentation::word-motion-target-cursor-pos empty-right)))))
+
+(test word-motion-target-raw-accessors-stay-internal
+  "word-motion-target exposes explicit readers; generated slot readers remain internal."
+  (let ((target (nshell.presentation::word-motion-target-right "echo foo" 0)))
+    (is (fboundp 'nshell.presentation::%word-motion-target-cursor-pos))
+    (is (not (eq (symbol-function
+                  'nshell.presentation::word-motion-target-cursor-pos)
+                 (symbol-function
+                  'nshell.presentation::%word-motion-target-cursor-pos))))
+    (is (= 5 (nshell.presentation::word-motion-target-cursor-pos target)))))
+
 (test input-state-word-navigation-clears-visible-suggestion-when-moving
   (let ((state (input-state
                 :buffer "git checkout main"

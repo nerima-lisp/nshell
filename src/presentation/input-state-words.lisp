@@ -2,35 +2,55 @@
 
 (in-package #:nshell.presentation)
 
-(defun move-word-left (state)
-  (with-input-buffer (state buffer pos) state
-    (let ((scan-limit pos))
-      (loop while (and (> scan-limit 0)
-                       (nshell.domain.parsing:shell-token-separator-p
-                        (char buffer (1- scan-limit))))
-            do (decf scan-limit))
-      (let ((ranges (shell-token-ranges-before buffer scan-limit)))
-        (move-cursor-to-clearing-suggestion
-         state
-         (if ranges
-             (shell-token-range-start (car (last ranges)))
-             0))))))
+(defstruct (word-motion-target
+            (:constructor %make-word-motion-target (cursor-pos))
+            (:conc-name %word-motion-target-))
+  (cursor-pos 0 :type fixnum :read-only t))
 
-(defun move-word-right (state)
-  (with-input-buffer (state buffer pos) state
-    (let ((end (length buffer)))
-      (if (and (< pos end)
+(defun word-motion-target-cursor-pos (target)
+  (%word-motion-target-cursor-pos target))
+
+(defun word-motion-target-left (buffer cursor)
+  (let ((scan-limit cursor))
+    (loop while (and (> scan-limit 0)
+                     (nshell.domain.parsing:shell-token-separator-p
+                      (char buffer (1- scan-limit))))
+          do (decf scan-limit))
+    (let ((ranges (shell-token-ranges-before buffer scan-limit)))
+      (%make-word-motion-target
+       (if ranges
+           (shell-token-range-start (car (last ranges)))
+           0)))))
+
+(defun word-motion-target-right (buffer cursor)
+  (let ((pos cursor)
+        (end (length buffer)))
+    (when (and (< pos end)
                (not (nshell.domain.parsing:shell-token-separator-p
                      (char buffer pos))))
-          (let ((range (shell-token-range-at-position buffer pos)))
-            (setf pos (if range
-                          (shell-token-range-end range)
-                          (shell-token-end buffer pos)))))
-      (loop while (and (< pos end)
-                       (nshell.domain.parsing:shell-token-separator-p
-                        (char buffer pos)))
-            do (incf pos))
-      (move-cursor-to-clearing-suggestion state pos))))
+      (let ((range (shell-token-range-at-position buffer pos)))
+        (setf pos (if range
+                      (shell-token-range-end range)
+                      (shell-token-end buffer pos)))))
+    (loop while (and (< pos end)
+                     (nshell.domain.parsing:shell-token-separator-p
+                      (char buffer pos)))
+          do (incf pos))
+    (%make-word-motion-target pos)))
+
+(defun move-word-left (state)
+  (with-input-buffer (state buffer cursor) state
+    (move-cursor-to-clearing-suggestion
+     state
+     (word-motion-target-cursor-pos
+      (word-motion-target-left buffer cursor)))))
+
+(defun move-word-right (state)
+  (with-input-buffer (state buffer cursor) state
+    (move-cursor-to-clearing-suggestion
+     state
+     (word-motion-target-cursor-pos
+      (word-motion-target-right buffer cursor)))))
 
 (defstruct (word-transform-edit
             (:constructor %make-word-transform-edit (start end replacement))

@@ -50,6 +50,14 @@
   kind
   target)
 
+(defstruct (%redirect-output-destination-state
+            (:constructor %make-redirect-output-destination-state
+                (stdout-target stdout-mode stderr-target stderr-mode)))
+  stdout-target
+  stdout-mode
+  stderr-target
+  stderr-mode)
+
 (defparameter +redirect-kind-fact-specs+
   '((:< t nil nil nil)
     (:<< t nil nil nil)
@@ -192,35 +200,55 @@
 (defun redirect-output-p (redirects)
   (not (null (%last-redirect-entry-matching redirects #'redirect-output-kind-p))))
 
+(defun %empty-redirect-output-destination-state ()
+  (%make-redirect-output-destination-state nil :supersede nil :supersede))
+
+(defun %redirect-output-destination-state-values (state)
+  (values
+   (%redirect-output-destination-state-stdout-target state)
+   (%redirect-output-destination-state-stdout-mode state)
+   (%redirect-output-destination-state-stderr-target state)
+   (%redirect-output-destination-state-stderr-mode state)))
+
+(defun %redirect-output-destination-state-apply-entry (state kind target)
+  (case kind
+    ((:> :>>)
+     (%make-redirect-output-destination-state
+      target
+      (%redirect-mode kind)
+      (%redirect-output-destination-state-stderr-target state)
+      (%redirect-output-destination-state-stderr-mode state)))
+    ((:&> :&>>)
+     (let ((mode (%redirect-mode kind)))
+       (%make-redirect-output-destination-state target mode target mode)))
+    ((:2> :2>>)
+     (%make-redirect-output-destination-state
+      (%redirect-output-destination-state-stdout-target state)
+      (%redirect-output-destination-state-stdout-mode state)
+      target
+      (%redirect-mode kind)))
+    (:2>&1
+     (%make-redirect-output-destination-state
+      (%redirect-output-destination-state-stdout-target state)
+      (%redirect-output-destination-state-stdout-mode state)
+      (%redirect-output-destination-state-stdout-target state)
+      (%redirect-output-destination-state-stdout-mode state)))
+    (otherwise state)))
+
 (defun redirect-output-destinations (redirects)
   "Return stdout/stderr file destinations as four values.
 The values are stdout-target, stdout-mode, stderr-target, and stderr-mode after
 applying REDIRECTS from left to right."
-  (let ((stdout-target nil)
-        (stdout-mode :supersede)
-        (stderr-target nil)
-        (stderr-mode :supersede))
-    (dolist (redirect redirects)
-      (let ((entry (%redirect-entry-from-raw redirect)))
-        (when entry
-          (case (%redirect-entry-kind entry)
-            ((:> :>>)
-             (setf stdout-target (%redirect-entry-target entry)
-                   stdout-mode (%redirect-mode (%redirect-entry-kind entry))))
-            ((:&> :&>>)
-             (let ((mode (%redirect-mode (%redirect-entry-kind entry))))
-               (setf stdout-target (%redirect-entry-target entry)
-                     stdout-mode mode
-                     stderr-target (%redirect-entry-target entry)
-                     stderr-mode mode)))
-            ((:2> :2>>)
-             (setf stderr-target (%redirect-entry-target entry)
-                   stderr-mode (%redirect-mode (%redirect-entry-kind entry))))
-            (:2>&1
-             (setf stderr-target stdout-target
-                   stderr-mode stdout-mode))
-            (t nil)))))
-    (values stdout-target stdout-mode stderr-target stderr-mode)))
+  (let ((state (%empty-redirect-output-destination-state)))
+    (map-redirect-entries
+     (lambda (kind target)
+       (setf state
+             (%redirect-output-destination-state-apply-entry
+              state
+              kind
+              target)))
+     redirects)
+    (%redirect-output-destination-state-values state)))
 
 (defstruct (%separator-facts
             (:constructor %make-separator-facts

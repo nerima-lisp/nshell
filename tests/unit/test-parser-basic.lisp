@@ -177,7 +177,36 @@
     (is (string= "later.out" stdout-target))
     (is (eq :append stdout-mode))
     (is (string= "out.txt" stderr-target))
-    (is (eq :supersede stderr-mode))))
+    (is (eq :supersede stderr-mode)))
+  (multiple-value-bind (stdout-target stdout-mode stderr-target stderr-mode)
+      (nshell.domain.parsing:redirect-output-destinations
+       '((:&>> . "all.log")))
+    (is (string= "all.log" stdout-target))
+    (is (eq :append stdout-mode))
+    (is (string= "all.log" stderr-target))
+    (is (eq :append stderr-mode)))
+  (let* ((state (nshell.domain.parsing::%empty-redirect-output-destination-state))
+         (stdout-state
+           (nshell.domain.parsing::%redirect-output-destination-state-apply-entry
+            state :> "out.txt"))
+         (merged-state
+           (nshell.domain.parsing::%redirect-output-destination-state-apply-entry
+            stdout-state :2>&1 nil))
+         (changed-stdout-state
+           (nshell.domain.parsing::%redirect-output-destination-state-apply-entry
+            merged-state :>> "later.out")))
+    (is (string= "later.out"
+                 (nshell.domain.parsing::%redirect-output-destination-state-stdout-target
+                  changed-stdout-state)))
+    (is (eq :append
+            (nshell.domain.parsing::%redirect-output-destination-state-stdout-mode
+             changed-stdout-state)))
+    (is (string= "out.txt"
+                 (nshell.domain.parsing::%redirect-output-destination-state-stderr-target
+                  changed-stdout-state)))
+    (is (eq :supersede
+            (nshell.domain.parsing::%redirect-output-destination-state-stderr-mode
+             changed-stdout-state)))))
 
 (test map-redirect-entries-projects-kind-and-target
   "Redirect consumers receive projected values instead of raw cons cells."

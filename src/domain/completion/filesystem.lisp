@@ -143,14 +143,16 @@
 (defvar *file-completion-subdirectories-fn* nil
   "Function called with a directory pathname to list directory completion candidates.")
 
-(defstruct (path-command-query
-            (:constructor %make-path-command-query (path prefix)))
+(defstruct (%path-command-query
+            (:constructor %make-path-command-query (path prefix))
+            (:conc-name %path-command-query-))
   (path nil :type (or null string) :read-only t)
   (prefix "" :type string :read-only t))
 
-(defstruct (file-completion-query
+(defstruct (%file-completion-query
             (:constructor %make-file-completion-query
-                (directory-prefix name-prefix directory include-files include-directories)))
+                (directory-prefix name-prefix directory include-files include-directories))
+            (:conc-name %file-completion-query-))
   (directory-prefix "" :type string :read-only t)
   (name-prefix "" :type string :read-only t)
   (directory #p"./" :type pathname :read-only t)
@@ -176,11 +178,11 @@
               (cons candidate (%filesystem-candidate-set-candidates set))))))
   set)
 
-(defun path-command-query-active-p (query)
+(defun %path-command-query-active-p (query)
   (and *path-command-directory-files-fn*
-       (path-command-query-path query)
+       (%path-command-query-path query)
        (not (command-prefix-has-directory-p
-             (path-command-query-prefix query)))))
+             (%path-command-query-prefix query)))))
 
 (defun path-command-directory-pathname (directory)
   (pathname (if (string= directory "")
@@ -209,19 +211,19 @@
 (defun command-candidates-from-path (path prefix)
   "Return executable command candidates from PATH that start with PREFIX."
   (let ((query (%make-path-command-query path prefix)))
-    (if (not (path-command-query-active-p query))
+    (if (not (%path-command-query-active-p query))
         nil
         (let ((candidates (%make-empty-filesystem-candidate-set)))
-          (dolist (directory (split-path (path-command-query-path query)))
+          (dolist (directory (split-path (%path-command-query-path query)))
             (add-path-command-directory-candidates
              directory
-             (path-command-query-prefix query)
+             (%path-command-query-prefix query)
              candidates))
           (sort (%filesystem-candidate-set-candidates candidates)
                 #'string<
                 :key #'candidate-text)))))
 
-(defun file-completion-query-from-prefix (prefix include-files include-directories)
+(defun %file-completion-query-from-prefix (prefix include-files include-directories)
   (multiple-value-bind (directory-prefix name-prefix)
       (split-file-completion-prefix prefix)
     (%make-file-completion-query
@@ -235,9 +237,9 @@
   (let ((name (entry-path-name entry)))
     (when (and name
                (not (string= name ""))
-               (starts-with-p (file-completion-query-name-prefix query) name))
+               (starts-with-p (%file-completion-query-name-prefix query) name))
       (let* ((raw-text (concatenate 'string
-                                    (file-completion-query-directory-prefix query)
+                                    (%file-completion-query-directory-prefix query)
                                     name))
              (text (if (eq kind :directory)
                        (ensure-directory-candidate-suffix raw-text)
@@ -257,22 +259,22 @@
 
 (defun file-candidates-from-directory (prefix &key (include-files t) (include-directories t))
   "Return filesystem completion candidates matching PREFIX."
-  (let ((query (file-completion-query-from-prefix
+  (let ((query (%file-completion-query-from-prefix
                 prefix
                 include-files
                 include-directories))
         (candidates (%make-empty-filesystem-candidate-set)))
-    (when (file-completion-query-include-directories query)
+    (when (%file-completion-query-include-directories query)
       (add-file-completion-entries
        (safe-file-completion-list *file-completion-subdirectories-fn*
-                                  (file-completion-query-directory query))
+                                  (%file-completion-query-directory query))
        :directory
        query
        candidates))
-    (when (file-completion-query-include-files query)
+    (when (%file-completion-query-include-files query)
       (add-file-completion-entries
        (safe-file-completion-list *file-completion-directory-files-fn*
-                                  (file-completion-query-directory query))
+                                  (%file-completion-query-directory query))
        :file
        query
        candidates))

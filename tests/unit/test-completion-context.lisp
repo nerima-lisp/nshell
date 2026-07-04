@@ -289,12 +289,35 @@
   "Filesystem completion query construction should not expose unprefixed helpers."
   (is (fboundp 'nshell.domain.completion::%make-file-completion-prefix-projection))
   (is (fboundp 'nshell.domain.completion::%make-path-command-query))
+  (is (fboundp 'nshell.domain.completion::%make-file-completion-query))
   (is (fboundp 'nshell.domain.completion::%make-empty-filesystem-candidate-set))
   (flet ((defined-symbol-p (name)
            (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
     (is (not (defined-symbol-p "MAKE-FILE-COMPLETION-PREFIX-PROJECTION")))
     (is (not (defined-symbol-p "MAKE-PATH-COMMAND-QUERY")))
+    (is (not (defined-symbol-p "MAKE-FILE-COMPLETION-QUERY")))
     (is (not (defined-symbol-p "MAKE-FILESYSTEM-CANDIDATE-SET")))))
+
+(test filesystem-query-state-accessors-are-internal-boundaries
+  "Filesystem query state should be read through internal accessors only."
+  (is (fboundp 'nshell.domain.completion::%path-command-query-path))
+  (is (fboundp 'nshell.domain.completion::%path-command-query-prefix))
+  (is (fboundp 'nshell.domain.completion::%file-completion-query-directory-prefix))
+  (is (fboundp 'nshell.domain.completion::%file-completion-query-name-prefix))
+  (is (fboundp 'nshell.domain.completion::%file-completion-query-directory))
+  (is (fboundp 'nshell.domain.completion::%file-completion-query-include-files))
+  (is (fboundp 'nshell.domain.completion::%file-completion-query-include-directories))
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (is (not (defined-symbol-p "PATH-COMMAND-QUERY-PATH")))
+    (is (not (defined-symbol-p "PATH-COMMAND-QUERY-PREFIX")))
+    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-DIRECTORY-PREFIX")))
+    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-NAME-PREFIX")))
+    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-DIRECTORY")))
+    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-INCLUDE-FILES")))
+    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-INCLUDE-DIRECTORIES")))
+    (is (not (defined-symbol-p "PATH-COMMAND-QUERY-ACTIVE-P")))
+    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-FROM-PREFIX")))))
 
 (test split-file-completion-prefix-splits-on-last-slash
   "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."

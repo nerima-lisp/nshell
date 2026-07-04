@@ -36,7 +36,7 @@
       (setf (gethash cmd-name (%knowledge-base-commands kb))
             (%make-kb-command-entry))))
 
-(defun %unique-kb-string-values (values)
+(defun %unique-string-values (values)
   (let ((seen nil)
         (result nil))
     (dolist (value values (nreverse result))
@@ -106,12 +106,12 @@
           (push spec other-specs)))
     (cons (%make-kb-option-value-spec
            opt-name
-           (%unique-kb-string-values
+           (%unique-string-values
             (append merged-values values)))
           (nreverse other-specs))))
 
-(defun %merge-kb-string-values (existing incoming)
-  (%unique-kb-string-values (append existing incoming)))
+(defun %merge-string-values (existing incoming)
+  (%unique-string-values (append existing incoming)))
 
 (defun %merge-kb-option-value-specs (existing incoming)
   (let ((merged existing))
@@ -124,7 +124,7 @@
 (defun %normalize-kb-exclusive-option-groups (groups)
   (let ((normalized nil))
     (dolist (group groups (nreverse normalized))
-      (let ((options (%unique-kb-string-values group)))
+      (let ((options (%unique-string-values group)))
         (when (rest options)
           (push options normalized))))))
 
@@ -145,38 +145,33 @@
 (defun kb-command-present-p (kb cmd-name)
   (not (null (%kb-command-entry kb cmd-name))))
 
-(defun kb-command-subcommands (kb cmd-name)
+(defun %kb-command-entry-slot (kb cmd-name accessor)
   (let ((entry (%kb-command-entry kb cmd-name)))
     (when entry
-      (%kb-command-entry-subcommands entry))))
+      (funcall accessor entry))))
+
+(defun kb-command-subcommands (kb cmd-name)
+  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-subcommands))
 
 (defun kb-command-flags (kb cmd-name)
-  (let ((entry (%kb-command-entry kb cmd-name)))
-    (when entry
-      (%kb-command-entry-flags entry))))
+  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-flags))
 
 (defun kb-command-option-values (kb cmd-name)
-  (let ((entry (%kb-command-entry kb cmd-name)))
-    (when entry
-      (%kb-command-entry-option-values entry))))
+  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-option-values))
 
 (defun kb-command-exclusive-options (kb cmd-name)
-  (let ((entry (%kb-command-entry kb cmd-name)))
-    (when entry
-      (%kb-command-entry-exclusive-options entry))))
+  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-exclusive-options))
 
 (defun kb-command-description (kb cmd-name)
-  (let ((entry (%kb-command-entry kb cmd-name)))
-    (when entry
-      (%kb-command-entry-description entry))))
+  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-description))
 
 (defun %merge-kb-command-entry-facts
     (entry &key subcommands flags option-values exclusive-options description)
   (setf (%kb-command-entry-subcommands entry)
-        (%merge-kb-string-values (%kb-command-entry-subcommands entry)
+        (%merge-string-values (%kb-command-entry-subcommands entry)
                                  subcommands)
         (%kb-command-entry-flags entry)
-        (%merge-kb-string-values (%kb-command-entry-flags entry) flags)
+        (%merge-string-values (%kb-command-entry-flags entry) flags)
         (%kb-command-entry-option-values entry)
         (%merge-kb-option-value-specs (%kb-command-entry-option-values entry)
                                       option-values)
@@ -266,7 +261,7 @@
                (when (%completion-help-option-token-p token)
                  (push token options))
                (setf start (max (1+ position) end))))
-    (%unique-kb-string-values (nreverse options))))
+    (%unique-string-values (nreverse options))))
 
 (defun %completion-split-on-char (text delimiter)
   (let ((parts nil)
@@ -297,8 +292,8 @@
                              #'%completion-help-enum-value-p
                              (mapcar (lambda (value)
                                        (string-trim '(#\Space #\Tab #\' #\") value))
-                                      (%completion-split-on-char content #\|)))))
-                 (when values values)))))))))
+                                     (%completion-split-on-char content #\|)))))
+                (when values values)))))))))
 
 (defun %completion-help-option-value-specs (options values)
   (when values
@@ -317,7 +312,7 @@
               (append option-values
                       (%completion-help-option-value-specs options values)))))
     (%make-completion-help-command-facts
-     (%unique-kb-string-values flags)
+     (%unique-string-values flags)
      option-values)))
 
 (defun kb-add-command-from-help (kb cmd-name help-text &key description)

@@ -2,6 +2,11 @@
 
 (defparameter +option-value-candidate-description+ "option value")
 
+(defun %candidate-entry-slot (entry kb-accessor catalog-accessor)
+  (if (%kb-command-entry-p entry)
+      (funcall kb-accessor entry)
+      (funcall catalog-accessor entry)))
+
 (defun %sorted-candidates-by-text (candidates)
   (sort candidates #'string< :key #'candidate-text))
 
@@ -9,24 +14,25 @@
   (%catalog-command-entry-command entry))
 
 (defun %candidate-entry-description (entry)
-  (if (%kb-command-entry-p entry)
-      (or (%kb-command-entry-description entry) "")
-      (or (%catalog-command-entry-description entry) "")))
+  (or (%candidate-entry-slot entry
+                             #'%kb-command-entry-description
+                             #'%catalog-command-entry-description)
+      ""))
 
 (defun %candidate-entry-flag-specs (entry)
-  (if (%kb-command-entry-p entry)
-      (%kb-command-entry-flags entry)
-      (%catalog-command-entry-flags entry)))
+  (%candidate-entry-slot entry
+                         #'%kb-command-entry-flags
+                         #'%catalog-command-entry-flags))
 
 (defun %candidate-entry-subcommand-specs (entry)
-  (if (%kb-command-entry-p entry)
-      (%kb-command-entry-subcommands entry)
-      (%catalog-command-entry-subcommands entry)))
+  (%candidate-entry-slot entry
+                         #'%kb-command-entry-subcommands
+                         #'%catalog-command-entry-subcommands))
 
 (defun %candidate-entry-exclusive-option-groups (entry)
-  (if (%kb-command-entry-p entry)
-      (%kb-command-entry-exclusive-options entry)
-      (%catalog-command-entry-exclusive-options entry)))
+  (%candidate-entry-slot entry
+                         #'%kb-command-entry-exclusive-options
+                         #'%catalog-command-entry-exclusive-options))
 
 (defun %command-entry-candidate (name entry)
   (make-candidate name
@@ -78,15 +84,6 @@
       (%make-attached-option-value-prefix
        (subseq prefix 0 separator-position)
        (subseq prefix (1+ separator-position))))))
-
-(defun %unique-string-values (values)
-  (let ((seen (make-hash-table :test #'equal))
-        (unique-values '()))
-    (dolist (value values)
-      (when (and (stringp value) (not (gethash value seen)))
-        (setf (gethash value seen) t)
-        (push value unique-values)))
-    (nreverse unique-values)))
 
 (defun %entry-option-value-specs (entry)
   (if (%kb-command-entry-p entry)

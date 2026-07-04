@@ -634,18 +634,18 @@
          (constantly t))
       (is (null (nshell.domain.completion:complete kb "./g" :path "/mock"))))))
 
-(test unique-kb-string-values-deduplicates-preserving-first-occurrence
-  "unique-kb-string-values keeps first occurrence and drops later duplicates."
+(test unique-string-values-deduplicates-preserving-first-occurrence
+  "unique-string-values keeps first occurrence and drops later duplicates."
   (flet ((uniq (&rest vals)
-           (nshell.domain.completion::%unique-kb-string-values vals)))
+           (nshell.domain.completion::%unique-string-values vals)))
     (is (null (uniq)))
     (is (equal '("a") (uniq "a" "a" "a")))
     (is (equal '("a" "b" "c") (uniq "a" "b" "a" "c" "b")))))
 
-(test merge-kb-string-values-combines-and-deduplicates
-  "merge-kb-string-values appends two lists and deduplicates."
+(test merge-string-values-combines-and-deduplicates
+  "merge-string-values appends two lists and deduplicates."
   (flet ((merge* (a b)
-           (nshell.domain.completion::%merge-kb-string-values a b)))
+           (nshell.domain.completion::%merge-string-values a b)))
     (is (null (merge* nil nil)))
     (is (equal '("a" "b") (merge* nil '("a" "b"))))
     (is (equal '("a" "b" "c") (merge* '("a" "b") '("b" "c"))))))

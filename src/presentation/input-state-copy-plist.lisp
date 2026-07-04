@@ -7,6 +7,41 @@
 (defun %copy-input-state-or-current (supplied-p value current-value)
   (if supplied-p value current-value))
 
+(defun %copy-input-state-clearable-or-current (supplied-p value current-value
+                                               &optional (clear-value nil))
+  (cond
+    ((and supplied-p (eq value :clear)) clear-value)
+    (supplied-p value)
+    (t current-value)))
+
+(defun %copy-input-state-clearable-string-or-current (supplied-p value current-value
+                                                      &optional (clear-value nil))
+  (cond
+    ((and supplied-p (eq value :clear)) clear-value)
+    ((and supplied-p (stringp value)) value)
+    (t current-value)))
+
+(defun %copy-input-state-clearable-integer-or-current (supplied-p value current-value
+                                                       &optional (clear-value nil))
+  (cond
+    ((and supplied-p (eq value :clear)) clear-value)
+    ((and supplied-p (integerp value)) value)
+    (t current-value)))
+
+(defun %copy-input-state-clearable-value-or-current (value current-value
+                                                     &optional (clear-value nil))
+  (cond
+    ((eq value :clear) clear-value)
+    (value value)
+    (t current-value)))
+
+(defun %copy-input-state-clamped-anchor-or-current (supplied-p value current-value buffer)
+  (cond
+    ((and supplied-p (eq value :clear)) nil)
+    (supplied-p
+     (and value (clamp-cursor value buffer)))
+    (t (and current-value (clamp-cursor current-value buffer)))))
+
 (defstruct (%input-state-completion-copy
             (:constructor %make-input-state-completion-copy
                 (&key completion-index completion-base-buffer
@@ -63,38 +98,31 @@
    :completion-index (if completion-index-supplied-p
                          completion-index
                          (input-state-completion-index state))
-   :completion-base-buffer (cond
-                             ((and completion-base-supplied-p
-                                   (eq completion-base-buffer :clear))
-                              nil)
-                             ((and completion-base-supplied-p
-                                   (stringp completion-base-buffer))
-                              completion-base-buffer)
-                             ((and completion-index-supplied-p
-                                   (= completion-index -1))
-                              nil)
-                             (t (input-state-completion-base-buffer state)))
-   :completion-base-cursor (cond
-                             ((and completion-base-cursor-supplied-p
-                                   (eq completion-base-cursor :clear))
-                              nil)
-                             ((and completion-base-cursor-supplied-p
-                                   (integerp completion-base-cursor))
-                              completion-base-cursor)
-                             ((and completion-index-supplied-p
-                                   (= completion-index -1))
-                              nil)
-                             (t (input-state-completion-base-cursor state)))
-   :last-candidates (cond
-                      ((and last-candidates-supplied-p
-                            (eq last-candidates :clear))
-                       nil)
-                      (last-candidates-supplied-p last-candidates)
-                      (t (input-state-last-candidates state)))
+   :completion-base-buffer (if (and completion-index-supplied-p
+                                    (= completion-index -1))
+                               nil
+                               (%copy-input-state-clearable-string-or-current
+                                completion-base-supplied-p
+                                completion-base-buffer
+                                (input-state-completion-base-buffer state)))
+   :completion-base-cursor (if (and completion-index-supplied-p
+                                    (= completion-index -1))
+                               nil
+                               (%copy-input-state-clearable-integer-or-current
+                                completion-base-cursor-supplied-p
+                                completion-base-cursor
+                                (input-state-completion-base-cursor state)))
+   :last-candidates (%copy-input-state-clearable-or-current
+                     last-candidates-supplied-p
+                     last-candidates
+                     (input-state-last-candidates state))
    :suggestion (cond
-                 ((eq suggestion :clear) nil)
-                 (suggestion-supplied-p suggestion)
-                 (t (input-state-suggestion state)))))
+                 ((not suggestion-supplied-p)
+                  (input-state-suggestion state))
+                 ((or (null suggestion)
+                      (eq suggestion :clear))
+                  nil)
+                 (t suggestion))))
 
 (defun %copy-input-state-transient-values (state
                                            buffer
@@ -123,21 +151,16 @@
               vi-count-supplied-p
               vi-count
               (input-state-vi-count state))
-   :vi-visual-anchor (cond
-                        ((and vi-visual-anchor-supplied-p
-                              (eq vi-visual-anchor :clear))
-                         nil)
-                        (vi-visual-anchor-supplied-p
-                         (and vi-visual-anchor
-                              (clamp-cursor vi-visual-anchor buffer)))
-                        (t (let ((anchor (input-state-vi-visual-anchor state)))
-                             (and anchor (clamp-cursor anchor buffer)))))
+   :vi-visual-anchor (%copy-input-state-clamped-anchor-or-current
+                      vi-visual-anchor-supplied-p
+                      vi-visual-anchor
+                      (input-state-vi-visual-anchor state)
+                      buffer)
    :abbreviation-expander (or abbreviation-expander
                                (input-state-abbreviation-expander state))
-   :kill-ring (cond
-                ((eq kill-ring :clear) nil)
-                (kill-ring kill-ring)
-                (t (input-state-kill-ring state)))
+   :kill-ring (%copy-input-state-clearable-value-or-current
+               kill-ring
+               (input-state-kill-ring state))
    :last-yank-start (%copy-input-state-or-current
                      last-yank-start-supplied-p
                      last-yank-start
@@ -174,20 +197,17 @@
                                          redo-stack-supplied-p
                                          redo-stack)
   (%make-input-state-session-copy
-   :search-query (cond
-                   ((eq search-query :clear) "")
-                   ((stringp search-query) search-query)
-                   (t (input-state-search-query state)))
-   :search-original-buffer (cond
-                             ((eq search-original-buffer :clear) "")
-                             ((stringp search-original-buffer)
-                              search-original-buffer)
-                             (t (input-state-search-original-buffer state)))
-   :search-original-cursor (cond
-                             ((eq search-original-cursor :clear) nil)
-                             ((integerp search-original-cursor)
-                              search-original-cursor)
-                             (t (input-state-search-original-cursor state)))
+   :search-query (%copy-input-state-clearable-value-or-current
+                  search-query
+                  (input-state-search-query state)
+                  "")
+   :search-original-buffer (%copy-input-state-clearable-value-or-current
+                            search-original-buffer
+                            (input-state-search-original-buffer state)
+                            "")
+   :search-original-cursor (%copy-input-state-clearable-value-or-current
+                            search-original-cursor
+                            (input-state-search-original-cursor state))
    :search-index (if search-index-supplied-p
                      search-index
                      (input-state-search-index state))

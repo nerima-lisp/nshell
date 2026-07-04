@@ -32,8 +32,8 @@
                         "%COPY-INPUT-STATE-SESSION-INITARGS"
                         "%INPUT-STATE-COMPLETION-COPY"
                         "%INPUT-STATE-TRANSIENT-COPY"
-                          "%INPUT-STATE-SESSION-COPY"))
-        (is (present-p new-name)))))
+                        "%INPUT-STATE-SESSION-COPY"))
+      (is (present-p new-name)))))
 
 (test input-state-copy-initargs-assemble-group-values
   (let ((completion
@@ -87,13 +87,74 @@
                  :search-original-cursor 8
                  :search-index 11
                  :undo-stack (:undo)
-                 :redo-stack (:redo))
+                :redo-stack (:redo))
                (nshell.presentation::%copy-input-state-initargs
                 "text"
                 2
                 completion
                 transient
                 session)))))
+
+(test input-state-copy-with-preserves-and-clears-optional-fields
+  (let ((state (input-state
+                :buffer "abc"
+                :cursor-pos 1
+                :completion-index 2
+                :completion-base-buffer "base"
+                :completion-base-cursor 2
+                :last-candidates '("one" "two")
+                :suggestion "hint"
+                :mode :search
+                :vi-visual-anchor 3
+                :kill-ring '("kill")
+                :search-query "query"
+                :search-original-buffer "origin"
+                :search-original-cursor 4
+                :search-index 9)))
+    (let ((preserved (nshell.presentation::copy-input-state-with
+                      state
+                      :search-index 10))
+          (cleared (nshell.presentation::copy-input-state-with
+                    state
+                    :completion-base-buffer :clear
+                    :completion-base-cursor :clear
+                    :last-candidates :clear
+                    :suggestion :clear
+                    :vi-visual-anchor :clear
+                    :kill-ring :clear
+                    :search-query :clear
+                    :search-original-buffer :clear
+                    :search-original-cursor :clear)))
+      (is-input-state preserved
+                      :buffer "abc"
+                      :cursor-pos 1
+                      :completion-index 2
+                      :completion-base-buffer "base"
+                      :completion-base-cursor 2
+                      :last-candidates '("one" "two")
+                      :suggestion "hint"
+                      :mode :search
+                      :vi-visual-anchor 3
+                      :kill-ring '("kill")
+                      :search-query "query"
+                      :search-original-buffer "origin"
+                      :search-original-cursor 4
+                      :search-index 10)
+      (is-input-state cleared
+                      :buffer "abc"
+                      :cursor-pos 1
+                      :completion-index 2
+                      :completion-base-buffer nil
+                      :completion-base-cursor nil
+                      :last-candidates nil
+                      :suggestion nil
+                      :mode :search
+                      :vi-visual-anchor nil
+                      :kill-ring nil
+                      :search-query ""
+                      :search-original-buffer ""
+                      :search-original-cursor nil
+                      :search-index 9))))
 
 (test input-edit-snapshot-is-private-value
   (let* ((state (nshell.presentation:make-input-state :buffer "abc"

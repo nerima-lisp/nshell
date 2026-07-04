@@ -256,30 +256,33 @@
 (test command-redirect-split-state-consumes-targeted-redirects
   "Command redirect splitting state owns target consumption and dangling operators."
   (let ((state (nshell.domain.parsing::%empty-command-redirect-split-state)))
-    (multiple-value-bind (after-output remaining)
-        (nshell.domain.parsing::%command-redirect-split-state-accept-arg
+    (multiple-value-bind (after-output next-cursor)
+        (nshell.domain.parsing::%command-redirect-split-state-accept-cursor
          state
-         (nshell.domain.parsing::%command-arg ">")
-         (list (nshell.domain.parsing::%command-arg "out")
-               (nshell.domain.parsing::%command-arg "arg")))
+         (nshell.domain.parsing::%command-redirect-arg-cursor-from-args
+          (list (nshell.domain.parsing::%command-arg ">")
+                (nshell.domain.parsing::%command-arg "out")
+                (nshell.domain.parsing::%command-arg "arg"))))
       (multiple-value-bind (clean redirects)
           (nshell.domain.parsing::%command-redirect-split-state-values
            after-output)
         (is (null clean))
         (is (equal '((:> . "out")) redirects))
-        (is (equal '("arg")
-                   (mapcar #'nshell.domain.parsing:arg-value remaining)))))
-    (multiple-value-bind (after-dangling remaining)
-        (nshell.domain.parsing::%command-redirect-split-state-accept-arg
+        (is (equal "arg"
+                   (nshell.domain.parsing:arg-value
+                    (nshell.domain.parsing::%command-redirect-arg-cursor-arg
+                     next-cursor))))))
+    (multiple-value-bind (after-dangling next-cursor)
+        (nshell.domain.parsing::%command-redirect-split-state-accept-cursor
          state
-         (nshell.domain.parsing::%command-arg ">")
-         nil)
+         (nshell.domain.parsing::%command-redirect-arg-cursor-from-args
+          (list (nshell.domain.parsing::%command-arg ">"))))
       (multiple-value-bind (clean redirects)
           (nshell.domain.parsing::%command-redirect-split-state-values
            after-dangling)
         (is (equal '(">") (mapcar #'nshell.domain.parsing:arg-value clean)))
         (is (null redirects))
-        (is (null remaining))))))
+        (is (null next-cursor))))))
 
 (test command-list-redirect-split-state-preserves-stage-order
   "Command-list redirect split state owns clean command and redirect accumulation."

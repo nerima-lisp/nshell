@@ -175,8 +175,30 @@
    (cons (cons kind target)
          (%command-redirect-split-state-redirects state))))
 
-(defun %command-redirect-split-state-accept-arg (state arg remaining-args)
-  (let* ((value (arg-value arg))
+(defstruct (%command-redirect-arg-cursor
+            (:constructor %make-command-redirect-arg-cursor
+                (arg remaining-args)))
+  (arg nil :read-only t)
+  (remaining-args nil :type list :read-only t))
+
+(defun %command-redirect-arg-cursor-from-args (args)
+  (when args
+    (%make-command-redirect-arg-cursor (first args) (rest args))))
+
+(defun %command-redirect-arg-cursor-after-current (cursor)
+  (%command-redirect-arg-cursor-from-args
+   (%command-redirect-arg-cursor-remaining-args cursor)))
+
+(defun %command-redirect-arg-cursor-target-arg (cursor)
+  (first (%command-redirect-arg-cursor-remaining-args cursor)))
+
+(defun %command-redirect-arg-cursor-after-target (cursor)
+  (%command-redirect-arg-cursor-from-args
+   (rest (%command-redirect-arg-cursor-remaining-args cursor))))
+
+(defun %command-redirect-split-state-accept-cursor (state cursor)
+  (let* ((arg (%command-redirect-arg-cursor-arg cursor))
+         (value (arg-value arg))
          (redirect-facts (%redirect-facts value)))
     (cond
       ((and redirect-facts
@@ -186,17 +208,18 @@
          state
          (%redirect-facts-kind redirect-facts)
          nil)
-        remaining-args))
-      ((and redirect-facts remaining-args)
+        (%command-redirect-arg-cursor-after-current cursor)))
+      ((and redirect-facts
+            (%command-redirect-arg-cursor-remaining-args cursor))
        (values
         (%command-redirect-split-state-push-redirect
          state
          (%redirect-facts-kind redirect-facts)
-         (arg-value (first remaining-args)))
-        (rest remaining-args)))
+         (arg-value (%command-redirect-arg-cursor-target-arg cursor)))
+        (%command-redirect-arg-cursor-after-target cursor)))
       (t
        (values (%command-redirect-split-state-push-clean state arg)
-               remaining-args)))))
+               (%command-redirect-arg-cursor-after-current cursor))))))
 
 (defun %command-redirect-split-state-values (state)
   (values (nreverse (%command-redirect-split-state-clean state))
@@ -206,13 +229,11 @@
   "Split CMD-NODE into (clean-command-node redirects).
 Redirect operator args and their targets are removed from the clean command."
   (let ((state (%empty-command-redirect-split-state))
-        (remaining (command-node-args cmd-node)))
-    (loop while remaining
-          do (multiple-value-setq (state remaining)
-               (%command-redirect-split-state-accept-arg
-                state
-                (first remaining)
-                (rest remaining))))
+        (cursor (%command-redirect-arg-cursor-from-args
+                 (command-node-args cmd-node))))
+    (loop while cursor
+          do (multiple-value-setq (state cursor)
+               (%command-redirect-split-state-accept-cursor state cursor)))
     (multiple-value-bind (clean redirects)
         (%command-redirect-split-state-values state)
       (values (make-command-node

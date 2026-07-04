@@ -33,6 +33,18 @@
         :suggest-update
         (:buffer "xあy" :cursor-pos 2))))
 
+(test input-state-buffer-splice-projects-insertion-result-and-cursor
+  (let ((splice (nshell.presentation::make-buffer-splice 5 5 "hello ")))
+    (is (string= "echo hello done"
+                 (nshell.presentation::buffer-splice-result splice "echo done")))
+    (is (= 11 (nshell.presentation::buffer-splice-cursor-pos splice)))))
+
+(test input-state-buffer-splice-projects-deletion-result-and-cursor
+  (let ((splice (nshell.presentation::make-buffer-splice 4 8)))
+    (is (string= "git main"
+                 (nshell.presentation::buffer-splice-result splice "git old main")))
+    (is (= 4 (nshell.presentation::buffer-splice-cursor-pos splice)))))
+
 (test input-state-space-expands-abbreviation-before-cursor
   (let ((state (completion-session-state
                 :buffer "gco"

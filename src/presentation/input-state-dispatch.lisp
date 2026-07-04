@@ -15,6 +15,33 @@
 (defun input-dispatch-action-value (action)
   (%input-dispatch-action-value action))
 
+(defstruct (input-dispatch-transition
+             (:constructor %make-input-dispatch-transition
+                 (state output))
+             (:conc-name %input-dispatch-transition-))
+  (state nil :read-only t)
+  (output :none :type symbol :read-only t))
+
+(defun input-dispatch-transition-state (transition)
+  (%input-dispatch-transition-state transition))
+
+(defun input-dispatch-transition-output (transition)
+  (%input-dispatch-transition-output transition))
+
+(defun input-dispatch-transition (state output)
+  (%make-input-dispatch-transition state output))
+
+(defun input-dispatch-output-transition (state output)
+  (input-dispatch-transition (normalize-input-state state) output))
+
+(defmacro input-dispatch-transition-from-reduction (reduction)
+  `(multiple-value-bind (state output) ,reduction
+     (input-dispatch-output-transition state output)))
+
+(defun commit-input-dispatch-transition (transition)
+  (values (input-dispatch-transition-state transition)
+          (input-dispatch-transition-output transition)))
+
 (defun %start-history-search (state)
   (with-normalized-cleared-completion-state (state state)
     (values (copy-input-state-clearing-completion
@@ -121,53 +148,62 @@
      (%make-input-dispatch-action :redraw))
     (otherwise (%make-input-dispatch-action :none))))
 
+(defun input-dispatch-transition-for-action (state action)
+  (macrolet ((from (reduction)
+               `(input-dispatch-transition-from-reduction ,reduction)))
+    (case (input-dispatch-action-kind action)
+      (:insert-char (from (insert-char-with-abbreviation-expansion
+                           state
+                           (input-dispatch-action-value action))))
+      (:paste (from (insert-paste-at-cursor
+                     state
+                     (input-dispatch-action-value action))))
+      (:enter (from (finalize-enter-input-state state)))
+      (:cycle-completion (from (cycle-completion-state
+                                state
+                                (input-dispatch-action-value action))))
+      (:backspace (from (backspace-before-cursor state)))
+      (:delete (from (delete-char-at-cursor state)))
+      (:clear-input (from (clear-input-state state)))
+      (:delete-or-quit (from (%delete-or-quit-input-state state)))
+      (:start-history-search (from (%start-history-search state)))
+      (:accept-suggestion (from (accept-suggestion-at-eol state)))
+      (:escape (from (%escape-input-state state)))
+      (:redraw-clearing-completion
+       (from (%redraw-input-state (clear-completion-session-state state))))
+      (:move-cursor (from (move-cursor-clearing-suggestion
+                           state
+                           (input-dispatch-action-value action))))
+      (:move-cursor-absolute (from (move-cursor-to-clearing-suggestion
+                                    state
+                                    (input-dispatch-action-value action))))
+      (:move-eol-or-accept-suggestion
+       (from (%move-cursor-to-eol-or-accept-suggestion state)))
+      (:kill-to-eol (from (%kill-to-eol state)))
+      (:emit (input-dispatch-output-transition
+              state
+              (input-dispatch-action-value action)))
+      (:transpose-chars (from (transpose-chars-around-cursor state)))
+      (:kill-to-bol (from (%kill-to-bol state)))
+      (:backward-kill-word (from (backward-kill-word state)))
+      (:yank-last-kill (from (yank-last-kill state)))
+      (:undo (from (undo-input-state state)))
+      (:redo (from (redo-input-state state)))
+      (:capitalize-word (from (capitalize-word-at-cursor state)))
+      (:downcase-word (from (downcase-word-at-cursor state)))
+      (:transpose-words (from (transpose-words-around-cursor state)))
+      (:upcase-word (from (upcase-word-at-cursor state)))
+      (:cycle-last-yank (from (cycle-last-yank state)))
+      (:move-word-left (from (move-word-left state)))
+      (:accept-suggestion-word (from (accept-suggestion-word-at-eol state)))
+      (:forward-kill-word (from (forward-kill-word state)))
+      (:toggle-sudo-prefix (from (toggle-sudo-prefix state)))
+      (:redraw (from (%redraw-input-state state)))
+      (otherwise (input-dispatch-output-transition state :none)))))
+
 (defun reduce-insert-input-state-action (state action)
-  (case (input-dispatch-action-kind action)
-    (:insert-char (insert-char-with-abbreviation-expansion
-                   state
-                   (input-dispatch-action-value action)))
-    (:paste (insert-paste-at-cursor state
-                                    (input-dispatch-action-value action)))
-    (:enter (finalize-enter-input-state state))
-    (:cycle-completion (cycle-completion-state
-                        state
-                        (input-dispatch-action-value action)))
-    (:backspace (backspace-before-cursor state))
-    (:delete (delete-char-at-cursor state))
-    (:clear-input (clear-input-state state))
-    (:delete-or-quit (%delete-or-quit-input-state state))
-    (:start-history-search (%start-history-search state))
-    (:accept-suggestion (accept-suggestion-at-eol state))
-    (:escape (%escape-input-state state))
-    (:redraw-clearing-completion
-     (%redraw-input-state (clear-completion-session-state state)))
-    (:move-cursor (move-cursor-clearing-suggestion
-                   state
-                   (input-dispatch-action-value action)))
-    (:move-cursor-absolute (move-cursor-to-clearing-suggestion
-                            state
-                            (input-dispatch-action-value action)))
-    (:move-eol-or-accept-suggestion
-     (%move-cursor-to-eol-or-accept-suggestion state))
-    (:kill-to-eol (%kill-to-eol state))
-    (:emit (values state (input-dispatch-action-value action)))
-    (:transpose-chars (transpose-chars-around-cursor state))
-    (:kill-to-bol (%kill-to-bol state))
-    (:backward-kill-word (backward-kill-word state))
-    (:yank-last-kill (yank-last-kill state))
-    (:undo (undo-input-state state))
-    (:redo (redo-input-state state))
-    (:capitalize-word (capitalize-word-at-cursor state))
-    (:downcase-word (downcase-word-at-cursor state))
-    (:transpose-words (transpose-words-around-cursor state))
-    (:upcase-word (upcase-word-at-cursor state))
-    (:cycle-last-yank (cycle-last-yank state))
-    (:move-word-left (move-word-left state))
-    (:accept-suggestion-word (accept-suggestion-word-at-eol state))
-    (:forward-kill-word (forward-kill-word state))
-    (:toggle-sudo-prefix (toggle-sudo-prefix state))
-    (:redraw (%redraw-input-state state))
-    (otherwise (values state :none))))
+  (commit-input-dispatch-transition
+   (input-dispatch-transition-for-action state action)))
 
 (defun %reduce-insert-input-state-editing (state key-event)
   (reduce-insert-input-state-action

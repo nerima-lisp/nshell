@@ -129,6 +129,33 @@
     (is (eq :clear-screen
             (nshell.presentation::input-dispatch-action-value action)))))
 
+(test input-state-dispatch-transition-commits-action-output
+  "Dispatch actions project to transition values before returning reducer values."
+  (let* ((state (completion-session-state
+                 :buffer "git"
+                 :cursor-pos 2
+                 :completion-index 1
+                 :suggestion " status"))
+         (action (nshell.presentation::input-dispatch-action-for-key-event
+                  (input-key-event :ctrl-l)))
+         (transition (nshell.presentation::input-dispatch-transition-for-action
+                      state
+                      action)))
+    (is (nshell.presentation::input-dispatch-transition-p transition))
+    (is (not (fboundp 'nshell.presentation::make-input-dispatch-transition)))
+    (is (fboundp 'nshell.presentation::%input-dispatch-transition-state))
+    (is (eq :clear-screen
+            (nshell.presentation::input-dispatch-transition-output
+             transition)))
+    (with-expected-input-state-reduction (new-state output)
+        state
+        (nshell.presentation::commit-input-dispatch-transition transition)
+        :clear-screen
+        (:buffer "git"
+         :cursor-pos 2
+         :completion-index 1
+         :suggestion " status"))))
+
 (test input-state-dispatch-action-applies-output-actions-without-state-change
   (let* ((state (completion-session-state
                  :buffer "git"

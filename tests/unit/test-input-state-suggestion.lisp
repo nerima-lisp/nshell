@@ -194,15 +194,26 @@
       :redraw))
 
 (test input-state-suggestion-acceptance-stays-behind-public-projections
-  "Autosuggestion acceptance should expose a value object, not raw split indexes."
-  (let ((acceptance (nshell.presentation::next-suggestion-acceptance
-                     " status --short")))
+  "Autosuggestion acceptance should expose value objects, not raw split indexes."
+  (let* ((suggestion " status --short")
+         (segment (nshell.presentation::suggestion-next-acceptance-segment
+                   suggestion))
+         (acceptance (nshell.presentation::next-suggestion-acceptance
+                      suggestion)))
+    (is (fboundp 'nshell.presentation::%make-suggestion-acceptance-segment))
+    (is (fboundp 'nshell.presentation::%suggestion-acceptance-segment-end))
+    (is (fboundp 'nshell.presentation::suggestion-acceptance-segment-end))
+    (is (fboundp 'nshell.presentation::suggestion-next-acceptance-segment))
+    (is (not (fboundp 'nshell.presentation::make-suggestion-acceptance-segment)))
+    (is (not (fboundp 'nshell.presentation::%suggestion-next-word-end)))
+    (is (nshell.presentation::suggestion-acceptance-segment-p segment))
+    (is (= 7
+           (nshell.presentation::suggestion-acceptance-segment-end segment)))
     (is (fboundp 'nshell.presentation::%make-suggestion-acceptance))
     (is (fboundp 'nshell.presentation::%suggestion-acceptance-accepted))
     (is (fboundp 'nshell.presentation::%suggestion-acceptance-remaining))
     (is (not (fboundp 'nshell.presentation::make-suggestion-acceptance)))
     (is (not (fboundp 'nshell.presentation::suggestion-next-word-end)))
-    (is (fboundp 'nshell.presentation::%suggestion-next-word-end))
     (is (string= " status"
                  (nshell.presentation::suggestion-acceptance-accepted acceptance)))
     (is (string= " --short"

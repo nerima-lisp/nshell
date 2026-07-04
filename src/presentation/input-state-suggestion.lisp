@@ -77,6 +77,14 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
              (shell-token-end suggestion operator-end))
             (t operator-end)))))))
 
+(defstruct (suggestion-acceptance-segment
+            (:constructor %make-suggestion-acceptance-segment (end))
+            (:conc-name %suggestion-acceptance-segment-))
+  (end 0 :type fixnum :read-only t))
+
+(defun suggestion-acceptance-segment-end (segment)
+  (%suggestion-acceptance-segment-end segment))
+
 (defstruct (suggestion-acceptance
             (:constructor %make-suggestion-acceptance (accepted remaining))
             (:conc-name %suggestion-acceptance-))
@@ -134,8 +142,8 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
    :cursor-pos (suggestion-append-edit-cursor-pos edit)
    :suggestion (or (suggestion-append-edit-remaining edit) :clear)))
 
-(defun %suggestion-next-word-end (suggestion)
-  "Return the end index of the next shell token or operator in SUGGESTION.
+(defun suggestion-next-acceptance-segment (suggestion)
+  "Return the next autosuggestion acceptance segment.
 
 Leading shell word separators are accepted with the following token, matching
 fish-style autosuggestion word acceptance for tails such as \" status --short\"."
@@ -146,24 +154,26 @@ fish-style autosuggestion word acceptance for tails such as \" status --short\".
                       (char suggestion pos)))
           do (incf pos))
     (if (= pos end)
-        end
-        (or (suggestion-compact-redirection-end suggestion pos)
-            (handler-case
-                (let* ((tokenization
-                         (nshell.domain.parsing:tokenize suggestion))
-                       (tokens
-                         (nshell.domain.parsing:tokenization-result-tokens
-                          tokenization))
-                       (first-token
-                         (suggestion-first-token-at-or-after tokens pos)))
-                  (if first-token
-                      (suggestion-token-accept-end tokens first-token)
-                      end))
-              (error ()
-                (shell-token-end suggestion pos)))))))
+        (%make-suggestion-acceptance-segment end)
+        (%make-suggestion-acceptance-segment
+         (or (suggestion-compact-redirection-end suggestion pos)
+             (handler-case
+                 (let* ((tokenization
+                          (nshell.domain.parsing:tokenize suggestion))
+                        (tokens
+                          (nshell.domain.parsing:tokenization-result-tokens
+                           tokenization))
+                        (first-token
+                          (suggestion-first-token-at-or-after tokens pos)))
+                   (if first-token
+                       (suggestion-token-accept-end tokens first-token)
+                       end))
+               (error ()
+                 (shell-token-end suggestion pos))))))))
 
 (defun next-suggestion-acceptance (suggestion)
-  (let* ((accept-end (%suggestion-next-word-end suggestion))
+  (let* ((segment (suggestion-next-acceptance-segment suggestion))
+         (accept-end (suggestion-acceptance-segment-end segment))
          (accepted (subseq suggestion 0 accept-end))
          (remaining (subseq suggestion accept-end)))
     (%make-suggestion-acceptance accepted remaining)))

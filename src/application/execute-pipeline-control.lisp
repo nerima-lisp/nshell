@@ -131,7 +131,7 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
     (when pids
       (let ((job-id (nshell.domain.job-control:monitor-add-background-job
                      (shell-context-job-monitor context) pids command-line)))
-        (setf (gethash job-id (shell-context-process-registry context)) processes)
+        (%store-shell-process-registry-entry context job-id processes)
         job-id))))
 
 (defun %spawn-background-node-in-context (context command)

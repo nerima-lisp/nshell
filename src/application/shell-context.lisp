@@ -40,6 +40,10 @@
       (remhash name (shell-context-function-source-table context)))
   body-lines)
 
+(defun %store-shell-process-registry-entry (context job-id processes)
+  (setf (gethash job-id (shell-context-process-registry context)) processes)
+  processes)
+
 (defmethod nshell.domain.completion:completion-filesystem-fns ((context shell-context))
   "Return filesystem adapter functions used by domain completion."
   (shell-context-filesystem-fns context))

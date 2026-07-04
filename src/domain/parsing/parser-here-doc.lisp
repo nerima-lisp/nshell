@@ -90,18 +90,49 @@
   next-position
   (incomplete-p nil :type boolean :read-only t))
 
+(defstruct (%here-doc-consumption-state
+            (:constructor %make-here-doc-consumption-state
+                (reversed-bodies next-position incomplete-p)))
+  (reversed-bodies '() :type list :read-only t)
+  next-position
+  (incomplete-p nil :type boolean :read-only t))
+
+(defun %empty-here-doc-consumption-state (start)
+  (%make-here-doc-consumption-state '() start nil))
+
+(defun %here-doc-consumption-state-add-body (state body)
+  (%make-here-doc-consumption-state
+   (cons (%here-doc-body-body body)
+         (%here-doc-consumption-state-reversed-bodies state))
+   (%here-doc-body-next-position body)
+   (%here-doc-body-missing-delimiter-p body)))
+
+(defun %here-doc-consumption-state-consume-delimiter (input state delimiter)
+  (%here-doc-consumption-state-add-body
+   state
+   (%consume-here-doc-body
+    input
+    (%here-doc-consumption-state-next-position state)
+    delimiter)))
+
+(defun %here-doc-consumption-from-state (state)
+  (%make-here-doc-consumption
+   (nreverse (%here-doc-consumption-state-reversed-bodies state))
+   (%here-doc-consumption-state-next-position state)
+   (%here-doc-consumption-state-incomplete-p state)))
+
 (defun %consume-here-docs-result (input start delimiters)
-  (let ((bodies '())
-        (pos start)
-        (incomplete nil))
-    (dolist (delimiter delimiters)
-      (let ((body (%consume-here-doc-body input pos delimiter)))
-        (push (%here-doc-body-body body) bodies)
-        (setf pos (%here-doc-body-next-position body))
-        (when (%here-doc-body-missing-delimiter-p body)
-          (setf incomplete t)
-          (return))))
-    (%make-here-doc-consumption (nreverse bodies) pos incomplete)))
+  (labels ((consume (state remaining-delimiters)
+             (if (or (endp remaining-delimiters)
+                     (%here-doc-consumption-state-incomplete-p state))
+                 (%here-doc-consumption-from-state state)
+                 (consume
+                  (%here-doc-consumption-state-consume-delimiter
+                   input
+                   state
+                   (first remaining-delimiters))
+                  (rest remaining-delimiters)))))
+    (consume (%empty-here-doc-consumption-state start) delimiters)))
 
 (defun %here-doc-target-token-p (token)
   (eq (token-type token) :word))

@@ -1428,6 +1428,29 @@
                (nshell.domain.parsing::%here-doc-delimiter-scan-result
                 scan)))))
 
+(test parser-here-doc-consumption-state-projects-fold-result
+  "Here-doc consumption state owns body accumulation and cursor movement."
+  (let* ((input (format nil "one~%A~%two~%B~%"))
+         (state
+           (nshell.domain.parsing::%here-doc-consumption-state-consume-delimiter
+            input
+            (nshell.domain.parsing::%here-doc-consumption-state-consume-delimiter
+             input
+             (nshell.domain.parsing::%empty-here-doc-consumption-state 0)
+             "A")
+            "B"))
+         (consumption
+           (nshell.domain.parsing::%here-doc-consumption-from-state state)))
+    (is (nshell.domain.parsing::%here-doc-consumption-state-p state))
+    (is (equal (list (format nil "one~%") (format nil "two~%"))
+               (nshell.domain.parsing::%here-doc-consumption-bodies
+                consumption)))
+    (is (= (length input)
+           (nshell.domain.parsing::%here-doc-consumption-next-position
+            consumption)))
+    (is (not (nshell.domain.parsing::%here-doc-consumption-incomplete-p
+              consumption)))))
+
 (test parser-here-doc-consumption-projects-body-position-and-incomplete-state
   "Here-doc consumption returns one explicit domain result for tokenizer assembly."
   (let* ((consumed-prefix (format nil "one~%A~%two~%B~%"))

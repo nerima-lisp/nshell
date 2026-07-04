@@ -139,17 +139,25 @@
         (%token-reduction-state-pending-sep state)
         (%token-reduction-state-pending-sep-token state)))
 
+(defun %token-reduction-state-record-command-entry (state)
+  (push (%token-reduction-command-entry-from-state state)
+        (%token-reduction-state-all-cmds state))
+  state)
+
+(defun %token-reduction-state-clear-command-context (state)
+  (setf (%token-reduction-state-current-cmd state) nil
+        (%token-reduction-state-current-cmd-token state) nil
+        (%token-reduction-state-current-args state) '()
+        (%token-reduction-state-pending-redirect-token state) nil
+        (%token-reduction-state-pending-sep state) nil
+        (%token-reduction-state-pending-sep-token state) nil)
+  state)
+
 (defun %flush-token-reduction-command (state)
   (when (%token-reduction-state-current-cmd state)
     (%record-missing-redirect-target state)
-    (push (%token-reduction-command-entry-from-state state)
-          (%token-reduction-state-all-cmds state))
-    (setf (%token-reduction-state-current-cmd state) nil
-          (%token-reduction-state-current-cmd-token state) nil
-          (%token-reduction-state-current-args state) '()
-          (%token-reduction-state-pending-redirect-token state) nil
-          (%token-reduction-state-pending-sep state) nil
-          (%token-reduction-state-pending-sep-token state) nil)))
+    (%token-reduction-state-record-command-entry state)
+    (%token-reduction-state-clear-command-context state)))
 
 (defun %record-token-reduction-separator (state separator token)
   (if (%token-reduction-state-current-cmd state)

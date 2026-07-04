@@ -1108,6 +1108,32 @@
       (is (string= "Expected command before '|'"
                    (nshell.domain.parsing:parse-diagnostic-message diagnostic))))))
 
+(test parser-reduction-state-records-and-clears-command-context
+  "Token reduction state owns command entry recording and command context reset."
+  (let* ((command-token (nshell.domain.parsing:make-token :word "echo" 0 4))
+         (separator-token (nshell.domain.parsing:make-token :pipe "|" 11 12))
+         (state
+           (nshell.domain.parsing::%make-token-reduction-state
+            :current-cmd "echo"
+            :current-cmd-token command-token
+            :current-args (list "hello")
+            :pending-sep :pipe
+            :pending-sep-token separator-token)))
+    (is (eq state
+            (nshell.domain.parsing::%token-reduction-state-record-command-entry
+             state)))
+    (is (= 1
+           (length
+            (nshell.domain.parsing::%token-reduction-state-all-cmds state))))
+    (is (eq state
+            (nshell.domain.parsing::%token-reduction-state-clear-command-context
+             state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-current-cmd state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-current-args state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-pending-sep state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-pending-sep-token
+               state)))))
+
 (test parser-reduction-state-folds-token-stream
   "Token stream reduction folds tokens through an explicit state boundary."
   (let* ((state

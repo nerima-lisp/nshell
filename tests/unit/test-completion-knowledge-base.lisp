@@ -655,6 +655,37 @@
                (nshell.domain.completion:kb-command-option-values
                 kb "tool")))))
 
+(test completion-help-command-facts-are-private-values
+  (let ((facts (nshell.domain.completion::%completion-help-command-facts
+                (format nil "  --format=(json|yaml)~%  --verbose~%  -h, --help"))))
+    (is (nshell.domain.completion::%completion-help-command-facts-p facts))
+    (is (not (listp facts)))
+    (is (not (fboundp
+              'nshell.domain.completion::make-completion-help-command-facts)))
+    (is (fboundp
+         'nshell.domain.completion::%make-completion-help-command-facts))
+    (is (equal '("--format" "--verbose" "-h" "--help")
+               (nshell.domain.completion::%completion-help-command-facts-flags
+                facts)))
+    (is (equal '(("--format" "json" "yaml"))
+               (nshell.domain.completion::%completion-help-command-facts-option-values
+                facts)))))
+
+(test add-command-from-help-projects-help-facts-through-public-kb-api
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+    (nshell.domain.completion:kb-add-command-from-help
+     kb "tool"
+     (format nil "  --format=(json|yaml)~%  --verbose~%  --mode=(fast|safe)")
+     :description "parsed help")
+    (is (equal '("--format" "--verbose" "--mode")
+               (nshell.domain.completion:kb-command-flags kb "tool")))
+    (is (equal '(("--mode" "fast" "safe")
+                 ("--format" "json" "yaml"))
+               (nshell.domain.completion:kb-command-option-values kb "tool")))
+    (is (string= "parsed help"
+                 (nshell.domain.completion:kb-command-description
+                  kb "tool")))))
+
 (test knowledge-base-command-entries-are-private-aggregate-values
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "tool")

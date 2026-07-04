@@ -15,6 +15,13 @@
   (exclusive-options nil :type list)
   description)
 
+(defstruct (%completion-help-command-facts
+            (:constructor %make-completion-help-command-facts
+                (flags option-values))
+            (:conc-name %completion-help-command-facts-))
+  (flags nil :type list :read-only t)
+  (option-values nil :type list :read-only t))
+
 (defun make-empty-knowledge-base ()
   (%make-knowledge-base))
 
@@ -293,15 +300,17 @@
               option-values
               (append option-values
                       (%completion-help-option-value-specs options values)))))
-    (list :flags (%unique-kb-string-values flags)
-          :option-values option-values)))
+    (%make-completion-help-command-facts
+     (%unique-kb-string-values flags)
+     option-values)))
 
 (defun kb-add-command-from-help (kb cmd-name help-text &key description)
   "Add command completion metadata by parsing already-fetched help text."
   (let ((facts (%completion-help-command-facts help-text)))
     (kb-add-command kb cmd-name
-                    :flags (getf facts :flags)
-                    :option-values (getf facts :option-values)
+                    :flags (%completion-help-command-facts-flags facts)
+                    :option-values
+                    (%completion-help-command-facts-option-values facts)
                     :description description)))
 
 (defun kb-remove-command (kb cmd-name)

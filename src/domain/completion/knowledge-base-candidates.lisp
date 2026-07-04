@@ -5,30 +5,30 @@
 (defun sorted-candidates-by-text (candidates)
   (sort candidates #'string< :key #'candidate-text))
 
-(defun candidate-entry-command-name (entry)
+(defun %candidate-entry-command-name (entry)
   (getf entry :command))
 
-(defun candidate-entry-description (entry)
+(defun %candidate-entry-description (entry)
   (or (getf entry :description) ""))
 
-(defun candidate-entry-flag-specs (entry)
+(defun %candidate-entry-flag-specs (entry)
   (getf entry :flags))
 
-(defun candidate-entry-subcommand-specs (entry)
+(defun %candidate-entry-subcommand-specs (entry)
   (getf entry :subcommands))
 
-(defun candidate-entry-exclusive-option-groups (entry)
+(defun %candidate-entry-exclusive-option-groups (entry)
   (getf entry :exclusive-options))
 
 (defun command-entry-candidate (name entry)
   (make-candidate name
                   :kind :command
-                  :description (candidate-entry-description entry)))
+                  :description (%candidate-entry-description entry)))
 
 (defun builtin-command-candidates (prefix)
   (sorted-candidates-by-text
    (loop for entry in +builtin-command-catalog+
-         for name = (candidate-entry-command-name entry)
+         for name = (%candidate-entry-command-name entry)
          when (starts-with-p prefix name)
            collect (command-entry-candidate name entry))))
 
@@ -44,8 +44,8 @@
 (defun unique-entry-argument-names (entry)
   (let ((seen (make-hash-table :test #'equal))
         (names '()))
-    (dolist (source (list (candidate-entry-flag-specs entry)
-                          (candidate-entry-subcommand-specs entry)))
+    (dolist (source (list (%candidate-entry-flag-specs entry)
+                          (%candidate-entry-subcommand-specs entry)))
       (dolist (name source)
         (when (and (stringp name) (not (gethash name seen)))
           (setf (gethash name seen) t)
@@ -198,7 +198,7 @@
                                (option-token-matches-p selected-option word))
                              argument-words))
                      group)))
-        (candidate-entry-exclusive-option-groups entry)))
+        (%candidate-entry-exclusive-option-groups entry)))
 
 (defun available-entry-argument-names (entry prefix argument-words)
   (loop for name in (unique-entry-argument-names entry)

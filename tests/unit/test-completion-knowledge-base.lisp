@@ -85,22 +85,36 @@
                      :subcommands '("run")
                      :exclusive-options '(("--json" "--yaml")))))
     (is (string= "tool"
-                 (nshell.domain.completion::candidate-entry-command-name
+                 (nshell.domain.completion::%candidate-entry-command-name
                   entry)))
     (is (string= "tool description"
-                 (nshell.domain.completion::candidate-entry-description
+                 (nshell.domain.completion::%candidate-entry-description
                   entry)))
     (is (string= ""
-                 (nshell.domain.completion::candidate-entry-description
+                 (nshell.domain.completion::%candidate-entry-description
                   '(:command "empty-description"))))
     (is (equal '("--flag")
-               (nshell.domain.completion::candidate-entry-flag-specs entry)))
+               (nshell.domain.completion::%candidate-entry-flag-specs entry)))
     (is (equal '("run")
-               (nshell.domain.completion::candidate-entry-subcommand-specs
+               (nshell.domain.completion::%candidate-entry-subcommand-specs
                 entry)))
     (is (equal '(("--json" "--yaml"))
-               (nshell.domain.completion::candidate-entry-exclusive-option-groups
+               (nshell.domain.completion::%candidate-entry-exclusive-option-groups
                 entry)))))
+
+(test candidate-entry-projection-helpers-are-internal-boundaries
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (is (not (defined-symbol-p "CANDIDATE-ENTRY-COMMAND-NAME")))
+    (is (not (defined-symbol-p "CANDIDATE-ENTRY-DESCRIPTION")))
+    (is (not (defined-symbol-p "CANDIDATE-ENTRY-FLAG-SPECS")))
+    (is (not (defined-symbol-p "CANDIDATE-ENTRY-SUBCOMMAND-SPECS")))
+    (is (not (defined-symbol-p "CANDIDATE-ENTRY-EXCLUSIVE-OPTION-GROUPS"))))
+  (is (fboundp 'nshell.domain.completion::%candidate-entry-command-name))
+  (is (fboundp 'nshell.domain.completion::%candidate-entry-description))
+  (is (fboundp 'nshell.domain.completion::%candidate-entry-flag-specs))
+  (is (fboundp 'nshell.domain.completion::%candidate-entry-subcommand-specs))
+  (is (fboundp 'nshell.domain.completion::%candidate-entry-exclusive-option-groups)))
 
 (test entry-option-values-projects-option-value-spec-boundary
   (let ((entry (list :option-values '(("--mode" "fast" "safe")

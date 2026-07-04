@@ -58,7 +58,7 @@
         description))))
 
 (defun candidates-from-rule-solutions (solutions variable kind &key (prefix "") description-fn)
-  (sort (merge-candidates
+  (sort (%merge-candidates
          (loop for solution in solutions
                for value = (solution-value variable solution)
                for description = (and description-fn
@@ -105,7 +105,7 @@
   (%rule-complete-query kb-rules (completion-query-for partial-input)))
 
 (defun %knowledge-base-command-candidates (kb path command)
-  (merge-candidates
+  (%merge-candidates
    (knowledge-base-command-candidates kb command)
    (%command-candidates-from-path path command)
    (builtin-command-candidates command)))
@@ -185,5 +185,5 @@
 
 (defun complete (kb partial-input &key path)
   (let ((query (completion-query-for partial-input)))
-    (rank-candidates (%completion-ranking-prefix query)
-                     (%completion-candidates kb query path))))
+    (%rank-candidates (%completion-ranking-prefix query)
+                      (%completion-candidates kb query path))))

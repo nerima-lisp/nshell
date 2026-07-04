@@ -5,7 +5,7 @@
 (test case-sensitive-prefix-p-matches-exact-case-leading-substring
   "case-sensitive-prefix-p returns true only when prefix matches the start of text exactly."
   (flet ((pre (prefix text)
-           (nshell.domain.completion::case-sensitive-prefix-p prefix text)))
+           (nshell.domain.completion::%case-sensitive-prefix-p prefix text)))
     (is (pre "" "anything"))
     (is (pre "check" "checkout"))
     (is (pre "git" "git"))
@@ -14,17 +14,17 @@
 
 (test candidate-description-present-p-tests-non-empty-description
   "candidate-description-present-p returns true only when description is non-empty."
-  (is (nshell.domain.completion::candidate-description-present-p
+  (is (nshell.domain.completion::%candidate-description-present-p
        (nshell.domain.completion:make-candidate "tool" :description "does stuff")))
-  (is (not (nshell.domain.completion::candidate-description-present-p
+  (is (not (nshell.domain.completion::%candidate-description-present-p
             (nshell.domain.completion:make-candidate "tool" :description ""))))
-  (is (not (nshell.domain.completion::candidate-description-present-p
+  (is (not (nshell.domain.completion::%candidate-description-present-p
             (nshell.domain.completion:make-candidate "tool")))))
 
 (test completion-rank-score-applies-exact-and-prefix-bonuses
   "completion-rank-score stacks bonuses: exact (+100000), prefix (+10000), described (+1000)."
   (flet ((score (prefix text &key (description "") (base 0))
-           (nshell.domain.completion::completion-rank-score
+           (nshell.domain.completion::%completion-rank-score
             prefix
             (nshell.domain.completion:make-candidate text :description description :score base))))
     ;; exact match: base + 100000 + 10000 (prefix) + 1000 (described)
@@ -39,7 +39,7 @@
   (flet ((make (text &key (score 0) (description ""))
            (nshell.domain.completion:make-candidate text :score score :description description))
          (better (a b)
-           (nshell.domain.completion::better-duplicate-candidate-p a b)))
+           (nshell.domain.completion::%better-duplicate-candidate-p a b)))
     ;; higher score wins unconditionally
     (is (better (make "t" :score 10) (make "t" :score 5)))
     (is (not (better (make "t" :score 5) (make "t" :score 10))))
@@ -53,7 +53,7 @@
   (let* ((low (nshell.domain.completion:make-candidate "dup" :score 1))
          (high (nshell.domain.completion:make-candidate
                 "dup" :score 5 :description "winner"))
-         (results (nshell.domain.completion::merge-candidates
+         (results (nshell.domain.completion::%merge-candidates
                    (list low)
                    (list high))))
     (is (= 1 (length results)))
@@ -65,7 +65,7 @@
   (let* ((low (nshell.domain.completion:make-candidate "dup" :score 1))
          (other (nshell.domain.completion:make-candidate "other" :score 2))
          (high (nshell.domain.completion:make-candidate "dup" :score 5))
-         (results (nshell.domain.completion::merge-candidates
+         (results (nshell.domain.completion::%merge-candidates
                    (list low other high))))
     (is (= 2 (length results)))
     (is (string= "other"
@@ -80,9 +80,28 @@
              (and symbol (fboundp symbol)))))
     (is (not (internal-symbol-p "MAKE-CANDIDATE-RANKING")))
     (is (not (internal-symbol-p "MAKE-DUPLICATE-CANDIDATE-QUALITY")))
+    (is (not (internal-symbol-p "CANDIDATE-RANKING-SCORE")))
+    (is (not (internal-symbol-p "CANDIDATE-RANKING-TEXT")))
+    (is (not (internal-symbol-p "DUPLICATE-CANDIDATE-QUALITY-SCORE")))
+    (is (not (internal-symbol-p "DUPLICATE-CANDIDATE-QUALITY-DESCRIBED-P")))
     (is (not (internal-symbol-p "MAKE-CANDIDATE-MERGE-SLOT")))
     (is (not (internal-symbol-p "MAKE-CANDIDATE-MERGE-SLOT-PROJECTION")))
     (is (not (internal-symbol-p "MAKE-CANDIDATE-MERGE-STATE")))
+    (is (not (internal-function-p "CANDIDATE-DESCRIPTION-PRESENT-P")))
+    (is (not (internal-function-p "CASE-SENSITIVE-PREFIX-P")))
+    (is (not (internal-function-p "EXACT-MATCH-RANK-BONUS")))
+    (is (not (internal-function-p "CASE-SENSITIVE-PREFIX-RANK-BONUS")))
+    (is (not (internal-function-p "DESCRIBED-CANDIDATE-RANK-BONUS")))
+    (is (not (internal-function-p "CANDIDATE-RANK-BONUS")))
+    (is (not (internal-function-p "COMPLETION-RANK-SCORE")))
+    (is (not (internal-function-p "CANDIDATE-RANKING-FOR")))
+    (is (not (internal-function-p "CANDIDATE-RANKING<")))
+    (is (not (internal-function-p "COMPLETION-CANDIDATE<")))
+    (is (not (internal-function-p "DUPLICATE-CANDIDATE-QUALITY")))
+    (is (not (internal-function-p "DUPLICATE-CANDIDATE-QUALITY>")))
+    (is (not (internal-function-p "BETTER-DUPLICATE-CANDIDATE-P")))
+    (is (not (internal-function-p "RANK-CANDIDATES")))
+    (is (not (internal-function-p "MERGE-CANDIDATES")))
     (is (not (internal-function-p "CANDIDATE-MERGE-STATE-ADD")))
     (is (not (internal-function-p "MERGE-CANDIDATE")))
     (is (not (internal-function-p "PROJECT-CANDIDATE-MERGE-SLOT")))
@@ -90,9 +109,28 @@
     (is (not (internal-function-p "CANDIDATE-MERGE-SLOT-REPLACE-CANDIDATE")))
     (is (internal-symbol-p "%MAKE-CANDIDATE-RANKING"))
     (is (internal-symbol-p "%MAKE-DUPLICATE-CANDIDATE-QUALITY"))
+    (is (internal-function-p "%CANDIDATE-RANKING-SCORE"))
+    (is (internal-function-p "%CANDIDATE-RANKING-TEXT"))
+    (is (internal-function-p "%DUPLICATE-CANDIDATE-QUALITY-SCORE"))
+    (is (internal-function-p "%DUPLICATE-CANDIDATE-QUALITY-DESCRIBED-P"))
     (is (internal-symbol-p "%MAKE-CANDIDATE-MERGE-SLOT"))
     (is (internal-symbol-p "%MAKE-CANDIDATE-MERGE-SLOT-PROJECTION"))
     (is (internal-symbol-p "%MAKE-EMPTY-CANDIDATE-MERGE-STATE"))
+    (is (internal-function-p "%CANDIDATE-DESCRIPTION-PRESENT-P"))
+    (is (internal-function-p "%CASE-SENSITIVE-PREFIX-P"))
+    (is (internal-function-p "%EXACT-MATCH-RANK-BONUS"))
+    (is (internal-function-p "%CASE-SENSITIVE-PREFIX-RANK-BONUS"))
+    (is (internal-function-p "%DESCRIBED-CANDIDATE-RANK-BONUS"))
+    (is (internal-function-p "%CANDIDATE-RANK-BONUS"))
+    (is (internal-function-p "%COMPLETION-RANK-SCORE"))
+    (is (internal-function-p "%CANDIDATE-RANKING-FOR"))
+    (is (internal-function-p "%CANDIDATE-RANKING<"))
+    (is (internal-function-p "%COMPLETION-CANDIDATE<"))
+    (is (internal-function-p "%DUPLICATE-CANDIDATE-QUALITY"))
+    (is (internal-function-p "%DUPLICATE-CANDIDATE-QUALITY>"))
+    (is (internal-function-p "%BETTER-DUPLICATE-CANDIDATE-P"))
+    (is (internal-function-p "%RANK-CANDIDATES"))
+    (is (internal-function-p "%MERGE-CANDIDATES"))
     (is (internal-function-p "%CANDIDATE-MERGE-STATE-ADD"))
     (is (internal-function-p "%MERGE-CANDIDATE"))
     (is (internal-function-p "%PROJECT-CANDIDATE-MERGE-SLOT"))
@@ -186,7 +224,7 @@
            (low (nshell.domain.completion:make-candidate low-text :score base-score))
            (high (nshell.domain.completion:make-candidate high-text
                                                           :score (+ base-score score-delta)))
-           (ranked (nshell.domain.completion::rank-candidates prefix (list low high))))
+           (ranked (nshell.domain.completion::%rank-candidates prefix (list low high))))
       (and (string= high-text (nshell.domain.completion:candidate-text (first ranked)))
            (string= low-text (nshell.domain.completion:candidate-text (second ranked)))))))
 
@@ -200,7 +238,7 @@
            (late-text (concatenate 'string prefix "-z-" late-tail))
            (early (nshell.domain.completion:make-candidate early-text :score score))
            (late (nshell.domain.completion:make-candidate late-text :score score))
-           (ranked (nshell.domain.completion::rank-candidates prefix (list late early))))
+           (ranked (nshell.domain.completion::%rank-candidates prefix (list late early))))
       (and (string= early-text (nshell.domain.completion:candidate-text (first ranked)))
            (string= late-text (nshell.domain.completion:candidate-text (second ranked)))))))
 
@@ -217,7 +255,7 @@
            (high (nshell.domain.completion:make-candidate text
                                                           :description description
                                                           :score expected-score))
-           (merged (nshell.domain.completion::merge-candidates (list low) (list high))))
+           (merged (nshell.domain.completion::%merge-candidates (list low) (list high))))
       (and (= 1 (length merged))
            (= expected-score (nshell.domain.completion:candidate-score (first merged)))
            (string= description
@@ -234,8 +272,8 @@
            (described (nshell.domain.completion:make-candidate text
                                                                :description description
                                                                :score score))
-           (merged (nshell.domain.completion::merge-candidates (list plain)
-                                                               (list described))))
+           (merged (nshell.domain.completion::%merge-candidates (list plain)
+                                                                (list described))))
       (and (= 1 (length merged))
            (= score (nshell.domain.completion:candidate-score (first merged)))
            (string= description
@@ -253,7 +291,7 @@
          (high (nshell.domain.completion:make-candidate "zz-large-tool"
                                                         :description "fast path"
                                                         :score 100))
-         (merged (nshell.domain.completion::merge-candidates
+         (merged (nshell.domain.completion::%merge-candidates
                   (cons low unique-candidates)
                   (list high)))
          (winner (completion-candidate-by-text "zz-large-tool" merged)))

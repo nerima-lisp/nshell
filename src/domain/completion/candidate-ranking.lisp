@@ -1,16 +1,18 @@
 (in-package #:nshell.domain.completion)
 
-(defconstant +exact-match-rank-bonus+ 100000)
-(defconstant +case-sensitive-prefix-rank-bonus+ 10000)
-(defconstant +described-candidate-rank-bonus+ 1000)
+(defconstant +%exact-match-rank-bonus+ 100000)
+(defconstant +%case-sensitive-prefix-rank-bonus+ 10000)
+(defconstant +%described-candidate-rank-bonus+ 1000)
 
-(defstruct (candidate-ranking
-            (:constructor %make-candidate-ranking (score text)))
+(defstruct (%candidate-ranking
+            (:constructor %make-candidate-ranking (score text))
+            (:conc-name %candidate-ranking-))
   score
   text)
 
-(defstruct (duplicate-candidate-quality
-            (:constructor %make-duplicate-candidate-quality (score described-p)))
+(defstruct (%duplicate-candidate-quality
+            (:constructor %make-duplicate-candidate-quality (score described-p))
+            (:conc-name %duplicate-candidate-quality-))
   score
   described-p)
 
@@ -51,75 +53,75 @@
 (defun %make-empty-candidate-merge-state ()
   (%make-candidate-merge-state (make-hash-table :test #'equal) nil))
 
-(defun candidate-description-present-p (candidate)
+(defun %candidate-description-present-p (candidate)
   (< 0 (length (candidate-description candidate))))
 
-(defun case-sensitive-prefix-p (prefix text)
+(defun %case-sensitive-prefix-p (prefix text)
   (and (<= (length prefix) (length text))
        (string= prefix text :end2 (length prefix))))
 
-(defun exact-match-rank-bonus (prefix text)
-  (if (string-equal prefix text) +exact-match-rank-bonus+ 0))
+(defun %exact-match-rank-bonus (prefix text)
+  (if (string-equal prefix text) +%exact-match-rank-bonus+ 0))
 
-(defun case-sensitive-prefix-rank-bonus (prefix text)
-  (if (case-sensitive-prefix-p prefix text)
-      +case-sensitive-prefix-rank-bonus+
+(defun %case-sensitive-prefix-rank-bonus (prefix text)
+  (if (%case-sensitive-prefix-p prefix text)
+      +%case-sensitive-prefix-rank-bonus+
       0))
 
-(defun described-candidate-rank-bonus (candidate)
-  (if (candidate-description-present-p candidate)
-      +described-candidate-rank-bonus+
+(defun %described-candidate-rank-bonus (candidate)
+  (if (%candidate-description-present-p candidate)
+      +%described-candidate-rank-bonus+
       0))
 
-(defun candidate-rank-bonus (prefix candidate)
+(defun %candidate-rank-bonus (prefix candidate)
   (let ((text (candidate-text candidate)))
-    (+ (exact-match-rank-bonus prefix text)
-       (case-sensitive-prefix-rank-bonus prefix text)
-       (described-candidate-rank-bonus candidate))))
+    (+ (%exact-match-rank-bonus prefix text)
+       (%case-sensitive-prefix-rank-bonus prefix text)
+       (%described-candidate-rank-bonus candidate))))
 
-(defun completion-rank-score (prefix candidate)
+(defun %completion-rank-score (prefix candidate)
   (+ (candidate-score candidate)
-     (candidate-rank-bonus prefix candidate)))
+     (%candidate-rank-bonus prefix candidate)))
 
-(defun candidate-ranking-for (prefix candidate)
-  (%make-candidate-ranking (completion-rank-score prefix candidate)
+(defun %candidate-ranking-for (prefix candidate)
+  (%make-candidate-ranking (%completion-rank-score prefix candidate)
                            (candidate-text candidate)))
 
-(defun candidate-ranking< (left right)
+(defun %candidate-ranking< (left right)
   (cond
-    ((/= (candidate-ranking-score left)
-         (candidate-ranking-score right))
-     (> (candidate-ranking-score left)
-        (candidate-ranking-score right)))
+    ((/= (%candidate-ranking-score left)
+         (%candidate-ranking-score right))
+     (> (%candidate-ranking-score left)
+        (%candidate-ranking-score right)))
     (t
-     (string< (candidate-ranking-text left)
-              (candidate-ranking-text right)))))
+     (string< (%candidate-ranking-text left)
+              (%candidate-ranking-text right)))))
 
-(defun completion-candidate< (prefix left right)
-  (candidate-ranking< (candidate-ranking-for prefix left)
-                      (candidate-ranking-for prefix right)))
+(defun %completion-candidate< (prefix left right)
+  (%candidate-ranking< (%candidate-ranking-for prefix left)
+                       (%candidate-ranking-for prefix right)))
 
-(defun duplicate-candidate-quality (candidate)
+(defun %duplicate-candidate-quality (candidate)
   (%make-duplicate-candidate-quality
    (candidate-score candidate)
-   (candidate-description-present-p candidate)))
+   (%candidate-description-present-p candidate)))
 
-(defun duplicate-candidate-quality> (candidate current)
+(defun %duplicate-candidate-quality> (candidate current)
   (cond
-    ((> (duplicate-candidate-quality-score candidate)
-        (duplicate-candidate-quality-score current))
+    ((> (%duplicate-candidate-quality-score candidate)
+        (%duplicate-candidate-quality-score current))
      t)
-    ((< (duplicate-candidate-quality-score candidate)
-        (duplicate-candidate-quality-score current))
+    ((< (%duplicate-candidate-quality-score candidate)
+        (%duplicate-candidate-quality-score current))
      nil)
-    ((and (duplicate-candidate-quality-described-p candidate)
-          (not (duplicate-candidate-quality-described-p current)))
+    ((and (%duplicate-candidate-quality-described-p candidate)
+          (not (%duplicate-candidate-quality-described-p current)))
      t)
     (t nil)))
 
-(defun better-duplicate-candidate-p (candidate current)
-  (duplicate-candidate-quality> (duplicate-candidate-quality candidate)
-                                (duplicate-candidate-quality current)))
+(defun %better-duplicate-candidate-p (candidate current)
+  (%duplicate-candidate-quality> (%duplicate-candidate-quality candidate)
+                                 (%duplicate-candidate-quality current)))
 
 (defun %candidate-merge-state-add (state candidate)
   (let* ((text (candidate-text candidate))
@@ -131,8 +133,8 @@
          (setf (gethash text cells-by-text) (%make-candidate-merge-slot new-results)
                (%candidate-merge-state-results state) new-results)
          state))
-      ((better-duplicate-candidate-p candidate
-                                     (%candidate-merge-slot-candidate slot))
+      ((%better-duplicate-candidate-p candidate
+                                      (%candidate-merge-slot-candidate slot))
        (%candidate-merge-slot-replace-candidate slot candidate)
        state)
       (t
@@ -141,12 +143,12 @@
 (defun %merge-candidate (candidate state)
   (%candidate-merge-state-add state candidate))
 
-(defun rank-candidates (prefix candidates)
+(defun %rank-candidates (prefix candidates)
   (stable-sort (copy-list candidates)
                (lambda (left right)
-                 (completion-candidate< prefix left right))))
+                 (%completion-candidate< prefix left right))))
 
-(defun merge-candidates (&rest candidate-lists)
+(defun %merge-candidates (&rest candidate-lists)
   (let ((state (%make-empty-candidate-merge-state)))
     (dolist (candidates candidate-lists)
       (dolist (candidate candidates)

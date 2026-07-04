@@ -6,26 +6,11 @@
   "Holds the saved *error-output* while stderr is redirected to a file; NIL when
 stderr is not redirected (the default merge-into-stdout behavior is then kept).")
 
-(defun %input-redirect-spec (redirects)
-  (find-if (lambda (redirect)
-             (member (car redirect) '(:< :<< :<<<)))
-           redirects
-           :from-end t))
-
 (defun %here-string-stream (value)
   (make-string-input-stream (format nil "~a~%" value)))
 
 (defun %here-document-stream (value)
   (make-string-input-stream (or value "")))
-
-(defun %redirect-output-spec (redirects)
-  (let ((redirect (find-if (lambda (redirect)
-                             (member (car redirect) '(:> :>> :&> :&>>)))
-                           redirects
-                           :from-end t)))
-    (when redirect
-      (values (cdr redirect)
-              (if (member (car redirect) '(:>> :&>>)) :append :supersede)))))
 
 (defun redirect-output (filename mode)
   (let ((stream (open filename

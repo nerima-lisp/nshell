@@ -1,7 +1,7 @@
 (in-package #:nshell.infrastructure.acl)
 
 (defun %pipeline-output-mode (redirect)
-  (if (member (car redirect) '(:>> :2>> :&>>))
+  (if (nshell.domain.parsing:redirect-append-kind-p (car redirect))
       :append
       :supersede))
 
@@ -65,7 +65,7 @@
                                 &key (default-output :stream))
   (let ((input-pipe-stream nil)
         (output-pipe-stream nil))
-    (let* ((input-redirect (%input-redirect-spec stage-redirects))
+    (let* ((input-redirect (nshell.domain.parsing:redirect-input-spec stage-redirects))
            (input (cond
                    ((and input-redirect (eq (car input-redirect) :<))
                     (let ((stream (open (cdr input-redirect)

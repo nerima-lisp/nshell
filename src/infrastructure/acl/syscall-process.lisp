@@ -120,7 +120,7 @@
   (let ((redirect-streams nil))
     (unwind-protect
          (handler-case
-             (let* ((input-redirect (%input-redirect-spec redirects))
+             (let* ((input-redirect (nshell.domain.parsing:redirect-input-spec redirects))
                     (input (cond
                              ((and input-redirect (eq (car input-redirect) :<))
                               (let ((stream (open (cdr input-redirect)
@@ -139,7 +139,7 @@
                              (t *standard-input*)))
                     (output
                       (multiple-value-bind (output-target output-mode)
-                          (%redirect-output-spec redirects)
+                          (nshell.domain.parsing:redirect-output-spec redirects)
                         (if output-target
                             (let ((stream (open output-target
                                                 :direction :output

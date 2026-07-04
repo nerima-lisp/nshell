@@ -25,16 +25,15 @@
                (nshell.domain.environment:env-get-values updated "FILES")))
     (is (null (nshell.domain.environment:env-get-values env "FILES")))))
 
-(test make-env-var-derives-scalar-view-from-values
-  "The constructor keeps structured values and derives the scalar view on demand."
-  (let* ((values (list "hello world" "tail"))
-         (var (nshell.domain.environment:make-env-var "FILES" values nil)))
-    (setf (first values) "changed")
-    (is (equal '("hello world" "tail")
-               (nshell.domain.environment:env-var-values var)))
-    (is (string= "hello world tail"
-                 (nshell.domain.environment:env-var-value var)))
-    (is (not (nshell.domain.environment:env-var-exported-p var)))))
+(test env-var-structure-is-not-public-api
+  "Internal variable records stay behind the environment aggregate API."
+  (dolist (name '("ENV-VAR" "ENV-VAR-P" "MAKE-ENV-VAR"
+                  "ENV-VAR-NAME" "ENV-VAR-VALUE" "ENV-VAR-VALUES"
+                  "ENV-VAR-EXPORTED-P" "ENVIRONMENT-VARS"))
+    (multiple-value-bind (symbol status)
+        (find-symbol name :nshell.domain.environment)
+      (declare (ignore symbol))
+      (is (not (eq :external status))))))
 
 (test env-unset-removes-variable
   "Unsetting a variable removes it from the environment."
@@ -80,9 +79,25 @@
          (env (nshell.domain.environment:env-set env "ALPHA" "first" t))
          (bindings (nshell.domain.environment:env-bindings env)))
     (is (equal '("ALPHA" "ZED")
-               (mapcar #'nshell.domain.environment:env-var-name bindings)))
-    (is (nshell.domain.environment:env-var-exported-p (first bindings)))
-    (is (not (nshell.domain.environment:env-var-exported-p (second bindings))))))
+               (mapcar #'nshell.domain.environment:env-binding-name bindings)))
+    (is (equal '("first")
+               (nshell.domain.environment:env-binding-values (first bindings))))
+    (is (string= "first"
+                 (nshell.domain.environment:env-binding-value (first bindings))))
+    (is (nshell.domain.environment:env-binding-exported-p (first bindings)))
+    (is (not (nshell.domain.environment:env-binding-exported-p (second bindings))))))
+
+(test env-assign-default-preserves-export-state
+  "Parameter default assignment updates the aggregate without exposing internals."
+  (let* ((env (nshell.domain.environment:make-environment))
+         (env (nshell.domain.environment:env-set env "EMPTY" "" t)))
+    (is (nshell.domain.environment:env-defined-p env "EMPTY"))
+    (is (nshell.domain.environment:env-exported-p env "EMPTY"))
+    (is (string= "filled"
+                 (nshell.domain.environment:env-assign-default!
+                  env "EMPTY" "filled")))
+    (is (string= "filled" (nshell.domain.environment:env-get env "EMPTY")))
+    (is (nshell.domain.environment:env-exported-p env "EMPTY"))))
 
 (test default-environment-has-core-variables
   "The default environment contains core shell variables."

@@ -33,9 +33,9 @@
 
 (defun %format-set-variable (var)
   (format nil "set ~:[~;-x ~]~a ~a~%"
-          (nshell.domain.environment:env-var-exported-p var)
-          (nshell.domain.environment:env-var-name var)
-          (nshell.domain.environment:env-var-value var)))
+          (nshell.domain.environment:env-binding-exported-p var)
+          (nshell.domain.environment:env-binding-name var)
+          (nshell.domain.environment:env-binding-value var)))
 
 (defun %format-set-variables (env)
   (with-output-to-string (out)

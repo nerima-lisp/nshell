@@ -100,12 +100,13 @@
 
 (defpackage #:nshell.domain.environment
   (:use #:cl)
-  (:export #:env-var #:env-var-p #:make-env-var
-           #:env-var-name #:env-var-value #:env-var-values #:env-var-exported-p
-           #:environment #:environment-p #:make-environment
-           #:environment-vars #:make-default-environment #:inject-os-environment
+  (:export #:environment-p #:make-environment
+           #:make-default-environment #:inject-os-environment
            #:env-get #:env-get-values #:env-set #:env-set-values
-           #:env-unset #:env-export #:env-bindings #:env-list))
+           #:env-defined-p #:env-exported-p #:env-unset #:env-export
+           #:env-assign-default! #:env-binding-name #:env-binding-value
+           #:env-binding-values #:env-binding-exported-p
+           #:env-bindings #:env-list))
 
 (defpackage #:nshell.domain.expansion
   (:use #:cl)

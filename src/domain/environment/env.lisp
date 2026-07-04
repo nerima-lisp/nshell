@@ -19,6 +19,30 @@ The scalar string view is derived from VALUES on demand."
   "Return the scalar string view of VAR."
   (format nil "~{~a~^ ~}" (env-var-values var)))
 
+(defstruct (env-binding
+            (:constructor %make-env-binding (name values exported-p))
+            (:conc-name %env-binding-))
+  "Read-only projection of an environment variable."
+  (name "" :type string :read-only t)
+  (values nil :type list :read-only t)
+  (exported-p nil :type boolean :read-only t))
+
+(defun env-binding-name (binding)
+  "Return BINDING's variable name."
+  (%env-binding-name binding))
+
+(defun env-binding-values (binding)
+  "Return BINDING's structured values."
+  (copy-list (%env-binding-values binding)))
+
+(defun env-binding-value (binding)
+  "Return BINDING's scalar string value."
+  (format nil "~{~a~^ ~}" (%env-binding-values binding)))
+
+(defun env-binding-exported-p (binding)
+  "Return true when BINDING is exported."
+  (%env-binding-exported-p binding))
+
 (defstruct (environment (:constructor %make-environment (vars)))
   "A collection of shell environment variables keyed by name."
   (vars (make-hash-table :test #'equal) :type hash-table :read-only t))
@@ -75,6 +99,15 @@ EXPORTED controls whether the variable appears in ENV-LIST."
   (let ((var (gethash name (environment-vars env))))
     (when var (copy-list (env-var-values var)))))
 
+(defun env-defined-p (env name)
+  "Return true when NAME is defined in ENV."
+  (nth-value 1 (gethash name (environment-vars env))))
+
+(defun env-exported-p (env name)
+  "Return true when NAME is defined and exported in ENV."
+  (let ((var (gethash name (environment-vars env))))
+    (and var (env-var-exported-p var))))
+
 (defun %inject-os-environment-entry (env entry)
   (let ((separator (position #\= entry)))
     (if (and separator (plusp separator))
@@ -122,14 +155,27 @@ EXPORTED controls whether the variable appears in ENV-LIST."
             (make-env-var name (env-var-values var) t)))
     (%make-environment vars)))
 
+(defun env-assign-default! (env name value)
+  "Assign VALUE to NAME inside ENV, preserving NAME's export state.
+This operation is intentionally destructive for parameter expansion assignments,
+which apply to the active shell environment object."
+  (check-type name string)
+  (check-type value string)
+  (let ((exported (env-exported-p env name)))
+    (setf (gethash name (environment-vars env))
+          (make-env-var name (list value) exported)))
+  value)
+
 (defun env-bindings (env)
-  "Return all variables in ENV sorted by name."
-  (let ((vars nil))
+  "Return all variables in ENV as read-only projections sorted by name."
+  (let ((bindings nil))
     (maphash (lambda (name var)
-               (declare (ignore name))
-               (push var vars))
+               (push (%make-env-binding name
+                                         (env-var-values var)
+                                         (env-var-exported-p var))
+                     bindings))
              (environment-vars env))
-    (sort vars #'string< :key #'env-var-name)))
+    (sort bindings #'string< :key #'env-binding-name)))
 
 (defun env-list (env)
   "Return exported variables in ENV as a list of (NAME . VALUE) pairs."

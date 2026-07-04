@@ -324,13 +324,7 @@ a further leading % selects the longest match instead of the shortest."
 
 (defun %assign-parameter-default (env name value)
   "Assign VALUE to NAME in ENV for ${NAME:=word}, preserving export state."
-  (let* ((vars (nshell.domain.environment:environment-vars env))
-         (existing (gethash name vars))
-         (exported (and existing
-                        (nshell.domain.environment:env-var-exported-p existing))))
-    (setf (gethash name vars)
-          (nshell.domain.environment:make-env-var name (list value) exported)))
-  value)
+  (nshell.domain.environment:env-assign-default! env name value))
 
 (defun %expand-parameter-length (content env)
   "Return the string length of ${#NAME} when CONTENT starts with # followed by a bare name.

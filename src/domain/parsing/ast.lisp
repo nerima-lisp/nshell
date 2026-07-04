@@ -219,19 +219,45 @@ Redirect operator args and their targets are removed from the clean command."
                (command-node-command cmd-node)
                clean
                (ast-node-span cmd-node)
-               (command-node-command-quote-style cmd-node))
+              (command-node-command-quote-style cmd-node))
               redirects))))
+
+(defstruct (%command-list-redirect-split-state
+            (:constructor %make-command-list-redirect-split-state
+                (clean-commands redirects)))
+  (clean-commands nil :type list :read-only t)
+  (redirects nil :type list :read-only t))
+
+(defun %empty-command-list-redirect-split-state ()
+  (%make-command-list-redirect-split-state nil nil))
+
+(defun %command-list-redirect-split-state-push (state clean-command command-redirects)
+  (%make-command-list-redirect-split-state
+   (cons clean-command
+         (%command-list-redirect-split-state-clean-commands state))
+   (cons command-redirects
+         (%command-list-redirect-split-state-redirects state))))
+
+(defun %command-list-redirect-split-state-accept-command (state command)
+  (multiple-value-bind (clean-command command-redirects)
+      (split-command-node-redirects command)
+    (%command-list-redirect-split-state-push
+     state
+     clean-command
+     command-redirects)))
+
+(defun %command-list-redirect-split-state-values (state)
+  (values
+   (nreverse (%command-list-redirect-split-state-clean-commands state))
+   (nreverse (%command-list-redirect-split-state-redirects state))))
 
 (defun split-command-nodes-redirects (commands)
   "Split each command in COMMANDS into (clean-commands per-stage-redirects)."
-  (let ((clean-commands nil)
-        (redirects nil))
+  (let ((state (%empty-command-list-redirect-split-state)))
     (dolist (command commands)
-      (multiple-value-bind (clean-command command-redirects)
-          (split-command-node-redirects command)
-        (push clean-command clean-commands)
-        (push command-redirects redirects)))
-    (values (nreverse clean-commands) (nreverse redirects))))
+      (setf state
+            (%command-list-redirect-split-state-accept-command state command)))
+    (%command-list-redirect-split-state-values state)))
 
 (defun ast-node->command-line (ast)
   "Render a command or pipeline AST node as a shell command line string."

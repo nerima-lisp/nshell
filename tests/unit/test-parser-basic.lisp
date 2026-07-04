@@ -281,6 +281,35 @@
         (is (null redirects))
         (is (null remaining))))))
 
+(test command-list-redirect-split-state-preserves-stage-order
+  "Command-list redirect split state owns clean command and redirect accumulation."
+  (let* ((state (nshell.domain.parsing::%empty-command-list-redirect-split-state))
+         (first-command (nshell.domain.parsing:make-command-node
+                         "one"
+                         (list ">" "one.out")))
+         (second-command (nshell.domain.parsing:make-command-node
+                          "two"
+                          (list "arg" "2>&1")))
+         (after-first
+           (nshell.domain.parsing::%command-list-redirect-split-state-accept-command
+            state
+            first-command))
+         (after-second
+           (nshell.domain.parsing::%command-list-redirect-split-state-accept-command
+            after-first
+            second-command)))
+    (multiple-value-bind (clean-commands redirects)
+        (nshell.domain.parsing::%command-list-redirect-split-state-values
+         after-second)
+      (is (equal '("one" "two")
+                 (mapcar #'nshell.domain.parsing:command-node-command
+                         clean-commands)))
+      (is (equal '(() ("arg"))
+                 (mapcar #'nshell.domain.parsing:command-node-arg-values
+                         clean-commands)))
+      (is (equal '(((:> . "one.out")) ((:2>&1 . nil)))
+                 redirects)))))
+
 (test split-command-node-redirects-projects-redirect-table-cases
   "Redirect splitting uses parser-domain redirect specs for supported redirect forms."
   (dolist (case '((("echo" ">" "out.txt")

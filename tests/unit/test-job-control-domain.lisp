@@ -1,6 +1,13 @@
 (in-package #:nshell/test)
 (def-suite job-control-domain-tests :description "Job control domain tests" :in nshell-tests)
 (in-suite job-control-domain-tests)
+
+(test job-monitor-raw-constructor-is-internal-boundary
+  (let ((monitor (nshell.domain.job-control:make-job-monitor)))
+    (is (hash-table-p (nshell.domain.job-control::job-monitor-jobs monitor)))
+    (is (= 1 (nshell.domain.job-control::job-monitor-next-id monitor)))
+    (is (fboundp 'nshell.domain.job-control::%make-job-monitor))))
+
 (test monitor-creates-jobs
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
          (cmd (nshell.domain.execution:make-command "ls"))

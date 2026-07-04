@@ -1,8 +1,11 @@
 (in-package #:nshell.domain.job-control)
 
-(defstruct (job-monitor (:constructor make-job-monitor ()))
+(defstruct (job-monitor (:constructor %make-job-monitor ()))
   (jobs (make-hash-table) :type hash-table)
   (next-id 1 :type integer))
+
+(defun make-job-monitor ()
+  (%make-job-monitor))
 
 (defun monitor-add-job (monitor job)
   (let ((id (job-monitor-next-id monitor)))

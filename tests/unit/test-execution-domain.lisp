@@ -108,6 +108,27 @@
     (is (nshell.domain.execution:job-background-p job))
     (is (eq :running (nshell.domain.execution:job-state job)))))
 
+(test job-runtime-metadata-projections-are-domain-owned
+  "Job runtime metadata projections cannot mutate job state."
+  (let* ((pids (list 4321 4322))
+         (command-line (copy-seq "left | right"))
+         (job (make-test-job 0 "left")))
+    (nshell.domain.execution:job-register-background-processes
+     job pids command-line)
+    (setf (first pids) 9999)
+    (setf (char command-line 0) #\X)
+    (let ((pids-view (nshell.domain.execution:job-pids job))
+          (line-view (nshell.domain.execution:job-command-line job))
+          (display-view (nshell.domain.execution:job-command-display-string job)))
+      (setf (first pids-view) 1111)
+      (setf (char line-view 0) #\Y)
+      (setf (char display-view 0) #\Z))
+    (is (equal '(4321 4322) (nshell.domain.execution:job-pids job)))
+    (is (string= "left | right"
+                 (nshell.domain.execution:job-command-line job)))
+    (is (string= "left | right"
+                 (nshell.domain.execution:job-command-display-string job)))))
+
 (test job-visibility-and-terminal-exit-code-updates-are-domain-operations
   "Mutable job facts are changed through explicit domain operations."
   (let ((job (make-test-job 0 "sleep")))

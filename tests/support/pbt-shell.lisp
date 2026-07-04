@@ -170,11 +170,11 @@
   (let* ((cmd (nshell.domain.execution:make-command command args))
          (pipeline (nshell.domain.execution:make-pipeline cmd))
          (job (nshell.domain.execution:make-job id pipeline)))
-    (setf (nshell.domain.execution:job-command-line job)
+    (setf (nshell.domain.execution::job-command-line-str job)
           (format nil "~{~a~^ ~}"
                   (nshell.domain.execution:command-to-list cmd))
-          (nshell.domain.execution:job-pgid job) pgid
-          (nshell.domain.execution:job-pids job) (copy-list pids))
+          (nshell.domain.execution::job-pgid-int job) pgid
+          (nshell.domain.execution::job-pids-list job) (copy-list pids))
     job))
 
 (defstruct (test-monitor-entry (:constructor make-test-monitor-entry (job-id job)))

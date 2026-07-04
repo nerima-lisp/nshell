@@ -5,15 +5,67 @@
     (id-int 0 :type integer :read-only t)
     (pipeline-pipe nil :type (or null pipeline) :read-only t)
     (state-kw :created :type keyword)
-    (pgid 0 :type integer)
-    (exit-code nil :type (or null integer))
-    (pids nil :type list)
-    (command-line "" :type string)
-    (background-p nil :type boolean)))
+    (pgid-int 0 :type integer)
+    (exit-code-int nil :type (or null integer))
+    (pids-list nil :type list)
+    (command-line-str "" :type string)
+    (background-visible-p nil :type boolean)))
+
+(defun %job-string-value (value)
+  (copy-seq value))
+
+(defun %job-pid-list (pids)
+  (copy-list pids))
+
+(defun %job-state (job)
+  (job-state-kw job))
+
+(defun %set-job-state (job state)
+  (setf (job-state-kw job) state))
+
+(defun %job-pipeline (job)
+  (job-pipeline-pipe job))
+
+(defun %job-pgid (job)
+  (job-pgid-int job))
+
+(defun %set-job-pgid (job pgid)
+  (setf (job-pgid-int job) pgid))
+
+(defun %job-exit-code (job)
+  (job-exit-code-int job))
+
+(defun %set-job-exit-code (job exit-code)
+  (setf (job-exit-code-int job) exit-code))
+
+(defun %job-pids (job)
+  (job-pids-list job))
+
+(defun %set-job-pids (job pids)
+  (setf (job-pids-list job) (%job-pid-list pids)))
+
+(defun %job-command-line (job)
+  (job-command-line-str job))
+
+(defun %set-job-command-line (job command-line)
+  (setf (job-command-line-str job) (%job-string-value command-line)))
+
+(defun %job-background-p (job)
+  (job-background-visible-p job))
+
+(defun %set-job-background-p (job background-p)
+  (setf (job-background-visible-p job) (not (null background-p))))
+
 (defun make-job (id pipeline) (%make-job id pipeline))
 (defun job-id (j) (job-id-int j))
-(defun job-state (j) (job-state-kw j))
-(defun job-pipeline (j) (job-pipeline-pipe j))
+(defun job-state (j) (%job-state j))
+(defun job-pipeline (j) (%job-pipeline j))
+(defun job-pgid (j) (%job-pgid j))
+(defun job-exit-code (j) (%job-exit-code j))
+(defun job-pids (j) (%job-pid-list (%job-pids j)))
+(defun job-command-line (j) (%job-string-value (%job-command-line j)))
+(defun job-background-p (j) (%job-background-p j))
+
 (defun job-state-valid-p (state)
   (not (null (member state '(:created :running :stopped :background :completed :done)))))
 
@@ -27,49 +79,49 @@
 (defun job-state-transition (job new-state)
   (unless (job-state-valid-p new-state)
     (error "Invalid job state: ~s" new-state))
-  (unless (%job-state-transition-valid-p (job-state-kw job) new-state)
+  (unless (%job-state-transition-valid-p (%job-state job) new-state)
     (error "Invalid job state transition: ~s -> ~s"
-           (job-state-kw job)
+           (%job-state job)
            new-state))
-  (unless (eq (job-state-kw job) new-state)
-    (setf (job-state-kw job) new-state))
+  (unless (eq (%job-state job) new-state)
+    (%set-job-state job new-state))
   job)
 
-(defun job-running-p (job) (eq (job-state-kw job) :running))
-(defun job-stopped-p (job) (eq (job-state-kw job) :stopped))
+(defun job-running-p (job) (eq (%job-state job) :running))
+(defun job-stopped-p (job) (eq (%job-state job) :stopped))
 (defun job-completed-p (job)
-  (not (null (member (job-state-kw job) '(:completed :done)))))
+  (not (null (member (%job-state job) '(:completed :done)))))
 
 (defun job-register-background-processes (job pids command-line)
-  (setf (job-pids job) (copy-list pids)
-        (job-pgid job) (first pids)
-        (job-command-line job) command-line
-        (job-background-p job) t)
+  (%set-job-pids job pids)
+  (%set-job-pgid job (or (first pids) 0))
+  (%set-job-command-line job command-line)
+  (%set-job-background-p job t)
   (job-state-transition job :running))
 
 (defun job-set-background-visible (job background-p)
-  (setf (job-background-p job) (not (null background-p)))
+  (%set-job-background-p job background-p)
   job)
 
 (defun job-record-terminal-exit-code (job exit-code)
   (when (and exit-code
              (job-completed-p job))
-    (setf (job-exit-code job) exit-code))
+    (%set-job-exit-code job exit-code))
   job)
 
 (defun valid-process-group-id-p (pgid)
   (and (integerp pgid) (plusp pgid)))
 
 (defun job-control-pgid (job)
-  (let ((pgid (job-pgid job)))
+  (let ((pgid (%job-pgid job)))
     (when (valid-process-group-id-p pgid)
       pgid)))
 
 (defun job-command-display-string (job)
-  (let ((command-line (job-command-line job)))
+  (let ((command-line (%job-command-line job)))
     (if (plusp (length command-line))
-        command-line
-        (let ((pipeline (job-pipeline job)))
+        (%job-string-value command-line)
+        (let ((pipeline (%job-pipeline job)))
           (if pipeline
               (format nil "~{~{~a~^ ~}~^ | ~}"
                       (mapcar #'command-to-list
@@ -79,7 +131,7 @@
 (defun job-known-pids (job)
   (remove-if-not (lambda (pid)
                    (and (integerp pid) (plusp pid)))
-                 (job-pids job)))
+                 (%job-pids job)))
 
 (defun job-last-pid (job)
   (car (last (job-known-pids job))))

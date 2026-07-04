@@ -23,8 +23,8 @@
   (declare (ignore args))
   (values
    (with-output-to-string (out)
-     (let ((*standard-output* out))
-       (jobs (shell-context-job-monitor context))))
+     (dolist (listing (jobs (shell-context-job-monitor context)))
+       (format-job-listing listing out)))
    0))
 
 (defun %builtin-disown (context args)

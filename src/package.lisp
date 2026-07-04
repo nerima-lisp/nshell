@@ -204,6 +204,9 @@
             #:execute-ast-in-context
             #:execute-external
             #:expand-command-alias-node
+            #:job-listing #:job-listing-p #:make-job-listing
+            #:job-listing-id #:job-listing-status #:job-listing-command
+            #:format-job-listing
             #:fg #:bg #:jobs #:disown #:interrupt-foreground #:suspend-foreground
             #:history-suggestion #:search-history-use-case
             #:interactive-history-search-use-case))

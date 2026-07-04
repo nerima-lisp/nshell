@@ -155,8 +155,9 @@
           (is (eq :completed (nshell.domain.execution:job-state completed-job)))
           (is (= 17 (nshell.domain.execution:job-exit-code completed-job)))
           (is (eq :created (nshell.domain.execution:job-state alive-job)))
-          (let ((output (capture-standard-output
-                          (nshell.application:jobs))))
+          (let ((output (with-output-to-string (out)
+                          (dolist (listing (nshell.application:jobs))
+                            (nshell.application:format-job-listing listing out)))))
               (is (search "[1] Done sleep" output))
               (is (search "[2] Created sleep" output)))))))
 

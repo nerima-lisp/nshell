@@ -7,6 +7,11 @@
 (defvar *shell-pgid* (sb-posix:getpid))
 (defvar *foreground-job-pgid* nil)
 
+(defstruct (job-listing (:constructor make-job-listing (id status command)))
+  id
+  status
+  command)
+
 (defun %set-acl-foreground-pgid (pgid)
   (let ((symbol (find-symbol "*FOREGROUND-PGID*" "NSHELL.INFRASTRUCTURE.ACL")))
     (when symbol
@@ -57,16 +62,20 @@
         job))))
 
 (defun jobs (&optional (job-monitor *job-monitor*))
-  "Print and return current jobs."
-  (let ((entries (nshell.domain.job-control:monitor-entries job-monitor)))
-    (dolist (entry entries)
-      (let ((jid (car entry))
-            (job (cdr entry)))
-        (format t "[~d] ~a ~a~%"
-                jid
-                (%status-label job)
-                (%job-command-string job))))
-    entries))
+  "Return current job listings without writing to the terminal."
+  (mapcar (lambda (entry)
+            (let ((job (cdr entry)))
+              (make-job-listing (car entry)
+                                (%status-label job)
+                                (%job-command-string job))))
+          (nshell.domain.job-control:monitor-entries job-monitor)))
+
+(defun format-job-listing (listing &optional stream)
+  "Render LISTING in the user-facing jobs format."
+  (format stream "[~d] ~a ~a~%"
+          (job-listing-id listing)
+          (job-listing-status listing)
+          (job-listing-command listing)))
 
 (defun disown (job-id &optional (job-monitor *job-monitor*))
   "Remove JOB-ID from the job monitor."

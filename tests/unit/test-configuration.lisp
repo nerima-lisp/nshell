@@ -48,9 +48,9 @@
   "Prompt model can be created"
   (let ((pm (nshell.domain.prompting:make-prompt-model
              :hostname "myhost" :cwd "/home/user" :exit-code 0)))
-    (is (string= "myhost" (nshell.domain.prompting:prompt-hostname pm)))
-    (is (string= "/home/user" (nshell.domain.prompting:prompt-cwd pm)))
-    (is (= 0 (nshell.domain.prompting:prompt-exit-code pm)))))
+    (is (string= "myhost" (nshell.domain.prompting:prompt-model-hostname pm)))
+    (is (string= "/home/user" (nshell.domain.prompting:prompt-model-cwd pm)))
+    (is (= 0 (nshell.domain.prompting:prompt-model-exit-code pm)))))
 
 (test render-prompt-model-default
   "Rendering prompt model produces non-empty result"

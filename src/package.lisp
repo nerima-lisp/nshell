@@ -201,9 +201,11 @@
 
 (defpackage #:nshell.domain.prompting
   (:use #:cl)
-  (:export #:make-prompt-model #:prompt-hostname #:prompt-cwd
-           #:prompt-exit-code #:prompt-segment #:prompt-right-segments
-           #:prompt-segments #:make-prompt-segment #:prompt-segment-text
+  (:export #:make-prompt-model #:prompt-model-hostname #:prompt-model-cwd
+           #:prompt-model-directory #:prompt-model-exit-code
+           #:prompt-model-duration-ms #:prompt-model-segments
+           #:prompt-model-right-segments #:prompt-segment
+           #:make-prompt-segment #:prompt-segment-text
            #:prompt-segment-kind #:*git-status-resolver*
            #:*prompt-time-resolver*
            #:render-prompt-model #:render-right-prompt-model))

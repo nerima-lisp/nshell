@@ -96,48 +96,50 @@
     (:time :comment)
     (t :normal)))
 
+(defun %current-prompt-model (last-exit last-command-duration-ms)
+  (nshell.domain.prompting:make-prompt-model
+   :hostname (or (uiop:hostname) "localhost")
+   :cwd (%display-cwd (namestring (uiop:getcwd)))
+   :exit-code last-exit
+   :duration-ms last-command-duration-ms))
+
+(defun %write-colored-segments (stream theme segments)
+  (dolist (seg segments)
+    (let ((text (nshell.domain.prompting:prompt-segment-text seg))
+          (kind (nshell.domain.prompting:prompt-segment-kind seg)))
+      (format stream "~a~a~C[0m"
+              (theme-color->ansi theme (segment-kind->role kind))
+              text
+              #\Esc))))
+
+(defun %colored-segments-string (theme segments)
+  (with-output-to-string (stream)
+    (%write-colored-segments stream theme segments)))
+
+(defun %write-right-prompt (theme left-segments right-segments terminal-width)
+  (let* ((left-width (%segments-visible-width left-segments))
+         (available (- terminal-width left-width 2))
+         (visible-right-segments (%truncate-segments right-segments available)))
+    (when visible-right-segments
+      (let* ((right-width (%segments-visible-width visible-right-segments))
+             (padding (- terminal-width left-width right-width)))
+        (when (> padding 0)
+          (nshell.infrastructure.terminal:ansi-save-cursor)
+          (format t "~C[~dC~a"
+                  #\Esc
+                  padding
+                  (%colored-segments-string theme visible-right-segments))
+          (nshell.infrastructure.terminal:ansi-restore-cursor))))))
+
 (defun render-prompt (config last-exit &key (last-command-duration-ms nil)
                                       (terminal-width (%prompt-terminal-width)))
   "Render the left prompt with theme colors."
   (let* ((theme (nshell.domain.configuration:config-theme config))
-         (cwd (namestring (uiop:getcwd)))
-         (display-cwd (%display-cwd cwd))
-         (pm (nshell.domain.prompting:make-prompt-model
-              :hostname (or (uiop:hostname) "localhost")
-              :cwd display-cwd
-              :exit-code last-exit
-              :duration-ms last-command-duration-ms))
-         (segments (nshell.domain.prompting:render-prompt-model pm)))
-    (dolist (seg segments)
-      (let ((text (nshell.domain.prompting:prompt-segment-text seg))
-            (kind (nshell.domain.prompting:prompt-segment-kind seg)))
-        (format t "~a~a~C[0m"
-                (theme-color->ansi theme (segment-kind->role kind))
-                text
-                #\Esc)))
-    ;; Right prompt
-    (let ((right-segs (nshell.domain.prompting:render-right-prompt-model pm)))
-      (when right-segs
-        (let* ((left-width (%segments-visible-width segments))
-               (available (- terminal-width left-width 2))
-               (visible-right-segs (%truncate-segments right-segs available)))
-          (when visible-right-segs
-            (let* ((right-width (%segments-visible-width visible-right-segs))
-                   (padding (- terminal-width left-width right-width)))
-              (when (> padding 0)
-                (nshell.infrastructure.terminal:ansi-save-cursor)
-                (format t "~C[~dC~a"
-                        #\Esc
-                        padding
-                        (with-output-to-string (s)
-                          (dolist (seg visible-right-segs)
-                            (let ((text (nshell.domain.prompting:prompt-segment-text seg))
-                                  (kind (nshell.domain.prompting:prompt-segment-kind seg)))
-                              (format s "~a~a~C[0m"
-                                      (theme-color->ansi theme
-                                                          (segment-kind->role kind))
-                                      text
-                                      #\Esc)))))
-                (nshell.infrastructure.terminal:ansi-restore-cursor)))))))
+         (pm (%current-prompt-model last-exit last-command-duration-ms))
+         (segments (nshell.domain.prompting:render-prompt-model pm))
+         (right-segments (nshell.domain.prompting:render-right-prompt-model pm)))
+    (%write-colored-segments *standard-output* theme segments)
+    (when right-segments
+      (%write-right-prompt theme segments right-segments terminal-width))
     (finish-output)
     (%segments-visible-width segments)))

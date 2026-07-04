@@ -33,6 +33,12 @@
                     (if slash (subseq text (1+ slash)) text)))))
     (and (< 0 (length name)) name)))
 
+(defvar *path-command-directory-files-fn* nil
+  "Function called with a PATH directory pathname to list command candidates.")
+
+(defvar *path-command-executable-p-fn* nil
+  "Function called with a candidate pathname to decide whether it is executable.")
+
 (defun %executable-candidate-p (entry)
   (handler-case
       (or (null *path-command-executable-p-fn*)
@@ -130,12 +136,6 @@
 
 (defgeneric completion-filesystem-fns (source)
   (:documentation "Return filesystem adapter functions used by completion."))
-
-(defvar *path-command-directory-files-fn* nil
-  "Function called with a PATH directory pathname to list command candidates.")
-
-(defvar *path-command-executable-p-fn* nil
-  "Function called with a candidate pathname to decide whether it is executable.")
 
 (defvar *file-completion-directory-files-fn* nil
   "Function called with a directory pathname to list file completion candidates.")

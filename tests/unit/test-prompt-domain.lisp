@@ -2,20 +2,22 @@
 
 (in-suite prompt-tests)
 
-(test prompt-raw-constructors-are-internal-boundaries
+(test prompt-constructors-and-accessors-are-public
   (let ((pm (nshell.domain.prompting:make-prompt-model
              :hostname "h"
              :cwd "/repo/"
              :segments (list (nshell.domain.prompting:make-prompt-segment "h" :host))))
         (segment (nshell.domain.prompting:make-prompt-segment "main" :git)))
-    (is (string= "h" (nshell.domain.prompting:prompt-hostname pm)))
+    (is (string= "h" (nshell.domain.prompting:prompt-model-hostname pm)))
+    (is (string= "/repo/" (nshell.domain.prompting:prompt-model-cwd pm)))
+    (is (null (nshell.domain.prompting:prompt-model-directory pm)))
     (let ((rendered (first (nshell.domain.prompting:render-prompt-model pm))))
       (is (string= "h" (nshell.domain.prompting:prompt-segment-text rendered)))
       (is (eq :host (nshell.domain.prompting:prompt-segment-kind rendered))))
     (is (string= "main" (nshell.domain.prompting:prompt-segment-text segment)))
     (is (eq :git (nshell.domain.prompting:prompt-segment-kind segment)))
-    (is (fboundp 'nshell.domain.prompting::%make-prompt-model))
-    (is (fboundp 'nshell.domain.prompting::%make-prompt-segment))))
+    (is (fboundp 'nshell.domain.prompting:make-prompt-model))
+    (is (fboundp 'nshell.domain.prompting:make-prompt-segment))))
 
 (test git-segment-resolves-branch-and-dirty-marker
   "A :git segment is resolved through the domain git status resolver."

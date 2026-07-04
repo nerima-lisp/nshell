@@ -13,10 +13,20 @@
 
 (defstruct (tokenization-result
             (:constructor %make-tokenization-result
-                (tokens cursor-token incomplete-p)))
+                (tokens cursor-token incomplete-p))
+            (:conc-name %tokenization-result-))
   (tokens nil :type list :read-only t)
   (cursor-token nil :read-only t)
   (incomplete-p nil :type boolean :read-only t))
+
+(defun tokenization-result-tokens (result)
+  (copy-list (%tokenization-result-tokens result)))
+
+(defun tokenization-result-cursor-token (result)
+  (%tokenization-result-cursor-token result))
+
+(defun tokenization-result-incomplete-p (result)
+  (%tokenization-result-incomplete-p result))
 
 (defun %token-position (position)
   (or position 0))

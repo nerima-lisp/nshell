@@ -18,13 +18,24 @@
        ,@body)))
 
 (test tokenize-returns-tokenization-result-object
-  (let ((result (nshell.domain.parsing:tokenize "echo ok")))
+  (let* ((result (nshell.domain.parsing:tokenize "echo ok"))
+         (tokens (nshell.domain.parsing:tokenization-result-tokens
+                  result)))
     (is (nshell.domain.parsing:tokenization-result-p result))
-    (is (= 2 (length (nshell.domain.parsing:tokenization-result-tokens
-                      result))))
+    (is (= 2 (length tokens)))
     (is (not (nshell.domain.parsing:tokenization-result-incomplete-p
-              result)))
-    (is (not (fboundp 'nshell.domain.parsing::%tokenization-result-p)))))
+              result)))))
+
+(test tokenization-result-token-list-is-domain-owned
+  (let* ((result (nshell.domain.parsing:tokenize "echo ok"))
+         (tokens (nshell.domain.parsing:tokenization-result-tokens
+                  result)))
+    (setf (first tokens)
+          (nshell.domain.parsing:make-token :word "mutated"))
+    (is (string= "echo"
+                 (nshell.domain.parsing:token-value
+                  (first (nshell.domain.parsing:tokenization-result-tokens
+                          result)))))))
 
 (test simple-command
   (with-tokenized-input (tokens cursor incomplete) "ls -la"

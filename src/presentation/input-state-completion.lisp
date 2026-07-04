@@ -2,7 +2,7 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (completion-cycle-selection
+(defstruct (%completion-cycle-selection
             (:constructor %make-completion-cycle-selection
                 (base-buffer base-cursor index candidate))
             (:conc-name %completion-cycle-selection-))
@@ -46,7 +46,7 @@
      index
      (nth index candidates))))
 
-(defstruct (completion-cycle-edit
+(defstruct (%completion-cycle-edit
             (:constructor %make-completion-cycle-edit
                 (base-buffer base-cursor index buffer cursor))
             (:conc-name %completion-cycle-edit-))

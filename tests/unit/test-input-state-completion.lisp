@@ -19,8 +19,10 @@
                       state
                       edit)))
     (is (fboundp 'nshell.presentation::%make-completion-cycle-selection))
+    (is (nshell.presentation::%completion-cycle-selection-p selection))
     (is (fboundp 'nshell.presentation::%completion-cycle-selection-base-buffer))
     (is (not (fboundp 'nshell.presentation::make-completion-cycle-selection)))
+    (is (not (fboundp 'nshell.presentation::completion-cycle-selection-p)))
     (is (not (fboundp 'nshell.presentation::%completion-cycle-selection)))
     (is (string= "git ch --dry-run"
                  (nshell.presentation::completion-cycle-selection-base-buffer
@@ -34,8 +36,10 @@
                  (nshell.presentation::completion-cycle-selection-candidate
                   selection)))
     (is (fboundp 'nshell.presentation::%make-completion-cycle-edit))
+    (is (nshell.presentation::%completion-cycle-edit-p edit))
     (is (fboundp 'nshell.presentation::%completion-cycle-edit-buffer))
     (is (not (fboundp 'nshell.presentation::make-completion-cycle-edit)))
+    (is (not (fboundp 'nshell.presentation::completion-cycle-edit-p)))
     (is (string= "git checkout --dry-run"
                  (nshell.presentation::completion-cycle-edit-buffer edit)))
     (is (= 12

@@ -1131,12 +1131,14 @@
 (test parser-reduction-state-records-and-clears-command-context
   "Token reduction state owns command entry recording and command context reset."
   (let* ((command-token (nshell.domain.parsing:make-token :word "echo" 0 4))
+         (redirect-token (nshell.domain.parsing:make-token :redirect ">" 5 6))
          (separator-token (nshell.domain.parsing:make-token :pipe "|" 11 12))
          (state
            (nshell.domain.parsing::%make-token-reduction-state
             :current-cmd "echo"
             :current-cmd-token command-token
             :current-args (list "hello")
+            :pending-redirect-token redirect-token
             :pending-sep :pipe
             :pending-sep-token separator-token)))
     (is (eq state
@@ -1149,6 +1151,8 @@
             (nshell.domain.parsing::%token-reduction-state-clear-command-context
              state)))
     (is (null (nshell.domain.parsing::%token-reduction-state-current-cmd state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-pending-redirect-token
+               state)))
     (is (null (nshell.domain.parsing::%token-reduction-state-current-args state)))))
 
 (test parser-reduction-state-updates-command-and-arguments

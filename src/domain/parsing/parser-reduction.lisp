@@ -175,8 +175,8 @@
 (defun %token-reduction-state-clear-command-context (state)
   (setf (%token-reduction-state-current-cmd state) nil
         (%token-reduction-state-current-cmd-token state) nil
-        (%token-reduction-state-current-args state) '()
-        (%token-reduction-state-pending-redirect-token state) nil)
+        (%token-reduction-state-current-args state) '())
+  (%token-reduction-state-clear-pending-redirect state)
   (%token-reduction-state-clear-pending-separator state)
   state)
 

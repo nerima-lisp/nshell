@@ -224,9 +224,17 @@
                 state
                 (nshell.presentation::suggestion-acceptance-accepted acceptance)
                 (nshell.presentation::suggestion-acceptance-remaining acceptance))))
+    (is (fboundp 'nshell.presentation::%make-suggestion-append-plan))
+    (is (fboundp 'nshell.presentation::%suggestion-append-plan-splice))
     (is (fboundp 'nshell.presentation::%make-suggestion-append-edit))
-    (is (fboundp 'nshell.presentation::%suggestion-append-edit-splice))
+    (is (fboundp 'nshell.presentation::%suggestion-append-edit-plan))
+    (is (not (fboundp 'nshell.presentation::make-suggestion-append-plan)))
     (is (not (fboundp 'nshell.presentation::make-suggestion-append-edit)))
+    (is (not (fboundp 'nshell.presentation::suggestion-append-edit-splice)))
+    (let ((plan (nshell.presentation::suggestion-append-edit-plan edit)))
+      (is (nshell.presentation::suggestion-append-plan-p plan))
+      (is (nshell.presentation::buffer-splice-p
+           (nshell.presentation::suggestion-append-plan-splice plan))))
     (is (string= "git status"
                  (nshell.presentation::suggestion-append-edit-buffer
                   edit

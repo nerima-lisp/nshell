@@ -89,25 +89,40 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
 (defun suggestion-acceptance-remaining (acceptance)
   (%suggestion-acceptance-remaining acceptance))
 
+(defstruct (suggestion-append-plan
+            (:constructor %make-suggestion-append-plan (splice))
+            (:conc-name %suggestion-append-plan-))
+  (splice (error "SPLICE is required.") :type buffer-splice :read-only t))
+
+(defun suggestion-append-plan-splice (plan)
+  (%suggestion-append-plan-splice plan))
+
 (defstruct (suggestion-append-edit
-            (:constructor %make-suggestion-append-edit (splice remaining))
+            (:constructor %make-suggestion-append-edit (plan remaining))
             (:conc-name %suggestion-append-edit-))
-  splice
+  (plan (error "PLAN is required.") :type suggestion-append-plan :read-only t)
   (remaining nil :type (or null string) :read-only t))
+
+(defun suggestion-append-edit-plan (edit)
+  (%suggestion-append-edit-plan edit))
 
 (defun suggestion-append-edit-for-state (state accepted remaining)
   (let* ((buffer (input-state-buffer state))
          (end (length buffer)))
     (%make-suggestion-append-edit
-     (make-buffer-splice end end accepted)
+     (%make-suggestion-append-plan
+      (make-buffer-splice end end accepted))
      (unless (zerop (length remaining))
        remaining))))
 
 (defun suggestion-append-edit-buffer (edit buffer)
-  (buffer-splice-result (%suggestion-append-edit-splice edit) buffer))
+  (buffer-splice-result
+   (suggestion-append-plan-splice (suggestion-append-edit-plan edit))
+   buffer))
 
 (defun suggestion-append-edit-cursor-pos (edit)
-  (buffer-splice-cursor-pos (%suggestion-append-edit-splice edit)))
+  (buffer-splice-cursor-pos
+   (suggestion-append-plan-splice (suggestion-append-edit-plan edit))))
 
 (defun suggestion-append-edit-remaining (edit)
   (%suggestion-append-edit-remaining edit))

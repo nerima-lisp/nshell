@@ -44,6 +44,27 @@
 (defun buffer-insertion-cursor-pos (insertion)
   (buffer-splice-cursor-pos (%buffer-insertion-splice insertion)))
 
+(defstruct (buffer-deletion
+             (:constructor %make-buffer-deletion (splice))
+             (:conc-name %buffer-deletion-))
+  splice)
+
+(defun buffer-deletion-before-cursor (cursor)
+  (unless (zerop cursor)
+    (%make-buffer-deletion
+     (make-buffer-splice (1- cursor) cursor))))
+
+(defun buffer-deletion-at-cursor (buffer cursor)
+  (unless (>= cursor (length buffer))
+    (%make-buffer-deletion
+     (make-buffer-splice cursor (1+ cursor)))))
+
+(defun buffer-deletion-result (deletion buffer)
+  (buffer-splice-result (%buffer-deletion-splice deletion) buffer))
+
+(defun buffer-deletion-cursor-pos (deletion)
+  (buffer-splice-cursor-pos (%buffer-deletion-splice deletion)))
+
 (defstruct (cursor-move-edit
              (:constructor %make-cursor-move-edit (cursor-pos))
              (:conc-name %cursor-move-edit-))
@@ -65,19 +86,21 @@
 
 (defun backspace-before-cursor (state)
   (with-buffer-edit (state buffer cursor) state
-    (if (zerop cursor)
-        (values state :none)
-        (let ((splice (make-buffer-splice (1- cursor) cursor)))
-          (commit-buffer-edit (buffer-splice-result splice buffer)
-                              :cursor-pos (buffer-splice-cursor-pos splice))))))
+    (let ((deletion (buffer-deletion-before-cursor cursor)))
+      (if deletion
+          (commit-buffer-edit (buffer-deletion-result deletion buffer)
+                              :cursor-pos
+                              (buffer-deletion-cursor-pos deletion))
+          (values state :none)))))
 
 (defun delete-char-at-cursor (state)
   (with-buffer-edit (state buffer cursor) state
-    (if (>= cursor (length buffer))
-        (values state :none)
-        (let ((splice (make-buffer-splice cursor (1+ cursor))))
-          (commit-buffer-edit (buffer-splice-result splice buffer)
-                              :cursor-pos (buffer-splice-cursor-pos splice))))))
+    (let ((deletion (buffer-deletion-at-cursor buffer cursor)))
+      (if deletion
+          (commit-buffer-edit (buffer-deletion-result deletion buffer)
+                              :cursor-pos
+                              (buffer-deletion-cursor-pos deletion))
+          (values state :none)))))
 
 (defun move-cursor-clearing-suggestion (state delta)
   (with-normalized-input-state (state state)

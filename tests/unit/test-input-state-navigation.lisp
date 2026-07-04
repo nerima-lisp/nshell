@@ -215,11 +215,14 @@
 
 (test word-motion-targets-are-value-objects
   (let ((left (nshell.presentation::word-motion-target-left "git checkout main" 17))
+        (left-after-spaces (nshell.presentation::word-motion-target-left "git checkout main   " 20))
         (right (nshell.presentation::word-motion-target-right "git checkout main" 4))
         (empty-left (nshell.presentation::word-motion-target-left "" 0))
         (empty-right (nshell.presentation::word-motion-target-right "" 0)))
     (is (nshell.presentation::word-motion-target-p left))
     (is (= 13 (nshell.presentation::word-motion-target-cursor-pos left)))
+    (is (nshell.presentation::word-motion-target-p left-after-spaces))
+    (is (= 13 (nshell.presentation::word-motion-target-cursor-pos left-after-spaces)))
     (is (nshell.presentation::word-motion-target-p right))
     (is (= 13 (nshell.presentation::word-motion-target-cursor-pos right)))
     (is (= 0 (nshell.presentation::word-motion-target-cursor-pos empty-left)))

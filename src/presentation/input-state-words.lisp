@@ -16,11 +16,11 @@
                      (nshell.domain.parsing:shell-token-separator-p
                       (char buffer (1- scan-limit))))
           do (decf scan-limit))
-    (let ((ranges (shell-token-ranges-before buffer scan-limit)))
+    (let ((range-set (shell-token-range-set-before buffer scan-limit)))
       (%make-word-motion-target
-       (if ranges
-           (shell-token-range-start (car (last ranges)))
-           0)))))
+       (if (shell-token-range-set-empty-p range-set)
+           0
+           (shell-token-range-start (shell-token-range-set-last range-set)))))))
 
 (defun word-motion-target-right (buffer cursor)
   (let ((pos cursor)

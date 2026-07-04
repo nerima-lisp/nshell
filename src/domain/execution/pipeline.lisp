@@ -65,16 +65,18 @@
     (error "Invalid pipeline stage index: ~s" index))
   (nth index (pipeline-plan-stages plan)))
 
+(defun %pipeline-plan-stage-pipe-config (plan index)
+  (pipeline-stage-pipe-config
+   (%pipeline-plan-stage-at plan index)))
+
 (defun pipeline-plan-stage-piped-input-p (plan index)
   "Return true when stage INDEX receives stdin from a previous pipeline stage."
   (eq :pipe
       (pipe-config-stdin
-       (pipeline-stage-pipe-config
-        (%pipeline-plan-stage-at plan index)))))
+       (%pipeline-plan-stage-pipe-config plan index))))
 
 (defun pipeline-plan-stage-piped-output-p (plan index)
   "Return true when stage INDEX writes stdout to the next pipeline stage."
   (eq :pipe
       (pipe-config-stdout
-       (pipeline-stage-pipe-config
-        (%pipeline-plan-stage-at plan index)))))
+       (%pipeline-plan-stage-pipe-config plan index))))

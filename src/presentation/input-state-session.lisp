@@ -26,6 +26,13 @@
   (preserve-yank-session-p nil :type boolean :read-only t)
   (preserve-argument-session-p nil :type boolean :read-only t))
 
+(defstruct (input-session-reduction
+             (:constructor %make-input-session-reduction
+                 (state output))
+             (:conc-name %input-session-reduction-))
+  (state nil :read-only t)
+  (output :none :type symbol :read-only t))
+
 (defun input-session-transition-policy-preserve-all-p (policy)
   (%input-session-transition-policy-preserve-all-p policy))
 
@@ -37,6 +44,24 @@
 
 (defun input-session-transition-policy-preserve-argument-session-p (policy)
   (%input-session-transition-policy-preserve-argument-session-p policy))
+
+(defun input-session-reduction-state (reduction)
+  (%input-session-reduction-state reduction))
+
+(defun input-session-reduction-output (reduction)
+  (%input-session-reduction-output reduction))
+
+(defun input-session-reduction (state output)
+  (%make-input-session-reduction state output))
+
+(defun input-session-reduction-for-key-event (state key-event)
+  (multiple-value-bind (new-state output)
+      (case (input-state-mode state)
+        (:search (reduce-search-input-state state key-event))
+        ((:vi-command :vi-visual :vi-d :vi-c)
+         (reduce-vi-input-state state key-event))
+        (t (reduce-insert-input-state state key-event)))
+    (input-session-reduction new-state output)))
 
 (defun %completion-session-preserved-p (old-state state key-event-type)
   (and (eq (input-state-mode old-state) :insert)
@@ -112,12 +137,12 @@ The first value is a fresh INPUT-STATE. The second value is an OUTPUT-EVENT
 keyword for the impure REPL shell to interpret. This function performs no I/O
   and mutates neither STATE nor KEY-EVENT."
   (with-normalized-input-state (state state)
-    (multiple-value-bind (new-state output)
-        (case (input-state-mode state)
-          (:search (reduce-search-input-state state key-event))
-          ((:vi-command :vi-visual :vi-d :vi-c)
-           (reduce-vi-input-state state key-event))
-          (t (reduce-insert-input-state state key-event)))
-      (let ((final-state (finalize-input-state-transition state new-state key-event)))
+    (let* ((reduction (input-session-reduction-for-key-event state key-event))
+           (output (input-session-reduction-output reduction))
+           (final-state
+             (finalize-input-state-transition
+              state
+              (input-session-reduction-state reduction)
+              key-event)))
         (values (record-undo-transition state final-state output key-event)
-                output)))))
+                output))))

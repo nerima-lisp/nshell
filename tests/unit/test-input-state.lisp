@@ -329,6 +329,20 @@
     (is (not (nshell.presentation::input-session-transition-policy-preserve-argument-session-p policy)))
     (is (not (fboundp 'nshell.presentation::make-input-session-transition-policy)))))
 
+(test input-state-session-reduction-is-private-value
+  (let* ((state (input-state :buffer "ab" :cursor-pos 2))
+         (reduction (nshell.presentation::input-session-reduction-for-key-event
+                     state
+                     (input-key-event :char #\c))))
+    (is (nshell.presentation::input-session-reduction-p reduction))
+    (is (not (listp reduction)))
+    (is (not (fboundp 'nshell.presentation::make-input-session-reduction)))
+    (is (eq :suggest-update
+            (nshell.presentation::input-session-reduction-output reduction)))
+    (is-input-state (nshell.presentation::input-session-reduction-state reduction)
+                    :buffer "abc"
+                    :cursor-pos 3)))
+
 (test input-state-finalize-transition-clears-transient-session-state-on-edit
   (let ((state (input-state
                 :buffer "git st"

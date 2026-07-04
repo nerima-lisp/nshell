@@ -9,16 +9,24 @@
   (getf entry :command))
 
 (defun %candidate-entry-description (entry)
-  (or (getf entry :description) ""))
+  (if (%kb-command-entry-p entry)
+      (or (%kb-command-entry-description entry) "")
+      (or (getf entry :description) "")))
 
 (defun %candidate-entry-flag-specs (entry)
-  (getf entry :flags))
+  (if (%kb-command-entry-p entry)
+      (%kb-command-entry-flags entry)
+      (getf entry :flags)))
 
 (defun %candidate-entry-subcommand-specs (entry)
-  (getf entry :subcommands))
+  (if (%kb-command-entry-p entry)
+      (%kb-command-entry-subcommands entry)
+      (getf entry :subcommands)))
 
 (defun %candidate-entry-exclusive-option-groups (entry)
-  (getf entry :exclusive-options))
+  (if (%kb-command-entry-p entry)
+      (%kb-command-entry-exclusive-options entry)
+      (getf entry :exclusive-options)))
 
 (defun %command-entry-candidate (name entry)
   (make-candidate name
@@ -81,7 +89,9 @@
     (nreverse unique-values)))
 
 (defun %entry-option-value-specs (entry)
-  (getf entry :option-values))
+  (if (%kb-command-entry-p entry)
+      (%kb-command-entry-option-values entry)
+      (getf entry :option-values)))
 
 (defstruct (%entry-option-value-spec-projection
             (:constructor %make-entry-option-value-spec-projection

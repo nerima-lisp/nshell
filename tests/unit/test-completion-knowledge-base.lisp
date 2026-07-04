@@ -21,7 +21,8 @@
        (push (cons name entry) commands)))
     (setf commands (nreverse commands))
     (is (equal '("alpha" "zeta") (mapcar #'car commands)))
-    (is (every #'consp (mapcar #'cdr commands)))))
+    (is (every #'nshell.domain.completion::%kb-command-entry-p
+               (mapcar #'cdr commands)))))
 
 (test command-candidate-helpers-are-internal-boundaries
   (flet ((defined-symbol-p (name)
@@ -109,6 +110,32 @@
     (is (equal '(("--json" "--yaml"))
                (nshell.domain.completion::%candidate-entry-exclusive-option-groups
                 entry)))))
+
+(test entry-candidate-projection-reads-knowledge-base-entry-boundary
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :subcommands '("run")
+     :flags '("--flag")
+     :option-values '(("--flag" "value"))
+     :exclusive-options '(("--json" "--yaml"))
+     :description "tool description")
+    (let ((entry (nshell.domain.completion::%kb-command-entry kb "tool")))
+      (is (string= "tool description"
+                   (nshell.domain.completion::%candidate-entry-description
+                    entry)))
+      (is (equal '("--flag")
+                 (nshell.domain.completion::%candidate-entry-flag-specs
+                  entry)))
+      (is (equal '("run")
+                 (nshell.domain.completion::%candidate-entry-subcommand-specs
+                  entry)))
+      (is (equal '(("--json" "--yaml"))
+                 (nshell.domain.completion::%candidate-entry-exclusive-option-groups
+                  entry)))
+      (is (equal '(("--flag" "value"))
+                 (nshell.domain.completion::%entry-option-value-specs
+                  entry))))))
 
 (test candidate-entry-projection-helpers-are-internal-boundaries
   (flet ((defined-symbol-p (name)
@@ -567,62 +594,75 @@
     (is (equal '("a" "b" "c") (merge* '("a" "b") '("b" "c"))))))
 
 (test merge-kb-command-facts-preserves-and-merges-entry-policy
-  (let ((entry (list :subcommands '("run")
-                     :flags '("--mode")
-                     :option-values '(("--mode" "fast"))
-                     :exclusive-options '(("--json" "--yaml"))
-                     :description "catalog")))
-    (is (eq entry
-            (nshell.domain.completion::%merge-kb-command-facts
-             entry
-             :subcommands '("test" "run")
-             :flags '("--mode" "--verbose")
-             :option-values '(("--mode" "safe" "fast")
-                              ("--format" "json"))
-             :exclusive-options '(("--json" "--yaml")
-                                  ("--compact" "--pretty")))))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :subcommands '("run")
+     :flags '("--mode")
+     :option-values '(("--mode" "fast"))
+     :exclusive-options '(("--json" "--yaml"))
+     :description "catalog")
+    (let ((entry (nshell.domain.completion::%kb-command-entry kb "tool")))
+      (nshell.domain.completion:kb-add-command
+       kb "tool"
+       :subcommands '("test" "run")
+       :flags '("--mode" "--verbose")
+       :option-values '(("--mode" "safe" "fast")
+                        ("--format" "json"))
+       :exclusive-options '(("--json" "--yaml")
+                            ("--compact" "--pretty")))
+      (is (eq entry
+              (nshell.domain.completion::%kb-command-entry kb "tool"))))
     (is (equal '("run" "test")
-               (nshell.domain.completion::%kb-command-entry-subcommands entry)))
+               (nshell.domain.completion:kb-command-subcommands kb "tool")))
     (is (equal '("--mode" "--verbose")
-               (nshell.domain.completion::%kb-command-entry-flags entry)))
+               (nshell.domain.completion:kb-command-flags kb "tool")))
     (is (equal '(("--format" "json")
                  ("--mode" "fast" "safe"))
-               (nshell.domain.completion::%kb-command-entry-option-values entry)))
+               (nshell.domain.completion:kb-command-option-values kb "tool")))
     (is (equal '(("--json" "--yaml")
                  ("--compact" "--pretty"))
-               (nshell.domain.completion::%kb-command-entry-exclusive-options
-                entry)))
+               (nshell.domain.completion:kb-command-exclusive-options
+                kb "tool")))
     (is (string= "catalog"
-                 (nshell.domain.completion::%kb-command-entry-description
-                  entry)))))
+                 (nshell.domain.completion:kb-command-description
+                  kb "tool")))))
 
 (test merge-kb-command-facts-updates-description-when-present
-  (let ((entry (list :subcommands nil
-                     :flags nil
-                     :option-values nil
-                     :exclusive-options nil
-                     :description "catalog")))
-    (nshell.domain.completion::%merge-kb-command-facts
-     entry
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+    (nshell.domain.completion:kb-add-command kb "tool" :description "catalog")
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
      :description "dynamic loader")
     (is (string= "dynamic loader"
-                 (nshell.domain.completion::%kb-command-entry-description
-                  entry)))))
+                 (nshell.domain.completion:kb-command-description
+                  kb "tool")))))
 
 (test add-kb-command-entry-option-merges-through-entry-boundary
-  (let ((entry (list :subcommands nil
-                     :flags '("--mode")
-                     :option-values '(("--mode" "fast"))
-                     :exclusive-options nil
-                     :description nil)))
-    (is (eq entry
-            (nshell.domain.completion::%add-kb-command-entry-option
-             entry "--mode" '("safe" "fast"))))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+    (nshell.domain.completion:kb-add-command
+     kb "tool"
+     :flags '("--mode")
+     :option-values '(("--mode" "fast")))
+    (let ((entry (nshell.domain.completion::%kb-command-entry kb "tool")))
+      (nshell.domain.completion:kb-add-option
+       kb "tool" "--mode" :values '("safe" "fast"))
+      (is (eq entry
+              (nshell.domain.completion::%kb-command-entry kb "tool"))))
     (is (equal '("--mode")
-               (nshell.domain.completion::%kb-command-entry-flags entry)))
+               (nshell.domain.completion:kb-command-flags kb "tool")))
     (is (equal '(("--mode" "fast" "safe"))
-               (nshell.domain.completion::%kb-command-entry-option-values
-                entry)))))
+               (nshell.domain.completion:kb-command-option-values
+                kb "tool")))))
+
+(test knowledge-base-command-entries-are-private-aggregate-values
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+    (nshell.domain.completion:kb-add-command kb "tool")
+    (let ((entry (nshell.domain.completion::%kb-command-entry kb "tool")))
+      (is (nshell.domain.completion::%kb-command-entry-p entry))
+      (is (not (listp entry)))
+      (is (not (fboundp 'nshell.domain.completion::make-kb-command-entry)))
+      (is (fboundp 'nshell.domain.completion::%make-kb-command-entry)))))
 
 (test knowledge-base-query-api-does-not-expose-entry-plist
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

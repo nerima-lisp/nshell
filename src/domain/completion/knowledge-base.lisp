@@ -4,6 +4,17 @@
             (:conc-name %knowledge-base-))
   (commands (make-hash-table :test #'equal) :type hash-table))
 
+(defstruct (%kb-command-entry
+            (:constructor %make-kb-command-entry
+                (&key subcommands flags option-values exclusive-options
+                      description))
+            (:conc-name %kb-command-entry-))
+  (subcommands nil :type list)
+  (flags nil :type list)
+  (option-values nil :type list)
+  (exclusive-options nil :type list)
+  description)
+
 (defun make-empty-knowledge-base ()
   (%make-knowledge-base))
 
@@ -16,11 +27,7 @@
 (defun %ensure-kb-command-entry (kb cmd-name)
   (or (gethash cmd-name (%knowledge-base-commands kb))
       (setf (gethash cmd-name (%knowledge-base-commands kb))
-	            (list :subcommands nil
-	                  :flags nil
-	                  :option-values nil
-	                  :exclusive-options nil
-	                  :description nil))))
+            (%make-kb-command-entry))))
 
 (defun %unique-kb-string-values (values)
   (let ((seen nil)
@@ -109,21 +116,6 @@
         (push group seen)
         (push group merged)))))
 
-(defun %kb-command-entry-subcommands (entry)
-  (getf entry :subcommands))
-
-(defun %kb-command-entry-flags (entry)
-  (getf entry :flags))
-
-(defun %kb-command-entry-option-values (entry)
-  (getf entry :option-values))
-
-(defun %kb-command-entry-exclusive-options (entry)
-  (getf entry :exclusive-options))
-
-(defun %kb-command-entry-description (entry)
-  (getf entry :description))
-
 (defun %kb-command-entry (kb cmd-name)
   (and kb (gethash cmd-name (%knowledge-base-commands kb))))
 
@@ -131,35 +123,45 @@
   (not (null (%kb-command-entry kb cmd-name))))
 
 (defun kb-command-subcommands (kb cmd-name)
-  (%kb-command-entry-subcommands (%kb-command-entry kb cmd-name)))
+  (let ((entry (%kb-command-entry kb cmd-name)))
+    (when entry
+      (%kb-command-entry-subcommands entry))))
 
 (defun kb-command-flags (kb cmd-name)
-  (%kb-command-entry-flags (%kb-command-entry kb cmd-name)))
+  (let ((entry (%kb-command-entry kb cmd-name)))
+    (when entry
+      (%kb-command-entry-flags entry))))
 
 (defun kb-command-option-values (kb cmd-name)
-  (%kb-command-entry-option-values (%kb-command-entry kb cmd-name)))
+  (let ((entry (%kb-command-entry kb cmd-name)))
+    (when entry
+      (%kb-command-entry-option-values entry))))
 
 (defun kb-command-exclusive-options (kb cmd-name)
-  (%kb-command-entry-exclusive-options (%kb-command-entry kb cmd-name)))
+  (let ((entry (%kb-command-entry kb cmd-name)))
+    (when entry
+      (%kb-command-entry-exclusive-options entry))))
 
 (defun kb-command-description (kb cmd-name)
-  (%kb-command-entry-description (%kb-command-entry kb cmd-name)))
+  (let ((entry (%kb-command-entry kb cmd-name)))
+    (when entry
+      (%kb-command-entry-description entry))))
 
 (defun %merge-kb-command-entry-facts
     (entry &key subcommands flags option-values exclusive-options description)
-  (setf (getf entry :subcommands)
+  (setf (%kb-command-entry-subcommands entry)
         (%merge-kb-string-values (%kb-command-entry-subcommands entry)
                                  subcommands)
-        (getf entry :flags)
+        (%kb-command-entry-flags entry)
         (%merge-kb-string-values (%kb-command-entry-flags entry) flags)
-        (getf entry :option-values)
+        (%kb-command-entry-option-values entry)
         (%merge-kb-option-value-specs (%kb-command-entry-option-values entry)
                                       option-values)
-        (getf entry :exclusive-options)
+        (%kb-command-entry-exclusive-options entry)
         (%merge-kb-exclusive-option-groups
          (%kb-command-entry-exclusive-options entry)
          exclusive-options)
-        (getf entry :description)
+        (%kb-command-entry-description entry)
         (or description (%kb-command-entry-description entry)))
   entry)
 

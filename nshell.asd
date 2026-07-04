@@ -252,6 +252,7 @@
    (:file "integration/test-terminal-stream")
    (:file "integration/test-terminal-presentation")
    (:file "integration/test-terminal-ansi")
+   (:file "integration/test-file-config")
    (:file "integration/test-file-history")
    (:file "e2e/test-smoke")
    (:file "e2e/test-smoke-script")

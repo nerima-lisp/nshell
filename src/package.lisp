@@ -295,7 +295,7 @@
   (:export #:*history-file-path-override*
            #:load-history-file #:append-history-entry
            #:history-file-path
-           #:load-config #:save-config #:config-file-path))
+           #:load-config #:save-config))
 
 ;; -- Presentation packages ----------------------------------
 (defpackage #:nshell.presentation

@@ -7,11 +7,6 @@
   (start 0 :type fixnum :read-only t)
   (end 0 :type fixnum :read-only t))
 
-(defun %shell-token-range-values (range)
-  (values (shell-token-range-start range)
-          (shell-token-range-end range)
-          t))
-
 (defun shell-token-end (text start)
   "Return the end index of the shell token in TEXT starting at START."
   (let ((pos start)
@@ -63,40 +58,37 @@
     (nreverse ranges)))
 
 (defun shell-token-range-at-position (text position)
-  "Return the shell token range containing POSITION."
+  "Return the shell token range containing POSITION, or NIL."
   (loop for range in (shell-token-ranges-before text (length text))
         when (and (<= (shell-token-range-start range) position)
                   (< position (shell-token-range-end range)))
-          do (return (%shell-token-range-values range))
-        finally (return (values nil nil nil))))
+          do (return range)))
 
 (defun shell-token-range-at-or-after-cursor (buffer cursor)
+  "Return the shell token range containing or following CURSOR, or NIL."
   (let* ((end (length buffer))
          (position (min cursor end))
          (ranges (shell-token-ranges-before buffer end)))
     (cond
       ((null ranges)
-       (values nil nil nil))
+       nil)
       ((>= position end)
-       (let ((range (car (last ranges))))
-         (%shell-token-range-values range)))
+       (car (last ranges)))
       (t
        (loop for range in ranges
              when (or (and (<= (shell-token-range-start range) position)
                            (< position (shell-token-range-end range)))
                       (>= (shell-token-range-start range) position))
-               do (return (%shell-token-range-values range))
-             finally (return (values nil nil nil)))))))
+               do (return range))))))
 
 (defun shell-token-range-before-position (buffer position)
+  "Return the shell token range before POSITION, or NIL."
   (let ((previous nil))
     (dolist (range (shell-token-ranges-before buffer (length buffer)))
       (if (<= (shell-token-range-end range) position)
           (setf previous range)
         (return)))
-    (if previous
-        (%shell-token-range-values previous)
-        (values nil nil nil))))
+    previous))
 
 (defun previous-kill-word-start (buffer cursor)
   (let ((pos cursor))
@@ -104,13 +96,10 @@
                      (nshell.domain.parsing:shell-token-separator-p
                       (char buffer (1- pos))))
           do (decf pos))
-    (multiple-value-bind (start end found-p)
-        (if (> pos 0)
-            (shell-token-range-at-position buffer (1- pos))
-            (values nil nil nil))
-      (declare (ignore end))
-      (if found-p
-          start
+    (let ((range (and (> pos 0)
+                      (shell-token-range-at-position buffer (1- pos)))))
+      (if range
+          (shell-token-range-start range)
           pos))))
 
 (defun next-kill-word-end (buffer cursor)
@@ -121,10 +110,8 @@
                       (char buffer pos)))
           do (incf pos))
     (if (< pos end)
-        (multiple-value-bind (start token-end found-p)
-            (shell-token-range-at-position buffer pos)
-          (declare (ignore start))
-          (if found-p
-              token-end
+        (let ((range (shell-token-range-at-position buffer pos)))
+          (if range
+              (shell-token-range-end range)
               (shell-token-end buffer pos)))
         pos)))

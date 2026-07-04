@@ -154,21 +154,21 @@ preceded by a backslash."
     (cond
       ((and (< cursor limit)
             (%completion-token-separator-at-p input cursor))
-       (multiple-value-bind (start end found-p)
-           (shell-token-range-before-position input cursor)
-         (if found-p
-             (values start end)
+       (let ((range (shell-token-range-before-position input cursor)))
+         (if range
+             (values (shell-token-range-start range)
+                     (shell-token-range-end range))
              (values cursor cursor))))
       ((and (= cursor limit)
             (plusp limit)
             (%completion-token-separator-at-p input (1- limit)))
        (values cursor cursor))
       (t
-       (multiple-value-bind (start end found-p)
-           (shell-token-range-at-or-after-cursor input cursor)
-         (if (not found-p)
+       (let ((range (shell-token-range-at-or-after-cursor input cursor)))
+         (if (null range)
              (values cursor cursor)
-             (values start end)))))))
+             (values (shell-token-range-start range)
+                     (shell-token-range-end range))))))))
 
 (defun %completion-token-body-bounds (input start end)
   (let ((body-start start)

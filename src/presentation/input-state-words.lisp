@@ -22,11 +22,9 @@
       (if (and (< pos end)
                (not (nshell.domain.parsing:shell-token-separator-p
                      (char buffer pos))))
-          (multiple-value-bind (token-start token-end token-found-p)
-              (shell-token-range-at-position buffer pos)
-            (declare (ignore token-start))
-            (setf pos (if token-found-p
-                          token-end
+          (let ((range (shell-token-range-at-position buffer pos)))
+            (setf pos (if range
+                          (shell-token-range-end range)
                           (shell-token-end buffer pos)))))
       (loop while (and (< pos end)
                        (nshell.domain.parsing:shell-token-separator-p
@@ -37,11 +35,12 @@
 (defun transform-word-at-cursor (state transform)
   "Apply TRANSFORM to the shell token at or after the cursor."
   (with-buffer-edit (state buffer cursor) state
-    (multiple-value-bind (start end found-p)
-        (shell-token-range-at-or-after-cursor buffer cursor)
-      (if (not found-p)
+    (let ((range (shell-token-range-at-or-after-cursor buffer cursor)))
+      (if (null range)
           (values state :none)
-          (let* ((word (subseq buffer start end))
+          (let* ((start (shell-token-range-start range))
+                 (end (shell-token-range-end range))
+                 (word (subseq buffer start end))
                  (new-word (funcall transform word))
                  (new-buffer (concatenate 'string
                                           (subseq buffer 0 start)
@@ -76,15 +75,17 @@
 
 (defun transpose-words-around-cursor (state)
   (with-buffer-edit (state buffer cursor) state
-    (multiple-value-bind (right-start right-end right-found-p)
-        (shell-token-range-at-or-after-cursor buffer cursor)
-      (if (not right-found-p)
+    (let ((right-range (shell-token-range-at-or-after-cursor buffer cursor)))
+      (if (null right-range)
           (values state :none)
-          (multiple-value-bind (left-start left-end left-found-p)
-              (shell-token-range-before-position buffer right-start)
-            (if (not left-found-p)
+          (let* ((right-start (shell-token-range-start right-range))
+                 (right-end (shell-token-range-end right-range))
+                 (left-range (shell-token-range-before-position buffer right-start)))
+            (if (null left-range)
                 (values state :none)
-                (let* ((left-word (subseq buffer left-start left-end))
+                (let* ((left-start (shell-token-range-start left-range))
+                       (left-end (shell-token-range-end left-range))
+                       (left-word (subseq buffer left-start left-end))
                        (middle (subseq buffer left-end right-start))
                        (right-word (subseq buffer right-start right-end))
                        (new-buffer

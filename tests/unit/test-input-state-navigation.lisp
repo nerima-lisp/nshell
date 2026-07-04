@@ -165,6 +165,21 @@
         (is-input-state one-start-state :cursor-pos 5)
         (is (eq :redraw one-start-output))))))
 
+(test shell-token-range-lookups-return-range-objects
+  (let ((inside (nshell.presentation::shell-token-range-at-position "echo foo" 5))
+        (after (nshell.presentation::shell-token-range-at-or-after-cursor "echo foo" 4))
+        (before (nshell.presentation::shell-token-range-before-position "echo foo" 4)))
+    (is (nshell.presentation::shell-token-range-p inside))
+    (is (= 5 (nshell.presentation::shell-token-range-start inside)))
+    (is (= 8 (nshell.presentation::shell-token-range-end inside)))
+    (is (nshell.presentation::shell-token-range-p after))
+    (is (= 5 (nshell.presentation::shell-token-range-start after)))
+    (is (= 8 (nshell.presentation::shell-token-range-end after)))
+    (is (nshell.presentation::shell-token-range-p before))
+    (is (= 0 (nshell.presentation::shell-token-range-start before)))
+    (is (= 4 (nshell.presentation::shell-token-range-end before)))
+    (is (null (nshell.presentation::shell-token-range-at-position "echo foo" 4)))))
+
 (test input-state-word-navigation-clears-visible-suggestion-when-moving
   (let ((state (input-state
                 :buffer "git checkout main"

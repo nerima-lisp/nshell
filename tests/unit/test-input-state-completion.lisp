@@ -4,38 +4,53 @@
 
 (test input-state-completion-cycle-edit-stays-behind-public-projections
   "Completion cycling should commit an edit value, not raw apply-completion values."
-  (let* ((edit (nshell.presentation::completion-cycle-edit-for-selection
-                "git ch --dry-run"
-                6
-                1
-                "cherry-pick"))
-         (state (input-state
-                 :buffer "git ch --dry-run"
-                 :cursor-pos 6
-                 :suggestion " ignored"
-                 :completion-index -1
-                 :last-candidates '("checkout" "cherry-pick")))
-         (committed (nshell.presentation::commit-completion-cycle-edit
+  (let* ((state (input-state
+                  :buffer "git ch --dry-run"
+                  :cursor-pos 6
+                  :suggestion " ignored"
+                  :completion-index -1
+                  :last-candidates '("checkout" "cherry-pick")))
+         (selection (nshell.presentation::completion-cycle-selection-for-state
                      state
-                     edit)))
+                     1
+                     '("checkout" "cherry-pick")))
+         (edit (nshell.presentation::completion-cycle-edit-for-selection selection))
+         (committed (nshell.presentation::commit-completion-cycle-edit
+                      state
+                      edit)))
+    (is (fboundp 'nshell.presentation::%make-completion-cycle-selection))
+    (is (fboundp 'nshell.presentation::%completion-cycle-selection-base-buffer))
+    (is (not (fboundp 'nshell.presentation::make-completion-cycle-selection)))
+    (is (not (fboundp 'nshell.presentation::%completion-cycle-selection)))
+    (is (string= "git ch --dry-run"
+                 (nshell.presentation::completion-cycle-selection-base-buffer
+                  selection)))
+    (is (= 6
+           (nshell.presentation::completion-cycle-selection-base-cursor
+            selection)))
+    (is (= 0
+           (nshell.presentation::completion-cycle-selection-index selection)))
+    (is (string= "checkout"
+                 (nshell.presentation::completion-cycle-selection-candidate
+                  selection)))
     (is (fboundp 'nshell.presentation::%make-completion-cycle-edit))
     (is (fboundp 'nshell.presentation::%completion-cycle-edit-buffer))
     (is (not (fboundp 'nshell.presentation::make-completion-cycle-edit)))
-    (is (string= "git cherry-pick --dry-run"
+    (is (string= "git checkout --dry-run"
                  (nshell.presentation::completion-cycle-edit-buffer edit)))
-    (is (= 15
+    (is (= 12
            (nshell.presentation::completion-cycle-edit-cursor-pos edit)))
-    (is (= 1
+    (is (= 0
            (nshell.presentation::completion-cycle-edit-index edit)))
     (is (string= "git ch --dry-run"
                  (nshell.presentation::completion-cycle-edit-base-buffer edit)))
     (is (= 6
            (nshell.presentation::completion-cycle-edit-base-cursor edit)))
     (is-input-state committed
-                    :buffer "git cherry-pick --dry-run"
-                    :cursor-pos 15
+                    :buffer "git checkout --dry-run"
+                    :cursor-pos 12
                     :suggestion nil
-                    :completion-index 1
+                    :completion-index 0
                     :completion-base-buffer "git ch --dry-run"
                     :completion-base-cursor 6)))
 

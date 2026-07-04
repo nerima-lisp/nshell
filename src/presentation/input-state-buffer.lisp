@@ -22,8 +22,27 @@
   (+ (%buffer-splice-start splice)
      (length (%buffer-splice-inserted splice))))
 
-(defun %splice-buffer (buffer start end &optional (inserted ""))
-  (buffer-splice-result (make-buffer-splice start end inserted) buffer))
+(defstruct (buffer-insertion
+             (:constructor %make-buffer-insertion (splice))
+             (:conc-name %buffer-insertion-))
+  splice)
+
+(defun buffer-insertion-at-cursor (buffer cursor text)
+  (when (stringp text)
+    (let ((remaining (- +max-input-buffer-size+ (length buffer))))
+      (when (and (plusp remaining)
+                 (plusp (length text)))
+        (let ((inserted (if (> (length text) remaining)
+                            (subseq text 0 remaining)
+                            text)))
+          (%make-buffer-insertion
+           (make-buffer-splice cursor cursor inserted)))))))
+
+(defun buffer-insertion-result (insertion buffer)
+  (buffer-splice-result (%buffer-insertion-splice insertion) buffer))
+
+(defun buffer-insertion-cursor-pos (insertion)
+  (buffer-splice-cursor-pos (%buffer-insertion-splice insertion)))
 
 (defun backspace-before-cursor (state)
   (with-buffer-edit (state buffer cursor) state
@@ -68,24 +87,22 @@
 
 (defun insert-char-at-cursor (state ch)
   (with-buffer-edit (state buffer cursor) state
-    (if (>= (length buffer) +max-input-buffer-size+)
-        (values state :none)
-        (let ((splice (make-buffer-splice cursor cursor (string ch))))
-          (commit-buffer-edit (buffer-splice-result splice buffer)
-                              :cursor-pos (buffer-splice-cursor-pos splice))))))
+    (let ((insertion (buffer-insertion-at-cursor buffer cursor (string ch))))
+      (if insertion
+          (commit-buffer-edit (buffer-insertion-result insertion buffer)
+                              :cursor-pos
+                              (buffer-insertion-cursor-pos insertion))
+          (values state :none)))))
 
 (defun insert-string-at-cursor (state text)
   "Insert TEXT at cursor, capped by `+max-input-buffer-size+'."
   (with-buffer-edit (state buffer cursor) state
-    (let ((remaining (- +max-input-buffer-size+ (length buffer))))
-      (if (or (not (stringp text)) (<= remaining 0) (zerop (length text)))
-          (values state :none)
-          (let* ((inserted (if (> (length text) remaining)
-                               (subseq text 0 remaining)
-                               text))
-                 (splice (make-buffer-splice cursor cursor inserted)))
-            (commit-buffer-edit (buffer-splice-result splice buffer)
-                                :cursor-pos (buffer-splice-cursor-pos splice)))))))
+    (let ((insertion (buffer-insertion-at-cursor buffer cursor text)))
+      (if insertion
+          (commit-buffer-edit (buffer-insertion-result insertion buffer)
+                              :cursor-pos
+                              (buffer-insertion-cursor-pos insertion))
+          (values state :none)))))
 
 (defun normalize-paste-text (text)
   "Normalize pasted line endings to LF while preserving other text."

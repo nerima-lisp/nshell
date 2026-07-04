@@ -45,6 +45,40 @@
                  (nshell.presentation::buffer-splice-result splice "git old main")))
     (is (= 4 (nshell.presentation::buffer-splice-cursor-pos splice)))))
 
+(test input-state-buffer-insertion-projects-capped-result-and-cursor
+  (let* ((buffer "echo  done")
+         (insertion (nshell.presentation::buffer-insertion-at-cursor
+                     buffer 5 "hello")))
+    (is (nshell.presentation::buffer-insertion-p insertion))
+    (is (not (fboundp 'nshell.presentation::make-buffer-insertion)))
+    (is (string= "echo hello done"
+                 (nshell.presentation::buffer-insertion-result
+                  insertion
+                  buffer)))
+    (is (= 10 (nshell.presentation::buffer-insertion-cursor-pos
+               insertion))))
+  (let* ((limit 4096)
+         (buffer (make-string 4094 :initial-element #\x))
+         (insertion (nshell.presentation::buffer-insertion-at-cursor
+                     buffer
+                     4094
+                     "abcdef")))
+    (is (string= (concatenate 'string buffer "ab")
+                 (nshell.presentation::buffer-insertion-result
+                  insertion
+                  buffer)))
+    (is (= limit (nshell.presentation::buffer-insertion-cursor-pos
+                  insertion)))))
+
+(test input-state-buffer-insertion-rejects-non-insertions
+  (let ((buffer (make-string 4096 :initial-element #\x)))
+    (is (null (nshell.presentation::buffer-insertion-at-cursor
+               "echo" 4 "")))
+    (is (null (nshell.presentation::buffer-insertion-at-cursor
+               "echo" 4 :not-a-string)))
+    (is (null (nshell.presentation::buffer-insertion-at-cursor
+               buffer 4096 "x")))))
+
 (test input-state-space-expands-abbreviation-before-cursor
   (let ((state (completion-session-state
                 :buffer "gco"

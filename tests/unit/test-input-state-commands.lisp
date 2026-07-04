@@ -32,6 +32,24 @@
         :suggest-update
         (:buffer "" :cursor-pos 0))))
 
+(test input-state-sudo-prefix-edit-projects-buffer-and-cursor
+  (let ((edit (nshell.presentation::sudo-prefix-edit-for-buffer "apt update")))
+    (is (nshell.presentation::sudo-prefix-edit-p edit))
+    (is (not (fboundp 'nshell.presentation::make-sudo-prefix-edit)))
+    (is (string= "sudo apt update"
+                 (nshell.presentation::sudo-prefix-edit-buffer edit
+                                                               "apt update")))
+    (is (= 8 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 3))))
+  (let ((edit (nshell.presentation::sudo-prefix-edit-for-buffer "sudo apt update")))
+    (is (string= "apt update"
+                 (nshell.presentation::sudo-prefix-edit-buffer edit
+                                                               "sudo apt update")))
+    (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 3))))
+  (let ((edit (nshell.presentation::sudo-prefix-edit-for-buffer "sudo")))
+    (is (string= ""
+                 (nshell.presentation::sudo-prefix-edit-buffer edit "sudo")))
+    (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 4)))))
+
 (test input-state-ctrl-p-and-ctrl-n-request-history-navigation
   (let ((state (completion-session-state
                 :buffer "git"
@@ -179,6 +197,28 @@
             (input-state :buffer "a" :cursor-pos 1)
             (input-state :buffer "ab" :cursor-pos 0))))
 
+(test input-state-char-transposition-projects-buffer-and-cursor
+  (let ((transposition (nshell.presentation::char-transposition-at-cursor
+                        "abcd" 2)))
+    (is (nshell.presentation::char-transposition-p transposition))
+    (is (not (fboundp 'nshell.presentation::make-char-transposition)))
+    (is (string= "acbd"
+                 (nshell.presentation::char-transposition-buffer
+                  transposition
+                  "abcd")))
+    (is (= 3 (nshell.presentation::char-transposition-cursor-pos
+              transposition))))
+  (let ((transposition (nshell.presentation::char-transposition-at-cursor
+                        "abcd" 4)))
+    (is (string= "abdc"
+                 (nshell.presentation::char-transposition-buffer
+                  transposition
+                  "abcd")))
+    (is (= 4 (nshell.presentation::char-transposition-cursor-pos
+              transposition))))
+  (is (null (nshell.presentation::char-transposition-at-cursor "a" 1)))
+  (is (null (nshell.presentation::char-transposition-at-cursor "ab" 0))))
+
 (test input-state-word-transposition-projects-token-swap
   (let ((transposition (nshell.presentation::word-transposition-at-cursor
                         "echo one two" 9)))
@@ -261,4 +301,3 @@
       (list (input-state :buffer "" :cursor-pos 0)
             (input-state :buffer "one" :cursor-pos 3)
             (input-state :buffer "one " :cursor-pos 4))))
-

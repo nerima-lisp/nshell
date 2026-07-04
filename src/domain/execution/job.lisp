@@ -34,10 +34,28 @@
   (unless (eq (job-state-kw job) new-state)
     (setf (job-state-kw job) new-state))
   job)
+
 (defun job-running-p (job) (eq (job-state-kw job) :running))
 (defun job-stopped-p (job) (eq (job-state-kw job) :stopped))
 (defun job-completed-p (job)
   (not (null (member (job-state-kw job) '(:completed :done)))))
+
+(defun job-register-background-processes (job pids command-line)
+  (setf (job-pids job) (copy-list pids)
+        (job-pgid job) (first pids)
+        (job-command-line job) command-line
+        (job-background-p job) t)
+  (job-state-transition job :running))
+
+(defun job-set-background-visible (job background-p)
+  (setf (job-background-p job) (not (null background-p)))
+  job)
+
+(defun job-record-terminal-exit-code (job exit-code)
+  (when (and exit-code
+             (job-completed-p job))
+    (setf (job-exit-code job) exit-code))
+  job)
 
 (defun job-known-pids (job)
   (remove-if-not (lambda (pid)

@@ -80,6 +80,30 @@
       (nshell.domain.execution:job-state-transition job :running))
     (is (eq :completed (nshell.domain.execution:job-state job)))))
 
+(test job-register-background-processes-initializes-runtime-metadata
+  "Job aggregate owns process metadata initialization."
+  (let ((job (make-test-job 0 "left")))
+    (is (eq job (nshell.domain.execution:job-register-background-processes
+                 job '(4321 4322) "left | right")))
+    (is (equal '(4321 4322) (nshell.domain.execution:job-pids job)))
+    (is (= 4321 (nshell.domain.execution:job-pgid job)))
+    (is (string= "left | right" (nshell.domain.execution:job-command-line job)))
+    (is (nshell.domain.execution:job-background-p job))
+    (is (eq :running (nshell.domain.execution:job-state job)))))
+
+(test job-visibility-and-terminal-exit-code-updates-are-domain-operations
+  "Mutable job facts are changed through explicit domain operations."
+  (let ((job (make-test-job 0 "sleep")))
+    (is (eq job (nshell.domain.execution:job-set-background-visible job t)))
+    (is (nshell.domain.execution:job-background-p job))
+    (nshell.domain.execution:job-set-background-visible job nil)
+    (is (not (nshell.domain.execution:job-background-p job)))
+    (nshell.domain.execution:job-record-terminal-exit-code job 7)
+    (is (null (nshell.domain.execution:job-exit-code job)))
+    (nshell.domain.execution:job-state-transition job :completed)
+    (is (eq job (nshell.domain.execution:job-record-terminal-exit-code job 7)))
+    (is (= 7 (nshell.domain.execution:job-exit-code job)))))
+
 (test job-completed-p-recognizes-done
   "Terminal done state is treated as completed."
   (let* ((cmd (nshell.domain.execution:make-command "ls"))

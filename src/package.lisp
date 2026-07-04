@@ -53,7 +53,9 @@
             #:pipe-config-stdin #:pipe-config-stdout #:pipe-config-index
             #:pipe-config-last-p #:pipeline-stage-count
             #:make-job #:job-id #:job-state #:job-pipeline
-            #:job-state-valid-p #:job-state-transition #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p #:job-known-pids #:job-last-pid #:job-pgid #:job-exit-code #:job-state-kw #:make-job-monitor #:monitor-find-job
+            #:job-state-valid-p #:job-state-transition #:job-register-background-processes
+            #:job-set-background-visible #:job-record-terminal-exit-code
+            #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p #:job-known-pids #:job-last-pid #:job-pgid #:job-exit-code #:job-state-kw #:make-job-monitor #:monitor-find-job
             #:job-pids #:job-command-line #:job-background-p))
 
   (defpackage #:nshell.domain.parsing

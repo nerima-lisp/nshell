@@ -235,7 +235,9 @@
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
-            #:make-process-group-leader #:reap-children #:get-terminal-size
+            #:make-process-group-leader
+            #:child-status #:child-status-p #:child-status-pid #:child-status-status
+            #:reap-children #:get-terminal-size
             #:*external-command-timeout*
             #:run-external #:run-external-capture #:process-exit-status-code
             #:with-git-process-fns #:clear-git-status-cache

@@ -56,15 +56,20 @@
   "Create a new session and make this process its leader."
   (sb-posix:setsid))
 
+(defstruct (child-status
+            (:constructor %make-child-status (pid status)))
+  (pid 0 :type integer :read-only t)
+  (status 0 :type integer :read-only t))
+
 (defun reap-children ()
-  "Reap all changed child processes without blocking. Returns a list of (pid . status)."
+  "Reap all changed child processes without blocking. Returns CHILD-STATUS values."
   (let ((children nil))
     (loop
       (handler-case
           (multiple-value-bind (pid status) (sb-posix:waitpid -1 sb-posix:wnohang)
             (cond
               ((plusp pid)
-               (push (cons pid status) children))
+               (push (%make-child-status pid status) children))
               (t
                (return (nreverse children)))))
         (sb-posix:syscall-error (condition)

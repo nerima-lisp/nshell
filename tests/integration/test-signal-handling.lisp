@@ -123,3 +123,10 @@
 (test reap-children-empty-when-no-children
   "Reaping with no changed children returns an empty list."
   (is (listp (nshell.infrastructure.acl:reap-children))))
+
+(test reap-children-exposes-typed-child-status
+  "Child reaping exposes a typed boundary instead of raw pid/status conses."
+  (let ((status (nshell.infrastructure.acl::%make-child-status 123 0)))
+    (is (nshell.infrastructure.acl:child-status-p status))
+    (is (= 123 (nshell.infrastructure.acl:child-status-pid status)))
+    (is (= 0 (nshell.infrastructure.acl:child-status-status status)))))

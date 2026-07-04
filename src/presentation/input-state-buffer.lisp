@@ -85,16 +85,46 @@
 (defun buffer-deletion-cursor-pos (deletion)
   (buffer-splice-cursor-pos (%buffer-deletion-splice deletion)))
 
+(defstruct (cursor-move-request
+             (:constructor %make-cursor-move-request (kind cursor delta position))
+             (:conc-name %cursor-move-request-))
+  (kind :by :read-only t)
+  (cursor 0 :type fixnum :read-only t)
+  (delta 0 :type fixnum :read-only t)
+  (position 0 :type fixnum :read-only t))
+
+(defun cursor-move-request-by (cursor-pos delta)
+  (%make-cursor-move-request :by cursor-pos delta 0))
+
+(defun cursor-move-request-to (position)
+  (%make-cursor-move-request :to 0 0 position))
+
+(defun cursor-move-request-kind (request)
+  (%cursor-move-request-kind request))
+
+(defun cursor-move-request-cursor (request)
+  (%cursor-move-request-cursor request))
+
+(defun cursor-move-request-delta (request)
+  (%cursor-move-request-delta request))
+
+(defun cursor-move-request-position (request)
+  (%cursor-move-request-position request))
+
 (defstruct (cursor-move-edit
              (:constructor %make-cursor-move-edit (cursor-pos))
              (:conc-name %cursor-move-edit-))
   (cursor-pos 0 :type fixnum :read-only t))
 
-(defun cursor-move-edit-by (cursor-pos delta)
-  (%make-cursor-move-edit (+ cursor-pos delta)))
-
-(defun cursor-move-edit-to (position)
-  (%make-cursor-move-edit position))
+(defun cursor-move-edit-for-request (request)
+  (case (cursor-move-request-kind request)
+    (:by
+     (%make-cursor-move-edit
+      (+ (cursor-move-request-cursor request)
+         (cursor-move-request-delta request))))
+    (:to
+     (%make-cursor-move-edit
+      (cursor-move-request-position request)))))
 
 (defun cursor-move-edit-cursor-pos (edit)
   (%cursor-move-edit-cursor-pos edit))
@@ -147,14 +177,16 @@
   (with-normalized-input-state (state state)
     (values (commit-cursor-move-edit
              state
-             (cursor-move-edit-by (input-state-cursor-pos state) delta))
+             (cursor-move-edit-for-request
+              (cursor-move-request-by (input-state-cursor-pos state) delta)))
             :redraw)))
 
 (defun move-cursor-to-clearing-suggestion (state position)
   (with-normalized-input-state (state state)
     (values (commit-cursor-move-edit
              state
-             (cursor-move-edit-to position))
+             (cursor-move-edit-for-request
+              (cursor-move-request-to position)))
             :redraw)))
 
 (defun clear-input-state (state)

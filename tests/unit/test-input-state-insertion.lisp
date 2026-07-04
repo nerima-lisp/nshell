@@ -136,11 +136,24 @@
   (let* ((state (input-state :buffer "abcdef"
                              :cursor-pos 3
                              :suggestion "def"))
-         (edit (nshell.presentation::cursor-move-edit-by 3 2))
+         (request (nshell.presentation::cursor-move-request-by 3 2))
+         (edit (nshell.presentation::cursor-move-edit-for-request request))
          (committed (nshell.presentation::commit-cursor-move-edit state edit)))
+    (is (fboundp 'nshell.presentation::%make-cursor-move-request))
+    (is (fboundp 'nshell.presentation::%cursor-move-request-kind))
+    (is (fboundp 'nshell.presentation::%cursor-move-request-cursor))
+    (is (fboundp 'nshell.presentation::%cursor-move-request-delta))
+    (is (fboundp 'nshell.presentation::%cursor-move-request-position))
     (is (fboundp 'nshell.presentation::%make-cursor-move-edit))
     (is (fboundp 'nshell.presentation::%cursor-move-edit-cursor-pos))
+    (is (not (fboundp 'nshell.presentation::make-cursor-move-request)))
     (is (not (fboundp 'nshell.presentation::make-cursor-move-edit)))
+    (is (not (fboundp 'nshell.presentation::cursor-move-edit-by)))
+    (is (not (fboundp 'nshell.presentation::cursor-move-edit-to)))
+    (is (nshell.presentation::cursor-move-request-p request))
+    (is (eq :by (nshell.presentation::cursor-move-request-kind request)))
+    (is (= 3 (nshell.presentation::cursor-move-request-cursor request)))
+    (is (= 2 (nshell.presentation::cursor-move-request-delta request)))
     (is (= 5 (nshell.presentation::cursor-move-edit-cursor-pos edit)))
     (is-input-state committed
                     :buffer "abcdef"
@@ -149,8 +162,13 @@
   (let* ((state (input-state :buffer "abcdef"
                              :cursor-pos 3
                              :suggestion "def"))
-         (edit (nshell.presentation::cursor-move-edit-to 99))
+         (request (nshell.presentation::cursor-move-request-to 99))
+         (edit (nshell.presentation::cursor-move-edit-for-request request))
          (committed (nshell.presentation::commit-cursor-move-edit state edit)))
+    (is (nshell.presentation::cursor-move-request-p request))
+    (is (eq :to (nshell.presentation::cursor-move-request-kind request)))
+    (is (= 99 (nshell.presentation::cursor-move-request-position request)))
+    (is (= 99 (nshell.presentation::cursor-move-edit-cursor-pos edit)))
     (is-input-state committed
                     :buffer "abcdef"
                     :cursor-pos 6

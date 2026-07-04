@@ -3,9 +3,16 @@
 (in-package #:nshell.presentation)
 
 (defstruct (shell-token-range
-            (:constructor %make-shell-token-range (start end)))
+            (:constructor %make-shell-token-range (start end))
+            (:conc-name %shell-token-range-))
   (start 0 :type fixnum :read-only t)
   (end 0 :type fixnum :read-only t))
+
+(defun shell-token-range-start (range)
+  (%shell-token-range-start range))
+
+(defun shell-token-range-end (range)
+  (%shell-token-range-end range))
 
 (defun shell-token-end (text start)
   "Return the end index of the shell token in TEXT starting at START."

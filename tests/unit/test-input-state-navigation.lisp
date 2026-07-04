@@ -180,6 +180,17 @@
     (is (= 4 (nshell.presentation::shell-token-range-end before)))
     (is (null (nshell.presentation::shell-token-range-at-position "echo foo" 4)))))
 
+(test shell-token-range-raw-accessors-stay-internal
+  "shell-token-range exposes explicit readers; generated slot readers remain internal."
+  (let ((range (nshell.presentation::shell-token-range-at-position "echo foo" 5)))
+    (is (fboundp 'nshell.presentation::%shell-token-range-start))
+    (is (not (eq (symbol-function
+                  'nshell.presentation::shell-token-range-start)
+                 (symbol-function
+                  'nshell.presentation::%shell-token-range-start))))
+    (is (= 5 (nshell.presentation::shell-token-range-start range)))
+    (is (= 8 (nshell.presentation::shell-token-range-end range)))))
+
 (test input-state-word-navigation-clears-visible-suggestion-when-moving
   (let ((state (input-state
                 :buffer "git checkout main"

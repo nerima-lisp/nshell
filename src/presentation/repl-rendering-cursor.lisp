@@ -1,9 +1,16 @@
 (in-package #:nshell.presentation)
 
 (defstruct (rendered-position
-            (:constructor %make-rendered-position (row column)))
+            (:constructor %make-rendered-position (row column))
+            (:conc-name %rendered-position-))
   (row 0 :type fixnum :read-only t)
   (column 0 :type fixnum :read-only t))
+
+(defun rendered-position-row (position)
+  (%rendered-position-row position))
+
+(defun rendered-position-column (position)
+  (%rendered-position-column position))
 
 (defun %advance-rendered-character (position char terminal-width)
   (let ((row (rendered-position-row position))

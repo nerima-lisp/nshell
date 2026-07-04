@@ -22,6 +22,19 @@
           :terminal-width 10
           :prompt-width 12))))
 
+(test repl-rendered-position-accessors-stay-behind-public-projections
+  "Rendered position storage readers should stay internal to presentation rendering."
+  (let ((position (nshell.presentation::%rendered-buffer-position "abc" 3 12
+                                                                  :terminal-width 10)))
+    (is (fboundp 'nshell.presentation::%rendered-position-row))
+    (is (fboundp 'nshell.presentation::%rendered-position-column))
+    (is (not (fboundp 'nshell.presentation::make-rendered-position)))
+    (is (fboundp 'nshell.presentation::%make-rendered-position))
+    (is (= (nshell.presentation::rendered-position-row position)
+           (nshell.presentation::%rendered-position-row position)))
+    (is (= (nshell.presentation::rendered-position-column position)
+           (nshell.presentation::%rendered-position-column position)))))
+
 (test repl-rendered-line-count-includes-wrapped-suggestion
   "Prompt clearing should track terminal rows introduced by autosuggestion wrapping."
   (is (= 2

@@ -1,19 +1,5 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (%reduced-command-entry
-            (:constructor %make-reduced-command-entry
-                (command separator separator-token)))
-  (command nil :read-only t)
-  (separator nil :read-only t)
-  (separator-token nil :read-only t))
-
-(defun %reduced-command-entry-from-reducer-entry (entry)
-  (destructuring-bind (command separator separator-token) entry
-    (%make-reduced-command-entry command separator separator-token)))
-
-(defun %reduced-command-entries-from-reducer-entries (entries)
-  (mapcar #'%reduced-command-entry-from-reducer-entry entries))
-
 (defstruct (%command-list-components
             (:constructor %make-command-list-components
                 (commands separators separator-tokens)))
@@ -47,7 +33,7 @@
      (%command-list-components-commands components)
      (%command-list-components-separators components)
      (%command-list-components-separator-tokens components)
-     (%build-ast-from-reducer-entries reducer-entries))))
+     (%build-ast-from-reduced-entries entries))))
 
 (defun %reduced-command-stream-last-separator (stream)
   (%last-list-element (%reduced-command-stream-separators stream)))

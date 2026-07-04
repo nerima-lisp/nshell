@@ -227,3 +227,17 @@ applying REDIRECTS from left to right."
   (let ((facts (%separator-facts separator)))
     (and facts
          (%separator-facts-text facts))))
+
+(defstruct (%reduced-command-entry
+            (:constructor %make-reduced-command-entry
+                (command separator separator-token)))
+  (command nil :read-only t)
+  (separator nil :read-only t)
+  (separator-token nil :read-only t))
+
+(defun %reduced-command-entry-from-reducer-entry (entry)
+  (destructuring-bind (command separator separator-token) entry
+    (%make-reduced-command-entry command separator separator-token)))
+
+(defun %reduced-command-entries-from-reducer-entries (entries)
+  (mapcar #'%reduced-command-entry-from-reducer-entry entries))

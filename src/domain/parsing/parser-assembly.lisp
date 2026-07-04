@@ -25,13 +25,13 @@
   (command nil :read-only t)
   (separator nil :read-only t))
 
-(defun %command-list-entry-from-reducer-entry (entry)
-  (destructuring-bind (command separator separator-token) entry
-    (declare (ignore separator-token))
-    (%make-command-list-entry command separator)))
+(defun %command-list-entry-from-reduced-entry (entry)
+  (%make-command-list-entry
+   (%reduced-command-entry-command entry)
+   (%reduced-command-entry-separator entry)))
 
-(defun %command-list-entries-from-reducer-entries (entries)
-  (mapcar #'%command-list-entry-from-reducer-entry entries))
+(defun %command-list-entries-from-reduced-entries (entries)
+  (mapcar #'%command-list-entry-from-reduced-entry entries))
 
 (defun %command-list-commands (entries)
   (mapcar #'%command-list-entry-command entries))
@@ -59,9 +59,9 @@
      separators
      (%trailing-command-separator separators))))
 
-(defun %command-list-assembly-from-reducer-entries (reducer-entries)
+(defun %command-list-assembly-from-reduced-entries (entries)
   (%command-list-assembly-from-entries
-   (%command-list-entries-from-reducer-entries reducer-entries)))
+   (%command-list-entries-from-reduced-entries entries)))
 
 (defun %command-list-assembly-single-command (assembly)
   (first (%command-list-assembly-commands assembly)))
@@ -221,6 +221,6 @@
   (%command-list-assembly-decision-ast
    (%command-list-assembly-decision-from-assembly assembly)))
 
-(defun %build-ast-from-reducer-entries (reducer-entries)
+(defun %build-ast-from-reduced-entries (entries)
   (%command-list-assembly-ast
-   (%command-list-assembly-from-reducer-entries reducer-entries)))
+   (%command-list-assembly-from-reduced-entries entries)))

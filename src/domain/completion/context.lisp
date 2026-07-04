@@ -1,14 +1,41 @@
 (in-package #:nshell.domain.completion)
 
 (defstruct (completion-context
-            (:constructor %make-completion-context
+            (:constructor %make-raw-completion-context
                 (&key (command "") (argument-prefix "") command-position-p
-                      (argument-words '()) redirection-target-p)))
+                      (argument-words '()) redirection-target-p))
+            (:conc-name %completion-context-))
   (command "" :type string :read-only t)
   (argument-prefix "" :type string :read-only t)
   (argument-words '() :type list :read-only t)
   (command-position-p nil :type boolean :read-only t)
   (redirection-target-p nil :type boolean :read-only t))
+
+(defun %make-completion-context (&key (command "") (argument-prefix "")
+                                      command-position-p
+                                      (argument-words '())
+                                      redirection-target-p)
+  (%make-raw-completion-context
+   :command command
+   :argument-prefix argument-prefix
+   :argument-words (copy-list argument-words)
+   :command-position-p command-position-p
+   :redirection-target-p redirection-target-p))
+
+(defun completion-context-command (context)
+  (%completion-context-command context))
+
+(defun completion-context-argument-prefix (context)
+  (%completion-context-argument-prefix context))
+
+(defun completion-context-argument-words (context)
+  (copy-list (%completion-context-argument-words context)))
+
+(defun completion-context-command-position-p (context)
+  (%completion-context-command-position-p context))
+
+(defun completion-context-redirection-target-p (context)
+  (%completion-context-redirection-target-p context))
 
 (defstruct (%completion-word
             (:constructor %make-completion-word (value start end))

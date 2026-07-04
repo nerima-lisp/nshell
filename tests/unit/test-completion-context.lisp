@@ -128,11 +128,33 @@
     (is (equal '("status")
                (nshell.domain.completion:completion-context-argument-words after-argument)))))
 
+(test completion-context-argument-words-list-is-domain-owned
+  "Completion contexts should not expose mutable aggregate storage."
+  (let* ((words (list "status" "--short"))
+         (context (nshell.domain.completion::%make-completion-context
+                   :command "git"
+                   :argument-prefix "--short"
+                   :argument-words words
+                   :command-position-p nil
+                   :redirection-target-p nil))
+         (projected
+           (nshell.domain.completion:completion-context-argument-words context)))
+    (setf (first words) "mutated-input")
+    (setf (first projected) "mutated-projection")
+    (is (equal '("status" "--short")
+               (nshell.domain.completion:completion-context-argument-words context)))))
+
 (test completion-context-constructors-are-internal-boundaries
   "Completion context construction should not expose legacy unprefixed helper names."
   (flet ((defined-symbol-p (name)
            (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
     (dolist (name '("%MAKE-COMPLETION-CONTEXT"
+                    "%MAKE-RAW-COMPLETION-CONTEXT"
+                    "%COMPLETION-CONTEXT-COMMAND"
+                    "%COMPLETION-CONTEXT-ARGUMENT-PREFIX"
+                    "%COMPLETION-CONTEXT-ARGUMENT-WORDS"
+                    "%COMPLETION-CONTEXT-COMMAND-POSITION-P"
+                    "%COMPLETION-CONTEXT-REDIRECTION-TARGET-P"
                     "%MAKE-COMPLETION-WORD"
                     "%MAKE-COMPLETION-INPUT-ANALYSIS"
                     "%STARTS-WITH-P"

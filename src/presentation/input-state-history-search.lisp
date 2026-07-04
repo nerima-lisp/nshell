@@ -15,18 +15,22 @@
   (values (apply #'copy-input-state-clearing-completion state initargs)
           :search-update))
 
+(defun %history-search-finished-state (state)
+  (copy-input-state-with
+   (clear-history-search-session-state state)
+   :mode :insert))
+
+(defun %history-search-cancelled-state (state)
+  (copy-input-state-with
+   (clear-history-search-session-state
+    (%history-search-original-state state))
+   :mode :insert))
+
 (defun %history-search-finish (state &optional (output :suggest-update))
-  (values (copy-input-state-with
-           (clear-history-search-session-state state)
-           :mode :insert)
-          output))
+  (values (%history-search-finished-state state) output))
 
 (defun %history-search-abort (state)
-  (values (copy-input-state-with
-           (clear-history-search-session-state
-            (%history-search-original-state state))
-           :mode :insert)
-          :suggest-update))
+  (values (%history-search-cancelled-state state) :suggest-update))
 
 (defun %update-history-search-query (state text)
   (with-normalized-cleared-completion-state (state state)
@@ -58,6 +62,13 @@
            :search-query (subseq query 0 (1- (length query)))
            :search-index 0)))))
 
+(defun %history-search-matched-state (state text)
+  (copy-input-state-clearing-completion
+   state
+   :buffer text
+   :cursor-pos (length text)
+   :search-index (input-state-search-index state)))
+
 (defun apply-history-search-results-to-input-state (state result-texts)
   "Apply history RESULT-TEXTS to STATE while preserving pure reducer semantics.
 
@@ -71,11 +82,7 @@ with wraparound so repeated Ctrl-R can cycle through older matches."
         (matches
          (let* ((index (mod (input-state-search-index state) (length matches)))
                 (text (nth index matches)))
-           (copy-input-state-clearing-completion
-            state
-            :buffer text
-            :cursor-pos (length text)
-            :search-index (input-state-search-index state))))
+           (%history-search-matched-state state text)))
         (t
          (%history-search-original-state state))))))
 

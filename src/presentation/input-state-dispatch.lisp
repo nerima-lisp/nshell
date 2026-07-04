@@ -48,8 +48,8 @@
                  (input-state-cursor-pos state)
                  0)))
 
-(defun reduce-insert-input-state (state key-event)
-  (case (nshell.domain.input:key-event-type key-event)
+(defun %reduce-insert-input-state-editing (state key-event-type key-event)
+  (case key-event-type
     (:char (let ((ch (nshell.domain.input:key-event-char key-event)))
              (if ch
                  (insert-char-with-abbreviation-expansion state ch)
@@ -100,3 +100,9 @@
       :mouse)
      (%redraw-input-state state))
     (otherwise (values state :none))))
+
+(defun reduce-insert-input-state (state key-event)
+  (%reduce-insert-input-state-editing
+   state
+   (nshell.domain.input:key-event-type key-event)
+   key-event))

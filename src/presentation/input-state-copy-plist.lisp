@@ -8,24 +8,13 @@
   (if supplied-p value current-value))
 
 (defun %copy-input-state-clearable-or-current (supplied-p value current-value
-                                               &optional (clear-value nil))
+                                               &optional (clear-value nil)
+                                               acceptp)
   (cond
     ((and supplied-p (eq value :clear)) clear-value)
-    (supplied-p value)
-    (t current-value)))
-
-(defun %copy-input-state-clearable-string-or-current (supplied-p value current-value
-                                                      &optional (clear-value nil))
-  (cond
-    ((and supplied-p (eq value :clear)) clear-value)
-    ((and supplied-p (stringp value)) value)
-    (t current-value)))
-
-(defun %copy-input-state-clearable-integer-or-current (supplied-p value current-value
-                                                       &optional (clear-value nil))
-  (cond
-    ((and supplied-p (eq value :clear)) clear-value)
-    ((and supplied-p (integerp value)) value)
+    ((and supplied-p (or (null acceptp)
+                         (funcall acceptp value)))
+     value)
     (t current-value)))
 
 (defun %copy-input-state-clearable-value-or-current (value current-value
@@ -36,11 +25,11 @@
     (t current-value)))
 
 (defun %copy-input-state-clamped-anchor-or-current (supplied-p value current-value buffer)
-  (cond
-    ((and supplied-p (eq value :clear)) nil)
-    (supplied-p
-     (and value (clamp-cursor value buffer)))
-    (t (and current-value (clamp-cursor current-value buffer)))))
+  (let ((anchor (cond
+                  ((and supplied-p (eq value :clear)) nil)
+                  (supplied-p value)
+                  (t current-value))))
+    (and anchor (clamp-cursor anchor buffer))))
 
 (defstruct (%input-state-completion-copy
             (:constructor %make-input-state-completion-copy
@@ -101,17 +90,21 @@
    :completion-base-buffer (if (and completion-index-supplied-p
                                     (= completion-index -1))
                                nil
-                               (%copy-input-state-clearable-string-or-current
+                               (%copy-input-state-clearable-or-current
                                 completion-base-supplied-p
                                 completion-base-buffer
-                                (input-state-completion-base-buffer state)))
+                                (input-state-completion-base-buffer state)
+                                nil
+                                #'stringp))
    :completion-base-cursor (if (and completion-index-supplied-p
                                     (= completion-index -1))
                                nil
-                               (%copy-input-state-clearable-integer-or-current
+                               (%copy-input-state-clearable-or-current
                                 completion-base-cursor-supplied-p
                                 completion-base-cursor
-                                (input-state-completion-base-cursor state)))
+                                (input-state-completion-base-cursor state)
+                                nil
+                                #'integerp))
    :last-candidates (%copy-input-state-clearable-or-current
                      last-candidates-supplied-p
                      last-candidates

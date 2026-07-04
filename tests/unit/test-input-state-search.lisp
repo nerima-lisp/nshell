@@ -163,6 +163,15 @@
                        :original-buffer "g"
                        :index 1))))
 
+(test input-state-history-search-leaves-non-search-state-unchanged
+  (let ((state (input-state :buffer "git" :cursor-pos 3)))
+    (let ((applied
+            (nshell.presentation:apply-history-search-results-to-input-state
+             state '("git status" "git log"))))
+      (is (equalp state applied))
+      (is (string= "git" (nshell.presentation:input-state-buffer applied)))
+      (is (= 3 (nshell.presentation:input-state-cursor-pos applied))))))
+
 (test input-state-history-search-ctrl-s-moves-to-newer-result
   (let ((state (history-search-state
                 :buffer "git status"
@@ -191,4 +200,3 @@
                        :original-buffer "git status"
                        :original-cursor 4
                        :index 2))))
-

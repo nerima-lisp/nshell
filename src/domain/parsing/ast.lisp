@@ -171,14 +171,18 @@ Redirect operator args and their targets are removed from the clean command."
           while (< index limit)
           for arg = (nth index args)
           for value = (arg-value arg)
-          for spec = (assoc value +redirect-specs+ :test #'string=)
+          for redirect-facts = (%redirect-facts value)
           do (cond
-               ((and spec (member (cdr spec) +redirect-fd-dup-specs+))
-                (push (cons (cdr spec) nil) redirects)
+               ((and redirect-facts
+                     (%redirect-facts-fd-dup-p redirect-facts))
+                (push (cons (%redirect-facts-kind redirect-facts) nil)
+                      redirects)
                 (incf index))
-               ((and spec (< (1+ index) limit))
+               ((and redirect-facts (< (1+ index) limit))
                 (let ((target (arg-value (nth (1+ index) args))))
-                  (push (cons (cdr spec) target) redirects)
+                  (push (cons (%redirect-facts-kind redirect-facts)
+                              target)
+                        redirects)
                   (incf index 2)))
                (t
                 (push arg clean)

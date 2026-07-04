@@ -176,6 +176,17 @@
                          (nshell.domain.parsing:command-node-arg-values clean))))
         (is (equal expected-redirects redirects))))))
 
+(test split-command-node-redirects-consumes-redirect-facts-boundary
+  "Redirect splitting consumes parser-data facts for target and fd-dup redirects."
+  (multiple-value-bind (clean redirects)
+      (nshell.domain.parsing:split-command-node-redirects
+       (nshell.domain.parsing:make-command-node
+        "cmd" (list ">" "out.txt" "2>&1" "arg")))
+    (is (equal '("arg")
+               (nshell.domain.parsing:command-node-args clean)))
+    (is (equal '((:> . "out.txt") (:2>&1 . nil))
+               redirects))))
+
 (test separator-rule-entry-projects-separator-facts
   "Separator rule entries are the projection boundary for parser separator specs."
   (let ((pipe-entry (nshell.domain.parsing::%separator-rule-entry :pipe))

@@ -35,7 +35,7 @@
       (values (format nil "cd: ~a~%" condition) 1))))
 
 (define-builtin %builtin-exit (context args) (args)
-  (setf (shell-context-running context) nil)
+  (%stop-shell-context context)
   (values nil 0))
 
 (define-builtin %builtin-true (context args) (context args)

@@ -44,6 +44,10 @@
   (setf (gethash job-id (shell-context-process-registry context)) processes)
   processes)
 
+(defun %stop-shell-context (context)
+  (setf (shell-context-running context) nil)
+  context)
+
 (defmethod nshell.domain.completion:completion-filesystem-fns ((context shell-context))
   "Return filesystem adapter functions used by domain completion."
   (shell-context-filesystem-fns context))

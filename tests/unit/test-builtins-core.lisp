@@ -47,6 +47,13 @@
       (is (nshell.application:lookup-builtin command)
           command))))
 
+(test exit-stops-the-current-shell-context
+  "exit mutates only the current application shell context running flag."
+  (with-builtins-context (context)
+    (setf (nshell.application:shell-context-running context) t)
+    (assert-builtin-call (context "exit" nil) :code 0 :output-null t)
+    (is (not (nshell.application:shell-context-running context)))))
+
 (test type-colorizes-only-the-function-definition-branch
   "type --color colors the function definition block without changing short output."
   (with-builtins-context (context)

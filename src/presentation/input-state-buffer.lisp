@@ -49,15 +49,35 @@
              (:conc-name %buffer-deletion-))
   splice)
 
-(defun buffer-deletion-before-cursor (cursor)
-  (unless (zerop cursor)
-    (%make-buffer-deletion
-     (make-buffer-splice (1- cursor) cursor))))
+(defstruct (buffer-deletion-request
+             (:constructor %make-buffer-deletion-request (kind cursor))
+             (:conc-name %buffer-deletion-request-))
+  (kind :before-cursor :read-only t)
+  (cursor 0 :type fixnum :read-only t))
 
-(defun buffer-deletion-at-cursor (buffer cursor)
-  (unless (>= cursor (length buffer))
-    (%make-buffer-deletion
-     (make-buffer-splice cursor (1+ cursor)))))
+(defun buffer-deletion-request-before-cursor (cursor)
+  (%make-buffer-deletion-request :before-cursor cursor))
+
+(defun buffer-deletion-request-at-cursor (cursor)
+  (%make-buffer-deletion-request :at-cursor cursor))
+
+(defun buffer-deletion-request-kind (request)
+  (%buffer-deletion-request-kind request))
+
+(defun buffer-deletion-request-cursor (request)
+  (%buffer-deletion-request-cursor request))
+
+(defun buffer-deletion-for-request (request buffer)
+  (let ((cursor (buffer-deletion-request-cursor request)))
+    (case (buffer-deletion-request-kind request)
+      (:before-cursor
+       (unless (zerop cursor)
+         (%make-buffer-deletion
+          (make-buffer-splice (1- cursor) cursor))))
+      (:at-cursor
+       (unless (>= cursor (length buffer))
+         (%make-buffer-deletion
+          (make-buffer-splice cursor (1+ cursor))))))))
 
 (defun buffer-deletion-result (deletion buffer)
   (buffer-splice-result (%buffer-deletion-splice deletion) buffer))
@@ -103,7 +123,9 @@
 
 (defun backspace-before-cursor (state)
   (with-buffer-edit (state buffer cursor) state
-    (let ((deletion (buffer-deletion-before-cursor cursor)))
+    (let ((deletion (buffer-deletion-for-request
+                     (buffer-deletion-request-before-cursor cursor)
+                     buffer)))
       (if deletion
           (commit-buffer-edit (buffer-deletion-result deletion buffer)
                               :cursor-pos
@@ -112,7 +134,9 @@
 
 (defun delete-char-at-cursor (state)
   (with-buffer-edit (state buffer cursor) state
-    (let ((deletion (buffer-deletion-at-cursor buffer cursor)))
+    (let ((deletion (buffer-deletion-for-request
+                     (buffer-deletion-request-at-cursor cursor)
+                     buffer)))
       (if deletion
           (commit-buffer-edit (buffer-deletion-result deletion buffer)
                               :cursor-pos

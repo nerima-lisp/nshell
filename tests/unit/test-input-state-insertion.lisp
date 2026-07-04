@@ -81,10 +81,36 @@
 
 (test input-state-buffer-deletion-projects-result-and-cursor
   (let* ((buffer "abcd")
-         (before (nshell.presentation::buffer-deletion-before-cursor 2))
-         (at (nshell.presentation::buffer-deletion-at-cursor buffer 1)))
+         (before-request
+           (nshell.presentation::buffer-deletion-request-before-cursor 2))
+         (at-request
+           (nshell.presentation::buffer-deletion-request-at-cursor 1))
+         (before (nshell.presentation::buffer-deletion-for-request
+                  before-request
+                  buffer))
+         (at (nshell.presentation::buffer-deletion-for-request
+              at-request
+              buffer)))
+    (is (nshell.presentation::buffer-deletion-request-p before-request))
+    (is (nshell.presentation::buffer-deletion-request-p at-request))
+    (is (eq :before-cursor
+            (nshell.presentation::buffer-deletion-request-kind
+             before-request)))
+    (is (eq :at-cursor
+            (nshell.presentation::buffer-deletion-request-kind
+             at-request)))
+    (is (= 2 (nshell.presentation::buffer-deletion-request-cursor
+              before-request)))
+    (is (= 1 (nshell.presentation::buffer-deletion-request-cursor
+              at-request)))
     (is (nshell.presentation::buffer-deletion-p before))
     (is (nshell.presentation::buffer-deletion-p at))
+    (is (fboundp 'nshell.presentation::%make-buffer-deletion-request))
+    (is (fboundp 'nshell.presentation::%buffer-deletion-request-kind))
+    (is (fboundp 'nshell.presentation::%buffer-deletion-request-cursor))
+    (is (not (fboundp 'nshell.presentation::make-buffer-deletion-request)))
+    (is (not (fboundp 'nshell.presentation::buffer-deletion-before-cursor)))
+    (is (not (fboundp 'nshell.presentation::buffer-deletion-at-cursor)))
     (is (fboundp 'nshell.presentation::%make-buffer-deletion))
     (is (fboundp 'nshell.presentation::%buffer-deletion-splice))
     (is (not (fboundp 'nshell.presentation::make-buffer-deletion)))
@@ -96,9 +122,15 @@
     (is (= 1 (nshell.presentation::buffer-deletion-cursor-pos at)))))
 
 (test input-state-buffer-deletion-rejects-empty-ranges
-  (is (null (nshell.presentation::buffer-deletion-before-cursor 0)))
-  (is (null (nshell.presentation::buffer-deletion-at-cursor "" 0)))
-  (is (null (nshell.presentation::buffer-deletion-at-cursor "abc" 3))))
+  (is (null (nshell.presentation::buffer-deletion-for-request
+             (nshell.presentation::buffer-deletion-request-before-cursor 0)
+             "abc")))
+  (is (null (nshell.presentation::buffer-deletion-for-request
+             (nshell.presentation::buffer-deletion-request-at-cursor 0)
+             "")))
+  (is (null (nshell.presentation::buffer-deletion-for-request
+             (nshell.presentation::buffer-deletion-request-at-cursor 3)
+             "abc"))))
 
 (test input-state-cursor-move-edit-projects-position-through-commit
   (let* ((state (input-state :buffer "abcdef"

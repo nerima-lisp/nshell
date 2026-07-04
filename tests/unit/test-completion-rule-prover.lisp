@@ -137,7 +137,48 @@
       (is (string= "status"
                    (solution-binding '?completion (first solutions)))))))
 
+(test rule-data-projections-name-specs-and-proof-goals
+  (let ((fact (nshell.domain.completion::%project-fact-spec
+               '(git-subcommand "status")))
+        (rule (nshell.domain.completion::%project-rule-spec
+               '((completes "git" ?completion)
+                 (git-subcommand ?completion))))
+        (goals (nshell.domain.completion::%proof-goal-sequence-from-goals
+                '((git-subcommand "status") (git-option "--help"))))
+        (goal (nshell.domain.completion::%project-proof-goal
+               '(git-subcommand "status"))))
+    (is (eq 'git-subcommand
+            (nshell.domain.completion::%fact-spec-projection-predicate fact)))
+    (is (equal '("status")
+               (nshell.domain.completion::%fact-spec-projection-args fact)))
+    (is (equal '(completes "git" ?completion)
+               (nshell.domain.completion::%rule-spec-projection-head rule)))
+    (is (equal '((git-subcommand ?completion))
+               (nshell.domain.completion::%rule-spec-projection-body rule)))
+    (is (equal '(git-subcommand "status")
+               (nshell.domain.completion::%proof-goal-sequence-next-goal goals)))
+    (is (equal '((git-option "--help"))
+               (nshell.domain.completion::%proof-goal-sequence-remaining-goals
+                goals)))
+    (is (eq 'git-subcommand
+            (nshell.domain.completion::%proof-goal-projection-predicate goal)))
+    (is (equal '("status")
+               (nshell.domain.completion::%proof-goal-projection-arguments
+                goal)))))
+
 (test rule-data-spec-builders-are-internal-boundaries
+  (is (not (fboundp 'nshell.domain.completion::fact-spec-predicate)))
+  (is (not (fboundp 'nshell.domain.completion::fact-spec-args)))
+  (is (not (fboundp 'nshell.domain.completion::rule-spec-head)))
+  (is (not (fboundp 'nshell.domain.completion::rule-spec-body)))
+  (is (not (fboundp 'nshell.domain.completion::next-proof-goal)))
+  (is (not (fboundp 'nshell.domain.completion::remaining-proof-goals)))
+  (is (not (fboundp 'nshell.domain.completion::goal-predicate)))
+  (is (not (fboundp 'nshell.domain.completion::goal-arguments)))
+  (is (fboundp 'nshell.domain.completion::%project-fact-spec))
+  (is (fboundp 'nshell.domain.completion::%project-rule-spec))
+  (is (fboundp 'nshell.domain.completion::%proof-goal-sequence-from-goals))
+  (is (fboundp 'nshell.domain.completion::%project-proof-goal))
   (is (not (fboundp 'nshell.domain.completion::make-fact-from-spec)))
   (is (not (fboundp 'nshell.domain.completion::make-rule-from-spec)))
   (is (fboundp 'nshell.domain.completion::%make-fact-from-spec))

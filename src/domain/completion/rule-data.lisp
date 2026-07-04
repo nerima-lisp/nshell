@@ -22,37 +22,52 @@
 (defparameter *max-proof-depth* 32
   "Maximum rule-expansion depth for completion proof search.")
 
-(defun fact-spec-predicate (spec)
-  (first spec))
+(defstruct (%fact-spec-projection
+            (:constructor %make-fact-spec-projection (predicate args))
+            (:conc-name %fact-spec-projection-))
+  predicate
+  args)
 
-(defun fact-spec-args (spec)
-  (rest spec))
+(defstruct (%rule-spec-projection
+            (:constructor %make-rule-spec-projection (head body))
+            (:conc-name %rule-spec-projection-))
+  head
+  body)
 
-(defun rule-spec-head (spec)
-  (first spec))
+(defstruct (%proof-goal-sequence
+            (:constructor %make-proof-goal-sequence
+                (next-goal remaining-goals))
+            (:conc-name %proof-goal-sequence-))
+  next-goal
+  remaining-goals)
 
-(defun rule-spec-body (spec)
-  (rest spec))
+(defstruct (%proof-goal-projection
+            (:constructor %make-proof-goal-projection (predicate arguments))
+            (:conc-name %proof-goal-projection-))
+  predicate
+  arguments)
 
-(defun next-proof-goal (goals)
-  (first goals))
+(defun %project-fact-spec (spec)
+  (%make-fact-spec-projection (first spec) (rest spec)))
 
-(defun remaining-proof-goals (goals)
-  (rest goals))
+(defun %project-rule-spec (spec)
+  (%make-rule-spec-projection (first spec) (rest spec)))
 
-(defun goal-predicate (goal)
-  (first goal))
+(defun %proof-goal-sequence-from-goals (goals)
+  (%make-proof-goal-sequence (first goals) (rest goals)))
 
-(defun goal-arguments (goal)
-  (rest goal))
+(defun %project-proof-goal (goal)
+  (%make-proof-goal-projection (first goal) (rest goal)))
 
 (defun %make-fact-from-spec (spec)
-  (make-fact :predicate (fact-spec-predicate spec)
-             :args (fact-spec-args spec)))
+  (let ((projection (%project-fact-spec spec)))
+    (make-fact :predicate (%fact-spec-projection-predicate projection)
+               :args (%fact-spec-projection-args projection))))
 
 (defun %make-rule-from-spec (spec)
-  (make-rule :head (rule-spec-head spec)
-             :body (rule-spec-body spec)))
+  (let ((projection (%project-rule-spec spec)))
+    (make-rule :head (%rule-spec-projection-head projection)
+               :body (%rule-spec-projection-body projection))))
 
 (defgeneric predicate-true-p (predicate args bindings)
   (:documentation "Return true when PREDICATE with walked ARGS is true in the current environment."))
@@ -124,18 +139,29 @@
 (defun prove-body (search goals bindings)
   (if (null goals)
       (list bindings)
-      (loop for solution in (prove-internal
-                             (proof-search-for-goal search (next-proof-goal goals) bindings))
-            append (prove-body search (remaining-proof-goals goals) solution))))
+      (let ((goal-sequence (%proof-goal-sequence-from-goals goals)))
+        (loop for solution in (prove-internal
+                               (proof-search-for-goal
+                                search
+                                (%proof-goal-sequence-next-goal goal-sequence)
+                                bindings))
+              append (prove-body
+                      search
+                      (%proof-goal-sequence-remaining-goals goal-sequence)
+                      solution)))))
 
 (defun walk-goal-arguments (goal bindings)
-  (mapcar (lambda (arg) (nshell.domain.parsing:walk arg bindings))
-          (goal-arguments goal)))
+  (let ((projection (%project-proof-goal goal)))
+    (mapcar (lambda (arg) (nshell.domain.parsing:walk arg bindings))
+            (%proof-goal-projection-arguments projection))))
 
 (defun prove-built-in-solutions (search)
   (let ((goal (proof-search-goal search))
         (bindings (proof-search-bindings search)))
-    (when (predicate-true-p (goal-predicate goal) (walk-goal-arguments goal bindings) bindings)
+    (when (predicate-true-p
+           (%proof-goal-projection-predicate (%project-proof-goal goal))
+           (walk-goal-arguments goal bindings)
+           bindings)
       (list bindings))))
 
 (defun fact-solution (fact search)

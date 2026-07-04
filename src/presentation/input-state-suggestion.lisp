@@ -77,7 +77,19 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
              (shell-token-end suggestion operator-end))
             (t operator-end)))))))
 
-(defun suggestion-next-word-end (suggestion)
+(defstruct (suggestion-acceptance
+            (:constructor %make-suggestion-acceptance (accepted remaining))
+            (:conc-name %suggestion-acceptance-))
+  (accepted "" :type string :read-only t)
+  (remaining "" :type string :read-only t))
+
+(defun suggestion-acceptance-accepted (acceptance)
+  (%suggestion-acceptance-accepted acceptance))
+
+(defun suggestion-acceptance-remaining (acceptance)
+  (%suggestion-acceptance-remaining acceptance))
+
+(defun %suggestion-next-word-end (suggestion)
   "Return the end index of the next shell token or operator in SUGGESTION.
 
 Leading shell word separators are accepted with the following token, matching
@@ -105,6 +117,12 @@ fish-style autosuggestion word acceptance for tails such as \" status --short\".
               (error ()
                 (shell-token-end suggestion pos)))))))
 
+(defun next-suggestion-acceptance (suggestion)
+  (let* ((accept-end (%suggestion-next-word-end suggestion))
+         (accepted (subseq suggestion 0 accept-end))
+         (remaining (subseq suggestion accept-end)))
+    (%make-suggestion-acceptance accepted remaining)))
+
 (defun append-suggestion-to-input-state (state suggestion)
   (let* ((buffer (input-state-buffer state))
          (new-buffer (concatenate 'string buffer suggestion))
@@ -125,9 +143,9 @@ fish-style autosuggestion word acceptance for tails such as \" status --short\".
   (with-normalized-input-state (state state)
     (let ((suggestion (input-state-suggestion state)))
       (if (and suggestion (input-state-at-eol-p state))
-          (let* ((accept-end (suggestion-next-word-end suggestion))
-                 (accepted (subseq suggestion 0 accept-end))
-                 (remaining (subseq suggestion accept-end))
+          (let* ((acceptance (next-suggestion-acceptance suggestion))
+                 (accepted (suggestion-acceptance-accepted acceptance))
+                 (remaining (suggestion-acceptance-remaining acceptance))
                  (new-state (append-suggestion-to-input-state state accepted)))
             (values (if (zerop (length remaining))
                         (copy-input-state-with new-state

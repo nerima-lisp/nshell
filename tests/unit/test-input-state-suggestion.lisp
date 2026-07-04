@@ -193,6 +193,25 @@
       nil
       :redraw))
 
+(test input-state-suggestion-acceptance-stays-behind-public-projections
+  "Autosuggestion acceptance should expose a value object, not raw split indexes."
+  (let ((acceptance (nshell.presentation::next-suggestion-acceptance
+                     " status --short")))
+    (is (fboundp 'nshell.presentation::%make-suggestion-acceptance))
+    (is (fboundp 'nshell.presentation::%suggestion-acceptance-accepted))
+    (is (fboundp 'nshell.presentation::%suggestion-acceptance-remaining))
+    (is (not (fboundp 'nshell.presentation::make-suggestion-acceptance)))
+    (is (not (fboundp 'nshell.presentation::suggestion-next-word-end)))
+    (is (fboundp 'nshell.presentation::%suggestion-next-word-end))
+    (is (string= " status"
+                 (nshell.presentation::suggestion-acceptance-accepted acceptance)))
+    (is (string= " --short"
+                 (nshell.presentation::suggestion-acceptance-remaining acceptance)))
+    (is (string= (nshell.presentation::%suggestion-acceptance-accepted acceptance)
+                 (nshell.presentation::suggestion-acceptance-accepted acceptance)))
+    (is (string= (nshell.presentation::%suggestion-acceptance-remaining acceptance)
+                 (nshell.presentation::suggestion-acceptance-remaining acceptance)))))
+
 (test input-state-suggestion-word-like-token-p-returns-canonical-booleans
   (is (eq t (nshell.presentation::suggestion-word-like-token-p
              (nshell.domain.parsing:make-token :word "git"))))

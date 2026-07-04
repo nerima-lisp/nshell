@@ -5,8 +5,23 @@
 (test knowledge-base-constructor-is-internal-boundary
   (is (not (fboundp 'nshell.domain.completion::make-knowledge-base)))
   (is (fboundp 'nshell.domain.completion::%make-knowledge-base))
+  (is (not (fboundp 'nshell.domain.completion::knowledge-base-commands)))
+  (is (fboundp 'nshell.domain.completion::%knowledge-base-commands))
   (is (nshell.domain.completion::knowledge-base-p
        (nshell.domain.completion:make-empty-knowledge-base))))
+
+(test knowledge-base-command-storage-is-traversed-through-boundary
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
+        (commands nil))
+    (nshell.domain.completion:kb-add-command kb "zeta")
+    (nshell.domain.completion:kb-add-command kb "alpha")
+    (nshell.domain.completion::%map-kb-commands
+     kb
+     (lambda (name entry)
+       (push (cons name entry) commands)))
+    (setf commands (nreverse commands))
+    (is (equal '("alpha" "zeta") (mapcar #'car commands)))
+    (is (every #'consp (mapcar #'cdr commands)))))
 
 (test knowledge-base-completion-uses-explicit-command-facts
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

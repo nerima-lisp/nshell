@@ -1,13 +1,21 @@
 (in-package #:nshell.domain.completion)
-(defstruct (knowledge-base (:constructor %make-knowledge-base ()))
+(defstruct (knowledge-base
+            (:constructor %make-knowledge-base ())
+            (:conc-name %knowledge-base-))
   (commands (make-hash-table :test #'equal) :type hash-table))
 
 (defun make-empty-knowledge-base ()
   (%make-knowledge-base))
 
+(defun %map-kb-commands (kb function)
+  (dolist (cmd-name (sort (loop for key being the hash-keys of (%knowledge-base-commands kb)
+                                collect key)
+                          #'string<))
+    (funcall function cmd-name (gethash cmd-name (%knowledge-base-commands kb)))))
+
 (defun %ensure-kb-command-entry (kb cmd-name)
-  (or (gethash cmd-name (knowledge-base-commands kb))
-      (setf (gethash cmd-name (knowledge-base-commands kb))
+  (or (gethash cmd-name (%knowledge-base-commands kb))
+      (setf (gethash cmd-name (%knowledge-base-commands kb))
 	            (list :subcommands nil
 	                  :flags nil
 	                  :option-values nil
@@ -273,7 +281,7 @@
                     :description description)))
 
 (defun kb-remove-command (kb cmd-name)
-  (remhash cmd-name (knowledge-base-commands kb)))
+  (remhash cmd-name (%knowledge-base-commands kb)))
 
 (defun kb-query (kb cmd-name)
-  (gethash cmd-name (knowledge-base-commands kb)))
+  (gethash cmd-name (%knowledge-base-commands kb)))

@@ -34,11 +34,12 @@
 
 (defun knowledge-base-command-candidates (kb prefix)
   (let ((results '()))
-    (maphash (lambda (name entry)
-               (when (starts-with-p prefix name)
-                 (push (command-entry-candidate name entry) results)))
-             (knowledge-base-commands kb))
-    results))
+    (%map-kb-commands
+     kb
+     (lambda (name entry)
+       (when (starts-with-p prefix name)
+         (push (command-entry-candidate name entry) results))))
+    (nreverse results)))
 
 (defun unique-entry-argument-names (entry)
   (let ((seen (make-hash-table :test #'equal))

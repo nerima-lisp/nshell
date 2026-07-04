@@ -91,6 +91,12 @@
   (when redirect
     (%make-redirect-entry (car redirect) (cdr redirect))))
 
+(defun %redirect-entries-from-raw (redirects)
+  (loop for redirect in redirects
+        for entry = (%redirect-entry-from-raw redirect)
+        when entry
+          collect entry))
+
 (defun %redirect-facts (text)
   (let ((entry (%redirect-spec-entry text)))
     (when entry
@@ -168,20 +174,16 @@
         :supersede)))
 
 (defun %last-redirect-entry-matching (redirects predicate)
-  (loop for redirect in (reverse redirects)
-        for entry = (%redirect-entry-from-raw redirect)
-        when (and entry
-                  (funcall predicate (%redirect-entry-kind entry)))
+  (loop for entry in (reverse (%redirect-entries-from-raw redirects))
+        when (funcall predicate (%redirect-entry-kind entry))
           return entry))
 
 (defun map-redirect-entries (function redirects)
   "Call FUNCTION with kind and target for each redirect in REDIRECTS."
-  (dolist (redirect redirects)
-    (let ((entry (%redirect-entry-from-raw redirect)))
-      (when entry
-        (funcall function
-                 (%redirect-entry-kind entry)
-                 (%redirect-entry-target entry)))))
+  (dolist (entry (%redirect-entries-from-raw redirects))
+    (funcall function
+             (%redirect-entry-kind entry)
+             (%redirect-entry-target entry)))
   nil)
 
 (defun redirect-input-spec (redirects)
@@ -253,18 +255,15 @@
       (%redirect-output-destination-state-stdout-mode state)))
     (otherwise state)))
 
-(defun %redirect-output-destination-state-apply-redirect (state redirect)
-  (let ((entry (%redirect-entry-from-raw redirect)))
-    (if entry
-        (%redirect-output-destination-state-apply-entry
-         state
-         (%redirect-entry-kind entry)
-         (%redirect-entry-target entry))
-        state)))
+(defun %redirect-output-destination-state-apply-redirect-entry (state entry)
+  (%redirect-output-destination-state-apply-entry
+   state
+   (%redirect-entry-kind entry)
+   (%redirect-entry-target entry)))
 
 (defun %redirect-output-destination-state-from-redirects (redirects)
-  (reduce #'%redirect-output-destination-state-apply-redirect
-          redirects
+  (reduce #'%redirect-output-destination-state-apply-redirect-entry
+          (%redirect-entries-from-raw redirects)
           :initial-value (%empty-redirect-output-destination-state)))
 
 (defun redirect-output-destinations (redirects)

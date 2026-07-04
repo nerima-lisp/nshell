@@ -74,6 +74,20 @@
                  (nshell.domain.parsing::%redirect-entry-target entry)))
     (is (null (nshell.domain.parsing::%redirect-entry-from-raw nil)))))
 
+(test redirect-entries-project-runtime-redirect-list
+  "Runtime redirect entry normalization is a collection boundary."
+  (let ((entries (nshell.domain.parsing::%redirect-entries-from-raw
+                  '((:> . "out.txt")
+                    nil
+                    (:2>&1)))))
+    (is (every #'nshell.domain.parsing::%redirect-entry-p entries))
+    (is (equal '(:> :2>&1)
+               (mapcar #'nshell.domain.parsing::%redirect-entry-kind
+                       entries)))
+    (is (equal '("out.txt" nil)
+               (mapcar #'nshell.domain.parsing::%redirect-entry-target
+                       entries)))))
+
 (test redirect-target-policy-projects-target-requirement
   "Redirect target policy owns which redirect specs consume a target."
   (let ((fd-dup-policy

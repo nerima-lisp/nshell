@@ -1089,6 +1089,25 @@
     (is (eq :pipe
             (nshell.domain.parsing::%token-reduction-state-pending-sep state)))))
 
+(test parser-reduction-state-records-diagnostic-boundary
+  "Token reduction state owns diagnostic recording through a single boundary."
+  (let* ((state (nshell.domain.parsing::%make-token-reduction-state))
+         (token (nshell.domain.parsing:make-token :pipe "|" 0 1))
+         (policy
+           (nshell.domain.parsing::%make-token-reduction-diagnostic-policy
+            :missing-command
+            "Expected command before '|'")))
+    (is (eq state
+            (nshell.domain.parsing::%token-reduction-state-record-diagnostic
+             state token policy)))
+    (let ((diagnostic
+            (first
+             (nshell.domain.parsing::%token-reduction-state-errors state))))
+      (is (eq :missing-command
+              (nshell.domain.parsing:parse-diagnostic-kind diagnostic)))
+      (is (string= "Expected command before '|'"
+                   (nshell.domain.parsing:parse-diagnostic-message diagnostic))))))
+
 (test parser-reduction-state-folds-token-stream
   "Token stream reduction folds tokens through an explicit state boundary."
   (let* ((state

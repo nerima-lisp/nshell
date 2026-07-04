@@ -25,10 +25,6 @@
   (commands '() :type list)
   (errors '() :type list))
 
-(defun %push-token-reduction-diagnostic (state kind message token)
-  (push (%token-diagnostic kind message token)
-        (%token-reduction-state-errors state)))
-
 (defun %redirect-token-targetless-p (tok)
   (%redirect-targetless-p (token-value tok)))
 
@@ -96,6 +92,17 @@
    (%token-reduction-diagnostic-policy-message policy)
    token))
 
+(defun %token-reduction-state-record-diagnostic (state token policy)
+  (push (%token-reduction-diagnostic token policy)
+        (%token-reduction-state-errors state))
+  state)
+
+(defun %token-reduction-state-record-diagnostic-message (state kind message token)
+  (%token-reduction-state-record-diagnostic
+   state
+   token
+   (%make-token-reduction-diagnostic-policy kind message)))
+
 (defun %token-reduction-missing-redirect-target-policy (token)
   (%make-token-reduction-diagnostic-policy
    :missing-redirection-target
@@ -104,11 +111,10 @@
 (defun %record-missing-redirect-target (state)
   (let ((pending-redirect-token (%token-reduction-state-pending-redirect-token state)))
     (when pending-redirect-token
-      (push (%token-reduction-diagnostic
-             pending-redirect-token
-             (%token-reduction-missing-redirect-target-policy
-              pending-redirect-token))
-            (%token-reduction-state-errors state))
+      (%token-reduction-state-record-diagnostic
+       state
+       pending-redirect-token
+       (%token-reduction-missing-redirect-target-policy pending-redirect-token))
       (setf (%token-reduction-state-pending-redirect-token state) nil))))
 
 (defun %token-reduction-error-policy-from-token (token)
@@ -153,7 +159,7 @@
               (%token-reduction-state-pending-sep-token state) token)
         (%flush-token-reduction-command state))
       (unless (eq (token-type token) :newline)
-        (%push-token-reduction-diagnostic
+        (%token-reduction-state-record-diagnostic-message
          state
          :missing-command
          (format nil "Expected command before '~a'"
@@ -177,23 +183,23 @@
         ;; not start a pending redirect.
         (unless (%redirect-token-targetless-p tok)
           (setf (%token-reduction-state-pending-redirect-token state) tok)))
-      (%push-token-reduction-diagnostic
+      (%token-reduction-state-record-diagnostic-message
        state
        :missing-command
        (format nil "Expected command before '~a'" (token-value tok))
        tok)))
 
 (defun %token-reduction-error (state tok)
-  (push (%token-reduction-diagnostic
-         tok
-         (%token-reduction-error-policy-from-token tok))
-        (%token-reduction-state-errors state)))
+  (%token-reduction-state-record-diagnostic
+   state
+   tok
+   (%token-reduction-error-policy-from-token tok)))
 
 (defun %token-reduction-separator (state tok)
   (let ((separator (%separator-from-token-type (token-type tok))))
     (if separator
         (%record-token-reduction-separator state separator tok)
-        (%push-token-reduction-diagnostic
+        (%token-reduction-state-record-diagnostic-message
          state
          :unexpected-token
          (format nil "Unexpected token: ~a" (token-value tok))

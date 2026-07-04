@@ -168,6 +168,7 @@
 (test shell-token-range-lookups-return-range-objects
   (let ((inside (nshell.presentation::shell-token-range-at-position "echo foo" 5))
         (after (nshell.presentation::shell-token-range-at-or-after-cursor "echo foo" 4))
+        (at-end (nshell.presentation::shell-token-range-at-or-after-cursor "echo foo" 8))
         (before (nshell.presentation::shell-token-range-before-position "echo foo" 4)))
     (is (nshell.presentation::shell-token-range-p inside))
     (is (= 5 (nshell.presentation::shell-token-range-start inside)))
@@ -175,10 +176,31 @@
     (is (nshell.presentation::shell-token-range-p after))
     (is (= 5 (nshell.presentation::shell-token-range-start after)))
     (is (= 8 (nshell.presentation::shell-token-range-end after)))
+    (is (nshell.presentation::shell-token-range-p at-end))
+    (is (= 5 (nshell.presentation::shell-token-range-start at-end)))
+    (is (= 8 (nshell.presentation::shell-token-range-end at-end)))
     (is (nshell.presentation::shell-token-range-p before))
     (is (= 0 (nshell.presentation::shell-token-range-start before)))
     (is (= 4 (nshell.presentation::shell-token-range-end before)))
     (is (null (nshell.presentation::shell-token-range-at-position "echo foo" 4)))))
+
+(test shell-token-range-set-stays-private-scan-boundary
+  (let ((range-set (nshell.presentation::shell-token-range-set-before
+                    "echo foo"
+                    8)))
+    (is (nshell.presentation::shell-token-range-set-p range-set))
+    (is (not (listp range-set)))
+    (is (not (fboundp 'nshell.presentation::make-shell-token-range-set)))
+    (is (fboundp 'nshell.presentation::%make-shell-token-range-set))
+    (is (fboundp 'nshell.presentation::%shell-token-range-set-ranges))
+    (is (not (eq (symbol-function
+                  'nshell.presentation::shell-token-range-set-ranges)
+                 (symbol-function
+                  'nshell.presentation::%shell-token-range-set-ranges))))
+    (let ((last-range (nshell.presentation::shell-token-range-set-last range-set)))
+      (is (nshell.presentation::shell-token-range-p last-range))
+      (is (= 5 (nshell.presentation::shell-token-range-start last-range)))
+      (is (= 8 (nshell.presentation::shell-token-range-end last-range))))))
 
 (test shell-token-range-raw-accessors-stay-internal
   "shell-token-range exposes explicit readers; generated slot readers remain internal."

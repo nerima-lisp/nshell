@@ -2,6 +2,23 @@
 
 (in-suite input-state-tests)
 
+(test input-state-kill-edit-projects-buffer-and-killed-text
+  (let ((edit (nshell.presentation::%make-kill-edit 5 10 5))
+        (buffer "echo hello world"))
+    (is (nshell.presentation::kill-edit-p edit))
+    (is (= 5 (nshell.presentation::kill-edit-start edit)))
+    (is (= 10 (nshell.presentation::kill-edit-end edit)))
+    (is (= 5 (nshell.presentation::kill-edit-cursor-pos edit)))
+    (is (not (nshell.presentation::kill-edit-empty-p edit)))
+    (is (string= "hello"
+                 (nshell.presentation::kill-edit-killed-text edit buffer)))
+    (is (string= "echo  world"
+                 (nshell.presentation::kill-edit-buffer edit buffer)))))
+
+(test input-state-kill-edit-detects-empty-range
+  (is (nshell.presentation::kill-edit-empty-p
+       (nshell.presentation::%make-kill-edit 3 3 3))))
+
 (test input-state-ctrl-w-kills-previous-word-into-kill-ring
   (let ((state (completion-session-state
                 :buffer "git checkout main"
@@ -179,6 +196,35 @@
       (is (eq :suggest-update cycle-output))
       (is-input-state popped :buffer "echo one three" :cursor-pos 14)
       (is-input-state cycled :buffer "echo one two " :cursor-pos 13))))
+
+(test input-state-yank-pop-edit-validates-recorded-yank
+  (let* ((state (input-state
+                 :buffer "echo one"
+                 :cursor-pos 8
+                 :kill-ring '("one" "two")
+                 :last-yank-start 5
+                 :last-yank-end 8
+                 :last-yank-index 0))
+         (edit (nshell.presentation::yank-pop-edit-for-state state)))
+    (is (nshell.presentation::yank-pop-edit-p edit))
+    (is (= 5 (nshell.presentation::yank-pop-edit-start edit)))
+    (is (= 8 (nshell.presentation::yank-pop-edit-end edit)))
+    (is (= 1 (nshell.presentation::yank-pop-edit-next-index edit)))
+    (is (= 8 (nshell.presentation::yank-pop-edit-cursor-pos edit)))
+    (is (string= "two"
+                 (nshell.presentation::yank-pop-edit-replacement edit)))
+    (is (string= "echo two"
+                 (nshell.presentation::yank-pop-edit-buffer edit "echo one")))))
+
+(test input-state-yank-pop-edit-rejects-stale-yank-metadata
+  (is (null (nshell.presentation::yank-pop-edit-for-state
+             (input-state
+              :buffer "echo other"
+              :cursor-pos 10
+              :kill-ring '("one" "two")
+              :last-yank-start 5
+              :last-yank-end 10
+              :last-yank-index 0)))))
 
 (test input-state-alt-y-noops-after-non-yank-edit
   (let ((state (input-state

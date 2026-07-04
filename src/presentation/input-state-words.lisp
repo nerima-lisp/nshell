@@ -73,31 +73,78 @@
   "Capitalize the shell token at or after the cursor."
   (transform-word-at-cursor state #'capitalize-token-text))
 
+(defstruct (word-transposition
+            (:constructor %make-word-transposition
+                (left-start left-end middle-start middle-end right-start right-end))
+            (:conc-name %word-transposition-))
+  (left-start 0 :type fixnum :read-only t)
+  (left-end 0 :type fixnum :read-only t)
+  (middle-start 0 :type fixnum :read-only t)
+  (middle-end 0 :type fixnum :read-only t)
+  (right-start 0 :type fixnum :read-only t)
+  (right-end 0 :type fixnum :read-only t))
+
+(defun word-transposition-left-start (transposition)
+  (%word-transposition-left-start transposition))
+
+(defun word-transposition-left-end (transposition)
+  (%word-transposition-left-end transposition))
+
+(defun word-transposition-middle-start (transposition)
+  (%word-transposition-middle-start transposition))
+
+(defun word-transposition-middle-end (transposition)
+  (%word-transposition-middle-end transposition))
+
+(defun word-transposition-right-start (transposition)
+  (%word-transposition-right-start transposition))
+
+(defun word-transposition-right-end (transposition)
+  (%word-transposition-right-end transposition))
+
+(defun word-transposition-at-cursor (buffer cursor)
+  (let ((right-range (shell-token-range-at-or-after-cursor buffer cursor)))
+    (when right-range
+      (let ((left-range (shell-token-range-before-position
+                         buffer
+                         (shell-token-range-start right-range))))
+        (when left-range
+          (%make-word-transposition
+           (shell-token-range-start left-range)
+           (shell-token-range-end left-range)
+           (shell-token-range-end left-range)
+           (shell-token-range-start right-range)
+           (shell-token-range-start right-range)
+           (shell-token-range-end right-range)))))))
+
+(defun word-transposition-buffer (transposition buffer)
+  (concatenate 'string
+               (subseq buffer 0 (word-transposition-left-start transposition))
+               (subseq buffer
+                       (word-transposition-right-start transposition)
+                       (word-transposition-right-end transposition))
+               (subseq buffer
+                       (word-transposition-middle-start transposition)
+                       (word-transposition-middle-end transposition))
+               (subseq buffer
+                       (word-transposition-left-start transposition)
+                       (word-transposition-left-end transposition))
+               (subseq buffer (word-transposition-right-end transposition))))
+
+(defun word-transposition-cursor-pos (transposition)
+  (+ (word-transposition-left-start transposition)
+     (- (word-transposition-right-end transposition)
+        (word-transposition-right-start transposition))
+     (- (word-transposition-middle-end transposition)
+        (word-transposition-middle-start transposition))
+     (- (word-transposition-left-end transposition)
+        (word-transposition-left-start transposition))))
+
 (defun transpose-words-around-cursor (state)
   (with-buffer-edit (state buffer cursor) state
-    (let ((right-range (shell-token-range-at-or-after-cursor buffer cursor)))
-      (if (null right-range)
+    (let ((transposition (word-transposition-at-cursor buffer cursor)))
+      (if (null transposition)
           (values state :none)
-          (let* ((right-start (shell-token-range-start right-range))
-                 (right-end (shell-token-range-end right-range))
-                 (left-range (shell-token-range-before-position buffer right-start)))
-            (if (null left-range)
-                (values state :none)
-                (let* ((left-start (shell-token-range-start left-range))
-                       (left-end (shell-token-range-end left-range))
-                       (left-word (subseq buffer left-start left-end))
-                       (middle (subseq buffer left-end right-start))
-                       (right-word (subseq buffer right-start right-end))
-                       (new-buffer
-                         (concatenate 'string
-                                      (subseq buffer 0 left-start)
-                                      right-word
-                                      middle
-                                      left-word
-                                      (subseq buffer right-end)))
-                       (new-cursor (+ left-start
-                                      (length right-word)
-                                      (length middle)
-                                      (length left-word))))
-                  (commit-buffer-edit new-buffer
-                                      :cursor-pos new-cursor))))))))
+          (commit-buffer-edit
+           (word-transposition-buffer transposition buffer)
+           :cursor-pos (word-transposition-cursor-pos transposition))))))

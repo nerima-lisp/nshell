@@ -179,6 +179,27 @@
             (input-state :buffer "a" :cursor-pos 1)
             (input-state :buffer "ab" :cursor-pos 0))))
 
+(test input-state-word-transposition-projects-token-swap
+  (let ((transposition (nshell.presentation::word-transposition-at-cursor
+                        "echo one two" 9)))
+    (is (nshell.presentation::word-transposition-p transposition))
+    (is (fboundp 'nshell.presentation::%make-word-transposition))
+    (is (fboundp 'nshell.presentation::%word-transposition-left-start))
+    (is (not (fboundp 'nshell.presentation::make-word-transposition)))
+    (is (= 5 (nshell.presentation::word-transposition-left-start transposition)))
+    (is (= 8 (nshell.presentation::word-transposition-left-end transposition)))
+    (is (= 8 (nshell.presentation::word-transposition-middle-start transposition)))
+    (is (= 9 (nshell.presentation::word-transposition-middle-end transposition)))
+    (is (= 9 (nshell.presentation::word-transposition-right-start transposition)))
+    (is (= 12 (nshell.presentation::word-transposition-right-end transposition)))
+    (is (string= "echo two one"
+                 (nshell.presentation::word-transposition-buffer
+                  transposition
+                  "echo one two")))
+    (is (= 12 (nshell.presentation::word-transposition-cursor-pos
+               transposition))))
+  (is (null (nshell.presentation::word-transposition-at-cursor "one" 3))))
+
 (test input-state-alt-t-transposes-last-two-words-at-eol
   (let ((state (completion-session-state
                 :buffer "echo one two"

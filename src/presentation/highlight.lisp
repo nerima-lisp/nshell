@@ -94,7 +94,7 @@
    Falls back to known ANSI 16-color codes when theme lookup fails."
   (let ((color (nshell.domain.configuration:theme-color theme role)))
     (if color
-        (let ((code (nshell.infrastructure.terminal::ansi-color-code color)))
+        (let ((code (nshell.infrastructure.terminal:ansi-color-code color)))
           (format nil "~C[3~dm" #\Esc code))
         (format nil (fallback-highlight-control role) #\Esc))))
 

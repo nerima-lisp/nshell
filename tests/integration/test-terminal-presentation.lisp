@@ -56,6 +56,12 @@
   (is (not (fboundp 'nshell.presentation::make-highlight-span)))
   (is (fboundp 'nshell.presentation::%make-highlight-span)))
 
+(test terminal-highlight-uses-public-ansi-boundary
+  "Presentation color rendering depends on the terminal ANSI public contract."
+  (is (fboundp 'nshell.infrastructure.terminal:ansi-color-code))
+  (is (not (null (find-symbol "ANSI-COLOR-CODE"
+                              :nshell.infrastructure.terminal)))))
+
 (test terminal-screen-render-roundtrip-with-input-state
   "Decoded input can update presentation state and render through the virtual screen."
   (let* ((state (input-state))

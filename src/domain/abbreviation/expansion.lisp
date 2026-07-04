@@ -6,6 +6,12 @@
   (expansion "" :type string)
   (position :anywhere :type (member :anywhere :command)))
 
+(defstruct (abbreviation-token-range
+            (:constructor %make-abbreviation-token-range (start end)))
+  "Token boundary used by the abbreviation scanner."
+  (start 0 :type fixnum :read-only t)
+  (end 0 :type fixnum :read-only t))
+
 (defun abbreviation-boundary-p (ch)
   (member ch '(#\Space #\Tab #\Newline #\| #\; #\& #\< #\>) :test #'char=))
 
@@ -53,23 +59,25 @@
         (ranges nil))
     (loop while (< pos end)
           do (if (abbreviation-boundary-p (char text pos))
-                 (incf pos)
-                 (let ((token-start pos)
-                       (token-end (abbreviation-token-end text pos end)))
-                   (push (cons token-start token-end) ranges)
+                  (incf pos)
+                  (let ((token-start pos)
+                        (token-end (abbreviation-token-end text pos end)))
+                   (push (%make-abbreviation-token-range token-start token-end) ranges)
                    (setf pos (max token-end (1+ pos))))))
     (nreverse ranges)))
+
+(defun abbreviation-token-range-values (buffer range)
+  (let ((start (abbreviation-token-range-start range))
+        (end (abbreviation-token-range-end range)))
+    (values (subseq buffer start end) start end t)))
 
 (defun abbreviation-target-before-cursor (buffer cursor)
   "Return token, start, end, and found-p for a token ending at CURSOR."
   (let* ((end (length buffer))
          (position (min cursor end)))
     (loop for range in (abbreviation-token-ranges-before buffer position)
-          when (= (cdr range) position)
-            do (return (values (subseq buffer (car range) (cdr range))
-                               (car range)
-                               (cdr range)
-                               t))
+          when (= (abbreviation-token-range-end range) position)
+            do (return (abbreviation-token-range-values buffer range))
           finally (return (values nil nil nil nil)))))
 
 (defun abbreviation-command-position-p (buffer token-start)

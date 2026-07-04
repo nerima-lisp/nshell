@@ -80,6 +80,67 @@
                    (nshell.presentation::sudo-prefix-edit-buffer edit "sudo")))
       (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 4))))))
 
+(test input-state-dispatch-action-classifies-key-events
+  (labels ((action-for (type &optional char data)
+             (nshell.presentation::input-dispatch-action-for-key-event
+              (input-key-event type char nil data))))
+    (let ((char-action (action-for :char #\x))
+          (next-history-action (action-for :ctrl-n))
+          (eol-action (action-for :ctrl-e))
+          (paste-action (action-for :paste nil "abc"))
+          (unknown-action (action-for :unknown)))
+      (is (nshell.presentation::input-dispatch-action-p char-action))
+      (is (eq :insert-char
+              (nshell.presentation::input-dispatch-action-kind char-action)))
+      (is (char= #\x
+                 (nshell.presentation::input-dispatch-action-value
+                  char-action)))
+      (is (eq :emit
+              (nshell.presentation::input-dispatch-action-kind
+               next-history-action)))
+      (is (eq :history-next
+              (nshell.presentation::input-dispatch-action-value
+               next-history-action)))
+      (is (eq :move-eol-or-accept-suggestion
+              (nshell.presentation::input-dispatch-action-kind eol-action)))
+      (is (eq :paste
+              (nshell.presentation::input-dispatch-action-kind paste-action)))
+      (is (eq :none
+              (nshell.presentation::input-dispatch-action-kind
+               unknown-action))))))
+
+(test input-state-dispatch-action-raw-accessors-stay-internal
+  "input-dispatch-action exposes explicit readers; generated slot readers stay internal."
+  (let ((action (nshell.presentation::input-dispatch-action-for-key-event
+                 (input-key-event :ctrl-l))))
+    (is (fboundp 'nshell.presentation::%input-dispatch-action-kind))
+    (is (not (eq (symbol-function
+                  'nshell.presentation::input-dispatch-action-kind)
+                 (symbol-function
+                  'nshell.presentation::%input-dispatch-action-kind))))
+    (is (not (fboundp 'nshell.presentation::make-input-dispatch-action)))
+    (is (eq :emit
+            (nshell.presentation::input-dispatch-action-kind action)))
+    (is (eq :clear-screen
+            (nshell.presentation::input-dispatch-action-value action)))))
+
+(test input-state-dispatch-action-applies-output-actions-without-state-change
+  (let* ((state (completion-session-state
+                 :buffer "git"
+                 :cursor-pos 2
+                 :completion-index 1
+                 :suggestion " status"))
+         (action (nshell.presentation::input-dispatch-action-for-key-event
+                  (input-key-event :ctrl-l))))
+    (with-expected-input-state-reduction (new-state output)
+        state
+        (nshell.presentation::reduce-insert-input-state-action state action)
+        :clear-screen
+        (:buffer "git"
+         :cursor-pos 2
+         :completion-index 1
+         :suggestion " status"))))
+
 (test input-state-ctrl-p-and-ctrl-n-request-history-navigation
   (let ((state (completion-session-state
                 :buffer "git"

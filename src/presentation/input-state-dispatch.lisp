@@ -2,6 +2,19 @@
 
 (in-package #:nshell.presentation)
 
+(defstruct (input-dispatch-action
+             (:constructor %make-input-dispatch-action
+                 (kind &optional value))
+             (:conc-name %input-dispatch-action-))
+  (kind :none :type symbol :read-only t)
+  (value nil :read-only t))
+
+(defun input-dispatch-action-kind (action)
+  (%input-dispatch-action-kind action))
+
+(defun input-dispatch-action-value (action)
+  (%input-dispatch-action-value action))
+
 (defun %start-history-search (state)
   (with-normalized-cleared-completion-state (state state)
     (values (copy-input-state-clearing-completion
@@ -48,48 +61,55 @@
                  (input-state-cursor-pos state)
                  0)))
 
-(defun %reduce-insert-input-state-editing (state key-event-type key-event)
-  (case key-event-type
+(defun input-dispatch-action-for-key-event (key-event)
+  (case (nshell.domain.input:key-event-type key-event)
     (:char (let ((ch (nshell.domain.input:key-event-char key-event)))
              (if ch
-                 (insert-char-with-abbreviation-expansion state ch)
-                 (values state :none))))
-    (:paste (insert-paste-at-cursor state key-event))
-    (:enter (finalize-enter-input-state state))
-    (:tab (cycle-completion-state state 1))
-    (:shift-tab (cycle-completion-state state -1))
-    (:backspace (backspace-before-cursor state))
-    (:delete (delete-char-at-cursor state))
-    (:ctrl-c (clear-input-state state))
-    (:ctrl-d (%delete-or-quit-input-state state))
-    ((:ctrl-r :ctrl-s) (%start-history-search state))
-    ((:ctrl-f :right) (accept-suggestion-at-eol state))
-    (:escape (%escape-input-state state))
-    (:ctrl-g (%redraw-input-state (clear-completion-session-state state)))
-    ((:ctrl-b :left) (move-cursor-clearing-suggestion state -1))
-    ((:ctrl-a :home) (move-cursor-to-clearing-suggestion state 0))
-    ((:ctrl-e :end) (%move-cursor-to-eol-or-accept-suggestion state))
-    (:ctrl-k (%kill-to-eol state))
-    (:ctrl-l (values state :clear-screen))
-    ((:ctrl-n :down :page-down) (values state :history-next))
-    ((:ctrl-p :up :page-up) (values state :history-prev))
-    (:ctrl-t (transpose-chars-around-cursor state))
-    (:ctrl-u (%kill-to-bol state))
-    (:ctrl-w (backward-kill-word state))
-    (:ctrl-y (yank-last-kill state))
-    (:ctrl-underscore (undo-input-state state))
-    (:alt-r (redo-input-state state))
-    (:alt-dot (values state :insert-last-argument))
-    (:alt-c (capitalize-word-at-cursor state))
-    (:alt-l (downcase-word-at-cursor state))
-    (:alt-t (transpose-words-around-cursor state))
-    (:alt-u (upcase-word-at-cursor state))
-    (:alt-y (cycle-last-yank state))
-    ((:alt-left :ctrl-left :alt-b) (move-word-left state))
-    ((:alt-right :ctrl-right :alt-f) (accept-suggestion-word-at-eol state))
-    (:alt-backspace (backward-kill-word state))
-    (:alt-d (forward-kill-word state))
-    (:alt-s (toggle-sudo-prefix state))
+                 (%make-input-dispatch-action :insert-char ch)
+                 (%make-input-dispatch-action :none))))
+    (:paste (%make-input-dispatch-action :paste key-event))
+    (:enter (%make-input-dispatch-action :enter))
+    (:tab (%make-input-dispatch-action :cycle-completion 1))
+    (:shift-tab (%make-input-dispatch-action :cycle-completion -1))
+    (:backspace (%make-input-dispatch-action :backspace))
+    (:delete (%make-input-dispatch-action :delete))
+    (:ctrl-c (%make-input-dispatch-action :clear-input))
+    (:ctrl-d (%make-input-dispatch-action :delete-or-quit))
+    ((:ctrl-r :ctrl-s) (%make-input-dispatch-action :start-history-search))
+    ((:ctrl-f :right) (%make-input-dispatch-action :accept-suggestion))
+    (:escape (%make-input-dispatch-action :escape))
+    (:ctrl-g (%make-input-dispatch-action :redraw-clearing-completion))
+    ((:ctrl-b :left) (%make-input-dispatch-action :move-cursor -1))
+    ((:ctrl-a :home) (%make-input-dispatch-action :move-cursor-absolute 0))
+    ((:ctrl-e :end) (%make-input-dispatch-action
+                     :move-eol-or-accept-suggestion))
+    (:ctrl-k (%make-input-dispatch-action :kill-to-eol))
+    (:ctrl-l (%make-input-dispatch-action :emit :clear-screen))
+    ((:ctrl-n :down :page-down) (%make-input-dispatch-action
+                                 :emit
+                                 :history-next))
+    ((:ctrl-p :up :page-up) (%make-input-dispatch-action
+                             :emit
+                             :history-prev))
+    (:ctrl-t (%make-input-dispatch-action :transpose-chars))
+    (:ctrl-u (%make-input-dispatch-action :kill-to-bol))
+    (:ctrl-w (%make-input-dispatch-action :backward-kill-word))
+    (:ctrl-y (%make-input-dispatch-action :yank-last-kill))
+    (:ctrl-underscore (%make-input-dispatch-action :undo))
+    (:alt-r (%make-input-dispatch-action :redo))
+    (:alt-dot (%make-input-dispatch-action :emit :insert-last-argument))
+    (:alt-c (%make-input-dispatch-action :capitalize-word))
+    (:alt-l (%make-input-dispatch-action :downcase-word))
+    (:alt-t (%make-input-dispatch-action :transpose-words))
+    (:alt-u (%make-input-dispatch-action :upcase-word))
+    (:alt-y (%make-input-dispatch-action :cycle-last-yank))
+    ((:alt-left :ctrl-left :alt-b) (%make-input-dispatch-action
+                                    :move-word-left))
+    ((:alt-right :ctrl-right :alt-f) (%make-input-dispatch-action
+                                      :accept-suggestion-word))
+    (:alt-backspace (%make-input-dispatch-action :backward-kill-word))
+    (:alt-d (%make-input-dispatch-action :forward-kill-word))
+    (:alt-s (%make-input-dispatch-action :toggle-sudo-prefix))
     ((:shift-up :shift-down :shift-left :shift-right
       :alt-up :alt-down :ctrl-up :ctrl-down
       :shift-alt-up :shift-alt-down :shift-alt-left :shift-alt-right
@@ -98,11 +118,61 @@
       :shift-alt-ctrl-up :shift-alt-ctrl-down :shift-alt-ctrl-left
       :shift-alt-ctrl-right
       :mouse)
-     (%redraw-input-state state))
+     (%make-input-dispatch-action :redraw))
+    (otherwise (%make-input-dispatch-action :none))))
+
+(defun reduce-insert-input-state-action (state action)
+  (case (input-dispatch-action-kind action)
+    (:insert-char (insert-char-with-abbreviation-expansion
+                   state
+                   (input-dispatch-action-value action)))
+    (:paste (insert-paste-at-cursor state
+                                    (input-dispatch-action-value action)))
+    (:enter (finalize-enter-input-state state))
+    (:cycle-completion (cycle-completion-state
+                        state
+                        (input-dispatch-action-value action)))
+    (:backspace (backspace-before-cursor state))
+    (:delete (delete-char-at-cursor state))
+    (:clear-input (clear-input-state state))
+    (:delete-or-quit (%delete-or-quit-input-state state))
+    (:start-history-search (%start-history-search state))
+    (:accept-suggestion (accept-suggestion-at-eol state))
+    (:escape (%escape-input-state state))
+    (:redraw-clearing-completion
+     (%redraw-input-state (clear-completion-session-state state)))
+    (:move-cursor (move-cursor-clearing-suggestion
+                   state
+                   (input-dispatch-action-value action)))
+    (:move-cursor-absolute (move-cursor-to-clearing-suggestion
+                            state
+                            (input-dispatch-action-value action)))
+    (:move-eol-or-accept-suggestion
+     (%move-cursor-to-eol-or-accept-suggestion state))
+    (:kill-to-eol (%kill-to-eol state))
+    (:emit (values state (input-dispatch-action-value action)))
+    (:transpose-chars (transpose-chars-around-cursor state))
+    (:kill-to-bol (%kill-to-bol state))
+    (:backward-kill-word (backward-kill-word state))
+    (:yank-last-kill (yank-last-kill state))
+    (:undo (undo-input-state state))
+    (:redo (redo-input-state state))
+    (:capitalize-word (capitalize-word-at-cursor state))
+    (:downcase-word (downcase-word-at-cursor state))
+    (:transpose-words (transpose-words-around-cursor state))
+    (:upcase-word (upcase-word-at-cursor state))
+    (:cycle-last-yank (cycle-last-yank state))
+    (:move-word-left (move-word-left state))
+    (:accept-suggestion-word (accept-suggestion-word-at-eol state))
+    (:forward-kill-word (forward-kill-word state))
+    (:toggle-sudo-prefix (toggle-sudo-prefix state))
+    (:redraw (%redraw-input-state state))
     (otherwise (values state :none))))
 
-(defun reduce-insert-input-state (state key-event)
-  (%reduce-insert-input-state-editing
+(defun %reduce-insert-input-state-editing (state key-event)
+  (reduce-insert-input-state-action
    state
-   (nshell.domain.input:key-event-type key-event)
-   key-event))
+   (input-dispatch-action-for-key-event key-event)))
+
+(defun reduce-insert-input-state (state key-event)
+  (%reduce-insert-input-state-editing state key-event))

@@ -202,6 +202,25 @@
       (is (= 5 (nshell.presentation:input-state-last-argument-end finalized)))
       (is (= 6 (nshell.presentation:input-state-last-argument-index finalized))))))
 
+(test input-state-session-transition-policy-classifies-control-l
+  (let* ((state (input-state
+                 :buffer "git st"
+                 :cursor-pos 6
+                 :completion-index 2
+                 :completion-base-buffer "git st"
+                 :completion-base-cursor 6
+                 :last-candidates '("status" "stash")))
+         (policy (nshell.presentation::input-session-transition-policy-for-key-event
+                  state
+                  state
+                  (input-key-event :ctrl-l))))
+    (is (nshell.presentation::input-session-transition-policy-p policy))
+    (is (nshell.presentation::input-session-transition-policy-preserve-all-p policy))
+    (is (nshell.presentation::input-session-transition-policy-preserve-completion-p policy))
+    (is (not (nshell.presentation::input-session-transition-policy-preserve-yank-session-p policy)))
+    (is (not (nshell.presentation::input-session-transition-policy-preserve-argument-session-p policy)))
+    (is (not (fboundp 'nshell.presentation::make-input-session-transition-policy)))))
+
 (test input-state-finalize-transition-clears-transient-session-state-on-edit
   (let ((state (input-state
                 :buffer "git st"
@@ -229,6 +248,62 @@
       (is (null (nshell.presentation:input-state-last-argument-start finalized)))
       (is (null (nshell.presentation:input-state-last-argument-end finalized)))
       (is (null (nshell.presentation:input-state-last-argument-index finalized))))))
+
+(test input-state-finalize-transition-preserves-yank-session-on-yank-cycle
+  (let ((state (input-state
+                :buffer "git st"
+                :cursor-pos 6
+                :completion-index 2
+                :completion-base-buffer "git st"
+                :completion-base-cursor 6
+                :last-candidates '("status" "stash")
+                :last-yank-start 1
+                :last-yank-end 2
+                :last-yank-index 3
+                :last-argument-start 4
+                :last-argument-end 5
+                :last-argument-index 6)))
+    (let ((finalized (nshell.presentation::finalize-input-state-transition
+                      state
+                      state
+                      (input-key-event :alt-y))))
+      (is-input-state-with-completion-cleared finalized
+                                              :buffer "git st"
+                                              :cursor-pos 6)
+      (is (= 1 (nshell.presentation::input-state-last-yank-start finalized)))
+      (is (= 2 (nshell.presentation::input-state-last-yank-end finalized)))
+      (is (= 3 (nshell.presentation::input-state-last-yank-index finalized)))
+      (is (null (nshell.presentation:input-state-last-argument-start finalized)))
+      (is (null (nshell.presentation:input-state-last-argument-end finalized)))
+      (is (null (nshell.presentation:input-state-last-argument-index finalized))))))
+
+(test input-state-finalize-transition-preserves-argument-session-on-last-argument-repeat
+  (let ((state (input-state
+                :buffer "git st"
+                :cursor-pos 6
+                :completion-index 2
+                :completion-base-buffer "git st"
+                :completion-base-cursor 6
+                :last-candidates '("status" "stash")
+                :last-yank-start 1
+                :last-yank-end 2
+                :last-yank-index 3
+                :last-argument-start 4
+                :last-argument-end 5
+                :last-argument-index 6)))
+    (let ((finalized (nshell.presentation::finalize-input-state-transition
+                      state
+                      state
+                      (input-key-event :alt-dot))))
+      (is-input-state-with-completion-cleared finalized
+                                              :buffer "git st"
+                                              :cursor-pos 6)
+      (is (null (nshell.presentation::input-state-last-yank-start finalized)))
+      (is (null (nshell.presentation::input-state-last-yank-end finalized)))
+      (is (null (nshell.presentation::input-state-last-yank-index finalized)))
+      (is (= 4 (nshell.presentation:input-state-last-argument-start finalized)))
+      (is (= 5 (nshell.presentation:input-state-last-argument-end finalized)))
+      (is (= 6 (nshell.presentation:input-state-last-argument-index finalized))))))
 
 (test input-state-finalize-transition-preserves-completion-session-on-tab
   (let ((state (input-state

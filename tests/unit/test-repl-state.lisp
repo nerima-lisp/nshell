@@ -7,7 +7,7 @@
   (with-repl-test-state
     (repl-test-set-env "LOCAL_ONLY" "hidden")
     (repl-test-set-env "VISIBLE" "yes" t)
-    (let ((strings (nshell.presentation::exported-environment-strings)))
+    (let ((strings (nshell.presentation:exported-environment-strings)))
       (is (member "VISIBLE=yes" strings :test #'string=))
       (is (not (member "LOCAL_ONLY=hidden" strings :test #'string=))))))
 

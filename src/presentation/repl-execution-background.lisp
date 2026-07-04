@@ -40,39 +40,14 @@
             (nreverse pipeline-redirects)
             nil)))
 
-(defun %background-job-node (ast)
-  (cond
-    ((or (nshell.domain.parsing:command-node-p ast)
-         (nshell.domain.parsing:pipeline-node-p ast))
-     ast)
-    ((nshell.domain.parsing:sequence-node-p ast)
-     (first (nshell.domain.parsing:sequence-node-commands ast)))
-    (t nil)))
-
 (defun %register-background-job (ast procs)
   (let* ((proc-list (if (listp procs) procs (list procs)))
          (pids (mapcar #'sb-ext:process-pid proc-list))
          (pgid (first pids))
-         (node (%background-job-node ast))
-         (cmds (if (nshell.domain.parsing:pipeline-node-p node)
-                   (nshell.domain.parsing:pipeline-node-commands node)
-                   (list node)))
-         (dom-cmds
-           (mapcar (lambda (cmd)
-                     (nshell.domain.execution:make-command
-                      (nshell.domain.parsing:command-node-command cmd)
-                      (nshell.domain.parsing:command-node-arg-values cmd)))
-                   cmds))
-         (pipe (apply #'nshell.domain.execution:make-pipeline dom-cmds))
-         (job (nshell.domain.execution:make-job 0 pipe))
-         (jid (nshell.domain.job-control:monitor-add-job
-               nshell.application:*job-monitor* job)))
-    (setf (nshell.domain.execution:job-command-line job)
-          (nshell.domain.parsing:ast-node->command-line ast))
-    (setf (nshell.domain.execution:job-pids job) pids)
-    (setf (nshell.domain.execution:job-pgid job) pgid)
-    (setf (nshell.domain.execution:job-background-p job) t)
-    (nshell.domain.job-control:monitor-update
-     nshell.application:*job-monitor* jid :running)
-    (setf (gethash jid nshell.presentation::*proc-registry*) procs)
-    (format t "[~d] ~d~%" jid pgid)))
+         (jid (nshell.domain.job-control:monitor-add-background-job
+               nshell.application:*job-monitor*
+               pids
+               (nshell.domain.parsing:ast-node->command-line ast))))
+    (when jid
+      (setf (gethash jid nshell.presentation::*proc-registry*) procs)
+      (format t "[~d] ~d~%" jid pgid))))

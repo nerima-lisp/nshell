@@ -33,6 +33,12 @@
   (state nil :read-only t)
   (output :none :type symbol :read-only t))
 
+(defstruct (%transient-session-clear
+            (:constructor %make-transient-session-clear (kind overrides))
+            (:conc-name %transient-session-clear-))
+  kind
+  overrides)
+
 (defun input-session-transition-policy-preserve-all-p (policy)
   (%input-session-transition-policy-preserve-all-p policy))
 
@@ -53,6 +59,48 @@
 
 (defun input-session-reduction (state output)
   (%make-input-session-reduction state output))
+
+(defun %yank-session-clear-overrides ()
+  '(:last-yank-start nil
+    :last-yank-end nil
+    :last-yank-index nil))
+
+(defun %argument-session-clear-overrides ()
+  '(:last-argument-start nil
+    :last-argument-end nil
+    :last-argument-index nil))
+
+(defun %assert-transient-session-clear-kind (clear kind)
+  (unless (and (%transient-session-clear-p clear)
+               (eq kind (%transient-session-clear-kind clear)))
+    (error "Expected transient session clear kind ~S, got ~S"
+           kind
+           clear))
+  clear)
+
+(defun yank-session-clear ()
+  (%make-transient-session-clear :yank
+                                 (%yank-session-clear-overrides)))
+
+(defun argument-session-clear ()
+  (%make-transient-session-clear :argument
+                                 (%argument-session-clear-overrides)))
+
+(defun apply-transient-session-clear (state clear)
+  (check-type clear %transient-session-clear)
+  (apply #'copy-input-state-with
+         state
+         (%transient-session-clear-overrides clear)))
+
+(defun apply-yank-session-clear (state clear)
+  (apply-transient-session-clear
+   state
+   (%assert-transient-session-clear-kind clear :yank)))
+
+(defun apply-argument-session-clear (state clear)
+  (apply-transient-session-clear
+   state
+   (%assert-transient-session-clear-kind clear :argument)))
 
 (defun input-session-reduction-for-key-event (state key-event)
   (multiple-value-bind (new-state output)
@@ -91,29 +139,24 @@
                         +argument-session-preserving-key-event-types+
                         :test #'eq))))))
 
-(defun %clear-session-fields (state initargs)
-  (apply #'copy-input-state-with state initargs))
-
-(defun %clear-session-fields-when (state clear-p initargs)
+(defun %clear-transient-session-when (state clear-p clear apply-clear)
   (if clear-p
-      (%clear-session-fields state initargs)
+      (funcall apply-clear state clear)
       state))
 
 (defun %apply-yank-session-policy (state policy)
-  (%clear-session-fields-when
+  (%clear-transient-session-when
    state
    (not (input-session-transition-policy-preserve-yank-session-p policy))
-   '(:last-yank-start nil
-     :last-yank-end nil
-     :last-yank-index nil)))
+   (yank-session-clear)
+   #'apply-yank-session-clear))
 
 (defun %apply-argument-session-policy (state policy)
-  (%clear-session-fields-when
+  (%clear-transient-session-when
    state
    (not (input-session-transition-policy-preserve-argument-session-p policy))
-   '(:last-argument-start nil
-     :last-argument-end nil
-     :last-argument-index nil)))
+   (argument-session-clear)
+   #'apply-argument-session-clear))
 
 (defun %clear-transient-session-state (state policy)
   (%apply-argument-session-policy (%apply-yank-session-policy state policy)

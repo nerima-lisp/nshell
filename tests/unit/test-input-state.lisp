@@ -395,6 +395,70 @@
                     :buffer "abc"
                     :cursor-pos 3)))
 
+(test input-state-yank-session-clear-is-private-value
+  (let* ((state (input-state
+                 :buffer "git st"
+                 :cursor-pos 6
+                 :last-yank-start 1
+                 :last-yank-end 2
+                 :last-yank-index 3
+                 :last-argument-start 4
+                 :last-argument-end 5
+                 :last-argument-index 6))
+         (clear (nshell.presentation::yank-session-clear))
+         (cleared (nshell.presentation::apply-yank-session-clear state clear)))
+    (is (nshell.presentation::%transient-session-clear-p clear))
+    (is (eq :yank
+            (nshell.presentation::%transient-session-clear-kind clear)))
+    (is (not (listp clear)))
+    (is (not (fboundp 'nshell.presentation::make-transient-session-clear)))
+    (is-input-state cleared
+                    :buffer "git st"
+                    :cursor-pos 6
+                    :last-argument-start 4
+                    :last-argument-end 5
+                    :last-argument-index 6)
+    (is (null (nshell.presentation::input-state-last-yank-start cleared)))
+    (is (null (nshell.presentation::input-state-last-yank-end cleared)))
+    (is (null (nshell.presentation::input-state-last-yank-index cleared)))))
+
+(test input-state-argument-session-clear-is-private-value
+  (let* ((state (input-state
+                 :buffer "git st"
+                 :cursor-pos 6
+                 :last-yank-start 1
+                 :last-yank-end 2
+                 :last-yank-index 3
+                 :last-argument-start 4
+                 :last-argument-end 5
+                 :last-argument-index 6))
+         (clear (nshell.presentation::argument-session-clear))
+         (cleared (nshell.presentation::apply-argument-session-clear state clear)))
+    (is (nshell.presentation::%transient-session-clear-p clear))
+    (is (eq :argument
+            (nshell.presentation::%transient-session-clear-kind clear)))
+    (is (not (listp clear)))
+    (is (not (fboundp 'nshell.presentation::make-transient-session-clear)))
+    (is-input-state cleared
+                    :buffer "git st"
+                    :cursor-pos 6)
+    (is (= 1 (nshell.presentation::input-state-last-yank-start cleared)))
+    (is (= 2 (nshell.presentation::input-state-last-yank-end cleared)))
+    (is (= 3 (nshell.presentation::input-state-last-yank-index cleared)))
+    (is (null (nshell.presentation:input-state-last-argument-start cleared)))
+    (is (null (nshell.presentation:input-state-last-argument-end cleared)))
+    (is (null (nshell.presentation:input-state-last-argument-index cleared)))))
+
+(test input-state-transient-session-clear-rejects-wrong-kind
+  (signals error
+    (nshell.presentation::apply-yank-session-clear
+     (input-state)
+     (nshell.presentation::argument-session-clear)))
+  (signals error
+    (nshell.presentation::apply-argument-session-clear
+     (input-state)
+     (nshell.presentation::yank-session-clear))))
+
 (test input-state-finalize-transition-clears-transient-session-state-on-edit
   (let ((state (input-state
                 :buffer "git st"

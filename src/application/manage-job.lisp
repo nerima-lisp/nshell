@@ -33,13 +33,14 @@
                (progn
                  (%set-acl-foreground-pgid pgid)
                  (%continue-process-group pgid)
-                 (nshell.domain.execution:job-state-transition job :running)
+                 (nshell.domain.job-control:monitor-update
+                  job-monitor job-id :running)
                  (when dispatcher
                    (publish-event dispatcher
                                   (nshell.domain.events:make-job-continued-event job-id)))
                  (%with-terminal-foreground-pgroup
                    pgid
-                   (lambda () (%wait-job-pgid job))))
+                   (lambda () (%wait-job-pgid job job-id job-monitor))))
             (setf *foreground-job-pgid* nil)
             (%set-acl-foreground-pgid nil)))
         job))))
@@ -52,7 +53,8 @@
         (when (%valid-job-pgid-p pgid)
           (%continue-process-group pgid))
         (setf (nshell.domain.execution:job-background-p job) t)
-        (nshell.domain.execution:job-state-transition job :background)
+        (nshell.domain.job-control:monitor-update
+         job-monitor job-id :background)
         (when dispatcher
           (publish-event dispatcher
                          (nshell.domain.events:make-job-continued-event job-id)))
@@ -153,7 +155,7 @@
           (t
            (error condition)))))))
 
-(defun %wait-job-pgid (job)
+(defun %wait-job-pgid (job job-id job-monitor)
   (let* ((pgid (nshell.domain.execution:job-pgid job))
          (known-pids (%job-known-pids job))
          (pending-pids (copy-list known-pids))
@@ -169,16 +171,15 @@
                  (setf pending-pids (remove pid pending-pids :test #'=))))
              (complete-job ()
                (let ((status-code (or last-stage-status latest-status)))
-                 (when status-code
-                   (setf (nshell.domain.execution:job-exit-code job) status-code)))
-               (nshell.domain.execution:job-state-transition job :completed)
-               job))
+                 (nshell.domain.job-control:monitor-update
+                  job-monitor job-id :completed status-code))))
       (loop
         (multiple-value-bind (pid state status-code)
             (%wait-job-pgid-event pgid)
           (case state
             (:stopped
-             (nshell.domain.execution:job-state-transition job :stopped)
+             (nshell.domain.job-control:monitor-update
+              job-monitor job-id :stopped)
              (return job))
             ((:exited :signaled)
              (record-completion pid status-code)

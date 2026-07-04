@@ -272,7 +272,7 @@
 
 (test trim-trailing-path-separators-removes-trailing-slashes
   "trim-trailing-path-separators strips trailing / unless the string is only slashes."
-  (flet ((trim (s) (nshell.domain.completion::trim-trailing-path-separators s)))
+  (flet ((trim (s) (nshell.domain.completion::%trim-trailing-path-separators s)))
     (is (string= "/usr/bin" (trim "/usr/bin/")))
     (is (string= "/usr/bin" (trim "/usr/bin")))
     ;; single slash preserved (only-separator case)
@@ -280,7 +280,7 @@
 
 (test entry-path-name-falls-back-to-directory-tail-component
   "entry-path-name uses the final directory component when no file component exists."
-  (flet ((entry-name (path) (nshell.domain.completion::entry-path-name path)))
+  (flet ((entry-name (path) (nshell.domain.completion::%entry-path-name path)))
     (is (string= "project"
                  (entry-name (make-pathname :directory '(:absolute "tmp" "project")))))
     (is (null (entry-name (make-pathname :directory '(:absolute)))))))
@@ -323,12 +323,12 @@
   "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."
   (flet ((split (s)
            (multiple-value-list
-            (nshell.domain.completion::split-file-completion-prefix s))))
+            (nshell.domain.completion::%split-file-completion-prefix s))))
     (is (equal '("" "foo")      (split "foo")))
     (is (equal '("/usr/" "bin") (split "/usr/bin")))
     (is (equal '("src/" "")     (split "src/"))))
   (let ((projection
-          (nshell.domain.completion::project-file-completion-prefix "src/main")))
+          (nshell.domain.completion::%project-file-completion-prefix "src/main")))
     (is (string= "src/"
                  (nshell.domain.completion::%file-completion-prefix-projection-directory-prefix
                   projection)))
@@ -345,6 +345,39 @@
     (is (not (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-DIRECTORY-PREFIX")))
     (is (not (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-FILE-PREFIX")))))
 
+(test file-completion-helpers-are-internal-boundaries
+  "File completion helper functions should not expose unprefixed compatibility names."
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (dolist (name '("%TRIM-TRAILING-PATH-SEPARATORS"
+                    "%PATHNAME-DIRECTORY-TAIL-COMPONENT"
+                    "%PATHNAME-LAST-DIRECTORY-COMPONENT"
+                    "%PATHNAME-FILE-COMPONENT-NAME"
+                    "%ENTRY-PATH-NAME"
+                    "%PROJECT-FILE-COMPLETION-PREFIX"
+                    "%SPLIT-FILE-COMPLETION-PREFIX"
+                    "%FILE-COMPLETION-DIRECTORY-PATHNAME"
+                    "%SAFE-FILE-COMPLETION-LIST"
+                    "%ENSURE-DIRECTORY-CANDIDATE-SUFFIX"
+                    "%FILE-COMPLETION-ENTRY-CANDIDATE"
+                    "%ADD-FILE-COMPLETION-ENTRIES"
+                    "%FILE-CANDIDATES-FROM-DIRECTORY"))
+      (is (fboundp (find-symbol name '#:nshell.domain.completion))))
+    (dolist (name '("TRIM-TRAILING-PATH-SEPARATORS"
+                    "PATHNAME-DIRECTORY-TAIL-COMPONENT"
+                    "PATHNAME-LAST-DIRECTORY-COMPONENT"
+                    "PATHNAME-FILE-COMPONENT-NAME"
+                    "ENTRY-PATH-NAME"
+                    "PROJECT-FILE-COMPLETION-PREFIX"
+                    "SPLIT-FILE-COMPLETION-PREFIX"
+                    "FILE-COMPLETION-DIRECTORY-PATHNAME"
+                    "SAFE-FILE-COMPLETION-LIST"
+                    "ENSURE-DIRECTORY-CANDIDATE-SUFFIX"
+                    "FILE-COMPLETION-ENTRY-CANDIDATE"
+                    "ADD-FILE-COMPLETION-ENTRIES"
+                    "FILE-CANDIDATES-FROM-DIRECTORY"))
+      (is (not (defined-symbol-p name))))))
+
 (test file-candidates-from-directory-deduplicates-by-candidate-text
   (with-file-completion-adapters
       ((lambda (dir)
@@ -354,7 +387,7 @@
          (declare (ignore dir))
          nil))
     (let* ((candidates
-             (nshell.domain.completion::file-candidates-from-directory
+             (nshell.domain.completion::%file-candidates-from-directory
               "to"
               :include-files t
               :include-directories nil))

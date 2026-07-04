@@ -39,7 +39,7 @@
           (funcall *path-command-executable-p-fn* entry))
     (error () nil)))
 
-(defun trim-trailing-path-separators (text)
+(defun %trim-trailing-path-separators (text)
   "Return TEXT without trailing path separators, unless it is only separators."
   (let ((end (length text)))
     (loop while (and (> end 1)
@@ -47,20 +47,20 @@
           do (decf end))
     (subseq text 0 end)))
 
-(defun pathname-directory-tail-component (path)
+(defun %pathname-directory-tail-component (path)
   "Return the final raw directory component carried by PATH."
   (let ((directory (pathname-directory path)))
     (when (consp directory)
       (loop for component in directory
             finally (return component)))))
 
-(defun pathname-last-directory-component (path)
+(defun %pathname-last-directory-component (path)
   "Return the last directory component of PATH, if PATH names a directory."
-  (let ((tail (pathname-directory-tail-component path)))
+  (let ((tail (%pathname-directory-tail-component path)))
     (when (and tail (not (keywordp tail)))
       (princ-to-string tail))))
 
-(defun pathname-file-component-name (path)
+(defun %pathname-file-component-name (path)
   "Return a raw file component name for PATH without pathname syntax escaping."
   (let ((name (pathname-name path))
         (type (pathname-type path)))
@@ -71,14 +71,14 @@
               (concatenate 'string base "." (princ-to-string type))
               base))))))
 
-(defun entry-path-name (entry)
+(defun %entry-path-name (entry)
   "Return a display basename for a pathname or string ENTRY."
   (cond
     ((pathnamep entry)
-     (or (pathname-file-component-name entry)
-         (pathname-last-directory-component entry)))
+     (or (%pathname-file-component-name entry)
+         (%pathname-last-directory-component entry)))
     ((stringp entry)
-     (let* ((trimmed (trim-trailing-path-separators entry))
+     (let* ((trimmed (%trim-trailing-path-separators entry))
             (separator (position-if #'path-separator-p trimmed :from-end t)))
        (if separator
            (subseq trimmed (1+ separator))
@@ -92,7 +92,7 @@
   (directory-prefix "" :type string :read-only t)
   (file-prefix "" :type string :read-only t))
 
-(defun project-file-completion-prefix (prefix)
+(defun %project-file-completion-prefix (prefix)
   "Project a raw file completion PREFIX into directory and file-prefix parts."
   (let ((separator (position-if #'path-separator-p prefix :from-end t)))
     (if separator
@@ -101,27 +101,27 @@
          (subseq prefix (1+ separator)))
         (%make-file-completion-prefix-projection "" prefix))))
 
-(defun split-file-completion-prefix (prefix)
+(defun %split-file-completion-prefix (prefix)
   "Split PREFIX into a directory prefix and basename prefix."
-  (let ((projection (project-file-completion-prefix prefix)))
+  (let ((projection (%project-file-completion-prefix prefix)))
     (values
      (%file-completion-prefix-projection-directory-prefix projection)
      (%file-completion-prefix-projection-file-prefix projection))))
 
-(defun file-completion-directory-pathname (directory-prefix)
+(defun %file-completion-directory-pathname (directory-prefix)
   "Return a pathname suitable for listing DIRECTORY-PREFIX."
   (pathname (if (string= directory-prefix "")
                 "./"
                 directory-prefix)))
 
-(defun safe-file-completion-list (fn directory)
+(defun %safe-file-completion-list (fn directory)
   "Call completion filesystem adapter FN for DIRECTORY, returning NIL on failure."
   (when fn
     (handler-case
         (funcall fn directory)
       (error () nil))))
 
-(defun ensure-directory-candidate-suffix (text)
+(defun %ensure-directory-candidate-suffix (text)
   "Return TEXT with a trailing slash for directory candidates."
   (if (or (string= text "")
           (path-separator-p (char text (1- (length text)))))
@@ -225,16 +225,16 @@
 
 (defun %file-completion-query-from-prefix (prefix include-files include-directories)
   (multiple-value-bind (directory-prefix name-prefix)
-      (split-file-completion-prefix prefix)
+      (%split-file-completion-prefix prefix)
     (%make-file-completion-query
      directory-prefix
      name-prefix
-     (file-completion-directory-pathname directory-prefix)
+     (%file-completion-directory-pathname directory-prefix)
      include-files
      include-directories)))
 
-(defun file-completion-entry-candidate (entry kind query)
-  (let ((name (entry-path-name entry)))
+(defun %file-completion-entry-candidate (entry kind query)
+  (let ((name (%entry-path-name entry)))
     (when (and name
                (not (string= name ""))
                (starts-with-p (%file-completion-query-name-prefix query) name))
@@ -242,7 +242,7 @@
                                     (%file-completion-query-directory-prefix query)
                                     name))
              (text (if (eq kind :directory)
-                       (ensure-directory-candidate-suffix raw-text)
+                       (%ensure-directory-candidate-suffix raw-text)
                        raw-text)))
         (make-candidate text
                         :kind kind
@@ -251,13 +251,13 @@
                                          "directory"
                                          "file"))))))
 
-(defun add-file-completion-entries (entries kind query candidates)
+(defun %add-file-completion-entries (entries kind query candidates)
   (dolist (entry entries candidates)
     (%filesystem-candidate-set-add
      candidates
-     (file-completion-entry-candidate entry kind query))))
+     (%file-completion-entry-candidate entry kind query))))
 
-(defun file-candidates-from-directory (prefix &key (include-files t) (include-directories t))
+(defun %file-candidates-from-directory (prefix &key (include-files t) (include-directories t))
   "Return filesystem completion candidates matching PREFIX."
   (let ((query (%file-completion-query-from-prefix
                 prefix
@@ -265,16 +265,16 @@
                 include-directories))
         (candidates (%make-empty-filesystem-candidate-set)))
     (when (%file-completion-query-include-directories query)
-      (add-file-completion-entries
-       (safe-file-completion-list *file-completion-subdirectories-fn*
-                                  (%file-completion-query-directory query))
+      (%add-file-completion-entries
+       (%safe-file-completion-list *file-completion-subdirectories-fn*
+                                   (%file-completion-query-directory query))
        :directory
        query
        candidates))
     (when (%file-completion-query-include-files query)
-      (add-file-completion-entries
-       (safe-file-completion-list *file-completion-directory-files-fn*
-                                  (%file-completion-query-directory query))
+      (%add-file-completion-entries
+       (%safe-file-completion-list *file-completion-directory-files-fn*
+                                   (%file-completion-query-directory query))
        :file
        query
        candidates))
@@ -294,10 +294,10 @@
   "Return filesystem candidates for MODE and PREFIX."
   (ecase mode
     (:directories
-     (file-candidates-from-directory prefix
-                                     :include-files nil
-                                     :include-directories t))
+     (%file-candidates-from-directory prefix
+                                      :include-files nil
+                                      :include-directories t))
     (:files-and-directories
-     (file-candidates-from-directory prefix
-                                     :include-files t
-                                     :include-directories t))))
+     (%file-candidates-from-directory prefix
+                                      :include-files t
+                                      :include-directories t))))

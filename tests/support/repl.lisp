@@ -21,6 +21,38 @@
      (nshell.presentation::with-fresh-repl-state-tables
        ,@body)))
 
+(defun repl-test-set-env (name value &optional exported)
+  (setf nshell.presentation::*environment*
+        (nshell.domain.environment:env-set
+         nshell.presentation::*environment* name value exported)))
+
+(defun repl-test-env (name)
+  (nshell.domain.environment:env-get nshell.presentation::*environment* name))
+
+(defun repl-test-define-alias (name expansion)
+  (setf (gethash name nshell.presentation::*aliases*) expansion))
+
+(defun repl-test-alias (name)
+  (gethash name nshell.presentation::*aliases*))
+
+(defun repl-test-abbreviation (name)
+  (gethash name nshell.presentation::*abbreviations*))
+
+(defun repl-test-define-function (name body-lines)
+  (setf (gethash name nshell.presentation::*functions*) body-lines))
+
+(defun repl-test-function (name)
+  (gethash name nshell.presentation::*functions*))
+
+(defun repl-test-register-process-entry (job-id entry)
+  (setf (gethash job-id nshell.presentation::*proc-registry*) entry))
+
+(defun repl-test-process-entry (job-id)
+  (gethash job-id nshell.presentation::*proc-registry*))
+
+(defun repl-test-running-p ()
+  nshell.presentation::*running*)
+
 (defmacro with-temporary-function ((symbol function) &body body)
   `(with-temporary-functions ((,symbol ,function))
      ,@body))

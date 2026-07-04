@@ -4,13 +4,12 @@
 
 (test exported-environment-strings-only-include-exported-vars
   "The REPL passes only exported domain environment variables to process launch."
-  (let* ((env (nshell.domain.environment:make-environment))
-         (env (nshell.domain.environment:env-set env "LOCAL_ONLY" "hidden" nil))
-         (env (nshell.domain.environment:env-set env "VISIBLE" "yes" t))
-         (nshell.presentation::*environment* env)
-         (strings (nshell.presentation::exported-environment-strings)))
-    (is (member "VISIBLE=yes" strings :test #'string=))
-    (is (not (member "LOCAL_ONLY=hidden" strings :test #'string=)))))
+  (with-repl-test-state
+    (repl-test-set-env "LOCAL_ONLY" "hidden")
+    (repl-test-set-env "VISIBLE" "yes" t)
+    (let ((strings (nshell.presentation::exported-environment-strings)))
+      (is (member "VISIBLE=yes" strings :test #'string=))
+      (is (not (member "LOCAL_ONLY=hidden" strings :test #'string=))))))
 
 (test repl-builtin-dispatches-through-application-registry
   "REPL builtin execution uses the application builtin registry and syncs context state."
@@ -20,9 +19,7 @@
       (is (string= "" output))
       (is (not (null builtin-p)))
       (is (= 0 code))
-      (is (string= "hello"
-                   (nshell.domain.environment:env-get
-                    nshell.presentation::*environment* "GREETING"))))
+      (is (string= "hello" (repl-test-env "GREETING"))))
     (multiple-value-bind (output builtin-p code)
         (call-repl-builtin "type" '("echo"))
       (is (not (null builtin-p)))
@@ -38,10 +35,10 @@
   "Registry builtins update REPL aliases, abbreviations, function table, and running flag."
   (with-repl-test-state
     (call-repl-builtin "alias" '("ll" "ls -l"))
-    (is (string= "ls -l" (gethash "ll" nshell.presentation::*aliases*)))
+    (is (string= "ls -l" (repl-test-alias "ll")))
     (call-repl-builtin "abbr" '("-a" "gco" "git" "checkout"))
-    (is (string= "git checkout" (gethash "gco" nshell.presentation::*abbreviations*)))
+    (is (string= "git checkout" (repl-test-abbreviation "gco")))
     (call-repl-builtin "function" '("hi" "echo" "hello" "end"))
-    (is (equal '("echo hello") (gethash "hi" nshell.presentation::*functions*)))
+    (is (equal '("echo hello") (repl-test-function "hi")))
     (call-repl-builtin "exit" nil)
-    (is (not nshell.presentation::*running*))))
+    (is (not (repl-test-running-p)))))

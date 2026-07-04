@@ -5,10 +5,7 @@
 (test repl-background-preparation-expands-command-position-word
   "Background preparation expands the command word before spawning."
   (with-repl-test-state
-    (setf nshell.presentation::*environment*
-          (nshell.domain.environment:env-set
-           nshell.presentation::*environment*
-           "CMD" "echo" nil))
+    (repl-test-set-env "CMD" "echo")
     (with-complete-command-line (result ast "$CMD bg-word")
       (is (null (nshell.domain.parsing:parse-errors result)))
       (multiple-value-bind (cmd redirects error)
@@ -26,10 +23,7 @@
                   ("echo split" 2)))
     (destructuring-bind (value expected-fields) case
       (with-repl-test-state
-        (setf nshell.presentation::*environment*
-              (nshell.domain.environment:env-set
-               nshell.presentation::*environment*
-               "CMD" value nil))
+        (repl-test-set-env "CMD" value)
         (with-complete-command-line (result ast "$CMD bg-word")
           (is (null (nshell.domain.parsing:parse-errors result)))
           (multiple-value-bind (cmd redirects error)
@@ -109,25 +103,19 @@
                                 monitor completed-job))
              (alive-job-id (nshell.domain.job-control:monitor-add-job
                             monitor alive-job)))
-        (let ((nshell.application:*job-monitor* monitor)
-              (nshell.presentation::*proc-registry*
-                (make-hash-table :test #'eql)))
-          (setf (gethash completed-job-id nshell.presentation::*proc-registry*)
-                  completed-proc
-                  (gethash alive-job-id nshell.presentation::*proc-registry*)
-                  alive-proc)
-            (let ((nshell.presentation::*background-proc-alive-p*
-                    (lambda (proc)
-                      (eq proc alive-proc)))
-                  (nshell.presentation::*background-proc-exit-code*
-                    (lambda (proc)
-                      (declare (ignore proc))
-                      17)))
-              (nshell.presentation::reap-background-jobs))
-            (is (null (gethash completed-job-id
-                               nshell.presentation::*proc-registry*)))
-            (is (eq alive-proc
-                  (gethash alive-job-id nshell.presentation::*proc-registry*)))
+        (let ((nshell.application:*job-monitor* monitor))
+          (repl-test-register-process-entry completed-job-id completed-proc)
+          (repl-test-register-process-entry alive-job-id alive-proc)
+          (let ((nshell.presentation::*background-proc-alive-p*
+                  (lambda (proc)
+                    (eq proc alive-proc)))
+                (nshell.presentation::*background-proc-exit-code*
+                  (lambda (proc)
+                    (declare (ignore proc))
+                    17)))
+            (nshell.presentation::reap-background-jobs))
+          (is (null (repl-test-process-entry completed-job-id)))
+          (is (eq alive-proc (repl-test-process-entry alive-job-id)))
           (is (eq :completed (nshell.domain.execution:job-state completed-job)))
           (is (= 17 (nshell.domain.execution:job-exit-code completed-job)))
           (is (eq :created (nshell.domain.execution:job-state alive-job)))
@@ -150,13 +138,13 @@
                                 monitor completed-job))
              (alive-job-id (nshell.domain.job-control:monitor-add-job
                             monitor alive-job)))
-        (let ((nshell.application:*job-monitor* monitor)
-              (nshell.presentation::*proc-registry*
-                (make-hash-table :test #'eql)))
-          (setf (gethash completed-job-id nshell.presentation::*proc-registry*)
-                  (list completed-proc-1 completed-proc-2)
-                (gethash alive-job-id nshell.presentation::*proc-registry*)
-                  (list completed-proc-1 alive-proc))
+        (let ((nshell.application:*job-monitor* monitor))
+          (repl-test-register-process-entry
+           completed-job-id
+           (list completed-proc-1 completed-proc-2))
+          (repl-test-register-process-entry
+           alive-job-id
+           (list completed-proc-1 alive-proc))
           (let ((nshell.presentation::*background-proc-alive-p*
                   (lambda (proc)
                     (eq proc alive-proc)))
@@ -167,10 +155,9 @@
                       (:completed-2 23)
                       (t 0)))))
             (nshell.presentation::reap-background-jobs))
-          (is (null (gethash completed-job-id
-                             nshell.presentation::*proc-registry*)))
+          (is (null (repl-test-process-entry completed-job-id)))
           (is (equal (list completed-proc-1 alive-proc)
-                     (gethash alive-job-id nshell.presentation::*proc-registry*)))
+                     (repl-test-process-entry alive-job-id)))
           (is (eq :completed (nshell.domain.execution:job-state completed-job)))
           (is (= 23 (nshell.domain.execution:job-exit-code completed-job)))
           (is (eq :created (nshell.domain.execution:job-state alive-job)))))))
@@ -187,12 +174,10 @@
         (unwind-protect
              (progn
                (sb-ext:process-wait proc)
-               (let ((nshell.application:*job-monitor* monitor)
-                     (nshell.presentation::*proc-registry*
-                       (make-hash-table :test #'eql)))
-                 (setf (gethash job-id nshell.presentation::*proc-registry*) proc)
+               (let ((nshell.application:*job-monitor* monitor))
+                 (repl-test-register-process-entry job-id proc)
                  (nshell.presentation::reap-background-jobs)
-                 (is (null (gethash job-id nshell.presentation::*proc-registry*)))
+                 (is (null (repl-test-process-entry job-id)))
                  (is (eq :completed (nshell.domain.execution:job-state job)))
                  (is (= 143 (nshell.domain.execution:job-exit-code job)))))
           (when (and proc (sb-ext:process-alive-p proc))

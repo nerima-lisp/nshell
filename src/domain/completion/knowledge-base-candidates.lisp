@@ -81,9 +81,10 @@
 (defun entry-option-value-specs (entry)
   (getf entry :option-values))
 
-(defstruct (entry-option-value-spec-projection
+(defstruct (%entry-option-value-spec-projection
             (:constructor %make-entry-option-value-spec-projection
-                (option values valid-p)))
+                (option values valid-p))
+            (:conc-name %entry-option-value-spec-projection-))
   option
   values
   valid-p)
@@ -97,18 +98,18 @@
       (%make-entry-option-value-spec-projection nil nil nil)))
 
 (defun entry-option-value-spec-option (spec)
-  (entry-option-value-spec-projection-option
+  (%entry-option-value-spec-projection-option
    (project-entry-option-value-spec spec)))
 
 (defun entry-option-value-spec-values (spec)
-  (entry-option-value-spec-projection-values
+  (%entry-option-value-spec-projection-values
    (project-entry-option-value-spec spec)))
 
 (defun entry-option-value-spec-for-option-p (spec option)
   (let ((projection (project-entry-option-value-spec spec)))
-    (and (entry-option-value-spec-projection-valid-p projection)
+    (and (%entry-option-value-spec-projection-valid-p projection)
          (string= option
-                  (entry-option-value-spec-projection-option projection)))))
+                  (%entry-option-value-spec-projection-option projection)))))
 
 (defun entry-option-values (entry option)
   (unique-string-values

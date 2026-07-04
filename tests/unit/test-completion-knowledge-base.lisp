@@ -112,12 +112,12 @@
             (nshell.domain.completion::project-entry-option-value-spec
              '("--mode" "fast"))))
       (is (string= "--mode"
-                   (nshell.domain.completion::entry-option-value-spec-projection-option
+                   (nshell.domain.completion::%entry-option-value-spec-projection-option
                     projection)))
       (is (equal '("fast")
-                 (nshell.domain.completion::entry-option-value-spec-projection-values
+                 (nshell.domain.completion::%entry-option-value-spec-projection-values
                   projection)))
-      (is (nshell.domain.completion::entry-option-value-spec-projection-valid-p
+      (is (nshell.domain.completion::%entry-option-value-spec-projection-valid-p
            projection)))
     (is (string= "--mode"
                  (nshell.domain.completion::entry-option-value-spec-option
@@ -131,12 +131,24 @@
     (is (not (nshell.domain.completion::entry-option-value-spec-for-option-p
               '("--format" "json")
               "--mode")))
-    (is (not (nshell.domain.completion::entry-option-value-spec-projection-valid-p
+    (is (not (nshell.domain.completion::%entry-option-value-spec-projection-valid-p
               (nshell.domain.completion::project-entry-option-value-spec
                '(nil "ignored")))))
     (is (equal '("fast" "safe")
                (nshell.domain.completion::entry-option-values entry "--mode")))
     (is (null (nshell.domain.completion::entry-option-values entry "--missing")))))
+
+(test entry-option-value-spec-projection-is-internal-boundary
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (is (not (defined-symbol-p "MAKE-ENTRY-OPTION-VALUE-SPEC-PROJECTION")))
+    (is (not (defined-symbol-p "ENTRY-OPTION-VALUE-SPEC-PROJECTION-OPTION")))
+    (is (not (defined-symbol-p "ENTRY-OPTION-VALUE-SPEC-PROJECTION-VALUES")))
+    (is (not (defined-symbol-p "ENTRY-OPTION-VALUE-SPEC-PROJECTION-VALID-P"))))
+  (is (fboundp 'nshell.domain.completion::%make-entry-option-value-spec-projection))
+  (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-projection-option))
+  (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-projection-values))
+  (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-projection-valid-p)))
 
 (test parse-attached-option-value-prefix-captures-option-and-value-prefix
   (let ((prefix (nshell.domain.completion::parse-attached-option-value-prefix

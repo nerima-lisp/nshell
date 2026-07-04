@@ -61,6 +61,19 @@
     (is (null (nshell.domain.parsing::%redirect-spec-entry
                "not-a-redirect")))))
 
+(test redirect-entry-projects-runtime-redirect-shape
+  "Runtime redirect entries isolate cons shape from redirect classification."
+  (let ((entry (nshell.domain.parsing::%redirect-entry-from-raw
+                '(:>> . "out.txt"))))
+    (is (nshell.domain.parsing::%redirect-entry-p entry))
+    (is (eq :>> (nshell.domain.parsing::%redirect-entry-kind entry)))
+    (is (string= "out.txt"
+                 (nshell.domain.parsing::%redirect-entry-target entry)))
+    (is (equal '(:>> . "out.txt")
+               (nshell.domain.parsing::%redirect-entry-to-raw entry)))
+    (is (null (nshell.domain.parsing::%redirect-entry-from-raw nil)))
+    (is (null (nshell.domain.parsing::%redirect-entry-to-raw nil)))))
+
 (test redirect-target-policy-projects-target-requirement
   "Redirect target policy owns which redirect specs consume a target."
   (let ((fd-dup-policy

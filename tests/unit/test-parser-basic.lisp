@@ -1051,14 +1051,15 @@
 
 (test parser-reduction-command-entry-projects-state-boundary
   "Command entry projection owns the reducer's command/separator/token shape."
-  (let* ((state (nshell.domain.parsing::%make-token-reduction-state))
-         (command-token (nshell.domain.parsing:make-token :word "echo" 0 4))
-         (separator-token (nshell.domain.parsing:make-token :pipe "|" 5 6)))
-    (setf (nshell.domain.parsing::%token-reduction-state-current-cmd state) "echo"
-          (nshell.domain.parsing::%token-reduction-state-current-cmd-token state) command-token
-          (nshell.domain.parsing::%token-reduction-state-current-args state) (list "hello")
-          (nshell.domain.parsing::%token-reduction-state-pending-sep state) :pipe
-          (nshell.domain.parsing::%token-reduction-state-pending-sep-token state) separator-token)
+  (let* ((command-token (nshell.domain.parsing:make-token :word "echo" 0 4))
+         (separator-token (nshell.domain.parsing:make-token :pipe "|" 5 6))
+         (state
+           (nshell.domain.parsing::%make-token-reduction-state
+            :current-cmd "echo"
+            :current-cmd-token command-token
+            :current-args (list "hello")
+            :pending-sep :pipe
+            :pending-sep-token separator-token)))
     (destructuring-bind (command separator token)
         (nshell.domain.parsing::%token-reduction-command-entry-from-state state)
       (is (string= "echo"
@@ -1075,10 +1076,12 @@
     (is (not (vectorp state)))
     (is (null (nshell.domain.parsing::%token-reduction-state-all-cmds state)))
     (is (null (nshell.domain.parsing::%token-reduction-state-current-args state)))
-    (is (null (nshell.domain.parsing::%token-reduction-state-errors state)))
-    (setf (nshell.domain.parsing::%token-reduction-state-current-cmd state) "echo"
-          (nshell.domain.parsing::%token-reduction-state-current-args state) (list "hello")
-          (nshell.domain.parsing::%token-reduction-state-pending-sep state) :pipe)
+    (is (null (nshell.domain.parsing::%token-reduction-state-errors state))))
+  (let ((state
+          (nshell.domain.parsing::%make-token-reduction-state
+           :current-cmd "echo"
+           :current-args (list "hello")
+           :pending-sep :pipe)))
     (is (string= "echo"
                  (nshell.domain.parsing::%token-reduction-state-current-cmd state)))
     (is (equal '("hello")

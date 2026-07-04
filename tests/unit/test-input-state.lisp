@@ -233,19 +233,28 @@
             new-state
             :undo-stack (list existing)
             :redo-stack (list redo)))
+         (recorded-transition
+           (nshell.presentation::undo-recording-transition
+            old-state
+            new-state-with-history
+            :suggest-update
+            (input-key-event :char #\c)))
+         (ignored-transition
+           (nshell.presentation::undo-recording-transition
+            old-state
+            new-state-with-history
+            :suggest-update
+            (input-key-event :ctrl-underscore)))
          (step (nshell.presentation::undo-recording-step-for-transition
-                old-state
-                new-state-with-history
-                :suggest-update
-                (input-key-event :char #\c)))
+                recorded-transition))
          (recorded (nshell.presentation::apply-undo-recording-step
-                    new-state-with-history
-                    step))
+                     new-state-with-history
+                     step))
          (ignored (nshell.presentation::undo-recording-step-for-transition
-                   old-state
-                   new-state-with-history
-                   :suggest-update
-                   (input-key-event :ctrl-underscore))))
+                   ignored-transition)))
+    (is (nshell.presentation::%undo-recording-transition-p
+         recorded-transition))
+    (is (not (listp recorded-transition)))
     (is (nshell.presentation::%undo-recording-step-p step))
     (is (not (listp step)))
     (is (= 2
@@ -263,6 +272,7 @@
            (length (nshell.presentation::input-state-undo-stack recorded))))
     (is (null (nshell.presentation::input-state-redo-stack recorded)))
     (is (null ignored))
+    (is (not (fboundp 'nshell.presentation::make-undo-recording-transition)))
     (is (not (fboundp 'nshell.presentation::make-undo-recording-step)))))
 
 (test input-state-finalize-transition-keeps-ctrl-l-session-state

@@ -23,6 +23,15 @@
   undo-stack
   redo-stack)
 
+(defstruct (%undo-recording-transition
+            (:constructor %make-undo-recording-transition
+                (old-state new-state output key-event))
+            (:conc-name %undo-recording-transition-))
+  old-state
+  new-state
+  output
+  key-event)
+
 (defun input-edit-snapshot (state)
   (%make-input-edit-snapshot (input-state-buffer state)
                              (input-state-cursor-pos state)))
@@ -83,24 +92,40 @@
                 :suggest-update)
         (values state :none))))
 
-(defun undo-recordable-transition-p (old-state new-state output key-event)
-  (and (eq output :suggest-update)
-       (eq (input-state-mode old-state) :insert)
-       (eq (input-state-mode new-state) :insert)
-       (not (member (nshell.domain.input:key-event-type key-event)
-                    '(:ctrl-underscore :alt-r)
-                    :test #'eq))
-       (not (and (string= (input-state-buffer old-state)
-                          (input-state-buffer new-state))
-                 (= (input-state-cursor-pos old-state)
-                    (input-state-cursor-pos new-state))))))
+(defun undo-recording-transition (old-state new-state output key-event)
+  (%make-undo-recording-transition old-state new-state output key-event))
 
-(defun undo-recording-step-for-transition (old-state new-state output key-event)
-  (when (undo-recordable-transition-p old-state new-state output key-event)
-    (%make-undo-recording-step
-     (cons (input-edit-snapshot old-state)
-           (input-state-undo-stack new-state))
-     nil)))
+(defun undo-recording-transition-key-type (transition)
+  (nshell.domain.input:key-event-type
+   (%undo-recording-transition-key-event transition)))
+
+(defun undo-recording-transition-edit-p (transition)
+  (let ((old-state (%undo-recording-transition-old-state transition))
+        (new-state (%undo-recording-transition-new-state transition)))
+    (or (not (string= (input-state-buffer old-state)
+                      (input-state-buffer new-state)))
+        (/= (input-state-cursor-pos old-state)
+            (input-state-cursor-pos new-state)))))
+
+(defun undo-recordable-transition-p (transition)
+  (let ((old-state (%undo-recording-transition-old-state transition))
+        (new-state (%undo-recording-transition-new-state transition)))
+    (and (eq (%undo-recording-transition-output transition) :suggest-update)
+         (eq (input-state-mode old-state) :insert)
+         (eq (input-state-mode new-state) :insert)
+         (not (member (undo-recording-transition-key-type transition)
+                      '(:ctrl-underscore :alt-r)
+                      :test #'eq))
+         (undo-recording-transition-edit-p transition))))
+
+(defun undo-recording-step-for-transition (transition)
+  (when (undo-recordable-transition-p transition)
+    (let ((old-state (%undo-recording-transition-old-state transition))
+          (new-state (%undo-recording-transition-new-state transition)))
+      (%make-undo-recording-step
+       (cons (input-edit-snapshot old-state)
+             (input-state-undo-stack new-state))
+       nil))))
 
 (defun apply-undo-recording-step (state step)
   (copy-input-state-with state
@@ -110,10 +135,11 @@
                                       step)))
 
 (defun record-undo-transition (old-state new-state output key-event)
-  (let ((step (undo-recording-step-for-transition old-state
-                                                  new-state
-                                                  output
-                                                  key-event)))
+  (let* ((transition (undo-recording-transition old-state
+                                                new-state
+                                                output
+                                                key-event))
+         (step (undo-recording-step-for-transition transition)))
     (if step
         (apply-undo-recording-step new-state step)
       new-state)))

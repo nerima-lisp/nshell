@@ -23,25 +23,30 @@
 
 (defstruct (%candidate-merge-slot-projection
             (:constructor %make-candidate-merge-slot-projection
-                (current-candidate results-cell))
+                (current-candidate))
             (:conc-name %candidate-merge-slot-projection-))
-  current-candidate
+  current-candidate)
+
+(defun %candidate-results-cell-candidate (results-cell)
+  (first results-cell))
+
+(defun %candidate-results-cell-replace-candidate (results-cell candidate)
+  (setf (first results-cell) candidate)
   results-cell)
 
 (defun %project-candidate-merge-slot (slot)
   (let ((results-cell (%candidate-merge-slot-results-cell slot)))
     (%make-candidate-merge-slot-projection
-     (first results-cell)
-     results-cell)))
+     (%candidate-results-cell-candidate results-cell))))
 
 (defun %candidate-merge-slot-candidate (slot)
   (%candidate-merge-slot-projection-current-candidate
    (%project-candidate-merge-slot slot)))
 
 (defun %candidate-merge-slot-replace-candidate (slot candidate)
-  (let ((projection (%project-candidate-merge-slot slot)))
-    (setf (first (%candidate-merge-slot-projection-results-cell projection))
-          candidate))
+  (%candidate-results-cell-replace-candidate
+   (%candidate-merge-slot-results-cell slot)
+   candidate)
   slot)
 
 (defstruct (%candidate-merge-state

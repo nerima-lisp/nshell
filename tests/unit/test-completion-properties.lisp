@@ -72,6 +72,22 @@
                  (nshell.domain.completion:candidate-text (first results))))
     (is (eq high (second results)))))
 
+(test candidate-results-cell-owns-current-candidate-replacement
+  "Candidate result cells own raw cons-cell candidate projection and mutation."
+  (let* ((low (nshell.domain.completion:make-candidate "dup" :score 1))
+         (high (nshell.domain.completion:make-candidate "dup" :score 5))
+         (results-cell (list low)))
+    (is (eq low
+            (nshell.domain.completion::%candidate-results-cell-candidate
+             results-cell)))
+    (is (eq results-cell
+            (nshell.domain.completion::%candidate-results-cell-replace-candidate
+             results-cell
+             high)))
+    (is (eq high
+            (nshell.domain.completion::%candidate-results-cell-candidate
+             results-cell)))))
+
 (test completion-candidate-constructors-are-internal-boundaries
   (flet ((internal-symbol-p (name)
            (not (null (find-symbol name '#:nshell.domain.completion))))
@@ -135,6 +151,9 @@
     (is (not (internal-function-p "PROJECT-CANDIDATE-MERGE-SLOT")))
     (is (not (internal-function-p "CANDIDATE-MERGE-SLOT-CANDIDATE")))
     (is (not (internal-function-p "CANDIDATE-MERGE-SLOT-REPLACE-CANDIDATE")))
+    (is (not (internal-function-p "CANDIDATE-RESULTS-CELL-CANDIDATE")))
+    (is (not (internal-function-p "CANDIDATE-RESULTS-CELL-REPLACE-CANDIDATE")))
+    (is (not (internal-function-p "%CANDIDATE-MERGE-SLOT-PROJECTION-RESULTS-CELL")))
     (is (internal-symbol-p "%MAKE-CANDIDATE-RANKING"))
     (is (internal-symbol-p "%MAKE-DUPLICATE-CANDIDATE-QUALITY"))
     (is (internal-function-p "%CANDIDATE-RANKING-SCORE"))
@@ -163,7 +182,9 @@
     (is (internal-function-p "%MERGE-CANDIDATE"))
     (is (internal-function-p "%PROJECT-CANDIDATE-MERGE-SLOT"))
     (is (internal-function-p "%CANDIDATE-MERGE-SLOT-CANDIDATE"))
-    (is (internal-function-p "%CANDIDATE-MERGE-SLOT-REPLACE-CANDIDATE"))))
+    (is (internal-function-p "%CANDIDATE-MERGE-SLOT-REPLACE-CANDIDATE"))
+    (is (internal-function-p "%CANDIDATE-RESULTS-CELL-CANDIDATE"))
+    (is (internal-function-p "%CANDIDATE-RESULTS-CELL-REPLACE-CANDIDATE"))))
 
 (test pbt-path-command-completion-is-prefixed-and-deduped
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

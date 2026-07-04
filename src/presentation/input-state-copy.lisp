@@ -1,19 +1,25 @@
 ; Input state copy-with-overrides: initargs assembler and public copy-input-state-with API.
 (in-package #:nshell.presentation)
 
-(defun %copy-input-state-initargs (new-buffer
-                                   new-cursor
-                                   completion-values
-                                   transient-values
-                                   session-values)
-  (append (list :buffer new-buffer
-                :cursor-pos new-cursor)
+(defstruct (%input-state-copy-spec
+            (:constructor %make-input-state-copy-spec
+                (&key buffer cursor-pos completion transient session))
+            (:conc-name %input-state-copy-spec-))
+  buffer
+  cursor-pos
+  completion
+  transient
+  session)
+
+(defun %copy-input-state-initargs (spec)
+  (append (list :buffer (%input-state-copy-spec-buffer spec)
+                :cursor-pos (%input-state-copy-spec-cursor-pos spec))
             (%copy-input-state-completion-initargs
-             completion-values)
+             (%input-state-copy-spec-completion spec))
             (%copy-input-state-transient-initargs
-             transient-values)
+             (%input-state-copy-spec-transient spec))
             (%copy-input-state-session-initargs
-             session-values)))
+             (%input-state-copy-spec-session spec))))
 
 (defun copy-input-state-with (state &key buffer cursor-pos
                                       (completion-index nil
@@ -48,8 +54,8 @@
                                       (undo-stack nil undo-stack-supplied-p)
                                       (redo-stack nil redo-stack-supplied-p))
   (let* ((new-buffer (or buffer (input-state-buffer state)))
-          (new-cursor (clamp-cursor (or cursor-pos (input-state-cursor-pos state))
-                                     new-buffer))
+         (new-cursor (clamp-cursor (or cursor-pos (input-state-cursor-pos state))
+                                   new-buffer))
          (completion-values
            (%copy-input-state-completion-values
             state
@@ -99,12 +105,13 @@
             redo-stack-supplied-p
             redo-stack)))
     (apply #'make-input-state
-             (%copy-input-state-initargs
-              new-buffer
-              new-cursor
-              completion-values
-              transient-values
-              session-values))))
+           (%copy-input-state-initargs
+            (%make-input-state-copy-spec
+             :buffer new-buffer
+             :cursor-pos new-cursor
+             :completion completion-values
+             :transient transient-values
+             :session session-values)))))
 
 (defun normalize-input-state (state)
   (copy-input-state-with

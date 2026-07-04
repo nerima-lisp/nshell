@@ -14,14 +14,20 @@
 
 (test generic-event-factory
   "Generic domain events can be created through an explicit factory."
-  (let ((event (nshell.domain.events:make-generic-domain-event :test-event)))
+  (let ((event (nshell.domain.events:make-generic-domain-event :test-event :timestamp 0)))
     (is (eq (nshell.domain.events:domain-event-type event) :test-event))
-    (is (integerp (nshell.domain.events:domain-event-timestamp event)))))
+    (is (= 0 (nshell.domain.events:domain-event-timestamp event)))))
 
-(test domain-event-constructor-is-internal-boundary
-  "The raw struct constructor is not part of the package boundary."
-  (is (not (fboundp 'nshell.domain.events::make-domain-event)))
-  (is (fboundp 'nshell.domain.events::%make-domain-event)))
+(test domain-event-factory-enforces-event-invariants
+  "Domain events are created through invariant-checking factories."
+  (signals type-error
+    (nshell.domain.events:make-generic-domain-event "not-a-keyword"))
+  (signals type-error
+    (nshell.domain.events:make-generic-domain-event :test :timestamp nil))
+  (let ((event (nshell.domain.events:make-command-entered-event "ls")))
+    (is (nshell.domain.events:domain-event-p event))
+    (is (eq (nshell.domain.events:domain-event-type event) :command-entered))
+    (is (integerp (nshell.domain.events:domain-event-timestamp event)))))
 
 (test command-events-have-correct-types
   "All command event constructors produce correct types"

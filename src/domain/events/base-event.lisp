@@ -4,15 +4,20 @@
   (type nil :type keyword :read-only t)
   (timestamp (get-universal-time) :type integer :read-only t))
 
-(defun make-generic-domain-event (type &key timestamp)
-  (%make-domain-event type (or timestamp (get-universal-time))))
+(defun %make-domain-event-with-invariants (type &optional (timestamp (get-universal-time)))
+  (check-type type keyword)
+  (check-type timestamp integer)
+  (%make-domain-event type timestamp))
+
+(defun make-generic-domain-event (type &key (timestamp (get-universal-time)))
+  (%make-domain-event-with-invariants type timestamp))
 
 (defmacro define-event-constructors (&rest specs)
   `(progn
      ,@(loop for (name type args) in specs
-             collect `(defun ,name ,args
-                        ,(when args `(declare (ignore ,@args)))
-                        (%make-domain-event ,type)))))
+              collect `(defun ,name ,args
+                          ,(when args `(declare (ignore ,@args)))
+                          (%make-domain-event-with-invariants ,type)))))
 
 (define-event-constructors
   (make-command-entered-event :command-entered (text))

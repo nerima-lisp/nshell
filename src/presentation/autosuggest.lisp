@@ -32,18 +32,23 @@
             (when (and (<= (length prefix) (length text))
                        (string-equal prefix text :end2 (length prefix))
                        (< (length prefix) (length text)))
-              (multiple-value-bind (token-start token-end)
-                  (nshell.presentation::%completion-token-bounds input (length input))
-                (let* ((quote-context (nshell.presentation::%completion-quote-context
-                                       input token-start token-end))
-                       (escaped-prefix (nshell.presentation::%completion-insertion-text
-                                        prefix
-                                        :quote-context quote-context))
-                       (escaped-text (nshell.presentation::%completion-insertion-text
-                                      text
-                                      :quote-context quote-context)))
+              (let* ((token-bounds (nshell.presentation::%completion-token-bounds
+                                     input
+                                     (length input)))
+                     (token-start (nshell.presentation::completion-token-slice-start
+                                    token-bounds))
+                     (token-end (nshell.presentation::completion-token-slice-end
+                                  token-bounds))
+                     (quote-context (nshell.presentation::%completion-quote-context
+                                      input token-start token-end))
+                     (escaped-prefix (nshell.presentation::%completion-insertion-text
+                                      prefix
+                                      :quote-context quote-context))
+                     (escaped-text (nshell.presentation::%completion-insertion-text
+                                    text
+                                    :quote-context quote-context)))
                   (unless (%autosuggest-closed-quoted-token-p input token-start token-end)
-                    (subseq escaped-text (length escaped-prefix))))))))
+                    (subseq escaped-text (length escaped-prefix)))))))
       (error () nil))))
 
 (defun compute-suggestion (history input &key knowledge-base path)

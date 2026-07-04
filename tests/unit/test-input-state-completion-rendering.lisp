@@ -231,6 +231,26 @@
     (is (eq :double (ctx "\"foo" 0)))
     (is (null       (ctx "foo"  0)))))
 
+(test completion-token-bounds-return-slices
+  "completion token bounds are explicit slices; body bounds remove quote delimiters."
+  (let* ((token-bounds (nshell.presentation::%completion-token-bounds
+                        "echo \"foo bar\""
+                        7))
+         (body-bounds (nshell.presentation::%completion-token-body-bounds
+                       "echo \"foo bar\""
+                       token-bounds))
+         (empty-bounds (nshell.presentation::%completion-token-bounds
+                        "echo "
+                        5)))
+    (is (nshell.presentation::completion-token-slice-p token-bounds))
+    (is (= 5 (nshell.presentation::completion-token-slice-start token-bounds)))
+    (is (= 14 (nshell.presentation::completion-token-slice-end token-bounds)))
+    (is (nshell.presentation::completion-token-slice-p body-bounds))
+    (is (= 6 (nshell.presentation::completion-token-slice-start body-bounds)))
+    (is (= 13 (nshell.presentation::completion-token-slice-end body-bounds)))
+    (is (= 5 (nshell.presentation::completion-token-slice-start empty-bounds)))
+    (is (= 5 (nshell.presentation::completion-token-slice-end empty-bounds)))))
+
 (test common-prefix-two-finds-shared-leading-substring
   "common-prefix-two returns the longest common prefix of two strings."
   (flet ((pre (a b) (nshell.presentation::%common-prefix-two a b)))

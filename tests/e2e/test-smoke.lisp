@@ -159,7 +159,7 @@
   (with-complete-command-line (result ast "echo hello world")
     (is (nshell.domain.parsing:command-node-p ast))
     (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
-    (is (equal '("hello" "world") (nshell.domain.parsing:command-node-args ast)))))
+    (is (equal '("hello" "world") (nshell.domain.parsing:command-node-arg-values ast)))))
 (test e2e-full-repl-cycle
   (let* ((history (nshell.domain.history:make-command-history))
          (line "pwd"))

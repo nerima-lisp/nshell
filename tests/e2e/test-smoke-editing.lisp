@@ -14,7 +14,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "git" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("status")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-ctrl-e-accepts-autosuggestion-tail
   (let* ((events (read-key-events-from-string (string (code-char 5))))
@@ -29,7 +29,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "git" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("status")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-right-and-ctrl-f-accept-autosuggestion-tail
   "Decoded Right and Ctrl-F both accept the complete autosuggestion tail at line end."
@@ -75,7 +75,7 @@
         (is (string= "git"
                      (nshell.domain.parsing:command-node-command (first commands))))
         (is (equal '("status")
-                   (nshell.domain.parsing:command-node-args (first commands))))
+                   (nshell.domain.parsing:command-node-arg-values (first commands))))
         (is (string= "grep"
                      (nshell.domain.parsing:command-node-command (second commands))))))))
 
@@ -94,7 +94,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "git" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("status")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-alt-right-accepts-attached-redirection-target
   (let* ((events (read-key-events-from-string (esc-sequence "f")))
@@ -110,8 +110,8 @@
                  (nshell.presentation:input-state-suggestion state)))
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
-      (is (equal '("hi" (">" . nil) "out.txt")
-                 (nshell.domain.parsing:command-node-args ast))))))
+      (is (equal '("hi" ">" "out.txt")
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-control-h-backspace-input-cycle
   (let* ((events (read-key-events-from-string
@@ -126,7 +126,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "git" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("status")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-ctrl-d-deletes-character-under-cursor
   (let* ((events (read-key-events-from-string
@@ -142,7 +142,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("hello")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-ctrl-d-on-empty-input-requests-quit
   (let* ((events (read-key-events-from-string (string (code-char 4))))
@@ -203,7 +203,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "git" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("status")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-alt-y-yank-pop-input-cycle
   (let* ((events (read-key-events-from-string
@@ -221,7 +221,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("second")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-multiline-quoted-command-cycle
   (let* ((history (nshell.domain.history:make-command-history))

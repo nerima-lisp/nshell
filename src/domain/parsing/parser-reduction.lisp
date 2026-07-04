@@ -109,11 +109,9 @@
    t))
 
 (defun %token-reduction-argument-raw-value (argument)
-  (if (or (%token-reduction-argument-quote-style argument)
-          (%token-reduction-argument-syntactic-p argument))
-      (cons (%token-reduction-argument-value argument)
-            (%token-reduction-argument-quote-style argument))
-      (%token-reduction-argument-value argument)))
+  (make-command-arg
+   (%token-reduction-argument-value argument)
+   (%token-reduction-argument-quote-style argument)))
 
 (defun %token-reduction-word-argument (tok)
   (%token-reduction-argument-raw-value

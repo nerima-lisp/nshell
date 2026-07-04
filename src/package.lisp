@@ -81,6 +81,8 @@
                 #:sequence-node-separators
                 #:command-node-arg-values #:split-command-node-redirects
                 #:split-command-nodes-redirects #:ast-node->command-line
+                #:command-arg #:command-arg-p #:make-command-arg
+                #:command-arg-value #:command-arg-quote-style
                 #:arg-value #:arg-quote-style
                 #:sequence-node-command-separator
                 #:sequence-node-command-separator-p

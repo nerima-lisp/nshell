@@ -185,7 +185,9 @@
   "Control-flow header helpers should consume one typed argument projection."
   (let* ((header (nshell.domain.parsing:make-command-node
                   "else"
-                  '(("if" . :double) "false" "extra")))
+                  (list (nshell.domain.parsing:make-command-arg "if" :double)
+                        "false"
+                        "extra")))
          (header-args (nshell.domain.parsing::%control-flow-header-args header))
          (condition (nshell.domain.parsing::%command-from-header-args header)))
     (is (nshell.domain.parsing::%control-flow-header-args-p header-args))
@@ -217,7 +219,12 @@
   "For grouping should consume a typed loop-binding projection from the header."
   (let* ((explicit-header (nshell.domain.parsing:make-command-node
                            "for"
-                           '(("item" . :double) "in" "a" "b")))
+                           (list (nshell.domain.parsing:make-command-arg
+                                  "item"
+                                  :double)
+                                 "in"
+                                 "a"
+                                 "b")))
          (explicit-binding
            (nshell.domain.parsing::%control-flow-for-header-binding-from-header
             explicit-header))
@@ -350,7 +357,10 @@
   "Switch grouping should consume a typed case-pattern projection from case headers."
   (let* ((explicit-header (nshell.domain.parsing:make-command-node
                            "case"
-                           '(("vanilla" . :single) "chocolate")))
+                           (list (nshell.domain.parsing:make-command-arg
+                                  "vanilla"
+                                  :single)
+                                 "chocolate")))
          (explicit-patterns
            (nshell.domain.parsing::%control-flow-switch-case-patterns-from-header
             explicit-header))
@@ -402,7 +412,7 @@
                      (nshell.domain.parsing:command-node-command
                       (first (nshell.domain.parsing:if-node-then-branch nested-if)))))
         (is (equal '("no")
-                   (nshell.domain.parsing:command-node-args
+                   (nshell.domain.parsing:command-node-arg-values
                     (first (nshell.domain.parsing:if-node-then-branch nested-if)))))))))
 
 (test parse-else-if-preserves-nested-else-branch
@@ -420,7 +430,7 @@
                    (nshell.domain.parsing:command-node-command
                     (first nested-else))))
       (is (equal '("yes")
-                 (nshell.domain.parsing:command-node-args
+                 (nshell.domain.parsing:command-node-arg-values
                   (first nested-else)))))))
 
 (test control-flow-grouping-route-projects-block-grouper-policy

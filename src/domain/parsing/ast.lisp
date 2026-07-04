@@ -4,6 +4,9 @@
 (defun %copy-ast-list (items)
   (copy-list (or items '())))
 
+(defun %copy-command-args (args)
+  (mapcar #'%command-arg args))
+
 (defstruct (ast-node (:constructor %make-ast-node (type &optional span)))
   (type :unknown :type keyword :read-only t)
   (span nil :type list :read-only t))
@@ -17,7 +20,7 @@
 
 (defun make-command-node (command args &optional span command-quote-style)
   (%make-command-node command
-                      (%copy-ast-list args)
+                      (%copy-command-args args)
                       span
                       command-quote-style))
 
@@ -123,16 +126,16 @@
   (kind :unknown :type keyword :read-only t))
 
 
-;; -- Arg utilities (cons-based arg support) -----------------
-(defstruct (%command-arg
-            (:constructor %make-command-arg (value quote-style)))
-  (value nil :read-only t)
-  (quote-style nil :read-only t))
+;; -- Arg utilities ------------------------------------------
+(defstruct (command-arg
+            (:constructor make-command-arg (value &optional quote-style)))
+  (value "" :type string :read-only t)
+  (quote-style nil :type (member nil :single :double) :read-only t))
 
-(defun %command-arg-from-raw (arg)
-  (if (consp arg)
-      (%make-command-arg (car arg) (cdr arg))
-      (%make-command-arg arg nil)))
+(defun %command-arg (arg)
+  (etypecase arg
+    (command-arg arg)
+    (string (make-command-arg arg nil))))
 
 (defun %validated-command-arg-quote-style (arg style)
   (case style
@@ -140,19 +143,17 @@
     (t (error "Invalid quote style ~S in arg ~S" style arg))))
 
 (defun arg-value (arg)
-  "Extract string value from an arg (string or (value . quote-style) cons)."
-  (%command-arg-value (%command-arg-from-raw arg)))
+  "Return the string value from a typed command argument."
+  (command-arg-value (%command-arg arg)))
 
 (defun arg-quote-style (arg)
-  "Return the quote style of ARG: NIL, :SINGLE, or :DOUBLE.
-Bare-string args and redirect-target conses are unquoted."
-  (when (consp arg)
-    (%validated-command-arg-quote-style
-     arg
-     (%command-arg-quote-style (%command-arg-from-raw arg)))))
+  "Return the quote style of ARG: NIL, :SINGLE, or :DOUBLE."
+  (%validated-command-arg-quote-style
+   arg
+   (command-arg-quote-style (%command-arg arg))))
 
 (defun command-node-arg-values (node)
-  "Return all args as plain strings (unwrapping cons cells)."
+  "Return all typed args as plain strings."
   (mapcar #'arg-value (command-node-args node)))
 
 (defun split-command-node-redirects (cmd-node)

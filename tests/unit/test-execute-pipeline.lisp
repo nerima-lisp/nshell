@@ -25,7 +25,7 @@
                  "--non-interactive"
                  "--disable-debugger"
                  "--eval"
-                 (cons form :single))
+                 (nshell.domain.parsing:make-command-arg form :single))
            extra-args)))
 
 (test execute-command-line-adds-complete-commands-to-history

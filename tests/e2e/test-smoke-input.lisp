@@ -48,7 +48,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "sudo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("apt" "update")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-ctrl-t-input-cycle
   (let* ((events (read-key-events-from-string
@@ -64,7 +64,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "git" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("status")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-alt-t-input-cycle
   (let* ((events (read-key-events-from-string
@@ -77,7 +77,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("hello" "world")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-alt-u-input-cycle
   (let* ((events (read-key-events-from-string
@@ -90,7 +90,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("HELLO")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-bracketed-paste-normalizes-newlines-and-undos-once
   (let* ((raw-paste (format nil "echo one~C~Cecho two~C"
@@ -139,7 +139,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("tail")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-ctrl-k-replaces-line-suffix
   (let* ((events (read-key-events-from-string
@@ -156,7 +156,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("hello" "shell")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-ctrl-u-yank-restores-killed-line
   (let* ((events (read-key-events-from-string
@@ -172,7 +172,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("hello" "world")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-ctrl-w-yank-restores-escaped-word
   (let* ((events (read-key-events-from-string
@@ -188,7 +188,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("hello world")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-ctrl-g-cancels-completion-session
   (let* ((events (read-key-events-from-string (string (code-char 7))))

@@ -57,7 +57,7 @@
           (let ((ast (nshell.domain.parsing::make-sequence-node
                       (list (nshell.domain.parsing:make-command-node
                              "printf"
-                             (list (cons "%s" :single) "bg" ">" output)))
+                             (list (nshell.domain.parsing:make-command-arg "%s" :single) "bg" ">" output)))
                       '(:amp))))
             (multiple-value-bind (output-text code)
                 (call-repl-execute-ast ast)
@@ -82,7 +82,7 @@
           (let* ((pipeline (nshell.domain.parsing:make-pipeline-node
                             (list (nshell.domain.parsing:make-command-node
                                    "printf"
-                                   (list (cons "%s" :single) "bg-pipe"))
+                                   (list (nshell.domain.parsing:make-command-arg "%s" :single) "bg-pipe"))
                                   (nshell.domain.parsing:make-command-node
                                    "cat"
                                    (list ">" output)))))

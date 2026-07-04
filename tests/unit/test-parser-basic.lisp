@@ -6,7 +6,8 @@
   (with-complete-ast (ast "ls -la")
     (is (nshell.domain.parsing:command-node-p ast))
     (is (string= "ls" (nshell.domain.parsing:command-node-command ast)))
-    (is (equal '("-la") (nshell.domain.parsing:command-node-args ast)))))
+    (is (equal '("-la")
+               (nshell.domain.parsing:command-node-arg-values ast)))))
 
 (test parse-fd-redirects-tokenize-and-need-no-spurious-target
   "fd-prefixed and combined redirects parse cleanly; 2>&1 needs no file target."
@@ -17,8 +18,8 @@
   (with-complete-command-line (result ast "cat x 2>&1")
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (string= "cat" (nshell.domain.parsing:command-node-command ast)))
-    (is (equal '("x" ("2>&1" . nil))
-               (nshell.domain.parsing:command-node-args ast))))
+    (is (equal '("x" "2>&1")
+               (nshell.domain.parsing:command-node-arg-values ast))))
   (with-complete-command-line (result ast "make &>build.log")
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (string= "make" (nshell.domain.parsing:command-node-command ast)))))
@@ -157,7 +158,7 @@
       (nshell.domain.parsing:split-command-node-redirects
        (nshell.domain.parsing:make-command-node "echo" (list "hello" ">")))
     (is (equal '("hello" ">")
-               (nshell.domain.parsing:command-node-args clean)))
+               (nshell.domain.parsing:command-node-arg-values clean)))
     (is (null redirects))))
 
 (test split-command-node-redirects-preserves-left-to-right-order
@@ -168,7 +169,7 @@
         "cmd"
         (list "arg" "2>&1" ">" "out" "2>" "err")))
     (is (equal '("arg")
-               (nshell.domain.parsing:command-node-args clean)))
+               (nshell.domain.parsing:command-node-arg-values clean)))
     (is (equal '((:2>&1 . nil) (:> . "out") (:2> . "err"))
                redirects))))
 
@@ -207,7 +208,7 @@
        (nshell.domain.parsing:make-command-node
         "cmd" (list ">" "out.txt" "2>&1" "arg")))
     (is (equal '("arg")
-               (nshell.domain.parsing:command-node-args clean)))
+               (nshell.domain.parsing:command-node-arg-values clean)))
     (is (equal '((:> . "out.txt") (:2>&1 . nil))
                redirects))))
 
@@ -305,27 +306,19 @@
     (is (null
          (nshell.domain.parsing::command-node-command-quote-style ast)))))
 
-(test command-arg-projects-cons-quote-style-boundary
-  "Command args should project raw cons storage before exposing value and quote style."
-  (let ((plain (nshell.domain.parsing::%command-arg-from-raw "plain"))
-        (quoted (nshell.domain.parsing::%command-arg-from-raw
-                 (cons "$FOO" :double)))
-        (unquoted-redirect
-          (nshell.domain.parsing::%command-arg-from-raw
-           (cons "target.txt" nil))))
-    (is (nshell.domain.parsing::%command-arg-p plain))
-    (is (string= "plain"
-                 (nshell.domain.parsing::%command-arg-value plain)))
-    (is (null (nshell.domain.parsing::%command-arg-quote-style plain)))
-    (is (string= "$FOO"
-                 (nshell.domain.parsing::%command-arg-value quoted)))
-    (is (eq :double
-            (nshell.domain.parsing::%command-arg-quote-style quoted)))
-    (is (string= "target.txt"
-                 (nshell.domain.parsing::%command-arg-value
-                  unquoted-redirect)))
-    (is (null (nshell.domain.parsing::%command-arg-quote-style
-               unquoted-redirect)))))
+(test command-arg-uses-typed-quote-style-boundary
+  "Command args are stored as typed command-arg values at the AST boundary."
+  (let* ((quoted (nshell.domain.parsing:make-command-arg "$FOO" :double))
+         (command (nshell.domain.parsing:make-command-node
+                   "echo"
+                   (list "plain" quoted "target.txt")))
+         (args (nshell.domain.parsing:command-node-args command)))
+    (is (every #'nshell.domain.parsing:command-arg-p args))
+    (is (equal '("plain" "$FOO" "target.txt")
+               (mapcar #'nshell.domain.parsing:arg-value args)))
+    (is (equal '(nil :double nil)
+               (mapcar #'nshell.domain.parsing:arg-quote-style args)))
+    (is (eq quoted (second args)))))
 
 (test parse-pipeline
   (with-complete-ast (ast "ls | grep foo")
@@ -363,14 +356,14 @@
          (command (nshell.domain.parsing:make-command-node "echo" args)))
     (setf (car args) "changed")
     (is (equal '("one")
-               (nshell.domain.parsing:command-node-args command))))
+               (nshell.domain.parsing:command-node-arg-values command))))
   (let* ((left (nshell.domain.parsing:make-command-node "echo" '("left")))
          (right (nshell.domain.parsing:make-command-node "echo" '("right")))
          (commands (list left))
          (pipeline (nshell.domain.parsing:make-pipeline-node commands)))
     (setf (car commands) right)
     (is (equal '("left")
-               (nshell.domain.parsing:command-node-args
+               (nshell.domain.parsing:command-node-arg-values
                 (first (nshell.domain.parsing:pipeline-node-commands pipeline))))))
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("first")))
          (second-command (nshell.domain.parsing:make-command-node "echo" '("second")))
@@ -380,7 +373,7 @@
     (setf (car commands) second-command
           (car separators) :semi)
     (is (equal '("first")
-               (nshell.domain.parsing:command-node-args
+               (nshell.domain.parsing:command-node-arg-values
                 (first (nshell.domain.parsing:sequence-node-commands sequence)))))
     (is (equal '(:amp)
                (nshell.domain.parsing:sequence-node-separators sequence))))
@@ -773,14 +766,15 @@
     (is (null (nshell.domain.parsing::%token-reduction-result-errors result)))
     (is (= 1 (length commands)))
     (let ((command (first (first commands))))
-      (is (equal '(("$HOME" . :double)
-                   (">" . nil)
-                   "out.txt"
-                   ("2>&1" . nil))
-                 (nshell.domain.parsing:command-node-args command))))))
+      (let ((args (nshell.domain.parsing:command-node-args command)))
+        (is (every #'nshell.domain.parsing:command-arg-p args))
+        (is (equal '("$HOME" ">" "out.txt" "2>&1")
+                   (mapcar #'nshell.domain.parsing:arg-value args)))
+        (is (equal '(:double nil nil nil)
+                   (mapcar #'nshell.domain.parsing:arg-quote-style args)))))))
 
 (test token-reduction-argument-projection-preserves-quote-and-redirect-shapes
-  "Token argument projection owns command-node raw arg shapes."
+  "Token argument projection owns typed command-node arg shapes."
   (let* ((plain-token
            (nshell.domain.parsing:make-token :word "plain" 0 5))
          (quoted-token
@@ -797,17 +791,26 @@
            (nshell.domain.parsing::%token-reduction-argument-from-redirect-token
             redirect-token)))
     (is (nshell.domain.parsing::%token-reduction-argument-p plain))
-    (is (equal "plain"
-               (nshell.domain.parsing::%token-reduction-argument-raw-value
-                plain)))
-    (is (equal '("$HOME" . :double)
-               (nshell.domain.parsing::%token-reduction-argument-raw-value
-                quoted)))
+    (let ((plain-arg
+            (nshell.domain.parsing::%token-reduction-argument-raw-value
+             plain))
+          (quoted-arg
+            (nshell.domain.parsing::%token-reduction-argument-raw-value
+             quoted))
+          (redirect-arg
+            (nshell.domain.parsing::%token-reduction-argument-raw-value
+             redirect)))
+      (is (nshell.domain.parsing:command-arg-p plain-arg))
+      (is (equal "plain" (nshell.domain.parsing:arg-value plain-arg)))
+      (is (null (nshell.domain.parsing:arg-quote-style plain-arg)))
+      (is (nshell.domain.parsing:command-arg-p quoted-arg))
+      (is (equal "$HOME" (nshell.domain.parsing:arg-value quoted-arg)))
+      (is (eq :double (nshell.domain.parsing:arg-quote-style quoted-arg)))
+      (is (nshell.domain.parsing:command-arg-p redirect-arg))
+      (is (equal ">" (nshell.domain.parsing:arg-value redirect-arg)))
+      (is (null (nshell.domain.parsing:arg-quote-style redirect-arg))))
     (is (nshell.domain.parsing::%token-reduction-argument-syntactic-p
-         redirect))
-    (is (equal '(">" . nil)
-               (nshell.domain.parsing::%token-reduction-argument-raw-value
-                redirect)))))
+         redirect))))
 
 (test parser-reduction-command-entry-projects-state-boundary
   "Command entry projection owns the reducer's command/separator/token shape."
@@ -824,7 +827,7 @@
       (is (string= "echo"
                    (nshell.domain.parsing:command-node-command command)))
       (is (equal '("hello")
-                 (nshell.domain.parsing:command-node-args command)))
+                 (nshell.domain.parsing:command-node-arg-values command)))
       (is (eq :pipe separator))
       (is (eq separator-token token)))))
 
@@ -841,8 +844,8 @@
         (first (nshell.domain.parsing::%token-reduction-result-commands result))
       (is (string= "echo"
                    (nshell.domain.parsing:command-node-command command)))
-      (is (equal '((">" . nil))
-                 (nshell.domain.parsing:command-node-args command)))
+      (is (equal '(">")
+                 (nshell.domain.parsing:command-node-arg-values command)))
       (is (eq :pipe separator))
       (is (eq separator-token token)))
     (let ((diagnostic
@@ -1073,31 +1076,31 @@
   (with-complete-command-line (result ast "echo hello > out.txt")
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (nshell.domain.parsing:command-node-p ast))
-    (is (equal '("hello" (">" . nil) "out.txt")
-               (nshell.domain.parsing:command-node-args ast)))))
+    (is (equal '("hello" ">" "out.txt")
+               (nshell.domain.parsing:command-node-arg-values ast)))))
 
 (test parse-here-string-redirect
   (with-complete-command-line (result ast "cat <<< hello")
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (nshell.domain.parsing:command-node-p ast))
-    (is (equal '(("<<<" . nil) "hello")
-               (nshell.domain.parsing:command-node-args ast)))))
+    (is (equal '("<<<" "hello")
+               (nshell.domain.parsing:command-node-arg-values ast)))))
 
 (test parse-here-document-redirect
   (with-complete-command-line (result ast (format nil "cat << EOF~%hello~%EOF"))
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (nshell.domain.parsing:command-node-p ast))
-    (is (equal `(("<<" . nil) ,(format nil "hello~%"))
-               (nshell.domain.parsing:command-node-args ast)))))
+    (is (equal `("<<" ,(format nil "hello~%"))
+               (nshell.domain.parsing:command-node-arg-values ast)))))
 
 (test parse-multiple-here-documents-preserve-delimiter-order
   (with-complete-command-line (result ast
                                       (format nil "cat << A << B~%one~%A~%two~%B"))
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (nshell.domain.parsing:command-node-p ast))
-    (is (equal `(("<<" . nil) ,(format nil "one~%")
-                 ("<<" . nil) ,(format nil "two~%"))
-               (nshell.domain.parsing:command-node-args ast)))))
+    (is (equal `("<<" ,(format nil "one~%")
+                 "<<" ,(format nil "two~%"))
+               (nshell.domain.parsing:command-node-arg-values ast)))))
 
 (test parse-here-document-preserves-tail-command
   (with-complete-command-line (result ast
@@ -1109,12 +1112,12 @@
                (nshell.domain.parsing:sequence-node-separators ast)))
     (let ((first-command (first (nshell.domain.parsing:sequence-node-commands ast)))
           (second-command (second (nshell.domain.parsing:sequence-node-commands ast))))
-      (is (equal `(("<<" . nil) ,(format nil "hello~%"))
-                 (nshell.domain.parsing:command-node-args first-command)))
+      (is (equal `("<<" ,(format nil "hello~%"))
+                 (nshell.domain.parsing:command-node-arg-values first-command)))
       (is (string= "echo"
                    (nshell.domain.parsing:command-node-command second-command)))
       (is (equal '("done")
-                 (nshell.domain.parsing:command-node-args second-command))))))
+                 (nshell.domain.parsing:command-node-arg-values second-command))))))
 
 (test parse-incomplete-here-document
   (with-parsed-command-line (result (format nil "cat << EOF~%hello"))
@@ -1125,4 +1128,4 @@
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (nshell.domain.parsing:command-node-p ast))
     (is (equal '("hello world")
-               (nshell.domain.parsing:command-node-args ast)))))
+               (nshell.domain.parsing:command-node-arg-values ast)))))

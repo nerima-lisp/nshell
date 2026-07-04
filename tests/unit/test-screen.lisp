@@ -9,6 +9,14 @@
 (defun %esc (text)
   (concatenate 'string (string #\Esc) text))
 
+(test cell-raw-constructor-is-internal-boundary
+  (let ((cell (nshell.infrastructure.terminal::make-cell :character #\X :foreground "FF0000")))
+    (is (nshell.infrastructure.terminal::cell-p cell))
+    (is (char= #\X (nshell.infrastructure.terminal:cell-character cell)))
+    (is (string= "FF0000" (nshell.infrastructure.terminal:cell-foreground cell)))
+    (is (null (nshell.infrastructure.terminal:cell-background cell)))
+    (is (fboundp 'nshell.infrastructure.terminal::%make-cell))))
+
 (test screen-cell-write-and-retrieval
   (let ((screen (nshell.infrastructure.terminal:make-screen :width 4 :height 2)))
     (nshell.infrastructure.terminal:screen-put-cell

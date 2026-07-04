@@ -1,11 +1,18 @@
 (in-package #:nshell.infrastructure.terminal)
 
-(defstruct (cell (:constructor make-cell (&key character foreground background bold-p underline-p)))
+(defstruct (cell (:constructor %make-cell (&key character foreground background bold-p underline-p)))
   (character nil :type (or null character))
   (foreground nil :type (or null string))
   (background nil :type (or null string))
   (bold-p nil :type boolean)
   (underline-p nil :type boolean))
+
+(defun make-cell (&key character foreground background bold-p underline-p)
+  (%make-cell :character character
+              :foreground foreground
+              :background background
+              :bold-p bold-p
+              :underline-p underline-p))
 
 (defstruct (screen (:constructor %make-screen (width height cells)))
   (width 80 :type integer)

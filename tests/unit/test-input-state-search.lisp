@@ -261,6 +261,39 @@
                      (nshell.presentation:input-state-search-query
                       cancelled-state)))))))
 
+(test input-state-history-search-key-command-is-private-value
+  "History-search key events should translate to typed commands before mutation."
+  (let ((typed (nshell.presentation::history-search-key-command-for-event
+                (input-key-event :char #\s)))
+        (pasted (nshell.presentation::history-search-key-command-for-event
+                 (input-key-event :paste nil nil
+                                  '(:protocol :bracketed :text "ta"))))
+        (older (nshell.presentation::history-search-key-command-for-event
+                (input-key-event :ctrl-r)))
+        (execute (nshell.presentation::history-search-key-command-for-event
+                  (input-key-event :enter))))
+    (is (nshell.presentation::history-search-key-command-p typed))
+    (is (not (listp typed)))
+    (is (not (fboundp 'nshell.presentation::make-history-search-key-command)))
+    (is (eq :query
+            (nshell.presentation::history-search-key-command-kind typed)))
+    (is (string= "s"
+                 (nshell.presentation::history-search-key-command-text typed)))
+    (is (eq :query
+            (nshell.presentation::history-search-key-command-kind pasted)))
+    (is (string= "ta"
+                 (nshell.presentation::history-search-key-command-text
+                  pasted)))
+    (is (eq :selection
+            (nshell.presentation::history-search-key-command-kind older)))
+    (is (= 1
+           (nshell.presentation::history-search-key-command-delta older)))
+    (is (eq :finish
+            (nshell.presentation::history-search-key-command-kind execute)))
+    (is (eq :execute
+            (nshell.presentation::history-search-key-command-output
+             execute)))))
+
 (test input-state-history-search-edits-query-not-buffer
   (with-reduced-input-state (search-state)
       (reduce-once (input-state :buffer "git" :cursor-pos 3)

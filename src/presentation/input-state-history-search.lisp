@@ -28,6 +28,15 @@
   (state nil :read-only t)
   (output :none :type symbol :read-only t))
 
+(defstruct (history-search-key-command
+            (:constructor %make-history-search-key-command
+                (&key kind text delta output))
+            (:conc-name %history-search-key-command-))
+  (kind :none :type symbol :read-only t)
+  (text "" :type string :read-only t)
+  (delta 0 :type integer :read-only t)
+  (output :none :type symbol :read-only t))
+
 (defun history-search-query-insertion-query (insertion)
   (%history-search-query-insertion-query insertion))
 
@@ -49,6 +58,18 @@
 (defun commit-history-search-transition (transition)
   (values (history-search-transition-state transition)
           (history-search-transition-output transition)))
+
+(defun history-search-key-command-kind (command)
+  (%history-search-key-command-kind command))
+
+(defun history-search-key-command-text (command)
+  (%history-search-key-command-text command))
+
+(defun history-search-key-command-delta (command)
+  (%history-search-key-command-delta command))
+
+(defun history-search-key-command-output (command)
+  (%history-search-key-command-output command))
 
 (defun history-search-edit-plan (edit)
   (%history-search-edit-plan edit))
@@ -168,6 +189,65 @@
 (defun %backspace-history-search-query (state)
   (commit-history-search-edit state (make-history-search-backspace-edit)))
 
+(defun %history-search-key-event-paste-text (key-event)
+  (let ((text (getf (nshell.domain.input:key-event-data key-event)
+                    :text)))
+    (if (stringp text) text "")))
+
+(defun history-search-key-command-for-event (key-event)
+  (case (nshell.domain.input:key-event-type key-event)
+    (:char
+     (let ((ch (nshell.domain.input:key-event-char key-event)))
+       (if ch
+           (%make-history-search-key-command :kind :query :text (string ch))
+           (%make-history-search-key-command :kind :none))))
+    (:paste
+     (%make-history-search-key-command
+      :kind :query
+      :text (%history-search-key-event-paste-text key-event)))
+    (:backspace
+     (%make-history-search-key-command :kind :backspace))
+    ((:ctrl-r :up :ctrl-p)
+     (%make-history-search-key-command :kind :selection :delta 1))
+    ((:ctrl-s :down :ctrl-n)
+     (%make-history-search-key-command :kind :selection :delta -1))
+    (:enter
+     (%make-history-search-key-command :kind :finish :output :execute))
+    ((:right :ctrl-f)
+     (%make-history-search-key-command :kind :finish :output :suggest-update))
+    ((:escape :ctrl-g)
+     (%make-history-search-key-command :kind :abort))
+    (:ctrl-l
+     (%make-history-search-key-command :kind :output :output :clear-screen))
+    (:ctrl-c
+     (%make-history-search-key-command :kind :clear))
+    (otherwise
+     (%make-history-search-key-command :kind :output :output :redraw))))
+
+(defun commit-history-search-key-command (state command)
+  (ecase (history-search-key-command-kind command)
+    (:query
+     (%update-history-search-query
+      state
+      (history-search-key-command-text command)))
+    (:selection
+     (%move-history-search-selection
+      state
+      (history-search-key-command-delta command)))
+    (:backspace
+     (%backspace-history-search-query state))
+    (:finish
+     (%history-search-finish state
+                             (history-search-key-command-output command)))
+    (:abort
+     (%history-search-abort state))
+    (:clear
+     (clear-input-state state))
+    (:output
+     (values state (history-search-key-command-output command)))
+    (:none
+     (values state :none))))
+
 (defun %history-search-matched-state (state text)
   (copy-input-state-clearing-completion
    state
@@ -193,21 +273,6 @@ with wraparound so repeated Ctrl-R can cycle through older matches."
          (%history-search-original-state state))))))
 
 (defun reduce-search-input-state (state key-event)
-  (case (nshell.domain.input:key-event-type key-event)
-    (:char (let ((ch (nshell.domain.input:key-event-char key-event)))
-             (if ch
-                 (%update-history-search-query state (string ch))
-                 (values state :none))))
-    (:paste (%update-history-search-query
-             state
-             (getf (nshell.domain.input:key-event-data key-event)
-                   :text)))
-    (:backspace (%backspace-history-search-query state))
-    ((:ctrl-r :up :ctrl-p) (%move-history-search-selection state 1))
-    ((:ctrl-s :down :ctrl-n) (%move-history-search-selection state -1))
-    (:enter (%history-search-finish state :execute))
-    ((:right :ctrl-f) (%history-search-finish state))
-    ((:escape :ctrl-g) (%history-search-abort state))
-    (:ctrl-l (values state :clear-screen))
-    (:ctrl-c (clear-input-state state))
-    (otherwise (values state :redraw))))
+  (commit-history-search-key-command
+   state
+   (history-search-key-command-for-event key-event)))

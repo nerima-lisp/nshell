@@ -1,12 +1,15 @@
 (in-package #:nshell.domain.history)
 
-(defstruct (command-history (:constructor make-command-history (&key (max-entries 10000))))
+(defstruct (command-history (:constructor %make-command-history (&key (max-entries 10000))))
   "In-memory command history plus transient navigation state."
   (entries nil :type list)
   (max-entries 10000 :type integer :read-only t)
   (navigate-index -1 :type integer)
   (navigate-prefix nil :type (or null string))
   (navigate-origin nil :type (or null string)))
+
+(defun make-command-history (&key (max-entries 10000))
+  (%make-command-history :max-entries max-entries))
 
 (defstruct (history-word (:constructor %make-history-word (start end)))
   (start 0 :type integer :read-only t)

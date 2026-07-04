@@ -10,7 +10,7 @@
             entry-equal-p)))
 
 ;;; HistoryEntry - immutable value object
-(defstruct (history-entry (:constructor make-history-entry
+(defstruct (history-entry (:constructor %make-history-entry
                              (text &optional (timestamp (get-universal-time)) exit-code)))
   "A single command history entry.
 TEXT is the command text.
@@ -19,6 +19,9 @@ EXIT-CODE is the exit code (nil if not yet executed)."
   (text "" :type string :read-only t)
   (timestamp (get-universal-time) :type integer :read-only t)
   (exit-code nil :type (or null integer) :read-only t))
+
+(defun make-history-entry (text &optional (timestamp (get-universal-time)) exit-code)
+  (%make-history-entry text timestamp exit-code))
 
 (defun entry-text (entry)
   "Return the command text for ENTRY."

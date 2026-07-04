@@ -67,18 +67,32 @@
   (%token-reduction-argument-raw-value
    (%token-reduction-argument-from-word-token tok)))
 
-(defun %push-token-reduction-argument (state argument)
-  (push argument (%token-reduction-state-current-args state)))
+(defun %token-reduction-state-append-argument (state argument)
+  (push argument (%token-reduction-state-current-args state))
+  state)
 
-(defun %push-token-reduction-word-argument (state tok)
-  (%push-token-reduction-argument state
-                                  (%token-reduction-word-argument tok)))
+(defun %token-reduction-state-append-word-argument (state tok)
+  (%token-reduction-state-append-argument state
+                                          (%token-reduction-word-argument tok)))
 
-(defun %push-token-reduction-redirect-argument (state tok)
-  (%push-token-reduction-argument state
-                                  (%token-reduction-argument-raw-value
-                                   (%token-reduction-argument-from-redirect-token
-                                    tok))))
+(defun %token-reduction-state-append-redirect-argument (state tok)
+  (%token-reduction-state-append-argument
+   state
+   (%token-reduction-argument-raw-value
+    (%token-reduction-argument-from-redirect-token tok))))
+
+(defun %token-reduction-state-start-command (state tok)
+  (setf (%token-reduction-state-current-cmd state) (token-value tok)
+        (%token-reduction-state-current-cmd-token state) tok)
+  state)
+
+(defun %token-reduction-state-clear-pending-redirect (state)
+  (setf (%token-reduction-state-pending-redirect-token state) nil)
+  state)
+
+(defun %token-reduction-state-mark-pending-redirect (state tok)
+  (setf (%token-reduction-state-pending-redirect-token state) tok)
+  state)
 
 (defstruct (%token-reduction-diagnostic-policy
             (:constructor %make-token-reduction-diagnostic-policy
@@ -115,7 +129,7 @@
        state
        pending-redirect-token
        (%token-reduction-missing-redirect-target-policy pending-redirect-token))
-      (setf (%token-reduction-state-pending-redirect-token state) nil))))
+      (%token-reduction-state-clear-pending-redirect state))))
 
 (defun %token-reduction-error-policy-from-token (token)
   (let ((value (token-value token)))
@@ -177,20 +191,19 @@
 (defun %token-reduction-word (state tok)
   (if (%token-reduction-state-current-cmd state)
       (progn
-        (%push-token-reduction-word-argument state tok)
-        (setf (%token-reduction-state-pending-redirect-token state) nil))
-      (setf (%token-reduction-state-current-cmd state) (token-value tok)
-            (%token-reduction-state-current-cmd-token state) tok)))
+        (%token-reduction-state-append-word-argument state tok)
+        (%token-reduction-state-clear-pending-redirect state))
+      (%token-reduction-state-start-command state tok)))
 
 (defun %token-reduction-redirect (state tok)
   (if (%token-reduction-state-current-cmd state)
       (progn
         (%record-missing-redirect-target state)
-        (%push-token-reduction-redirect-argument state tok)
+        (%token-reduction-state-append-redirect-argument state tok)
         ;; Targetless redirects (e.g. 2>&1) are self-contained and do
         ;; not start a pending redirect.
         (unless (%redirect-token-targetless-p tok)
-          (setf (%token-reduction-state-pending-redirect-token state) tok)))
+          (%token-reduction-state-mark-pending-redirect state tok)))
       (%token-reduction-state-record-diagnostic-message
        state
        :missing-command

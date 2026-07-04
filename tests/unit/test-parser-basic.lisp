@@ -562,6 +562,16 @@
               (first (nshell.domain.parsing:sequence-node-commands
                       background-ast)))))))
 
+(test parser-assembly-background-command-list-ast-wraps-one-command
+  "Background command-list AST wrapping should own the singleton sequence projection."
+  (let* ((command (nshell.domain.parsing:make-command-node "sleep" '("1")))
+         (ast (nshell.domain.parsing::%background-command-list-ast command)))
+    (is (nshell.domain.parsing:sequence-node-p ast))
+    (is (equal (list command)
+               (nshell.domain.parsing:sequence-node-commands ast)))
+    (is (equal '(:amp)
+               (nshell.domain.parsing:sequence-node-separators ast)))))
+
 (test parser-assembly-projects-command-separator-pairs
   "Mixed sequence assembly should expose command boundaries as value objects."
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))

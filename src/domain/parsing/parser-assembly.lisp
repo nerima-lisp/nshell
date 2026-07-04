@@ -181,17 +181,20 @@
     (make-sequence-node (nreverse sequence-commands)
                         (nreverse sequence-separators))))
 
+(defun %background-command-list-ast (command)
+  (make-sequence-node (list command) '(:amp)))
+
 (defun %single-command-ast (assembly)
   (let ((command (%command-list-assembly-single-command assembly)))
     (if (%command-list-assembly-background-p assembly)
-        (make-sequence-node (list command) '(:amp))
+        (%background-command-list-ast command)
         command)))
 
 (defun %pipeline-command-list-ast (assembly)
   (let* ((commands (%command-list-assembly-commands assembly))
          (node (make-pipeline-node commands)))
     (if (%command-list-assembly-background-p assembly)
-        (make-sequence-node (list node) '(:amp))
+        (%background-command-list-ast node)
         node)))
 
 (defun %sequence-command-list-ast (assembly)

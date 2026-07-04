@@ -22,10 +22,21 @@
   (+ (%buffer-splice-start splice)
      (length (%buffer-splice-inserted splice))))
 
-(defstruct (buffer-insertion
-             (:constructor %make-buffer-insertion (splice))
-             (:conc-name %buffer-insertion-))
+(defstruct (buffer-insertion-plan
+             (:constructor %make-buffer-insertion-plan (splice))
+             (:conc-name %buffer-insertion-plan-))
   splice)
+
+(defun buffer-insertion-plan-splice (plan)
+  (%buffer-insertion-plan-splice plan))
+
+(defstruct (buffer-insertion
+             (:constructor %make-buffer-insertion (plan))
+             (:conc-name %buffer-insertion-))
+  plan)
+
+(defun buffer-insertion-plan (insertion)
+  (%buffer-insertion-plan insertion))
 
 (defun buffer-insertion-at-cursor (buffer cursor text)
   (when (stringp text)
@@ -36,18 +47,33 @@
                             (subseq text 0 remaining)
                             text)))
           (%make-buffer-insertion
-           (make-buffer-splice cursor cursor inserted)))))))
+           (%make-buffer-insertion-plan
+            (make-buffer-splice cursor cursor inserted))))))))
 
 (defun buffer-insertion-result (insertion buffer)
-  (buffer-splice-result (%buffer-insertion-splice insertion) buffer))
+  (buffer-splice-result
+   (buffer-insertion-plan-splice (buffer-insertion-plan insertion))
+   buffer))
 
 (defun buffer-insertion-cursor-pos (insertion)
-  (buffer-splice-cursor-pos (%buffer-insertion-splice insertion)))
+  (buffer-splice-cursor-pos
+   (buffer-insertion-plan-splice (buffer-insertion-plan insertion))))
 
 (defstruct (buffer-deletion
-             (:constructor %make-buffer-deletion (splice))
+             (:constructor %make-buffer-deletion (plan))
              (:conc-name %buffer-deletion-))
+  plan)
+
+(defstruct (buffer-deletion-plan
+             (:constructor %make-buffer-deletion-plan (splice))
+             (:conc-name %buffer-deletion-plan-))
   splice)
+
+(defun buffer-deletion-plan-splice (plan)
+  (%buffer-deletion-plan-splice plan))
+
+(defun buffer-deletion-plan (deletion)
+  (%buffer-deletion-plan deletion))
 
 (defstruct (buffer-deletion-request
              (:constructor %make-buffer-deletion-request (kind cursor))
@@ -73,17 +99,22 @@
       (:before-cursor
        (unless (zerop cursor)
          (%make-buffer-deletion
-          (make-buffer-splice (1- cursor) cursor))))
+          (%make-buffer-deletion-plan
+           (make-buffer-splice (1- cursor) cursor)))))
       (:at-cursor
        (unless (>= cursor (length buffer))
          (%make-buffer-deletion
-          (make-buffer-splice cursor (1+ cursor))))))))
+          (%make-buffer-deletion-plan
+           (make-buffer-splice cursor (1+ cursor)))))))))
 
 (defun buffer-deletion-result (deletion buffer)
-  (buffer-splice-result (%buffer-deletion-splice deletion) buffer))
+  (buffer-splice-result
+   (buffer-deletion-plan-splice (buffer-deletion-plan deletion))
+   buffer))
 
 (defun buffer-deletion-cursor-pos (deletion)
-  (buffer-splice-cursor-pos (%buffer-deletion-splice deletion)))
+  (buffer-splice-cursor-pos
+   (buffer-deletion-plan-splice (buffer-deletion-plan deletion))))
 
 (defstruct (cursor-move-request
              (:constructor %make-cursor-move-request (kind cursor delta position))

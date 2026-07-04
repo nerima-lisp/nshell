@@ -50,7 +50,13 @@
          (insertion (nshell.presentation::buffer-insertion-at-cursor
                      buffer 5 "hello")))
     (is (nshell.presentation::buffer-insertion-p insertion))
+    (is (nshell.presentation::buffer-insertion-plan-p
+         (nshell.presentation::buffer-insertion-plan insertion)))
+    (is (fboundp 'nshell.presentation::%make-buffer-insertion-plan))
+    (is (fboundp 'nshell.presentation::%buffer-insertion-plan-splice))
     (is (not (fboundp 'nshell.presentation::make-buffer-insertion)))
+    (is (not (fboundp 'nshell.presentation::make-buffer-insertion-plan)))
+    (is (not (fboundp 'nshell.presentation::buffer-insertion-splice)))
     (is (string= "echo hello done"
                  (nshell.presentation::buffer-insertion-result
                   insertion
@@ -105,6 +111,10 @@
               at-request)))
     (is (nshell.presentation::buffer-deletion-p before))
     (is (nshell.presentation::buffer-deletion-p at))
+    (is (nshell.presentation::buffer-deletion-plan-p
+         (nshell.presentation::buffer-deletion-plan before)))
+    (is (nshell.presentation::buffer-deletion-plan-p
+         (nshell.presentation::buffer-deletion-plan at)))
     (is (fboundp 'nshell.presentation::%make-buffer-deletion-request))
     (is (fboundp 'nshell.presentation::%buffer-deletion-request-kind))
     (is (fboundp 'nshell.presentation::%buffer-deletion-request-cursor))
@@ -112,8 +122,11 @@
     (is (not (fboundp 'nshell.presentation::buffer-deletion-before-cursor)))
     (is (not (fboundp 'nshell.presentation::buffer-deletion-at-cursor)))
     (is (fboundp 'nshell.presentation::%make-buffer-deletion))
-    (is (fboundp 'nshell.presentation::%buffer-deletion-splice))
+    (is (fboundp 'nshell.presentation::%make-buffer-deletion-plan))
+    (is (fboundp 'nshell.presentation::%buffer-deletion-plan-splice))
     (is (not (fboundp 'nshell.presentation::make-buffer-deletion)))
+    (is (not (fboundp 'nshell.presentation::make-buffer-deletion-plan)))
+    (is (not (fboundp 'nshell.presentation::buffer-deletion-splice)))
     (is (string= "acd"
                  (nshell.presentation::buffer-deletion-result before buffer)))
     (is (= 1 (nshell.presentation::buffer-deletion-cursor-pos before)))

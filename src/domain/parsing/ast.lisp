@@ -156,6 +156,18 @@
   "Return all typed args as plain strings."
   (mapcar #'arg-value (command-node-args node)))
 
+(defstruct (command-redirect-split-result
+            (:constructor %make-command-redirect-split-result
+                (clean-command redirects)))
+  (clean-command nil :read-only t)
+  (redirects nil :type list :read-only t))
+
+(defstruct (command-list-redirect-split-result
+            (:constructor %make-command-list-redirect-split-result
+                (clean-commands redirects)))
+  (clean-commands nil :type list :read-only t)
+  (redirects nil :type list :read-only t))
+
 (defstruct (%command-redirect-split-state
             (:constructor %make-command-redirect-split-state (clean redirects)))
   (clean nil :type list :read-only t)
@@ -196,6 +208,12 @@
   (%command-redirect-arg-cursor-from-args
    (rest (%command-redirect-arg-cursor-remaining-args cursor))))
 
+(defstruct (%command-redirect-split-step
+            (:constructor %make-command-redirect-split-step
+                (state cursor)))
+  (state nil :read-only t)
+  (cursor nil :read-only t))
+
 (defun %command-redirect-split-state-accept-cursor (state cursor)
   (let* ((arg (%command-redirect-arg-cursor-arg cursor))
          (value (arg-value arg))
@@ -203,7 +221,7 @@
     (cond
       ((and redirect-facts
             (%redirect-facts-fd-dup-p redirect-facts))
-       (values
+       (%make-command-redirect-split-step
         (%command-redirect-split-state-push-redirect
          state
          (%redirect-facts-kind redirect-facts)
@@ -211,37 +229,39 @@
         (%command-redirect-arg-cursor-after-current cursor)))
       ((and redirect-facts
             (%command-redirect-arg-cursor-remaining-args cursor))
-       (values
+       (%make-command-redirect-split-step
         (%command-redirect-split-state-push-redirect
          state
          (%redirect-facts-kind redirect-facts)
          (arg-value (%command-redirect-arg-cursor-target-arg cursor)))
         (%command-redirect-arg-cursor-after-target cursor)))
       (t
-       (values (%command-redirect-split-state-push-clean state arg)
-               (%command-redirect-arg-cursor-after-current cursor))))))
+       (%make-command-redirect-split-step
+        (%command-redirect-split-state-push-clean state arg)
+        (%command-redirect-arg-cursor-after-current cursor))))))
 
-(defun %command-redirect-split-state-values (state)
-  (values (nreverse (%command-redirect-split-state-clean state))
-          (nreverse (%command-redirect-split-state-redirects state))))
+(defun %command-redirect-split-result-from-state (cmd-node state)
+  (%make-command-redirect-split-result
+   (make-command-node
+    (command-node-command cmd-node)
+    (nreverse (%command-redirect-split-state-clean state))
+    (ast-node-span cmd-node)
+    (command-node-command-quote-style cmd-node))
+   (nreverse (%command-redirect-split-state-redirects state))))
 
 (defun split-command-node-redirects (cmd-node)
-  "Split CMD-NODE into (clean-command-node redirects).
+  "Split CMD-NODE into a COMMAND-REDIRECT-SPLIT-RESULT.
 Redirect operator args and their targets are removed from the clean command."
   (let ((state (%empty-command-redirect-split-state))
         (cursor (%command-redirect-arg-cursor-from-args
                  (command-node-args cmd-node))))
     (loop while cursor
-          do (multiple-value-setq (state cursor)
-               (%command-redirect-split-state-accept-cursor state cursor)))
-    (multiple-value-bind (clean redirects)
-        (%command-redirect-split-state-values state)
-      (values (make-command-node
-               (command-node-command cmd-node)
-               clean
-               (ast-node-span cmd-node)
-              (command-node-command-quote-style cmd-node))
-              redirects))))
+          do (let ((step (%command-redirect-split-state-accept-cursor
+                          state
+                          cursor)))
+               (setf state (%command-redirect-split-step-state step)
+                     cursor (%command-redirect-split-step-cursor step))))
+    (%command-redirect-split-result-from-state cmd-node state)))
 
 (defstruct (%command-list-redirect-split-state
             (:constructor %make-command-list-redirect-split-state
@@ -260,25 +280,24 @@ Redirect operator args and their targets are removed from the clean command."
          (%command-list-redirect-split-state-redirects state))))
 
 (defun %command-list-redirect-split-state-accept-command (state command)
-  (multiple-value-bind (clean-command command-redirects)
-      (split-command-node-redirects command)
+  (let ((result (split-command-node-redirects command)))
     (%command-list-redirect-split-state-push
      state
-     clean-command
-     command-redirects)))
+     (command-redirect-split-result-clean-command result)
+     (command-redirect-split-result-redirects result))))
 
-(defun %command-list-redirect-split-state-values (state)
-  (values
+(defun %command-list-redirect-split-result-from-state (state)
+  (%make-command-list-redirect-split-result
    (nreverse (%command-list-redirect-split-state-clean-commands state))
    (nreverse (%command-list-redirect-split-state-redirects state))))
 
 (defun split-command-nodes-redirects (commands)
-  "Split each command in COMMANDS into (clean-commands per-stage-redirects)."
+  "Split COMMANDS into a COMMAND-LIST-REDIRECT-SPLIT-RESULT."
   (let ((state (%empty-command-list-redirect-split-state)))
     (dolist (command commands)
       (setf state
             (%command-list-redirect-split-state-accept-command state command)))
-    (%command-list-redirect-split-state-values state)))
+    (%command-list-redirect-split-result-from-state state)))
 
 (defun ast-node->command-line (ast)
   "Render a command or pipeline AST node as a shell command line string."

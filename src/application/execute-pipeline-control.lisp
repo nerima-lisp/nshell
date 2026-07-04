@@ -146,8 +146,13 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
           (nshell.domain.parsing:pipeline-node-commands command))
        (if error
            (values error 127)
-           (multiple-value-bind (clean-commands redirects)
-               (%extract-pipeline-redirects expanded-commands)
+           (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
+                  (clean-commands
+                    (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
+                     redirect-split))
+                  (redirects
+                    (nshell.domain.parsing:command-list-redirect-split-result-redirects
+                     redirect-split)))
              (let* ((clean-pipeline (nshell.domain.parsing:make-pipeline-node
                                      clean-commands))
                     (processes (nshell.infrastructure.acl:spawn-pipeline-async
@@ -162,8 +167,13 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
          (%expand-command-node-in-context context command)
        (if error
            (values error 127)
-           (multiple-value-bind (clean-command redirects)
-               (%extract-command-redirects expanded-command)
+           (let* ((redirect-split (%extract-command-redirects expanded-command))
+                  (clean-command
+                    (nshell.domain.parsing:command-redirect-split-result-clean-command
+                     redirect-split))
+                  (redirects
+                    (nshell.domain.parsing:command-redirect-split-result-redirects
+                     redirect-split)))
              (let* ((cmd (nshell.domain.parsing:command-node-command clean-command))
                     (args (nshell.domain.parsing:command-node-arg-values clean-command))
                     (command-line (nshell.domain.parsing:ast-node->command-line

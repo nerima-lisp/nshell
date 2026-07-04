@@ -256,20 +256,28 @@
 
 (test split-command-node-redirects-preserves-dangling-operator
   "A trailing redirect operator should remain part of the command arguments."
-  (multiple-value-bind (clean redirects)
-      (nshell.domain.parsing:split-command-node-redirects
-       (nshell.domain.parsing:make-command-node "echo" (list "hello" ">")))
+  (let* ((result (nshell.domain.parsing:split-command-node-redirects
+                  (nshell.domain.parsing:make-command-node "echo"
+                                                           (list "hello" ">"))))
+         (clean (nshell.domain.parsing:command-redirect-split-result-clean-command
+                 result))
+         (redirects (nshell.domain.parsing:command-redirect-split-result-redirects
+                     result)))
+    (is (nshell.domain.parsing:command-redirect-split-result-p result))
     (is (equal '("hello" ">")
                (nshell.domain.parsing:command-node-arg-values clean)))
     (is (null redirects))))
 
 (test split-command-node-redirects-preserves-left-to-right-order
   "Redirect extraction preserves shell-significant left-to-right order."
-  (multiple-value-bind (clean redirects)
-      (nshell.domain.parsing:split-command-node-redirects
-       (nshell.domain.parsing:make-command-node
-        "cmd"
-        (list "arg" "2>&1" ">" "out" "2>" "err")))
+  (let* ((result (nshell.domain.parsing:split-command-node-redirects
+                  (nshell.domain.parsing:make-command-node
+                   "cmd"
+                   (list "arg" "2>&1" ">" "out" "2>" "err"))))
+         (clean (nshell.domain.parsing:command-redirect-split-result-clean-command
+                 result))
+         (redirects (nshell.domain.parsing:command-redirect-split-result-redirects
+                     result)))
     (is (equal '("arg")
                (nshell.domain.parsing:command-node-arg-values clean)))
     (is (equal '((:2>&1 . nil) (:> . "out") (:2> . "err"))
@@ -278,33 +286,52 @@
 (test command-redirect-split-state-consumes-targeted-redirects
   "Command redirect splitting state owns target consumption and dangling operators."
   (let ((state (nshell.domain.parsing::%empty-command-redirect-split-state)))
-    (multiple-value-bind (after-output next-cursor)
-        (nshell.domain.parsing::%command-redirect-split-state-accept-cursor
-         state
-         (nshell.domain.parsing::%command-redirect-arg-cursor-from-args
-          (list (nshell.domain.parsing::%command-arg ">")
-                (nshell.domain.parsing::%command-arg "out")
-                (nshell.domain.parsing::%command-arg "arg"))))
-      (multiple-value-bind (clean redirects)
-          (nshell.domain.parsing::%command-redirect-split-state-values
-           after-output)
-        (is (null clean))
-        (is (equal '((:> . "out")) redirects))
-        (is (equal "arg"
-                   (nshell.domain.parsing:arg-value
-                    (nshell.domain.parsing::%command-redirect-arg-cursor-arg
-                     next-cursor))))))
-    (multiple-value-bind (after-dangling next-cursor)
-        (nshell.domain.parsing::%command-redirect-split-state-accept-cursor
-         state
-         (nshell.domain.parsing::%command-redirect-arg-cursor-from-args
-          (list (nshell.domain.parsing::%command-arg ">"))))
-      (multiple-value-bind (clean redirects)
-          (nshell.domain.parsing::%command-redirect-split-state-values
-           after-dangling)
-        (is (equal '(">") (mapcar #'nshell.domain.parsing:arg-value clean)))
-        (is (null redirects))
-        (is (null next-cursor))))))
+    (let* ((after-output
+             (nshell.domain.parsing::%command-redirect-split-state-accept-cursor
+              state
+              (nshell.domain.parsing::%command-redirect-arg-cursor-from-args
+               (list (nshell.domain.parsing::%command-arg ">")
+                     (nshell.domain.parsing::%command-arg "out")
+                     (nshell.domain.parsing::%command-arg "arg")))))
+           (result
+             (nshell.domain.parsing::%command-redirect-split-result-from-state
+              (nshell.domain.parsing:make-command-node "cmd" nil)
+              (nshell.domain.parsing::%command-redirect-split-step-state
+               after-output)))
+           (next-cursor
+             (nshell.domain.parsing::%command-redirect-split-step-cursor
+              after-output)))
+      (is (nshell.domain.parsing::%command-redirect-split-step-p after-output))
+      (is (null (nshell.domain.parsing:command-node-arg-values
+                 (nshell.domain.parsing:command-redirect-split-result-clean-command
+                  result))))
+      (is (equal '((:> . "out"))
+                 (nshell.domain.parsing:command-redirect-split-result-redirects
+                  result)))
+      (is (equal "arg"
+                 (nshell.domain.parsing:arg-value
+                  (nshell.domain.parsing::%command-redirect-arg-cursor-arg
+                   next-cursor)))))
+    (let* ((after-dangling
+             (nshell.domain.parsing::%command-redirect-split-state-accept-cursor
+              state
+              (nshell.domain.parsing::%command-redirect-arg-cursor-from-args
+               (list (nshell.domain.parsing::%command-arg ">")))))
+           (result
+             (nshell.domain.parsing::%command-redirect-split-result-from-state
+              (nshell.domain.parsing:make-command-node "cmd" nil)
+              (nshell.domain.parsing::%command-redirect-split-step-state
+               after-dangling)))
+           (next-cursor
+             (nshell.domain.parsing::%command-redirect-split-step-cursor
+              after-dangling)))
+      (is (equal '(">")
+                 (nshell.domain.parsing:command-node-arg-values
+                  (nshell.domain.parsing:command-redirect-split-result-clean-command
+                   result))))
+      (is (null (nshell.domain.parsing:command-redirect-split-result-redirects
+                 result)))
+      (is (null next-cursor)))))
 
 (test command-list-redirect-split-state-preserves-stage-order
   "Command-list redirect split state owns clean command and redirect accumulation."
@@ -323,9 +350,16 @@
            (nshell.domain.parsing::%command-list-redirect-split-state-accept-command
             after-first
             second-command)))
-    (multiple-value-bind (clean-commands redirects)
-        (nshell.domain.parsing::%command-list-redirect-split-state-values
-         after-second)
+    (let* ((result
+             (nshell.domain.parsing::%command-list-redirect-split-result-from-state
+              after-second))
+           (clean-commands
+             (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
+              result))
+           (redirects
+             (nshell.domain.parsing:command-list-redirect-split-result-redirects
+              result)))
+      (is (nshell.domain.parsing:command-list-redirect-split-result-p result))
       (is (equal '("one" "two")
                  (mapcar #'nshell.domain.parsing:command-node-command
                          clean-commands)))
@@ -353,11 +387,17 @@
                    ("cat")
                    ((:<< . "bg")))))
     (destructuring-bind (words expected-clean expected-redirects) case
-      (multiple-value-bind (clean redirects)
-          (nshell.domain.parsing:split-command-node-redirects
-           (nshell.domain.parsing:make-command-node
-            (first words)
-            (rest words)))
+      (let* ((result
+               (nshell.domain.parsing:split-command-node-redirects
+                (nshell.domain.parsing:make-command-node
+                 (first words)
+                 (rest words))))
+             (clean
+               (nshell.domain.parsing:command-redirect-split-result-clean-command
+                result))
+             (redirects
+               (nshell.domain.parsing:command-redirect-split-result-redirects
+                result)))
         (is (equal expected-clean
                    (cons (nshell.domain.parsing:command-node-command clean)
                          (nshell.domain.parsing:command-node-arg-values clean))))
@@ -365,10 +405,13 @@
 
 (test split-command-node-redirects-consumes-redirect-facts-boundary
   "Redirect splitting consumes parser-data facts for target and fd-dup redirects."
-  (multiple-value-bind (clean redirects)
-      (nshell.domain.parsing:split-command-node-redirects
-       (nshell.domain.parsing:make-command-node
-        "cmd" (list ">" "out.txt" "2>&1" "arg")))
+  (let* ((result (nshell.domain.parsing:split-command-node-redirects
+                  (nshell.domain.parsing:make-command-node
+                   "cmd" (list ">" "out.txt" "2>&1" "arg"))))
+         (clean (nshell.domain.parsing:command-redirect-split-result-clean-command
+                 result))
+         (redirects (nshell.domain.parsing:command-redirect-split-result-redirects
+                     result)))
     (is (equal '("arg")
                (nshell.domain.parsing:command-node-arg-values clean)))
     (is (equal '((:> . "out.txt") (:2>&1 . nil))

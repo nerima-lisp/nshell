@@ -9,12 +9,12 @@
 ;; -- Logic: redirect extraction from command node args ----------------
 
 (defun %extract-command-redirects (cmd-node)
-  "Split CMD-NODE args into (clean-command-node redirects).
+  "Split CMD-NODE args into a command redirect split result.
 Redirect args (and their targets) are removed from the args list."
   (nshell.domain.parsing:split-command-node-redirects cmd-node))
 
 (defun %extract-pipeline-redirects (commands)
-  "Split each command in COMMANDS into (clean-commands per-stage-redirects)."
+  "Split COMMANDS into a command-list redirect split result."
   (nshell.domain.parsing:split-command-nodes-redirects commands))
 
 (defun %write-redirected-stage-output (redirects output)

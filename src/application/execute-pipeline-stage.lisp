@@ -159,8 +159,13 @@ Applies REDIRECTS and returns (output exit-code)."
       (%expand-command-node-in-context context command-node)
     (when error
       (return-from execute-command-node-in-context (values error 127)))
-    (multiple-value-bind (clean-command redirects)
-        (%extract-command-redirects expanded)
+    (let* ((redirect-split (%extract-command-redirects expanded))
+           (clean-command
+             (nshell.domain.parsing:command-redirect-split-result-clean-command
+              redirect-split))
+           (redirects
+             (nshell.domain.parsing:command-redirect-split-result-redirects
+              redirect-split)))
       (%execute-clean-command-node-in-context context clean-command redirects))))
 
 ;; -- Pipeline node execution --------------------------------------------------
@@ -171,8 +176,13 @@ Applies REDIRECTS and returns (output exit-code)."
         (%expand-command-nodes-in-context context commands)
       (when error
         (return-from execute-pipeline-node-in-context (values error 127)))
-      (multiple-value-bind (clean-commands redirects)
-          (%extract-pipeline-redirects expanded-commands)
+      (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
+             (clean-commands
+               (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
+                redirect-split))
+             (redirects
+               (nshell.domain.parsing:command-list-redirect-split-result-redirects
+                redirect-split)))
         (if (or (eq :cps (shell-context-execution-strategy context))
                 (some (lambda (cmd) (%shell-internal-command-p context cmd))
                       clean-commands))
@@ -198,8 +208,13 @@ Applies REDIRECTS and returns (output exit-code)."
       (when error
         (write-string error *error-output*)
         (return-from execute-pipeline 127))
-      (multiple-value-bind (clean-commands redirects)
-          (%extract-pipeline-redirects expanded-commands)
+      (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
+             (clean-commands
+               (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
+                redirect-split))
+             (redirects
+               (nshell.domain.parsing:command-list-redirect-split-result-redirects
+                redirect-split)))
         (nshell.infrastructure.acl:spawn-pipeline clean-commands :redirects redirects)))))
 
 (defun execute-pipeline-use-case (pipeline dispatcher)

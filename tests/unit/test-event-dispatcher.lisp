@@ -7,15 +7,15 @@
 (in-suite event-dispatcher-tests)
 
 (defun test-event (type)
-  (nshell.domain.events:make-domain-event type))
+  (nshell.domain.events:make-generic-domain-event type))
 
 (test dispatcher-drains-events-in-fifo-order-per-type
   "Events published for a type are delivered in FIFO order."
   (let ((dispatcher (nshell.application:make-event-dispatcher)))
     (with-event-capture (seen dispatcher :type-a) (nshell.domain.events:domain-event-timestamp event)
-      (nshell.application:publish-event dispatcher (nshell.domain.events:make-domain-event :type-a 1))
-      (nshell.application:publish-event dispatcher (nshell.domain.events:make-domain-event :type-a 2))
-      (nshell.application:publish-event dispatcher (nshell.domain.events:make-domain-event :type-a 3))
+      (nshell.application:publish-event dispatcher (nshell.domain.events:make-generic-domain-event :type-a :timestamp 1))
+      (nshell.application:publish-event dispatcher (nshell.domain.events:make-generic-domain-event :type-a :timestamp 2))
+      (nshell.application:publish-event dispatcher (nshell.domain.events:make-generic-domain-event :type-a :timestamp 3))
       (is (null (nshell.application:drain-events dispatcher)))
       (is (equal '(1 2 3) (nreverse seen))))))
 

@@ -12,11 +12,16 @@
              collect `(is (eq (nshell.domain.events:domain-event-type ,event-form)
                               ,expected-type)))))
 
-(test event-creation
-  "Domain events can be created with correct type"
-  (let ((event (nshell.domain.events:make-domain-event :test-event)))
+(test generic-event-factory
+  "Generic domain events can be created through an explicit factory."
+  (let ((event (nshell.domain.events:make-generic-domain-event :test-event)))
     (is (eq (nshell.domain.events:domain-event-type event) :test-event))
     (is (integerp (nshell.domain.events:domain-event-timestamp event)))))
+
+(test domain-event-constructor-is-internal-boundary
+  "The raw struct constructor is not part of the package boundary."
+  (is (not (fboundp 'nshell.domain.events::make-domain-event)))
+  (is (fboundp 'nshell.domain.events::%make-domain-event)))
 
 (test command-events-have-correct-types
   "All command event constructors produce correct types"
@@ -32,8 +37,13 @@
    ((nshell.domain.events:make-job-stopped-event 1 :sigterm) :job-stopped)
    ((nshell.domain.events:make-job-completed-event 1 0) :job-completed)))
 
+(test history-events-have-correct-types
+  "History event constructors produce correct types"
+  (assert-event-types
+   ((nshell.domain.events:make-history-searched-event) :history-searched)))
+
 (test event-timestamp-is-monotonic
   "Event timestamps are set at creation time"
   (let* ((t1 (get-universal-time))
-         (event (nshell.domain.events:make-domain-event :test)))
+         (event (nshell.domain.events:make-generic-domain-event :test)))
     (is (<= t1 (nshell.domain.events:domain-event-timestamp event)))))

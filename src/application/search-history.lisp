@@ -60,7 +60,7 @@
   (let ((matches (nshell.domain.history:history-search history query :mode mode)))
     (when dispatcher
       (publish-event dispatcher
-                     (nshell.domain.events:make-domain-event :history-searched)))
+                     (nshell.domain.events:make-history-searched-event)))
     matches))
 
 (defun interactive-history-search-use-case (history query &optional dispatcher)
@@ -72,5 +72,5 @@ while the contains fallback preserves the usual Ctrl-R substring search."
   (let ((matches (%interactive-history-search-matches history query)))
     (when dispatcher
       (publish-event dispatcher
-                     (nshell.domain.events:make-domain-event :history-searched)))
+                     (nshell.domain.events:make-history-searched-event)))
     matches))

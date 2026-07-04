@@ -11,14 +11,15 @@
 (defpackage #:nshell.domain.events
   (:use #:cl)
   (:export #:domain-event #:domain-event-p #:domain-event-type #:domain-event-timestamp
-           #:make-domain-event
+           #:make-generic-domain-event
            #:make-command-entered-event #:make-command-parsed-event
            #:make-parse-failed-event #:make-pipeline-started-event
            #:make-process-created-event #:make-process-exited-event
            #:make-pipeline-completed-event #:make-job-created-event
            #:make-job-stopped-event #:make-job-continued-event
            #:make-job-completed-event #:make-signal-caught-event
-           #:make-command-appended-to-history-event #:make-completion-triggered-event))
+           #:make-command-appended-to-history-event #:make-history-searched-event
+           #:make-completion-triggered-event))
 
 (defpackage #:nshell.domain.signals
   (:use #:cl)

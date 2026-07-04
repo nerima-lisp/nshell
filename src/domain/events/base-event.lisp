@@ -1,15 +1,18 @@
 (in-package #:nshell.domain.events)
 
-(defstruct (domain-event (:constructor make-domain-event (type &optional (timestamp (get-universal-time)))))
+(defstruct (domain-event (:constructor %make-domain-event (type &optional (timestamp (get-universal-time)))))
   (type nil :type keyword :read-only t)
   (timestamp (get-universal-time) :type integer :read-only t))
+
+(defun make-generic-domain-event (type &key timestamp)
+  (%make-domain-event type (or timestamp (get-universal-time))))
 
 (defmacro define-event-constructors (&rest specs)
   `(progn
      ,@(loop for (name type args) in specs
              collect `(defun ,name ,args
                         ,(when args `(declare (ignore ,@args)))
-                        (make-domain-event ,type)))))
+                        (%make-domain-event ,type)))))
 
 (define-event-constructors
   (make-command-entered-event :command-entered (text))
@@ -25,4 +28,5 @@
   (make-job-completed-event :job-completed (id code))
   (make-signal-caught-event :signal-caught (sig))
   (make-command-appended-to-history-event :command-appended-to-history (entry))
+  (make-history-searched-event :history-searched ())
   (make-completion-triggered-event :completion-triggered (prefix)))

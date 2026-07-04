@@ -290,9 +290,11 @@
   (is (fboundp 'nshell.domain.completion::%make-file-completion-prefix-projection))
   (is (fboundp 'nshell.domain.completion::%make-path-command-query))
   (is (fboundp 'nshell.domain.completion::%make-empty-filesystem-candidate-set))
-  (is (not (fboundp 'nshell.domain.completion::make-file-completion-prefix-projection)))
-  (is (not (fboundp 'nshell.domain.completion::make-path-command-query)))
-  (is (not (fboundp 'nshell.domain.completion::make-filesystem-candidate-set))))
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (is (not (defined-symbol-p "MAKE-FILE-COMPLETION-PREFIX-PROJECTION")))
+    (is (not (defined-symbol-p "MAKE-PATH-COMMAND-QUERY")))
+    (is (not (defined-symbol-p "MAKE-FILESYSTEM-CANDIDATE-SET")))))
 
 (test split-file-completion-prefix-splits-on-last-slash
   "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."
@@ -305,11 +307,20 @@
   (let ((projection
           (nshell.domain.completion::project-file-completion-prefix "src/main")))
     (is (string= "src/"
-                 (nshell.domain.completion::file-completion-prefix-projection-directory-prefix
+                 (nshell.domain.completion::%file-completion-prefix-projection-directory-prefix
                   projection)))
     (is (string= "main"
-                 (nshell.domain.completion::file-completion-prefix-projection-file-prefix
+                 (nshell.domain.completion::%file-completion-prefix-projection-file-prefix
                   projection)))))
+
+(test file-completion-prefix-projection-accessors-are-internal-boundaries
+  "File prefix projection readers should stay internal to the filesystem boundary."
+  (is (fboundp 'nshell.domain.completion::%file-completion-prefix-projection-directory-prefix))
+  (is (fboundp 'nshell.domain.completion::%file-completion-prefix-projection-file-prefix))
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (is (not (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-DIRECTORY-PREFIX")))
+    (is (not (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-FILE-PREFIX")))))
 
 (test file-candidates-from-directory-deduplicates-by-candidate-text
   (with-file-completion-adapters

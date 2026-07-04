@@ -85,9 +85,10 @@
            trimmed)))
     (t nil)))
 
-(defstruct (file-completion-prefix-projection
+(defstruct (%file-completion-prefix-projection
             (:constructor %make-file-completion-prefix-projection
-                (directory-prefix file-prefix)))
+                (directory-prefix file-prefix))
+            (:conc-name %file-completion-prefix-projection-))
   (directory-prefix "" :type string :read-only t)
   (file-prefix "" :type string :read-only t))
 
@@ -104,8 +105,8 @@
   "Split PREFIX into a directory prefix and basename prefix."
   (let ((projection (project-file-completion-prefix prefix)))
     (values
-     (file-completion-prefix-projection-directory-prefix projection)
-     (file-completion-prefix-projection-file-prefix projection))))
+     (%file-completion-prefix-projection-directory-prefix projection)
+     (%file-completion-prefix-projection-file-prefix projection))))
 
 (defun file-completion-directory-pathname (directory-prefix)
   "Return a pathname suitable for listing DIRECTORY-PREFIX."

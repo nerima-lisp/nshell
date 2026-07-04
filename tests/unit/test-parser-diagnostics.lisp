@@ -84,6 +84,31 @@
              (nshell.domain.parsing::%structural-diagnostics-diagnostics
               result)))))))
 
+(test structural-diagnostics-accumulator-projects-ordered-diagnostics
+  "Structural diagnostics accumulation should own order and incomplete state."
+  (let* ((accumulator
+           (nshell.domain.parsing::%empty-structural-diagnostics-accumulator))
+         (continuation
+           (nshell.domain.parsing::%continuation-separator-diagnostic
+            :pipe
+            (nshell.domain.parsing:make-token :pipe "|" 8 9)
+            9))
+         (unclosed
+           (nshell.domain.parsing::%unclosed-control-flow-diagnostic 9))
+         (result
+           (progn
+             (nshell.domain.parsing::%structural-diagnostics-accumulator-add-diagnostic
+              accumulator continuation :incomplete-p t)
+             (nshell.domain.parsing::%structural-diagnostics-accumulator-add-diagnostic
+              accumulator unclosed)
+             (nshell.domain.parsing::%structural-diagnostics-from-accumulator
+              accumulator))))
+    (is (nshell.domain.parsing::%structural-diagnostics-incomplete-p result))
+    (is (equal '(:trailing-continuation :unclosed-block)
+               (mapcar #'nshell.domain.parsing:parse-diagnostic-kind
+                       (nshell.domain.parsing::%structural-diagnostics-diagnostics
+                        result))))))
+
 (test structural-diagnostics-projects-stream-input-boundary
   "Parser structural diagnostics should consume one projected stream input."
   (let* ((command (nshell.domain.parsing:make-command-node "if" '("true")))

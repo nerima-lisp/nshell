@@ -54,11 +54,40 @@
        input-length
        input-length)))
 
+(defun %unclosed-control-flow-diagnostic (input-length)
+  (%make-parse-diagnostic
+   :unclosed-block
+   "Expected 'end' to close control-flow block"
+   input-length
+   input-length))
+
 (defstruct (%structural-diagnostics
             (:constructor %make-structural-diagnostics
                 (incomplete-p diagnostics)))
   (incomplete-p nil :type boolean :read-only t)
   (diagnostics nil :type list :read-only t))
+
+(defstruct (%structural-diagnostics-accumulator
+            (:constructor %make-structural-diagnostics-accumulator
+                (&key (incomplete-p nil) (diagnostics nil))))
+  (incomplete-p nil :type boolean)
+  (diagnostics nil :type list))
+
+(defun %empty-structural-diagnostics-accumulator ()
+  (%make-structural-diagnostics-accumulator))
+
+(defun %structural-diagnostics-accumulator-add-diagnostic
+    (accumulator diagnostic &key incomplete-p)
+  (push diagnostic
+        (%structural-diagnostics-accumulator-diagnostics accumulator))
+  (when incomplete-p
+    (setf (%structural-diagnostics-accumulator-incomplete-p accumulator) t))
+  accumulator)
+
+(defun %structural-diagnostics-from-accumulator (accumulator)
+  (%make-structural-diagnostics
+   (%structural-diagnostics-accumulator-incomplete-p accumulator)
+   (nreverse (%structural-diagnostics-accumulator-diagnostics accumulator))))
 
 (defstruct (%structural-diagnostics-input
             (:constructor %make-structural-diagnostics-input
@@ -81,25 +110,22 @@
         (last-sep-token
           (%structural-diagnostics-input-last-separator-token input))
         (input-length (%structural-diagnostics-input-input-length input))
-        (diagnostics nil)
-        (structural-incomplete nil))
+        (diagnostics (%empty-structural-diagnostics-accumulator)))
     (when (%continuation-separator-p last-sep)
-      (setf structural-incomplete t)
-      (push (%continuation-separator-diagnostic
-             last-sep last-sep-token input-length)
-            diagnostics))
+      (%structural-diagnostics-accumulator-add-diagnostic
+       diagnostics
+       (%continuation-separator-diagnostic
+        last-sep last-sep-token input-length)
+       :incomplete-p t))
     (when (%unclosed-control-flow-p cmds)
-      (setf structural-incomplete t)
-      (push (%make-parse-diagnostic
-             :unclosed-block
-             "Expected 'end' to close control-flow block"
-             input-length
-             input-length)
-            diagnostics))
+      (%structural-diagnostics-accumulator-add-diagnostic
+       diagnostics
+       (%unclosed-control-flow-diagnostic input-length)
+       :incomplete-p t))
     (dolist (diagnostic (%unexpected-control-flow-diagnostics cmds input-length))
-      (push diagnostic diagnostics))
-    (%make-structural-diagnostics structural-incomplete
-                                  (nreverse diagnostics))))
+      (%structural-diagnostics-accumulator-add-diagnostic diagnostics
+                                                         diagnostic))
+    (%structural-diagnostics-from-accumulator diagnostics)))
 
 (defun %parse-result-from-reduced-command-stream (stream errors incomplete input-length)
   (let ((structural-diagnostics

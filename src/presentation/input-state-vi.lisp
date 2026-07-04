@@ -24,6 +24,29 @@
 (defun %vi-clear-count (state)
   (copy-input-state-with state :vi-count nil))
 
+(defstruct (vi-input-transition
+             (:constructor %make-vi-input-transition
+                 (state output))
+             (:conc-name %vi-input-transition-))
+  (state nil :read-only t)
+  (output :none :type symbol :read-only t))
+
+(defun vi-input-transition-state (transition)
+  (%vi-input-transition-state transition))
+
+(defun vi-input-transition-output (transition)
+  (%vi-input-transition-output transition))
+
+(defun vi-input-transition (state output)
+  (%make-vi-input-transition state output))
+
+(defun vi-input-transition-clearing-count (state output)
+  (vi-input-transition (%vi-clear-count state) output))
+
+(defun commit-vi-input-transition (transition)
+  (values (vi-input-transition-state transition)
+          (vi-input-transition-output transition)))
+
 (defun %vi-accumulate-count (state digit)
   (copy-input-state-with state
                          :vi-count (+ (* 10 (or (input-state-vi-count state)
@@ -61,7 +84,8 @@
                           (previous-kill-word-start buffer current))))
 
 (defun %vi-values-clearing-count (state output)
-  (values (%vi-clear-count state) output))
+  (commit-vi-input-transition
+   (vi-input-transition-clearing-count state output)))
 
 (defun %vi-move-to-and-clear-count (state position)
   (%vi-values-clearing-count

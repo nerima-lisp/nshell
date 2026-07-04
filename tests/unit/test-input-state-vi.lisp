@@ -259,6 +259,29 @@
                         #\1)
                        #\2))))))
 
+(test vi-input-transition-clears-count-before-commit
+  "Vi reducer output should pass through a typed transition boundary before multiple values."
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 3
+                             :mode :vi-command
+                             :vi-count 12))
+         (transition (nshell.presentation::vi-input-transition-clearing-count
+                      state :history-prev)))
+    (is (nshell.presentation::vi-input-transition-p transition))
+    (is (fboundp 'nshell.presentation::%make-vi-input-transition))
+    (is (not (fboundp 'nshell.presentation::make-vi-input-transition)))
+    (is (eq :history-prev
+            (nshell.presentation::vi-input-transition-output transition)))
+    (is (null (nshell.presentation::input-state-vi-count
+               (nshell.presentation::vi-input-transition-state transition))))
+    (multiple-value-bind (committed output)
+        (nshell.presentation::commit-vi-input-transition transition)
+      (is (eq :history-prev output))
+      (is-vi-command-state committed
+                           :buffer "abcdef"
+                           :cursor-pos 3)
+      (is (null (nshell.presentation::input-state-vi-count committed))))))
+
 (test vi-visual-selection-projects-inclusive-anchor-range
   (let* ((state (input-state :buffer "abcdef"
                              :cursor-pos 1

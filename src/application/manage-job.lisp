@@ -12,6 +12,11 @@
   status
   command)
 
+(defstruct (job-wait-event (:constructor %make-job-wait-event (pid state status-code)))
+  pid
+  state
+  status-code)
+
 (defun %set-acl-foreground-pgid (pgid)
   (let ((symbol (find-symbol "*FOREGROUND-PGID*" "NSHELL.INFRASTRUCTURE.ACL")))
     (when symbol
@@ -128,20 +133,20 @@
           (sb-posix:waitpid (- pgid) sb-posix:wuntraced)
         (cond
           ((sb-posix:wifstopped status)
-           (values pid :stopped nil))
+           (%make-job-wait-event pid :stopped nil))
           ((sb-posix:wifexited status)
-           (values pid :exited (sb-posix:wexitstatus status)))
+           (%make-job-wait-event pid :exited (sb-posix:wexitstatus status)))
           ((sb-posix:wifsignaled status)
-           (values pid :signaled (+ 128 (sb-posix:wtermsig status))))
+           (%make-job-wait-event pid :signaled (+ 128 (sb-posix:wtermsig status))))
           (t
-           (values pid :unknown nil))))
+           (%make-job-wait-event pid :unknown nil))))
     (sb-posix:syscall-error (condition)
       (let ((errno (sb-posix:syscall-errno condition)))
         (cond
           ((= errno sb-posix:echild)
-           (values nil :no-child nil))
+           (%make-job-wait-event nil :no-child nil))
           ((= errno sb-posix:eintr)
-           (values nil :interrupted nil))
+           (%make-job-wait-event nil :interrupted nil))
           (t
            (error condition)))))))
 
@@ -164,14 +169,14 @@
                  (nshell.domain.job-control:complete-job
                   job-monitor job-id status-code))))
       (loop
-        (multiple-value-bind (pid state status-code)
-            (%wait-job-pgid-event pgid)
-          (case state
+        (let ((event (%wait-job-pgid-event pgid)))
+          (case (job-wait-event-state event)
             (:stopped
              (nshell.domain.job-control:suspend-job job-monitor job-id nil)
              (return job))
             ((:exited :signaled)
-             (record-completion pid status-code)
+             (record-completion (job-wait-event-pid event)
+                                (job-wait-event-status-code event))
              (when (and known-pids (null pending-pids))
                (return (finish-job))))
             (:no-child

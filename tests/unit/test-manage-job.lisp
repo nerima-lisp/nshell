@@ -118,7 +118,7 @@
                (error "unexpected extra wait"))
              (destructuring-bind (pid state status-code) event
                (push pid waited-pids)
-               (values pid state status-code)))))
+               (nshell.application::%make-job-wait-event pid state status-code)))))
       (is (eq job (nshell.application::%wait-job-pgid job job-id monitor))))
     (is (null events))
     (is (equal '(222 111) (nreverse waited-pids)))
@@ -140,11 +140,21 @@
              (unless event
                (error "unexpected extra wait"))
              (destructuring-bind (pid state status-code) event
-               (values pid state status-code)))))
+               (nshell.application::%make-job-wait-event pid state status-code)))))
       (is (eq job (nshell.application::%wait-job-pgid job job-id monitor))))
     (is (equal '((222 :exited 0)) events))
     (is (eq :stopped (nshell.domain.execution:job-state job)))
     (is (null (nshell.domain.execution:job-exit-code job)))))
+
+(test wait-job-event-shape-is-internal-boundary
+  "Foreground wait events are internal application values, not exported API."
+  (dolist (name '("JOB-WAIT-EVENT" "%MAKE-JOB-WAIT-EVENT"
+                  "JOB-WAIT-EVENT-PID" "JOB-WAIT-EVENT-STATE"
+                  "JOB-WAIT-EVENT-STATUS-CODE"))
+    (multiple-value-bind (_symbol status)
+        (find-symbol name "NSHELL.APPLICATION")
+      (declare (ignore _symbol))
+      (is (not (eq :external status))))))
 
 (test foreground-signal-target-ignores-shell-process-group
   "Foreground signal forwarding never targets the shell's own process group."

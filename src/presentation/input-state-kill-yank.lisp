@@ -59,19 +59,53 @@
                    (next-kill-word-end (input-state-buffer state) cursor)
                    cursor))))
 
+(defstruct (yank-edit
+            (:constructor %make-yank-edit (start text buffer cursor-pos))
+            (:conc-name %yank-edit-))
+  (start 0 :type fixnum :read-only t)
+  (text "" :type string :read-only t)
+  (buffer "" :type string :read-only t)
+  (cursor-pos 0 :type fixnum :read-only t))
+
+(defun yank-edit-start (edit)
+  (%yank-edit-start edit))
+
+(defun yank-edit-text (edit)
+  (%yank-edit-text edit))
+
+(defun yank-edit-buffer (edit)
+  (%yank-edit-buffer edit))
+
+(defun yank-edit-cursor-pos (edit)
+  (%yank-edit-cursor-pos edit))
+
+(defun yank-edit-for-state (state)
+  (let ((killed (first (input-state-kill-ring state))))
+    (when killed
+      (let* ((buffer (input-state-buffer state))
+             (cursor (input-state-cursor-pos state))
+             (insertion (buffer-insertion-at-cursor buffer cursor killed)))
+        (when insertion
+          (%make-yank-edit cursor
+                           killed
+                           (buffer-insertion-result insertion buffer)
+                           (buffer-insertion-cursor-pos insertion)))))))
+
+(defun commit-yank-edit (state edit)
+  (values (copy-input-state-clearing-completion
+           state
+           :buffer (yank-edit-buffer edit)
+           :cursor-pos (yank-edit-cursor-pos edit)
+           :last-yank-start (yank-edit-start edit)
+           :last-yank-end (yank-edit-cursor-pos edit)
+           :last-yank-index 0)
+          :suggest-update))
+
 (defun yank-last-kill (state)
   (with-normalized-cleared-completion-state (state state)
-    (let ((killed (first (input-state-kill-ring state))))
-      (if killed
-          (let ((start (input-state-cursor-pos state)))
-            (multiple-value-bind (new-state output)
-                (insert-string-at-cursor state killed)
-              (values (copy-input-state-clearing-completion
-                       new-state
-                       :last-yank-start start
-                       :last-yank-end (input-state-cursor-pos new-state)
-                       :last-yank-index 0)
-                      output)))
+    (let ((edit (yank-edit-for-state state)))
+      (if edit
+          (commit-yank-edit state edit)
           (values state :none)))))
 
 (defstruct (yank-pop-edit

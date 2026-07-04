@@ -19,6 +19,31 @@
   (is (nshell.presentation::kill-edit-empty-p
        (nshell.presentation::%make-kill-edit 3 3 3))))
 
+(test input-state-yank-edit-commits-insertion-and-yank-metadata
+  (let* ((state (completion-session-state
+                 :buffer "echo "
+                 :cursor-pos 5
+                 :completion-index 1
+                 :suggestion " ignored"
+                 :kill-ring '("one")))
+         (edit (nshell.presentation::yank-edit-for-state state)))
+    (is (nshell.presentation::yank-edit-p edit))
+    (is (= 5 (nshell.presentation::yank-edit-start edit)))
+    (is (string= "one" (nshell.presentation::yank-edit-text edit)))
+    (is (string= "echo one" (nshell.presentation::yank-edit-buffer edit)))
+    (is (= 8 (nshell.presentation::yank-edit-cursor-pos edit)))
+    (with-reduced-input-state (new-state output)
+        (nshell.presentation::commit-yank-edit state edit)
+      (is-input-state-with-completion-cleared
+       new-state
+       :buffer "echo one"
+       :cursor-pos 8
+       :kill-ring '("one"))
+      (is (= 5 (nshell.presentation::input-state-last-yank-start new-state)))
+      (is (= 8 (nshell.presentation::input-state-last-yank-end new-state)))
+      (is (= 0 (nshell.presentation::input-state-last-yank-index new-state)))
+      (is (eq :suggest-update output)))))
+
 (test input-state-ctrl-w-kills-previous-word-into-kill-ring
   (let ((state (completion-session-state
                 :buffer "git checkout main"

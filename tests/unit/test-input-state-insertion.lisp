@@ -17,6 +17,13 @@
         :suggest-update
         (:buffer "x" :cursor-pos 1))))
 
+(test key-event-raw-constructor-is-internal-boundary
+  (let ((event (nshell.domain.input:make-key-event :char #\x)))
+    (is (nshell.domain.input:key-event-p event))
+    (is (eq :char (nshell.domain.input:key-event-type event)))
+    (is (char= #\x (nshell.domain.input:key-event-char event)))
+    (is (fboundp 'nshell.domain.input::%make-key-event))))
+
 (test input-state-inserting-unicode-char-updates-buffer
   (let ((state (input-state :buffer "xy" :cursor-pos 1))
         (ch (char "あ" 0)))

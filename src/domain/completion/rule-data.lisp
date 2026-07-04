@@ -72,48 +72,48 @@
   (push rule (rule-knowledge-base-rules kb))
   kb)
 
-(defun logic-variable-symbol-p (x)
+(defun %logic-variable-symbol-p (x)
   (and (symbolp x)
        (< 0 (length (symbol-name x)))
        (char= #\? (char (symbol-name x) 0))))
 
-(defun variable-name (symbol)
+(defun %logic-variable-name (symbol)
   (subseq (symbol-name symbol) 1))
 
-(declaim (ftype (function (t hash-table) t) convert-logic-variables))
+(declaim (ftype (function (t hash-table) t) %convert-logic-variables))
 
-(defun logic-form-pair-head (form)
+(defun %logic-form-pair-head (form)
   (car form))
 
-(defun logic-form-pair-tail (form)
+(defun %logic-form-pair-tail (form)
   (cdr form))
 
-(defun make-logic-form-pair (head tail)
+(defun %make-logic-form-pair (head tail)
   (cons head tail))
 
-(defun convert-logic-form-pair (form env)
-  (make-logic-form-pair
-   (convert-logic-variables (logic-form-pair-head form) env)
-   (convert-logic-variables (logic-form-pair-tail form) env)))
+(defun %convert-logic-form-pair (form env)
+  (%make-logic-form-pair
+   (%convert-logic-variables (%logic-form-pair-head form) env)
+   (%convert-logic-variables (%logic-form-pair-tail form) env)))
 
-(defun convert-logic-variables (form env)
+(defun %convert-logic-variables (form env)
   (cond
-    ((logic-variable-symbol-p form)
+    ((%logic-variable-symbol-p form)
      (or (gethash form env)
          (setf (gethash form env)
-               (nshell.domain.parsing:make-var (variable-name form)))))
+               (nshell.domain.parsing:make-var (%logic-variable-name form)))))
     ((consp form)
-     (convert-logic-form-pair form env))
+     (%convert-logic-form-pair form env))
     (t form)))
 
-(defun fact-head (fact env)
-  (convert-logic-variables (cons (fact-predicate fact) (fact-args fact)) env))
+(defun %fact-head (fact env)
+  (%convert-logic-variables (cons (fact-predicate fact) (fact-args fact)) env))
 
-(defun rule-head-term (rule env)
-  (convert-logic-variables (rule-head rule) env))
+(defun %rule-head-term (rule env)
+  (%convert-logic-variables (rule-head rule) env))
 
-(defun rule-body-terms (rule env)
-  (mapcar (lambda (goal) (convert-logic-variables goal env))
+(defun %rule-body-terms (rule env)
+  (mapcar (lambda (goal) (%convert-logic-variables goal env))
           (rule-body rule)))
 
 (declaim (ftype (function (proof-search) list) prove-internal))
@@ -141,7 +141,7 @@
 (defun fact-solution (fact search)
   (let ((candidate
           (nshell.domain.parsing:unify (proof-search-goal search)
-                                       (fact-head fact (make-hash-table :test #'eq))
+                                       (%fact-head fact (make-hash-table :test #'eq))
                                        (proof-search-bindings search))))
     (values candidate (nshell.domain.parsing:unify-p candidate))))
 
@@ -153,8 +153,8 @@
 
 (defun fresh-rule-terms (rule)
   (let ((env (make-hash-table :test #'eq)))
-    (values (rule-head-term rule env)
-            (rule-body-terms rule env))))
+    (values (%rule-head-term rule env)
+            (%rule-body-terms rule env))))
 
 (defun rule-solutions (search rule)
   (multiple-value-bind (head body) (fresh-rule-terms rule)
@@ -203,7 +203,7 @@
 
 (defun prove (kb goal &optional (bindings '()) (max-depth *max-proof-depth*))
   (let* ((env (make-hash-table :test #'eq))
-         (internal-goal (convert-logic-variables goal env)))
+         (internal-goal (%convert-logic-variables goal env)))
     (mapcar (lambda (solution)
               (externalize-bindings env solution))
             (prove-internal

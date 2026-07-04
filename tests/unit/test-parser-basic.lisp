@@ -222,6 +222,26 @@
             (nshell.domain.parsing::%redirect-output-destination-state-stderr-mode
              changed-stdout-state)))))
 
+(test redirect-output-destination-state-folds-raw-entries
+  "Destination resolution folds raw redirect entries through an explicit state boundary."
+  (let ((state
+          (nshell.domain.parsing::%redirect-output-destination-state-from-redirects
+           '((:> . "out.txt")
+             (:2>&1)
+             (:2>> . "err.txt")))))
+    (is (string= "out.txt"
+                 (nshell.domain.parsing::%redirect-output-destination-state-stdout-target
+                  state)))
+    (is (eq :supersede
+            (nshell.domain.parsing::%redirect-output-destination-state-stdout-mode
+             state)))
+    (is (string= "err.txt"
+                 (nshell.domain.parsing::%redirect-output-destination-state-stderr-target
+                  state)))
+    (is (eq :append
+            (nshell.domain.parsing::%redirect-output-destination-state-stderr-mode
+             state)))))
+
 (test map-redirect-entries-projects-kind-and-target
   "Redirect consumers receive projected values instead of raw cons cells."
   (let ((entries nil))

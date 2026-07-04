@@ -253,20 +253,26 @@
       (%redirect-output-destination-state-stdout-mode state)))
     (otherwise state)))
 
+(defun %redirect-output-destination-state-apply-redirect (state redirect)
+  (let ((entry (%redirect-entry-from-raw redirect)))
+    (if entry
+        (%redirect-output-destination-state-apply-entry
+         state
+         (%redirect-entry-kind entry)
+         (%redirect-entry-target entry))
+        state)))
+
+(defun %redirect-output-destination-state-from-redirects (redirects)
+  (reduce #'%redirect-output-destination-state-apply-redirect
+          redirects
+          :initial-value (%empty-redirect-output-destination-state)))
+
 (defun redirect-output-destinations (redirects)
   "Return stdout/stderr file destinations as four values.
 The values are stdout-target, stdout-mode, stderr-target, and stderr-mode after
 applying REDIRECTS from left to right."
-  (let ((state (%empty-redirect-output-destination-state)))
-    (map-redirect-entries
-     (lambda (kind target)
-       (setf state
-             (%redirect-output-destination-state-apply-entry
-              state
-              kind
-              target)))
-     redirects)
-    (%redirect-output-destination-state-values state)))
+  (%redirect-output-destination-state-values
+   (%redirect-output-destination-state-from-redirects redirects)))
 
 (defstruct (%separator-facts
             (:constructor %make-separator-facts

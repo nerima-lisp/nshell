@@ -115,20 +115,20 @@
   (%make-begin-end-node (%copy-ast-list body) span))
 
 (defstruct (argument-node (:include ast-node)
-                          (:constructor make-argument-node (value &optional span)))
+                          (:constructor %make-argument-node (value &optional span)))
   (value "" :type string :read-only t))
 
 (defstruct (operator-node (:include ast-node)
-                          (:constructor make-operator-node (operator &optional span)))
+                          (:constructor %make-operator-node (operator &optional span)))
   (operator "" :type string :read-only t))
 
 (defstruct (error-node (:include ast-node)
-                       (:constructor make-error-node (message position &optional span)))
+                       (:constructor %make-error-node (message position &optional span)))
   (message "" :type string :read-only t)
   (position 0 :type integer :read-only t))
 
 (defstruct (incomplete-node (:include ast-node)
-                            (:constructor make-incomplete-node (partial-text kind &optional span)))
+                            (:constructor %make-incomplete-node (partial-text kind &optional span)))
   (partial-text "" :type string :read-only t)
   (kind :unknown :type keyword :read-only t))
 

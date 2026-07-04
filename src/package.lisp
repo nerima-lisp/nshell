@@ -69,7 +69,6 @@
            #:tokenization-result-incomplete-p
            #:token-type #:token-value #:token-start #:token-end #:make-token
            #:ast-node-type #:make-command-node #:make-pipeline-node
-           #:make-argument-node #:make-operator-node #:make-error-node
                 #:command-node-p #:pipeline-node-p #:sequence-node-p
                 #:command-node-command #:command-node-command-quote-style #:command-node-args
                 #:sequence-node-commands #:pipeline-node-commands

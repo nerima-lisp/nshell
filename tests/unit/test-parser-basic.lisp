@@ -219,6 +219,17 @@
   (is (not (fboundp 'nshell.domain.parsing::make-ast-node)))
   (is (fboundp 'nshell.domain.parsing::%make-ast-node)))
 
+(test ast-node-leaf-constructors-are-internal-boundaries
+  "Leaf AST raw constructors are internal implementation details."
+  (is (not (fboundp 'nshell.domain.parsing::make-argument-node)))
+  (is (not (fboundp 'nshell.domain.parsing::make-operator-node)))
+  (is (not (fboundp 'nshell.domain.parsing::make-error-node)))
+  (is (not (fboundp 'nshell.domain.parsing::make-incomplete-node)))
+  (is (fboundp 'nshell.domain.parsing::%make-argument-node))
+  (is (fboundp 'nshell.domain.parsing::%make-operator-node))
+  (is (fboundp 'nshell.domain.parsing::%make-error-node))
+  (is (fboundp 'nshell.domain.parsing::%make-incomplete-node)))
+
 (test ast-node-constructors-copy-list-slots
   "AST constructors should not share mutable list slots with callers."
   (let* ((args (list "one"))

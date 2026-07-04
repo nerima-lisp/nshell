@@ -156,39 +156,71 @@
   "Return all typed args as plain strings."
   (mapcar #'arg-value (command-node-args node)))
 
+(defstruct (%command-redirect-split-state
+            (:constructor %make-command-redirect-split-state (clean redirects)))
+  (clean nil :type list :read-only t)
+  (redirects nil :type list :read-only t))
+
+(defun %empty-command-redirect-split-state ()
+  (%make-command-redirect-split-state nil nil))
+
+(defun %command-redirect-split-state-push-clean (state arg)
+  (%make-command-redirect-split-state
+   (cons arg (%command-redirect-split-state-clean state))
+   (%command-redirect-split-state-redirects state)))
+
+(defun %command-redirect-split-state-push-redirect (state kind target)
+  (%make-command-redirect-split-state
+   (%command-redirect-split-state-clean state)
+   (cons (cons kind target)
+         (%command-redirect-split-state-redirects state))))
+
+(defun %command-redirect-split-state-accept-arg (state arg remaining-args)
+  (let* ((value (arg-value arg))
+         (redirect-facts (%redirect-facts value)))
+    (cond
+      ((and redirect-facts
+            (%redirect-facts-fd-dup-p redirect-facts))
+       (values
+        (%command-redirect-split-state-push-redirect
+         state
+         (%redirect-facts-kind redirect-facts)
+         nil)
+        remaining-args))
+      ((and redirect-facts remaining-args)
+       (values
+        (%command-redirect-split-state-push-redirect
+         state
+         (%redirect-facts-kind redirect-facts)
+         (arg-value (first remaining-args)))
+        (rest remaining-args)))
+      (t
+       (values (%command-redirect-split-state-push-clean state arg)
+               remaining-args)))))
+
+(defun %command-redirect-split-state-values (state)
+  (values (nreverse (%command-redirect-split-state-clean state))
+          (nreverse (%command-redirect-split-state-redirects state))))
+
 (defun split-command-node-redirects (cmd-node)
   "Split CMD-NODE into (clean-command-node redirects).
 Redirect operator args and their targets are removed from the clean command."
-  (let ((clean nil)
-        (redirects nil)
-        (args (command-node-args cmd-node)))
-    (loop with index = 0
-          with limit = (length args)
-          while (< index limit)
-          for arg = (nth index args)
-          for value = (arg-value arg)
-          for redirect-facts = (%redirect-facts value)
-          do (cond
-               ((and redirect-facts
-                     (%redirect-facts-fd-dup-p redirect-facts))
-                (push (cons (%redirect-facts-kind redirect-facts) nil)
-                      redirects)
-                (incf index))
-               ((and redirect-facts (< (1+ index) limit))
-                (let ((target (arg-value (nth (1+ index) args))))
-                  (push (cons (%redirect-facts-kind redirect-facts)
-                              target)
-                        redirects)
-                  (incf index 2)))
-               (t
-                (push arg clean)
-                (incf index))))
-    (values (make-command-node
-             (command-node-command cmd-node)
-             (nreverse clean)
-             (ast-node-span cmd-node)
-             (command-node-command-quote-style cmd-node))
-            (nreverse redirects))))
+  (let ((state (%empty-command-redirect-split-state))
+        (remaining (command-node-args cmd-node)))
+    (loop while remaining
+          do (multiple-value-setq (state remaining)
+               (%command-redirect-split-state-accept-arg
+                state
+                (first remaining)
+                (rest remaining))))
+    (multiple-value-bind (clean redirects)
+        (%command-redirect-split-state-values state)
+      (values (make-command-node
+               (command-node-command cmd-node)
+               clean
+               (ast-node-span cmd-node)
+               (command-node-command-quote-style cmd-node))
+              redirects))))
 
 (defun split-command-nodes-redirects (commands)
   "Split each command in COMMANDS into (clean-commands per-stage-redirects)."

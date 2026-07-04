@@ -241,6 +241,34 @@
     (is (equal '((:2>&1 . nil) (:> . "out") (:2> . "err"))
                redirects))))
 
+(test command-redirect-split-state-consumes-targeted-redirects
+  "Command redirect splitting state owns target consumption and dangling operators."
+  (let ((state (nshell.domain.parsing::%empty-command-redirect-split-state)))
+    (multiple-value-bind (after-output remaining)
+        (nshell.domain.parsing::%command-redirect-split-state-accept-arg
+         state
+         (nshell.domain.parsing::%command-arg ">")
+         (list (nshell.domain.parsing::%command-arg "out")
+               (nshell.domain.parsing::%command-arg "arg")))
+      (multiple-value-bind (clean redirects)
+          (nshell.domain.parsing::%command-redirect-split-state-values
+           after-output)
+        (is (null clean))
+        (is (equal '((:> . "out")) redirects))
+        (is (equal '("arg")
+                   (mapcar #'nshell.domain.parsing:arg-value remaining)))))
+    (multiple-value-bind (after-dangling remaining)
+        (nshell.domain.parsing::%command-redirect-split-state-accept-arg
+         state
+         (nshell.domain.parsing::%command-arg ">")
+         nil)
+      (multiple-value-bind (clean redirects)
+          (nshell.domain.parsing::%command-redirect-split-state-values
+           after-dangling)
+        (is (equal '(">") (mapcar #'nshell.domain.parsing:arg-value clean)))
+        (is (null redirects))
+        (is (null remaining))))))
+
 (test split-command-node-redirects-projects-redirect-table-cases
   "Redirect splitting uses parser-domain redirect specs for supported redirect forms."
   (dolist (case '((("echo" ">" "out.txt")

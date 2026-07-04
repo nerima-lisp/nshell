@@ -1,90 +1,43 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (%command-list-cardinality
-            (:constructor %make-command-list-cardinality
-                (single-command single-command-p)))
-  (single-command nil :read-only t)
-  (single-command-p nil :type boolean :read-only t))
-
-(defun %command-list-cardinality (commands)
-  (if (and commands (null (rest commands)))
-      (%make-command-list-cardinality (first commands) t)
-      (%make-command-list-cardinality nil nil)))
-
 (defun %single-command-p (commands)
-  (%command-list-cardinality-single-command-p
-   (%command-list-cardinality commands)))
+  (and commands (null (rest commands))))
 
 (defun %pipeline-or-command-node (commands)
-  (let ((cardinality (%command-list-cardinality commands)))
-    (if (%command-list-cardinality-single-command-p cardinality)
-        (%command-list-cardinality-single-command cardinality)
-        (make-pipeline-node commands))))
-
-(defstruct (%pipeline-group
-            (:constructor %make-pipeline-group (commands)))
-  (commands nil :type list :read-only t))
-
-(defun %pipeline-group-from-reversed (commands)
-  (%make-pipeline-group (nreverse commands)))
-
-(defun %pipeline-group-ast (group)
-  (%pipeline-or-command-node
-   (%pipeline-group-commands group)))
-
-(defstruct (%command-list-entry
-            (:constructor %make-command-list-entry
-                (command separator)))
-  (command nil :read-only t)
-  (separator nil :read-only t))
+  (if (%single-command-p commands)
+      (first commands)
+      (make-pipeline-node commands)))
 
 (defun %command-list-entry-from-reduced-entry (entry)
-  (%make-command-list-entry
-   (%reduced-command-entry-command entry)
-   (%reduced-command-entry-separator entry)))
+  (list (%reduced-command-entry-command entry)
+        (%reduced-command-entry-separator entry)))
 
 (defun %command-list-entries-from-reduced-entries (entries)
   (mapcar #'%command-list-entry-from-reduced-entry entries))
 
 (defun %command-list-commands (entries)
-  (mapcar #'%command-list-entry-command entries))
+  (mapcar #'first entries))
 
 (defun %command-list-separators (entries)
-  (mapcar #'%command-list-entry-separator entries))
-
-(defstruct (%command-list-separator-layout
-            (:constructor %make-command-list-separator-layout
-                (separators boundary-separators trailing-separator)))
-  (separators nil :type list :read-only t)
-  (boundary-separators nil :type list :read-only t)
-  (trailing-separator nil :read-only t))
+  (mapcar #'second entries))
 
 (defun %command-list-separator-layout-from-separators (separators)
-  (%make-command-list-separator-layout
-   separators
-   (butlast separators)
-   (car (last separators))))
-
-(defstruct (%command-list-assembly
-            (:constructor %make-command-list-assembly
-                (commands separator-layout)))
-  (commands nil :type list :read-only t)
-  (separator-layout nil :read-only t))
+  separators)
 
 (defun %command-list-assembly-from-entries (entries)
   (let ((separators (%command-list-separators entries)))
-    (%make-command-list-assembly
-     (%command-list-commands entries)
-     (%command-list-separator-layout-from-separators separators))))
+    (cons (%command-list-commands entries)
+          (%command-list-separator-layout-from-separators separators))))
 
 (defun %command-list-assembly-from-reduced-entries (entries)
   (%command-list-assembly-from-entries
    (%command-list-entries-from-reduced-entries entries)))
 
 (defun %command-list-assembly-single-command (assembly)
-  (%command-list-cardinality-single-command
-   (%command-list-cardinality
-    (%command-list-assembly-commands assembly))))
+  (let ((commands (%command-list-assembly-commands assembly)))
+    (if (%single-command-p commands)
+        (first commands)
+        nil)))
 
 (defun %command-list-assembly-background-p (assembly)
   (%background-separator-p
@@ -117,83 +70,65 @@
       (%command-list-separator-layout-separators layout)
       (%command-list-separator-layout-boundary-separators layout)))
 
-(defstruct (%command-separator-pair
-            (:constructor %make-command-separator-pair
-                (command separator)))
-  (command nil :read-only t)
-  (separator nil :read-only t))
+(defun %command-list-separator-layout-separators (layout)
+  layout)
 
-(defstruct (%command-separator-pair-source
-            (:constructor %make-command-separator-pair-source
-                (commands separators)))
-  (commands nil :type list :read-only t)
-  (separators nil :type list :read-only t))
+(defun %command-list-separator-layout-boundary-separators (layout)
+  (butlast layout))
 
-(defun %command-separator-pairs (source)
-  (loop for command in (%command-separator-pair-source-commands source)
-        for separator in (%command-separator-pair-source-separators source)
-        collect (%make-command-separator-pair command separator)))
+(defun %command-list-separator-layout-trailing-separator (layout)
+  (car (last layout)))
 
-(defstruct (%mixed-sequence-assembly
-            (:constructor %make-mixed-sequence-assembly
-                (commands separator-layout)))
-  (commands nil :type list :read-only t)
-  (separator-layout nil :read-only t))
+(defun %command-list-assembly-commands (assembly)
+  (car assembly))
 
-(defun %mixed-sequence-assembly-from-command-list-assembly (assembly)
-  (%make-mixed-sequence-assembly
-   (%command-list-assembly-commands assembly)
-   (%command-list-assembly-separator-layout assembly)))
+(defun %command-list-assembly-separator-layout (assembly)
+  (cdr assembly))
+
+(defun %command-separator-pairs (commands separators)
+  (loop for command in commands
+        for separator in separators
+        collect (cons command separator)))
 
 (defun %mixed-sequence-assembly-pairs (assembly)
   (%command-separator-pairs
-   (%make-command-separator-pair-source
-    (%mixed-sequence-assembly-commands assembly)
-    (%command-list-separator-layout-separators
-     (%mixed-sequence-assembly-separator-layout assembly)))))
-
-(defstruct (%pending-pipeline-group
-            (:constructor %make-pending-pipeline-group
-                (commands)))
-  (commands nil :type list :read-only t))
+   (%command-list-assembly-commands assembly)
+   (%command-list-separator-layout-separators
+    (%command-list-assembly-separator-layout assembly))))
 
 (defun %empty-pending-pipeline-group ()
-  (%make-pending-pipeline-group nil))
+  nil)
 
 (defun %pending-pipeline-group-empty-p (group)
-  (null (%pending-pipeline-group-commands group)))
+  (null group))
 
 (defun %pending-pipeline-group-push (group command)
-  (%make-pending-pipeline-group
-   (cons command (%pending-pipeline-group-commands group))))
+  (cons command group))
 
 (defun %pending-pipeline-group-ast (group)
-  (%pipeline-group-ast
-   (%pipeline-group-from-reversed
-    (%pending-pipeline-group-commands group))))
-
-(defstruct (%mixed-sequence-pipe-flush
-            (:constructor %make-mixed-sequence-pipe-flush
-                (sequence-commands pipe-group)))
-  (sequence-commands nil :type list :read-only t)
-  (pipe-group nil :read-only t))
+  (%pipeline-or-command-node (nreverse group)))
 
 (defun %flush-mixed-sequence-pipe-group (sequence-commands pipe-group)
-  (if (not (%pending-pipeline-group-empty-p pipe-group))
-      (%make-mixed-sequence-pipe-flush
-       (cons (%pending-pipeline-group-ast pipe-group) sequence-commands)
-       (%empty-pending-pipeline-group))
-      (%make-mixed-sequence-pipe-flush sequence-commands pipe-group)))
-
-(defstruct (%mixed-sequence-build-state
-            (:constructor %make-mixed-sequence-build-state
-                (sequence-commands sequence-separators pipe-group)))
-  (sequence-commands nil :type list :read-only t)
-  (sequence-separators nil :type list :read-only t)
-  (pipe-group nil :read-only t))
+  (if (%pending-pipeline-group-empty-p pipe-group)
+      (cons sequence-commands pipe-group)
+      (cons (cons (%pending-pipeline-group-ast pipe-group) sequence-commands)
+            (%empty-pending-pipeline-group))))
 
 (defun %empty-mixed-sequence-build-state ()
-  (%make-mixed-sequence-build-state nil nil (%empty-pending-pipeline-group)))
+  (list nil nil (%empty-pending-pipeline-group)))
+
+(defun %mixed-sequence-build-state-sequence-commands (state)
+  (first state))
+
+(defun %mixed-sequence-build-state-sequence-separators (state)
+  (second state))
+
+(defun %mixed-sequence-build-state-pipe-group (state)
+  (third state))
+
+(defun %make-mixed-sequence-build-state
+    (sequence-commands sequence-separators pipe-group)
+  (list sequence-commands sequence-separators pipe-group))
 
 (defun %mixed-sequence-build-state-push-command (state command)
   (%make-mixed-sequence-build-state
@@ -208,9 +143,9 @@
                 (%mixed-sequence-build-state-sequence-commands state)
                 (%mixed-sequence-build-state-pipe-group state))))
     (%make-mixed-sequence-build-state
-     (%mixed-sequence-pipe-flush-sequence-commands flush)
+     (car flush)
      (%mixed-sequence-build-state-sequence-separators state)
-     (%mixed-sequence-pipe-flush-pipe-group flush))))
+     (cdr flush))))
 
 (defun %mixed-sequence-build-state-record-separator (state separator)
   (%make-mixed-sequence-build-state
@@ -220,10 +155,8 @@
 
 (defun %mixed-sequence-build-state-accept-pair (state pair)
   (let* ((after-command
-           (%mixed-sequence-build-state-push-command
-            state
-            (%command-separator-pair-command pair)))
-         (separator (%command-separator-pair-separator pair)))
+           (%mixed-sequence-build-state-push-command state (car pair)))
+         (separator (cdr pair)))
     (if (%sequence-boundary-separator-p separator)
         (%mixed-sequence-build-state-record-separator
          (%mixed-sequence-build-state-flush-pipe-group after-command)
@@ -273,28 +206,18 @@
       ((%sequence-separators-p layout) :sequence)
       (t :mixed-sequence))))
 
-(defstruct (%command-list-assembly-decision
-            (:constructor %make-command-list-assembly-decision
-                (assembly policy)))
-  (assembly nil :read-only t)
-  (policy nil :read-only t))
-
 (defun %command-list-assembly-decision-from-assembly (assembly)
-  (%make-command-list-assembly-decision
-   assembly
-   (%command-list-assembly-policy assembly)))
+  (list assembly (%command-list-assembly-policy assembly)))
 
 (defun %command-list-assembly-decision-ast (decision)
-  (let ((assembly (%command-list-assembly-decision-assembly decision)))
-    (case (%command-list-assembly-decision-policy decision)
+  (let ((assembly (first decision)))
+    (case (second decision)
       (:empty nil)
       (:single-command (%single-command-ast assembly))
       (:pipeline (%pipeline-command-list-ast assembly))
       (:sequence (%sequence-command-list-ast assembly))
       (:mixed-sequence
-       (%build-mixed-sequence
-        (%mixed-sequence-assembly-from-command-list-assembly
-         assembly))))))
+       (%build-mixed-sequence assembly)))))
 
 (defun %command-list-assembly-ast (assembly)
   (%command-list-assembly-decision-ast

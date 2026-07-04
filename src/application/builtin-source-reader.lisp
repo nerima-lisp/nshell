@@ -37,6 +37,30 @@
 
 (defparameter +source-definition-end-keyword+ "end")
 
+(defstruct (%source-function-consumption
+            (:constructor %make-source-function-consumption
+                (closed-p remaining-lines depth body-lines)))
+  (closed-p nil :type boolean :read-only t)
+  (remaining-lines nil :type list :read-only t)
+  (depth 0 :type integer :read-only t)
+  (body-lines nil :type list :read-only t))
+
+(defstruct (%source-function-definition-result
+            (:constructor %make-source-function-definition-result
+                (remaining-lines output-chunk exit-code stop-p)))
+  (remaining-lines nil :type list :read-only t)
+  (output-chunk nil :type (or null string) :read-only t)
+  (exit-code 0 :type integer :read-only t)
+  (stop-p nil :type boolean :read-only t))
+
+(defstruct (%source-lines-step-result
+            (:constructor %make-source-lines-step-result
+                (remaining-lines output-chunks exit-code stop-p)))
+  (remaining-lines nil :type list :read-only t)
+  (output-chunks nil :type list :read-only t)
+  (exit-code 0 :type integer :read-only t)
+  (stop-p nil :type boolean :read-only t))
+
 (defun %source-line-segments (line)
   (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
                  (nshell.domain.parsing:tokenize line))))
@@ -106,36 +130,45 @@
         for line-delta = (%source-definition-line-depth-delta body-line)
         do (if (and (= depth 1)
                     (= line-delta -1))
-               (return (values t source depth body))
+               (return (%make-source-function-consumption
+                        t source depth body))
                (progn
                  (push body-line body)
                  (incf depth line-delta)))
-        finally (return (values nil source depth body))))
+        finally
+           (return (%make-source-function-consumption
+                    nil source depth body))))
 
 (defun %source-function-definition-finish (context name body inline-lines remaining source-path)
   (let ((function-body (nreverse body))
         (tail (append inline-lines remaining)))
     (%store-shell-function-definition context name function-body source-path)
-    (values tail nil 0 nil)))
+    (%make-source-function-definition-result tail nil 0 nil)))
 
 (defun %source-function-definition-scan (context name body inline-lines remaining depth source-path)
-  (let ((closed nil))
-    (multiple-value-bind (inline-closed inline-tail inline-depth new-body)
-        (%source-function-definition-consume-lines inline-lines depth body)
-      (setf closed inline-closed
-            inline-lines inline-tail
-            depth inline-depth
-            body new-body))
+  (let* ((inline-consumption
+           (%source-function-definition-consume-lines inline-lines depth body))
+         (closed (%source-function-consumption-closed-p inline-consumption)))
+    (setf inline-lines (%source-function-consumption-remaining-lines
+                        inline-consumption)
+          depth (%source-function-consumption-depth inline-consumption)
+          body (%source-function-consumption-body-lines inline-consumption))
     (when (not closed)
-      (multiple-value-bind (remaining-closed remaining-tail remaining-depth new-body)
-          (%source-function-definition-consume-lines remaining depth body)
-        (setf closed remaining-closed
-              remaining remaining-tail
-              depth remaining-depth
-              body new-body)))
+      (let ((remaining-consumption
+              (%source-function-definition-consume-lines remaining depth body)))
+        (setf closed (%source-function-consumption-closed-p remaining-consumption)
+              remaining (%source-function-consumption-remaining-lines
+                         remaining-consumption)
+              depth (%source-function-consumption-depth remaining-consumption)
+              body (%source-function-consumption-body-lines
+                    remaining-consumption))))
     (if closed
         (%source-function-definition-finish context name body inline-lines remaining source-path)
-        (values nil (format nil "source: function ~a missing end~%" name) 2 t))))
+        (%make-source-function-definition-result
+         nil
+         (format nil "source: function ~a missing end~%" name)
+         2
+         t))))
 
 (defun %source-function-definition (context name line lines source-path)
   (let ((body nil)
@@ -144,13 +177,15 @@
     (%source-function-definition-scan context name body inline-lines lines depth source-path)))
 
 (defun %source-lines-handle-function-start (context line remaining source-path output)
-  (multiple-value-bind (tail chunk exit-code stop-p)
-      (%source-function-definition context (%function-start-p line)
-                                   line remaining source-path)
-    (values tail
-            (%source-lines-add-chunk chunk output)
-            exit-code
-            stop-p)))
+  (let ((result (%source-function-definition context (%function-start-p line)
+                                             line remaining source-path)))
+    (%make-source-lines-step-result
+     (%source-function-definition-result-remaining-lines result)
+     (%source-lines-add-chunk
+      (%source-function-definition-result-output-chunk result)
+      output)
+     (%source-function-definition-result-exit-code result)
+     (%source-function-definition-result-stop-p result))))
 
 (defun %source-lines-add-chunk (chunk output)
   (if chunk (cons chunk output) output))
@@ -175,16 +210,18 @@
     (if (nshell.domain.parsing:parse-complete-p result)
         (multiple-value-bind (chunk exit-code)
             (%execute-source-line context text)
-          (values tail
-                  (%source-lines-add-chunk chunk output)
-                  exit-code
-                  nil))
+          (%make-source-lines-step-result
+           tail
+           (%source-lines-add-chunk chunk output)
+           exit-code
+           nil))
         (multiple-value-bind (chunk exit-code)
             (%source-line-parse-error-result result)
-          (values tail
-                  (%source-lines-add-chunk chunk output)
-                  exit-code
-                  t)))))
+          (%make-source-lines-step-result
+           tail
+           (%source-lines-add-chunk chunk output)
+           exit-code
+           t)))))
 
 (defun %comment-or-blank-source-line-p (line)
   "True for blank lines and whole-line comments (including a leading #! shebang),
@@ -203,20 +240,19 @@ which are skipped rather than parsed."
                ;; Skip blank lines and whole-line comments / shebangs.
                ((%comment-or-blank-source-line-p line) nil)
                ((%function-start-p line)
-                (multiple-value-bind (tail new-output exit-code stop-p)
-                    (%source-lines-handle-function-start context line remaining
-                                                         source-path output)
-                  (setf remaining tail
-                        output new-output
-                        code exit-code)
-                  (when stop-p
+                (let ((step (%source-lines-handle-function-start
+                             context line remaining source-path output)))
+                  (setf remaining (%source-lines-step-result-remaining-lines step)
+                        output (%source-lines-step-result-output-chunks step)
+                        code (%source-lines-step-result-exit-code step))
+                  (when (%source-lines-step-result-stop-p step)
                     (return))))
                (t
-                (multiple-value-bind (tail new-output exit-code stop-p)
-                    (%source-lines-handle-source-form context line remaining output)
-                  (setf remaining tail
-                        output new-output
-                        code exit-code)
-                  (when stop-p
+                (let ((step (%source-lines-handle-source-form
+                             context line remaining output)))
+                  (setf remaining (%source-lines-step-result-remaining-lines step)
+                        output (%source-lines-step-result-output-chunks step)
+                        code (%source-lines-step-result-exit-code step))
+                  (when (%source-lines-step-result-stop-p step)
                     (return))))))
     (values (apply #'concatenate 'string (nreverse output)) code)))

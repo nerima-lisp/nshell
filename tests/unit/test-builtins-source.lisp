@@ -247,3 +247,61 @@
     (is (= -1 (delta "end")))
     (is (=  0 (delta "echo hello")))
     (is (=  0 (delta "")))))
+
+(test source-function-consumption-projects-scan-state
+  "source function body scanning returns a structured consumption state."
+  (let ((result (nshell.application::%source-function-definition-consume-lines
+                 '("echo hi" "end" "echo tail")
+                 1
+                 nil)))
+    (is (nshell.application::%source-function-consumption-p result))
+    (is (nshell.application::%source-function-consumption-closed-p result))
+    (is (equal '("echo tail")
+               (nshell.application::%source-function-consumption-remaining-lines
+                result)))
+    (is (= 1 (nshell.application::%source-function-consumption-depth result)))
+    (is (equal '("echo hi")
+               (nshell.application::%source-function-consumption-body-lines
+                result)))))
+
+(test source-function-definition-result-projects-inline-tail
+  "source function definitions return structured output and remaining lines."
+  (let* ((context (make-test-builtins-context))
+         (result (nshell.application::%source-function-definition
+                  context
+                  "foo"
+                  "function foo; echo hi; end; echo tail"
+                  nil
+                  nil)))
+    (is (nshell.application::%source-function-definition-result-p result))
+    (is (equal '("echo tail")
+               (nshell.application::%source-function-definition-result-remaining-lines
+                result)))
+    (is (null (nshell.application::%source-function-definition-result-output-chunk
+               result)))
+    (is (= 0 (nshell.application::%source-function-definition-result-exit-code
+              result)))
+    (is (not (nshell.application::%source-function-definition-result-stop-p
+              result)))
+    (is (equal '("echo hi")
+               (gethash "foo"
+                        (nshell.application:shell-context-function-table
+                         context))))))
+
+(test source-lines-step-result-projects-function-errors
+  "source line function handling returns a structured step result on missing end."
+  (let* ((context (make-test-builtins-context))
+         (result (nshell.application::%source-lines-handle-function-start
+                  context
+                  "function foo"
+                  nil
+                  nil
+                  nil)))
+    (is (nshell.application::%source-lines-step-result-p result))
+    (is (null (nshell.application::%source-lines-step-result-remaining-lines
+               result)))
+    (is (= 2 (nshell.application::%source-lines-step-result-exit-code result)))
+    (is (nshell.application::%source-lines-step-result-stop-p result))
+    (is (equal (list (format nil "source: function foo missing end~%"))
+               (nshell.application::%source-lines-step-result-output-chunks
+                result)))))

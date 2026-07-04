@@ -34,6 +34,33 @@
       (is (member "-t" (completion-texts candidates)
                   :test #'string=)))))
 
+(test builtin-command-metadata-follows-runtime-specs
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.presentation::seed-repl-completion-knowledge-base kb)
+    (let ((string-collect (completion-texts
+                           (nshell.domain.completion:complete kb "string co")))
+          (string-repeat (completion-texts
+                          (nshell.domain.completion:complete kb "string re")))
+          (string-sub (completion-texts
+                       (nshell.domain.completion:complete kb "string su")))
+          (string-count (completion-texts
+                         (nshell.domain.completion:complete kb "string --co")))
+          (string-newline (completion-texts
+                           (nshell.domain.completion:complete kb "string -N")))
+          (alias-flags (completion-texts
+                        (nshell.domain.completion:complete kb "alias -"))))
+      (is (member "collect" string-collect :test #'string=))
+      (is (member "replace" string-repeat :test #'string=))
+      (is (member "repeat" string-repeat :test #'string=))
+      (is (member "sub" string-sub :test #'string=))
+      (is (member "--count" string-count :test #'string=))
+      (is (member "-N" string-newline :test #'string=))
+      (is (member "-e" alias-flags :test #'string=))
+      (is (member "-q" alias-flags :test #'string=)))
+    (is (equal '("--color=always" "--color=auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "type --color=a"))))))
+
 (test complete-command-flags-are-completed
   (let ((kb (nshell.domain.completion:make-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
@@ -103,16 +130,31 @@
                        (nshell.domain.completion:rule-complete
                         nshell.domain.completion::*built-in-rule-knowledge-base*
                         "git sw")))
+         (gh-subcommands (completion-texts
+                          (nshell.domain.completion:rule-complete
+                           nshell.domain.completion::*built-in-rule-knowledge-base*
+                           "gh pr")))
          (flags (completion-texts
                  (nshell.domain.completion:rule-complete
                   nshell.domain.completion::*built-in-rule-knowledge-base*
-                  "docker --t"))))
+                  "docker --t")))
+         (curl-flags (completion-texts
+                      (nshell.domain.completion:rule-complete
+                       nshell.domain.completion::*built-in-rule-knowledge-base*
+                       "curl --req")))
+         (rg-flags (completion-texts
+                    (nshell.domain.completion:rule-complete
+                     nshell.domain.completion::*built-in-rule-knowledge-base*
+                     "rg --colo"))))
     (is (not (null kubectl)))
     (is (string= "control Kubernetes clusters"
                  (nshell.domain.completion:candidate-description kubectl)))
     (is (member "switch" subcommands :test #'string=))
+    (is (member "pr" gh-subcommands :test #'string=))
     (is (member "--tls" flags :test #'string=))
-    (is (member "--tlscert" flags :test #'string=))))
+    (is (member "--tlscert" flags :test #'string=))
+    (is (member "--request" curl-flags :test #'string=))
+    (is (member "--color" rg-flags :test #'string=))))
 
 (test repl-completion-includes-common-external-option-values
   (let ((kb (nshell.domain.completion:make-knowledge-base)))
@@ -122,7 +164,13 @@
                 (nshell.domain.completion:complete kb "cargo --color=a"))))
     (is (equal '("-o=yaml")
                (completion-texts
-                (nshell.domain.completion:complete kb "kubectl -o=y"))))))
+                (nshell.domain.completion:complete kb "kubectl -o=y"))))
+    (is (equal '("--request=DELETE")
+               (completion-texts
+                (nshell.domain.completion:complete kb "curl --request=D"))))
+    (is (equal '("--color=always" "--color=ansi" "--color=auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "rg --color=a"))))))
 
 (test repl-completion-includes-common-external-separate-option-values
   (let ((kb (nshell.domain.completion:make-knowledge-base)))
@@ -132,7 +180,43 @@
                 (nshell.domain.completion:complete kb "cargo --color a"))))
     (is (equal '("yaml")
                (completion-texts
-                (nshell.domain.completion:complete kb "kubectl -o y"))))))
+                (nshell.domain.completion:complete kb "kubectl -o y"))))
+    (is (equal '("DELETE")
+               (completion-texts
+                (nshell.domain.completion:complete kb "curl -X D"))))
+    (is (equal '("always" "ansi" "auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "rg --color a"))))))
+
+(test help-derived-command-metadata-feeds-knowledge-base-completion
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command-from-help
+     kb
+     "zz-helped"
+     (format nil "Usage: zz-helped [OPTIONS]~%~
+                  Options:~%~
+                    -h, --help            Show help~%~
+                    -o, --output FILE     Write output~%~
+                        --color=WHEN      Color mode (always|auto|never)~%")
+     :description "help-derived test command")
+    (is (member "zz-helped"
+                (completion-texts
+                 (nshell.domain.completion:complete kb "zz-h"))
+                :test #'string=))
+    (is (member "--help"
+                (completion-texts
+                 (nshell.domain.completion:complete kb "zz-helped --h"))
+                :test #'string=))
+    (is (member "-o"
+                (completion-texts
+                 (nshell.domain.completion:complete kb "zz-helped -"))
+                :test #'string=))
+    (is (equal '("--color=always" "--color=auto")
+               (completion-texts
+                (nshell.domain.completion:complete kb "zz-helped --color=a"))))
+    (is (equal '("never")
+               (completion-texts
+                (nshell.domain.completion:complete kb "zz-helped --color n"))))))
 
 (test repl-completion-hides-common-external-mutually-exclusive-options
   (let ((kb (nshell.domain.completion:make-knowledge-base)))
@@ -183,12 +267,39 @@
     (let ((candidates (nshell.domain.completion:rule-complete kb "git st")))
       (is (equal '("status") (completion-texts candidates))))))
 
+(test complete-uses-provided-rule-knowledge-base
+  (let ((kb (make-empty-rule-kb)))
+    (nshell.domain.completion:assert-fact!
+     kb
+     (nshell.domain.completion:make-fact :predicate 'nshell.domain.completion::completes
+                                         :args '("zz-only" "--custom")))
+    (nshell.domain.completion:assert-fact!
+     kb
+     (nshell.domain.completion:make-fact :predicate 'nshell.domain.completion::describes
+                                         :args '("zz-only" "custom command")))
+    (is (equal '("zz-only")
+               (completion-texts
+                (nshell.domain.completion:complete kb "zz-o"))))
+    (is (equal '("--custom")
+               (completion-texts
+                (nshell.domain.completion:complete kb "zz-only --"))))
+    (is (null (nshell.domain.completion:complete kb "git st")))))
+
 (test rule-completion-skips-leading-assignment-words
   (let ((candidates (nshell.domain.completion:rule-complete
                      nshell.domain.completion::*built-in-rule-knowledge-base*
                      "FOO=bar git st")))
     (is (member "status" (completion-texts candidates)
                 :test #'string=))))
+
+(test rule-completion-completes-command-after-leading-assignment-words
+  (let ((candidates (nshell.domain.completion:rule-complete
+                     nshell.domain.completion::*built-in-rule-knowledge-base*
+                     "FOO=bar gi")))
+    (is (member "git" (completion-texts candidates)
+                :test #'string=))
+    (is (not (member "status" (completion-texts candidates)
+                     :test #'string=)))))
 
 (test rule-completion-uses-current-pipeline-command
   (let ((candidates (nshell.domain.completion:rule-complete

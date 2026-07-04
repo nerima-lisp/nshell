@@ -1,5 +1,6 @@
 (in-package #:nshell.presentation)
 
+
 (defun %kind-icon (kind)
   (case kind
     (:command "λ")

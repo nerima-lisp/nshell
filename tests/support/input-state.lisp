@@ -1,5 +1,6 @@
 (in-package #:nshell/test)
 
+
 (defun input-key-event (type &optional char number data)
   (nshell.domain.input:make-key-event type char number data))
 
@@ -227,4 +228,3 @@
   (if expected
       (is (eq expected actual))
       (is (null actual))))
-

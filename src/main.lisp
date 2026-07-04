@@ -1,5 +1,6 @@
 (in-package #:nshell)
 
+
 (defun tty-p ()
   "Return T if standard input is a terminal (interactive mode)."
   #+sbcl (= 1 (sb-unix:unix-isatty 0))

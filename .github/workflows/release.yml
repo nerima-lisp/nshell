@@ -22,6 +22,8 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-linux
+          - os: macos-13
+            target: x86_64-darwin
           - os: macos-14
             target: aarch64-darwin
     steps:
@@ -32,6 +34,10 @@ jobs:
 
       - name: Build release binary
         run: nix build --print-build-logs
+
+      - name: Verify release binary starts
+        run: |
+          echo 'echo nshell-ci-ok' | ./result/bin/nshell | grep -q nshell-ci-ok
 
       - name: Package tarball + checksum
         run: |

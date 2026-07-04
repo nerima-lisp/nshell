@@ -1,8 +1,56 @@
 ; Static alist catalogs: builtin commands, external commands, and format specs.
 (in-package #:nshell.domain.completion)
 
+(defstruct (catalog-entry-property-projection
+            (:constructor %make-catalog-entry-property-projection
+                (key value present-p)))
+  key
+  value
+  present-p)
+
+(defun catalog-entry-property-projection (entry property)
+  (loop for (key value) on entry by #'cddr
+        when (eq key property)
+          return (%make-catalog-entry-property-projection key value t)
+        finally (return (%make-catalog-entry-property-projection
+                         property nil nil))))
+
+(defun catalog-entry-property-key (projection)
+  (catalog-entry-property-projection-key projection))
+
+(defun catalog-entry-property-present-p (entry property)
+  (catalog-entry-property-projection-present-p
+   (catalog-entry-property-projection entry property)))
+
+(defun catalog-entry-property-value (entry property)
+  (catalog-entry-property-projection-value
+   (catalog-entry-property-projection entry property)))
+
+(defun catalog-entry-command (entry)
+  (catalog-entry-property-value entry :command))
+
+(defun command-catalog-preserved-properties ()
+  '(:synopsis :description :subcommands :flags :option-values :exclusive-options))
+
+(defun catalog-entry-property (entry property)
+  (when (catalog-entry-property-present-p entry property)
+    (list property (catalog-entry-property-value entry property))))
+
+(defun command-catalog-entry (entry)
+  (let ((command (catalog-entry-command entry)))
+    (unless (stringp command)
+      (error "Command catalog entry requires a string :command: ~S" entry))
+    (append (list :command command)
+            (mapcan (lambda (property)
+                      (catalog-entry-property entry property))
+                    (command-catalog-preserved-properties)))))
+
+(defun command-catalog (entries)
+  (mapcar #'command-catalog-entry entries))
+
 (defparameter +builtin-command-catalog+
-  (list
+  (command-catalog
+   (list
    (list :command "echo"
          :synopsis "echo [string ...]"
          :description "print arguments")
@@ -40,7 +88,8 @@
          :description "export variable to environment")
    (list :command "alias"
          :synopsis "alias [name expansion...] | alias -e name... | alias -q name..."
-         :description "manage aliases")
+         :description "manage aliases"
+         :flags '("-e" "-q"))
    (list :command "abbr"
          :synopsis "abbr [-a [-p command|anywhere] name expansion...] [-e name...] [-q name...] [-l] [-s]"
          :description "manage abbreviations"
@@ -57,7 +106,8 @@
          :description "show command type"
          :flags '("-a" "--all" "-s" "--short" "-f" "--no-functions"
                   "--color" "-q" "--query" "--quiet" "-p" "--path" "-P" "--force-path"
-                  "-t" "--type" "-h" "--help"))
+                  "-t" "--type" "-h" "--help")
+         :option-values '(("--color" "always" "auto")))
    (list :command "which"
          :synopsis "which NAME [...]"
          :description "show command path")
@@ -70,9 +120,11 @@
    (list :command "string"
          :synopsis "string collect|length|lower|upper|join|split|replace|match|repeat|sub|trim ...; string replace|match|repeat|sub|trim ..."
          :description "manipulate strings"
-         :flags '("length" "lower" "upper" "join" "split" "replace" "match"
-                  "trim" "-a" "--all" "-q" "--quiet" "-i" "--ignore-case"
-                  "--"))
+         :flags '("collect" "length" "lower" "upper" "join" "split" "replace"
+                  "match" "repeat" "sub" "trim" "-a" "--all" "-q" "--quiet"
+                  "-i" "--ignore-case" "--allow-empty" "-N" "--no-newline"
+                  "-n" "--count" "-m" "--max" "-s" "--start" "-l" "--length"
+                  "-e" "--end" "--"))
    (list :command "source"
          :synopsis "source file"
          :description "execute commands from file")
@@ -118,10 +170,11 @@
          :flags '())
    (list :command "not"
          :synopsis "not command [args...]"
-         :description "invert command status")))
+         :description "invert command status"))))
 
 (defparameter +external-command-catalog+
-  (list
+  (command-catalog
+   (list
    (list :command "git"
          :description "distributed version control"
          :subcommands '((:name "add" :description "stage changes")
@@ -170,6 +223,55 @@
                         "version")
          :flags '("--help" "--global" "-g" "--prefix" "--silent" "--verbose"
                   "--version"))
+   (list :command "gh"
+         :description "GitHub command line interface"
+         :subcommands '("api" "auth" "browse" "gist" "issue" "pr" "release"
+                        "repo" "run" "secret" "workflow")
+         :flags '("--help" "--hostname" "--repo" "-R" "--version"))
+   (list :command "go"
+         :description "Go toolchain"
+         :subcommands '("build" "clean" "doc" "env" "fmt" "generate" "get"
+                        "install" "list" "mod" "run" "test" "tool" "version"
+                        "vet" "work")
+         :flags '("-C" "-mod" "-modfile" "-overlay" "-p" "-race" "-tags"
+                  "-v" "-x" "--help")
+         :option-values '(("-mod" "mod" "readonly" "vendor")))
+   (list :command "python"
+         :description "Python interpreter"
+         :flags '("-B" "-E" "-I" "-O" "-OO" "-S" "-V" "-W" "-c" "-m" "-q"
+                  "--help" "--version"))
+   (list :command "pip"
+         :description "Python package installer"
+         :subcommands '("cache" "check" "config" "download" "freeze" "install"
+                        "list" "show" "uninstall" "wheel")
+         :flags '("--help" "--isolated" "--no-cache-dir" "--proxy" "--quiet"
+                  "-q" "--require-virtualenv" "--verbose" "-v" "--version"))
+   (list :command "make"
+         :description "build automation tool"
+         :flags '("-B" "-C" "-f" "-j" "-k" "-n" "-s" "--always-make"
+                  "--directory" "--dry-run" "--file" "--help" "--jobs"
+                  "--keep-going" "--silent"))
+   (list :command "curl"
+         :description "transfer data with URLs"
+         :flags '("-d" "--data" "-f" "--fail" "-H" "--header" "-I" "--head"
+                  "-L" "--location" "-o" "--output" "-O" "--remote-name"
+                  "-s" "--silent" "-u" "--user" "-v" "--verbose" "-X"
+                  "--request" "--compressed" "--connect-timeout" "--help")
+         :option-values '(("--request" "GET" "POST" "PUT" "PATCH" "DELETE" "HEAD")
+                          ("-X" "GET" "POST" "PUT" "PATCH" "DELETE" "HEAD")))
+   (list :command "jq"
+         :description "command-line JSON processor"
+         :flags '("-c" "--compact-output" "-r" "--raw-output" "-e"
+                  "--exit-status" "-n" "--null-input" "-s" "--slurp" "-C"
+                  "--color-output" "-M" "--monochrome-output" "--arg"
+                  "--argjson" "--help"))
+   (list :command "rg"
+         :description "ripgrep search tool"
+         :flags '("-F" "--fixed-strings" "-g" "--glob" "-i" "--ignore-case"
+                  "-n" "--line-number" "-S" "--smart-case" "-t" "--type"
+                  "-T" "--type-not" "--color" "--files" "--hidden" "--json"
+                  "--help")
+         :option-values '(("--color" "auto" "always" "never" "ansi")))
    (list :command "grep"
          :description "search text by pattern"
          :flags '("-E" "-F" "-H" "-I" "-R" "-i" "-n" "-q" "-r" "-v" "--color"
@@ -186,7 +288,7 @@
                   "--file" "--gzip" "--help"))
    (list :command "ssh"
          :description "OpenSSH remote login"
-         :flags '("-A" "-F" "-J" "-L" "-N" "-R" "-T" "-V" "-i" "-l" "-p" "-v"))))
+         :flags '("-A" "-F" "-J" "-L" "-N" "-R" "-T" "-V" "-i" "-l" "-p" "-v")))))
 
 (defparameter +command-path-builtin-specs+
   '(("type"

@@ -1,4 +1,6 @@
 (in-package #:nshell/test)
+
+
 (in-suite expansion-tests)
 
 (test abbreviation-domain-finds-token-before-cursor

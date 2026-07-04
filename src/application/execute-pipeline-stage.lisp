@@ -16,18 +16,16 @@ command name expands to zero or multiple fields (ambiguous)."
                           (shell-context-alias-table context)))
          (raw-command (nshell.domain.parsing:command-node-command alias-expanded))
          (command-style (nshell.domain.parsing:command-node-command-quote-style alias-expanded))
-         (environment (shell-context-environment context))
-         (command-fields (nshell.domain.expansion:expand-command-name-fields-by-quote-style
-                          raw-command command-style environment))
-         (non-empty (remove "" command-fields :test #'string=)))
-    (if (= 1 (length non-empty))
-        (values (nshell.domain.parsing:make-command-node
-                 (first non-empty)
-                 (%line-command-args-in-context context alias-expanded))
-                nil)
-        (values nil
-                (format nil "nshell: ~a: command name expansion produced ~d fields~%"
-                        raw-command (length non-empty))))))
+         (environment (shell-context-environment context)))
+    (multiple-value-bind (command error)
+        (nshell.domain.expansion:expand-command-name-by-quote-style
+         raw-command command-style environment)
+      (if error
+          (values nil error)
+          (values (nshell.domain.parsing:make-command-node
+                   command
+                   (%line-command-args-in-context context alias-expanded))
+                  nil)))))
 
 (defun %expand-command-nodes-in-context (context commands)
   "Expand all COMMANDS; return (expanded-list nil) or (nil error-string) on first error."
@@ -54,38 +52,87 @@ Applies REDIRECTS and returns (output exit-code)."
                          (open input-target :direction :input :if-does-not-exist :error)))
                   (input (make-string-input-stream input))
                   (t *standard-input*))))
-    (multiple-value-bind (stderr-kind stderr-target stderr-mode)
-        (%pipeline-stderr-spec redirects)
-      (handler-case
-          (unwind-protect
-               (let ((process
-                       (sb-ext:run-program command args
-                                           :input stdin
-                                           :output :stream
-                                           :error (if (eq stderr-kind :file) :stream :output)
-                                           :wait nil
-                                           :search t)))
-                 (let ((output (%read-stream-to-string (sb-ext:process-output process)))
-                       (errout (when (eq stderr-kind :file)
-                                 (%read-stream-to-string (sb-ext:process-error process))))
-                       (stdout-target (%output-redirect-spec redirects)))
-                   (sb-ext:process-wait process)
-                   (let ((stdout-written (%write-redirected-stage-output redirects output)))
-                     (when (eq stderr-kind :file)
-                       (let ((mode (if (and stdout-target (equal stderr-target stdout-target))
-                                       :append
-                                       stderr-mode)))
-                         (with-open-file (stream stderr-target
-                                                 :direction :output
-                                                 :if-exists mode
-                                                 :if-does-not-exist :create)
-                           (write-string (or errout "") stream))))
-                     (values (and (not stdout-written) output)
-                             (nshell.infrastructure.acl:process-exit-status-code process)))))
-            (when opened-input
-              (close opened-input)))
-        (error (condition)
-          (values (format nil "nshell: ~a: ~a~%" command condition) 127))))))
+    (labels ((%resolve-external-stage-destinations ()
+               (let ((stdout-target nil)
+                     (stdout-mode :supersede)
+                     (stderr-target nil)
+                     (stderr-mode :supersede))
+                 (dolist (redirect redirects)
+                   (case (car redirect)
+                     ((:> :>>)
+                      (setf stdout-target (cdr redirect)
+                            stdout-mode (if (eq (car redirect) :>>) :append :supersede)))
+                     ((:&> :&>>)
+                      (let ((mode (if (eq (car redirect) :&>>) :append :supersede)))
+                        (setf stdout-target (cdr redirect)
+                              stdout-mode mode
+                              stderr-target (cdr redirect)
+                              stderr-mode mode)))
+                     ((:2> :2>>)
+                      (setf stderr-target (cdr redirect)
+                            stderr-mode (if (eq (car redirect) :2>>) :append :supersede)))
+                     (:2>&1
+                      (setf stderr-target stdout-target
+                            stderr-mode stdout-mode))
+                     (t nil)))
+                 (values stdout-target stdout-mode stderr-target stderr-mode))))
+      (multiple-value-bind (stdout-target stdout-mode stderr-target stderr-mode)
+          (%resolve-external-stage-destinations)
+        (let ((merge-stderr-p (or (and (null stdout-target) (null stderr-target))
+                                  (and stdout-target stderr-target
+                                       (equal stdout-target stderr-target)))))
+          (handler-case
+              (unwind-protect
+                   (let ((process
+                           (sb-ext:run-program command args
+                                               :input stdin
+                                               :output :stream
+                                               :error (if merge-stderr-p :output :stream)
+                                               :wait nil
+                                               :search t)))
+                     (let ((output (%read-stream-to-string (sb-ext:process-output process)))
+                           (errout (when (not merge-stderr-p)
+                                     (%read-stream-to-string (sb-ext:process-error process)))))
+                       (sb-ext:process-wait process)
+                       (cond
+                         (merge-stderr-p
+                          (when stdout-target
+                            (with-open-file (stream stdout-target
+                                                    :direction :output
+                                                    :if-exists stdout-mode
+                                                    :if-does-not-exist :create)
+                              (write-string output stream)))
+                          (values (and (null stdout-target) output)
+                                  (nshell.infrastructure.acl:process-exit-status-code process)))
+                         (stdout-target
+                          (with-open-file (stream stdout-target
+                                                  :direction :output
+                                                  :if-exists stdout-mode
+                                                  :if-does-not-exist :create)
+                            (write-string output stream))
+                          (when stderr-target
+                            (with-open-file (stream stderr-target
+                                                    :direction :output
+                                                    :if-exists stderr-mode
+                                                    :if-does-not-exist :create)
+                              (write-string (or errout "") stream)))
+                          (values (and (null stderr-target) output)
+                                  (nshell.infrastructure.acl:process-exit-status-code process)))
+                         (stderr-target
+                          (with-open-file (stream stderr-target
+                                                  :direction :output
+                                                  :if-exists stderr-mode
+                                                  :if-does-not-exist :create)
+                            (write-string (or errout "") stream))
+                          (values output
+                                  (nshell.infrastructure.acl:process-exit-status-code process)))
+                         (t
+                          (values output
+                                  (nshell.infrastructure.acl:process-exit-status-code process))))))
+                (when opened-input
+                  (close opened-input)))
+            (error (condition)
+              (values (format nil "nshell: ~a: ~a~%" command condition) 127))))))))
 
 ;; -- Internal vs external dispatch -------------------------------------------
 

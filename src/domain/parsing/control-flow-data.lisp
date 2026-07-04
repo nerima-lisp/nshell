@@ -16,9 +16,9 @@
     ("begin" . %group-control-flow-begin)))
 
 (defstruct (control-flow-frame
-            (:constructor %make-control-flow-frame (keyword)))
-  (keyword nil :type string)
-  (else-seen nil :type boolean))
+            (:constructor %make-control-flow-frame (keyword else-seen)))
+  (keyword nil :type string :read-only t)
+  (else-seen nil :type boolean :read-only t))
 
 (defun control-flow-keyword-p (value)
   (and (stringp value)
@@ -32,25 +32,40 @@
 (defun %block-opening-keyword-p (keyword)
   (not (null (member keyword +control-flow-block-keywords+ :test #'string=))))
 
-(defun %command-first-arg-value (header &optional (default ""))
+(defstruct (%control-flow-header-args
+            (:constructor %make-control-flow-header-args (first rest all)))
+  (first nil :read-only t)
+  (rest nil :type list :read-only t)
+  (all nil :type list :read-only t))
+
+(defun %control-flow-header-args (header)
   (let ((args (and (command-node-p header) (command-node-args header))))
-    (if args
-        (arg-value (first args))
+    (%make-control-flow-header-args (first args)
+                                    (%copy-ast-list (rest args))
+                                    (%copy-ast-list args))))
+
+(defun %command-first-arg-value (header &optional (default ""))
+  (let ((arg (%control-flow-header-args-first
+              (%control-flow-header-args header))))
+    (if arg
+        (arg-value arg)
         default)))
 
 (defun %command-from-header-args (header)
-  (let ((args (command-node-args header)))
-    (when args
-      (make-command-node (arg-value (first args))
-                         (rest args)
+  (let* ((header-args (%control-flow-header-args header))
+         (arg (%control-flow-header-args-first header-args)))
+    (when arg
+      (make-command-node (arg-value arg)
+                         (%control-flow-header-args-rest header-args)
                          nil
-                         (arg-quote-style (first args))))))
+                         (arg-quote-style arg)))))
 
 (defun %else-if-header-p (header)
   (and (command-node-p header)
-       (let ((args (command-node-args header)))
-         (and args
-              (string= "if" (arg-value (first args)))))))
+       (let ((arg (%control-flow-header-args-first
+                   (%control-flow-header-args header))))
+         (and arg
+              (string= "if" (arg-value arg))))))
 
 (defun %consume-control-flow-terminator (nodes keyword)
   (if (and nodes (string= (%command-keyword (first nodes)) keyword))
@@ -59,78 +74,101 @@
 
 (defun %stack-top-keyword (stack)
   (let ((top (first stack)))
-    (cond
-      ((stringp top) top)
-      ((control-flow-frame-p top) (control-flow-frame-keyword top))
-      (t nil))))
+    (and (control-flow-frame-p top)
+         (control-flow-frame-keyword top))))
 
 (defun %case-within-switch-p (keyword stack)
   (and keyword
        (string= keyword "case")
        (string= (%stack-top-keyword stack) "switch")))
 
+(defun %push-control-flow-frame (stack keyword)
+  (cons (%make-control-flow-frame keyword nil) stack))
+
+(defun %if-frame-accepts-else-p (frame)
+  (and (control-flow-frame-p frame)
+       (string= (control-flow-frame-keyword frame) "if")
+       (not (control-flow-frame-else-seen frame))))
+
+(defun %control-flow-stack-with-else-seen (stack)
+  (let ((frame (first stack)))
+    (cons (%make-control-flow-frame (control-flow-frame-keyword frame) t)
+          (rest stack))))
+
+(defstruct (%control-flow-stack-transition
+            (:constructor %make-control-flow-stack-transition
+                (stack unexpected-keyword)))
+  (stack nil :type list :read-only t)
+  (unexpected-keyword nil :read-only t))
+
+(defun %control-flow-stack-transition (stack cmd)
+  (let ((keyword (%command-keyword cmd)))
+    (cond
+      ((and keyword
+            (string= keyword "case")
+            (%case-within-switch-p keyword stack))
+       (%make-control-flow-stack-transition stack nil))
+      ((and keyword
+            (string= keyword "case"))
+       (%make-control-flow-stack-transition stack keyword))
+      ((and keyword (%block-opening-keyword-p keyword))
+       (%make-control-flow-stack-transition
+        (%push-control-flow-frame stack keyword)
+        nil))
+      ((and keyword (string= keyword "else"))
+       (if (%if-frame-accepts-else-p (first stack))
+           (%make-control-flow-stack-transition
+            (if (%else-if-header-p cmd)
+                stack
+                (%control-flow-stack-with-else-seen stack))
+            nil)
+           (%make-control-flow-stack-transition stack keyword)))
+      ((and keyword (string= keyword "end"))
+       (if stack
+           (%make-control-flow-stack-transition (rest stack) nil)
+           (%make-control-flow-stack-transition stack keyword)))
+      (t
+       (%make-control-flow-stack-transition stack nil)))))
+
 (defun %unclosed-control-flow-p (cmds)
   (loop with stack = nil
         for cmd in cmds
-        for keyword = (%command-keyword cmd)
-        do (cond
-             ((and keyword
-                   (string= keyword "case")
-                   (%case-within-switch-p keyword stack)))
-             ((and keyword
-                   (string= keyword "case"))
-              nil)
-             ((and keyword (%block-opening-keyword-p keyword))
-              (push keyword stack))
-             ((and keyword (string= keyword "end") stack)
-              (pop stack)))
+        do (let ((transition (%control-flow-stack-transition stack cmd)))
+             (setf stack
+                   (%control-flow-stack-transition-stack transition)))
         finally (return (not (null stack)))))
 
-(defun %command-diagnostic-span (node input-length)
+(defstruct (%control-flow-diagnostic-span
+            (:constructor %make-control-flow-diagnostic-span (start end)))
+  (start 0 :type integer :read-only t)
+  (end 0 :type integer :read-only t))
+
+(defun %control-flow-diagnostic-span-from-node (node input-length)
   (let ((span (and (ast-node-p node) (ast-node-span node))))
     (if (and (consp span) (consp (rest span)))
-        (values (first span) (second span))
-        (values input-length input-length))))
+        (%make-control-flow-diagnostic-span (first span) (second span))
+        (%make-control-flow-diagnostic-span input-length input-length))))
 
 (defun %push-control-flow-diagnostic (diagnostics node keyword input-length)
-  (multiple-value-bind (start end)
-      (%command-diagnostic-span node input-length)
-    (push (make-parse-diagnostic
+  (let ((span (%control-flow-diagnostic-span-from-node node input-length)))
+    (push (%make-parse-diagnostic
            :unexpected-control-flow
            (format nil "Unexpected '~a'" keyword)
-           start
-           end)
+           (%control-flow-diagnostic-span-start span)
+           (%control-flow-diagnostic-span-end span))
           diagnostics)))
-
-(defun %push-control-flow-frame (stack keyword)
-  (push (%make-control-flow-frame keyword) stack))
 
 (defun %unexpected-control-flow-diagnostics (cmds input-length)
   (let ((stack nil)
         (diagnostics nil))
     (dolist (cmd cmds)
-      (let ((keyword (%command-keyword cmd)))
-        (cond
-          ((and keyword
-                (string= keyword "case")
-                (%case-within-switch-p keyword stack)))
-          ((and keyword
-                (string= keyword "case"))
-           (setf diagnostics
-                 (%push-control-flow-diagnostic diagnostics cmd keyword input-length)))
-          ((and keyword (%block-opening-keyword-p keyword))
-           (setf stack (%push-control-flow-frame stack keyword)))
-          ((and keyword (string= keyword "else"))
-           (if (and stack
-                    (string= (control-flow-frame-keyword (first stack)) "if")
-                    (not (control-flow-frame-else-seen (first stack))))
-               (unless (%else-if-header-p cmd)
-                 (setf (control-flow-frame-else-seen (first stack)) t))
-               (setf diagnostics
-                     (%push-control-flow-diagnostic diagnostics cmd keyword input-length))))
-          ((and keyword (string= keyword "end"))
-           (if stack
-               (pop stack)
-               (setf diagnostics
-                     (%push-control-flow-diagnostic diagnostics cmd keyword input-length)))))))
+      (let* ((transition (%control-flow-stack-transition stack cmd))
+             (unexpected-keyword
+               (%control-flow-stack-transition-unexpected-keyword transition)))
+        (setf stack
+              (%control-flow-stack-transition-stack transition))
+        (when unexpected-keyword
+          (setf diagnostics
+                (%push-control-flow-diagnostic
+                 diagnostics cmd unexpected-keyword input-length)))))
     (nreverse diagnostics)))

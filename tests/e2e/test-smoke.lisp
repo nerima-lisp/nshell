@@ -106,17 +106,26 @@
             (when (and count (plusp count))
               (octets->string buffer count))))))))
 
-(defun %e2e-pty-read-until (fd needle &key (timeout 15.0))
-  (let* ((output "")
-         (deadline (+ (get-internal-real-time)
-                      (round (* timeout internal-time-units-per-second)))))
-    (loop while (< (get-internal-real-time) deadline)
-          do (let ((chunk (%e2e-pty-read-available fd)))
-               (when chunk
-                 (setf output (concatenate 'string output chunk))
-                 (when (search needle output :test #'char-equal)
-                   (return-from %e2e-pty-read-until output))))
-          finally (return output))))
+(defun %e2e-pty-read-until (fd needle &key (timeout 15.0) attempts (delay 0.05))
+  (let ((output ""))
+    (flet ((check-output ()
+             (when (search needle output :test #'char-equal)
+               (return-from %e2e-pty-read-until output))))
+      (if attempts
+          (loop repeat attempts
+                do (let ((chunk (%e2e-pty-read-available fd)))
+                     (when chunk
+                       (setf output (concatenate 'string output chunk))
+                       (check-output)))
+                   (sleep delay))
+          (let ((deadline (+ (get-internal-real-time)
+                             (round (* timeout internal-time-units-per-second)))))
+            (loop while (< (get-internal-real-time) deadline)
+                  do (let ((chunk (%e2e-pty-read-available fd)))
+                       (when chunk
+                         (setf output (concatenate 'string output chunk))
+                         (check-output)))))))
+    output))
 
 (defun %e2e-pty-write-line (fd line)
   (nshell.infrastructure.acl:pty-write fd (format nil "~A~%" line)))
@@ -280,4 +289,3 @@
                               nil
                               1
                               :expected-error +main-usage-line+))
-

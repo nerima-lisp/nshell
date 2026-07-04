@@ -26,27 +26,43 @@
     "+" "-" "*" "/" "%" "(" ")" "<" ">" "!" "&" "|" "^" "~")
   "Operator lexemes recognized by the arithmetic evaluator.")
 
+(defstruct (arith-token (:constructor %make-arith-token (kind value)))
+  (kind nil :read-only t)
+  (value nil :read-only t))
+
+(defun %arith-token-kind (ch)
+  "Classify the arithmetic lexer branch for CH."
+  (cond
+    ((null ch) nil)
+    ((digit-char-p ch) :number)
+    ((or (alpha-char-p ch) (char= ch #\_)) :variable)
+    (t :operator)))
+
 (defun %arith-next-token (lx)
-  "Return the next token as (:num . integer), (:var . name), (:op . string),
-or NIL at end of input."
+  "Return the next arithmetic token, or NIL at end of input."
   (%arith-skip-space lx)
   (let ((ch (%arith-peek lx)))
-    (cond
-      ((null ch) nil)
-      ((digit-char-p ch)
+    (case (%arith-token-kind ch)
+      ((nil) nil)
+      (:number
        (let ((start (arith-lexer-pos lx)))
          (loop for c = (%arith-peek lx)
                while (and c (digit-char-p c))
                do (incf (arith-lexer-pos lx)))
-         (cons :num (parse-integer (arith-lexer-input lx)
-                                   :start start :end (arith-lexer-pos lx)))))
-      ((or (alpha-char-p ch) (char= ch #\_))
+         (%make-arith-token :num
+                            (parse-integer (arith-lexer-input lx)
+                                           :start start
+                                           :end (arith-lexer-pos lx)))))
+      (:variable
        (let ((start (arith-lexer-pos lx)))
          (loop for c = (%arith-peek lx)
                while (and c (or (alphanumericp c) (char= c #\_)))
                do (incf (arith-lexer-pos lx)))
-         (cons :var (subseq (arith-lexer-input lx) start (arith-lexer-pos lx)))))
-      (t
+         (%make-arith-token :var
+                            (subseq (arith-lexer-input lx)
+                                    start
+                                    (arith-lexer-pos lx)))))
+      (:operator
        (let ((op (find-if (lambda (candidate)
                             (let ((end (+ (arith-lexer-pos lx) (length candidate))))
                               (and (<= end (length (arith-lexer-input lx)))
@@ -54,7 +70,9 @@ or NIL at end of input."
                                             :start2 (arith-lexer-pos lx) :end2 end))))
                           +arith-operators+)))
          (if op
-             (progn (incf (arith-lexer-pos lx) (length op)) (cons :op op))
+             (progn
+               (incf (arith-lexer-pos lx) (length op))
+               (%make-arith-token :op op))
              (error "nshell: invalid arithmetic character ~s" ch)))))))
 
 (defstruct (arith-parser (:constructor %make-arith-parser (lexer env)))
@@ -68,9 +86,16 @@ or NIL at end of input."
   (unless (arith-parser-primed p) (%arith-advance p))
   (arith-parser-lookahead p))
 
+(defun %arith-token-kind-p (token kind)
+  (and token (eq (arith-token-kind token) kind)))
+
+(defun %arith-token-value (token)
+  (arith-token-value token))
+
 (defun %arith-op-p (p text)
   (let ((tok (%arith-current p)))
-    (and tok (eq (car tok) :op) (string= (cdr tok) text))))
+    (and (%arith-token-kind-p tok :op)
+         (string= (%arith-token-value tok) text))))
 
 (defun %arith-eat-op (p text)
   (if (%arith-op-p p text)
@@ -97,8 +122,12 @@ or NIL at end of input."
        (prog1 (%arith-or p)
          (unless (%arith-eat-op p ")")
            (error "nshell: unbalanced parenthesis in arithmetic expression"))))
-      ((and tok (eq (car tok) :num)) (%arith-advance p) (cdr tok))
-      ((and tok (eq (car tok) :var)) (%arith-advance p) (%arith-var-value p (cdr tok)))
+      ((%arith-token-kind-p tok :num)
+       (%arith-advance p)
+       (%arith-token-value tok))
+      ((%arith-token-kind-p tok :var)
+       (%arith-advance p)
+       (%arith-var-value p (%arith-token-value tok)))
       (t (error "nshell: unexpected token in arithmetic expression: ~s" tok)))))
 
 (defun %arith-unary (p)
@@ -152,15 +181,19 @@ Each rule is (op-string expr) where LEFT is the accumulated left-side value."
 (define-arith-binary %arith-or %arith-and
   ("||" (%arith-bool (or (not (zerop left)) (not (zerop (%arith-and p)))))))
 
+(defun %arith-complete-result (parser result)
+  "Return RESULT after verifying PARSER consumed the whole expression."
+  (when (%arith-current parser)
+    (error "nshell: trailing tokens in arithmetic expression: ~s"
+           (%arith-current parser)))
+  result)
+
 (defun evaluate-arithmetic (expression env)
   "Evaluate EXPRESSION (a string) as shell integer arithmetic, returning an
 integer. Variables are resolved from ENV."
   (let* ((parser (%make-arith-parser (%make-arith-lexer expression) env))
          (result (%arith-or parser)))
-    (when (%arith-current parser)
-      (error "nshell: trailing tokens in arithmetic expression: ~s"
-             (%arith-current parser)))
-    result))
+    (%arith-complete-result parser result)))
 
 (defun %arithmetic-substitution-end (input start)
   "Given INPUT and START pointing at the first #\( of a $(( opener, return the
@@ -176,23 +209,40 @@ when unbalanced."
                     (when (zerop depth)
                       (return (1+ i))))))))
 
+(defstruct (arithmetic-substitution
+            (:constructor %make-arithmetic-substitution (start end expression)))
+  (start 0 :type fixnum :read-only t)
+  (end 0 :type fixnum :read-only t)
+  (expression "" :type string :read-only t))
+
+(defun %arithmetic-substitution-at (input start)
+  "Return the arithmetic substitution at START, or NIL when START is not a $(( opener."
+  (when (and (< (+ start 2) (length input))
+             (char= (char input start) #\$)
+             (char= (char input (1+ start)) #\()
+             (char= (char input (+ start 2)) #\())
+    (let ((end (%arithmetic-substitution-end input (1+ start))))
+      (when end
+        (%make-arithmetic-substitution start
+                                       end
+                                       (subseq input (+ start 3) (- end 2)))))))
+
 (defun expand-arithmetic (input env)
   "Replace every $((expression)) in INPUT with its evaluated integer value."
   (with-output-to-string (out)
     (loop with len = (length input)
           with i = 0
           while (< i len)
-          do (if (and (char= (char input i) #\$)
-                      (< (+ i 2) len)
-                      (char= (char input (1+ i)) #\()
-                      (char= (char input (+ i 2)) #\())
-                 (let ((end (%arithmetic-substitution-end input (1+ i))))
-                   (if end
-                       (let ((expr (subseq input (+ i 3) (- end 2))))
-                         (write-string
-                          (princ-to-string
-                           (evaluate-arithmetic (expand-variables expr env) env))
-                          out)
-                         (setf i end))
-                       (progn (write-char (char input i) out) (incf i))))
+          for substitution = (%arithmetic-substitution-at input i)
+          do (if substitution
+                 (progn
+                   (write-string
+                    (princ-to-string
+                     (evaluate-arithmetic
+                      (expand-variables
+                       (arithmetic-substitution-expression substitution)
+                       env)
+                      env))
+                    out)
+                   (setf i (arithmetic-substitution-end substitution)))
                  (progn (write-char (char input i) out) (incf i))))))

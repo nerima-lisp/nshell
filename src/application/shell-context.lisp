@@ -7,12 +7,12 @@
 
 (defstruct shell-context
   "Dependency container for one nshell session."
-  (history nil :type (or null nshell.domain.history:command-history))
-  (config nil :type (or null nshell.domain.configuration::config))
-  (knowledge-base nil :type (or null nshell.domain.completion::knowledge-base))
-  (environment nil :type (or null nshell.domain.environment:environment))
-  (dispatcher nil :type (or null event-dispatcher))
-  (job-monitor nil :type (or null nshell.domain.job-control::job-monitor))
+  (history nil)
+  (config nil)
+  (knowledge-base nil)
+  (environment nil)
+  (dispatcher nil)
+  (job-monitor nil)
   (alias-table (make-hash-table :test #'equal) :type hash-table)
   (abbreviation-table (make-hash-table :test #'equal) :type hash-table)
   (function-table (make-hash-table :test #'equal) :type hash-table)

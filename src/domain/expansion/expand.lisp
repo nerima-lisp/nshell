@@ -49,6 +49,22 @@
 (defun enough-path (file root)
   (namestring (enough-namestring file (pathname root))))
 
+(defstruct (glob-match-subject
+            (:constructor %make-glob-match-subject (pattern root file)))
+  (pattern "" :type string :read-only t)
+  (root "./" :read-only t)
+  (file #p"" :type pathname :read-only t))
+
+(defun %glob-file-match-subject (pattern root file)
+  (%make-glob-match-subject pattern root file))
+
+(defun %glob-match-subject-candidate (subject)
+  (let* ((root (glob-match-subject-root subject))
+         (relative (enough-path (glob-match-subject-file subject) root)))
+    (if (string= root "./")
+        relative
+        (concatenate 'string root relative))))
+
 ;;; Shell glob expansion helpers
 
 (defun glob-char-p (ch)
@@ -164,37 +180,50 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
   (if (not (glob-pattern-p pattern))
       (list pattern)
       (let* ((root (glob-root pattern))
-             (recursive-p (search "**" pattern))
-             (files (if recursive-p
-                        (recursive-directory-files root)
-                        (immediate-directory-files root)))
-             (matches (remove-if-not
-                       (lambda (file)
-                         (let* ((relative (enough-path file root))
-                                (candidate (if (string= root "./")
-                                               relative
-                                               (concatenate 'string root relative))))
-                           (glob-match-p pattern candidate)))
-                       files)))
+             (files (%glob-candidate-files pattern root))
+             (matches nil))
+        (dolist (file files)
+          (when (%glob-match-file-p pattern root file)
+            (push (namestring file) matches)))
         (if matches
-            (sort (mapcar #'namestring matches) #'string<)
+            (sort matches #'string<)
             (list pattern)))))
+
+(defun %glob-candidate-files (pattern root)
+  "Return filesystem candidates for PATTERN from ROOT using the glob recursion policy."
+  (if (search "**" pattern)
+      (recursive-directory-files root)
+      (immediate-directory-files root)))
+
+(defun %glob-candidate (root file)
+  (%glob-match-subject-candidate (%glob-file-match-subject "" root file)))
+
+(defun %glob-match-file-p (pattern root file)
+  (let ((subject (%glob-file-match-subject pattern root file)))
+    (glob-match-p (glob-match-subject-pattern subject)
+                  (%glob-match-subject-candidate subject))))
 
 (defun %first-glob-index (pattern)
   (position-if #'glob-char-p pattern))
 
-(defun %expand-glob-with-prefix (pattern)
-  "Expand assignment-like compound words such as label=*.txt as label=file.txt."
+(defun %glob-assignment-prefix-parts (pattern)
+  "Return PREFIX and glob SUFFIX for assignment-like compound PATTERN, or NIL."
   (let* ((glob-index (%first-glob-index pattern))
          (equals (and glob-index
                       (position #\= pattern :end glob-index :from-end t)))
          (path-equals (and equals
                            (position #\/ pattern :end equals :from-end t))))
-    (if (or (null equals) path-equals)
+    (when (and equals (null path-equals))
+      (values (subseq pattern 0 (1+ equals))
+              (subseq pattern (1+ equals))))))
+
+(defun %expand-glob-with-prefix (pattern)
+  "Expand assignment-like compound words such as label=*.txt as label=file.txt."
+  (multiple-value-bind (prefix suffix)
+      (%glob-assignment-prefix-parts pattern)
+    (if (null prefix)
         (expand-glob pattern)
-        (let* ((prefix (subseq pattern 0 (1+ equals)))
-               (suffix (subseq pattern (1+ equals)))
-               (expanded (expand-glob suffix)))
+        (let ((expanded (expand-glob suffix)))
           (if (and (= 1 (length expanded))
                    (string= suffix (first expanded)))
               (list pattern)
@@ -245,6 +274,43 @@ range CONTENT, or NIL when CONTENT is not a valid range."
                  (loop for c from a downto b collect (string (code-char c))))))
           (t nil))))))
 
+(defun %brace-expansion-options (content)
+  "Return expansion options for one brace group CONTENT, or NIL when literal."
+  (or (%brace-range-expansion content)
+      (let ((parts (%split-top-level-commas content)))
+        (when (> (length parts) 1) parts))))
+
+(defstruct (brace-expansion-frame
+            (:constructor %make-brace-expansion-frame
+                (input open close prefix content suffix options)))
+  (input "" :type string :read-only t)
+  (open 0 :type fixnum :read-only t)
+  (close 0 :type fixnum :read-only t)
+  (prefix "" :type string :read-only t)
+  (content "" :type string :read-only t)
+  (suffix "" :type string :read-only t)
+  (options nil :read-only t))
+
+(defun %brace-expansion-frame (input open close)
+  "Create the domain frame for the first matched brace group in INPUT."
+  (let ((content (subseq input (1+ open) close)))
+    (%make-brace-expansion-frame
+     input
+     open
+     close
+     (subseq input 0 open)
+     content
+     (subseq input (1+ close))
+     (%brace-expansion-options content))))
+
+(defun %brace-expansion-frame-literal (frame)
+  "Return FRAME's literal brace text including the preserved prefix."
+  (concatenate 'string
+               (brace-expansion-frame-prefix frame)
+               "{"
+               (brace-expansion-frame-content frame)
+               "}"))
+
 (defun expand-braces (input)
   "Expand brace patterns {a,b,c} and ranges {1..5}/{a..e} in INPUT, returning a
 list of strings (always at least one). A brace group with no top-level comma and
@@ -255,18 +321,20 @@ no valid range is left literal, matching shell behavior."
         (let ((close (%find-matching-brace input open)))
           (if (null close)
               (list input)
-              (let* ((prefix (subseq input 0 open))
-                     (content (subseq input (1+ open) close))
-                     (suffix (subseq input (1+ close)))
-                     (options (or (%brace-range-expansion content)
-                                  (let ((parts (%split-top-level-commas content)))
-                                    (when (> (length parts) 1) parts)))))
-                (if (null options)
+              (let ((frame (%brace-expansion-frame input open close)))
+                (if (null (brace-expansion-frame-options frame))
                     (mapcar (lambda (s)
-                              (concatenate 'string prefix "{" content "}" s))
-                            (expand-braces suffix))
-                    (loop for opt in options
-                          append (loop for opt-exp in (expand-braces opt)
-                                       append (loop for suf in (expand-braces suffix)
-                                                    collect (concatenate 'string
-                                                                         prefix opt-exp suf)))))))))))
+                              (concatenate 'string
+                                           (%brace-expansion-frame-literal frame)
+                                           s))
+                            (expand-braces (brace-expansion-frame-suffix frame)))
+                    (let ((suffix-expansions
+                            (expand-braces (brace-expansion-frame-suffix frame))))
+                      (loop for opt in (brace-expansion-frame-options frame)
+                            append (loop for opt-exp in (expand-braces opt)
+                                         append (loop for suf in suffix-expansions
+                                                      collect (concatenate
+                                                               'string
+                                                               (brace-expansion-frame-prefix frame)
+                                                               opt-exp
+                                                               suf))))))))))))

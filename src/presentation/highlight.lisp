@@ -62,28 +62,27 @@
 
 (defun highlight-line (input)
   "Parse INPUT and return highlight spans for fish-style syntax coloring."
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize input)
-      (declare (ignore cursor incomplete))
-      (let ((first-word t)
-          (diagnostics (nshell.domain.parsing:parse-errors
-                        (nshell.domain.parsing:parse-command-line input))))
-      (mapcar (lambda (tok)
-                (let* ((type (nshell.domain.parsing:token-type tok))
-                       (value (nshell.domain.parsing:token-value tok))
-                       (role (if (some (lambda (diagnostic)
-                                         (diagnostic-overlaps-token-p diagnostic tok))
-                                       diagnostics)
-                                 :error
-                                 (classify-token-role type value first-word))))
-                  (when (eq type :word) (setf first-word nil))
-                  (when (member type +operator-token-types+ :test #'eq)
-                    (setf first-word t))
-                  (make-highlight-span
-                   (nshell.domain.parsing:token-start tok)
-                   (nshell.domain.parsing:token-end tok)
-                   role)))
-              tokens))))
+  (let* ((tokenization (nshell.domain.parsing:tokenize input))
+         (tokens (nshell.domain.parsing:tokenization-result-tokens tokenization))
+         (first-word t)
+         (diagnostics (nshell.domain.parsing:parse-errors
+                       (nshell.domain.parsing:parse-command-line input))))
+    (mapcar (lambda (tok)
+              (let* ((type (nshell.domain.parsing:token-type tok))
+                     (value (nshell.domain.parsing:token-value tok))
+                     (role (if (some (lambda (diagnostic)
+                                       (diagnostic-overlaps-token-p diagnostic tok))
+                                     diagnostics)
+                               :error
+                               (classify-token-role type value first-word))))
+                (when (eq type :word) (setf first-word nil))
+                (when (member type +operator-token-types+ :test #'eq)
+                  (setf first-word t))
+                (make-highlight-span
+                 (nshell.domain.parsing:token-start tok)
+                 (nshell.domain.parsing:token-end tok)
+                 role)))
+            tokens)))
 
 ;; Rendering helpers for highlight spans.
 (defun fallback-highlight-control (role)

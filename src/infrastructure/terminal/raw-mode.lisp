@@ -1,4 +1,5 @@
 (in-package #:nshell.infrastructure.terminal)
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :sb-posix))
 

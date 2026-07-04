@@ -9,7 +9,7 @@
 nshell is an interactive shell that puts the *interactive* experience first:
 real-time syntax highlighting, history-aware autosuggestions, fish-style
 abbreviations, and a fast, context-aware completion engine — all built on a
-clean, test-driven Common Lisp core (5,500+ checks) and a reproducible Nix
+clean, test-driven Common Lisp core (5,800+ checks) and a reproducible Nix
 build.
 
 > **Status: early development (0.4.x).** The interactive editor and core
@@ -155,7 +155,9 @@ nix build .#checks.$(nix eval --impure --raw --expr builtins.currentSystem).test
 ```
 
 Run the full non-sandboxed integration suite when changing PTY, subprocess,
-terminal, or job-control behavior:
+terminal, or job-control behavior. This covers the real-PTY interactive smoke,
+Ctrl-C recovery, and job-control lifecycle checks that are intentionally skipped
+inside hermetic Nix builds:
 
 ```sh
 nix develop -c sbcl --non-interactive \
@@ -188,10 +190,13 @@ nshell is converging on world-class interactive-shell parity. Near-term focus:
 
 See [CHANGELOG.md](./CHANGELOG.md) for released changes.
 
+For release qualification, see [PUBLIC_READINESS.md](./PUBLIC_READINESS.md).
+
 ## Contributing
 
 Contributions are welcome. Please run `nix flake check --print-build-logs`
-before opening a pull request; CI runs the same gate on Linux and macOS. See
+before opening a pull request; CI runs that hermetic gate on Linux and macOS
+and also runs the full non-sandboxed integration suite on Linux. See
 `CONTRIBUTING.md` for style, test, compatibility, and issue-reporting
 expectations.
 

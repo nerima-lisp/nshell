@@ -1,12 +1,18 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (parse-result (:constructor make-parse-result (ast &optional errors incomplete)))
+(defstruct (parse-result (:constructor %make-parse-result
+                            (ast &optional errors incomplete)))
   (ast nil :type (or null ast-node))
   (errors nil :type list)
   (incomplete nil :type boolean))
 
+(defun %make-normalized-parse-result (ast &optional errors incomplete)
+  (%make-parse-result ast
+                      (or errors '())
+                      (not (null incomplete))))
+
 (defstruct (parse-diagnostic
-            (:constructor make-parse-diagnostic
+            (:constructor %make-parse-diagnostic
                 (kind message start end &optional token)))
   (kind :error :type keyword :read-only t)
   (message "" :type string :read-only t)
@@ -14,19 +20,50 @@
   (end 0 :type integer :read-only t)
   (token nil :read-only t))
 
-(defun parse-complete-p (result)
-  (and (parse-result-ast result)
-       (null (parse-result-errors result))
-       (not (parse-result-incomplete result))))
-
-(defun parse-result-state (result)
-  (cond
-    ((parse-complete-p result) :complete)
-    ((parse-result-incomplete result) :incomplete)
-    ((parse-errors result) :error)))
-
 (defun parse-errors (result)
   (parse-result-errors result))
+
+(defstruct (%parse-result-facts
+            (:constructor %make-parse-result-facts
+                (ast errors incomplete)))
+  (ast nil :read-only t)
+  (errors nil :type list :read-only t)
+  (incomplete nil :type boolean :read-only t))
+
+(defun %parse-result-facts-from-result (result)
+  (%make-parse-result-facts
+   (parse-result-ast result)
+   (parse-errors result)
+   (parse-result-incomplete result)))
+
+(defun %parse-result-facts-complete-p (facts)
+  (and (%parse-result-facts-ast facts)
+       (null (%parse-result-facts-errors facts))
+       (not (%parse-result-facts-incomplete facts))))
+
+(defun %parse-result-facts-empty-p (facts)
+  (and (null (%parse-result-facts-ast facts))
+       (null (%parse-result-facts-errors facts))
+       (not (%parse-result-facts-incomplete facts))))
+
+(defun %parse-result-facts-state (facts)
+  (cond
+    ((%parse-result-facts-complete-p facts) :complete)
+    ((%parse-result-facts-incomplete facts) :incomplete)
+    ((%parse-result-facts-errors facts) :error)
+    ((%parse-result-facts-empty-p facts) :empty)))
+
+(defun parse-complete-p (result)
+  (%parse-result-facts-complete-p
+   (%parse-result-facts-from-result result)))
+
+(defun parse-empty-p (result)
+  (%parse-result-facts-empty-p
+   (%parse-result-facts-from-result result)))
+
+(defun parse-result-state (result)
+  (%parse-result-facts-state
+   (%parse-result-facts-from-result result)))
 
 (defun parse-error-messages (result)
   (mapcar #'parse-diagnostic-message (parse-errors result)))
@@ -39,32 +76,42 @@
                    :key #'parse-diagnostic-kind))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (defstruct (%parsed-command-line-case-clause
+              (:constructor %make-parsed-command-line-case-clause (keyword body)))
+    (keyword nil :type keyword :read-only t)
+    (body nil :type list :read-only t))
+
+  (defun %parsed-command-line-case-clause (keyword clauses)
+    (let ((body (cdr (assoc keyword clauses))))
+      (when body
+        (%make-parsed-command-line-case-clause keyword body))))
+
   (defmacro with-parsed-command-line ((result line) &body body)
     `(let ((,result (parse-command-line ,line)))
        (declare (ignorable ,result))
        ,@body))
 
+  (defun %parsed-command-line-case-branch (keyword clauses result ast parsed-result)
+    (let ((clause (%parsed-command-line-case-clause keyword clauses)))
+      (when clause
+        `((,(%parsed-command-line-case-clause-keyword clause)
+           (let ((,result ,parsed-result)
+                 (,ast (parse-result-ast ,parsed-result)))
+             (declare (ignorable ,result ,ast))
+             ,@(%parsed-command-line-case-clause-body clause)))))))
+
   (defmacro with-parsed-command-line-case ((result ast line) &body clauses)
-    (labels ((branch-body (keyword)
-               (cdr (assoc keyword clauses))))
-      (let ((parsed-result (gensym "PARSE-RESULT-")))
-        `(let ((,parsed-result (parse-command-line ,line)))
-           (case (parse-result-state ,parsed-result)
-             (:complete
-              (let ((,result ,parsed-result)
-                    (,ast (parse-result-ast ,parsed-result)))
-                (declare (ignorable ,result ,ast))
-                ,@(branch-body :complete)))
-             (:incomplete
-              (let ((,result ,parsed-result)
-                    (,ast (parse-result-ast ,parsed-result)))
-                (declare (ignorable ,result ,ast))
-                ,@(branch-body :incomplete)))
-             (:error
-              (let ((,result ,parsed-result)
-                    (,ast (parse-result-ast ,parsed-result)))
-                (declare (ignorable ,result ,ast))
-                ,@(branch-body :error))))))))
+    (let ((parsed-result (gensym "PARSE-RESULT-")))
+      `(let ((,parsed-result (parse-command-line ,line)))
+         (case (parse-result-state ,parsed-result)
+           ,@(%parsed-command-line-case-branch
+              :complete clauses result ast parsed-result)
+           ,@(%parsed-command-line-case-branch
+              :incomplete clauses result ast parsed-result)
+           ,@(%parsed-command-line-case-branch
+              :error clauses result ast parsed-result)
+           ,@(%parsed-command-line-case-branch
+              :empty clauses result ast parsed-result)))))
 
   (defmacro with-complete-command-line ((result ast line) &body body)
     (let ((parsed-result (gensym "PARSE-RESULT-")))
@@ -73,11 +120,10 @@
            (let ((,result ,parsed-result)
                  (,ast (parse-result-ast ,parsed-result)))
              (declare (ignorable ,result ,ast))
-             ,@body)))))
-  )
+             ,@body))))))
 
 (defun %token-diagnostic (kind message token)
-  (make-parse-diagnostic kind message
-                         (token-start token)
-                         (token-end token)
-                         token))
+  (%make-parse-diagnostic kind message
+                          (token-start token)
+                          (token-end token)
+                          token))

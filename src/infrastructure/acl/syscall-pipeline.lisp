@@ -23,10 +23,14 @@
                  (setf output
                        (cond
                          (next-pipe
-                          (setf output-pipe-stream
-                                (sb-sys:make-fd-stream (second next-pipe)
-                                                       :output t
-                                                       :buffering :line)))
+                          (let ((fd (second next-pipe)))
+                            (when fd
+                              (setf output-pipe-stream
+                                    (sb-sys:make-fd-stream fd
+                                                           :output t
+                                                           :buffering :line))
+                              (setf (second next-pipe) nil)
+                              output-pipe-stream)))
                          (t default-output))
                        output-materialized-p t))
                output))
@@ -78,10 +82,14 @@
                       (push stream redirect-streams)
                       stream))
                    (prev-pipe
-                    (setf input-pipe-stream
-                          (sb-sys:make-fd-stream (first prev-pipe)
-                                                 :input t
-                                                 :buffering :line)))
+                    (let ((fd (first prev-pipe)))
+                      (when fd
+                        (setf input-pipe-stream
+                              (sb-sys:make-fd-stream fd
+                                                     :input t
+                                                     :buffering :line))
+                        (setf (first prev-pipe) nil)
+                        input-pipe-stream)))
                    (t t))))
       (multiple-value-bind (output error-output resolved-output-pipe-stream redirect-streams)
           (%pipeline-output-streams stage-redirects next-pipe redirect-streams
@@ -100,8 +108,9 @@
         do (ignore-errors (close (car streams)))))
 
 (defun %close-unused-next-pipe-writer (next-pipe output-pipe-stream)
-  (when (and next-pipe (null output-pipe-stream))
-    (ignore-errors (sb-posix:close (second next-pipe)))))
+  (when (and next-pipe (null output-pipe-stream) (integerp (second next-pipe)))
+    (ignore-errors (sb-posix:close (second next-pipe)))
+    (setf (second next-pipe) nil)))
 
 (defun %spawn-pipeline-stage (cmd-node stage-redirects prev-pipe next-pipe redirect-streams
                               &key (default-output :stream))
@@ -112,19 +121,27 @@
                                  :default-output default-output)
       (let* ((cmd (nshell.domain.parsing:command-node-command cmd-node))
              (args (mapcar #'nshell.domain.parsing:arg-value
-                           (nshell.domain.parsing:command-node-args cmd-node))))
+                           (nshell.domain.parsing:command-node-args cmd-node)))
+             (environment (%get-environment))
+             (resolved-cmd (%resolve-external-command cmd environment)))
         (unwind-protect
              (multiple-value-prog1
                  (values
                   (progn
                     (%close-unused-next-pipe-writer next-pipe output-pipe-stream)
-                    (sb-ext:run-program cmd args
-                      :input input
-                      :output output
-                      :error error-output
-                      :wait nil
-                      :search t
-                      :environment (%get-environment)))
+                    (if resolved-cmd
+                        (sb-ext:run-program resolved-cmd args
+                          :input input
+                          :output output
+                          :error error-output
+                          :wait nil
+                          :search nil
+                          :environment environment)
+                        (progn
+                          (format *error-output*
+                                  "~a"
+                                  (%external-command-not-found-message cmd))
+                          nil)))
                   redirect-streams)
                (setf started t))
           (unless started
@@ -153,18 +170,14 @@
 
 (defun %close-pipeline-fds (pipes)
   (dolist (pipe pipes)
-    (ignore-errors (sb-posix:close (first pipe)))
-    (ignore-errors (sb-posix:close (second pipe)))))
-
-(defun %wait-process-exit-with-timeout (proc timeout-seconds)
-  (let ((deadline (+ (get-internal-real-time)
-                     (round (* timeout-seconds internal-time-units-per-second)))))
-    (loop while (and (sb-ext:process-alive-p proc)
-                     (< (get-internal-real-time) deadline))
-          do (sleep 0.01))
-    (unless (sb-ext:process-alive-p proc)
-      (ignore-errors (sb-ext:process-wait proc))
-      t)))
+    (let ((read-fd (first pipe))
+          (write-fd (second pipe)))
+      (when (integerp read-fd)
+        (ignore-errors (sb-posix:close read-fd))
+        (setf (first pipe) nil))
+      (when (integerp write-fd)
+        (ignore-errors (sb-posix:close write-fd))
+        (setf (second pipe) nil)))))
 
 (defun %terminate-pipeline-processes (procs)
   (dolist (proc procs)
@@ -175,6 +188,28 @@
       (when (sb-ext:process-alive-p proc)
         (ignore-errors (sb-ext:process-kill proc 9)))
       (ignore-errors (sb-ext:process-wait proc)))))
+
+(defun %wait-pipeline-exit-with-timeout (procs timeout-seconds)
+  (let ((deadline (+ (get-internal-real-time)
+                     (round (* timeout-seconds internal-time-units-per-second)))))
+    (loop while (and (some #'sb-ext:process-alive-p procs)
+                     (< (get-internal-real-time) deadline))
+          do (sleep 0.01))
+    (not (some #'sb-ext:process-alive-p procs))))
+
+(defun %wait-pipeline-with-output (procs timeout-fn)
+  (let ((copier (%start-process-output-copier (car procs) *standard-output*)))
+    (unwind-protect
+         (if (or (null *external-command-timeout*)
+                 (%wait-pipeline-exit-with-timeout procs *external-command-timeout*))
+             (progn
+               (prog1 (%wait-pipeline-processes procs)
+                 (%join-process-output-copier copier)))
+             (progn
+               (%terminate-pipeline-processes procs)
+               (%join-process-output-copier copier)
+               (funcall timeout-fn)))
+      (%join-process-output-copier copier))))
 
 (defun %pipeline-spawn-loop (commands pipes redirects redirect-streams
                              &key default-output pgid-assign-fn error-sentinel)
@@ -208,8 +243,11 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                                            redirect-streams
                                            :default-output default-output)
                    (setf redirect-streams updated-streams)
-                   (setf pgid (funcall pgid-assign-fn proc pgid))
-                   (push proc procs))
+                   (if proc
+                       (progn
+                         (setf pgid (funcall pgid-assign-fn proc pgid))
+                         (push proc procs))
+                       (setf error-p error-sentinel)))
                (error (err)
                  (setf error-p error-sentinel)
                  (format *error-output* "nshell: ~a: ~a~%"
@@ -244,8 +282,14 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                  (%terminate-pipeline-processes procs)
                  spawn-error-code)
                (flet ((finish-pipeline ()
-                        (%drain-process-output (first procs))
-                        (%wait-pipeline-processes procs)))
+                        (%wait-pipeline-with-output
+                         procs
+                         (lambda ()
+                           (format *error-output*
+                                   "nshell: pipeline timed out after ~a seconds~%"
+                                   *external-command-timeout*)
+                           124))))
+                 (%close-pipeline-fds pipes)
                  (if pgid
                      (%with-foreground-process-group pgid #'finish-pipeline)
                      (finish-pipeline)))))

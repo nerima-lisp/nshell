@@ -5,9 +5,11 @@
 (test pbt-tokenizer-roundtrip
   "Generated commands tokenize and parse without error (property test)"
   (for-all-property (:trials 50) ((cmd (gen-shell-command :min-words 2)))
-    (multiple-value-bind (tokens cursor incomplete)
-        (nshell.domain.parsing:tokenize cmd)
-      (declare (ignore cursor))
+    (let* ((tokenization (nshell.domain.parsing:tokenize cmd))
+           (tokens (nshell.domain.parsing:tokenization-result-tokens
+                    tokenization))
+           (incomplete (nshell.domain.parsing:tokenization-result-incomplete-p
+                        tokenization)))
       (is (not incomplete) "Generated command ~s should not be incomplete" cmd)
       (is (consp tokens) "Generated command ~s should produce tokens" cmd))))
 
@@ -54,9 +56,19 @@
   (is (not (nshell.domain.parsing:shell-operator-separator-p #\Space)))
   (is (not (nshell.domain.parsing:shell-token-separator-p #\a))))
 
+(test shell-input-blank-p
+  "Blank command input follows shell token separator rules."
+  (is (nshell.domain.parsing:shell-input-blank-p " 	|;&<>"))
+  (is (nshell.domain.parsing:shell-input-blank-p
+       (format nil " ~c" #\Return)
+       :include-return-p t))
+  (is (not (nshell.domain.parsing:shell-input-blank-p
+            (format nil " ~c" #\Return))))
+  (is (not (nshell.domain.parsing:shell-input-blank-p " echo"))))
+
 (test shell-command-separator-token-p
   "Command separator tokens are classified in the parsing domain."
-  (dolist (type '(:pipe :and :or :semicolon :ampersand))
+  (dolist (type '(:pipe :and :or :semicolon :newline :ampersand))
     (is (nshell.domain.parsing:shell-command-separator-token-p
          (nshell.domain.parsing:make-token type ""))))
   (is (not (nshell.domain.parsing:shell-command-separator-token-p

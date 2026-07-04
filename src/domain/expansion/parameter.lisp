@@ -10,6 +10,24 @@ body; NIL at top level.")
       default
       (ignore-errors (parse-integer text :junk-allowed nil))))
 
+(defstruct (list-selection-spec
+            (:constructor %make-list-selection-spec (kind start-index end-index)))
+  (kind :index :type keyword :read-only t)
+  (start-index nil :read-only t)
+  (end-index nil :read-only t))
+
+(defun %list-selection-spec (spec)
+  (let ((range-pos (search ".." spec)))
+    (if range-pos
+        (%make-list-selection-spec
+         :range
+         (%parse-argv-index (subseq spec 0 range-pos) 1)
+         (%parse-argv-index (subseq spec (+ range-pos 2)) -1))
+        (%make-list-selection-spec
+         :index
+         (%parse-argv-index spec)
+         nil))))
+
 (defun %argv-normalized-index (index count)
   (cond
     ((null index) nil)
@@ -36,13 +54,17 @@ body; NIL at top level.")
               until (= index end))
         (nreverse result)))))
 
+(defun %list-selection-spec-fields (fields selection)
+  (case (list-selection-spec-kind selection)
+    (:range (%list-range-fields fields
+                                (list-selection-spec-start-index selection)
+                                (list-selection-spec-end-index selection)))
+    (:index (%list-index-field fields
+                               (list-selection-spec-start-index selection)))
+    (otherwise nil)))
+
 (defun %list-spec-fields (fields spec)
-  (let ((range-pos (search ".." spec)))
-    (if range-pos
-        (let ((start-index (%parse-argv-index (subseq spec 0 range-pos) 1))
-              (end-index (%parse-argv-index (subseq spec (+ range-pos 2)) -1)))
-          (%list-range-fields fields start-index end-index))
-        (%list-index-field fields (%parse-argv-index spec)))))
+  (%list-selection-spec-fields fields (%list-selection-spec spec)))
 
 (defun %argv-spec-fields (spec)
   (%list-spec-fields *positional-args* spec))
@@ -66,8 +88,53 @@ body; NIL at top level.")
            (name-end (loop for j from name-start below len
                            while (variable-name-char-p (char input j))
                            finally (return j)))
-           (name (subseq input name-start name-end)))
+            (name (subseq input name-start name-end)))
       (values name name-end t))))
+
+(defstruct (variable-reference-syntax
+            (:constructor %make-variable-reference-syntax
+                (name name-end bracket-spec bracket-next bracket-status)))
+  (name "" :type string :read-only t)
+  (name-end 0 :type fixnum :read-only t)
+  (bracket-spec nil :read-only t)
+  (bracket-next nil :read-only t)
+  (bracket-status nil :read-only t))
+
+(defun %bracket-spec-after-name (input name-end len)
+  "Return (values spec next-index status) for optional [SPEC] after NAME-END.
+STATUS is :INDEXED for a balanced bracket, :UNBALANCED for '[' without ']',
+or NIL when no bracket starts at NAME-END."
+  (when (and (< name-end len) (char= (char input name-end) #\[))
+    (let ((close (position #\] input :start (1+ name-end))))
+      (if close
+          (values (subseq input (1+ name-end) close)
+                  (1+ close)
+                  :indexed)
+          (values nil name-end :unbalanced)))))
+
+(defun %variable-reference-syntax-after-name (name input name-end len)
+  "Project a scanned variable name and optional bracket into a reference value."
+  (multiple-value-bind (spec next status)
+      (%bracket-spec-after-name input name-end len)
+    (%make-variable-reference-syntax name name-end spec next status)))
+
+(defun %variable-reference-syntax-at (input start len)
+  "Return a variable-reference-syntax for a recognized $NAME at START."
+  (multiple-value-bind (name name-end recognized-p)
+      (%scan-variable-reference-name input start len)
+    (when recognized-p
+      (%variable-reference-syntax-after-name name input name-end len))))
+
+(defun %variable-reference-indexed-p (reference)
+  (eq :indexed (variable-reference-syntax-bracket-status reference)))
+
+(defun %variable-reference-unbalanced-p (reference)
+  (eq :unbalanced (variable-reference-syntax-bracket-status reference)))
+
+(defun %variable-reference-next-index (reference)
+  (if (%variable-reference-indexed-p reference)
+      (variable-reference-syntax-bracket-next reference)
+      (variable-reference-syntax-name-end reference)))
 
 (defun argv-reference-fields (value)
   "Return (values fields recognized-p) for an exact fish-style $argv reference.
@@ -83,72 +150,89 @@ negative indexes count from the end, and $argv[A..B] returns an inclusive range.
     (t
      (values nil nil))))
 
-(defun %bracket-index-ref (input end len fields-fn)
-  "Return (values joined-field next-index) when a [SPEC] bracket follows END.
-Returns (values nil end) when there is no bracket or when it is unbalanced."
-  (if (and (< end len) (char= (char input end) #\[))
-      (let ((close (position #\] input :start (1+ end))))
-        (if close
-            (values (%join-fields (funcall fields-fn (subseq input (1+ end) close)))
-                    (1+ close))
-            (values nil end)))
-      (values nil end)))
+(defun %argv-expansion-after-name (input name-end len)
+  "Return (values expansion next-index) for a scanned $argv reference."
+  (let ((reference (%variable-reference-syntax-after-name "argv" input name-end len)))
+    (if (%variable-reference-indexed-p reference)
+        (values (%join-fields
+                 (%argv-spec-fields
+                  (variable-reference-syntax-bracket-spec reference)))
+                (%variable-reference-next-index reference))
+        (values (%join-fields *positional-args*)
+                (%variable-reference-next-index reference)))))
 
-(defun %argv-index-ref (input end len)
-  (%bracket-index-ref input end len #'%argv-spec-fields))
+(defun %variable-expansion-after-name (input name env name-end len)
+  "Return (values expansion next-index) for a scanned normal variable reference."
+  (let ((reference (%variable-reference-syntax-after-name name input name-end len)))
+    (if (%variable-reference-indexed-p reference)
+         (values (%join-fields
+                  (%variable-spec-fields
+                   name
+                   (variable-reference-syntax-bracket-spec reference)
+                   env))
+                (%variable-reference-next-index reference))
+        (values (or (nshell.domain.environment:env-get env name) "")
+                (%variable-reference-next-index reference)))))
 
-(defun %variable-index-ref (input name env end len)
-  (%bracket-index-ref input end len
-                      (lambda (spec) (%variable-spec-fields name spec env))))
+(defun %argv-reference-fields-for-syntax (reference)
+  "Return list-reference values for a parsed $argv syntax object."
+  (unless (%variable-reference-unbalanced-p reference)
+    (if (%variable-reference-indexed-p reference)
+        (values (%argv-spec-fields
+                 (variable-reference-syntax-bracket-spec reference))
+                (%variable-reference-next-index reference)
+                t)
+        (values (copy-list *positional-args*)
+                (%variable-reference-next-index reference)
+                t))))
 
 (defun %argv-reference-at (input start len)
   "Return (values fields next-index recognized-p) for a $argv reference at START."
-  (multiple-value-bind (name name-end recognized-p)
-      (%scan-variable-reference-name input start len)
-    (when (and recognized-p (string= name "argv"))
-      (if (and (< name-end len) (char= (char input name-end) #\[))
-          (let ((close (position #\] input :start (1+ name-end))))
-            (when close
-              (values (%argv-spec-fields (subseq input (1+ name-end) close))
-                      (1+ close)
-                      t)))
-          (values (copy-list *positional-args*) name-end t)))))
+  (let ((reference (%variable-reference-syntax-at input start len)))
+    (when (and reference
+               (string= (variable-reference-syntax-name reference) "argv"))
+      (%argv-reference-fields-for-syntax reference))))
 
 (defun %variable-reference-at (input start len env)
   "Return (values fields next-index recognized-p) for a list variable reference."
-  (multiple-value-bind (name name-end recognized-p)
-      (%scan-variable-reference-name input start len)
-    (when recognized-p
-      (cond
-        ((string= name "argv")
-         (%argv-reference-at input start len))
-        ((and (< name-end len) (char= (char input name-end) #\[))
-         (let ((close (position #\] input :start (1+ name-end))))
-           (when close
-             (values (%variable-spec-fields name
-                                            (subseq input (1+ name-end) close)
-                                            env)
-                     (1+ close)
-                     t))))))))
+  (let ((reference (%variable-reference-syntax-at input start len)))
+    (when reference
+      (let ((name (variable-reference-syntax-name reference)))
+        (cond
+          ((string= name "argv")
+           (%argv-reference-fields-for-syntax reference))
+          ((%variable-reference-unbalanced-p reference)
+           nil)
+          ((%variable-reference-indexed-p reference)
+           (values (%variable-spec-fields
+                    name
+                    (variable-reference-syntax-bracket-spec reference)
+                    env)
+                   (%variable-reference-next-index reference)
+                   t))
+           (t
+            (let ((fields (nshell.domain.environment:env-get-values env name)))
+              (when fields
+                (values fields
+                        (%variable-reference-next-index reference)
+                        t)))))))))
 
 (defun %expand-variable-reference (input start len env)
   "Return (values expansion next-index) for a bare variable reference at START."
-  (multiple-value-bind (name name-end recognized-p)
-      (%scan-variable-reference-name input start len)
-    (when recognized-p
-      (cond
-        ((string= name "argv")
-         (multiple-value-bind (element next) (%argv-index-ref input name-end len)
-           (if element
-               (values element next)
-               (values (%join-fields *positional-args*) name-end))))
-        (t
-         (multiple-value-bind (element next)
-             (%variable-index-ref input name env name-end len)
-           (if element
-               (values element next)
-               (values (or (nshell.domain.environment:env-get env name) "")
-                       name-end))))))))
+  (let ((reference (%variable-reference-syntax-at input start len)))
+    (when reference
+      (let ((name (variable-reference-syntax-name reference)))
+        (if (string= name "argv")
+            (%argv-expansion-after-name
+             input
+             (variable-reference-syntax-name-end reference)
+             len)
+            (%variable-expansion-after-name
+             input
+             name
+             env
+             (variable-reference-syntax-name-end reference)
+             len))))))
 
 (defun expand-variables (input env)
   "Expand $VAR and ${VAR} occurrences in INPUT using ENV. Also expands the
@@ -257,6 +341,53 @@ Returns NIL when CONTENT is not a length expansion."
     (let ((value (nshell.domain.environment:env-get env (subseq content 1))))
       (princ-to-string (length (or value ""))))))
 
+(defstruct (parameter-binding
+            (:constructor %make-parameter-binding (name raw set-p value)))
+  (name "" :type string :read-only t)
+  (raw nil :read-only t)
+  (set-p nil :read-only t)
+  (value "" :type string :read-only t))
+
+(defun %parameter-binding (name env)
+  (let ((raw (nshell.domain.environment:env-get env name)))
+    (%make-parameter-binding name raw (not (null raw)) (or raw ""))))
+
+(defstruct (parameter-operator
+            (:constructor %make-parameter-operator (op word-text colon-p)))
+  (op nil :read-only t)
+  (word-text "" :type string :read-only t)
+  (colon-p nil :read-only t))
+
+(defun %parameter-operator-parts (rest)
+  "Parse REST into a braced parameter operator value."
+  (let* ((colon-p (and (plusp (length rest)) (char= (char rest 0) #\:)))
+         (op-index (if colon-p 1 0))
+         (op (and (< op-index (length rest)) (char rest op-index)))
+         (word-start (min (length rest) (1+ op-index)))
+         (word-text (subseq rest word-start)))
+    (%make-parameter-operator op word-text colon-p)))
+
+(defun %parameter-default-applicable-p (binding operator)
+  (if (parameter-operator-colon-p operator)
+      (or (not (parameter-binding-set-p binding))
+          (zerop (length (parameter-binding-value binding))))
+      (not (parameter-binding-set-p binding))))
+
+(defun %apply-parameter-operator (binding operator word rest env)
+  (let* ((name (parameter-binding-name binding))
+         (value (parameter-binding-value binding))
+         (word-text (parameter-operator-word-text operator))
+         (apply-default-p (%parameter-default-applicable-p binding operator)))
+    (case (parameter-operator-op operator)
+      (#\- (if apply-default-p word value))
+      (#\= (if apply-default-p (%assign-parameter-default env name word) value))
+      (#\+ (if apply-default-p "" word))
+      (#\? (if apply-default-p word value))
+      (#\# (%param-strip-prefix value word-text env))
+      (#\% (%param-strip-suffix value word-text env))
+      (#\/ (%param-substitute value word-text env))
+      (t   (concatenate 'string value rest)))))
+
 (defun %expand-braced-parameter (content env)
   "Expand the CONTENT of a ${...} parameter expansion.
 Supports plain ${NAME}, length ${#NAME}, the POSIX default/alternate operators
@@ -269,25 +400,11 @@ the shell environment when it fires."
       (let* ((op-pos (%parameter-name-end content))
              (name  (subseq content 0 op-pos))
              (rest  (subseq content op-pos))
-             (raw   (nshell.domain.environment:env-get env name))
-             (set-p (not (null raw)))
-             (value (or raw "")))
+             (binding (%parameter-binding name env))
+             (value (parameter-binding-value binding)))
         (if (zerop (length rest))
             value
-            (let* ((colon          (char= (char rest 0) #\:))
-                   (op-index       (if colon 1 0))
-                   (op             (and (< op-index (length rest)) (char rest op-index)))
-                   (word-text      (subseq rest (min (length rest) (1+ op-index))))
-                   (word           (expand-variables word-text env))
-                   (apply-default-p (if colon
-                                        (or (not set-p) (zerop (length value)))
-                                        (not set-p))))
-              (case op
-                (#\- (if apply-default-p word value))
-                (#\= (if apply-default-p (%assign-parameter-default env name word) value))
-                (#\+ (if apply-default-p "" word))
-                (#\? (if apply-default-p word value))
-                (#\# (%param-strip-prefix value word-text env))
-                (#\% (%param-strip-suffix value word-text env))
-                (#\/ (%param-substitute   value word-text env))
-                (t   (concatenate 'string value rest))))))))
+            (let* ((operator (%parameter-operator-parts rest))
+                   (word-text (parameter-operator-word-text operator))
+                   (word (expand-variables word-text env)))
+              (%apply-parameter-operator binding operator word rest env))))))

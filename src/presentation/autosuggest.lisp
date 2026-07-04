@@ -1,5 +1,6 @@
 (in-package #:nshell.presentation)
 
+
 (defun autosuggest-token-prefix (input)
   (let ((context (nshell.domain.completion:completion-context-for input)))
     (if (nshell.domain.completion:completion-context-command-position-p context)

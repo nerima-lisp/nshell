@@ -10,24 +10,20 @@
 (defun %prepare-command-node (cmd)
   (let* ((environment (ensure-environment))
          (command (nshell.domain.parsing:command-node-command cmd))
-         (style (nshell.domain.parsing:command-node-command-quote-style cmd))
-         (expanded (nshell.domain.expansion:expand-command-name-fields-by-quote-style
-                    command style environment))
-         (non-empty (remove "" expanded :test #'string=)))
-    (if (= 1 (length non-empty))
-        (multiple-value-bind (args redirects)
-            (extract-redirects
-             (%expand-command-args cmd environment))
-          (values (nshell.domain.parsing:make-command-node
-                   (first non-empty)
-                   args)
-                  redirects
-                  nil))
-        (values nil
-                nil
-                (format nil "nshell: ~a: command name expansion produced ~d fields~%"
-                        (nshell.domain.parsing:command-node-command cmd)
-                        (length non-empty))))))
+         (style (nshell.domain.parsing:command-node-command-quote-style cmd)))
+    (multiple-value-bind (expanded error)
+        (nshell.domain.expansion:expand-command-name-by-quote-style
+         command style environment)
+      (if error
+          (values nil nil error)
+          (multiple-value-bind (args redirects)
+              (extract-redirects
+               (%expand-command-args cmd environment))
+            (values (nshell.domain.parsing:make-command-node
+                     expanded
+                     args)
+                    redirects
+                    nil))))))
 
 (defun %prepare-pipeline-node (pipeline)
   (let ((prepared '())

@@ -1,5 +1,6 @@
 (in-package #:nshell.infrastructure.terminal)
 
+
 (defun read-available-char (&key (attempts 20) (sleep-seconds 0.001))
   (loop repeat attempts
         when (listen *standard-input*)

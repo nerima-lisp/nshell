@@ -1,5 +1,6 @@
 (in-package #:nshell.presentation)
 
+
 (defun %candidate-text (candidate)
   (if (stringp candidate)
       candidate

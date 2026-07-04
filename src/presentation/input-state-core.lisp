@@ -2,6 +2,7 @@
 
 (in-package #:nshell.presentation)
 
+
 (defconstant +max-input-buffer-size+ 4096
   "Maximum editable input buffer length accepted by `reduce-input-state'.")
 

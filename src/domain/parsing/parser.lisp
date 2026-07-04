@@ -1,25 +1,93 @@
 (in-package #:nshell.domain.parsing)
 
-(defun %parse-structural-diagnostics (cmds last-sep last-sep-token input-length)
-  (let ((diagnostics nil)
+(defstruct (%command-list-components
+            (:constructor %make-command-list-components
+                (commands separators separator-tokens)))
+  (commands nil :type list :read-only t)
+  (separators nil :type list :read-only t)
+  (separator-tokens nil :type list :read-only t))
+
+(defun %command-list-components-from-list (cmd-list)
+  (%make-command-list-components
+   (mapcar #'first cmd-list)
+   (mapcar #'second cmd-list)
+   (mapcar #'third cmd-list)))
+
+(defun %last-list-element (items)
+  (car (last items)))
+
+(defstruct (%reduced-command-stream
+            (:constructor %make-reduced-command-stream
+                (commands separators separator-tokens ast)))
+  (commands nil :type list :read-only t)
+  (separators nil :type list :read-only t)
+  (separator-tokens nil :type list :read-only t)
+  (ast nil :read-only t))
+
+(defun %reduced-command-stream-from-list (cmd-list)
+  (let ((components (%command-list-components-from-list cmd-list)))
+    (%make-reduced-command-stream
+     (%command-list-components-commands components)
+     (%command-list-components-separators components)
+     (%command-list-components-separator-tokens components)
+     (%build-ast-from-command-list cmd-list))))
+
+(defun %reduced-command-stream-last-separator (stream)
+  (%last-list-element (%reduced-command-stream-separators stream)))
+
+(defun %reduced-command-stream-last-separator-token (stream)
+  (%last-list-element (%reduced-command-stream-separator-tokens stream)))
+
+(defun %continuation-separator-diagnostic (separator token input-length)
+  (if token
+      (%token-diagnostic
+       :trailing-continuation
+       (format nil "Expected command after '~a'"
+               (%separator-text separator))
+       token)
+      (%make-parse-diagnostic
+       :trailing-continuation
+       "Expected command after continuation operator"
+       input-length
+       input-length)))
+
+(defstruct (%structural-diagnostics
+            (:constructor %make-structural-diagnostics
+                (incomplete-p diagnostics)))
+  (incomplete-p nil :type boolean :read-only t)
+  (diagnostics nil :type list :read-only t))
+
+(defstruct (%structural-diagnostics-input
+            (:constructor %make-structural-diagnostics-input
+                (commands last-separator last-separator-token input-length)))
+  (commands nil :type list :read-only t)
+  (last-separator nil :read-only t)
+  (last-separator-token nil :read-only t)
+  (input-length 0 :type integer :read-only t))
+
+(defun %structural-diagnostics-input-from-stream (stream input-length)
+  (%make-structural-diagnostics-input
+   (%reduced-command-stream-commands stream)
+   (%reduced-command-stream-last-separator stream)
+   (%reduced-command-stream-last-separator-token stream)
+   input-length))
+
+(defun %parse-structural-diagnostics-for-input (input)
+  (let ((cmds (%structural-diagnostics-input-commands input))
+        (last-sep (%structural-diagnostics-input-last-separator input))
+        (last-sep-token
+          (%structural-diagnostics-input-last-separator-token input))
+        (input-length (%structural-diagnostics-input-input-length input))
+        (diagnostics nil)
         (structural-incomplete nil))
     (when (%continuation-separator-p last-sep)
       (setf structural-incomplete t)
-      (push (if last-sep-token
-                (%token-diagnostic
-                 :trailing-continuation
-                 (format nil "Expected command after '~a'"
-                         (%separator-text last-sep))
-                 last-sep-token)
-                (make-parse-diagnostic
-                 :trailing-continuation
-                 "Expected command after continuation operator"
-                 input-length
-                 input-length))
+      (push (%continuation-separator-diagnostic
+             last-sep last-sep-token input-length)
             diagnostics))
     (when (%unclosed-control-flow-p cmds)
       (setf structural-incomplete t)
-      (push (make-parse-diagnostic
+      (push (%make-parse-diagnostic
              :unclosed-block
              "Expected 'end' to close control-flow block"
              input-length
@@ -27,27 +95,41 @@
             diagnostics))
     (dolist (diagnostic (%unexpected-control-flow-diagnostics cmds input-length))
       (push diagnostic diagnostics))
-    (values structural-incomplete (nreverse diagnostics))))
+    (%make-structural-diagnostics structural-incomplete
+                                  (nreverse diagnostics))))
+
+(defun %parse-result-from-reduced-command-stream (stream errors incomplete input-length)
+  (let ((structural-diagnostics
+          (%parse-structural-diagnostics-for-input
+           (%structural-diagnostics-input-from-stream stream input-length))))
+    (%make-normalized-parse-result
+     (group-control-flow (%reduced-command-stream-ast stream))
+     (nconc (nreverse errors)
+            (%structural-diagnostics-diagnostics structural-diagnostics))
+     (or incomplete
+         (%structural-diagnostics-incomplete-p structural-diagnostics)))))
+
+(defun %parse-result-from-token-reduction-result (reduction incomplete input-length)
+  (%parse-result-from-reduced-command-stream
+   (%reduced-command-stream-from-list
+    (%token-reduction-result-commands reduction))
+   (%token-reduction-result-errors reduction)
+   incomplete
+   input-length))
+
+(defun %empty-token-parse-result (incomplete)
+  (%make-normalized-parse-result nil nil incomplete))
 
 (defun parse-tokens (tokens incomplete &key (input-length 0))
-  (multiple-value-bind (cmd-list errors)
-      (%reduce-token-stream tokens)
-    (let* ((cmds (mapcar #'first cmd-list))
-           (separators (mapcar #'second cmd-list))
-           (separator-tokens (mapcar #'third cmd-list))
-           (last-sep (car (last separators)))
-           (last-sep-token (car (last separator-tokens)))
-           (ast (%build-ast-from-command-list cmd-list)))
-      (multiple-value-bind (structural-incomplete structural-diagnostics)
-          (%parse-structural-diagnostics cmds last-sep last-sep-token input-length)
-        (make-parse-result (group-control-flow ast)
-                           (nconc (nreverse errors) structural-diagnostics)
-                           (or incomplete structural-incomplete))))))
+  (%parse-result-from-token-reduction-result
+   (%reduce-token-stream-result tokens)
+   incomplete
+   input-length))
 
 (defun parse-command-line (input &key (cursor-pos nil))
-  (multiple-value-bind (tokens cursor-token incomplete)
-      (%tokenize-here-doc-aware input cursor-pos)
-    (declare (ignore cursor-token))
+  (let* ((tokenization (%tokenize-here-doc-aware input cursor-pos))
+         (tokens (tokenization-result-tokens tokenization))
+         (incomplete (tokenization-result-incomplete-p tokenization)))
     (if (null tokens)
-        (make-parse-result nil nil incomplete)
+        (%empty-token-parse-result incomplete)
         (parse-tokens tokens incomplete :input-length (length input)))))

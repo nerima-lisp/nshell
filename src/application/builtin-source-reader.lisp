@@ -38,8 +38,8 @@
 (defparameter +source-definition-end-keyword+ "end")
 
 (defun %source-line-segments (line)
-  (multiple-value-bind (tokens)
-      (nshell.domain.parsing:tokenize line)
+  (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
+                 (nshell.domain.parsing:tokenize line))))
     (let ((segments nil)
           (segment-start 0))
       (loop for token in tokens
@@ -61,8 +61,8 @@
               (return (nreverse segments))))))
 
 (defun %function-start-p (line)
-  (multiple-value-bind (tokens)
-      (nshell.domain.parsing:tokenize line)
+  (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
+                 (nshell.domain.parsing:tokenize line))))
     (let ((words nil))
       (dolist (token tokens)
         (let ((type (nshell.domain.parsing:token-type token)))
@@ -77,8 +77,8 @@
           (second words))))))
 
 (defun %source-definition-line-depth-delta (line)
-  (multiple-value-bind (tokens)
-      (nshell.domain.parsing:tokenize line)
+  (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
+                 (nshell.domain.parsing:tokenize line))))
     (let ((expect-command t)
           (delta 0))
       (dolist (token tokens delta)

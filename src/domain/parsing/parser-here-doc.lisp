@@ -10,74 +10,131 @@
       (1+ line-end)
       line-end))
 
+(defun %here-doc-redirect-token-p (token)
+  (and (eq (token-type token) :redirect)
+       (string= (token-value token) "<<")))
+
 (defun %here-doc-delimiters (tokens)
   (let ((delimiters '()))
     (loop for (tok next) on tokens
-          when (and (eq (token-type tok) :redirect)
-                    (string= (token-value tok) "<<")
+          when (and (%here-doc-redirect-token-p tok)
                     next
                     (eq (token-type next) :word))
             do (push (token-value next) delimiters))
     (nreverse delimiters)))
 
+(defstruct (%here-doc-line
+            (:constructor %make-here-doc-line
+                (text next-position newline-p)))
+  (text "" :type string :read-only t)
+  next-position
+  (newline-p nil :type boolean :read-only t))
+
 (defun %read-here-doc-line (input start)
   (let* ((end (%line-end-position input start))
          (has-newline (< end (length input))))
-    (values (subseq input start end)
-            (if has-newline (1+ end) end)
-            has-newline)))
+    (%make-here-doc-line (subseq input start end)
+                         (if has-newline (1+ end) end)
+                         has-newline)))
+
+(defstruct (%here-doc-body
+            (:constructor %make-here-doc-body
+                (body next-position missing-delimiter-p)))
+  (body "" :type string :read-only t)
+  next-position
+  (missing-delimiter-p nil :type boolean :read-only t))
 
 (defun %consume-here-doc-body (input start delimiter)
   (with-output-to-string (body)
     (loop with pos = start
           while (< pos (length input))
-          do (multiple-value-bind (line next-pos has-newline)
-                 (%read-here-doc-line input pos)
-               (when (string= line delimiter)
+          do (let ((line (%read-here-doc-line input pos)))
+               (when (string= (%here-doc-line-text line) delimiter)
                  (return-from %consume-here-doc-body
-                   (values (get-output-stream-string body) next-pos nil)))
-               (write-string line body)
-               (when has-newline
+                   (%make-here-doc-body
+                    (get-output-stream-string body)
+                    (%here-doc-line-next-position line)
+                    nil)))
+               (write-string (%here-doc-line-text line) body)
+               (when (%here-doc-line-newline-p line)
                  (write-char #\Newline body))
-               (setf pos next-pos))
+               (setf pos (%here-doc-line-next-position line)))
           finally (return-from %consume-here-doc-body
-                    (values (get-output-stream-string body) pos t)))))
+                    (%make-here-doc-body
+                     (get-output-stream-string body)
+                     pos
+                     t)))))
 
-(defun %consume-here-docs (input start delimiters)
+(defstruct (%here-doc-consumption
+            (:constructor %make-here-doc-consumption
+                (bodies next-position incomplete-p)))
+  (bodies '() :type list :read-only t)
+  next-position
+  (incomplete-p nil :type boolean :read-only t))
+
+(defun %consume-here-docs-result (input start delimiters)
   (let ((bodies '())
         (pos start)
         (incomplete nil))
     (dolist (delimiter delimiters)
-      (multiple-value-bind (body next-pos missing-delimiter)
-          (%consume-here-doc-body input pos delimiter)
-        (push body bodies)
-        (setf pos next-pos)
-        (when missing-delimiter
+      (let ((body (%consume-here-doc-body input pos delimiter)))
+        (push (%here-doc-body-body body) bodies)
+        (setf pos (%here-doc-body-next-position body))
+        (when (%here-doc-body-missing-delimiter-p body)
           (setf incomplete t)
           (return))))
-    (values (nreverse bodies) pos incomplete)))
+    (%make-here-doc-consumption (nreverse bodies) pos incomplete)))
+
+(defun %here-doc-target-token-p (token)
+  (eq (token-type token) :word))
+
+(defun %replace-here-doc-target-token (token body)
+  (make-token (token-type token)
+              body
+              (token-start token)
+              (token-end token)
+              (token-quote-style token)))
+
+(defstruct (here-doc-target-replacer
+            (:constructor %make-here-doc-target-replacer (bodies)))
+  bodies
+  (target-pending-p nil :type boolean))
+
+(defun %here-doc-target-replacer-has-body-p (replacer)
+  (not (null (here-doc-target-replacer-bodies replacer))))
+
+(defun %mark-here-doc-target-pending (replacer)
+  (when (%here-doc-target-replacer-has-body-p replacer)
+    (setf (here-doc-target-replacer-target-pending-p replacer) t))
+  replacer)
+
+(defun %consume-next-here-doc-target-body (replacer)
+  (let ((body (first (here-doc-target-replacer-bodies replacer))))
+    (setf (here-doc-target-replacer-bodies replacer)
+          (rest (here-doc-target-replacer-bodies replacer)))
+    body))
+
+(defun %here-doc-target-replacer-should-replace-p (replacer token)
+  (and (here-doc-target-replacer-target-pending-p replacer)
+       (%here-doc-target-replacer-has-body-p replacer)
+       (%here-doc-target-token-p token)))
+
+(defun %here-doc-target-replacer-accept (replacer token)
+  (cond
+    ((%here-doc-target-replacer-should-replace-p replacer token)
+     (setf (here-doc-target-replacer-target-pending-p replacer) nil)
+     (%replace-here-doc-target-token
+      token
+      (%consume-next-here-doc-target-body replacer)))
+    (t
+     (when (%here-doc-redirect-token-p token)
+       (%mark-here-doc-target-pending replacer))
+     token)))
 
 (defun %replace-here-doc-targets (tokens bodies)
-  (let ((remaining-bodies bodies)
-        (replace-next-target nil)
-        (updated '()))
-    (dolist (tok tokens)
-      (cond
-        ((and replace-next-target remaining-bodies (eq (token-type tok) :word))
-         (push (make-token (token-type tok)
-                           (pop remaining-bodies)
-                           (token-start tok)
-                           (token-end tok)
-                           (token-quote-style tok))
-               updated)
-         (setf replace-next-target nil))
-        (t
-         (push tok updated)
-         (setf replace-next-target
-               (and (eq (token-type tok) :redirect)
-                    (string= (token-value tok) "<<")
-                    remaining-bodies)))))
-    (nreverse updated)))
+  (let ((replacer (%make-here-doc-target-replacer bodies)))
+    (loop for tok in tokens
+          collect (%here-doc-target-replacer-accept replacer tok))))
 
 (defun %synthetic-newline-token (pos)
   (make-token :newline (string #\Newline) pos pos))
@@ -98,33 +155,56 @@
   (or (>= start (length input))
       (shell-input-blank-p (subseq input start))))
 
+(declaim (ftype (function (string t) t)
+                %tokenize-here-doc-aware))
+
+(defun %tokenize-here-doc-tail (input next-pos tokens cursor-token incomplete)
+  (if (%blank-input-from-position-p input next-pos)
+      (%make-tokenization-result tokens cursor-token incomplete)
+      (let ((tail (%tokenize-here-doc-aware (subseq input next-pos) nil)))
+        (%make-tokenization-result
+         (append tokens
+                 (list (%synthetic-newline-token next-pos))
+                 (%offset-tokens (tokenization-result-tokens tail)
+                                  next-pos))
+         (or cursor-token
+             (tokenization-result-cursor-token tail))
+         (or incomplete
+             (tokenization-result-incomplete-p tail))))))
+
+(defun %tokenize-here-doc-command-line (input first-line-end first-line-tokens
+                                        cursor-token first-line-incomplete
+                                        delimiters)
+  (if (= first-line-end (length input))
+      (%make-tokenization-result first-line-tokens cursor-token t)
+      (let ((consumption
+              (%consume-here-docs-result input
+                                         (%line-start-after input first-line-end)
+                                         delimiters)))
+        (%tokenize-here-doc-tail
+         input
+         (%here-doc-consumption-next-position consumption)
+         (%replace-here-doc-targets
+          first-line-tokens
+          (%here-doc-consumption-bodies consumption))
+         cursor-token
+         (or first-line-incomplete
+             (%here-doc-consumption-incomplete-p consumption))))))
+
 (defun %tokenize-here-doc-aware (input cursor-pos)
   (let* ((first-line-end (%line-end-position input 0))
-         (first-line (subseq input 0 first-line-end)))
-    (multiple-value-bind (first-line-tokens cursor-token first-line-incomplete)
-        (tokenize first-line :cursor-pos cursor-pos)
-      (let ((delimiters (%here-doc-delimiters first-line-tokens)))
-        (if delimiters
-            (if (= first-line-end (length input))
-                (values first-line-tokens cursor-token t)
-                (multiple-value-bind (bodies next-pos here-doc-incomplete)
-                    (%consume-here-docs input
-                                        (%line-start-after input first-line-end)
-                                        delimiters)
-                  (let ((tokens (%replace-here-doc-targets first-line-tokens bodies)))
-                    (if (%blank-input-from-position-p input next-pos)
-                        (values tokens
-                                cursor-token
-                                (or first-line-incomplete here-doc-incomplete))
-                        (multiple-value-bind (tail-tokens tail-cursor-token
-                                              tail-incomplete)
-                            (%tokenize-here-doc-aware (subseq input next-pos)
-                                                      nil)
-                          (values (append tokens
-                                          (list (%synthetic-newline-token next-pos))
-                                          (%offset-tokens tail-tokens next-pos))
-                                  (or cursor-token tail-cursor-token)
-                                  (or first-line-incomplete
-                                      here-doc-incomplete
-                                      tail-incomplete)))))))
-            (tokenize input :cursor-pos cursor-pos))))))
+         (first-line (subseq input 0 first-line-end))
+         (first-line-result
+           (tokenize first-line :cursor-pos cursor-pos))
+         (first-line-tokens
+           (tokenization-result-tokens first-line-result))
+         (delimiters (%here-doc-delimiters first-line-tokens)))
+    (if delimiters
+        (%tokenize-here-doc-command-line
+         input
+         first-line-end
+         first-line-tokens
+         (tokenization-result-cursor-token first-line-result)
+         (tokenization-result-incomplete-p first-line-result)
+         delimiters)
+        (tokenize input :cursor-pos cursor-pos))))

@@ -9,7 +9,8 @@
 ## Checklist
 
 - [ ] Added or updated tests under `tests/`
-- [ ] `nix flake check` passes locally (build + full suite + smoke tests)
+- [ ] `nix flake check` passes locally
+- [ ] For OS-interactive changes, the non-sandboxed integration suite passes
 - [ ] Tests are hermetic (no dependence on cwd, terminal size, or environment)
 - [ ] Updated `CHANGELOG.md` under `[Unreleased]`
 - [ ] Followed the layering in `CONTRIBUTING.md` (domain has no I/O)

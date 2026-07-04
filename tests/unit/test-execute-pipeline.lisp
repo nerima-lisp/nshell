@@ -69,7 +69,7 @@
 (test execute-pipeline-use-case-expands-command-position-word
   "The public pipeline API expands variables in command position before spawning."
   (with-os-environment-variable ("NSHELL_PIPELINE_CMD" "printf")
-    (let* ((ast (nshell.domain.parsing:make-command-node
+      (let* ((ast (nshell.domain.parsing:make-command-node
                  "$NSHELL_PIPELINE_CMD"
                  (list "%s" "pipeline-api")))
            (code nil)
@@ -77,7 +77,7 @@
                      (setf code
                            (nshell.application:execute-pipeline-use-case ast nil)))))
       (is (= 0 code))
-      (is (string= (format nil "pipeline-api~%") output)))))
+      (is (string= "pipeline-api" output)))))
 
 (test execute-pipeline-use-case-rejects-multi-field-command-position-expansion
   "The public pipeline API rejects ambiguous expanded command names."

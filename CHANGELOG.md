@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   evidence, vi visual selection, here-document, and here-string support.
 - README testing and contribution guidance now distinguishes hermetic Nix checks
   from full dev-shell integration coverage and links security reporting.
+- Added `PUBLIC_READINESS.md` to make the world-level interactive-shell release
+  bar, evidence requirements, and remaining public gaps explicit.
+- CONTRIBUTING and the PR checklist now distinguish hermetic checks from
+  non-sandboxed OS-interactive integration coverage.
 - CONTRIBUTING now includes a release checklist for CI gates, binary smoke
   checks, public docs, manual tag/ref consistency, tarball contents, checksums,
   and changelog hygiene.

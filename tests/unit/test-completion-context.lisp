@@ -30,6 +30,17 @@
     (is (not (nshell.domain.completion:completion-context-command-position-p context)))
     (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
 
+(test completion-context-for-leading-assignment-command-prefix-stays-command-position
+  (let ((context (nshell.domain.completion:completion-context-for "FOO=bar gi")))
+    (is (string= "gi"
+                 (nshell.domain.completion:completion-context-command context)))
+    (is (string= ""
+                 (nshell.domain.completion:completion-context-argument-prefix context)))
+    (is (equal '()
+               (nshell.domain.completion:completion-context-argument-words context)))
+    (is (nshell.domain.completion:completion-context-command-position-p context))
+    (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
+
 (test completion-context-for-respects-command-separators
   (dolist (case '(("echo ignored && git ch" "git" "ch")
                   ("echo ignored || git ch" "git" "ch")
@@ -85,6 +96,58 @@
                (eq :file
                    (nshell.domain.completion:candidate-kind (first candidates)))))))))
 
+(test completion-command-position-p-classifies-word-state
+  (let ((command (nshell.domain.completion::%make-completion-word "git" 0 3))
+        (argument (nshell.domain.completion::%make-completion-word "status" 4 10)))
+    (is (nshell.domain.completion::%completion-command-position-p nil nil 0))
+    (is (nshell.domain.completion::%completion-command-position-p command command 3))
+    (is (not (nshell.domain.completion::%completion-command-position-p command nil 4)))
+    (is (not (nshell.domain.completion::%completion-command-position-p
+              command argument 10)))))
+
+(test project-completion-command-word-skips-leading-assignments
+  (let* ((assignment (nshell.domain.completion::%make-completion-word "FOO=bar" 0 7))
+         (command (nshell.domain.completion::%make-completion-word "git" 8 11))
+         (projection
+           (nshell.domain.completion::project-completion-command-word
+            "FOO=bar git"
+            (list assignment command))))
+    (is (eq command
+            (nshell.domain.completion::completion-command-word-projection-word
+             projection)))
+    (is (eq command
+            (nshell.domain.completion::command-word
+             "FOO=bar git"
+             (list assignment command))))))
+
+(test latest-completion-word-projects-current-word-boundary
+  (let ((first-word (nshell.domain.completion::%make-completion-word "git" 0 3))
+        (last-word (nshell.domain.completion::%make-completion-word "status" 4 10)))
+    (is (null
+         (nshell.domain.completion::completion-word-stream-projection-latest-word
+          (nshell.domain.completion::project-completion-word-stream '()))))
+    (is (null (nshell.domain.completion::latest-completion-word '())))
+    (is (eq last-word
+            (nshell.domain.completion::completion-word-stream-projection-latest-word
+             (nshell.domain.completion::project-completion-word-stream
+              (list first-word last-word)))))
+    (is (eq last-word
+            (nshell.domain.completion::latest-completion-word
+             (list first-word last-word))))))
+
+(test completion-context-constructors-are-internal-boundaries
+  "Completion context construction should not expose legacy unprefixed helper names."
+  (is (not (fboundp 'nshell.domain.completion::make-completion-context)))
+  (is (not (fboundp 'nshell.domain.completion::make-completion-word)))
+  (is (not (fboundp 'nshell.domain.completion::make-completion-input-analysis)))
+  (is (not (fboundp 'nshell.domain.completion::make-completion-command-word-projection)))
+  (is (not (fboundp 'nshell.domain.completion::make-completion-word-stream-projection)))
+  (is (fboundp 'nshell.domain.completion::%make-completion-context))
+  (is (fboundp 'nshell.domain.completion::%make-completion-word))
+  (is (fboundp 'nshell.domain.completion::%make-completion-input-analysis))
+  (is (fboundp 'nshell.domain.completion::%make-completion-command-word-projection))
+  (is (fboundp 'nshell.domain.completion::%make-completion-word-stream-projection)))
+
 (test completion-context-word-like-token-p-returns-canonical-booleans
   (is (eq t (nshell.domain.completion::word-like-token-p
              (nshell.domain.parsing:make-token :word "git"))))
@@ -115,27 +178,33 @@
 
 (test command-segment-tokens-returns-tokens-after-last-separator
   "command-segment-tokens strips everything up to and including the last separator."
-  (flet ((seg (input)
-           (nshell.domain.completion::command-segment-tokens
+  (flet ((tokens (input)
+           (nshell.domain.parsing:tokenization-result-tokens
             (nshell.domain.parsing:tokenize input))))
-    ;; no separator: whole token list returned
-    (is (= 2 (length (seg "git checkout"))))
-    ;; after &&: only "git" and "ch" returned
-    (is (= 2 (length (seg "echo a && git ch"))))
-    ;; after semicolon
-    (is (= 1 (length (seg "a ; b"))))))
+    (flet ((seg (input)
+             (nshell.domain.completion::command-segment-tokens
+              (tokens input))))
+      ;; no separator: whole token list returned
+      (is (= 2 (length (seg "git checkout"))))
+      ;; after &&: only "git" and "ch" returned
+      (is (= 2 (length (seg "echo a && git ch"))))
+      ;; after semicolon
+      (is (= 1 (length (seg "a ; b")))))))
 
 (test shell-completion-words-merges-adjacent-word-tokens
   "shell-completion-words combines adjacent word-like tokens into single logical words."
-  (flet ((words (input)
-           (mapcar #'nshell.domain.completion::completion-word-value
-                   (nshell.domain.completion::shell-completion-words
-                    (nshell.domain.parsing:tokenize input)))))
-    (is (equal '("git" "checkout") (words "git checkout")))
-    ;; pipe is not word-like so it triggers a flush
-    (is (equal '("ls" "foo") (words "ls | foo")))
-    ;; multiple args
-    (is (equal '("git" "--color" "status") (words "git --color status")))))
+  (flet ((tokens (input)
+           (nshell.domain.parsing:tokenization-result-tokens
+            (nshell.domain.parsing:tokenize input))))
+    (flet ((words (input)
+             (mapcar #'nshell.domain.completion::completion-word-value
+                     (nshell.domain.completion::shell-completion-words
+                      (tokens input)))))
+      (is (equal '("git" "checkout") (words "git checkout")))
+      ;; pipe is not word-like so it triggers a flush
+      (is (equal '("ls" "foo") (words "ls | foo")))
+      ;; multiple args
+      (is (equal '("git" "--color" "status") (words "git --color status"))))))
 
 (test pbt-filesystem-redirection-completion-preserves-prefix
   (check-property (:trials 50)
@@ -193,6 +262,13 @@
     ;; single slash preserved (only-separator case)
     (is (string= "/" (trim "/")))))
 
+(test entry-path-name-falls-back-to-directory-tail-component
+  "entry-path-name uses the final directory component when no file component exists."
+  (flet ((entry-name (path) (nshell.domain.completion::entry-path-name path)))
+    (is (string= "project"
+                 (entry-name (make-pathname :directory '(:absolute "tmp" "project")))))
+    (is (null (entry-name (make-pathname :directory '(:absolute)))))))
+
 (test split-file-completion-prefix-splits-on-last-slash
   "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."
   (flet ((split (s)
@@ -200,4 +276,27 @@
             (nshell.domain.completion::split-file-completion-prefix s))))
     (is (equal '("" "foo")      (split "foo")))
     (is (equal '("/usr/" "bin") (split "/usr/bin")))
-    (is (equal '("src/" "")     (split "src/")))))
+    (is (equal '("src/" "")     (split "src/"))))
+  (let ((projection
+          (nshell.domain.completion::project-file-completion-prefix "src/main")))
+    (is (string= "src/"
+                 (nshell.domain.completion::file-completion-prefix-projection-directory-prefix
+                  projection)))
+    (is (string= "main"
+                 (nshell.domain.completion::file-completion-prefix-projection-file-prefix
+                  projection)))))
+
+(test filesystem-candidate-set-add-deduplicates-by-text
+  (let* ((set (nshell.domain.completion::make-filesystem-candidate-set))
+         (first (nshell.domain.completion:make-candidate "bin/tool"
+                                                         :kind :file
+                                                         :score 60))
+         (duplicate (nshell.domain.completion:make-candidate "bin/tool"
+                                                             :kind :directory
+                                                             :score 70)))
+    (is (eq set (nshell.domain.completion::filesystem-candidate-set-add set first)))
+    (is (eq set (nshell.domain.completion::filesystem-candidate-set-add set duplicate)))
+    (let ((candidates
+            (nshell.domain.completion::filesystem-candidate-set-candidates set)))
+      (is (= 1 (length candidates)))
+      (is (eq first (first candidates))))))

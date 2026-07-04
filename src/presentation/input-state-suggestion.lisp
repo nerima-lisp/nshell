@@ -2,6 +2,7 @@
 
 (in-package #:nshell.presentation)
 
+
 (defun suggestion-word-like-token-p (token)
   (not (null (member (nshell.domain.parsing:token-type token)
                      '(:word :error)
@@ -91,13 +92,16 @@ fish-style autosuggestion word acceptance for tails such as \" status --short\".
         end
         (or (suggestion-compact-redirection-end suggestion pos)
             (handler-case
-                (multiple-value-bind (tokens)
-                    (nshell.domain.parsing:tokenize suggestion)
-                  (let ((first-token
-                          (suggestion-first-token-at-or-after tokens pos)))
-                    (if first-token
-                        (suggestion-token-accept-end tokens first-token)
-                        end)))
+                (let* ((tokenization
+                         (nshell.domain.parsing:tokenize suggestion))
+                       (tokens
+                         (nshell.domain.parsing:tokenization-result-tokens
+                          tokenization))
+                       (first-token
+                         (suggestion-first-token-at-or-after tokens pos)))
+                  (if first-token
+                      (suggestion-token-accept-end tokens first-token)
+                      end))
               (error ()
                 (shell-token-end suggestion pos)))))))
 

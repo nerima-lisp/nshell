@@ -94,7 +94,7 @@
         # Verify the default package compiles and builds successfully
         build = self.packages.${system}.default;
 
-        # Run the full test suite (332 tests)
+        # Run the full test suite
         test = pkgs.sbcl.buildASDFSystem {
           pname = "nshell-test-check";
           version = "0.4.0";
@@ -177,7 +177,7 @@
               alias test='sbcl --noinform --eval "(require :asdf)" --eval "(push (truename \"./\") asdf:*central-registry*)" --eval "(asdf:test-system :nshell/test)" --quit'
               echo ""
               echo "nshell development environment"
-              echo "  test  - Run the nshell test suite (332 tests)"
+              echo "  test  - Run the nshell test suite"
               echo "  sbcl  - Interactive Common Lisp (with fiveam)"
               echo ""
             '';

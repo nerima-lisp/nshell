@@ -1,6 +1,7 @@
 ; Builtin registry, path resolution, and command dispatch.
 (in-package #:nshell.application)
 
+
 (defvar *builtin-registry* (make-hash-table :test #'equal)
   "Registry mapping builtin command names to handler functions.")
 

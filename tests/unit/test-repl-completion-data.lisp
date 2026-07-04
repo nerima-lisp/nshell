@@ -31,6 +31,12 @@
         command)
     (is (equal (getf entry :flags)
                (getf (rest repl-entry) :flags))
+        command)
+    (is (equal (getf entry :option-values)
+               (getf (rest repl-entry) :option-values))
+        command)
+    (is (equal (getf entry :exclusive-options)
+               (getf (rest repl-entry) :exclusive-options))
         command)))
 
 (defun %assert-builtin-catalog-alignment (catalog help-entries repl-specs)
@@ -65,6 +71,98 @@
    nshell.domain.completion::+builtin-command-catalog+
    (nshell.domain.completion:builtin-help-entries)
    (%repl-completion-command-specs)))
+
+(test catalog-command-spec-projects-completion-metadata
+  "Catalog rows should project option metadata into REPL completion specs without knowledge-base involvement."
+  (let* ((catalog (list (list :command "zz"
+                              :description "synthetic command"
+                              :subcommands (list "run"
+                                                 (list :name "test"
+                                                       :description "run tests"))
+                              :flags '("--mode" "--json" "--yaml")
+                              :option-values '(("--mode" "fast" "safe"))
+                              :exclusive-options '(("--json" "--yaml")))))
+         (spec (first (nshell.domain.completion::completion-command-specs-from-catalog
+                       catalog))))
+    (is (equal "zz" (first spec)))
+    (is (equal '("run" "test") (getf (rest spec) :subcommands)))
+    (is (equal '("--mode" "--json" "--yaml") (getf (rest spec) :flags)))
+    (is (equal '(("--mode" "fast" "safe"))
+               (getf (rest spec) :option-values)))
+    (is (equal '(("--json" "--yaml"))
+               (getf (rest spec) :exclusive-options)))
+    (is (string= "synthetic command"
+                 (getf (rest spec) :description)))))
+
+(test catalog-command-projection-boundary-feeds-all-derived-data
+  "Catalog rows should be converted once before deriving help entries, completion specs, and rule facts."
+  (let* ((entry (list :command "zz"
+                     :synopsis "zz [subcommand]"
+                     :description "synthetic command"
+                     :subcommands (list "run"
+                                        (list :name "test"
+                                              :description "run tests"))
+                     :flags '("--mode")
+                     :option-values '(("--mode" "fast" "safe"))
+                     :exclusive-options '(("--json" "--yaml"))))
+         (projection (nshell.domain.completion::catalog-entry-command-projection
+                      entry)))
+    (is (equal "zz"
+               (nshell.domain.completion::catalog-command-projection-command
+                projection)))
+    (is (equal '("run" (:name "test" :description "run tests"))
+               (nshell.domain.completion::catalog-command-projection-subcommands
+                projection)))
+    (is (equal '(:command "zz"
+                 :synopsis "zz [subcommand]"
+                 :description "synthetic command")
+               (nshell.domain.completion::catalog-help-entry projection)))
+    (is (equal '("zz"
+                 :subcommands ("run" "test")
+                 :flags ("--mode")
+                 :option-values (("--mode" "fast" "safe"))
+                 :exclusive-options (("--json" "--yaml"))
+                 :description "synthetic command")
+               (nshell.domain.completion::catalog-completion-command-spec
+                projection)))
+    (is (equal '((nshell.domain.completion::completes "zz" "zz")
+                 (nshell.domain.completion::describes "zz" "synthetic command")
+                 (nshell.domain.completion::completes "zz" "run")
+                 (nshell.domain.completion::completes "zz" "test")
+                 (nshell.domain.completion::describes "test" "run tests")
+                 (nshell.domain.completion::has-flag "zz" "--mode"))
+               (nshell.domain.completion::catalog-command-with-subcommand-rule-facts
+                projection)))))
+
+(test command-catalog-entry-projection-boundaries-preserve-explicit-empty-properties
+  "Static catalog normalization should preserve explicitly present NIL metadata."
+  (let ((entry (nshell.domain.completion::command-catalog-entry
+                (list :command "zz"
+                      :description "synthetic command"
+                      :flags nil
+                      :option-values nil))))
+    (is (equal "zz" (nshell.domain.completion::catalog-entry-command entry)))
+    (is (nshell.domain.completion::catalog-entry-property-present-p entry :flags))
+    (is (nshell.domain.completion::catalog-entry-property-present-p entry :option-values))
+    (is (equal (list :flags nil)
+               (nshell.domain.completion::catalog-entry-property entry :flags)))
+    (let ((flags-projection
+            (nshell.domain.completion::catalog-entry-property-projection
+             entry :flags))
+          (synopsis-projection
+            (nshell.domain.completion::catalog-entry-property-projection
+             entry :synopsis)))
+      (is (eq :flags
+              (nshell.domain.completion::catalog-entry-property-key
+               flags-projection)))
+      (is (nshell.domain.completion::catalog-entry-property-projection-present-p
+           flags-projection))
+      (is (not (nshell.domain.completion::catalog-entry-property-projection-present-p
+                synopsis-projection)))
+      (is (null (nshell.domain.completion::catalog-entry-property-projection-value
+                 flags-projection))))
+    (is (equal '(:synopsis :description :subcommands :flags :option-values :exclusive-options)
+               (nshell.domain.completion::command-catalog-preserved-properties)))))
 
 (test pbt-builtin-catalog-projects-into-help-and-repl-seed
   "Each builtin catalog entry should project consistently into help and REPL seed data."
@@ -143,9 +241,21 @@
                 (completion-texts
                  (nshell.domain.completion:complete kb "git sw"))
                 :test #'string=))
+    (is (member "pr"
+                (completion-texts
+                 (nshell.domain.completion:complete kb "gh pr"))
+                :test #'string=))
     (is (member "--tls"
                 (completion-texts
                  (nshell.domain.completion:complete kb "docker --t"))
+                :test #'string=))
+    (is (member "--request"
+                (completion-texts
+                 (nshell.domain.completion:complete kb "curl --req"))
+                :test #'string=))
+    (is (member "--color"
+                (completion-texts
+                 (nshell.domain.completion:complete kb "rg --colo"))
                 :test #'string=))))
 
 (test type-command-flags-follow-the-catalog

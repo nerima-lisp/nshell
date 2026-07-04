@@ -1,4 +1,6 @@
 (in-package #:nshell.infrastructure.persistence)
+
+
 (defun config-file-path () (merge-pathnames ".nshellrc" (user-homedir-pathname)))
 (defun load-config ()
   (let ((path (config-file-path)))

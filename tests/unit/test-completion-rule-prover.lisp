@@ -74,6 +74,62 @@
       (is (= 1 (length solutions)))
       (is (string= "ls" (solution-binding '?command (first solutions)))))))
 
+(test first-solution-value-projects-rule-solution-boundary
+  (let ((solutions (list (list (cons '?description "primary"))
+                         (list (cons '?description "fallback")))))
+    (let ((binding
+            (nshell.domain.completion::project-rule-solution-binding
+             '?description
+             (first solutions)))
+          (missing
+            (nshell.domain.completion::project-rule-solution-binding
+             '?missing
+             (first solutions)))
+          (solution-set
+            (nshell.domain.completion::project-rule-solution-set solutions)))
+      (is (string= "primary"
+                   (nshell.domain.completion::rule-solution-binding-projection-value
+                    binding)))
+      (is (nshell.domain.completion::rule-solution-binding-projection-present-p
+           binding))
+      (is (not (nshell.domain.completion::rule-solution-binding-projection-present-p
+                missing)))
+      (is (equal (first solutions)
+                 (nshell.domain.completion::rule-solution-set-projection-first-solution
+                  solution-set))))
+    (is (string= "primary"
+                 (nshell.domain.completion::first-solution-value
+                  '?description solutions)))
+    (is (null (nshell.domain.completion::first-solution-value
+               '?description nil)))))
+
+(test rule-data-projection-boundaries-name-domain-parts
+  (let ((fact (nshell.domain.completion::make-fact-from-spec
+               '(completes "git" "status")))
+        (rule (nshell.domain.completion::make-rule-from-spec
+               '((completes "git" ?completion) (git-subcommand ?completion))))
+        (goal '(test-builtin-string= "git" "git")))
+    (is (eq 'completes (nshell.domain.completion::fact-predicate fact)))
+    (is (equal '("git" "status") (nshell.domain.completion::fact-args fact)))
+    (is (equal '(completes "git" ?completion)
+               (nshell.domain.completion::rule-head rule)))
+    (is (equal '((git-subcommand ?completion))
+               (nshell.domain.completion::rule-body rule)))
+    (is (eq 'test-builtin-string=
+            (nshell.domain.completion::goal-predicate goal)))
+    (is (equal '("git" "git")
+               (nshell.domain.completion::goal-arguments goal)))))
+
+(test logic-form-pair-projects-conversion-boundary
+  (let* ((env (make-hash-table :test #'eq))
+         (converted (nshell.domain.completion::convert-logic-variables
+                     '(?value . ?value)
+                     env))
+         (head (nshell.domain.completion::logic-form-pair-head converted))
+         (tail (nshell.domain.completion::logic-form-pair-tail converted)))
+    (is (nshell.domain.parsing:var-p head))
+    (is (eq head tail))))
+
 (test no-solution-for-unsatisfiable-goal
   (let ((kb (make-empty-rule-kb)))
     (nshell.domain.completion:assert-fact!
@@ -158,6 +214,29 @@
                                          shallow)
                        :test #'string=)))
       (is (member "format" (mapcar (lambda (solution)
-                                      (solution-binding '?target solution))
-                                    deep)
-                  :test #'string=)))))
+                                       (solution-binding '?target solution))
+                                     deep)
+                   :test #'string=)))))
+
+(test repeated-rule-expansion-uses-fresh-rule-variables
+  "Each rule application gets its own logic-variable environment."
+  (let ((kb (make-empty-rule-kb)))
+    (dolist (edge '(("git" "commit")
+                    ("commit" "--amend")))
+      (nshell.domain.completion:assert-fact!
+       kb
+       (nshell.domain.completion:make-fact :predicate 'edge :args edge)))
+    (nshell.domain.completion:assert-rule!
+     kb
+     (nshell.domain.completion:make-rule :head '(step ?from ?to)
+                                          :body '((edge ?from ?to))))
+    (nshell.domain.completion:assert-rule!
+     kb
+     (nshell.domain.completion:make-rule :head '(two-step ?from ?to)
+                                          :body '((step ?from ?mid)
+                                                  (step ?mid ?to))))
+    (let ((solutions
+            (nshell.domain.completion:prove-all kb '(two-step "git" ?target)
+                                                :max-depth 4)))
+      (is (= 1 (length solutions)))
+      (is (string= "--amend" (solution-binding '?target (first solutions)))))))

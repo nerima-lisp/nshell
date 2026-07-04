@@ -10,15 +10,145 @@
 
 (test parse-fd-redirects-tokenize-and-need-no-spurious-target
   "fd-prefixed and combined redirects parse cleanly; 2>&1 needs no file target."
+  (is (nshell.domain.parsing::%redirect-targetless-p "2>&1"))
   (with-complete-command-line (result ast "cat x 2>err.txt")
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (string= "cat" (nshell.domain.parsing:command-node-command ast))))
   (with-complete-command-line (result ast "cat x 2>&1")
     (is (null (nshell.domain.parsing:parse-errors result)))
-    (is (string= "cat" (nshell.domain.parsing:command-node-command ast))))
+    (is (string= "cat" (nshell.domain.parsing:command-node-command ast)))
+    (is (equal '("x" ("2>&1" . nil))
+               (nshell.domain.parsing:command-node-args ast))))
   (with-complete-command-line (result ast "make &>build.log")
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (string= "make" (nshell.domain.parsing:command-node-command ast)))))
+
+(test parser-data-query-functions-handle-boundary-values
+  "Parser data lookups should reject absent domain values without type errors."
+  (let ((redirect-facts (nshell.domain.parsing::%redirect-facts "2>&1"))
+        (pipe-facts (nshell.domain.parsing::%separator-facts :pipe)))
+    (is (null (nshell.domain.parsing::%redirect-facts nil)))
+    (is (null (nshell.domain.parsing::%redirect-target-policy nil)))
+    (is (nshell.domain.parsing::%redirect-facts-p redirect-facts))
+    (is (string= "2>&1"
+                 (nshell.domain.parsing::%redirect-facts-text
+                  redirect-facts)))
+    (is (eq :2>&1
+            (nshell.domain.parsing::%redirect-facts-kind
+             redirect-facts)))
+    (is (nshell.domain.parsing::%redirect-facts-fd-dup-p redirect-facts))
+    (is (null (nshell.domain.parsing::%redirect-facts "not-a-redirect")))
+    (is (null (nshell.domain.parsing::%separator-from-token-type :unknown)))
+    (is (nshell.domain.parsing::%separator-facts-p pipe-facts))
+    (is (eq :pipe
+            (nshell.domain.parsing::%separator-facts-token-type pipe-facts)))
+    (is (string= "|"
+                 (nshell.domain.parsing::%separator-facts-text pipe-facts)))
+    (is (nshell.domain.parsing::%separator-facts-continues-p pipe-facts))
+    (is (not (nshell.domain.parsing::%continuation-separator-p nil)))
+    (is (null (nshell.domain.parsing::%separator-facts nil)))
+    (is (null (nshell.domain.parsing::%separator-text nil)))))
+
+(test redirect-spec-entry-projects-table-shape
+  "Redirect spec entries isolate raw table shape from parser data queries."
+  (let ((entry (nshell.domain.parsing::%redirect-spec-entry "2>&1")))
+    (is (nshell.domain.parsing::%redirect-spec-entry-p entry))
+    (is (string= "2>&1"
+                 (nshell.domain.parsing::%redirect-spec-entry-text entry)))
+    (is (eq :2>&1
+            (nshell.domain.parsing::%redirect-spec-entry-kind entry)))
+    (is (null (nshell.domain.parsing::%redirect-spec-entry nil)))
+    (is (null (nshell.domain.parsing::%redirect-spec-entry
+               "not-a-redirect")))))
+
+(test redirect-target-policy-projects-target-requirement
+  "Redirect target policy owns which redirect specs consume a target."
+  (let ((fd-dup-policy
+          (nshell.domain.parsing::%redirect-target-policy "2>&1"))
+        (output-policy
+          (nshell.domain.parsing::%redirect-target-policy ">"))
+        (stderr-policy
+          (nshell.domain.parsing::%redirect-target-policy "2>")))
+    (is (nshell.domain.parsing::%redirect-target-policy-p fd-dup-policy))
+    (is (eq :2>&1
+            (nshell.domain.parsing::%redirect-target-policy-kind
+             fd-dup-policy)))
+    (is (not (nshell.domain.parsing::%redirect-target-policy-target-required-p
+              fd-dup-policy)))
+    (is (nshell.domain.parsing::%redirect-target-policy-target-required-p
+         output-policy))
+    (is (nshell.domain.parsing::%redirect-target-policy-target-required-p
+         stderr-policy))
+    (is (nshell.domain.parsing::%redirect-target-required-p ">"))
+    (is (nshell.domain.parsing::%redirect-target-required-p "2>"))
+    (is (nshell.domain.parsing::%redirect-targetless-p "2>&1"))
+    (is (null (nshell.domain.parsing::%redirect-target-policy nil)))
+    (is (null (nshell.domain.parsing::%redirect-target-policy
+               "not-a-redirect")))
+    (is (null (nshell.domain.parsing::%redirect-target-required-p nil)))
+    (is (null (nshell.domain.parsing::%redirect-targetless-p
+               "not-a-redirect")))))
+
+(test separator-rule-entry-projects-separator-facts
+  "Separator rule entries are the projection boundary for parser separator specs."
+  (let ((pipe-entry (nshell.domain.parsing::%separator-rule-entry :pipe))
+        (pipe-facts (nshell.domain.parsing::%separator-facts :pipe)))
+    (is (nshell.domain.parsing::%separator-rule-entry-p pipe-entry))
+    (is (eq :pipe
+            (nshell.domain.parsing::%separator-rule-entry-kind pipe-entry)))
+    (is (eq :pipe
+            (nshell.domain.parsing::%separator-rule-entry-token-type
+             pipe-entry)))
+    (is (string= "|"
+                 (nshell.domain.parsing::%separator-rule-entry-text
+                  pipe-entry)))
+    (is (nshell.domain.parsing::%separator-rule-entry-continues-p
+         pipe-entry))
+    (is (eq :pipe
+            (nshell.domain.parsing::%separator-facts-kind pipe-facts)))
+    (is (eq :pipe
+            (nshell.domain.parsing::%separator-facts-token-type pipe-facts)))
+    (is (string= "|"
+                 (nshell.domain.parsing::%separator-facts-text pipe-facts)))
+    (is (nshell.domain.parsing::%separator-facts-continues-p pipe-facts))))
+
+(test separator-rule-entry-projects-token-type-lookup
+  "Separator token-type lookup should not expose raw rule table shape."
+  (let ((entry
+          (nshell.domain.parsing::%separator-rule-entry-from-token-type
+           :semicolon)))
+    (is (nshell.domain.parsing::%separator-rule-entry-p entry))
+    (is (eq :semi
+            (nshell.domain.parsing::%separator-rule-entry-kind entry)))
+    (is (eq :semicolon
+            (nshell.domain.parsing::%separator-rule-entry-token-type entry)))
+    (is (string= ";"
+                 (nshell.domain.parsing::%separator-rule-entry-text entry)))
+    (is (not (nshell.domain.parsing::%separator-rule-entry-continues-p
+              entry)))
+    (is (eq :semi
+            (nshell.domain.parsing::%separator-from-token-type :semicolon)))
+    (is (null
+         (nshell.domain.parsing::%separator-rule-entry-from-token-type nil)))))
+
+(test separator-facts-preserve-unknown-separator-fallback
+  "Unknown non-nil separators keep display text without becoming continuations."
+  (let ((entry (nshell.domain.parsing::%separator-rule-entry :custom-separator))
+        (facts (nshell.domain.parsing::%separator-facts :custom-separator)))
+    (is (nshell.domain.parsing::%separator-rule-entry-p entry))
+    (is (eq :custom-separator
+            (nshell.domain.parsing::%separator-rule-entry-kind entry)))
+    (is (null (nshell.domain.parsing::%separator-rule-entry-token-type entry)))
+    (is (string= "custom-separator"
+                 (nshell.domain.parsing::%separator-rule-entry-text entry)))
+    (is (not (nshell.domain.parsing::%separator-rule-entry-continues-p
+              entry)))
+    (is (eq :custom-separator
+            (nshell.domain.parsing::%separator-facts-kind facts)))
+    (is (null (nshell.domain.parsing::%separator-facts-token-type facts)))
+    (is (string= "custom-separator"
+                 (nshell.domain.parsing::%separator-facts-text facts)))
+    (is (not (nshell.domain.parsing::%separator-facts-continues-p facts)))))
 
 (test parse-keeps-dollar-substitutions-attached-to-word
   "$( ) and $(( )) stay attached to surrounding word characters as one argument."
@@ -48,6 +178,28 @@
     (is (null
          (nshell.domain.parsing::command-node-command-quote-style ast)))))
 
+(test command-arg-projects-cons-quote-style-boundary
+  "Command args should project raw cons storage before exposing value and quote style."
+  (let ((plain (nshell.domain.parsing::%command-arg-from-raw "plain"))
+        (quoted (nshell.domain.parsing::%command-arg-from-raw
+                 (cons "$FOO" :double)))
+        (unquoted-redirect
+          (nshell.domain.parsing::%command-arg-from-raw
+           (cons "target.txt" nil))))
+    (is (nshell.domain.parsing::%command-arg-p plain))
+    (is (string= "plain"
+                 (nshell.domain.parsing::%command-arg-value plain)))
+    (is (null (nshell.domain.parsing::%command-arg-quote-style plain)))
+    (is (string= "$FOO"
+                 (nshell.domain.parsing::%command-arg-value quoted)))
+    (is (eq :double
+            (nshell.domain.parsing::%command-arg-quote-style quoted)))
+    (is (string= "target.txt"
+                 (nshell.domain.parsing::%command-arg-value
+                  unquoted-redirect)))
+    (is (null (nshell.domain.parsing::%command-arg-quote-style
+               unquoted-redirect)))))
+
 (test parse-pipeline
   (with-complete-ast (ast "ls | grep foo")
     (is (nshell.domain.parsing:pipeline-node-p ast))
@@ -62,6 +214,544 @@
     (is (string= "printf %s bg-pipe | cat"
                  (nshell.domain.parsing:ast-node->command-line pipeline)))))
 
+(test ast-node-constructors-copy-list-slots
+  "AST constructors should not share mutable list slots with callers."
+  (let* ((args (list "one"))
+         (command (nshell.domain.parsing:make-command-node "echo" args)))
+    (setf (car args) "changed")
+    (is (equal '("one")
+               (nshell.domain.parsing:command-node-args command))))
+  (let* ((left (nshell.domain.parsing:make-command-node "echo" '("left")))
+         (right (nshell.domain.parsing:make-command-node "echo" '("right")))
+         (commands (list left))
+         (pipeline (nshell.domain.parsing:make-pipeline-node commands)))
+    (setf (car commands) right)
+    (is (equal '("left")
+               (nshell.domain.parsing:command-node-args
+                (first (nshell.domain.parsing:pipeline-node-commands pipeline))))))
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("first")))
+         (second-command (nshell.domain.parsing:make-command-node "echo" '("second")))
+         (commands (list first-command))
+         (separators (list :amp))
+         (sequence (nshell.domain.parsing::make-sequence-node commands separators)))
+    (setf (car commands) second-command
+          (car separators) :semi)
+    (is (equal '("first")
+               (nshell.domain.parsing:command-node-args
+                (first (nshell.domain.parsing:sequence-node-commands sequence)))))
+    (is (equal '(:amp)
+               (nshell.domain.parsing:sequence-node-separators sequence)))))
+
+(test sequence-node-command-separator-entries-project-copied-node-state
+  "Sequence traversal should expose command/separator entries without leaking raw pair storage."
+  (let* ((left (nshell.domain.parsing:make-command-node "echo" '("left")))
+         (right (nshell.domain.parsing:make-command-node "echo" '("right")))
+         (sequence (nshell.domain.parsing::make-sequence-node
+                    (list left right)
+                    (list :semi :amp)))
+         (entries (nshell.domain.parsing::%sequence-node-command-separators sequence)))
+    (is (= 2 (length entries)))
+    (is (every #'nshell.domain.parsing::%sequence-node-command-separator-p entries))
+    (is (eq left
+            (nshell.domain.parsing::%sequence-node-command-separator-command
+             (first entries))))
+    (is (eq :semi
+            (nshell.domain.parsing::%sequence-node-command-separator-separator
+             (first entries))))
+    (let ((seen nil))
+      (nshell.domain.parsing::do-sequence-node-command-separator-pairs
+          (command separator sequence)
+        (push (list command separator) seen))
+      (is (equal (list (list right :amp)
+                       (list left :semi))
+                 seen)))))
+
+(test parser-assembly-builds-single-command-boundaries
+  "Parser assembly should keep background metadata out of command nodes."
+  (let* ((command (nshell.domain.parsing:make-command-node "sleep" '("1")))
+         (foreground-ast
+           (nshell.domain.parsing::%build-ast-from-command-list
+            (list (list command nil nil))))
+         (background-ast
+           (nshell.domain.parsing::%build-ast-from-command-list
+            (list (list command :amp nil)))))
+    (is (eq command foreground-ast))
+    (is (nshell.domain.parsing:sequence-node-p background-ast))
+    (is (equal '(:amp)
+               (nshell.domain.parsing:sequence-node-separators background-ast)))
+    (is (eq command
+            (first (nshell.domain.parsing:sequence-node-commands
+                    background-ast))))))
+
+(test parser-assembly-projects-command-list-boundary
+  "Parser assembly should project command-list pairs before AST construction."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
+         (second-command (nshell.domain.parsing:make-command-node "cat" nil))
+         (command-list (list (list first-command :pipe nil)
+                             (list second-command :amp nil)))
+         (assembly
+           (nshell.domain.parsing::%command-list-assembly-from-list
+            command-list)))
+    (is (equal (list first-command second-command)
+               (nshell.domain.parsing::%command-list-assembly-commands
+                assembly)))
+    (is (equal '(:pipe :amp)
+               (nshell.domain.parsing::%command-list-assembly-separators
+                assembly)))
+    (is (eq :amp
+            (nshell.domain.parsing::%command-list-assembly-last-separator
+             assembly)))))
+
+(test parser-assembly-projects-single-command-intent
+  "Single-command assembly should expose command and background intent."
+  (let* ((command (nshell.domain.parsing:make-command-node "sleep" '("1")))
+         (foreground
+           (nshell.domain.parsing::%command-list-assembly-from-list
+            (list (list command nil nil))))
+         (background
+           (nshell.domain.parsing::%command-list-assembly-from-list
+            (list (list command :amp nil)))))
+    (is (eq command
+            (nshell.domain.parsing::%command-list-assembly-single-command
+             foreground)))
+    (is (not (nshell.domain.parsing::%command-list-assembly-background-p
+              foreground)))
+    (is (nshell.domain.parsing::%command-list-assembly-background-p
+         background))
+    (is (eq command
+            (nshell.domain.parsing::%single-command-ast foreground)))
+    (let ((background-ast
+            (nshell.domain.parsing::%single-command-ast background)))
+      (is (nshell.domain.parsing:sequence-node-p background-ast))
+      (is (equal '(:amp)
+                 (nshell.domain.parsing:sequence-node-separators
+                  background-ast)))
+      (is (eq command
+              (first (nshell.domain.parsing:sequence-node-commands
+                      background-ast)))))))
+
+(test parser-assembly-projects-command-separator-pairs
+  "Mixed sequence assembly should expose command boundaries as value objects."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
+         (second-command (nshell.domain.parsing:make-command-node "cat" nil))
+         (pairs (nshell.domain.parsing::%command-separator-pairs
+                 (list first-command second-command)
+                 '(:pipe :and)))
+         (first-pair (first pairs))
+         (second-pair (second pairs)))
+    (is (= 2 (length pairs)))
+    (is (nshell.domain.parsing::%command-separator-pair-p first-pair))
+    (is (eq first-command
+            (nshell.domain.parsing::%command-separator-pair-command
+             first-pair)))
+    (is (eq :pipe
+            (nshell.domain.parsing::%command-separator-pair-separator
+             first-pair)))
+    (is (nshell.domain.parsing::%command-separator-pair-p second-pair))
+    (is (eq second-command
+            (nshell.domain.parsing::%command-separator-pair-command
+             second-pair)))
+    (is (eq :and
+            (nshell.domain.parsing::%command-separator-pair-separator
+             second-pair)))))
+
+(test parser-assembly-projects-mixed-sequence-assembly
+  "Mixed sequence building should consume a projected assembly input."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
+         (second-command (nshell.domain.parsing:make-command-node "grep" '("two")))
+         (third-command (nshell.domain.parsing:make-command-node "wc" nil))
+         (assembly
+           (nshell.domain.parsing::%command-list-assembly-from-list
+            (list (list first-command :pipe nil)
+                  (list second-command :and nil)
+                  (list third-command nil nil))))
+         (mixed
+           (nshell.domain.parsing::%mixed-sequence-assembly-from-command-list-assembly
+            assembly))
+         (pairs
+           (nshell.domain.parsing::%mixed-sequence-assembly-pairs mixed)))
+    (is (nshell.domain.parsing::%mixed-sequence-assembly-p mixed))
+    (is (equal (list first-command second-command third-command)
+               (nshell.domain.parsing::%mixed-sequence-assembly-commands
+                mixed)))
+    (is (equal '(:pipe :and nil)
+               (nshell.domain.parsing::%mixed-sequence-assembly-separators
+                mixed)))
+    (is (= 3 (length pairs)))
+    (is (eq :and
+            (nshell.domain.parsing::%command-separator-pair-separator
+             (second pairs))))))
+
+(test parser-assembly-projects-pipeline-groups
+  "Mixed sequence assembly should project pending pipeline groups before AST construction."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
+         (second-command (nshell.domain.parsing:make-command-node "cat" nil))
+         (single-group
+           (nshell.domain.parsing::%pipeline-group-from-reversed
+            (list first-command)))
+         (pipeline-group
+           (nshell.domain.parsing::%pipeline-group-from-reversed
+            (list second-command first-command)))
+         (pipeline-ast
+           (nshell.domain.parsing::%pipeline-group-ast pipeline-group)))
+    (is (nshell.domain.parsing::%pipeline-group-p single-group))
+    (is (equal (list first-command)
+               (nshell.domain.parsing::%pipeline-group-commands
+                single-group)))
+    (is (eq first-command
+            (nshell.domain.parsing::%pipeline-group-ast single-group)))
+    (is (equal (list first-command second-command)
+               (nshell.domain.parsing::%pipeline-group-commands
+                pipeline-group)))
+    (is (nshell.domain.parsing:pipeline-node-p pipeline-ast))
+    (is (equal (list first-command second-command)
+               (nshell.domain.parsing:pipeline-node-commands
+                pipeline-ast)))))
+
+(test parser-assembly-flushes-pipeline-group-through-value-object
+  "Mixed sequence pipe flushing should expose accumulator state as one value object."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
+         (second-command (nshell.domain.parsing:make-command-node "cat" nil))
+         (flush
+           (nshell.domain.parsing::%flush-mixed-sequence-pipe-group
+            nil
+            (list second-command first-command)))
+         (sequence-commands
+           (nshell.domain.parsing::%mixed-sequence-pipe-flush-sequence-commands
+            flush)))
+    (is (nshell.domain.parsing::%mixed-sequence-pipe-flush-p flush))
+    (is (null
+         (nshell.domain.parsing::%mixed-sequence-pipe-flush-pipe-group
+          flush)))
+    (is (= 1 (length sequence-commands)))
+    (is (nshell.domain.parsing:pipeline-node-p (first sequence-commands)))
+    (is (equal (list first-command second-command)
+               (nshell.domain.parsing:pipeline-node-commands
+                (first sequence-commands))))))
+
+(test parser-assembly-classifies-command-list-policy
+  "Parser assembly policy should classify command-list shape before building AST nodes."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
+         (second-command (nshell.domain.parsing:make-command-node "cat" nil))
+         (third-command (nshell.domain.parsing:make-command-node "wc" nil)))
+    (flet ((policy (command-list)
+             (nshell.domain.parsing::%command-list-assembly-policy
+              (nshell.domain.parsing::%command-list-assembly-from-list
+               command-list))))
+      (is (eq :empty (policy nil)))
+      (is (eq :single-command
+              (policy (list (list first-command nil nil)))))
+      (is (eq :pipeline
+              (policy (list (list first-command :pipe nil)
+                            (list second-command nil nil)))))
+      (is (eq :sequence
+              (policy (list (list first-command :semi nil)
+                            (list second-command nil nil)))))
+      (is (eq :mixed-sequence
+              (policy (list (list first-command :pipe nil)
+                            (list second-command :and nil)
+                            (list third-command nil nil))))))))
+
+(test parser-assembly-decision-keeps-policy-with-projection
+  "Assembly decisions should bind the projected command-list shape to its AST policy."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" nil))
+         (second-command (nshell.domain.parsing:make-command-node "cat" nil))
+         (assembly
+           (nshell.domain.parsing::%command-list-assembly-from-list
+            (list (list first-command :pipe nil)
+                  (list second-command :amp nil))))
+         (decision
+           (nshell.domain.parsing::%command-list-assembly-decision-from-assembly
+            assembly)))
+    (is (nshell.domain.parsing::%command-list-assembly-decision-p decision))
+    (is (eq assembly
+            (nshell.domain.parsing::%command-list-assembly-decision-assembly
+             decision)))
+    (is (eq :pipeline
+            (nshell.domain.parsing::%command-list-assembly-decision-policy
+             decision)))))
+
+(test parser-projects-reduced-command-stream-boundary
+  "Public parser orchestration projects reduced command streams before diagnostics."
+  (let* ((command (nshell.domain.parsing:make-command-node "echo" nil))
+         (separator-token (nshell.domain.parsing:make-token :pipe "|" 5 6))
+         (stream (nshell.domain.parsing::%reduced-command-stream-from-list
+                  (list (list command :pipe separator-token)))))
+    (is (equal (list command)
+               (nshell.domain.parsing::%reduced-command-stream-commands stream)))
+    (is (eq :pipe
+            (nshell.domain.parsing::%reduced-command-stream-last-separator stream)))
+    (is (eq separator-token
+            (nshell.domain.parsing::%reduced-command-stream-last-separator-token
+             stream)))
+    (let* ((input
+             (nshell.domain.parsing::%structural-diagnostics-input-from-stream
+              stream
+              6))
+           (diagnostics-result
+             (nshell.domain.parsing::%parse-structural-diagnostics-for-input
+              input))
+           (diagnostics
+             (nshell.domain.parsing::%structural-diagnostics-diagnostics
+              diagnostics-result)))
+      (is (nshell.domain.parsing::%structural-diagnostics-incomplete-p
+           diagnostics-result))
+      (is (equal '(:trailing-continuation)
+                 (mapcar #'nshell.domain.parsing:parse-diagnostic-kind diagnostics)))
+      (is (eq separator-token
+              (nshell.domain.parsing:parse-diagnostic-token
+               (first diagnostics)))))))
+
+(test parser-projects-command-list-components-boundary
+  "Parser orchestration projects raw reducer triples before stream construction."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" nil))
+         (second-command (nshell.domain.parsing:make-command-node "cat" nil))
+         (separator-token (nshell.domain.parsing:make-token :pipe "|" 5 6))
+         (components
+           (nshell.domain.parsing::%command-list-components-from-list
+            (list (list first-command :pipe separator-token)
+                  (list second-command nil nil)))))
+    (is (nshell.domain.parsing::%command-list-components-p components))
+    (is (equal (list first-command second-command)
+               (nshell.domain.parsing::%command-list-components-commands
+                components)))
+    (is (equal '(:pipe nil)
+               (nshell.domain.parsing::%command-list-components-separators
+                components)))
+    (is (equal (list separator-token nil)
+               (nshell.domain.parsing::%command-list-components-separator-tokens
+                components)))))
+
+(test parser-reduction-projects-token-arguments-at-boundary
+  "Token reduction owns the command argument representation."
+  (let* ((result
+           (nshell.domain.parsing::%reduce-token-stream-result
+            (list (nshell.domain.parsing:make-token :word "echo" 0 4)
+                  (nshell.domain.parsing:make-token :word "$HOME" 5 12 :double)
+                  (nshell.domain.parsing:make-token :redirect ">" 13 14)
+                  (nshell.domain.parsing:make-token :word "out.txt" 15 22)
+                  (nshell.domain.parsing:make-token :redirect "2>&1" 23 27))))
+         (commands
+           (nshell.domain.parsing::%token-reduction-result-commands result)))
+    (is (null (nshell.domain.parsing::%token-reduction-result-errors result)))
+    (is (= 1 (length commands)))
+    (let ((command (first (first commands))))
+      (is (equal '(("$HOME" . :double)
+                   (">" . nil)
+                   "out.txt"
+                   ("2>&1" . nil))
+                 (nshell.domain.parsing:command-node-args command))))))
+
+(test token-reduction-argument-projection-preserves-quote-and-redirect-shapes
+  "Token argument projection owns command-node raw arg shapes."
+  (let* ((plain-token
+           (nshell.domain.parsing:make-token :word "plain" 0 5))
+         (quoted-token
+           (nshell.domain.parsing:make-token :word "$HOME" 6 11 :double))
+         (redirect-token
+           (nshell.domain.parsing:make-token :redirect ">" 12 13))
+         (plain
+           (nshell.domain.parsing::%token-reduction-argument-from-word-token
+            plain-token))
+         (quoted
+           (nshell.domain.parsing::%token-reduction-argument-from-word-token
+            quoted-token))
+         (redirect
+           (nshell.domain.parsing::%token-reduction-argument-from-redirect-token
+            redirect-token)))
+    (is (nshell.domain.parsing::%token-reduction-argument-p plain))
+    (is (equal "plain"
+               (nshell.domain.parsing::%token-reduction-argument-raw-value
+                plain)))
+    (is (equal '("$HOME" . :double)
+               (nshell.domain.parsing::%token-reduction-argument-raw-value
+                quoted)))
+    (is (nshell.domain.parsing::%token-reduction-argument-syntactic-p
+         redirect))
+    (is (equal '(">" . nil)
+               (nshell.domain.parsing::%token-reduction-argument-raw-value
+                redirect)))))
+
+(test parser-reduction-command-entry-projects-state-boundary
+  "Command entry projection owns the reducer's command/separator/token shape."
+  (let* ((state (nshell.domain.parsing::%make-token-reduction-state))
+         (command-token (nshell.domain.parsing:make-token :word "echo" 0 4))
+         (separator-token (nshell.domain.parsing:make-token :pipe "|" 5 6)))
+    (setf (nshell.domain.parsing::%token-reduction-state-current-cmd state) "echo"
+          (nshell.domain.parsing::%token-reduction-state-current-cmd-token state) command-token
+          (nshell.domain.parsing::%token-reduction-state-current-args state) (list "hello")
+          (nshell.domain.parsing::%token-reduction-state-pending-sep state) :pipe
+          (nshell.domain.parsing::%token-reduction-state-pending-sep-token state) separator-token)
+    (destructuring-bind (command separator token)
+        (nshell.domain.parsing::%token-reduction-command-entry-from-state state)
+      (is (string= "echo"
+                   (nshell.domain.parsing:command-node-command command)))
+      (is (equal '("hello")
+                 (nshell.domain.parsing:command-node-args command)))
+      (is (eq :pipe separator))
+      (is (eq separator-token token)))))
+
+(test parser-reduction-result-projects-state-boundary
+  "Token reduction result is the projection boundary for commands and diagnostics."
+  (let* ((separator-token (nshell.domain.parsing:make-token :pipe "|" 7 8))
+         (result
+           (nshell.domain.parsing::%reduce-token-stream-result
+            (list (nshell.domain.parsing:make-token :word "echo" 0 4)
+                  (nshell.domain.parsing:make-token :redirect ">" 5 6)
+                  separator-token))))
+    (is (nshell.domain.parsing::%token-reduction-result-p result))
+    (destructuring-bind (command separator token)
+        (first (nshell.domain.parsing::%token-reduction-result-commands result))
+      (is (string= "echo"
+                   (nshell.domain.parsing:command-node-command command)))
+      (is (equal '((">" . nil))
+                 (nshell.domain.parsing:command-node-args command)))
+      (is (eq :pipe separator))
+      (is (eq separator-token token)))
+    (let ((diagnostic
+            (first (nshell.domain.parsing::%token-reduction-result-errors result))))
+      (is (eq :missing-redirection-target
+              (nshell.domain.parsing:parse-diagnostic-kind diagnostic))))))
+
+(test parser-result-uses-token-reduction-boundary
+  "Parser orchestration should consume token reduction results as the reducer boundary."
+  (let* ((command (nshell.domain.parsing:make-command-node "echo" '("hello")))
+         (separator-token (nshell.domain.parsing:make-token :pipe "|" 11 12))
+         (diagnostic
+           (nshell.domain.parsing::%make-parse-diagnostic
+            :missing-redirection-target "Expected redirect target" 6 7))
+         (reduction
+           (nshell.domain.parsing::%make-token-reduction-result
+            (list (list command :pipe separator-token))
+            (list diagnostic)))
+         (result
+           (nshell.domain.parsing::%parse-result-from-token-reduction-result
+            reduction nil 12)))
+    (is (nshell.domain.parsing:parse-result-incomplete result))
+    (is (member diagnostic
+                (nshell.domain.parsing:parse-errors result)))
+     (is (member :trailing-continuation
+                 (mapcar #'nshell.domain.parsing:parse-diagnostic-kind
+                         (nshell.domain.parsing:parse-errors result))))
+     (let ((ast (nshell.domain.parsing:parse-result-ast result)))
+       (is (nshell.domain.parsing:command-node-p ast))
+       (is (string= "echo"
+                    (nshell.domain.parsing:command-node-command ast))))))
+
+(test parser-here-doc-target-replacement-is-here-doc-specific
+  "Here-doc body replacement is limited to << target words."
+  (let* ((tokens (list (nshell.domain.parsing:make-token :word "cat" 0 3)
+                       (nshell.domain.parsing:make-token :redirect "<<<" 4 7)
+                       (nshell.domain.parsing:make-token :word "inline" 8 14)
+                       (nshell.domain.parsing:make-token :redirect "<<" 15 17)
+                       (nshell.domain.parsing:make-token :word "EOF" 18 21 :single)
+                       (nshell.domain.parsing:make-token :redirect ">" 22 23)
+                       (nshell.domain.parsing:make-token :word "out" 24 27)))
+         (updated (nshell.domain.parsing::%replace-here-doc-targets
+                   tokens
+                   (list (format nil "body~%")))))
+    (is (equal `("cat" "<<<" "inline" "<<" ,(format nil "body~%") ">" "out")
+               (mapcar #'nshell.domain.parsing:token-value updated)))
+    (is (eq :single
+            (nshell.domain.parsing::token-quote-style (fifth updated))))))
+
+(test parser-here-doc-line-projects-text-position-and-newline
+  "Here-doc line scanning returns one explicit line value."
+  (let ((line (nshell.domain.parsing::%read-here-doc-line
+               (format nil "body~%tail")
+               0)))
+    (is (nshell.domain.parsing::%here-doc-line-p line))
+    (is (string= "body"
+                 (nshell.domain.parsing::%here-doc-line-text line)))
+    (is (= 5
+           (nshell.domain.parsing::%here-doc-line-next-position line)))
+    (is (nshell.domain.parsing::%here-doc-line-newline-p line))))
+
+(test parser-here-doc-body-projects-body-position-and-missing-delimiter
+  "Here-doc body consumption returns one explicit body value."
+  (let ((body (nshell.domain.parsing::%consume-here-doc-body
+               (format nil "one~%EOF~%tail")
+               0
+               "EOF")))
+    (is (nshell.domain.parsing::%here-doc-body-p body))
+    (is (string= (format nil "one~%")
+                 (nshell.domain.parsing::%here-doc-body-body body)))
+    (is (= 8
+           (nshell.domain.parsing::%here-doc-body-next-position body)))
+    (is (not
+         (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body)))))
+
+(test parser-here-doc-consumption-projects-body-position-and-incomplete-state
+  "Here-doc consumption returns one explicit domain result for tokenizer assembly."
+  (let* ((consumed-prefix (format nil "one~%A~%two~%B~%"))
+         (input (concatenate 'string consumed-prefix "echo tail"))
+         (consumption
+           (nshell.domain.parsing::%consume-here-docs-result
+            input
+            0
+            '("A" "B"))))
+    (is (nshell.domain.parsing::%here-doc-consumption-p consumption))
+    (is (equal (list (format nil "one~%") (format nil "two~%"))
+               (nshell.domain.parsing::%here-doc-consumption-bodies
+                consumption)))
+    (is (= (length consumed-prefix)
+           (nshell.domain.parsing::%here-doc-consumption-next-position
+            consumption)))
+    (is (not (nshell.domain.parsing::%here-doc-consumption-incomplete-p
+              consumption)))))
+
+(test parser-here-doc-tokenization-projects-result-boundary
+  "Here-doc aware tokenization returns one explicit tokenizer result."
+  (let* ((input (format nil "cat << EOF~%hello~%EOF~%echo done"))
+         (result (nshell.domain.parsing::%tokenize-here-doc-aware input nil))
+         (tokens (nshell.domain.parsing:tokenization-result-tokens result))
+         (token-values (mapcar #'nshell.domain.parsing:token-value tokens)))
+    (is (nshell.domain.parsing:tokenization-result-p result))
+    (is (not (nshell.domain.parsing:tokenization-result-incomplete-p
+              result)))
+    (is (null (nshell.domain.parsing:tokenization-result-cursor-token
+               result)))
+    (is (member (format nil "hello~%") token-values :test #'string=))
+    (is (member "echo" token-values :test #'string=))))
+
+(test parser-here-doc-target-replacer-consumes-bodies-after-redirects
+  "The target replacer owns pending-target and body consumption state."
+  (let* ((redirect (nshell.domain.parsing:make-token :redirect "<<" 0 2))
+         (target (nshell.domain.parsing:make-token :word "EOF" 3 6 :single))
+         (plain (nshell.domain.parsing:make-token :word "plain" 7 12))
+         (replacer (nshell.domain.parsing::%make-here-doc-target-replacer
+                    (list (format nil "body~%")))))
+    (is (eq redirect
+            (nshell.domain.parsing::%here-doc-target-replacer-accept
+             replacer
+             redirect)))
+    (let ((updated-target
+            (nshell.domain.parsing::%here-doc-target-replacer-accept
+             replacer
+             target)))
+      (is (string= (format nil "body~%")
+                   (nshell.domain.parsing:token-value updated-target)))
+      (is (eq :single
+              (nshell.domain.parsing::token-quote-style updated-target))))
+    (is (eq plain
+            (nshell.domain.parsing::%here-doc-target-replacer-accept
+             replacer
+             plain)))))
+
+(test parser-here-doc-target-replacer-consumes-bodies-in-order
+  "Here-doc target body consumption is an explicit replacer boundary."
+  (let ((replacer (nshell.domain.parsing::%make-here-doc-target-replacer
+                   (list "first" "second"))))
+    (is (string= "first"
+                 (nshell.domain.parsing::%consume-next-here-doc-target-body
+                  replacer)))
+    (is (string= "second"
+                 (nshell.domain.parsing::%consume-next-here-doc-target-body
+                  replacer)))
+    (is (null
+         (nshell.domain.parsing::%consume-next-here-doc-target-body
+          replacer)))))
+
 (test parse-mixed-sequence-and-pipeline
   (with-complete-ast (ast "echo one | cat; echo two")
     (is (nshell.domain.parsing:sequence-node-p ast))
@@ -73,6 +763,25 @@
     (is (equal '(:semi)
                (nshell.domain.parsing:sequence-node-separators ast)))))
 
+(test parse-mixed-sequence-keeps-pipeline-groups
+  (with-complete-ast (ast "echo one | cat && echo two | wc")
+    (is (nshell.domain.parsing:sequence-node-p ast))
+    (is (= 2 (length (nshell.domain.parsing:sequence-node-commands ast))))
+    (is (every #'nshell.domain.parsing:pipeline-node-p
+               (nshell.domain.parsing:sequence-node-commands ast)))
+    (is (equal '(:and)
+               (nshell.domain.parsing:sequence-node-separators ast)))))
+
+(test parse-background-pipeline-preserves-sequence-node
+  "A trailing & backgrounds the whole pipeline, not the final command only."
+  (with-complete-ast (ast "echo one | cat &")
+    (is (nshell.domain.parsing:sequence-node-p ast))
+    (is (= 1 (length (nshell.domain.parsing:sequence-node-commands ast))))
+    (is (nshell.domain.parsing:pipeline-node-p
+         (first (nshell.domain.parsing:sequence-node-commands ast))))
+    (is (equal '(:amp)
+               (nshell.domain.parsing:sequence-node-separators ast)))))
+
 (test parse-newline-sequence
   (with-complete-ast (ast (format nil "echo one~%echo two"))
     (is (nshell.domain.parsing:sequence-node-p ast))
@@ -82,7 +791,35 @@
 
 (test parse-empty-input
   (with-parsed-command-line (result "")
-    (is (null (nshell.domain.parsing:parse-result-ast result)))))
+    (is (null (nshell.domain.parsing:parse-result-ast result)))
+    (is (eq :empty (nshell.domain.parsing:parse-result-state result)))))
+
+(test parse-empty-input-case-branch-is-explicit
+  (is (eq :empty
+          (nshell.domain.parsing:with-parsed-command-line-case (result ast "")
+            (:complete
+             (declare (ignore result ast))
+             :complete)
+            (:empty
+             (declare (ignore result ast))
+             :empty)))))
+
+(test parsed-command-line-case-clause-projects-branch-body
+  "Case branch expansion should project macro clauses before generating code."
+  (let ((clause (nshell.domain.parsing::%parsed-command-line-case-clause
+                 :empty
+                 '((:complete :complete-body)
+                   (:empty :empty-body-1 :empty-body-2)))))
+    (is (nshell.domain.parsing::%parsed-command-line-case-clause-p clause))
+    (is (eq :empty
+            (nshell.domain.parsing::%parsed-command-line-case-clause-keyword
+             clause)))
+    (is (equal '(:empty-body-1 :empty-body-2)
+               (nshell.domain.parsing::%parsed-command-line-case-clause-body
+                clause)))
+    (is (null (nshell.domain.parsing::%parsed-command-line-case-clause
+               :error
+               '((:complete :complete-body)))))))
 
 (test parse-complete-redirect
   (with-complete-command-line (result ast "echo hello > out.txt")
@@ -103,6 +840,15 @@
     (is (null (nshell.domain.parsing:parse-errors result)))
     (is (nshell.domain.parsing:command-node-p ast))
     (is (equal `(("<<" . nil) ,(format nil "hello~%"))
+               (nshell.domain.parsing:command-node-args ast)))))
+
+(test parse-multiple-here-documents-preserve-delimiter-order
+  (with-complete-command-line (result ast
+                                      (format nil "cat << A << B~%one~%A~%two~%B"))
+    (is (null (nshell.domain.parsing:parse-errors result)))
+    (is (nshell.domain.parsing:command-node-p ast))
+    (is (equal `(("<<" . nil) ,(format nil "one~%")
+                 ("<<" . nil) ,(format nil "two~%"))
                (nshell.domain.parsing:command-node-args ast)))))
 
 (test parse-here-document-preserves-tail-command

@@ -1,16 +1,40 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (logic-var (:constructor make-var (name)))
-  (name nil :type (or string symbol) :read-only t))
+(defstruct (logic-var
+            (:constructor make-var (name))
+            (:predicate var-p))
+  name)
 
-(defun var-p (x) (logic-var-p x))
+(defvar *unify-fail* (cons :fail :fail))
+
+(defun %unify-failed-p (result)
+  (eq result *unify-fail*))
+
+(defstruct (%binding-entry
+            (:constructor %make-binding-entry (variable value)))
+  (variable nil :read-only t)
+  (value nil :read-only t))
+
+(defun %binding-entry-from-pair (pair)
+  (when pair
+    (%make-binding-entry (car pair) (cdr pair))))
+
+(defun %binding-entry-for-var (var bindings)
+  (%binding-entry-from-pair (assoc var bindings :test #'eq)))
 
 (defun lookup-var (var bindings)
-  (let ((pair (assoc var bindings :test #'eq)))
-    (if pair
-        (let ((val (cdr pair)))
-          (if (var-p val) (lookup-var val bindings) val))
+  (let ((entry (%binding-entry-for-var var bindings)))
+    (if entry
+        (let ((val (%binding-entry-value entry)))
+          (if (var-p val)
+              (lookup-var val bindings)
+              val))
         var)))
+
+(defun %resolve-term (term bindings)
+  (if (var-p term)
+      (lookup-var term bindings)
+      term))
 
 (defun extend-bindings (var value bindings)
   (acons var value bindings))
@@ -26,39 +50,57 @@
          (occurs-check var (cdr term) bindings)))
     (t nil)))
 
-;; Sentinel for unification failure
-(defvar *unify-fail* (cons :fail :fail))
+(defun %bind-var (var value bindings)
+  (if (occurs-check var value bindings)
+      *unify-fail*
+      (extend-bindings var value bindings)))
+
+(declaim (ftype (function (t t &optional t) t) unify))
+
+(defun %unify-conses (x y bindings)
+  (let ((car-bindings (unify (car x) (car y) bindings)))
+    (if (%unify-failed-p car-bindings)
+        *unify-fail*
+        (unify (cdr x) (cdr y) car-bindings))))
 
 (defun unify (x y &optional (bindings '()))
   "Unify X and Y under BINDINGS. Returns bindings on success, *UNIFY-FAIL* on failure.
 Use UNIFY-P to check success."
-  (let ((x1 (if (var-p x) (lookup-var x bindings) x))
-        (y1 (if (var-p y) (lookup-var y bindings) y)))
+  (let ((x1 (%resolve-term x bindings))
+        (y1 (%resolve-term y bindings)))
     (cond
       ((and (var-p x1) (var-p y1) (eq x1 y1)) bindings)
-      ((var-p x1) (if (occurs-check x1 y1 bindings) *unify-fail* (extend-bindings x1 y1 bindings)))
-      ((var-p y1) (if (occurs-check y1 x1 bindings) *unify-fail* (extend-bindings y1 x1 bindings)))
+      ((var-p x1) (%bind-var x1 y1 bindings))
+      ((var-p y1) (%bind-var y1 x1 bindings))
       ((and (atom x1) (atom y1)) (if (equal x1 y1) bindings *unify-fail*))
-      ((and (consp x1) (consp y1))
-       (let ((b (unify (car x1) (car y1) bindings)))
-         (if (eq b *unify-fail*) *unify-fail* (unify (cdr x1) (cdr y1) b))))
+      ((and (consp x1) (consp y1)) (%unify-conses x1 y1 bindings))
       (t *unify-fail*))))
 
 (defun unify-p (result)
   "True if unification succeeded (not *UNIFY-FAIL*)."
-  (not (eq result *unify-fail*)))
+  (not (%unify-failed-p result)))
+
+(defun %backtrack (goals bindings)
+  (if (null goals)
+      (values bindings t)
+      (let ((goal (car goals))
+            (rest (cdr goals)))
+        (let ((result (funcall goal bindings)))
+          (if (unify-p result)
+              (multiple-value-bind (final-bindings succeeded-p)
+                  (%backtrack rest result)
+                (if succeeded-p
+                    (values final-bindings t)
+                    (values nil nil)))
+              (values nil nil))))))
 
 (defun backtrack (goals &optional (bindings '()))
-  (if (null goals) bindings
-    (let ((goal (car goals)) (rest (cdr goals)))
-      (let ((result (funcall goal bindings)))
-        (if (and result (not (eq result *unify-fail*)))
-            (let ((final (backtrack rest result)))
-              (if final final nil))
-            nil)))))
+  (multiple-value-bind (final-bindings succeeded-p)
+      (%backtrack goals bindings)
+    (and succeeded-p final-bindings)))
 
 (defun walk (term bindings)
-  (let ((resolved (if (var-p term) (lookup-var term bindings) term)))
+  (let ((resolved (%resolve-term term bindings)))
     (cond ((var-p resolved) resolved)
           ((consp resolved) (cons (walk (car resolved) bindings) (walk (cdr resolved) bindings)))
           (t resolved))))

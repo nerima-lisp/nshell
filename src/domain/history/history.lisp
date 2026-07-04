@@ -75,9 +75,8 @@ word-like tokens are merged before command/argument classification."
 Command words and redirection targets are not considered arguments. For
 pipelines and command lists, the result is scoped to the final command segment."
   (when (and (stringp line) (plusp (length line)))
-    (multiple-value-bind (tokens cursor-token incomplete-token)
-        (nshell.domain.parsing:tokenize line)
-      (declare (ignore cursor-token incomplete-token))
+    (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
+                   (nshell.domain.parsing:tokenize line))))
       (loop with last-argument = nil
             with skip-redirect-target = nil
             with seen-command-word = nil

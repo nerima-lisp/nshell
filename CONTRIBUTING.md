@@ -50,8 +50,10 @@ Please keep dependencies pointing inward:
 4. **Preserve user-facing compatibility.** If a change intentionally diverges
    from POSIX, bash, zsh, fish, or nushell behavior, document the reason in the
    pull request and add regression coverage for the chosen semantics.
-5. **Run `nix flake check`** locally — CI runs the same checks on Linux and
-   macOS, and a green check is required to merge.
+5. **Run `nix flake check`** locally — CI runs that hermetic gate on Linux and
+   macOS, and a green check is required to merge. For PTY, subprocess,
+   terminal, signal, or job-control changes, also run the non-sandboxed
+   integration suite from the test-selection section.
 6. **Update `CHANGELOG.md`** under `[Unreleased]`.
 7. **Match the surrounding style** — naming, comment density, and idiom.
 
@@ -95,6 +97,16 @@ systems were verified.
 Before tagging a release, verify the public artifacts from a clean checkout:
 
 - `nix flake check --print-build-logs` passes on Linux and macOS.
+- The non-sandboxed integration suite passes for PTY, subprocess, terminal,
+  signal, and job-control coverage:
+
+  ```sh
+  nix develop --command sbcl --non-interactive \
+    --eval '(require :asdf)' \
+    --eval '(push (truename "./") asdf:*central-registry*)' \
+    --eval '(asdf:test-system :nshell/test)'
+  ```
+
 - `nix build --print-build-logs` produces `./result/bin/nshell`.
 - `./result/bin/nshell --version` reports the intended version.
 - `./result/bin/nshell --help` and `man ./man/nshell.1` match the README and

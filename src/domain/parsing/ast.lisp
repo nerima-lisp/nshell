@@ -1,37 +1,68 @@
 ;;; AST Node Types
 (in-package #:nshell.domain.parsing)
 
+(defun %copy-ast-list (items)
+  (copy-list (or items '())))
+
 (defstruct (ast-node (:constructor make-ast-node (type &optional span)))
   (type :unknown :type keyword :read-only t)
   (span nil :type list :read-only t))
 
 (defstruct (command-node (:include ast-node)
-                         (:constructor make-command-node
+                         (:constructor %make-command-node
                              (command args &optional span command-quote-style)))
   (command "" :type string :read-only t)
   (command-quote-style nil :type (member nil :single :double) :read-only t)
   (args nil :type list :read-only t))
 
+(defun make-command-node (command args &optional span command-quote-style)
+  (%make-command-node command
+                      (%copy-ast-list args)
+                      span
+                      command-quote-style))
+
 (defstruct (pipeline-node (:include ast-node)
-                          (:constructor make-pipeline-node (commands &optional span)))
+                          (:constructor %make-pipeline-node (commands &optional span)))
   (commands nil :type list :read-only t))
 
+(defun make-pipeline-node (commands &optional span)
+  (%make-pipeline-node (%copy-ast-list commands) span))
+
 (defstruct (sequence-node (:include ast-node)
-                           (:constructor make-sequence-node (commands &optional separators span)))
+                           (:constructor %make-sequence-node (commands &optional separators span)))
   "Represents shell command sequences separated by ;, &, &&, or ||.
    SEPARATORS is a list of :semi, :amp, :and, or :or keywords, one per command except the last."
   (commands nil :type list :read-only t)
   (separators nil :type list :read-only t))
 
-(defun %sequence-node-command-separator-pairs (node)
+(defun make-sequence-node (commands &optional separators span)
+  (%make-sequence-node (%copy-ast-list commands)
+                       (%copy-ast-list separators)
+                       span))
+
+(defstruct (%sequence-node-command-separator
+            (:constructor %make-sequence-node-command-separator (command separator)))
+  (command nil :read-only t)
+  (separator nil :read-only t))
+
+(defun %make-sequence-node-command-separator-entry (command separator)
+  (%make-sequence-node-command-separator command separator))
+
+(defun %sequence-node-command-separators (node)
   (let ((separators (copy-list (sequence-node-separators node))))
     (loop for command in (sequence-node-commands node)
-          collect (cons command (pop separators)))))
+          collect (%make-sequence-node-command-separator-entry command (pop separators)))))
+
+(defun %sequence-node-command-separator-pairs (node)
+  (mapcar (lambda (entry)
+            (cons (%sequence-node-command-separator-command entry)
+                  (%sequence-node-command-separator-separator entry)))
+          (%sequence-node-command-separators node)))
 
 (defmacro do-sequence-node-command-separator-pairs ((command separator node &optional result) &body body)
-  `(dolist (pair (%sequence-node-command-separator-pairs ,node) ,result)
-     (let ((,command (car pair))
-           (,separator (cdr pair)))
+  `(dolist (entry (%sequence-node-command-separators ,node) ,result)
+     (let ((,command (%sequence-node-command-separator-command entry))
+           (,separator (%sequence-node-command-separator-separator entry)))
        ,@body)))
 
 (defstruct (if-node (:include ast-node)
@@ -80,18 +111,32 @@
 
 
 ;; -- Arg utilities (cons-based arg support) -----------------
+(defstruct (%command-arg
+            (:constructor %make-command-arg (value quote-style)))
+  (value nil :read-only t)
+  (quote-style nil :read-only t))
+
+(defun %command-arg-from-raw (arg)
+  (if (consp arg)
+      (%make-command-arg (car arg) (cdr arg))
+      (%make-command-arg arg nil)))
+
+(defun %validated-command-arg-quote-style (arg style)
+  (case style
+    ((nil :single :double) style)
+    (t (error "Invalid quote style ~S in arg ~S" style arg))))
+
 (defun arg-value (arg)
   "Extract string value from an arg (string or (value . quote-style) cons)."
-  (if (consp arg) (car arg) arg))
+  (%command-arg-value (%command-arg-from-raw arg)))
 
 (defun arg-quote-style (arg)
   "Return the quote style of ARG: NIL, :SINGLE, or :DOUBLE.
 Bare-string args and redirect-target conses are unquoted."
   (when (consp arg)
-    (let ((style (cdr arg)))
-      (case style
-        ((nil :single :double) style)
-        (t (error "Invalid quote style ~S in arg ~S" style arg))))))
+    (%validated-command-arg-quote-style
+     arg
+     (%command-arg-quote-style (%command-arg-from-raw arg)))))
 
 (defun command-node-arg-values (node)
   "Return all args as plain strings (unwrapping cons cells)."

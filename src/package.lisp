@@ -62,6 +62,10 @@
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
            #:+redirect-specs+ #:+redirect-fd-dup-specs+
+           #:tokenization-result-p
+           #:tokenization-result-tokens
+           #:tokenization-result-cursor-token
+           #:tokenization-result-incomplete-p
            #:token-type #:token-value #:token-start #:token-end #:make-token
            #:ast-node-type #:make-command-node #:make-pipeline-node
            #:make-argument-node #:make-operator-node #:make-error-node
@@ -79,7 +83,7 @@
              #:begin-end-node-p #:begin-end-node-body
              #:var-p #:make-var #:unify #:walk #:extend-bindings #:backtrack #:unify-p
            #:with-parsed-command-line #:with-parsed-command-line-case #:with-complete-command-line
-           #:parse-complete-p #:parse-errors
+           #:parse-complete-p #:parse-result-state #:parse-errors
            #:parse-error-messages #:format-parse-error-messages
            #:parse-result-ast #:parse-result-incomplete
             #:parse-diagnostic #:parse-diagnostic-p
@@ -104,6 +108,7 @@
            #:expand-variables #:expand-tilde #:expand-glob #:expand-all
            #:expand-by-quote-style
            #:expand-command-name-fields-by-quote-style
+           #:expand-command-name-by-quote-style
            #:expand-double-quoted #:expand-arithmetic #:evaluate-arithmetic
            #:expand-braces #:argv-reference-fields #:*positional-args*))
 
@@ -111,7 +116,8 @@
   (:use #:cl)
   (:export #:make-candidate #:candidate-text #:candidate-kind
             #:candidate-description #:candidate-score
-            #:make-knowledge-base #:kb-add-command #:kb-add-option
+            #:make-knowledge-base #:kb-add-command #:kb-add-command-from-help
+            #:kb-add-option
             #:kb-remove-command #:kb-query
             #:make-fact #:make-rule #:fact-p #:rule-p
             #:assert-fact! #:assert-rule! #:prove #:prove-all #:predicate-true-p
@@ -216,6 +222,7 @@
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
             #:make-process-group-leader #:reap-children #:get-terminal-size
+            #:*external-command-timeout*
             #:run-external #:run-external-capture #:process-exit-status-code
             #:with-git-process-fns #:clear-git-status-cache
             #:invalidate-git-status-cache #:get-git-status

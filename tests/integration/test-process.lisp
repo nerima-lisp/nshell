@@ -51,6 +51,37 @@
     (is (= 0 exit))
     (is (string= (format nil "hello~%") output))))
 
+(test run-external-times-out-and-returns
+  "Synchronous execution should time out while reading output or waiting."
+  (let* ((nshell.infrastructure.acl:*external-command-timeout* 0.2)
+         (exit nil)
+         (error-output
+           (with-output-to-string (*error-output*)
+             (setf exit
+                   (nshell.infrastructure.acl:run-external
+                    (current-sbcl-executable)
+                    (list "--noinform"
+                          "--non-interactive"
+                          "--disable-debugger"
+                          "--eval"
+                          "(sleep 5)"))))))
+    (is (= 124 exit))
+    (is (search "timed out after" error-output))))
+
+(test run-external-capture-times-out-and-returns
+  "Captured synchronous execution should return a timeout message and exit 124."
+  (let ((nshell.infrastructure.acl:*external-command-timeout* 0.2))
+    (multiple-value-bind (output exit)
+        (nshell.infrastructure.acl:run-external-capture
+         (current-sbcl-executable)
+         (list "--noinform"
+               "--non-interactive"
+               "--disable-debugger"
+               "--eval"
+               "(sleep 5)"))
+      (is (= 124 exit))
+      (is (search "timed out after" output)))))
+
 (test run-external-capture-signal-exit-status
   "External command capture normalizes signaled processes to 128+signal."
   (multiple-value-bind (output exit)
@@ -116,6 +147,19 @@
                           :redirects (list (list (cons :2>&1 nil)) nil))))))
     (is (= 0 exit))
     (is (string= (format nil "6~%") output))))
+
+(test spawn-pipeline-times-out-and-returns
+  "Synchronous pipelines should time out and terminate started processes."
+  (let* ((nshell.infrastructure.acl:*external-command-timeout* 0.2)
+         (sleeper (%process-test-sbcl-command-node "(sleep 5)"))
+         (exit nil)
+         (error-output
+           (with-output-to-string (*error-output*)
+             (setf exit
+                   (nshell.infrastructure.acl:spawn-pipeline
+                    (list sleeper))))))
+    (is (= 124 exit))
+    (is (search "pipeline timed out" error-output))))
 
 (test spawn-pipeline-redirect-dup-before-stdout-redirect-keeps-stderr-on-pipe
   "2>&1 before a stdout redirect keeps stderr connected to the original pipeline stdout."

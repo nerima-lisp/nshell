@@ -1,4 +1,6 @@
 (in-package #:nshell/test)
+
+
 (in-suite expansion-tests)
 
 (test arithmetic-basic-operators
@@ -37,9 +39,56 @@
     (is (string= "$(echo hi)"
                  (nshell.domain.expansion:expand-arithmetic "$(echo hi)" env)))))
 
+(test arithmetic-substitution-at-projects-expression-span
+  "arithmetic-substitution-at keeps substitution detection separate from rendering."
+  (let ((substitution
+          (nshell.domain.expansion::%arithmetic-substitution-at "a$((X + 1))b" 1)))
+    (is (nshell.domain.expansion::arithmetic-substitution-p substitution))
+    (is (= 1 (nshell.domain.expansion::arithmetic-substitution-start substitution)))
+    (is (= 11 (nshell.domain.expansion::arithmetic-substitution-end substitution)))
+    (is (string= "X + 1"
+                 (nshell.domain.expansion::arithmetic-substitution-expression
+                  substitution))))
+  (is (null (nshell.domain.expansion::%arithmetic-substitution-at "$(echo hi)" 0)))
+  (is (null (nshell.domain.expansion::%arithmetic-substitution-at "$((1 + 2)" 0))))
+
 (test arithmetic-division-by-zero-signals
   "Division by zero is an error rather than a crash-producing value."
   (signals error (nshell.domain.expansion:evaluate-arithmetic "1 / 0" (arith-env))))
+
+(test arithmetic-token-kind-classifies-lexer-boundary
+  "arith-token-kind maps the first character to the arithmetic lexer branch."
+  (is (null (nshell.domain.expansion::%arith-token-kind nil)))
+  (is (eq :number (nshell.domain.expansion::%arith-token-kind #\1)))
+  (is (eq :variable (nshell.domain.expansion::%arith-token-kind #\X)))
+  (is (eq :variable (nshell.domain.expansion::%arith-token-kind #\_)))
+  (is (eq :operator (nshell.domain.expansion::%arith-token-kind #\+))))
+
+(test arithmetic-token-accessors-hide-cons-shape
+  "Arithmetic parser code uses token access helpers instead of cons slots."
+  (let* ((lexer (nshell.domain.expansion::%make-arith-lexer "X + 42"))
+         (variable-token (nshell.domain.expansion::%arith-next-token lexer))
+         (operator-token (nshell.domain.expansion::%arith-next-token lexer))
+         (number-token (nshell.domain.expansion::%arith-next-token lexer)))
+    (is (nshell.domain.expansion::arith-token-p variable-token))
+    (is (nshell.domain.expansion::%arith-token-kind-p variable-token :var))
+    (is (not (nshell.domain.expansion::%arith-token-kind-p variable-token :num)))
+    (is (string= "X" (nshell.domain.expansion::%arith-token-value variable-token)))
+    (is (nshell.domain.expansion::%arith-token-kind-p operator-token :op))
+    (is (string= "+" (nshell.domain.expansion::%arith-token-value operator-token)))
+    (is (nshell.domain.expansion::%arith-token-kind-p number-token :num))
+    (is (= 42 (nshell.domain.expansion::%arith-token-value number-token)))))
+
+(test arithmetic-complete-result-enforces-full-consumption
+  "arith-complete-result keeps expression consumption separate from evaluation."
+  (let ((complete (nshell.domain.expansion::%make-arith-parser
+                   (nshell.domain.expansion::%make-arith-lexer "")
+                   (arith-env)))
+        (trailing (nshell.domain.expansion::%make-arith-parser
+                   (nshell.domain.expansion::%make-arith-lexer "+ 1")
+                   (arith-env))))
+    (is (= 42 (nshell.domain.expansion::%arith-complete-result complete 42)))
+    (signals error (nshell.domain.expansion::%arith-complete-result trailing 42))))
 
 (test brace-comma-expansion
   "{a,b,c} expands to each option with surrounding prefix/suffix."
@@ -67,6 +116,33 @@
   (is (equal '("{a}") (nshell.domain.expansion:expand-braces "{a}")))
   (is (equal '("nobrace") (nshell.domain.expansion:expand-braces "nobrace"))))
 
+(test brace-expansion-frame-captures-first-group-boundary
+  "brace-expansion-frame keeps one group's slices and classified options."
+  (let* ((input "pre{a,b}post")
+         (open (position #\{ input))
+         (close (nshell.domain.expansion::%find-matching-brace input open))
+         (frame (nshell.domain.expansion::%brace-expansion-frame input
+                                                                  open
+                                                                  close)))
+    (is (nshell.domain.expansion::brace-expansion-frame-p frame))
+    (is (string= input
+                 (nshell.domain.expansion::brace-expansion-frame-input frame)))
+    (is (= open
+           (nshell.domain.expansion::brace-expansion-frame-open frame)))
+    (is (= close
+           (nshell.domain.expansion::brace-expansion-frame-close frame)))
+    (is (string= "pre"
+                 (nshell.domain.expansion::brace-expansion-frame-prefix frame)))
+    (is (string= "a,b"
+                 (nshell.domain.expansion::brace-expansion-frame-content frame)))
+    (is (string= "post"
+                 (nshell.domain.expansion::brace-expansion-frame-suffix frame)))
+    (is (equal '("a" "b")
+               (nshell.domain.expansion::brace-expansion-frame-options frame)))
+    (is (string= "pre{a,b}"
+                 (nshell.domain.expansion::%brace-expansion-frame-literal
+                  frame)))))
+
 (test glob-expansion-finds-files
   "A star glob expands to matching files."
   ;; Inject filesystem adapters for DDD purity
@@ -93,6 +169,68 @@
         (let ((root (probe-file (merge-pathnames "nshell-glob-*/" (uiop:temporary-directory)))))
           (when root (uiop:delete-directory-tree root :validate t)))
       (error ()))))
+
+(test glob-candidate-files-selects-directory-scope
+  "glob-candidate-files keeps recursive traversal policy outside expand-glob."
+  (let ((calls nil))
+    (let ((nshell.domain.expansion:*glob-directory-files-fn*
+            (lambda (dir)
+              (push (list :files (namestring dir)) calls)
+              (list (merge-pathnames "one.txt" dir))))
+          (nshell.domain.expansion:*glob-subdirectories-fn*
+            (lambda (dir)
+              (push (list :subdirs (namestring dir)) calls)
+              nil)))
+      (is (equal (list #p"/tmp/one.txt")
+                 (nshell.domain.expansion::%glob-candidate-files "*.txt" #p"/tmp/")))
+      (is (equal '((:files "/tmp/")) (nreverse calls))))))
+
+(test glob-candidate-files-selects-recursive-scope
+  "A ** pattern delegates to recursive candidate enumeration."
+  (let ((calls nil))
+    (let ((nshell.domain.expansion:*glob-directory-files-fn*
+            (lambda (dir)
+              (push (list :files (namestring dir)) calls)
+              (list (merge-pathnames "one.txt" dir))))
+          (nshell.domain.expansion:*glob-subdirectories-fn*
+            (lambda (dir)
+              (push (list :subdirs (namestring dir)) calls)
+              nil)))
+      (is (equal (list #p"/tmp/one.txt")
+                 (nshell.domain.expansion::%glob-candidate-files "**/*.txt" #p"/tmp/")))
+      (is (equal '((:files "/tmp/") (:subdirs "/tmp/")) (nreverse calls))))))
+
+(test glob-match-subject-projects-file-relative-to-root
+  "glob-match-subject keeps filesystem candidates separate from pattern matching text."
+  (let* ((root "/tmp/nshell/")
+         (pattern (concatenate 'string root "*.txt"))
+         (file #p"/tmp/nshell/alpha.txt")
+         (subject (nshell.domain.expansion::%glob-file-match-subject pattern root file)))
+    (is (nshell.domain.expansion::glob-match-subject-p subject))
+    (is (string= pattern
+                 (nshell.domain.expansion::glob-match-subject-pattern subject)))
+    (is (string= "/tmp/nshell/alpha.txt"
+                 (nshell.domain.expansion::%glob-match-subject-candidate subject)))
+    (is (nshell.domain.expansion::%glob-match-file-p pattern root file))))
+
+(test glob-match-subject-projects-relative-root-candidates
+  "A ./ glob root projects candidates without leaking the implicit directory prefix."
+  (let* ((pattern "*.txt")
+         (file #p"alpha.txt")
+         (subject (nshell.domain.expansion::%glob-file-match-subject pattern "./" file)))
+    (is (string= "alpha.txt"
+                 (nshell.domain.expansion::%glob-match-subject-candidate subject)))
+    (is (nshell.domain.expansion::%glob-match-file-p pattern "./" file))))
+
+(test glob-assignment-prefix-parts-classifies-compound-patterns
+  "glob-assignment-prefix-parts separates label-like prefixes from glob suffixes."
+  (flet ((parts (pattern)
+           (multiple-value-list
+            (nshell.domain.expansion::%glob-assignment-prefix-parts pattern))))
+    (is (equal '("label=" "*.txt") (parts "label=*.txt")))
+    (is (equal '("env:FOO=" "bar?.lisp") (parts "env:FOO=bar?.lisp")))
+    (is (equal '(nil) (parts "*.txt")))
+    (is (equal '(nil) (parts "/tmp/a=b/*.txt")))))
 
 (test nonexistent-var-expands-empty
   "Undefined variables expand to the empty string."
@@ -170,4 +308,3 @@
            (mid (code-char (floor (+ (char-code lo) (char-code hi)) 2))))
       (not (nshell.domain.expansion::glob-match-p (format nil "[!~c-~c]" lo hi)
                                                   (string mid))))))
-

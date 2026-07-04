@@ -1,13 +1,57 @@
 (in-package #:nshell.domain.completion)
 
+(defstruct (completion-query
+             (:constructor make-completion-query
+                 (partial-input context command arg-prefix argument-words filesystem-candidates)))
+  (partial-input "" :type string :read-only t)
+  (context nil :read-only t)
+  (command "" :type string :read-only t)
+  (arg-prefix "" :type string :read-only t)
+  (argument-words nil :type list :read-only t)
+  (filesystem-candidates nil :type list :read-only t))
+
+(defun completion-query-for (partial-input)
+  (let* ((context (completion-context-for partial-input))
+         (arg-prefix (completion-context-argument-prefix context))
+         (filesystem-mode (completion-filesystem-mode context)))
+    (make-completion-query partial-input
+                           context
+                           (completion-context-command context)
+                           arg-prefix
+                           (completion-context-argument-words context)
+                           (when filesystem-mode
+                             (filesystem-candidates-for-mode filesystem-mode arg-prefix)))))
+
+(defstruct (rule-solution-binding-projection
+             (:constructor make-rule-solution-binding-projection (value present-p)))
+  value
+  present-p)
+
+(defstruct (rule-solution-set-projection
+             (:constructor make-rule-solution-set-projection (first-solution)))
+  first-solution)
+
+(defun project-rule-solution-binding (variable solution)
+  (let ((binding (assoc variable solution)))
+    (make-rule-solution-binding-projection (cdr binding) (not (null binding)))))
+
+(defun project-rule-solution-set (solutions)
+  (make-rule-solution-set-projection (first solutions)))
+
 (defun solution-value (variable solution)
-  (cdr (assoc variable solution)))
+  (rule-solution-binding-projection-value
+   (project-rule-solution-binding variable solution)))
+
+(defun first-solution-value (variable solutions)
+  (let ((solution (rule-solution-set-projection-first-solution
+                   (project-rule-solution-set solutions))))
+    (when solution
+      (solution-value variable solution))))
 
 (defun completion-description (kb-rules value)
   (when (stringp value)
     (let* ((solutions (prove-all kb-rules (list 'describes value '?description)))
-           (description (and solutions
-                             (solution-value '?description (first solutions)))))
+           (description (first-solution-value '?description solutions)))
       (when (stringp description)
         description))))
 
@@ -24,22 +68,23 @@
         #'string<
         :key #'candidate-text))
 
-(defun rule-complete (kb-rules partial-input)
-  (let* ((context (completion-context-for partial-input))
-         (command (completion-context-command context))
-         (arg-prefix (completion-context-argument-prefix context)))
+(defun %rule-complete-query (kb-rules query)
+  (let* ((context (completion-query-context query))
+         (command (completion-query-command query))
+         (arg-prefix (completion-query-arg-prefix query))
+         (argument-position-p (%completion-query-argument-position-p query)))
     (flet ((candidate-description-for (value)
              (completion-description kb-rules value)))
       (cond
         ((completion-context-redirection-target-p context)
          (list (make-candidate arg-prefix :kind :file :description "file")))
-        ((and (< (length command) (length partial-input))
+        ((and argument-position-p
               (prove-all kb-rules (list 'suggests-dir command)))
          (list (make-candidate "" :kind :directory :description "directory")))
-        ((and (< (length command) (length partial-input))
+        ((and argument-position-p
               (prove-all kb-rules (list 'suggests-file command)))
          (list (make-candidate "" :kind :file :description "file")))
-        ((< (length command) (length partial-input))
+        (argument-position-p
          (candidates-from-rule-solutions
           (prove-all kb-rules (list 'completes command '?completion))
           '?completion
@@ -48,78 +93,95 @@
           :description-fn #'candidate-description-for))
         (t
          (candidates-from-rule-solutions
-          (prove-all kb-rules '(completes ?command ?completion))
-          '?command
-          :command
-          :prefix command
-          :description-fn #'candidate-description-for))))))
+           (prove-all kb-rules '(completes ?command ?completion))
+           '?command
+           :command
+           :prefix command
+           :description-fn #'candidate-description-for))))))
 
-(defun %complete-knowledge-base (kb context path command arg-prefix argument-words filesystem-candidates)
-  (%complete-by-context context
-                        command
-                        arg-prefix
-                        filesystem-candidates
-                        (merge-candidates
-                         (knowledge-base-command-candidates kb command)
-                         (command-candidates-from-path path command)
-                         (builtin-command-candidates command))
-                        (knowledge-base-argument-candidates kb command arg-prefix
-                                                            :argument-words argument-words)))
+(defun rule-complete (kb-rules partial-input)
+  (%rule-complete-query kb-rules (completion-query-for partial-input)))
 
-(defun %complete-by-context (context command arg-prefix filesystem-candidates
-                                     command-candidates argument-candidates)
+(defun %knowledge-base-command-candidates (kb path command)
+  (merge-candidates
+   (knowledge-base-command-candidates kb command)
+   (command-candidates-from-path path command)
+   (builtin-command-candidates command)))
+
+(defun %knowledge-base-argument-candidates (kb command arg-prefix argument-words)
+  (knowledge-base-argument-candidates kb command arg-prefix
+                                      :argument-words argument-words))
+
+(defun %completion-query-command-position-p (query)
+  (completion-context-command-position-p (completion-query-context query)))
+
+(defun %completion-query-argument-position-p (query)
+  (not (%completion-query-command-position-p query)))
+
+(defun %completion-query-redirection-target-p (query)
+  (completion-context-redirection-target-p (completion-query-context query)))
+
+(defun %query-candidates (query command-candidates-fn argument-candidates-fn)
   (cond
-    ((completion-context-command-position-p context)
-     (rank-candidates
-      command
-      command-candidates))
-    (filesystem-candidates
-     (rank-candidates
-      arg-prefix
-      filesystem-candidates))
+    ((%completion-query-command-position-p query)
+     (funcall command-candidates-fn))
+    ((completion-query-filesystem-candidates query)
+     (completion-query-filesystem-candidates query))
     (t
-     (rank-candidates arg-prefix argument-candidates))))
+     (funcall argument-candidates-fn))))
 
-(defun %complete-rule-knowledge-base (kb context partial-input command arg-prefix filesystem-candidates)
-  (let ((rule-candidates (rule-complete kb partial-input)))
-    (%complete-by-context context
-                          command
-                          arg-prefix
-                          filesystem-candidates
-                          rule-candidates
-                          rule-candidates)))
+(defun %knowledge-base-candidates (kb query path)
+  (let ((command (completion-query-command query))
+        (arg-prefix (completion-query-arg-prefix query)))
+    (%query-candidates
+     query
+     (lambda ()
+       (%knowledge-base-command-candidates kb path command))
+     (lambda ()
+       (%knowledge-base-argument-candidates
+        kb
+        command
+        arg-prefix
+        (completion-query-argument-words query))))))
 
-(defun %complete-fallback (context path command arg-prefix filesystem-candidates)
-  (%complete-by-context context
-                        command
-                        arg-prefix
-                        filesystem-candidates
-                        (command-candidates-from-path path command)
-                        nil))
+(defun %rule-knowledge-base-candidates (kb query)
+  (labels ((rule-candidates ()
+             (%rule-complete-query kb query)))
+    (%query-candidates query #'rule-candidates #'rule-candidates)))
+
+(defun %fallback-candidates (query path)
+  (%query-candidates query
+                     (lambda ()
+                       (command-candidates-from-path path
+                                                     (completion-query-command query)))
+                     (lambda ()
+                       nil)))
+
+(defun %redirection-target-candidates (query)
+  (or (completion-query-filesystem-candidates query)
+      (list (make-candidate (completion-query-arg-prefix query)
+                            :kind :file
+                            :description "file"))))
+
+(defun %completion-candidates (kb query path)
+  (cond
+    ((%completion-query-redirection-target-p query)
+     (%redirection-target-candidates query))
+    (t
+     (typecase kb
+       (knowledge-base
+        (%knowledge-base-candidates kb query path))
+       (rule-knowledge-base
+        (%rule-knowledge-base-candidates kb query))
+       (t
+        (%fallback-candidates query path))))))
+
+(defun %completion-ranking-prefix (query)
+  (if (%completion-query-command-position-p query)
+      (completion-query-command query)
+      (completion-query-arg-prefix query)))
 
 (defun complete (kb partial-input &key path)
-  (let* ((context (completion-context-for partial-input))
-         (command (completion-context-command context))
-         (arg-prefix (completion-context-argument-prefix context))
-         (argument-words (completion-context-argument-words context))
-         (filesystem-mode (completion-filesystem-mode context))
-         (filesystem-candidates
-           (when filesystem-mode
-             (filesystem-candidates-for-mode filesystem-mode arg-prefix))))
-    (cond
-      ((completion-context-redirection-target-p context)
-       (rank-candidates
-        arg-prefix
-        (or filesystem-candidates
-            (list (make-candidate arg-prefix :kind :file :description "file")))))
-      (t
-       (typecase kb
-         (knowledge-base
-          (%complete-knowledge-base
-           kb context path command arg-prefix argument-words filesystem-candidates))
-         (rule-knowledge-base
-          (%complete-rule-knowledge-base
-           kb context partial-input command arg-prefix filesystem-candidates))
-         (t
-          (%complete-fallback
-           context path command arg-prefix filesystem-candidates)))))))
+  (let ((query (completion-query-for partial-input)))
+    (rank-candidates (%completion-ranking-prefix query)
+                     (%completion-candidates kb query path))))

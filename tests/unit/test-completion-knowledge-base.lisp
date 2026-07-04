@@ -42,6 +42,166 @@
                (completion-texts
                 (nshell.domain.completion:complete kb "tool --"))))))
 
+(test option-value-candidates-project-values-through-shared-boundary
+  (let ((candidates (nshell.domain.completion::option-value-candidates
+                     '("zsh" "bash")
+                     :text-function (lambda (value)
+                                      (concatenate 'string "--shell=" value)))))
+    (is (equal '("--shell=bash" "--shell=zsh")
+               (completion-texts candidates)))
+    (is (every (lambda (candidate)
+                 (and (eq :option
+                          (nshell.domain.completion:candidate-kind candidate))
+                      (string= "option value"
+                               (nshell.domain.completion:candidate-description
+                               candidate))))
+               candidates))))
+
+(test entry-candidate-projection-boundaries-name-command-entry-parts
+  (let ((entry (list :command "tool"
+                     :description "tool description"
+                     :flags '("--flag")
+                     :subcommands '("run")
+                     :exclusive-options '(("--json" "--yaml")))))
+    (is (string= "tool"
+                 (nshell.domain.completion::candidate-entry-command-name
+                  entry)))
+    (is (string= "tool description"
+                 (nshell.domain.completion::candidate-entry-description
+                  entry)))
+    (is (string= ""
+                 (nshell.domain.completion::candidate-entry-description
+                  '(:command "empty-description"))))
+    (is (equal '("--flag")
+               (nshell.domain.completion::candidate-entry-flag-specs entry)))
+    (is (equal '("run")
+               (nshell.domain.completion::candidate-entry-subcommand-specs
+                entry)))
+    (is (equal '(("--json" "--yaml"))
+               (nshell.domain.completion::candidate-entry-exclusive-option-groups
+                entry)))))
+
+(test entry-option-values-projects-option-value-spec-boundary
+  (let ((entry (list :option-values '(("--mode" "fast" "safe")
+                                      ("--format" "json")))))
+    (is (equal '(("--mode" "fast" "safe")
+                 ("--format" "json"))
+               (nshell.domain.completion::entry-option-value-specs entry)))
+    (let ((projection
+            (nshell.domain.completion::project-entry-option-value-spec
+             '("--mode" "fast"))))
+      (is (string= "--mode"
+                   (nshell.domain.completion::entry-option-value-spec-projection-option
+                    projection)))
+      (is (equal '("fast")
+                 (nshell.domain.completion::entry-option-value-spec-projection-values
+                  projection)))
+      (is (nshell.domain.completion::entry-option-value-spec-projection-valid-p
+           projection)))
+    (is (string= "--mode"
+                 (nshell.domain.completion::entry-option-value-spec-option
+                  '("--mode" "fast"))))
+    (is (equal '("fast")
+               (nshell.domain.completion::entry-option-value-spec-values
+                '("--mode" "fast"))))
+    (is (nshell.domain.completion::entry-option-value-spec-for-option-p
+         '("--mode" "fast")
+         "--mode"))
+    (is (not (nshell.domain.completion::entry-option-value-spec-for-option-p
+              '("--format" "json")
+              "--mode")))
+    (is (not (nshell.domain.completion::entry-option-value-spec-projection-valid-p
+              (nshell.domain.completion::project-entry-option-value-spec
+               '(nil "ignored")))))
+    (is (equal '("fast" "safe")
+               (nshell.domain.completion::entry-option-values entry "--mode")))
+    (is (null (nshell.domain.completion::entry-option-values entry "--missing")))))
+
+(test parse-attached-option-value-prefix-captures-option-and-value-prefix
+  (let ((prefix (nshell.domain.completion::parse-attached-option-value-prefix
+                 "--mode=fa")))
+    (is (string= "--mode"
+                 (nshell.domain.completion::attached-option-value-prefix-option
+                  prefix)))
+    (is (string= "fa"
+                 (nshell.domain.completion::attached-option-value-prefix-value-prefix
+                  prefix))))
+  (is (null (nshell.domain.completion::parse-attached-option-value-prefix
+             "--mode"))))
+
+(test parse-separate-option-value-prefix-captures-option-and-value-prefix
+  (let ((prefix (nshell.domain.completion::parse-separate-option-value-prefix
+                 '("--mode" "fa")
+                 "fa")))
+    (is (string= "--mode"
+                 (nshell.domain.completion::separate-option-value-prefix-option
+                  prefix)))
+    (is (string= "fa"
+                 (nshell.domain.completion::separate-option-value-prefix-value-prefix
+                  prefix))))
+  (let ((prefix (nshell.domain.completion::parse-separate-option-value-prefix
+                 '("--mode")
+                 "")))
+    (is (string= "--mode"
+                 (nshell.domain.completion::separate-option-value-prefix-option
+                  prefix)))
+    (is (string= ""
+                 (nshell.domain.completion::separate-option-value-prefix-value-prefix
+                  prefix)))))
+
+(test knowledge-base-candidate-constructors-are-internal-boundaries
+  (flet ((internal-symbol-p (name)
+           (not (null (find-symbol name '#:nshell.domain.completion)))))
+    (is (not (internal-symbol-p "MAKE-ATTACHED-OPTION-VALUE-PREFIX")))
+    (is (not (internal-symbol-p "MAKE-SEPARATE-OPTION-VALUE-PREFIX")))
+    (is (not (internal-symbol-p "MAKE-ENTRY-OPTION-VALUE-SPEC-PROJECTION")))
+    (is (internal-symbol-p "%MAKE-ATTACHED-OPTION-VALUE-PREFIX"))
+    (is (internal-symbol-p "%MAKE-SEPARATE-OPTION-VALUE-PREFIX"))
+    (is (internal-symbol-p "%MAKE-ENTRY-OPTION-VALUE-SPEC-PROJECTION"))))
+
+(test argument-words-without-value-prefix-removes-in-progress-value-word
+  (is (equal '("--mode")
+             (nshell.domain.completion::argument-words-without-value-prefix
+              '("--mode" "fa")
+              "fa")))
+  (is (equal '("--mode")
+             (nshell.domain.completion::argument-words-without-value-prefix
+              '("--mode")
+              "")))
+  (is (null (nshell.domain.completion::previous-option-for-value-prefix
+             '("fa")
+             "fa"))))
+
+(test kb-option-value-spec-projection-boundaries-name-domain-parts
+  (let ((spec '("--mode" "fast" "safe")))
+    (let ((projection
+            (nshell.domain.completion::%kb-option-value-spec-projection spec)))
+      (is (string= "--mode"
+                   (nshell.domain.completion::kb-option-value-spec-projection-option
+                    projection)))
+      (is (equal '("fast" "safe")
+                 (nshell.domain.completion::kb-option-value-spec-projection-values
+                  projection)))
+      (is (nshell.domain.completion::kb-option-value-spec-projection-valid-p
+           projection)))
+    (is (string= "--mode"
+                 (nshell.domain.completion::%kb-option-value-spec-option spec)))
+    (is (equal '("fast" "safe")
+               (nshell.domain.completion::%kb-option-value-spec-values spec)))
+    (is (nshell.domain.completion::%valid-kb-option-value-spec-p spec))
+    (is (nshell.domain.completion::%kb-option-value-spec-for-option-p
+         spec "--mode"))
+    (is (not (nshell.domain.completion::%kb-option-value-spec-for-option-p
+              spec "--other")))
+    (is (not (nshell.domain.completion::%valid-kb-option-value-spec-p
+              '(nil "ignored"))))
+    (is (not (nshell.domain.completion::kb-option-value-spec-projection-valid-p
+              (nshell.domain.completion::%kb-option-value-spec-projection
+               '(nil "ignored")))))
+    (is (equal '("--mode" "safe")
+               (nshell.domain.completion::%make-kb-option-value-spec
+                "--mode" '("safe"))))))
+
 (test knowledge-base-option-value-completion-dedupes-duplicates
   (let ((kb (nshell.domain.completion:make-knowledge-base)))
     (nshell.domain.completion:kb-add-command
@@ -268,6 +428,64 @@
     (is (null (merge* nil nil)))
     (is (equal '("a" "b") (merge* nil '("a" "b"))))
     (is (equal '("a" "b" "c") (merge* '("a" "b") '("b" "c"))))))
+
+(test merge-kb-command-facts-preserves-and-merges-entry-policy
+  (let ((entry (list :subcommands '("run")
+                     :flags '("--mode")
+                     :option-values '(("--mode" "fast"))
+                     :exclusive-options '(("--json" "--yaml"))
+                     :description "catalog")))
+    (is (eq entry
+            (nshell.domain.completion::%merge-kb-command-facts
+             entry
+             :subcommands '("test" "run")
+             :flags '("--mode" "--verbose")
+             :option-values '(("--mode" "safe" "fast")
+                              ("--format" "json"))
+             :exclusive-options '(("--json" "--yaml")
+                                  ("--compact" "--pretty")))))
+    (is (equal '("run" "test")
+               (nshell.domain.completion::%kb-command-entry-subcommands entry)))
+    (is (equal '("--mode" "--verbose")
+               (nshell.domain.completion::%kb-command-entry-flags entry)))
+    (is (equal '(("--format" "json")
+                 ("--mode" "fast" "safe"))
+               (nshell.domain.completion::%kb-command-entry-option-values entry)))
+    (is (equal '(("--json" "--yaml")
+                 ("--compact" "--pretty"))
+               (nshell.domain.completion::%kb-command-entry-exclusive-options
+                entry)))
+    (is (string= "catalog"
+                 (nshell.domain.completion::%kb-command-entry-description
+                  entry)))))
+
+(test merge-kb-command-facts-updates-description-when-present
+  (let ((entry (list :subcommands nil
+                     :flags nil
+                     :option-values nil
+                     :exclusive-options nil
+                     :description "catalog")))
+    (nshell.domain.completion::%merge-kb-command-facts
+     entry
+     :description "dynamic loader")
+    (is (string= "dynamic loader"
+                 (nshell.domain.completion::%kb-command-entry-description
+                  entry)))))
+
+(test add-kb-command-entry-option-merges-through-entry-boundary
+  (let ((entry (list :subcommands nil
+                     :flags '("--mode")
+                     :option-values '(("--mode" "fast"))
+                     :exclusive-options nil
+                     :description nil)))
+    (is (eq entry
+            (nshell.domain.completion::%add-kb-command-entry-option
+             entry "--mode" '("safe" "fast"))))
+    (is (equal '("--mode")
+               (nshell.domain.completion::%kb-command-entry-flags entry)))
+    (is (equal '(("--mode" "fast" "safe"))
+               (nshell.domain.completion::%kb-command-entry-option-values
+                entry)))))
 
 (test normalize-kb-exclusive-option-groups-filters-singletons-and-deduplicates
   "normalize drops singleton groups and deduplicates values within each group."

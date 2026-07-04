@@ -149,17 +149,37 @@ preceded by a backslash."
        (not (%completion-escaped-position-p input position))))
 
 (defstruct (completion-token-slice
-            (:constructor %make-completion-token-slice (start end)))
+            (:constructor %make-completion-token-slice (start end))
+            (:conc-name %completion-token-slice-))
   (start 0 :type fixnum :read-only t)
   (end 0 :type fixnum :read-only t))
 
+(defun completion-token-slice-start (slice)
+  (%completion-token-slice-start slice))
+
+(defun completion-token-slice-end (slice)
+  (%completion-token-slice-end slice))
+
 (defstruct (completion-token-context
             (:constructor %make-completion-token-context
-                (bounds body-bounds quote-context raw-token)))
+                (bounds body-bounds quote-context raw-token))
+            (:conc-name %completion-token-context-))
   (bounds nil :read-only t)
   (body-bounds nil :read-only t)
   (quote-context nil :read-only t)
   (raw-token "" :type string :read-only t))
+
+(defun completion-token-context-bounds (context)
+  (%completion-token-context-bounds context))
+
+(defun completion-token-context-body-bounds (context)
+  (%completion-token-context-body-bounds context))
+
+(defun completion-token-context-quote-context (context)
+  (%completion-token-context-quote-context context))
+
+(defun completion-token-context-raw-token (context)
+  (%completion-token-context-raw-token context))
 
 (defun %completion-token-bounds (input cursor)
   (let* ((limit (length input))

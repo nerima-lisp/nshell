@@ -264,6 +264,26 @@
     (is (= 9 (nshell.presentation::completion-token-slice-end
               (nshell.presentation::completion-token-context-body-bounds context))))))
 
+(test completion-token-raw-accessors-stay-internal
+  "completion token structs expose explicit readers; generated slot readers remain internal."
+  (let ((context (nshell.presentation::%completion-token-context "cat foo" 7)))
+    (is (fboundp 'nshell.presentation::%completion-token-context-bounds))
+    (is (fboundp 'nshell.presentation::%completion-token-slice-start))
+    (is (not (eq (symbol-function
+                  'nshell.presentation::completion-token-context-bounds)
+                 (symbol-function
+                  'nshell.presentation::%completion-token-context-bounds))))
+    (is (not (eq (symbol-function
+                  'nshell.presentation::completion-token-slice-start)
+                 (symbol-function
+                  'nshell.presentation::%completion-token-slice-start))))
+    (is (= 4
+           (nshell.presentation::completion-token-slice-start
+            (nshell.presentation::completion-token-context-bounds context))))
+    (is (= 7
+           (nshell.presentation::completion-token-slice-end
+            (nshell.presentation::completion-token-context-bounds context))))))
+
 (test common-prefix-two-finds-shared-leading-substring
   "common-prefix-two returns the longest common prefix of two strings."
   (flet ((pre (a b) (nshell.presentation::%common-prefix-two a b)))

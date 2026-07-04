@@ -115,6 +115,20 @@
                 :completion-base-buffer "g"
                 :completion-base-cursor 1
                 :last-candidates '("git" "grep"))))
+    (let* ((query-edit
+             (nshell.presentation::make-history-search-query-edit "atus"))
+           (query-plan (nshell.presentation::history-search-edit-plan
+                        query-edit)))
+      (is (nshell.presentation::history-search-edit-p query-edit))
+      (is (nshell.presentation::history-search-edit-plan-p query-plan))
+      (is (eq :query
+              (nshell.presentation::history-search-edit-plan-kind query-plan)))
+      (is (string= "atus"
+                   (nshell.presentation::history-search-edit-plan-text
+                    query-plan)))
+      (is (= 0
+             (nshell.presentation::history-search-edit-plan-delta query-plan)))
+      (is (not (fboundp 'nshell.presentation::make-history-search-edit-plan))))
     (with-reduced-input-state (query-state query-output)
         (nshell.presentation::commit-history-search-edit
          state
@@ -125,22 +139,40 @@
                                                :original-buffer "git"
                                                :index 0)
       (is (eq :search-update query-output))
-      (with-reduced-input-state (selection-state selection-output)
-          (nshell.presentation::commit-history-search-edit
-           query-state
-           (nshell.presentation::make-history-search-selection-edit 1))
-        (is (= 1 (nshell.presentation:input-state-search-index selection-state)))
-        (is (eq :search-update selection-output)))
-      (with-reduced-input-state (backspace-state backspace-output)
-          (nshell.presentation::commit-history-search-edit
-           query-state
-           (nshell.presentation::make-history-search-backspace-edit))
-        (is-search-state-with-completion-cleared backspace-state
-                                                 :mode :search
-                                                 :query "statu"
-                                                 :original-buffer "git"
-                                                 :index 0)
-        (is (eq :search-update backspace-output))))))
+      (let* ((selection-edit
+               (nshell.presentation::make-history-search-selection-edit 1))
+             (selection-plan (nshell.presentation::history-search-edit-plan
+                              selection-edit)))
+        (is (eq :selection
+                (nshell.presentation::history-search-edit-plan-kind
+                 selection-plan)))
+        (is (= 1
+               (nshell.presentation::history-search-edit-plan-delta
+                selection-plan)))
+        (with-reduced-input-state (selection-state selection-output)
+            (nshell.presentation::commit-history-search-edit
+             query-state
+             selection-edit)
+          (is (= 1 (nshell.presentation:input-state-search-index
+                    selection-state)))
+          (is (eq :search-update selection-output))))
+      (let* ((backspace-edit
+               (nshell.presentation::make-history-search-backspace-edit))
+             (backspace-plan (nshell.presentation::history-search-edit-plan
+                              backspace-edit)))
+        (is (eq :backspace
+                (nshell.presentation::history-search-edit-plan-kind
+                 backspace-plan)))
+        (with-reduced-input-state (backspace-state backspace-output)
+            (nshell.presentation::commit-history-search-edit
+             query-state
+             backspace-edit)
+          (is-search-state-with-completion-cleared backspace-state
+                                                   :mode :search
+                                                   :query "statu"
+                                                   :original-buffer "git"
+                                                   :index 0)
+          (is (eq :search-update backspace-output)))))))
 
 (test input-state-history-search-query-insertion-truncates-to-buffer-limit
   (let* ((limit nshell.presentation::+max-input-buffer-size+)

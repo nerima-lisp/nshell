@@ -122,12 +122,6 @@ Builds the final output string by joining all pushed chunks in order."
   "Return the OS PID of a background PROCESS object, or NIL if unavailable."
   (ignore-errors (sb-ext:process-pid process)))
 
-(defun %command-node-command-line (command-node)
-  "Format COMMAND-NODE as a human-readable string for job listing."
-  (let* ((cmd (nshell.domain.parsing:command-node-command command-node))
-         (args (nshell.domain.parsing:command-node-arg-values command-node)))
-    (format nil "~a~{ ~a~}" cmd args)))
-
 (defun %register-background-job (context processes command-line)
   "Register PROCESSES as a background job in CONTEXT's monitor and process registry.
 PROCESSES is a single process object (command) or a list (pipeline).
@@ -143,19 +137,23 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
 (defun %spawn-background-node-in-context (context command)
   "Spawn COMMAND (command-node or pipeline-node) asynchronously and register a job."
   (if (nshell.domain.parsing:pipeline-node-p command)
-      (let* ((commands (nshell.domain.parsing:pipeline-node-commands command))
-             (redirects (make-list (length commands) :initial-element nil))
-             (processes (nshell.infrastructure.acl:spawn-pipeline-async
-                         commands :redirects redirects))
-             (command-line (format nil "~{~a~^ | ~}"
-                                   (mapcar #'%command-node-command-line commands))))
-        (when processes
-          (%register-background-job context processes command-line)))
+      (let ((commands (nshell.domain.parsing:pipeline-node-commands command)))
+        (multiple-value-bind (clean-commands redirects)
+            (%extract-pipeline-redirects commands)
+          (let* ((clean-pipeline (nshell.domain.parsing:make-pipeline-node
+                                  clean-commands))
+                 (processes (nshell.infrastructure.acl:spawn-pipeline-async
+                             clean-commands :redirects redirects))
+                 (command-line (nshell.domain.parsing:ast-node->command-line
+                                clean-pipeline)))
+            (when processes
+              (%register-background-job context processes command-line)))))
       (multiple-value-bind (clean-command redirects)
           (%extract-command-redirects command)
         (let* ((cmd (nshell.domain.parsing:command-node-command clean-command))
                (args (nshell.domain.parsing:command-node-arg-values clean-command))
-               (command-line (%command-node-command-line command))
+               (command-line (nshell.domain.parsing:ast-node->command-line
+                              clean-command))
                (process (nshell.infrastructure.acl:spawn-async
                          cmd args :redirects redirects)))
           (when process

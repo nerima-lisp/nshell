@@ -158,7 +158,8 @@
                 (is (nshell.domain.execution:job-background-p job))
                 (is (eq :running (nshell.domain.execution:job-state job)))
                 (is (string= "first arg"
-                             (nshell.domain.execution:job-command-line job)))
+                             (nshell.domain.execution:job-command-display-string
+                              job)))
                 (is (eq process
                         (gethash job-id
                                  (nshell.application:shell-context-process-registry
@@ -213,7 +214,8 @@
                 (is (nshell.domain.execution:job-background-p job))
                 (is (eq :running (nshell.domain.execution:job-state job)))
                 (is (string= "first left | second right"
-                             (nshell.domain.execution:job-command-line job)))
+                             (nshell.domain.execution:job-command-display-string
+                              job)))
                 (is (eq processes
                         (gethash job-id
                                  (nshell.application:shell-context-process-registry
@@ -245,4 +247,3 @@
     (is (= -1 (delta "end")))
     (is (=  0 (delta "echo hello")))
     (is (=  0 (delta "")))))
-

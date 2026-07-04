@@ -86,7 +86,8 @@
                    (job (cdar entries)))
               (is (= 1 (length entries)))
               (is (string= "printf %s bg"
-                           (nshell.domain.execution:job-command-line job))))
+                           (nshell.domain.execution:job-command-display-string
+                            job))))
             (is (probe-file output))
             (is (string= "bg" (uiop:read-file-string output))))))))
 
@@ -117,7 +118,8 @@
               (is (= 2 (length (nshell.domain.execution:job-pids job))))
               (is (nshell.domain.execution:job-background-p job))
               (is (string= "printf %s bg-pipe | cat"
-                           (nshell.domain.execution:job-command-line job))))
+                           (nshell.domain.execution:job-command-display-string
+                            job))))
             (is (probe-file output))
             (is (string= "bg-pipe" (uiop:read-file-string output))))))))
 

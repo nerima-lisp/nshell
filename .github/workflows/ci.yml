@@ -23,11 +23,24 @@ jobs:
           - os: ubuntu-latest   # x86_64-linux
           - os: macos-13        # x86_64-darwin
           - os: macos-14        # aarch64-darwin
+    # GitHub Actions doesn't let a step's `if` read that same step's own
+    # `env`, and a secret cannot be referenced directly in an `if`, so this
+    # indirection is required.
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
+
+      # Only configure the binary cache when the auth token is available
+      # (it is not exposed to pull requests from forks).
+      - uses: cachix/cachix-action@v17
+        if: ${{ env.CACHIX_AUTH_TOKEN != '' }}
+        with:
+          name: takeokunn-nshell
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build, test, and smoke-test (nix flake check)
         run: nix flake check --print-build-logs
@@ -39,11 +52,19 @@ jobs:
     # coverage on a runner where those facilities exist.
     name: integration tests (full OS environment)
     runs-on: ubuntu-latest
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: cachix/cachix-action@v17
+        if: ${{ env.CACHIX_AUTH_TOKEN != '' }}
+        with:
+          name: takeokunn-nshell
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Run full test suite in a dev shell (non-sandboxed)
         run: |
@@ -64,11 +85,19 @@ jobs:
           - os: ubuntu-latest
           - os: macos-13
           - os: macos-14
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: cachix/cachix-action@v17
+        if: ${{ env.CACHIX_AUTH_TOKEN != '' }}
+        with:
+          name: takeokunn-nshell
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build nshell binary
         run: nix build --print-build-logs

@@ -196,23 +196,41 @@
 
 (test redirect-output-destinations-preserve-left-to-right-effects
   "Domain output destination resolution owns shell-significant redirect order."
-  (multiple-value-bind (stdout-target stdout-mode stderr-target stderr-mode)
-      (nshell.domain.parsing:redirect-output-destinations
-       '((:2> . "early.err")
-         (:> . "out.txt")
-         (:2>&1 . nil)
-         (:>> . "later.out")))
-    (is (string= "later.out" stdout-target))
-    (is (eq :append stdout-mode))
-    (is (string= "out.txt" stderr-target))
-    (is (eq :supersede stderr-mode)))
-  (multiple-value-bind (stdout-target stdout-mode stderr-target stderr-mode)
-      (nshell.domain.parsing:redirect-output-destinations
-       '((:&>> . "all.log")))
-    (is (string= "all.log" stdout-target))
-    (is (eq :append stdout-mode))
-    (is (string= "all.log" stderr-target))
-    (is (eq :append stderr-mode)))
+  (let ((destinations
+          (nshell.domain.parsing:redirect-output-destinations
+           '((:2> . "early.err")
+             (:> . "out.txt")
+             (:2>&1 . nil)
+             (:>> . "later.out")))))
+    (is (nshell.domain.parsing:redirect-output-destinations-p destinations))
+    (is (string= "later.out"
+                 (nshell.domain.parsing:redirect-output-destinations-stdout-target
+                  destinations)))
+    (is (eq :append
+            (nshell.domain.parsing:redirect-output-destinations-stdout-mode
+             destinations)))
+    (is (string= "out.txt"
+                 (nshell.domain.parsing:redirect-output-destinations-stderr-target
+                  destinations)))
+    (is (eq :supersede
+            (nshell.domain.parsing:redirect-output-destinations-stderr-mode
+             destinations))))
+  (let ((destinations
+          (nshell.domain.parsing:redirect-output-destinations
+           '((:&>> . "all.log")))))
+    (is (nshell.domain.parsing:redirect-output-destinations-p destinations))
+    (is (string= "all.log"
+                 (nshell.domain.parsing:redirect-output-destinations-stdout-target
+                  destinations)))
+    (is (eq :append
+            (nshell.domain.parsing:redirect-output-destinations-stdout-mode
+             destinations)))
+    (is (string= "all.log"
+                 (nshell.domain.parsing:redirect-output-destinations-stderr-target
+                  destinations)))
+    (is (eq :append
+            (nshell.domain.parsing:redirect-output-destinations-stderr-mode
+             destinations))))
   (let* ((state (nshell.domain.parsing::%empty-redirect-output-destination-state))
          (stdout-state
            (nshell.domain.parsing::%redirect-output-destination-state-apply-entry

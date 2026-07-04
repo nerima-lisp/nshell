@@ -52,11 +52,23 @@ Applies REDIRECTS and returns (output exit-code)."
                          (open input-target :direction :input :if-does-not-exist :error)))
                   (input (make-string-input-stream input))
                   (t *standard-input*))))
-    (multiple-value-bind (stdout-target stdout-mode stderr-target stderr-mode)
-        (nshell.domain.parsing:redirect-output-destinations redirects)
-      (let ((merge-stderr-p (or (and (null stdout-target) (null stderr-target))
-                                (and stdout-target stderr-target
-                                     (equal stdout-target stderr-target)))))
+    (let* ((destinations
+             (nshell.domain.parsing:redirect-output-destinations redirects))
+           (stdout-target
+             (nshell.domain.parsing:redirect-output-destinations-stdout-target
+              destinations))
+           (stdout-mode
+             (nshell.domain.parsing:redirect-output-destinations-stdout-mode
+              destinations))
+           (stderr-target
+             (nshell.domain.parsing:redirect-output-destinations-stderr-target
+              destinations))
+           (stderr-mode
+             (nshell.domain.parsing:redirect-output-destinations-stderr-mode
+              destinations))
+           (merge-stderr-p (or (and (null stdout-target) (null stderr-target))
+                               (and stdout-target stderr-target
+                                    (equal stdout-target stderr-target)))))
         (handler-case
             (unwind-protect
                  (let ((process
@@ -108,7 +120,7 @@ Applies REDIRECTS and returns (output exit-code)."
               (when opened-input
                 (close opened-input)))
           (error (condition)
-            (values (format nil "nshell: ~a: ~a~%" command condition) 127)))))))
+            (values (format nil "nshell: ~a: ~a~%" command condition) 127))))))
 
 ;; -- Internal vs external dispatch -------------------------------------------
 

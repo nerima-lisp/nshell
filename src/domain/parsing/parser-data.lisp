@@ -223,8 +223,16 @@
 (defun %empty-redirect-output-destination-state ()
   (%make-redirect-output-destination-state nil :supersede nil :supersede))
 
-(defun %redirect-output-destination-state-values (state)
-  (values
+(defstruct (redirect-output-destinations
+            (:constructor %make-redirect-output-destinations
+                (stdout-target stdout-mode stderr-target stderr-mode)))
+  stdout-target
+  stdout-mode
+  stderr-target
+  stderr-mode)
+
+(defun %redirect-output-destinations-from-state (state)
+  (%make-redirect-output-destinations
    (%redirect-output-destination-state-stdout-target state)
    (%redirect-output-destination-state-stdout-mode state)
    (%redirect-output-destination-state-stderr-target state)
@@ -267,10 +275,8 @@
           :initial-value (%empty-redirect-output-destination-state)))
 
 (defun redirect-output-destinations (redirects)
-  "Return stdout/stderr file destinations as four values.
-The values are stdout-target, stdout-mode, stderr-target, and stderr-mode after
-applying REDIRECTS from left to right."
-  (%redirect-output-destination-state-values
+  "Return stdout/stderr file destinations after applying REDIRECTS left to right."
+  (%redirect-output-destinations-from-state
    (%redirect-output-destination-state-from-redirects redirects)))
 
 (defstruct (%separator-facts

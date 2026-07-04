@@ -69,6 +69,11 @@
            #:redirect-input-file-target #:redirect-output-spec
            #:redirect-stderr-spec #:redirect-output-p
            #:redirect-output-destinations
+           #:redirect-output-destinations-p
+           #:redirect-output-destinations-stdout-target
+           #:redirect-output-destinations-stdout-mode
+           #:redirect-output-destinations-stderr-target
+           #:redirect-output-destinations-stderr-mode
            #:tokenization-result-p
            #:tokenization-result-tokens
            #:tokenization-result-cursor-token

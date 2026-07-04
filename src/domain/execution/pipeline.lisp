@@ -4,14 +4,14 @@
                        (:conc-name pipeline-))
     (commands-list nil :type list :read-only t))
 
-  (defstruct (pipe-config (:constructor make-pipe-config (&key stdin stdout index last-p))
+  (defstruct (pipe-config (:constructor %make-pipe-config (&key stdin stdout index last-p))
                           (:conc-name pipe-config-))
     (stdin nil :type (or null keyword))
     (stdout nil :type (or null keyword))
     (index 0 :type integer :read-only t)
     (last-p nil :type boolean :read-only t))
 
-  (defstruct (pipeline-stage (:constructor make-pipeline-stage (stage-command pipe-config))
+  (defstruct (pipeline-stage (:constructor %make-pipeline-stage (stage-command pipe-config))
                              (:conc-name pipeline-stage-))
     (stage-command nil :read-only t)
     (pipe-config nil :type pipe-config :read-only t))
@@ -38,9 +38,9 @@
      (loop for command in commands
            for index from 0
            for last-p = (= index last-index)
-           collect (make-pipeline-stage
+           collect (%make-pipeline-stage
                     command
-                    (make-pipe-config
+                    (%make-pipe-config
                      :stdin (when (plusp index) :pipe)
                      :stdout (unless last-p :pipe)
                      :index index

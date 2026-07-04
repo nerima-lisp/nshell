@@ -20,6 +20,12 @@
      (nshell.domain.completion:make-fact :predicate 'completes :args '("ls" "--help")))
     (is (= 1 (length (nshell.domain.completion:prove-all kb '(completes "ls" "--help")))))))
 
+(test rule-knowledge-base-constructor-is-internal-boundary
+  (is (not (fboundp 'nshell.domain.completion::make-rule-knowledge-base)))
+  (is (fboundp 'nshell.domain.completion::%make-rule-knowledge-base))
+  (is (nshell.domain.completion::rule-knowledge-base-p
+       (nshell.domain.completion::make-empty-rule-knowledge-base))))
+
 (test rule-with-one-body-goal-resolves
   (let ((kb (make-empty-rule-kb)))
     (nshell.domain.completion:assert-fact!
@@ -96,7 +102,9 @@
                 missing)))
       (is (equal (first solutions)
                  (nshell.domain.completion::rule-solution-set-projection-first-solution
-                  solution-set))))
+                  solution-set)))
+      (is (not (fboundp 'nshell.domain.completion::make-rule-solution-binding-projection)))
+      (is (not (fboundp 'nshell.domain.completion::make-rule-solution-set-projection))))
     (is (string= "primary"
                  (nshell.domain.completion::first-solution-value
                   '?description solutions)))
@@ -118,7 +126,8 @@
     (is (eq 'test-builtin-string=
             (nshell.domain.completion::goal-predicate goal)))
     (is (equal '("git" "git")
-               (nshell.domain.completion::goal-arguments goal)))))
+               (nshell.domain.completion::goal-arguments goal)))
+    (is (not (fboundp 'nshell.domain.completion::make-proof-search)))))
 
 (test logic-form-pair-projects-conversion-boundary
   (let* ((env (make-hash-table :test #'eq))

@@ -305,8 +305,10 @@ Each case is (EXPECTED INPUT &rest ARGS)."
 
 (test whitespace-field-scanner-accumulates-field-boundaries
   "Scanner state exposes field-boundary accumulation for whitespace splitting."
+  (is (not (fboundp 'nshell.domain.expansion::make-whitespace-field-scanner)))
+  (is (fboundp 'nshell.domain.expansion::%make-whitespace-field-scanner))
   (let* ((text (format nil " alpha~Cbeta~Cgamma " #\Tab #\Newline))
-         (scanner (nshell.domain.expansion::make-whitespace-field-scanner text)))
+         (scanner (nshell.domain.expansion::%make-whitespace-field-scanner text)))
     (loop for index from 0 below (length text)
           do (nshell.domain.expansion::whitespace-field-scanner-accept
               scanner index (char text index)))

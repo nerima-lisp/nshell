@@ -32,7 +32,7 @@
   (getf entry :exclusive-options))
 
 (defstruct (catalog-command-projection
-            (:constructor make-catalog-command-projection
+            (:constructor %make-catalog-command-projection
                 (&key command description synopsis subcommands flags option-values
                       exclusive-options)))
   command
@@ -44,7 +44,7 @@
   exclusive-options)
 
 (defun catalog-entry-command-projection (entry)
-  (make-catalog-command-projection
+  (%make-catalog-command-projection
    :command (catalog-command entry)
    :description (catalog-description entry)
    :synopsis (catalog-synopsis entry)

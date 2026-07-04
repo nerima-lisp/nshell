@@ -1,7 +1,7 @@
 (in-package #:nshell/test)
 
 (defun make-empty-rule-kb ()
-  (nshell.domain.completion::make-rule-knowledge-base))
+  (nshell.domain.completion::make-empty-rule-knowledge-base))
 
 (defun solution-binding (variable solution)
   (cdr (assoc variable solution)))

@@ -9,11 +9,11 @@
   (head '() :type list :read-only t)
   (body '() :type list :read-only t))
 
-(defstruct (rule-knowledge-base (:constructor make-rule-knowledge-base (&key (facts nil) (rules nil))))
+(defstruct (rule-knowledge-base (:constructor %make-rule-knowledge-base (&key (facts nil) (rules nil))))
   (facts nil :type list)
   (rules nil :type list))
 
-(defstruct (proof-search (:constructor make-proof-search (kb goal bindings depth)))
+(defstruct (proof-search (:constructor %make-proof-search (kb goal bindings depth)))
   (kb nil :read-only t)
   (goal '() :type list :read-only t)
   (bindings '() :type list :read-only t)
@@ -60,6 +60,9 @@
 (defmethod predicate-true-p ((predicate symbol) args bindings)
   (declare (ignore predicate args bindings))
   nil)
+
+(defun make-empty-rule-knowledge-base ()
+  (%make-rule-knowledge-base))
 
 (defun assert-fact! (kb fact)
   (push fact (rule-knowledge-base-facts kb))
@@ -116,7 +119,7 @@
 (declaim (ftype (function (proof-search) list) prove-internal))
 
 (defun proof-search-for-goal (search goal bindings &optional (depth (proof-search-depth search)))
-  (make-proof-search (proof-search-kb search) goal bindings depth))
+  (%make-proof-search (proof-search-kb search) goal bindings depth))
 
 (defun prove-body (search goals bindings)
   (if (null goals)
@@ -204,13 +207,13 @@
     (mapcar (lambda (solution)
               (externalize-bindings env solution))
             (prove-internal
-             (make-proof-search kb internal-goal bindings max-depth)))))
+             (%make-proof-search kb internal-goal bindings max-depth)))))
 
 (defun prove-all (kb goal &key (max-depth *max-proof-depth*))
   (prove kb goal '() max-depth))
 
 (defparameter *built-in-rule-knowledge-base*
-  (make-rule-knowledge-base
+  (%make-rule-knowledge-base
    :facts (mapcar #'make-fact-from-spec
                   (builtin-rule-facts))
    :rules (mapcar #'make-rule-from-spec

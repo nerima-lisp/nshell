@@ -1,7 +1,7 @@
 (in-package #:nshell.domain.completion)
 
 (defstruct (completion-query
-             (:constructor make-completion-query
+             (:constructor %make-completion-query
                  (partial-input context command arg-prefix argument-words filesystem-candidates)))
   (partial-input "" :type string :read-only t)
   (context nil :read-only t)
@@ -14,29 +14,29 @@
   (let* ((context (completion-context-for partial-input))
          (arg-prefix (completion-context-argument-prefix context))
          (filesystem-mode (completion-filesystem-mode context)))
-    (make-completion-query partial-input
-                           context
-                           (completion-context-command context)
-                           arg-prefix
-                           (completion-context-argument-words context)
-                           (when filesystem-mode
-                             (filesystem-candidates-for-mode filesystem-mode arg-prefix)))))
+    (%make-completion-query partial-input
+                            context
+                            (completion-context-command context)
+                            arg-prefix
+                            (completion-context-argument-words context)
+                            (when filesystem-mode
+                              (filesystem-candidates-for-mode filesystem-mode arg-prefix)))))
 
 (defstruct (rule-solution-binding-projection
-             (:constructor make-rule-solution-binding-projection (value present-p)))
+             (:constructor %make-rule-solution-binding-projection (value present-p)))
   value
   present-p)
 
 (defstruct (rule-solution-set-projection
-             (:constructor make-rule-solution-set-projection (first-solution)))
+             (:constructor %make-rule-solution-set-projection (first-solution)))
   first-solution)
 
 (defun project-rule-solution-binding (variable solution)
   (let ((binding (assoc variable solution)))
-    (make-rule-solution-binding-projection (cdr binding) (not (null binding)))))
+    (%make-rule-solution-binding-projection (cdr binding) (not (null binding)))))
 
 (defun project-rule-solution-set (solutions)
-  (make-rule-solution-set-projection (first solutions)))
+  (%make-rule-solution-set-projection (first solutions)))
 
 (defun solution-value (variable solution)
   (rule-solution-binding-projection-value

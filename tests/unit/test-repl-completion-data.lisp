@@ -110,6 +110,7 @@
     (is (equal "zz"
                (nshell.domain.completion::catalog-command-projection-command
                 projection)))
+    (is (not (fboundp 'nshell.domain.completion::make-catalog-command-projection)))
     (is (equal '("run" (:name "test" :description "run tests"))
                (nshell.domain.completion::catalog-command-projection-subcommands
                 projection)))

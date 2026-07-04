@@ -148,6 +148,11 @@
   (is (fboundp 'nshell.domain.completion::%make-completion-command-word-projection))
   (is (fboundp 'nshell.domain.completion::%make-completion-word-stream-projection)))
 
+(test completion-query-constructor-is-internal-boundary
+  "Completion query construction should stay behind completion-query-for."
+  (is (not (fboundp 'nshell.domain.completion::make-completion-query)))
+  (is (fboundp 'nshell.domain.completion::%make-completion-query)))
+
 (test completion-context-word-like-token-p-returns-canonical-booleans
   (is (eq t (nshell.domain.completion::word-like-token-p
              (nshell.domain.parsing:make-token :word "git"))))

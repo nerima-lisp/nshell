@@ -121,7 +121,7 @@ single string. Command substitution is applied by the caller before this."
           (whitespace-field-boundary-end boundary)))
 
 (defstruct (whitespace-field-scanner
-            (:constructor make-whitespace-field-scanner (text)))
+            (:constructor %make-whitespace-field-scanner (text)))
   (text "" :type string :read-only t)
   (boundaries nil :type list)
   (start nil :type (or null integer)))
@@ -160,7 +160,7 @@ single string. Command substitution is applied by the caller before this."
           collect (whitespace-field-boundary-text boundary text))))
 
 (defun %split-whitespace-fields (text)
-  (let ((scanner (make-whitespace-field-scanner text)))
+  (let ((scanner (%make-whitespace-field-scanner text)))
     (loop for index from 0 below (length text)
           do (whitespace-field-scanner-accept scanner index (char text index)))
     (whitespace-field-scanner-result scanner)))

@@ -692,6 +692,30 @@
                (nshell.domain.parsing:pipeline-node-commands
                 (first sequence-commands))))))
 
+(test parser-assembly-build-state-accepts-pair-through-value-object
+  "Mixed sequence building should transition through a single state value."
+  (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
+         (pair
+           (nshell.domain.parsing::%make-command-separator-pair
+            first-command
+            :and))
+         (state
+           (nshell.domain.parsing::%mixed-sequence-build-state-accept-pair
+            (nshell.domain.parsing::%empty-mixed-sequence-build-state)
+            pair))
+         (sequence-commands
+           (nshell.domain.parsing::%mixed-sequence-build-state-sequence-commands
+            state)))
+    (is (nshell.domain.parsing::%mixed-sequence-build-state-p state))
+    (is (nshell.domain.parsing::%pending-pipeline-group-empty-p
+         (nshell.domain.parsing::%mixed-sequence-build-state-pipe-group
+          state)))
+    (is (= 1 (length sequence-commands)))
+    (is (eq first-command (first sequence-commands)))
+    (is (equal '(:and)
+               (nshell.domain.parsing::%mixed-sequence-build-state-sequence-separators
+                state)))))
+
 (test parser-assembly-classifies-command-list-policy
   "Parser assembly policy should classify command-list shape before building AST nodes."
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))

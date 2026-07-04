@@ -185,33 +185,62 @@
        (%empty-pending-pipeline-group))
       (%make-mixed-sequence-pipe-flush sequence-commands pipe-group)))
 
+(defstruct (%mixed-sequence-build-state
+            (:constructor %make-mixed-sequence-build-state
+                (sequence-commands sequence-separators pipe-group)))
+  (sequence-commands nil :type list :read-only t)
+  (sequence-separators nil :type list :read-only t)
+  (pipe-group nil :read-only t))
+
+(defun %empty-mixed-sequence-build-state ()
+  (%make-mixed-sequence-build-state nil nil (%empty-pending-pipeline-group)))
+
+(defun %mixed-sequence-build-state-push-command (state command)
+  (%make-mixed-sequence-build-state
+   (%mixed-sequence-build-state-sequence-commands state)
+   (%mixed-sequence-build-state-sequence-separators state)
+   (%pending-pipeline-group-push
+    (%mixed-sequence-build-state-pipe-group state)
+    command)))
+
+(defun %mixed-sequence-build-state-flush-pipe-group (state)
+  (let ((flush (%flush-mixed-sequence-pipe-group
+                (%mixed-sequence-build-state-sequence-commands state)
+                (%mixed-sequence-build-state-pipe-group state))))
+    (%make-mixed-sequence-build-state
+     (%mixed-sequence-pipe-flush-sequence-commands flush)
+     (%mixed-sequence-build-state-sequence-separators state)
+     (%mixed-sequence-pipe-flush-pipe-group flush))))
+
+(defun %mixed-sequence-build-state-record-separator (state separator)
+  (%make-mixed-sequence-build-state
+   (%mixed-sequence-build-state-sequence-commands state)
+   (cons separator (%mixed-sequence-build-state-sequence-separators state))
+   (%mixed-sequence-build-state-pipe-group state)))
+
+(defun %mixed-sequence-build-state-accept-pair (state pair)
+  (let* ((after-command
+           (%mixed-sequence-build-state-push-command
+            state
+            (%command-separator-pair-command pair)))
+         (separator (%command-separator-pair-separator pair)))
+    (if (%sequence-boundary-separator-p separator)
+        (%mixed-sequence-build-state-record-separator
+         (%mixed-sequence-build-state-flush-pipe-group after-command)
+         separator)
+        after-command)))
+
+(defun %mixed-sequence-build-state-ast (state)
+  (let ((final-state (%mixed-sequence-build-state-flush-pipe-group state)))
+    (make-sequence-node
+     (nreverse (%mixed-sequence-build-state-sequence-commands final-state))
+     (nreverse (%mixed-sequence-build-state-sequence-separators final-state)))))
+
 (defun %build-mixed-sequence (assembly)
-  (let ((sequence-commands nil)
-        (sequence-separators nil)
-        (pipe-group (%empty-pending-pipeline-group)))
+  (let ((state (%empty-mixed-sequence-build-state)))
     (loop for pair in (%mixed-sequence-assembly-pairs assembly)
-          for command = (%command-separator-pair-command pair)
-          for separator = (%command-separator-pair-separator pair)
-          do (setf pipe-group
-                   (%pending-pipeline-group-push pipe-group command))
-             (when (%sequence-boundary-separator-p separator)
-               (let ((flush (%flush-mixed-sequence-pipe-group
-                             sequence-commands
-                             pipe-group)))
-                 (setf sequence-commands
-                       (%mixed-sequence-pipe-flush-sequence-commands flush)
-                       pipe-group
-                       (%mixed-sequence-pipe-flush-pipe-group flush)))
-               (push separator sequence-separators)))
-    (let ((flush (%flush-mixed-sequence-pipe-group
-                  sequence-commands
-                  pipe-group)))
-      (setf sequence-commands
-            (%mixed-sequence-pipe-flush-sequence-commands flush)
-            pipe-group
-            (%mixed-sequence-pipe-flush-pipe-group flush)))
-    (make-sequence-node (nreverse sequence-commands)
-                        (nreverse sequence-separators))))
+          do (setf state (%mixed-sequence-build-state-accept-pair state pair)))
+    (%mixed-sequence-build-state-ast state)))
 
 (defun %background-command-list-ast (command)
   (make-sequence-node (list command) '(:amp)))

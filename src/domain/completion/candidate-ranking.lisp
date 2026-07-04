@@ -4,51 +4,8 @@
 (defconstant +%case-sensitive-prefix-rank-bonus+ 10000)
 (defconstant +%described-candidate-rank-bonus+ 1000)
 
-(defstruct (%candidate-ranking
-            (:constructor %make-candidate-ranking (score text))
-            (:conc-name %candidate-ranking-))
-  score
-  text)
-
-(defstruct (%duplicate-candidate-quality
-            (:constructor %make-duplicate-candidate-quality (score described-p))
-            (:conc-name %duplicate-candidate-quality-))
-  score
-  described-p)
-
-(defstruct (%candidate-merge-slot
-            (:constructor %make-candidate-merge-slot (results-cell))
-            (:conc-name %candidate-merge-slot-))
-  results-cell)
-
-(defun %candidate-results-cell-candidate (results-cell)
-  (first results-cell))
-
-(defun %candidate-results-cell-replace-candidate (results-cell candidate)
-  (setf (first results-cell) candidate)
-  results-cell)
-
-(defun %candidate-merge-slot-candidate (slot)
-  (%candidate-results-cell-candidate
-   (%candidate-merge-slot-results-cell slot)))
-
-(defun %candidate-merge-slot-replace-candidate (slot candidate)
-  (%candidate-results-cell-replace-candidate
-   (%candidate-merge-slot-results-cell slot)
-   candidate)
-  slot)
-
-(defstruct (%candidate-merge-state
-            (:constructor %make-candidate-merge-state (cells-by-text results))
-            (:conc-name %candidate-merge-state-))
-  cells-by-text
-  results)
-
-(defun %make-empty-candidate-merge-state ()
-  (%make-candidate-merge-state (make-hash-table :test #'equal) nil))
-
 (defun %candidate-description-present-p (candidate)
-  (< 0 (length (candidate-description candidate))))
+  (plusp (length (candidate-description candidate))))
 
 (defun %case-sensitive-prefix-p (prefix text)
   (and (<= (length prefix) (length text))
@@ -77,74 +34,51 @@
   (+ (candidate-score candidate)
      (%candidate-rank-bonus prefix candidate)))
 
-(defun %candidate-ranking-for (prefix candidate)
-  (%make-candidate-ranking (%completion-rank-score prefix candidate)
-                           (candidate-text candidate)))
-
-(defun %candidate-ranking< (left right)
-  (cond
-    ((/= (%candidate-ranking-score left)
-         (%candidate-ranking-score right))
-     (> (%candidate-ranking-score left)
-        (%candidate-ranking-score right)))
-    (t
-     (string< (%candidate-ranking-text left)
-              (%candidate-ranking-text right)))))
+(defun %candidate-ranking< (prefix left right)
+  (let ((left-score (%completion-rank-score prefix left))
+        (right-score (%completion-rank-score prefix right)))
+    (cond
+      ((/= left-score right-score)
+       (> left-score right-score))
+      (t
+       (string< (candidate-text left)
+                (candidate-text right))))))
 
 (defun %completion-candidate< (prefix left right)
-  (%candidate-ranking< (%candidate-ranking-for prefix left)
-                       (%candidate-ranking-for prefix right)))
-
-(defun %duplicate-candidate-quality (candidate)
-  (%make-duplicate-candidate-quality
-   (candidate-score candidate)
-   (%candidate-description-present-p candidate)))
-
-(defun %duplicate-candidate-quality> (candidate current)
-  (cond
-    ((> (%duplicate-candidate-quality-score candidate)
-        (%duplicate-candidate-quality-score current))
-     t)
-    ((< (%duplicate-candidate-quality-score candidate)
-        (%duplicate-candidate-quality-score current))
-     nil)
-    ((and (%duplicate-candidate-quality-described-p candidate)
-          (not (%duplicate-candidate-quality-described-p current)))
-     t)
-    (t nil)))
+  (%candidate-ranking< prefix left right))
 
 (defun %better-duplicate-candidate-p (candidate current)
-  (%duplicate-candidate-quality> (%duplicate-candidate-quality candidate)
-                                 (%duplicate-candidate-quality current)))
-
-(defun %candidate-merge-state-add (state candidate)
-  (let* ((text (candidate-text candidate))
-         (cells-by-text (%candidate-merge-state-cells-by-text state))
-         (slot (gethash text cells-by-text)))
+  (let ((candidate-score (candidate-score candidate))
+        (current-score (candidate-score current)))
     (cond
-      ((null slot)
-       (let ((new-results (cons candidate (%candidate-merge-state-results state))))
-         (setf (gethash text cells-by-text) (%make-candidate-merge-slot new-results)
-               (%candidate-merge-state-results state) new-results)
-         state))
-      ((%better-duplicate-candidate-p candidate
-                                      (%candidate-merge-slot-candidate slot))
-       (%candidate-merge-slot-replace-candidate slot candidate)
-       state)
+      ((> candidate-score current-score)
+       t)
+      ((< candidate-score current-score)
+       nil)
       (t
-       state))))
+       (and (%candidate-description-present-p candidate)
+            (not (%candidate-description-present-p current)))))))
 
-(defun %merge-candidate (candidate state)
-  (%candidate-merge-state-add state candidate))
+(defun %merge-candidates (&rest candidate-lists)
+  (let ((cells-by-text (make-hash-table :test #'equal))
+        (results nil))
+    (labels ((merge-candidate (candidate)
+               (let* ((text (candidate-text candidate))
+                      (results-cell (gethash text cells-by-text)))
+                 (cond
+                   ((null results-cell)
+                    (let ((new-results-cell (cons candidate results)))
+                      (setf (gethash text cells-by-text) new-results-cell
+                            results new-results-cell)))
+                   ((%better-duplicate-candidate-p candidate
+                                                    (car results-cell))
+                    (setf (car results-cell) candidate))))))
+      (dolist (candidates candidate-lists)
+        (dolist (candidate candidates)
+          (merge-candidate candidate)))
+      results)))
 
 (defun %rank-candidates (prefix candidates)
   (stable-sort (copy-list candidates)
                (lambda (left right)
                  (%completion-candidate< prefix left right))))
-
-(defun %merge-candidates (&rest candidate-lists)
-  (let ((state (%make-empty-candidate-merge-state)))
-    (dolist (candidates candidate-lists)
-      (dolist (candidate candidates)
-        (%merge-candidate candidate state)))
-    (%candidate-merge-state-results state)))

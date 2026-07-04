@@ -2,7 +2,7 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (input-dispatch-action
+(defstruct (%input-dispatch-action
              (:constructor %make-input-dispatch-action
                  (kind &optional value))
              (:conc-name %input-dispatch-action-))
@@ -15,7 +15,7 @@
 (defun input-dispatch-action-value (action)
   (%input-dispatch-action-value action))
 
-(defstruct (input-dispatch-transition
+(defstruct (%input-dispatch-transition
              (:constructor %make-input-dispatch-transition
                  (state output))
              (:conc-name %input-dispatch-transition-))

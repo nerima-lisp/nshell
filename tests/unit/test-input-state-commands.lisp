@@ -94,7 +94,7 @@
           (eol-action (action-for :ctrl-e))
           (paste-action (action-for :paste nil "abc"))
           (unknown-action (action-for :unknown)))
-      (is (nshell.presentation::input-dispatch-action-p char-action))
+      (is (nshell.presentation::%input-dispatch-action-p char-action))
       (is (eq :insert-char
               (nshell.presentation::input-dispatch-action-kind char-action)))
       (is (char= #\x
@@ -115,9 +115,10 @@
                unknown-action))))))
 
 (test input-state-dispatch-action-raw-accessors-stay-internal
-  "input-dispatch-action exposes explicit readers; generated slot readers stay internal."
+  "input-dispatch-action exposes explicit readers; generated slots and predicates stay internal."
   (let ((action (nshell.presentation::input-dispatch-action-for-key-event
                  (input-key-event :ctrl-l))))
+    (is (not (fboundp 'nshell.presentation::input-dispatch-action-p)))
     (is (fboundp 'nshell.presentation::%input-dispatch-action-kind))
     (is (not (eq (symbol-function
                   'nshell.presentation::input-dispatch-action-kind)
@@ -141,7 +142,8 @@
          (transition (nshell.presentation::input-dispatch-transition-for-action
                       state
                       action)))
-    (is (nshell.presentation::input-dispatch-transition-p transition))
+    (is (nshell.presentation::%input-dispatch-transition-p transition))
+    (is (not (fboundp 'nshell.presentation::input-dispatch-transition-p)))
     (is (not (fboundp 'nshell.presentation::make-input-dispatch-transition)))
     (is (fboundp 'nshell.presentation::%input-dispatch-transition-state))
     (is (eq :clear-screen

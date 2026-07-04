@@ -135,6 +135,26 @@
                   (%starts-with-p value-prefix value))
           collect value))
 
+(defstruct (%argument-word-sequence
+            (:constructor %make-argument-word-sequence
+                (words latest words-before-latest))
+            (:conc-name %argument-word-sequence-))
+  words
+  latest
+  words-before-latest)
+
+(defun %argument-word-sequence-from-words (words)
+  (let ((latest nil)
+        (words-before-latest nil))
+    (dolist (word words)
+      (when latest
+        (push latest words-before-latest))
+      (setf latest word))
+    (%make-argument-word-sequence
+     words
+     latest
+     (nreverse words-before-latest))))
+
 (defun %option-value-candidate (text)
   (make-candidate text
                   :kind :option
@@ -161,26 +181,19 @@
                            option
                            value)))))))
 
-(defun %latest-argument-word (words)
-  (loop for word in words
-        finally (return word)))
-
-(defun %argument-words-before-latest (words)
-  (loop for remaining on words
-        while (rest remaining)
-        collect (first remaining)))
-
 (defun %argument-words-without-value-prefix (words prefix)
-  (let ((latest-word (%latest-argument-word words)))
+  (let* ((sequence (%argument-word-sequence-from-words words))
+         (latest-word (%argument-word-sequence-latest sequence)))
     (if (and latest-word
              (not (string= prefix ""))
              (string= latest-word prefix))
-        (%argument-words-before-latest words)
+        (%argument-word-sequence-words-before-latest sequence)
         words)))
 
 (defun %previous-option-for-value-prefix (argument-words prefix)
-  (%latest-argument-word
-   (%argument-words-without-value-prefix argument-words prefix)))
+  (%argument-word-sequence-latest
+   (%argument-word-sequence-from-words
+    (%argument-words-without-value-prefix argument-words prefix))))
 
 (defun %parse-separate-option-value-prefix (argument-words prefix)
   (let ((option (%previous-option-for-value-prefix argument-words prefix)))

@@ -308,12 +308,28 @@
              '("fa")
              "fa"))))
 
+(test argument-word-sequence-projects-latest-and-prior-words
+  (let ((sequence
+          (nshell.domain.completion::%argument-word-sequence-from-words
+           '("--mode" "fast"))))
+    (is (equal '("--mode" "fast")
+               (nshell.domain.completion::%argument-word-sequence-words
+                sequence)))
+    (is (string= "fast"
+                 (nshell.domain.completion::%argument-word-sequence-latest
+                  sequence)))
+    (is (equal '("--mode")
+               (nshell.domain.completion::%argument-word-sequence-words-before-latest
+                sequence)))))
+
 (test argument-candidate-helpers-are-internal-boundaries
   (flet ((defined-symbol-p (name)
            (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
     (is (not (defined-symbol-p "UNIQUE-ENTRY-ARGUMENT-NAMES")))
     (is (not (defined-symbol-p "LATEST-ARGUMENT-WORD")))
     (is (not (defined-symbol-p "ARGUMENT-WORDS-BEFORE-LATEST")))
+    (is (not (defined-symbol-p "ARGUMENT-WORD-SEQUENCE-FROM-WORDS")))
+    (is (not (defined-symbol-p "ARGUMENT-WORD-SEQUENCE-LATEST")))
     (is (not (defined-symbol-p "ARGUMENT-WORDS-WITHOUT-VALUE-PREFIX")))
     (is (not (defined-symbol-p "PREVIOUS-OPTION-FOR-VALUE-PREFIX")))
     (is (not (defined-symbol-p "OPTION-TOKEN-MATCHES-P")))
@@ -322,8 +338,10 @@
     (is (not (defined-symbol-p "ARGUMENT-NAME-CANDIDATE")))
     (is (not (defined-symbol-p "ENTRY-ARGUMENT-NAME-CANDIDATES"))))
   (is (fboundp 'nshell.domain.completion::%unique-entry-argument-names))
-  (is (fboundp 'nshell.domain.completion::%latest-argument-word))
-  (is (fboundp 'nshell.domain.completion::%argument-words-before-latest))
+  (is (fboundp 'nshell.domain.completion::%argument-word-sequence-from-words))
+  (is (fboundp 'nshell.domain.completion::%argument-word-sequence-latest))
+  (is (fboundp
+       'nshell.domain.completion::%argument-word-sequence-words-before-latest))
   (is (fboundp
        'nshell.domain.completion::%argument-words-without-value-prefix))
   (is (fboundp

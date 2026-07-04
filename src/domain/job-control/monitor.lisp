@@ -7,6 +7,12 @@
 (defun make-job-monitor ()
   (%make-job-monitor))
 
+(defun monitor-empty-p (monitor)
+  (zerop (hash-table-count (job-monitor-jobs-table monitor))))
+
+(defun monitor-next-job-id (monitor)
+  (job-monitor-next-id-int monitor))
+
 (defun %monitor-jobs-table (monitor)
   (job-monitor-jobs-table monitor))
 

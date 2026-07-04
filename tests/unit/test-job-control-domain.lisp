@@ -2,15 +2,16 @@
 (def-suite job-control-domain-tests :description "Job control domain tests" :in nshell-tests)
 (in-suite job-control-domain-tests)
 
-(test job-monitor-raw-constructor-is-internal-boundary
+(test job-monitor-construction-exposes-aggregate-facts
   (let ((monitor (nshell.domain.job-control:make-job-monitor)))
-    (is (hash-table-p (nshell.domain.job-control::job-monitor-jobs-table monitor)))
-    (is (= 1 (nshell.domain.job-control::job-monitor-next-id-int monitor)))
-    (is (fboundp 'nshell.domain.job-control::%make-job-monitor))))
+    (is (nshell.domain.job-control:job-monitor-p monitor))
+    (is (nshell.domain.job-control:monitor-empty-p monitor))
+    (is (= 1 (nshell.domain.job-control:monitor-next-job-id monitor)))))
 
 (test monitor-collection-shape-is-internal-boundary
   "Job monitor exposes ordered traversal, not hash-table or alist shape."
   (dolist (name '("MONITOR-JOBS" "MONITOR-ENTRIES"
+                  "%MAKE-JOB-MONITOR"
                   "JOB-MONITOR-JOBS-TABLE" "JOB-MONITOR-NEXT-ID-INT"))
     (multiple-value-bind (_symbol status)
         (find-symbol name "NSHELL.DOMAIN.JOB-CONTROL")

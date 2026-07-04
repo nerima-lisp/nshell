@@ -186,7 +186,9 @@
 
 (defpackage #:nshell.domain.job-control
   (:use #:cl)
-  (:export #:make-job-monitor #:monitor-add-job #:monitor-add-background-job
+  (:export #:job-monitor-p #:make-job-monitor
+            #:monitor-empty-p #:monitor-next-job-id
+            #:monitor-add-job #:monitor-add-background-job
             #:monitor-update
             #:monitor-map-jobs #:monitor-find-job
             #:monitor-remove-job

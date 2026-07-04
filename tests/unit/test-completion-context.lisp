@@ -279,40 +279,42 @@
                               '(:file :directory)))
                     candidates))))))
 
-(test path-separator-p-detects-forward-slash
-  "path-separator-p returns true only for / (path separator on Unix)."
-  (flet ((sep (ch) (nshell.domain.completion::%path-separator-p ch)))
-    (is (sep #\/))
-    (is (not (sep #\:)))
-    (is (not (sep #\a)))))
+(test command-path-candidates-projects-path-directories
+  "command-path-candidates returns matching executable candidates in PATH order."
+  (flet ((executable-p (path)
+           (member path '("/bin/git" "/usr/bin/git") :test #'string=)))
+    (is (equal '("/bin/git" "/usr/bin/git")
+               (nshell.domain.completion:command-path-candidates
+                "git" "/bin:/usr/bin" #'executable-p)))))
 
-(test command-prefix-has-directory-p-detects-slash-in-prefix
-  "command-prefix-has-directory-p returns the slash position when one is present."
-  (flet ((has-dir (s)
-           (nshell.domain.completion::%command-prefix-has-directory-p s)))
-    (is (null (has-dir "git")))
-    (is (not (null (has-dir "./git"))))
-    (is (not (null (has-dir "/usr/bin/git"))))))
+(test command-path-candidates-honors-directory-command
+  "command-path-candidates checks directory-qualified commands directly."
+  (flet ((executable-p (path)
+           (string= path "./git")))
+    (is (equal '("./git")
+               (nshell.domain.completion:command-path-candidates
+                "./git" "/bin:/usr/bin" #'executable-p)))
+    (is (null
+         (nshell.domain.completion:command-path-candidates
+          "./missing" "/bin:/usr/bin" #'executable-p)))))
 
-(test split-path-splits-colon-separated-directories
-  "split-path splits a colon-separated PATH into a list of directory strings."
-  (flet ((sp (s) (nshell.domain.completion::%split-path s)))
-    (is (equal '("/bin" "/usr/bin") (sp "/bin:/usr/bin")))
-    (is (equal '("/bin") (sp "/bin")))
-    (is (equal '("" "/bin") (sp ":/bin")))))
-
-(test join-directory-command-handles-empty-directory-policy
-  "join-directory-command keeps empty PATH element policy explicit at call sites."
-  (flet ((join (directory command &key (empty-directory directory))
-           (nshell.domain.completion::%join-directory-command
-            directory command :empty-directory empty-directory)))
-    (is (string= "git" (join "" "git" :empty-directory "")))
-    (is (string= "./git" (join "" "git" :empty-directory ".")))
-    (is (string= "/bin/git" (join "/bin/" "git")))
-    (is (string= "/bin/git" (join "/bin" "git")))))
+(test command-path-candidates-keeps-empty-directory-policy-explicit
+  "command-path-candidates lets callers choose how empty PATH elements are projected."
+  (flet ((executable-p (path)
+           (member path '("git" "./git" "/bin/git") :test #'string=)))
+    (is (equal '("git" "/bin/git")
+               (nshell.domain.completion:command-path-candidates
+                "git" ":/bin" #'executable-p :empty-directory "")))
+    (is (equal '("./git" "/bin/git")
+               (nshell.domain.completion:command-path-candidates
+                "git" ":/bin" #'executable-p :empty-directory ".")))))
 
 (test path-command-helpers-are-internal-boundaries
   "Path command helper functions should not expose unprefixed compatibility names."
+  (is (eq :external
+          (nth-value 1
+                     (find-symbol "COMMAND-PATH-CANDIDATES"
+                                  '#:nshell.domain.completion))))
   (flet ((defined-symbol-p (name)
            (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
     (dolist (name '("%PATH-SEPARATOR-P"

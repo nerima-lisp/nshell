@@ -87,17 +87,13 @@
                             #o111))))))
 
 (defun %resolve-external-command (command &optional (environment (%get-environment)))
-  (cond
-    ((nshell.domain.completion::%command-prefix-has-directory-p command)
-     (and (%executable-file-p command) command))
-    (t
-     (loop for directory in (nshell.domain.completion::%split-path
-                             (or (%environment-value "PATH" environment)
-                                 "/bin:/usr/bin"))
-           for candidate = (nshell.domain.completion::%join-directory-command
-                            directory command :empty-directory ".")
-           when (%executable-file-p candidate)
-             return candidate))))
+  (first
+   (nshell.domain.completion:command-path-candidates
+    command
+    (or (%environment-value "PATH" environment)
+        "/bin:/usr/bin")
+    #'%executable-file-p
+    :empty-directory ".")))
 
 (defun spawn-async (cmd args &key redirects)
   "Spawn CMD with ARGS asynchronously. Returns the SBCL process object, or NIL on error."

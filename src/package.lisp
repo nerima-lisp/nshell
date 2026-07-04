@@ -168,6 +168,7 @@
             #:completion-context-command-position-p
             #:completion-context-redirection-target-p
             #:completion-filesystem-fns
+            #:command-path-candidates
             #:*path-command-directory-files-fn* #:*path-command-executable-p-fn*
             #:*file-completion-directory-files-fn*
             #:*file-completion-subdirectories-fn*))

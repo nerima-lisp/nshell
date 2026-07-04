@@ -235,34 +235,3 @@
   (is (not (nshell.application::%builtin-option-like-p "-")))
   (is (not (nshell.application::%builtin-option-like-p "name")))
   (is (not (nshell.application::%builtin-option-like-p nil))))
-
-(test path-separator-p-detects-unix-slash
-  "path-separator-p returns true only for / on Unix."
-  (flet ((sep (ch) (nshell.domain.completion::%path-separator-p ch)))
-    (is (sep #\/))
-    (is (not (sep #\\)))
-    (is (not (sep #\:)))))
-
-(test command-has-directory-p-detects-slash-in-name
-  "command-has-directory-p returns the index of / in the command name."
-  (flet ((has (s)
-           (nshell.domain.completion::%command-prefix-has-directory-p s)))
-    (is (null (has "git")))
-    (is (not (null (has "./git"))))
-    (is (not (null (has "/usr/bin/git"))))))
-
-(test split-path-splits-on-colon-delimiters
-  "split-path splits a colon-separated PATH string."
-  (flet ((sp (s) (nshell.domain.completion::%split-path s)))
-    (is (equal '("/bin" "/usr/bin") (sp "/bin:/usr/bin")))
-    (is (equal '("/bin") (sp "/bin")))
-    (is (equal '("" "/bin") (sp ":/bin")))))
-
-(test join-path-name-forms-directory-slash-command
-  "join-path-name joins directory and command with / handling existing trailing slash."
-  (flet ((join (dir cmd)
-           (nshell.domain.completion::%join-directory-command
-            dir cmd :empty-directory "")))
-    (is (string= "git"          (join "" "git")))
-    (is (string= "/bin/git"     (join "/bin/" "git")))
-    (is (string= "/bin/git"     (join "/bin" "git")))))

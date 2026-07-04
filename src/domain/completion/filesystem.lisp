@@ -25,6 +25,17 @@
        (concatenate 'string dir command))
       (t (concatenate 'string dir "/" command)))))
 
+(defun command-path-candidates (command path executable-p &key (empty-directory ""))
+  "Return executable path candidates for COMMAND projected through PATH."
+  (if (%command-prefix-has-directory-p command)
+      (when (funcall executable-p command)
+        (list command))
+      (loop for directory in (%split-path (or path ""))
+            for candidate = (%join-directory-command
+                             directory command :empty-directory empty-directory)
+            when (funcall executable-p candidate)
+              collect candidate)))
+
 (defun %entry-command-name (entry)
   (let ((name (if (pathnamep entry)
                   (file-namestring entry)

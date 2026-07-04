@@ -165,36 +165,52 @@
   (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-projection-valid-p)))
 
 (test parse-attached-option-value-prefix-captures-option-and-value-prefix
-  (let ((prefix (nshell.domain.completion::parse-attached-option-value-prefix
+  (let ((prefix (nshell.domain.completion::%parse-attached-option-value-prefix
                  "--mode=fa")))
     (is (string= "--mode"
-                 (nshell.domain.completion::attached-option-value-prefix-option
+                 (nshell.domain.completion::%attached-option-value-prefix-option
                   prefix)))
     (is (string= "fa"
-                 (nshell.domain.completion::attached-option-value-prefix-value-prefix
+                 (nshell.domain.completion::%attached-option-value-prefix-value-prefix
                   prefix))))
-  (is (null (nshell.domain.completion::parse-attached-option-value-prefix
+  (is (null (nshell.domain.completion::%parse-attached-option-value-prefix
              "--mode"))))
 
 (test parse-separate-option-value-prefix-captures-option-and-value-prefix
-  (let ((prefix (nshell.domain.completion::parse-separate-option-value-prefix
+  (let ((prefix (nshell.domain.completion::%parse-separate-option-value-prefix
                  '("--mode" "fa")
                  "fa")))
     (is (string= "--mode"
-                 (nshell.domain.completion::separate-option-value-prefix-option
+                 (nshell.domain.completion::%separate-option-value-prefix-option
                   prefix)))
     (is (string= "fa"
-                 (nshell.domain.completion::separate-option-value-prefix-value-prefix
+                 (nshell.domain.completion::%separate-option-value-prefix-value-prefix
                   prefix))))
-  (let ((prefix (nshell.domain.completion::parse-separate-option-value-prefix
+  (let ((prefix (nshell.domain.completion::%parse-separate-option-value-prefix
                  '("--mode")
                  "")))
     (is (string= "--mode"
-                 (nshell.domain.completion::separate-option-value-prefix-option
+                 (nshell.domain.completion::%separate-option-value-prefix-option
                   prefix)))
     (is (string= ""
-                 (nshell.domain.completion::separate-option-value-prefix-value-prefix
+                 (nshell.domain.completion::%separate-option-value-prefix-value-prefix
                   prefix)))))
+
+(test option-value-prefix-projections-are-internal-boundaries
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (is (not (defined-symbol-p "ATTACHED-OPTION-VALUE-PREFIX-OPTION")))
+    (is (not (defined-symbol-p "ATTACHED-OPTION-VALUE-PREFIX-VALUE-PREFIX")))
+    (is (not (defined-symbol-p "SEPARATE-OPTION-VALUE-PREFIX-OPTION")))
+    (is (not (defined-symbol-p "SEPARATE-OPTION-VALUE-PREFIX-VALUE-PREFIX")))
+    (is (not (defined-symbol-p "PARSE-ATTACHED-OPTION-VALUE-PREFIX")))
+    (is (not (defined-symbol-p "PARSE-SEPARATE-OPTION-VALUE-PREFIX"))))
+  (is (fboundp 'nshell.domain.completion::%attached-option-value-prefix-option))
+  (is (fboundp 'nshell.domain.completion::%attached-option-value-prefix-value-prefix))
+  (is (fboundp 'nshell.domain.completion::%separate-option-value-prefix-option))
+  (is (fboundp 'nshell.domain.completion::%separate-option-value-prefix-value-prefix))
+  (is (fboundp 'nshell.domain.completion::%parse-attached-option-value-prefix))
+  (is (fboundp 'nshell.domain.completion::%parse-separate-option-value-prefix)))
 
 (test knowledge-base-candidate-constructors-are-internal-boundaries
   (flet ((internal-symbol-p (name)

@@ -52,17 +52,19 @@
           (push name names))))
     (nreverse names)))
 
-(defstruct (attached-option-value-prefix
-            (:constructor %make-attached-option-value-prefix (option value-prefix)))
+(defstruct (%attached-option-value-prefix
+            (:constructor %make-attached-option-value-prefix (option value-prefix))
+            (:conc-name %attached-option-value-prefix-))
   option
   value-prefix)
 
-(defstruct (separate-option-value-prefix
-            (:constructor %make-separate-option-value-prefix (option value-prefix)))
+(defstruct (%separate-option-value-prefix
+            (:constructor %make-separate-option-value-prefix (option value-prefix))
+            (:conc-name %separate-option-value-prefix-))
   option
   value-prefix)
 
-(defun parse-attached-option-value-prefix (prefix)
+(defun %parse-attached-option-value-prefix (prefix)
   (let ((separator-position (position #\= prefix)))
     (when separator-position
       (%make-attached-option-value-prefix
@@ -137,11 +139,11 @@
          collect (option-value-candidate (funcall text-function value)))))
 
 (defun attached-option-value-candidates (entry prefix)
-  (let ((attached-prefix (parse-attached-option-value-prefix prefix)))
+  (let ((attached-prefix (%parse-attached-option-value-prefix prefix)))
     (when attached-prefix
-      (let ((option (attached-option-value-prefix-option attached-prefix))
+      (let ((option (%attached-option-value-prefix-option attached-prefix))
             (value-prefix
-              (attached-option-value-prefix-value-prefix attached-prefix)))
+              (%attached-option-value-prefix-value-prefix attached-prefix)))
         (option-value-candidates
          (matching-entry-option-values entry option value-prefix)
          :text-function (lambda (value)
@@ -168,7 +170,7 @@
   (latest-argument-word
    (argument-words-without-value-prefix argument-words prefix)))
 
-(defun parse-separate-option-value-prefix (argument-words prefix)
+(defun %parse-separate-option-value-prefix (argument-words prefix)
   (let ((option (previous-option-for-value-prefix argument-words prefix)))
     (when option
       (%make-separate-option-value-prefix option prefix))))
@@ -176,13 +178,13 @@
 (defun separate-option-value-candidates (entry separate-prefix)
   (when (and separate-prefix
              (not (starts-with-p "-"
-                                  (separate-option-value-prefix-value-prefix
+                                  (%separate-option-value-prefix-value-prefix
                                    separate-prefix))))
     (option-value-candidates
      (matching-entry-option-values
       entry
-      (separate-option-value-prefix-option separate-prefix)
-      (separate-option-value-prefix-value-prefix separate-prefix)))))
+      (%separate-option-value-prefix-option separate-prefix)
+      (%separate-option-value-prefix-value-prefix separate-prefix)))))
 
 (defun option-token-matches-p (option token)
   (or (string= option token)
@@ -220,5 +222,5 @@
       (or (attached-option-value-candidates entry prefix)
           (separate-option-value-candidates
            entry
-           (parse-separate-option-value-prefix argument-words prefix))
+           (%parse-separate-option-value-prefix argument-words prefix))
           (entry-argument-name-candidates entry prefix argument-words)))))

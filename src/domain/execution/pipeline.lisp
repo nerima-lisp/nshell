@@ -27,9 +27,6 @@
 (defun pipeline-empty-p (pipe) (null (pipeline-commands-list pipe)))
 (defun pipeline-length (pipe) (length (pipeline-commands-list pipe)))
 
-(defun pipeline-stage-command (stage)
-  (pipeline-stage-stage-command stage))
-
 (defun make-pipeline-plan (pipeline)
   "Create a pure execution plan from PIPELINE."
   (let* ((commands (pipeline-commands pipeline))
@@ -40,12 +37,38 @@
            for last-p = (= index last-index)
            collect (%make-pipeline-stage
                     command
-                    (%make-pipe-config
-                     :stdin (when (plusp index) :pipe)
-                     :stdout (unless last-p :pipe)
-                     :index index
-                     :last-p last-p))))))
+                     (%make-pipe-config
+                      :stdin (when (plusp index) :pipe)
+                      :stdout (unless last-p :pipe)
+                      :index index
+                      :last-p last-p))))))
 
-(defun pipeline-stage-count (plan)
+(defun pipeline-plan-stage-count (plan)
   "Return the number of stages in PLAN."
   (length (pipeline-plan-stages plan)))
+
+(defun pipeline-plan-commands (plan)
+  "Return the commands in PLAN stage order."
+  (mapcar #'pipeline-stage-stage-command
+          (pipeline-plan-stages plan)))
+
+(defun %pipeline-plan-stage-at (plan index)
+  (unless (and (integerp index)
+               (<= 0 index)
+               (< index (pipeline-plan-stage-count plan)))
+    (error "Invalid pipeline stage index: ~s" index))
+  (nth index (pipeline-plan-stages plan)))
+
+(defun pipeline-plan-stage-piped-input-p (plan index)
+  "Return true when stage INDEX receives stdin from a previous pipeline stage."
+  (eq :pipe
+      (pipe-config-stdin
+       (pipeline-stage-pipe-config
+        (%pipeline-plan-stage-at plan index)))))
+
+(defun pipeline-plan-stage-piped-output-p (plan index)
+  "Return true when stage INDEX writes stdout to the next pipeline stage."
+  (eq :pipe
+      (pipe-config-stdout
+       (pipeline-stage-pipe-config
+        (%pipeline-plan-stage-at plan index)))))

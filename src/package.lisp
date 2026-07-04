@@ -47,11 +47,9 @@
   (:use #:cl)
   (:export #:make-command #:command-name #:command-args
             #:make-pipeline #:pipeline-p #:pipeline-commands
-            #:make-pipeline-plan #:pipeline-plan-p #:pipeline-plan-stages
-            #:pipeline-stage #:pipeline-stage-p #:pipeline-stage-command
-            #:pipeline-stage-pipe-config #:pipe-config #:pipe-config-p
-            #:pipe-config-stdin #:pipe-config-stdout #:pipe-config-index
-            #:pipe-config-last-p #:pipeline-stage-count
+            #:make-pipeline-plan #:pipeline-plan-p #:pipeline-plan-stage-count
+            #:pipeline-plan-commands #:pipeline-plan-stage-piped-input-p
+            #:pipeline-plan-stage-piped-output-p
             #:make-job #:job-id #:job-state #:job-pipeline
             #:job-state-valid-p #:job-state-transition #:job-register-background-processes
             #:job-set-background-visible #:job-record-terminal-exit-code

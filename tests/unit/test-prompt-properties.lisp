@@ -7,7 +7,7 @@
   (check-property (:trials 50)
       ((seg-text (gen-prompt-text) #'shrink-prompt-text)
        (term-width (gen-terminal-width) nil))
-    (let* ((segment (list (cons seg-text :git)))
+    (let* ((segment (list (nshell.domain.prompting:make-prompt-segment seg-text :git)))
            (truncated (nshell.presentation::%truncate-segments segment term-width)))
       (<= (nshell.presentation::%segments-visible-width truncated) term-width))))
 
@@ -17,7 +17,8 @@
       ((text-a (gen-prompt-text) #'shrink-prompt-text)
        (text-b (gen-prompt-text) #'shrink-prompt-text)
        (term-width (gen-terminal-width) nil))
-    (let* ((segments (list (cons text-a :git) (cons text-b :exit-error)))
+    (let* ((segments (list (nshell.domain.prompting:make-prompt-segment text-a :git)
+                           (nshell.domain.prompting:make-prompt-segment text-b :exit-error)))
            (truncated (nshell.presentation::%truncate-segments segments term-width)))
       (<= (nshell.presentation::%segments-visible-width truncated) term-width))))
 
@@ -26,10 +27,11 @@
   (check-property (:trials 50)
       ((cjk-text (gen-prompt-text :cjk-probability 0.7) #'shrink-prompt-text)
        (term-width (gen-terminal-width) nil))
-    (let* ((segment (list (cons cjk-text :git)))
+    (let* ((segment (list (nshell.domain.prompting:make-prompt-segment cjk-text :git)))
            (truncated (nshell.presentation::%truncate-segments segment term-width))
            (visible-width (nshell.presentation::%segments-visible-width truncated)))
       (and (<= visible-width term-width)
            (if (< (nshell.presentation::%segments-visible-width segment) term-width)
-               (string= cjk-text (car (first truncated)))
+               (string= cjk-text
+                        (nshell.domain.prompting:prompt-segment-text (first truncated)))
                t)))))

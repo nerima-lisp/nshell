@@ -22,8 +22,9 @@
         sum (%char-visible-width char)))
 
 (defun %segments-visible-width (segments)
-  (loop for (text . nil) in segments
-        sum (%string-visible-width text)))
+  (loop for segment in segments
+        sum (%string-visible-width
+             (nshell.domain.prompting:prompt-segment-text segment))))
 
 (defun %home-prefix-p (home cwd)
   "Return T when CWD is HOME or a descendant of HOME on a path boundary."
@@ -57,18 +58,22 @@
   "Return SEGMENTS shortened so their visible terminal width is at most WIDTH."
   (when (plusp width)
     (loop with remaining = width
-          for (text . kind) in segments
+          for segment in segments
           while (plusp remaining)
+          for text = (nshell.domain.prompting:prompt-segment-text segment)
+          for kind = (nshell.domain.prompting:prompt-segment-kind segment)
           for text-width = (%string-visible-width text)
           if (<= text-width remaining)
             collect (progn
                       (decf remaining text-width)
-                      (cons text kind))
+                      segment)
           else
             append (let ((truncated (%truncate-string-to-width text remaining)))
-                     (when (plusp (length truncated))
-                       (setf remaining 0)
-                       (list (cons truncated kind)))))))
+                      (when (plusp (length truncated))
+                        (setf remaining 0)
+                        (list (nshell.domain.prompting:make-prompt-segment
+                               truncated
+                               kind)))))))
 
 (defun %prompt-terminal-width ()
   "Return current terminal width, falling back to 80 columns outside a tty."
@@ -104,8 +109,8 @@
               :duration-ms last-command-duration-ms))
          (segments (nshell.domain.prompting:render-prompt-model pm)))
     (dolist (seg segments)
-      (let ((text (car seg))
-            (kind (cdr seg)))
+      (let ((text (nshell.domain.prompting:prompt-segment-text seg))
+            (kind (nshell.domain.prompting:prompt-segment-kind seg)))
         (format t "~a~a~C[0m"
                 (theme-color->ansi theme (segment-kind->role kind))
                 text
@@ -126,8 +131,8 @@
                         padding
                         (with-output-to-string (s)
                           (dolist (seg visible-right-segs)
-                            (let ((text (car seg))
-                                  (kind (cdr seg)))
+                            (let ((text (nshell.domain.prompting:prompt-segment-text seg))
+                                  (kind (nshell.domain.prompting:prompt-segment-kind seg)))
                               (format s "~a~a~C[0m"
                                       (theme-color->ansi theme
                                                           (segment-kind->role kind))

@@ -80,15 +80,11 @@
 (defun %render-right-segment (pm seg)
   (case (prompt-segment-kind seg)
     (:git
-     (let ((resolved (%git-status-segment pm)))
-       (when resolved
-         (cons (prompt-segment-text resolved)
-               (prompt-segment-kind resolved)))))
-    (t (cons (prompt-segment-text seg)
-             (prompt-segment-kind seg)))))
+     (%git-status-segment pm))
+    (t seg)))
 
 (defun render-prompt-model (pm)
-  "Convert a prompt model into a list of (text . kind) pairs for the left prompt."
+  "Convert a prompt model into left prompt segments."
   (let ((segs (prompt-model-segments pm)))
     (when (null segs)
       (setf segs
@@ -100,14 +96,12 @@
                    (if (and (prompt-model-exit-code pm)
                             (not (zerop (prompt-model-exit-code pm))))
                        "✗" ">")
-                   :exit)
+                    :exit)
                   (make-prompt-segment " " :literal))))
-    (mapcar (lambda (seg)
-              (cons (prompt-segment-text seg) (prompt-segment-kind seg)))
-            segs)))
+    segs))
 
 (defun render-right-prompt-model (pm)
-  "Convert prompt model right segments to (text . kind) pairs."
+  "Convert prompt model right segments to prompt segments."
   (let ((segs (prompt-model-right-segments pm)))
     (if segs
         (remove nil (mapcar (lambda (seg)
@@ -116,26 +110,20 @@
         (let ((result nil)
               (git (%git-status-segment pm))
               (ec (prompt-model-exit-code pm))
-              (duration (%prompt-duration-segment pm)))
+               (duration (%prompt-duration-segment pm)))
           (when git
-            (push (cons (prompt-segment-text git)
-                        (prompt-segment-kind git))
-                  result))
+            (push git result))
           (when (and ec (not (zerop ec)))
             (when result
-              (push (cons " " :literal) result))
-            (push (cons (format nil "[~d]" ec) :exit-error) result))
+              (push (make-prompt-segment " " :literal) result))
+            (push (make-prompt-segment (format nil "[~d]" ec) :exit-error) result))
           (when duration
             (when result
-              (push (cons " " :literal) result))
-            (push (cons (prompt-segment-text duration)
-                        (prompt-segment-kind duration))
-                  result))
+              (push (make-prompt-segment " " :literal) result))
+            (push duration result))
           (let ((time (%prompt-time-segment)))
             (when time
               (when result
-                (push (cons " " :literal) result))
-              (push (cons (prompt-segment-text time)
-                          (prompt-segment-kind time))
-                    result)))
+                (push (make-prompt-segment " " :literal) result))
+              (push time result)))
           (nreverse result)))))

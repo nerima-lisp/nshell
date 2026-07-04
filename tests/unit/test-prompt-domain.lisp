@@ -9,8 +9,9 @@
              :segments (list (nshell.domain.prompting:make-prompt-segment "h" :host))))
         (segment (nshell.domain.prompting:make-prompt-segment "main" :git)))
     (is (string= "h" (nshell.domain.prompting:prompt-hostname pm)))
-    (is (equal '("h" . :host)
-               (first (nshell.domain.prompting:render-prompt-model pm))))
+    (let ((rendered (first (nshell.domain.prompting:render-prompt-model pm))))
+      (is (string= "h" (nshell.domain.prompting:prompt-segment-text rendered)))
+      (is (eq :host (nshell.domain.prompting:prompt-segment-kind rendered))))
     (is (string= "main" (nshell.domain.prompting:prompt-segment-text segment)))
     (is (eq :git (nshell.domain.prompting:prompt-segment-kind segment)))
     (is (fboundp 'nshell.domain.prompting::%make-prompt-model))
@@ -28,7 +29,8 @@
                 :directory "/repo/"
                 :right-segments (list (nshell.domain.prompting:make-prompt-segment "" :git))))
            (result (nshell.domain.prompting:render-right-prompt-model pm)))
-      (is (equal '("main*" . :git) (first result))))))
+      (is (string= "main*" (nshell.domain.prompting:prompt-segment-text (first result))))
+      (is (eq :git (nshell.domain.prompting:prompt-segment-kind (first result)))))))
 
 (test default-right-prompt-includes-git-and-exit-code
   "Default right prompt displays git status and non-zero exit code."
@@ -39,9 +41,12 @@
     (let* ((pm (nshell.domain.prompting:make-prompt-model
                 :hostname "h" :cwd "/repo/" :directory "/repo/" :exit-code 2))
            (result (nshell.domain.prompting:render-right-prompt-model pm)))
-      (is (equal '("feature" . :git) (first result)))
-      (is (equal '(" " . :literal) (second result)))
-      (is (equal '("[2]" . :exit-error) (third result))))))
+      (is (string= "feature" (nshell.domain.prompting:prompt-segment-text (first result))))
+      (is (eq :git (nshell.domain.prompting:prompt-segment-kind (first result))))
+      (is (string= " " (nshell.domain.prompting:prompt-segment-text (second result))))
+      (is (eq :literal (nshell.domain.prompting:prompt-segment-kind (second result))))
+      (is (string= "[2]" (nshell.domain.prompting:prompt-segment-text (third result))))
+      (is (eq :exit-error (nshell.domain.prompting:prompt-segment-kind (third result)))))))
 
 (test default-right-prompt-appends-duration-and-time
   "Default right prompt includes duration and time segments after status information."
@@ -60,13 +65,20 @@
                 :duration-ms 123))
            (result (nshell.domain.prompting:render-right-prompt-model pm)))
       (is (= 7 (length result)))
-      (is (equal '("feature" . :git) (first result)))
-      (is (equal '(" " . :literal) (second result)))
-      (is (equal '("[2]" . :exit-error) (third result)))
-      (is (equal '(" " . :literal) (fourth result)))
-      (is (equal '("123ms" . :duration) (fifth result)))
-      (is (equal '(" " . :literal) (sixth result)))
-      (is (equal '("12:34" . :time) (seventh result))))))
+      (is (string= "feature" (nshell.domain.prompting:prompt-segment-text (first result))))
+      (is (eq :git (nshell.domain.prompting:prompt-segment-kind (first result))))
+      (is (string= " " (nshell.domain.prompting:prompt-segment-text (second result))))
+      (is (eq :literal (nshell.domain.prompting:prompt-segment-kind (second result))))
+      (is (string= "[2]" (nshell.domain.prompting:prompt-segment-text (third result))))
+      (is (eq :exit-error (nshell.domain.prompting:prompt-segment-kind (third result))))
+      (is (string= " " (nshell.domain.prompting:prompt-segment-text (fourth result))))
+      (is (eq :literal (nshell.domain.prompting:prompt-segment-kind (fourth result))))
+      (is (string= "123ms" (nshell.domain.prompting:prompt-segment-text (fifth result))))
+      (is (eq :duration (nshell.domain.prompting:prompt-segment-kind (fifth result))))
+      (is (string= " " (nshell.domain.prompting:prompt-segment-text (sixth result))))
+      (is (eq :literal (nshell.domain.prompting:prompt-segment-kind (sixth result))))
+      (is (string= "12:34" (nshell.domain.prompting:prompt-segment-text (seventh result))))
+      (is (eq :time (nshell.domain.prompting:prompt-segment-kind (seventh result)))))))
 
 (test git-status-uses-process-adapter-and-cache
   "Git status is executed through the supplied process adapter and cached per directory."

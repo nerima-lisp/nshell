@@ -58,8 +58,8 @@
               :hostname "test" :cwd "/tmp" :exit-code 0))
          (result (nshell.domain.prompting:render-prompt-model pm)))
     (is (consp result))
-    (is (consp (car result)))
-    (is (stringp (caar result)))))
+    (is (typep (car result) 'nshell.domain.prompting:prompt-segment))
+    (is (stringp (nshell.domain.prompting:prompt-segment-text (car result))))))
 
 (test prompt-with-error-exit-code
   "Prompt model with non-zero exit code renders correctly"

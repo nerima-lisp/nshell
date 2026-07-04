@@ -1108,6 +1108,26 @@
       (is (string= "Expected command before '|'"
                    (nshell.domain.parsing:parse-diagnostic-message diagnostic))))))
 
+(test parser-reduction-diagnostic-policy-formats-token-errors
+  "Token reduction diagnostic policies own reducer-facing error messages."
+  (let ((missing-command
+          (nshell.domain.parsing::%token-reduction-missing-command-policy "|"))
+        (unexpected-token
+          (nshell.domain.parsing::%token-reduction-unexpected-token-policy
+           (nshell.domain.parsing:make-token :unknown "@" 0 1))))
+    (is (eq :missing-command
+            (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind
+             missing-command)))
+    (is (string= "Expected command before '|'"
+                 (nshell.domain.parsing::%token-reduction-diagnostic-policy-message
+                  missing-command)))
+    (is (eq :unexpected-token
+            (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind
+             unexpected-token)))
+    (is (string= "Unexpected token: @"
+                 (nshell.domain.parsing::%token-reduction-diagnostic-policy-message
+                  unexpected-token)))))
+
 (test parser-reduction-state-records-and-clears-command-context
   "Token reduction state owns command entry recording and command context reset."
   (let* ((command-token (nshell.domain.parsing:make-token :word "echo" 0 4))

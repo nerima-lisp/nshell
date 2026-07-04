@@ -121,16 +121,20 @@
         (%token-reduction-state-errors state))
   state)
 
-(defun %token-reduction-state-record-diagnostic-message (state kind message token)
-  (%token-reduction-state-record-diagnostic
-   state
-   token
-   (%make-token-reduction-diagnostic-policy kind message)))
-
 (defun %token-reduction-missing-redirect-target-policy (token)
   (%make-token-reduction-diagnostic-policy
    :missing-redirection-target
    (format nil "Expected target after '~a'" (token-value token))))
+
+(defun %token-reduction-missing-command-policy (text)
+  (%make-token-reduction-diagnostic-policy
+   :missing-command
+   (format nil "Expected command before '~a'" text)))
+
+(defun %token-reduction-unexpected-token-policy (token)
+  (%make-token-reduction-diagnostic-policy
+   :unexpected-token
+   (format nil "Unexpected token: ~a" (token-value token))))
 
 (defun %record-missing-redirect-target (state)
   (let ((pending-redirect-token (%token-reduction-state-pending-redirect-token state)))
@@ -189,12 +193,11 @@
         (%token-reduction-state-mark-pending-separator state separator token)
         (%flush-token-reduction-command state))
       (unless (eq (token-type token) :newline)
-        (%token-reduction-state-record-diagnostic-message
+        (%token-reduction-state-record-diagnostic
          state
-         :missing-command
-         (format nil "Expected command before '~a'"
-                 (%separator-text separator))
-         token))))
+         token
+         (%token-reduction-missing-command-policy
+          (%separator-text separator))))))
 
 (defun %token-reduction-word (state tok)
   (if (%token-reduction-state-current-cmd state)
@@ -212,11 +215,10 @@
         ;; not start a pending redirect.
         (unless (%redirect-token-targetless-p tok)
           (%token-reduction-state-mark-pending-redirect state tok)))
-      (%token-reduction-state-record-diagnostic-message
+      (%token-reduction-state-record-diagnostic
        state
-       :missing-command
-       (format nil "Expected command before '~a'" (token-value tok))
-       tok)))
+       tok
+       (%token-reduction-missing-command-policy (token-value tok)))))
 
 (defun %token-reduction-error (state tok)
   (%token-reduction-state-record-diagnostic
@@ -228,11 +230,10 @@
   (let ((separator (%separator-from-token-type (token-type tok))))
     (if separator
         (%record-token-reduction-separator state separator tok)
-        (%token-reduction-state-record-diagnostic-message
+        (%token-reduction-state-record-diagnostic
          state
-         :unexpected-token
-         (format nil "Unexpected token: ~a" (token-value tok))
-         tok))))
+         tok
+         (%token-reduction-unexpected-token-policy tok)))))
 
 (defun %reduce-token (state tok)
   (case (token-type tok)

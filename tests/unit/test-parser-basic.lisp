@@ -981,6 +981,24 @@
       (is (eq :pipe separator))
       (is (eq separator-token token)))))
 
+(test parser-reduction-state-is-domain-state-object
+  "Token reduction state is an explicit reducer state object, not positional storage."
+  (let ((state (nshell.domain.parsing::%make-token-reduction-state)))
+    (is (nshell.domain.parsing::%token-reduction-state-p state))
+    (is (not (vectorp state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-all-cmds state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-current-args state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-errors state)))
+    (setf (nshell.domain.parsing::%token-reduction-state-current-cmd state) "echo"
+          (nshell.domain.parsing::%token-reduction-state-current-args state) (list "hello")
+          (nshell.domain.parsing::%token-reduction-state-pending-sep state) :pipe)
+    (is (string= "echo"
+                 (nshell.domain.parsing::%token-reduction-state-current-cmd state)))
+    (is (equal '("hello")
+               (nshell.domain.parsing::%token-reduction-state-current-args state)))
+    (is (eq :pipe
+            (nshell.domain.parsing::%token-reduction-state-pending-sep state)))))
+
 (test parser-reduction-result-projects-state-boundary
   "Token reduction result is the projection boundary for commands and diagnostics."
   (let* ((separator-token (nshell.domain.parsing:make-token :pipe "|" 7 8))

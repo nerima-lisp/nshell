@@ -1,70 +1,24 @@
 ; Token reduction: collapse flat token stream into command/separator/error triples.
 (in-package #:nshell.domain.parsing)
 
-(defconstant +token-reduction-state-all-cmds+ 0)
-(defconstant +token-reduction-state-current-args+ 1)
-(defconstant +token-reduction-state-current-cmd+ 2)
-(defconstant +token-reduction-state-current-cmd-token+ 3)
-(defconstant +token-reduction-state-pending-redirect-token+ 4)
-(defconstant +token-reduction-state-pending-sep+ 5)
-(defconstant +token-reduction-state-pending-sep-token+ 6)
-(defconstant +token-reduction-state-errors+ 7)
-(defconstant +token-reduction-state-size+ 8)
-
-(defun %make-token-reduction-state ()
-  (let ((state (make-array +token-reduction-state-size+ :initial-element nil)))
-    (setf (aref state +token-reduction-state-all-cmds+) '()
-          (aref state +token-reduction-state-current-args+) '()
-          (aref state +token-reduction-state-errors+) '())
-    state))
-
-(defun %token-reduction-state-all-cmds (state)
-  (aref state +token-reduction-state-all-cmds+))
-
-(defun (setf %token-reduction-state-all-cmds) (value state)
-  (setf (aref state +token-reduction-state-all-cmds+) value))
-
-(defun %token-reduction-state-current-args (state)
-  (aref state +token-reduction-state-current-args+))
-
-(defun (setf %token-reduction-state-current-args) (value state)
-  (setf (aref state +token-reduction-state-current-args+) value))
-
-(defun %token-reduction-state-current-cmd (state)
-  (aref state +token-reduction-state-current-cmd+))
-
-(defun (setf %token-reduction-state-current-cmd) (value state)
-  (setf (aref state +token-reduction-state-current-cmd+) value))
-
-(defun %token-reduction-state-current-cmd-token (state)
-  (aref state +token-reduction-state-current-cmd-token+))
-
-(defun (setf %token-reduction-state-current-cmd-token) (value state)
-  (setf (aref state +token-reduction-state-current-cmd-token+) value))
-
-(defun %token-reduction-state-pending-redirect-token (state)
-  (aref state +token-reduction-state-pending-redirect-token+))
-
-(defun (setf %token-reduction-state-pending-redirect-token) (value state)
-  (setf (aref state +token-reduction-state-pending-redirect-token+) value))
-
-(defun %token-reduction-state-pending-sep (state)
-  (aref state +token-reduction-state-pending-sep+))
-
-(defun (setf %token-reduction-state-pending-sep) (value state)
-  (setf (aref state +token-reduction-state-pending-sep+) value))
-
-(defun %token-reduction-state-pending-sep-token (state)
-  (aref state +token-reduction-state-pending-sep-token+))
-
-(defun (setf %token-reduction-state-pending-sep-token) (value state)
-  (setf (aref state +token-reduction-state-pending-sep-token+) value))
-
-(defun %token-reduction-state-errors (state)
-  (aref state +token-reduction-state-errors+))
-
-(defun (setf %token-reduction-state-errors) (value state)
-  (setf (aref state +token-reduction-state-errors+) value))
+(defstruct (%token-reduction-state
+             (:constructor %make-token-reduction-state
+                 (&key (all-cmds '())
+                       (current-args '())
+                       current-cmd
+                       current-cmd-token
+                       pending-redirect-token
+                       pending-sep
+                       pending-sep-token
+                       (errors '()))))
+  (all-cmds '() :type list)
+  (current-args '() :type list)
+  current-cmd
+  current-cmd-token
+  pending-redirect-token
+  pending-sep
+  pending-sep-token
+  (errors '() :type list))
 
 (defstruct (%token-reduction-result
              (:constructor %make-token-reduction-result (commands errors)))

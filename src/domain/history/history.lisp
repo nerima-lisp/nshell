@@ -19,6 +19,18 @@
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t))
 
+(defstruct (%history-token-window
+            (:constructor %make-history-token-window (current next)))
+  (current nil :read-only t)
+  (next nil :read-only t))
+
+(defstruct (%history-logical-word-cursor
+            (:constructor %make-history-logical-word-cursor (remaining)))
+  (remaining nil :type list))
+
+(defun %history-token-window-from-remaining (remaining)
+  (%make-history-token-window (first remaining) (second remaining)))
+
 (defun %history-word-token-p (token)
   (not (null (member (nshell.domain.parsing:token-type token) '(:word :error) :test #'eq))))
 
@@ -66,6 +78,21 @@ word-like tokens are merged before command/argument classification."
 (defun %history-word-source (line word)
   (subseq line (history-word-start word) (history-word-end word)))
 
+(defun %history-logical-word-cursor-current (cursor)
+  (first (%history-logical-word-cursor-remaining cursor)))
+
+(defun %history-logical-word-cursor-consume-current (cursor)
+  (setf (%history-logical-word-cursor-remaining cursor)
+        (rest (%history-logical-word-cursor-remaining cursor))))
+
+(defun %history-logical-word-cursor-consume-matching-token (cursor token)
+  (let ((word (%history-logical-word-cursor-current cursor)))
+    (when (and word
+               (= (nshell.domain.parsing:token-start token)
+                  (history-word-start word)))
+      (%history-logical-word-cursor-consume-current cursor)
+      word)))
+
 (defun %history-clear-navigation (history)
   "Clear transient navigation state."
   (setf (command-history-navigate-index history) -1
@@ -87,10 +114,11 @@ pipelines and command lists, the result is scoped to the final command segment."
       (loop with last-argument = nil
             with skip-redirect-target = nil
             with seen-command-word = nil
-            with logical-words = (%history-logical-words tokens)
+            with logical-word-cursor = (%make-history-logical-word-cursor
+                                        (%history-logical-words tokens))
             for remaining on tokens
-            for token = (first remaining)
-            for next-token = (second remaining)
+            for token-window = (%history-token-window-from-remaining remaining)
+            for token = (%history-token-window-current token-window)
             do (cond
                  ((and skip-redirect-target
                        (eq (nshell.domain.parsing:token-type token) :ampersand))
@@ -102,13 +130,13 @@ pipelines and command lists, the result is scoped to the final command segment."
                  ((%history-redirect-token-p token)
                   (setf skip-redirect-target t))
                  ((%history-word-token-p token)
-                  (let ((word (first logical-words)))
-                    (when (and word
-                               (= (nshell.domain.parsing:token-start token)
-                                  (history-word-start word)))
-                      (pop logical-words)
+                  (let ((word (%history-logical-word-cursor-consume-matching-token
+                               logical-word-cursor token)))
+                    (when word
                       (cond
-                        ((%history-fd-redirection-designator-p token next-token)
+                        ((%history-fd-redirection-designator-p
+                          token
+                          (%history-token-window-next token-window))
                          nil)
                         (skip-redirect-target
                          (setf skip-redirect-target nil))

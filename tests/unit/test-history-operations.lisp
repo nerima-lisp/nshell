@@ -74,6 +74,32 @@
                (nshell.domain.history:command-line-last-argument
                 "printf kept > out\\ file next"))))
 
+(test history-last-argument-scan-cursor-projects-token-and-word-boundaries
+  "Last-argument scanning keeps token lookahead separate from logical shell words."
+  (let* ((tokens (nshell.domain.parsing:tokenization-result-tokens
+                  (nshell.domain.parsing:tokenize "echo \"hello\"world > out")))
+         (word-token (second tokens))
+         (window (nshell.domain.history::%history-token-window-from-remaining
+                  (rest tokens)))
+         (cursor (nshell.domain.history::%make-history-logical-word-cursor
+                  (nshell.domain.history::%history-logical-words tokens)))
+         (command-word (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
+                        cursor
+                        (first tokens)))
+         (argument-word (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
+                         cursor
+                         word-token)))
+    (is (eq word-token (nshell.domain.history::%history-token-window-current window)))
+    (is (eq (third tokens) (nshell.domain.history::%history-token-window-next window)))
+    (is (string= "echo"
+                 (nshell.domain.history::%history-word-source
+                  "echo \"hello\"world > out"
+                  command-word)))
+    (is (string= "\"hello\"world"
+                 (nshell.domain.history::%history-word-source
+                  "echo \"hello\"world > out"
+                  argument-word)))))
+
 (test history-command-line-last-argument-skips-file-descriptor-redirection-prefixes
   "File-descriptor prefixes immediately before redirects are not treated as arguments."
   (is (string= "hi"

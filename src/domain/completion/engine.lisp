@@ -107,7 +107,7 @@
 (defun %knowledge-base-command-candidates (kb path command)
   (merge-candidates
    (knowledge-base-command-candidates kb command)
-   (command-candidates-from-path path command)
+   (%command-candidates-from-path path command)
    (builtin-command-candidates command)))
 
 (defun %knowledge-base-argument-candidates (kb command arg-prefix argument-words)
@@ -154,7 +154,7 @@
 (defun %fallback-candidates (query path)
   (%query-candidates query
                      (lambda ()
-                       (command-candidates-from-path path
+                       (%command-candidates-from-path path
                                                      (completion-query-command query)))
                      (lambda ()
                        nil)))

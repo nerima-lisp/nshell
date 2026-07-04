@@ -1,14 +1,14 @@
 (in-package #:nshell.domain.completion)
 
-(defun path-separator-p (char)
+(defun %path-separator-p (char)
   (or (char= char #\/)
       #+windows (char= char #\\)
       #-windows nil))
 
-(defun command-prefix-has-directory-p (prefix)
-  (position-if #'path-separator-p prefix))
+(defun %command-prefix-has-directory-p (prefix)
+  (position-if #'%path-separator-p prefix))
 
-(defun split-path (path)
+(defun %split-path (path)
   (let ((start 0)
         (parts nil))
     (loop for pos = (position #\: path :start start)
@@ -17,23 +17,23 @@
           do (setf start (1+ pos)))
     (nreverse parts)))
 
-(defun join-directory-command (directory command &key (empty-directory directory))
+(defun %join-directory-command (directory command &key (empty-directory directory))
   (let ((dir (if (string= directory "") empty-directory directory)))
     (cond
       ((string= dir "") command)
-      ((path-separator-p (char dir (1- (length dir))))
+      ((%path-separator-p (char dir (1- (length dir))))
        (concatenate 'string dir command))
       (t (concatenate 'string dir "/" command)))))
 
-(defun entry-command-name (entry)
+(defun %entry-command-name (entry)
   (let ((name (if (pathnamep entry)
                   (file-namestring entry)
                   (let* ((text (princ-to-string entry))
-                         (slash (position-if #'path-separator-p text :from-end t)))
+                         (slash (position-if #'%path-separator-p text :from-end t)))
                     (if slash (subseq text (1+ slash)) text)))))
     (and (< 0 (length name)) name)))
 
-(defun executable-candidate-p (entry)
+(defun %executable-candidate-p (entry)
   (handler-case
       (or (null *path-command-executable-p-fn*)
           (funcall *path-command-executable-p-fn* entry))
@@ -43,7 +43,7 @@
   "Return TEXT without trailing path separators, unless it is only separators."
   (let ((end (length text)))
     (loop while (and (> end 1)
-                     (path-separator-p (char text (1- end))))
+                     (%path-separator-p (char text (1- end))))
           do (decf end))
     (subseq text 0 end)))
 
@@ -79,7 +79,7 @@
          (%pathname-last-directory-component entry)))
     ((stringp entry)
      (let* ((trimmed (%trim-trailing-path-separators entry))
-            (separator (position-if #'path-separator-p trimmed :from-end t)))
+            (separator (position-if #'%path-separator-p trimmed :from-end t)))
        (if separator
            (subseq trimmed (1+ separator))
            trimmed)))
@@ -94,7 +94,7 @@
 
 (defun %project-file-completion-prefix (prefix)
   "Project a raw file completion PREFIX into directory and file-prefix parts."
-  (let ((separator (position-if #'path-separator-p prefix :from-end t)))
+  (let ((separator (position-if #'%path-separator-p prefix :from-end t)))
     (if separator
         (%make-file-completion-prefix-projection
          (subseq prefix 0 (1+ separator))
@@ -124,7 +124,7 @@
 (defun %ensure-directory-candidate-suffix (text)
   "Return TEXT with a trailing slash for directory candidates."
   (if (or (string= text "")
-          (path-separator-p (char text (1- (length text)))))
+          (%path-separator-p (char text (1- (length text)))))
       text
       (concatenate 'string text "/")))
 
@@ -181,41 +181,41 @@
 (defun %path-command-query-active-p (query)
   (and *path-command-directory-files-fn*
        (%path-command-query-path query)
-       (not (command-prefix-has-directory-p
+       (not (%command-prefix-has-directory-p
              (%path-command-query-prefix query)))))
 
-(defun path-command-directory-pathname (directory)
+(defun %path-command-directory-pathname (directory)
   (pathname (if (string= directory "")
                 "./"
                 directory)))
 
-(defun list-path-command-directory (directory)
+(defun %list-path-command-directory (directory)
   (funcall *path-command-directory-files-fn*
-           (path-command-directory-pathname directory)))
+           (%path-command-directory-pathname directory)))
 
-(defun path-command-entry-candidate (entry prefix)
-  (let ((name (entry-command-name entry)))
+(defun %path-command-entry-candidate (entry prefix)
+  (let ((name (%entry-command-name entry)))
     (when (and name
                (starts-with-p prefix name)
-               (executable-candidate-p entry))
+               (%executable-candidate-p entry))
       (make-candidate name :kind :command))))
 
-(defun add-path-command-directory-candidates (directory prefix candidates)
+(defun %add-path-command-directory-candidates (directory prefix candidates)
   (handler-case
-      (dolist (entry (list-path-command-directory directory) candidates)
+      (dolist (entry (%list-path-command-directory directory) candidates)
         (%filesystem-candidate-set-add
          candidates
-         (path-command-entry-candidate entry prefix)))
+         (%path-command-entry-candidate entry prefix)))
     (error () candidates)))
 
-(defun command-candidates-from-path (path prefix)
+(defun %command-candidates-from-path (path prefix)
   "Return executable command candidates from PATH that start with PREFIX."
   (let ((query (%make-path-command-query path prefix)))
     (if (not (%path-command-query-active-p query))
         nil
         (let ((candidates (%make-empty-filesystem-candidate-set)))
-          (dolist (directory (split-path (%path-command-query-path query)))
-            (add-path-command-directory-candidates
+          (dolist (directory (%split-path (%path-command-query-path query)))
+            (%add-path-command-directory-candidates
              directory
              (%path-command-query-prefix query)
              candidates))

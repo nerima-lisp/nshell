@@ -88,13 +88,13 @@
 
 (defun %resolve-external-command (command &optional (environment (%get-environment)))
   (cond
-    ((nshell.domain.completion:command-prefix-has-directory-p command)
+    ((nshell.domain.completion::%command-prefix-has-directory-p command)
      (and (%executable-file-p command) command))
     (t
-     (loop for directory in (nshell.domain.completion:split-path
+     (loop for directory in (nshell.domain.completion::%split-path
                              (or (%environment-value "PATH" environment)
                                  "/bin:/usr/bin"))
-           for candidate = (nshell.domain.completion:join-directory-command
+           for candidate = (nshell.domain.completion::%join-directory-command
                             directory command :empty-directory ".")
            when (%executable-file-p candidate)
              return candidate))))

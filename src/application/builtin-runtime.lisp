@@ -82,16 +82,16 @@
 
 (defun %resolve-command-path-candidates (context command)
   (cond
-    ((nshell.domain.completion:command-prefix-has-directory-p command)
+    ((nshell.domain.completion::%command-prefix-has-directory-p command)
      (when (%stat-path context command)
        (list command)))
     (t
      (let ((path (or (and (shell-context-environment context)
                           (nshell.domain.environment:env-get
-                           (shell-context-environment context) "PATH"))
+                          (shell-context-environment context) "PATH"))
                      "")))
-       (loop for directory in (nshell.domain.completion:split-path path)
-             for candidate = (nshell.domain.completion:join-directory-command
+       (loop for directory in (nshell.domain.completion::%split-path path)
+             for candidate = (nshell.domain.completion::%join-directory-command
                               directory command :empty-directory "")
              when (%stat-path context candidate)
                collect candidate)))))

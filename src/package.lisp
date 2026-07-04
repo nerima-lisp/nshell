@@ -149,10 +149,7 @@
             #:completion-filesystem-fns
             #:*path-command-directory-files-fn* #:*path-command-executable-p-fn*
             #:*file-completion-directory-files-fn*
-            #:*file-completion-subdirectories-fn*
-            #:path-separator-p #:command-prefix-has-directory-p
-            #:split-path #:join-directory-command
-            #:command-candidates-from-path))
+            #:*file-completion-subdirectories-fn*))
 
 (defpackage #:nshell.domain.history
   (:use #:cl)

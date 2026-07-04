@@ -34,3 +34,14 @@
                         "%INPUT-STATE-TRANSIENT-COPY"
                         "%INPUT-STATE-SESSION-COPY"))
       (is (present-p new-name)))))
+
+(test input-edit-snapshot-is-private-value
+  (let* ((state (nshell.presentation:make-input-state :buffer "abc"
+                                                      :cursor-pos 2))
+         (snapshot (nshell.presentation::input-edit-snapshot state)))
+    (is (nshell.presentation::%input-edit-snapshot-p snapshot))
+    (is (not (listp snapshot)))
+    (is (string= "abc"
+                 (nshell.presentation::%input-edit-snapshot-buffer snapshot)))
+    (is (= 2
+           (nshell.presentation::%input-edit-snapshot-cursor-pos snapshot)))))

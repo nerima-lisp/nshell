@@ -2,14 +2,22 @@
 
 (in-package #:nshell.presentation)
 
+(defstruct (%input-edit-snapshot
+            (:constructor %make-input-edit-snapshot (buffer cursor-pos))
+            (:conc-name %input-edit-snapshot-))
+  buffer
+  cursor-pos)
+
 (defun input-edit-snapshot (state)
-  (list :buffer (input-state-buffer state)
-        :cursor-pos (input-state-cursor-pos state)))
+  (%make-input-edit-snapshot (input-state-buffer state)
+                             (input-state-cursor-pos state)))
 
 (defun restore-input-edit-snapshot (state snapshot &key undo-stack redo-stack)
   (copy-input-state-clearing-completion state
-                                        :buffer (getf snapshot :buffer)
-                                        :cursor-pos (getf snapshot :cursor-pos)
+                                        :buffer (%input-edit-snapshot-buffer
+                                                 snapshot)
+                                        :cursor-pos (%input-edit-snapshot-cursor-pos
+                                                     snapshot)
                                         :last-yank-start nil
                                         :last-yank-end nil
                                         :last-yank-index nil

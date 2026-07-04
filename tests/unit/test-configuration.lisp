@@ -6,6 +6,19 @@
 
 (in-suite configuration-domain-tests)
 
+(test configuration-raw-constructors-are-internal-boundaries
+  "Configuration public factories wrap internal raw constructors"
+  (let ((theme (nshell.domain.configuration:make-theme :name "custom"))
+        (config (nshell.domain.configuration:make-config)))
+    (is (nshell.domain.configuration:theme-p theme))
+    (is (string= "custom" (nshell.domain.configuration:theme-name theme)))
+    (is (hash-table-p (nshell.domain.configuration::theme-colors theme)))
+    (is (nshell.domain.configuration:config-p config))
+    (is (nshell.domain.configuration:theme-p (nshell.domain.configuration:config-theme config)))
+    (is (string= "[%u@%h %w]> " (nshell.domain.configuration::config-prompt-format config)))
+    (is (fboundp 'nshell.domain.configuration::%make-theme))
+    (is (fboundp 'nshell.domain.configuration::%make-config))))
+
 (test default-theme-creation
   "Default theme has all expected colors"
   (let ((theme (nshell.domain.configuration:default-theme)))

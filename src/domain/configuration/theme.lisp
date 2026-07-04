@@ -1,8 +1,11 @@
 (in-package #:nshell.domain.configuration)
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (theme (:constructor make-theme (&key (name "default") (colors (make-hash-table :test #'eq)))))
+  (defstruct (theme (:constructor %make-theme (&key (name "default") (colors (make-hash-table :test #'eq)))))
     (name "default" :type string :read-only t)
-    (colors (make-hash-table :test #'eq) :type hash-table :read-only t)))
+    (colors (make-hash-table :test #'eq) :type hash-table :read-only t))
+
+  (defun make-theme (&key (name "default") (colors (make-hash-table :test #'eq)))
+    (%make-theme :name name :colors colors)))
 (defun theme-color (theme key) (gethash key (theme-colors theme)))
 (defun theme-set-color (theme key value) (setf (gethash key (theme-colors theme)) value) theme)
 (defun default-theme ()

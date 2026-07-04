@@ -20,16 +20,22 @@
                             (:conc-name pipeline-plan-))
     (stages nil :type list :read-only t)))
 
+(defun %pipeline-command-list (commands)
+  (copy-list commands))
+
+(defun %pipeline-commands (pipe)
+  (pipeline-commands-list pipe))
+
 (defun make-pipeline (&rest commands)
-  (%make-pipeline commands))
-(defun pipeline-commands (pipe) (pipeline-commands-list pipe))
-(defun pipeline-single-command-p (pipe) (= (length (pipeline-commands-list pipe)) 1))
-(defun pipeline-empty-p (pipe) (null (pipeline-commands-list pipe)))
-(defun pipeline-length (pipe) (length (pipeline-commands-list pipe)))
+  (%make-pipeline (%pipeline-command-list commands)))
+(defun pipeline-commands (pipe) (%pipeline-command-list (%pipeline-commands pipe)))
+(defun pipeline-single-command-p (pipe) (= (length (%pipeline-commands pipe)) 1))
+(defun pipeline-empty-p (pipe) (null (%pipeline-commands pipe)))
+(defun pipeline-length (pipe) (length (%pipeline-commands pipe)))
 
 (defun make-pipeline-plan (pipeline)
   "Create a pure execution plan from PIPELINE."
-  (let* ((commands (pipeline-commands pipeline))
+  (let* ((commands (%pipeline-commands pipeline))
          (last-index (1- (length commands))))
     (%make-pipeline-plan
      (loop for command in commands
@@ -37,11 +43,11 @@
            for last-p = (= index last-index)
            collect (%make-pipeline-stage
                     command
-                     (%make-pipe-config
-                      :stdin (when (plusp index) :pipe)
-                      :stdout (unless last-p :pipe)
-                      :index index
-                      :last-p last-p))))))
+                    (%make-pipe-config
+                     :stdin (when (plusp index) :pipe)
+                     :stdout (unless last-p :pipe)
+                     :index index
+                     :last-p last-p))))))
 
 (defun pipeline-plan-stage-count (plan)
   "Return the number of stages in PLAN."

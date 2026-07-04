@@ -9,6 +9,16 @@
          (pipe (nshell.domain.execution:make-pipeline cmd)))
     (is (nshell.domain.execution:pipeline-single-command-p pipe))))
 
+(test pipeline-command-list-is-domain-owned
+  (let* ((cmd1 (nshell.domain.execution:make-command "printf" '("foo")))
+         (cmd2 (nshell.domain.execution:make-command "grep" '("f")))
+         (pipe (nshell.domain.execution:make-pipeline cmd1 cmd2))
+         (commands (nshell.domain.execution:pipeline-commands pipe)))
+    (setf (car commands) :mutated)
+    (is (equal (list cmd1 cmd2)
+               (nshell.domain.execution:pipeline-commands pipe)))
+    (is (= 2 (nshell.domain.execution:pipeline-length pipe)))))
+
 (test pipeline-plan-preserves-stage-order
   (let* ((cmd1 (nshell.domain.execution:make-command "printf" '("foo")))
          (cmd2 (nshell.domain.execution:make-command "grep" '("f")))

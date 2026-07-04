@@ -54,7 +54,7 @@
     (is (eq 'ls (nshell.domain.parsing:walk y result)))))
 
 (test completion-knowledge-base-integration
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "git" :subcommands '("status") :flags '("-m"))
     (let ((entry (nshell.domain.completion:kb-query kb "git")))
       (is (not (null entry))))))
@@ -79,7 +79,7 @@
                  (lambda (entry) (probe-file entry)))
            (let ((texts (completion-texts
                          (nshell.domain.completion:complete
-                          (nshell.domain.completion:make-knowledge-base)
+                          (nshell.domain.completion:make-empty-knowledge-base)
                           "nshell-c"
                           :path (namestring root)))))
              (is (member "nshell-cmd" texts :test #'string=))))

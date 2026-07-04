@@ -185,7 +185,7 @@
 
 (test repl-command-data-seeds-completion-knowledge-base
   "REPL completion command data is converted into command and flag facts."
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
     (let ((command-texts (completion-texts
                           (nshell.domain.completion:complete kb "a"))))
@@ -230,7 +230,7 @@
 
 (test repl-completion-seeds-common-external-command-metadata
   "Completion-only external command data should seed REPL command, subcommand, and flag facts."
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
     (let ((kubectl (completion-candidate-by-text
                     "kubectl"
@@ -265,7 +265,7 @@
                            nshell.domain.completion::+builtin-command-catalog+
                            :key (lambda (entry) (getf entry :command))
                            :test #'string=))
-         (kb (nshell.domain.completion:make-knowledge-base)))
+         (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (is (not (null type-entry))
         "type entry should exist in the builtin command catalog")
     (nshell.presentation::seed-repl-completion-knowledge-base kb)

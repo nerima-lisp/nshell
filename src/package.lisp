@@ -116,7 +116,7 @@
   (:use #:cl)
   (:export #:make-candidate #:candidate-text #:candidate-kind
             #:candidate-description #:candidate-score
-            #:make-knowledge-base #:kb-add-command #:kb-add-command-from-help
+            #:make-empty-knowledge-base #:kb-add-command #:kb-add-command-from-help
             #:kb-add-option
             #:kb-remove-command #:kb-query
             #:make-fact #:make-rule #:fact-p #:rule-p

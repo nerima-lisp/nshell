@@ -83,7 +83,7 @@
        (stem (gen-command-prefix :min-length 1 :max-length 4) nil))
     (let* ((command (concatenate 'string "zz-nshell-" suffix))
            (option (concatenate 'string stem "-option"))
-           (kb (nshell.domain.completion:make-knowledge-base)))
+           (kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb command :flags (list option))
       (with-file-completion-adapters (nil nil)
         (let ((candidates

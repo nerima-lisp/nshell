@@ -17,7 +17,7 @@
                 :test #'string=))))
 
 (test type-command-flags-are-completed
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
     (let ((candidates (nshell.domain.completion:complete
                        kb
@@ -35,7 +35,7 @@
                   :test #'string=)))))
 
 (test builtin-command-metadata-follows-runtime-specs
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
     (let ((string-collect (completion-texts
                            (nshell.domain.completion:complete kb "string co")))
@@ -62,7 +62,7 @@
                 (nshell.domain.completion:complete kb "type --color=a"))))))
 
 (test complete-command-flags-are-completed
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
     (let ((long-options (completion-texts
                          (nshell.domain.completion:complete kb "complete --")))
@@ -157,7 +157,7 @@
     (is (member "--color" rg-flags :test #'string=))))
 
 (test repl-completion-includes-common-external-option-values
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
     (is (equal '("--color=always" "--color=auto")
                (completion-texts
@@ -173,7 +173,7 @@
                 (nshell.domain.completion:complete kb "rg --color=a"))))))
 
 (test repl-completion-includes-common-external-separate-option-values
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
     (is (equal '("always" "auto")
                (completion-texts
@@ -189,7 +189,7 @@
                 (nshell.domain.completion:complete kb "rg --color a"))))))
 
 (test help-derived-command-metadata-feeds-knowledge-base-completion
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command-from-help
      kb
      "zz-helped"
@@ -219,7 +219,7 @@
                 (nshell.domain.completion:complete kb "zz-helped --color n"))))))
 
 (test repl-completion-hides-common-external-mutually-exclusive-options
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.presentation::seed-repl-completion-knowledge-base kb)
     (let ((after-quiet (completion-texts
                         (nshell.domain.completion:complete kb "cargo --quiet -"))))

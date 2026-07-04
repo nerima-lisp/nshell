@@ -7,7 +7,7 @@
         *last-command-duration-ms* nil
         *history* (nshell.domain.history:make-command-history)
         *config* (nshell.domain.configuration:default-config)
-        *kb* (nshell.domain.completion:make-knowledge-base)
+        *kb* (nshell.domain.completion:make-empty-knowledge-base)
         *input-state* (make-repl-input-state)
         *completion-rendered-lines* 0
         *prompt-rendered-lines* 0

@@ -1,6 +1,9 @@
 (in-package #:nshell.domain.completion)
-(defstruct (knowledge-base (:constructor make-knowledge-base ()))
+(defstruct (knowledge-base (:constructor %make-knowledge-base ()))
   (commands (make-hash-table :test #'equal) :type hash-table))
+
+(defun make-empty-knowledge-base ()
+  (%make-knowledge-base))
 
 (defun %ensure-kb-command-entry (kb cmd-name)
   (or (gethash cmd-name (knowledge-base-commands kb))

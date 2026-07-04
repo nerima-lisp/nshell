@@ -4,7 +4,7 @@
 
 (test autosuggest-history-wins-over-completion
   (with-history (history "git clone")
-    (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb
                                                "git"
                                                :subcommands '("clean"))
@@ -16,7 +16,7 @@
 
 (test autosuggest-completes-command-from-knowledge-base
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "git")
     (is (string= "t"
                  (nshell.presentation:compute-suggestion
@@ -26,7 +26,7 @@
 
 (test autosuggest-completes-argument-from-rules
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "git" :flags '("status"))
     (is (string= "atus"
                  (nshell.presentation:compute-suggestion
@@ -36,7 +36,7 @@
 
 (test autosuggest-extends-command-prefix-across-multiple-candidates
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "git")
     (nshell.domain.completion:kb-add-command kb "gite")
     (is (string= "t"
@@ -47,7 +47,7 @@
 
 (test autosuggest-does-not-repeat-exact-candidate
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (is (null (nshell.presentation:compute-suggestion
                history
                "git status"
@@ -55,7 +55,7 @@
 
 (test autosuggest-does-not-repeat-exact-history-entry
   (with-history (history "git status")
-    (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (is (null (nshell.presentation:compute-suggestion
                  history
                  "git status"
@@ -64,7 +64,7 @@
 (test autosuggest-completes-continuation-line-from-history
   (with-history (history "echo setup
 git status --short")
-    (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb
                                                "git"
                                                :subcommands '("stash"))
@@ -76,7 +76,7 @@ git status --short")
 
 (test autosuggest-does-not-suggest-on-blank-input
   (with-history (history "git status")
-    (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "git")
       (is (null (nshell.presentation:compute-suggestion
                  history
@@ -89,7 +89,7 @@ git status --short")
 
 (test autosuggest-does-not-suggest-on-operator-only-input
   (with-history (history "git status")
-    (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "git")
       (dolist (input '("|" "&&" ">" ";"))
         (is (null (nshell.presentation:compute-suggestion
@@ -100,7 +100,7 @@ git status --short")
 (test pbt-autosuggest-does-not-suggest-on-operator-only-input
   "Any shell-operator-only input should behave like blank input."
   (with-history (history "git status")
-      (let ((kb (nshell.domain.completion:make-knowledge-base)))
+      (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
         (nshell.domain.completion:kb-add-command kb "git")
         (check-property (:trials 50)
           ((input (gen-shell-operator-only-input :min-length 1 :max-length 8
@@ -112,7 +112,7 @@ git status --short")
 
 (test autosuggest-completes-filesystem-argument
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-file-completion-adapters
         ((lambda (dir)
            (declare (ignore dir))
@@ -128,7 +128,7 @@ git status --short")
 
 (test autosuggest-escapes-filesystem-argument-tail
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-file-completion-adapters
         ((lambda (dir)
            (declare (ignore dir))
@@ -144,7 +144,7 @@ git status --short")
 
 (test autosuggest-keeps-quoted-filesystem-argument-raw
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-file-completion-adapters
         ((lambda (dir)
            (declare (ignore dir))
@@ -161,7 +161,7 @@ git status --short")
 
 (test autosuggest-keeps-double-quoted-literal-backslash-prefix
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-file-completion-adapters
         ((lambda (dir)
            (declare (ignore dir))
@@ -177,7 +177,7 @@ git status --short")
 
 (test autosuggest-does-not-append-outside-closed-quoted-token
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-file-completion-adapters
         ((lambda (dir)
            (declare (ignore dir))
@@ -193,7 +193,7 @@ git status --short")
 
 (test autosuggest-completes-source-filesystem-arguments
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-file-completion-adapters
         ((lambda (dir)
            (declare (ignore dir))
@@ -210,7 +210,7 @@ git status --short")
 
 (test autosuggest-completes-source-filesystem-arguments-after-trailing-space
   (let ((history (nshell.domain.history:make-command-history))
-        (kb (nshell.domain.completion:make-knowledge-base)))
+        (kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-file-completion-adapters
         ((lambda (dir)
            (declare (ignore dir))

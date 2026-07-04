@@ -97,7 +97,7 @@
     (is (internal-symbol-p "%MAKE-EMPTY-CANDIDATE-MERGE-STATE"))))
 
 (test pbt-path-command-completion-is-prefixed-and-deduped
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "git")
     (with-path-command-adapters
         ((lambda (directory)
@@ -134,7 +134,7 @@
       ((suffix (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
        (description (gen-prompt-text :min-length 0 :max-length 24) #'shrink-prompt-text))
     (let* ((command (concatenate 'string "zz-nshell-" suffix))
-           (kb (nshell.domain.completion:make-knowledge-base)))
+           (kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb command :description description)
       (let ((candidates (nshell.domain.completion:complete kb command)))
         (and (= 1 (length candidates))
@@ -148,7 +148,7 @@
       ((suffix (gen-command-prefix :min-length 1 :max-length 8) nil))
     (let* ((command (concatenate 'string "zz-nshell-" suffix))
            (longer (concatenate 'string command "-extra"))
-           (kb (nshell.domain.completion:make-knowledge-base)))
+           (kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb longer)
       (nshell.domain.completion:kb-add-command kb command)
       (let ((candidates (nshell.domain.completion:complete kb command)))
@@ -163,7 +163,7 @@
     (let* ((prefix (concatenate 'string "zzcase-" suffix))
            (typed-case (concatenate 'string prefix "-typed"))
            (folded-case (concatenate 'string (string-upcase prefix) "-folded"))
-           (kb (nshell.domain.completion:make-knowledge-base)))
+           (kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb folded-case)
       (nshell.domain.completion:kb-add-command kb typed-case)
       (let ((texts (completion-texts
@@ -261,7 +261,7 @@
                  (nshell.domain.completion:candidate-description winner)))))
 
 (test knowledge-base-argument-completion-handles-large-duplicate-flag-set
-  (let ((kb (nshell.domain.completion:make-knowledge-base))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
         (flags '()))
     (dotimes (i 2000)
       (push "--shared" flags)
@@ -278,7 +278,7 @@
       (is (string= "--unique-1999" (car (last texts)))))))
 
 (test knowledge-base-option-value-completion-handles-large-duplicate-value-set
-  (let ((kb (nshell.domain.completion:make-knowledge-base))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
         (values '()))
     (dotimes (i 2000)
       (push "shared" values)
@@ -316,7 +316,7 @@
     (let* ((command (concatenate 'string "zz-nshell-" suffix))
            (prefix (concatenate 'string "--" stem))
            (flag (concatenate 'string prefix "-flag"))
-           (kb (nshell.domain.completion:make-knowledge-base)))
+           (kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb command :flags (list flag))
       (labels ((completion-has-only-prefixed-flag-p (line)
                  (let ((texts (completion-texts

@@ -12,7 +12,7 @@
          (nshell.presentation::*last-exit-code* 0)
          (nshell.presentation::*history* (nshell.domain.history:make-command-history))
          (nshell.presentation::*config* (nshell.domain.configuration:default-config))
-         (nshell.presentation::*kb* (nshell.domain.completion:make-knowledge-base))
+         (nshell.presentation::*kb* (nshell.domain.completion:make-empty-knowledge-base))
          (nshell.presentation::*input-state* nil)
          (nshell.presentation::*completion-rendered-lines* 0)
          (nshell.presentation::*prompt-rendered-lines* 0)

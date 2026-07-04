@@ -2,8 +2,14 @@
 
 (in-suite completion-rules-tests)
 
+(test knowledge-base-constructor-is-internal-boundary
+  (is (not (fboundp 'nshell.domain.completion::make-knowledge-base)))
+  (is (fboundp 'nshell.domain.completion::%make-knowledge-base))
+  (is (nshell.domain.completion::knowledge-base-p
+       (nshell.domain.completion:make-empty-knowledge-base))))
+
 (test knowledge-base-completion-uses-explicit-command-facts
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "custom" :flags '("--custom"))
     (let ((commands (nshell.domain.completion:complete kb "cu"))
           (arguments (completion-texts (nshell.domain.completion:complete kb "custom --c"))))
@@ -12,7 +18,7 @@
       (is (equal '("--custom") arguments)))))
 
 (test knowledge-base-completes-attached-option-values
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command
      kb "tool"
      :flags '("--color")
@@ -23,7 +29,7 @@
     (is (null (nshell.domain.completion:complete kb "tool --missing=a")))))
 
 (test knowledge-base-completes-separate-option-values
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command
      kb "tool"
      :flags '("--color" "-o")
@@ -203,7 +209,7 @@
                 "--mode" '("safe"))))))
 
 (test knowledge-base-option-value-completion-dedupes-duplicates
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command
      kb "tool"
      :flags '("--mode")
@@ -216,7 +222,7 @@
                 (nshell.domain.completion:complete kb "tool --mode a"))))))
 
 (test knowledge-base-option-value-completion-merges-duplicate-option-specs
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command
      kb "tool"
      :flags '("--mode")
@@ -231,7 +237,7 @@
                 (nshell.domain.completion:complete kb "tool --mode a"))))))
 
 (test knowledge-base-option-values-can-be-added-incrementally
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "tool")
     (nshell.domain.completion:kb-add-option kb "tool" "--mode"
                                             :values '("fast" "safe"))
@@ -240,7 +246,7 @@
                 (nshell.domain.completion:complete kb "tool --mode=f"))))))
 
 (test knowledge-base-add-option-creates-command-entry
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-option kb "tool" "--mode"
                                             :values '("fast" "safe"))
     (is (equal '("--mode")
@@ -251,7 +257,7 @@
                 (nshell.domain.completion:complete kb "tool --mode=f"))))))
 
 (test knowledge-base-add-option-merges-repeated-values
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "tool")
     (nshell.domain.completion:kb-add-option kb "tool" "--mode"
                                             :values '("fast" "safe"))
@@ -265,7 +271,7 @@
                 (nshell.domain.completion:complete kb "tool --mode s"))))))
 
 (test knowledge-base-add-command-merges-repeated-command-facts
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command
      kb "tool"
      :subcommands '("run")
@@ -298,7 +304,7 @@
                    (nshell.domain.completion:candidate-description candidate))))))
 
 (test knowledge-base-add-command-updates-description-when-provided
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "tool" :description "first source")
     (nshell.domain.completion:kb-add-command kb "tool" :description "second source")
     (let ((candidate (completion-candidate-by-text
@@ -309,7 +315,7 @@
                    (nshell.domain.completion:candidate-description candidate))))))
 
 (test knowledge-base-add-command-merges-exclusive-option-groups
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command
      kb "tool"
      :exclusive-options '(("--json" "--yaml" "--json")
@@ -324,7 +330,7 @@
                      :exclusive-options)))))
 
 (test knowledge-base-hides-mutually-exclusive-options-after-selection
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command
      kb "tool"
      :flags '("--color" "--no-color" "--verbose")
@@ -340,7 +346,7 @@
                 (nshell.domain.completion:complete kb "tool --color=always --"))))))
 
 (test knowledge-base-command-completion-carries-description
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "deploy" :description "release service")
     (let ((candidate (completion-candidate-by-text
                       "deploy"
@@ -350,7 +356,7 @@
                    (nshell.domain.completion:candidate-description candidate))))))
 
 (test path-command-completion-merges-with-kb-and-path-candidates
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "cargo")
     (with-path-command-adapters
         ((lambda (directory)
@@ -363,7 +369,7 @@
         (is (equal '("cd" "complete" "contains" "count" "cargo" "cat") texts))))))
 
 (test command-completion-ranks-exact-match-first
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "git")
     (nshell.domain.completion:kb-add-command kb "gitk")
     (nshell.domain.completion:kb-add-command kb "gist")
@@ -372,7 +378,7 @@
       (is (equal '("git" "gitk") texts)))))
 
 (test command-completion-ranks-case-sensitive-prefix-before-case-folded-match
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "ZZCase-tool")
     (nshell.domain.completion:kb-add-command kb "zzcase-tool")
     (let ((texts (completion-texts
@@ -380,7 +386,7 @@
       (is (equal '("zzcase-tool" "ZZCase-tool") texts)))))
 
 (test command-completion-keeps-best-duplicate-metadata
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "tool" :description "managed command")
     (with-path-command-adapters
         ((lambda (directory)
@@ -396,7 +402,7 @@
                       (first candidates))))))))
 
 (test path-command-completion-ignores-argument-position
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-path-command-adapters
         ((lambda (directory)
            (declare (ignore directory))
@@ -405,7 +411,7 @@
       (is (null (nshell.domain.completion:complete kb "echo g" :path "/mock"))))))
 
 (test path-command-completion-skips-directory-prefixed-commands
-  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+  (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (with-path-command-adapters
         ((lambda (directory)
            (declare (ignore directory))

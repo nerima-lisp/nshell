@@ -89,6 +89,34 @@
       (with-reduced-input-state (changed) (reduce-once cpend :char #\c)
         (is-input-state changed :buffer "" :mode :insert)))))
 
+(test vi-operator-edit-projects-motion-plan
+  (let* ((state (nshell.presentation::copy-input-state-with
+                 (input-state :buffer "one two three" :cursor-pos 4)
+                 :mode :vi-d))
+         (edit (nshell.presentation::vi-operator-edit-for-motion
+                state #\w :d)))
+    (is (nshell.presentation::vi-operator-edit-p edit))
+    (is (fboundp 'nshell.presentation::%make-vi-operator-edit))
+    (is (not (fboundp 'nshell.presentation::make-vi-operator-edit)))
+    (is (= 4 (nshell.presentation::vi-operator-edit-start edit)))
+    (is (= 7 (nshell.presentation::vi-operator-edit-end edit)))
+    (is (= 4 (nshell.presentation::vi-operator-edit-cursor edit)))
+    (is (eq :vi-command
+            (nshell.presentation::vi-operator-edit-end-mode edit)))))
+
+(test vi-operator-edit-commit-applies-change-end-mode
+  (let* ((state (input-state :buffer "one two" :cursor-pos 4))
+         (edit (nshell.presentation::vi-operator-edit-for-motion
+                state #\$ :c)))
+    (multiple-value-bind (changed output)
+        (nshell.presentation::commit-vi-operator-edit state edit)
+      (is (eq :redraw output))
+      (is-input-state changed
+                      :buffer "one "
+                      :cursor-pos 4
+                      :mode :insert
+                      :kill-ring '("two")))))
+
 (test vi-D-kills-to-end-of-line
   (let* ((base (input-state :buffer "hello world" :cursor-pos 6))
          ;; ESC moves cursor 6 -> 5 (the space); place it on 'w' via l.

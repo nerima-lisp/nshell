@@ -258,6 +258,56 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
                  (vi-visual-selection-cursor selection)
                  end-mode))
 
+(defstruct (vi-operator-edit
+             (:constructor %make-vi-operator-edit (start end cursor end-mode))
+             (:conc-name %vi-operator-edit-))
+  (start 0 :type fixnum :read-only t)
+  (end 0 :type fixnum :read-only t)
+  (cursor 0 :type fixnum :read-only t)
+  (end-mode :vi-command :type (member :vi-command :insert) :read-only t))
+
+(defun vi-operator-edit-start (edit)
+  (%vi-operator-edit-start edit))
+
+(defun vi-operator-edit-end (edit)
+  (%vi-operator-edit-end edit))
+
+(defun vi-operator-edit-cursor (edit)
+  (%vi-operator-edit-cursor edit))
+
+(defun vi-operator-edit-end-mode (edit)
+  (%vi-operator-edit-end-mode edit))
+
+(defun vi-operator-edit-for-motion (state ch op)
+  (let* ((buffer (input-state-buffer state))
+         (pos (input-state-cursor-pos state))
+         (len (length buffer))
+         (count (%vi-count state))
+         (end-mode (if (eq op :c) :insert :vi-command))
+         (self (if (eq op :c) #\c #\d)))
+    (cond
+      ((char= ch self)
+       (%make-vi-operator-edit 0 len 0 end-mode))
+      ((char= ch #\w)
+       (%make-vi-operator-edit
+        pos (%vi-counted-kill-word-end buffer pos count) pos end-mode))
+      ((char= ch #\b)
+       (let ((start (%vi-counted-kill-word-start buffer pos count)))
+         (%make-vi-operator-edit start pos start end-mode)))
+      ((char= ch #\$)
+       (%make-vi-operator-edit
+        pos len (if (eq op :c) pos (max 0 (1- pos))) end-mode))
+      ((char= ch #\0)
+       (%make-vi-operator-edit 0 pos 0 end-mode))
+      (t nil))))
+
+(defun commit-vi-operator-edit (state edit)
+  (%vi-kill-into state
+                 (vi-operator-edit-start edit)
+                 (vi-operator-edit-end edit)
+                 (vi-operator-edit-cursor edit)
+                 (vi-operator-edit-end-mode edit)))
+
 (defun %reduce-vi-normal (state ch)
   "Handle a single character CH in vi normal mode."
   (let ((pos (input-state-cursor-pos state))
@@ -311,27 +361,10 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
 
 (defun %reduce-vi-operator (state ch op)
   "Apply operator OP (:d or :c) to the motion keyed by CH."
-  (let* ((buffer (input-state-buffer state))
-         (pos (input-state-cursor-pos state))
-         (len (length buffer))
-         (count (%vi-count state))
-         (end-mode (if (eq op :c) :insert :vi-command))
-         ;; The operator key repeated (dd / cc) acts on the whole line.
-         (self (if (eq op :c) #\c #\d)))
-    (cond
-      ((char= ch self) (%vi-kill-into state 0 len 0 end-mode))
-      ((char= ch #\w) (%vi-kill-into state
-                                      pos
-                                      (%vi-counted-kill-word-end buffer pos count)
-                                      pos
-                                      end-mode))
-      ((char= ch #\b) (let ((start (%vi-counted-kill-word-start
-                                    buffer pos count)))
-                        (%vi-kill-into state start pos start end-mode)))
-      ((char= ch #\$) (%vi-kill-into state pos len (if (eq op :c) pos (max 0 (1- pos))) end-mode))
-      ((char= ch #\0) (%vi-kill-into state 0 pos 0 end-mode))
-      ;; Unknown motion cancels the pending operator.
-      (t (values (%vi-command-state state) :redraw)))))
+  (let ((edit (vi-operator-edit-for-motion state ch op)))
+    (if edit
+        (commit-vi-operator-edit state edit)
+        (values (%vi-command-state state) :redraw))))
 
 (defun reduce-vi-input-state (state key-event)
   "Reduce KEY-EVENT while STATE is in one of the vi modes."

@@ -52,25 +52,30 @@
 (defun %command-list-separators (entries)
   (mapcar #'%command-list-entry-separator entries))
 
-(defun %command-boundary-separators (separators)
-  (butlast separators))
+(defstruct (%command-list-separator-layout
+            (:constructor %make-command-list-separator-layout
+                (separators boundary-separators trailing-separator)))
+  (separators nil :type list :read-only t)
+  (boundary-separators nil :type list :read-only t)
+  (trailing-separator nil :read-only t))
 
-(defun %trailing-command-separator (separators)
-  (car (last separators)))
+(defun %command-list-separator-layout-from-separators (separators)
+  (%make-command-list-separator-layout
+   separators
+   (butlast separators)
+   (car (last separators))))
 
 (defstruct (%command-list-assembly
             (:constructor %make-command-list-assembly
-                (commands separators last-separator)))
+                (commands separator-layout)))
   (commands nil :type list :read-only t)
-  (separators nil :type list :read-only t)
-  (last-separator nil :read-only t))
+  (separator-layout nil :read-only t))
 
 (defun %command-list-assembly-from-entries (entries)
   (let ((separators (%command-list-separators entries)))
     (%make-command-list-assembly
      (%command-list-commands entries)
-     separators
-     (%trailing-command-separator separators))))
+     (%command-list-separator-layout-from-separators separators))))
 
 (defun %command-list-assembly-from-reduced-entries (entries)
   (%command-list-assembly-from-entries
@@ -83,7 +88,8 @@
 
 (defun %command-list-assembly-background-p (assembly)
   (%background-separator-p
-   (%command-list-assembly-last-separator assembly)))
+   (%command-list-separator-layout-trailing-separator
+    (%command-list-assembly-separator-layout assembly))))
 
 (defun %background-separator-p (separator)
   (eq separator :amp))
@@ -94,21 +100,22 @@
 (defun %sequence-boundary-separator-p (separator)
   (and separator (not (%pipeline-boundary-separator-p separator))))
 
-(defun %all-command-boundaries-p (separators predicate)
+(defun %all-command-boundaries-p (layout predicate)
   (every (lambda (separator)
            (funcall predicate separator))
-         (%command-boundary-separators separators)))
+         (%command-list-separator-layout-boundary-separators layout)))
 
-(defun %pipeline-separators-p (separators)
-  (%all-command-boundaries-p separators #'%pipeline-boundary-separator-p))
+(defun %pipeline-separators-p (layout)
+  (%all-command-boundaries-p layout #'%pipeline-boundary-separator-p))
 
-(defun %sequence-separators-p (separators)
-  (%all-command-boundaries-p separators #'%sequence-boundary-separator-p))
+(defun %sequence-separators-p (layout)
+  (%all-command-boundaries-p layout #'%sequence-boundary-separator-p))
 
-(defun %plain-sequence-separators (separators)
-  (if (%background-separator-p (%trailing-command-separator separators))
-      separators
-      (%command-boundary-separators separators)))
+(defun %plain-sequence-separators (layout)
+  (if (%background-separator-p
+       (%command-list-separator-layout-trailing-separator layout))
+      (%command-list-separator-layout-separators layout)
+      (%command-list-separator-layout-boundary-separators layout)))
 
 (defstruct (%command-separator-pair
             (:constructor %make-command-separator-pair
@@ -129,20 +136,21 @@
 
 (defstruct (%mixed-sequence-assembly
             (:constructor %make-mixed-sequence-assembly
-                (commands separators)))
+                (commands separator-layout)))
   (commands nil :type list :read-only t)
-  (separators nil :type list :read-only t))
+  (separator-layout nil :read-only t))
 
 (defun %mixed-sequence-assembly-from-command-list-assembly (assembly)
   (%make-mixed-sequence-assembly
    (%command-list-assembly-commands assembly)
-   (%command-list-assembly-separators assembly)))
+   (%command-list-assembly-separator-layout assembly)))
 
 (defun %mixed-sequence-assembly-pairs (assembly)
   (%command-separator-pairs
    (%make-command-separator-pair-source
     (%mixed-sequence-assembly-commands assembly)
-    (%mixed-sequence-assembly-separators assembly))))
+    (%command-list-separator-layout-separators
+     (%mixed-sequence-assembly-separator-layout assembly)))))
 
 (defstruct (%pending-pipeline-group
             (:constructor %make-pending-pipeline-group
@@ -223,17 +231,17 @@
 
 (defun %sequence-command-list-ast (assembly)
   (let ((commands (%command-list-assembly-commands assembly))
-        (separators (%command-list-assembly-separators assembly)))
-    (make-sequence-node commands (%plain-sequence-separators separators))))
+        (layout (%command-list-assembly-separator-layout assembly)))
+    (make-sequence-node commands (%plain-sequence-separators layout))))
 
 (defun %command-list-assembly-policy (assembly)
   (let ((commands (%command-list-assembly-commands assembly))
-        (separators (%command-list-assembly-separators assembly)))
+        (layout (%command-list-assembly-separator-layout assembly)))
     (cond
       ((null commands) :empty)
       ((%single-command-p commands) :single-command)
-      ((%pipeline-separators-p separators) :pipeline)
-      ((%sequence-separators-p separators) :sequence)
+      ((%pipeline-separators-p layout) :pipeline)
+      ((%sequence-separators-p layout) :sequence)
       (t :mixed-sequence))))
 
 (defstruct (%command-list-assembly-decision

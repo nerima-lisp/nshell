@@ -495,7 +495,10 @@
             reduced-entries))
          (assembly
            (nshell.domain.parsing::%command-list-assembly-from-entries
-            entries)))
+            entries))
+         (layout
+           (nshell.domain.parsing::%command-list-assembly-separator-layout
+            assembly)))
     (is (every #'nshell.domain.parsing::%reduced-command-entry-p
                reduced-entries))
     (is (every #'nshell.domain.parsing::%command-list-entry-p entries))
@@ -503,12 +506,16 @@
     (is (equal (list first-command second-command)
                (nshell.domain.parsing::%command-list-assembly-commands
                 assembly)))
+    (is (nshell.domain.parsing::%command-list-separator-layout-p layout))
     (is (equal '(:pipe :amp)
-               (nshell.domain.parsing::%command-list-assembly-separators
-                assembly)))
+               (nshell.domain.parsing::%command-list-separator-layout-separators
+                layout)))
+    (is (equal '(:pipe)
+               (nshell.domain.parsing::%command-list-separator-layout-boundary-separators
+                layout)))
     (is (eq :amp
-            (nshell.domain.parsing::%command-list-assembly-last-separator
-             assembly)))))
+            (nshell.domain.parsing::%command-list-separator-layout-trailing-separator
+             layout)))))
 
 (test parser-assembly-command-list-cardinality-owns-single-command-projection
   "Command-list cardinality should own raw single-command list projection."
@@ -613,15 +620,19 @@
          (mixed
            (nshell.domain.parsing::%mixed-sequence-assembly-from-command-list-assembly
             assembly))
+         (layout
+           (nshell.domain.parsing::%mixed-sequence-assembly-separator-layout
+            mixed))
          (pairs
            (nshell.domain.parsing::%mixed-sequence-assembly-pairs mixed)))
     (is (nshell.domain.parsing::%mixed-sequence-assembly-p mixed))
     (is (equal (list first-command second-command third-command)
                (nshell.domain.parsing::%mixed-sequence-assembly-commands
                 mixed)))
+    (is (nshell.domain.parsing::%command-list-separator-layout-p layout))
     (is (equal '(:pipe :and nil)
-               (nshell.domain.parsing::%mixed-sequence-assembly-separators
-                mixed)))
+               (nshell.domain.parsing::%command-list-separator-layout-separators
+                layout)))
     (is (= 3 (length pairs)))
     (is (eq :and
             (nshell.domain.parsing::%command-separator-pair-separator

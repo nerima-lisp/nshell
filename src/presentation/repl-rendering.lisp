@@ -72,18 +72,17 @@
                                        suggestion
                                        search-suffix
                                        :terminal-width terminal-width)
-    (multiple-value-bind (cursor-row cursor-column)
-        (%rendered-buffer-position text
-                                   (input-state-cursor-pos *input-state*)
-                                   prompt-width
-                                   :terminal-width terminal-width)
-      (declare (ignore cursor-column))
+    (let ((cursor-position
+            (%rendered-buffer-position text
+                                       (input-state-cursor-pos *input-state*)
+                                       prompt-width
+                                       :terminal-width terminal-width)))
       (setf *prompt-rendered-lines*
             (%rendered-buffer-line-count text
                                          :suggestion suggestion
                                          :search-suffix search-suffix
                                          :terminal-width terminal-width
                                          :prompt-width prompt-width)
-            *prompt-rendered-cursor-row* cursor-row)))
+            *prompt-rendered-cursor-row* (rendered-position-row cursor-position)))
   (finish-output)
-  (lambda () (read-key-cont)))
+  (lambda () (read-key-cont))))

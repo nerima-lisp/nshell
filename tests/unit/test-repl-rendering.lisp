@@ -231,10 +231,9 @@
 (test repl-render-prompt-restores-cursor-across-continuation-lines
   "Multiline redraw should move up to the logical edit line and restore its absolute column."
   (let ((text (format nil "echo あ~%second")))
-    (multiple-value-bind (row column)
-        (nshell.presentation::%rendered-buffer-position text 6 7)
-      (is (= 0 row))
-      (is (= 14 column)))
+    (let ((position (nshell.presentation::%rendered-buffer-position text 6 7)))
+      (is (= 0 (nshell.presentation::rendered-position-row position)))
+      (is (= 14 (nshell.presentation::rendered-position-column position))))
     (let ((output (capture-standard-output
                     (nshell.presentation::%move-cursor-to-rendered-position
                      text
@@ -247,14 +246,11 @@
 
 (test repl-rendered-position-wraps-at-terminal-width
   "Rendered cursor math should include terminal wrapping, not only logical newlines."
-  (multiple-value-bind (row column)
-      (nshell.presentation::%rendered-buffer-position "abcdefgh" 8 4
-                                                      :terminal-width 10)
-    (is (= 1 row))
-    (is (= 2 column)))
-  (multiple-value-bind (row column)
-      (nshell.presentation::%rendered-buffer-position "あいうえ" 4 4
-                                                      :terminal-width 10)
-    (is (= 1 row))
-    (is (= 2 column))))
-
+  (let ((position (nshell.presentation::%rendered-buffer-position "abcdefgh" 8 4
+                                                                  :terminal-width 10)))
+    (is (= 1 (nshell.presentation::rendered-position-row position)))
+    (is (= 2 (nshell.presentation::rendered-position-column position))))
+  (let ((position (nshell.presentation::%rendered-buffer-position "あいうえ" 4 4
+                                                                  :terminal-width 10)))
+    (is (= 1 (nshell.presentation::rendered-position-row position)))
+    (is (= 2 (nshell.presentation::rendered-position-column position)))))

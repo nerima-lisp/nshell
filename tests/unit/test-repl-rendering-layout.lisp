@@ -3,16 +3,14 @@
 
 (test repl-rendered-position-normalizes-long-prompt-width
   "Prompt width should contribute terminal-wrapped rows before input cursor math starts."
-  (multiple-value-bind (row column)
-      (nshell.presentation::%rendered-buffer-position "" 0 12
-                                                      :terminal-width 10)
-    (is (= 1 row))
-    (is (= 2 column)))
-  (multiple-value-bind (row column)
-      (nshell.presentation::%rendered-buffer-position "abc" 3 12
-                                                      :terminal-width 10)
-    (is (= 1 row))
-    (is (= 5 column)))
+  (let ((position (nshell.presentation::%rendered-buffer-position "" 0 12
+                                                                  :terminal-width 10)))
+    (is (= 1 (nshell.presentation::rendered-position-row position)))
+    (is (= 2 (nshell.presentation::rendered-position-column position))))
+  (let ((position (nshell.presentation::%rendered-buffer-position "abc" 3 12
+                                                                  :terminal-width 10)))
+    (is (= 1 (nshell.presentation::rendered-position-row position)))
+    (is (= 5 (nshell.presentation::rendered-position-column position))))
   (is (= 2
          (nshell.presentation::%rendered-buffer-line-count
           ""

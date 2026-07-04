@@ -161,19 +161,20 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
 
 (defun %execute-sequence-node-in-context (context ast)
   (%with-output-code-accumulator (output code)
-    (nshell.domain.parsing:do-sequence-node-command-separator-pairs
-        (command separator ast)
-      ;; :amp (&) spawns asynchronously and continues without blocking.
-      ;; :and (&&) stops on failure; :or (||) stops on success.
-      (if (eq :amp separator)
-          (%spawn-background-node-in-context context command)
-          (progn
-            (%collect-execution-result
-             (output code)
-             (execute-ast-in-context context command))
-            (when (or (and (eq :and separator) (/= code 0))
-                      (and (eq :or separator)  (= code 0)))
-              (return)))))))
+    (dolist (pair (nshell.domain.parsing:sequence-node-command-separator-pairs ast))
+      (let ((command (car pair))
+            (separator (cdr pair)))
+        ;; :amp (&) spawns asynchronously and continues without blocking.
+        ;; :and (&&) stops on failure; :or (||) stops on success.
+        (if (eq :amp separator)
+            (%spawn-background-node-in-context context command)
+            (progn
+              (%collect-execution-result
+               (output code)
+               (execute-ast-in-context context command))
+              (when (or (and (eq :and separator) (/= code 0))
+                        (and (eq :or separator)  (= code 0)))
+                (return))))))))
 
 ;; -- Data: AST dispatch table (Prolog-style rules) ----------------------------
 ;;

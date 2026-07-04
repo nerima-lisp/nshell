@@ -33,16 +33,17 @@
   (cond
     ((nshell.domain.parsing:sequence-node-p ast)
      (let ((code 0))
-       (nshell.domain.parsing::do-sequence-node-command-separator-pairs
-           (cmd sep ast code)
-         (cond
-           ((eq :amp sep)
-            (%execute-background-node cmd))
-           (t
-            (setf code (%update-status (or (execute-ast cmd) 0)))
-            (when (or (and (eq :and sep) (/= code 0))
-                      (and (eq :or sep) (= code 0)))
-              (return code)))))))
+       (dolist (pair (nshell.domain.parsing:sequence-node-command-separator-pairs ast) code)
+         (let ((cmd (car pair))
+               (sep (cdr pair)))
+           (cond
+             ((eq :amp sep)
+              (%execute-background-node cmd))
+             (t
+              (setf code (%update-status (or (execute-ast cmd) 0)))
+              (when (or (and (eq :and sep) (/= code 0))
+                        (and (eq :or sep) (= code 0)))
+                (return code))))))))
     ((nshell.domain.parsing:command-node-p ast)
      (execute-command-node ast))
     ((or (nshell.domain.parsing:pipeline-node-p ast)

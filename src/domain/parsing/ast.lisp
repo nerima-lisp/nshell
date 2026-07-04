@@ -53,17 +53,12 @@
     (loop for command in (sequence-node-commands node)
           collect (%make-sequence-node-command-separator-entry command (pop separators)))))
 
-(defun %sequence-node-command-separator-pairs (node)
+(defun sequence-node-command-separator-pairs (node)
+  "Return (command . separator) pairs for NODE in command order."
   (mapcar (lambda (entry)
             (cons (%sequence-node-command-separator-command entry)
                   (%sequence-node-command-separator-separator entry)))
           (%sequence-node-command-separators node)))
-
-(defmacro do-sequence-node-command-separator-pairs ((command separator node &optional result) &body body)
-  `(dolist (entry (%sequence-node-command-separators ,node) ,result)
-     (let ((,command (%sequence-node-command-separator-command entry))
-           (,separator (%sequence-node-command-separator-separator entry)))
-       ,@body)))
 
 (defstruct (if-node (:include ast-node)
                     (:constructor %make-if-node

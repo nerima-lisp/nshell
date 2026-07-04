@@ -65,7 +65,12 @@
               (nshell.presentation::sudo-prefix-operation-for-buffer buffer))))
     (let ((edit (edit-for "apt update")))
       (is (nshell.presentation::sudo-prefix-edit-p edit))
+      (is (nshell.presentation::sudo-prefix-plan-p
+           (nshell.presentation::sudo-prefix-edit-plan edit)))
       (is (not (fboundp 'nshell.presentation::make-sudo-prefix-edit)))
+      (is (not (fboundp 'nshell.presentation::make-sudo-prefix-plan)))
+      (is (not (fboundp 'nshell.presentation::sudo-prefix-edit-splice)))
+      (is (not (fboundp 'nshell.presentation::sudo-prefix-edit-cursor-delta)))
       (is (string= "sudo apt update"
                    (nshell.presentation::sudo-prefix-edit-buffer edit
                                                                  "apt update")))
@@ -292,7 +297,12 @@
   (let ((transposition (nshell.presentation::char-transposition-at-cursor
                         "abcd" 2)))
     (is (nshell.presentation::char-transposition-p transposition))
+    (is (nshell.presentation::char-transposition-plan-p
+         (nshell.presentation::char-transposition-plan transposition)))
     (is (not (fboundp 'nshell.presentation::make-char-transposition)))
+    (is (not (fboundp 'nshell.presentation::make-char-transposition-plan)))
+    (is (not (fboundp 'nshell.presentation::char-transposition-left)))
+    (is (not (fboundp 'nshell.presentation::char-transposition-right)))
     (is (string= "acbd"
                  (nshell.presentation::char-transposition-buffer
                   transposition

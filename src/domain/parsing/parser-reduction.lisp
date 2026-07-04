@@ -206,14 +206,22 @@
     (:error (%token-reduction-error state tok))
     (t (%token-reduction-separator state tok))))
 
+(defun %token-reduction-state-after-token (state tok)
+  (%reduce-token state tok)
+  state)
+
+(defun %token-reduction-state-from-tokens (tokens)
+  (let ((state (reduce #'%token-reduction-state-after-token
+                       tokens
+                       :initial-value (%make-token-reduction-state))))
+    (%flush-token-reduction-command state)
+    state))
+
 (defun %token-reduction-result-from-state (state)
   (%make-token-reduction-result
    (nreverse (%token-reduction-state-all-cmds state))
    (nreverse (%token-reduction-state-errors state))))
 
 (defun %reduce-token-stream-result (tokens)
-  (let ((state (%make-token-reduction-state)))
-    (dolist (tok tokens)
-      (%reduce-token state tok))
-    (%flush-token-reduction-command state)
-    (%token-reduction-result-from-state state)))
+  (%token-reduction-result-from-state
+   (%token-reduction-state-from-tokens tokens)))

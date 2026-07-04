@@ -1086,6 +1086,36 @@
     (is (eq :pipe
             (nshell.domain.parsing::%token-reduction-state-pending-sep state)))))
 
+(test parser-reduction-state-folds-token-stream
+  "Token stream reduction folds tokens through an explicit state boundary."
+  (let* ((state
+           (nshell.domain.parsing::%token-reduction-state-from-tokens
+            (list (nshell.domain.parsing:make-token :word "echo" 0 4)
+                  (nshell.domain.parsing:make-token :word "hello" 5 10)
+                  (nshell.domain.parsing:make-token :pipe "|" 11 12)
+                  (nshell.domain.parsing:make-token :word "wc" 13 15))))
+         (result
+           (nshell.domain.parsing::%token-reduction-result-from-state state))
+         (commands
+           (nshell.domain.parsing::%token-reduction-result-commands result)))
+    (is (nshell.domain.parsing::%token-reduction-state-p state))
+    (is (= 2 (length commands)))
+    (destructuring-bind (first-command first-separator first-token)
+        (first commands)
+      (is (string= "echo"
+                   (nshell.domain.parsing:command-node-command first-command)))
+      (is (equal '("hello")
+                 (nshell.domain.parsing:command-node-arg-values first-command)))
+      (is (eq :pipe first-separator))
+      (is (eq :pipe (nshell.domain.parsing:token-type first-token))))
+    (destructuring-bind (second-command second-separator second-token)
+        (second commands)
+      (is (string= "wc"
+                   (nshell.domain.parsing:command-node-command second-command)))
+      (is (null (nshell.domain.parsing:command-node-args second-command)))
+      (is (null second-separator))
+      (is (null second-token)))))
+
 (test parser-reduction-result-projects-state-boundary
   "Token reduction result is the projection boundary for commands and diagnostics."
   (let* ((separator-token (nshell.domain.parsing:make-token :pipe "|" 7 8))

@@ -2,7 +2,7 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (shell-token-range
+(defstruct (%shell-token-range
             (:constructor %make-shell-token-range (start end))
             (:conc-name %shell-token-range-))
   (start 0 :type fixnum :read-only t)
@@ -14,28 +14,25 @@
 (defun shell-token-range-end (range)
   (%shell-token-range-end range))
 
-(defstruct (shell-token-range-set
+(defstruct (%shell-token-range-set
             (:constructor %make-shell-token-range-set (ranges))
             (:conc-name %shell-token-range-set-))
   (ranges nil :type list :read-only t))
 
-(defun shell-token-range-set-ranges (range-set)
-  (%shell-token-range-set-ranges range-set))
-
 (defun shell-token-range-set-empty-p (range-set)
-  (null (shell-token-range-set-ranges range-set)))
+  (null (%shell-token-range-set-ranges range-set)))
 
 (defun shell-token-range-set-last (range-set)
-  (first (last (shell-token-range-set-ranges range-set))))
+  (first (last (%shell-token-range-set-ranges range-set))))
 
 (defun shell-token-range-set-find-at-position (range-set position)
-  (loop for range in (shell-token-range-set-ranges range-set)
+  (loop for range in (%shell-token-range-set-ranges range-set)
         when (and (<= (shell-token-range-start range) position)
                   (< position (shell-token-range-end range)))
           do (return range)))
 
 (defun shell-token-range-set-find-at-or-after (range-set position)
-  (loop for range in (shell-token-range-set-ranges range-set)
+  (loop for range in (%shell-token-range-set-ranges range-set)
         when (or (and (<= (shell-token-range-start range) position)
                       (< position (shell-token-range-end range)))
                  (>= (shell-token-range-start range) position))
@@ -43,7 +40,7 @@
 
 (defun shell-token-range-set-before-position (range-set position)
   (let ((previous nil))
-    (dolist (range (shell-token-range-set-ranges range-set))
+    (dolist (range (%shell-token-range-set-ranges range-set))
       (if (<= (shell-token-range-end range) position)
           (setf previous range)
         (return)))

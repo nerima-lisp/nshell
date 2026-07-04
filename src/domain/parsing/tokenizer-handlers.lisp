@@ -255,4 +255,4 @@ The current character is a single digit immediately followed by > or <."
      (tokenizer-state-incomplete state))))
 
 (defun tokenize (input &key (cursor-pos nil))
-  (tokenize-into-state (make-tokenizer-state input :cursor-pos cursor-pos)))
+  (tokenize-into-state (%make-tokenizer-state-for-input input :cursor-pos cursor-pos)))

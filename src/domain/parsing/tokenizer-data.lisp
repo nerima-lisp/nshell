@@ -138,7 +138,7 @@
              (%shell-input-separator-p ch spec))
            input)))
 
-(defun make-tokenizer-state (input &key cursor-pos)
+(defun %make-tokenizer-state-for-input (input &key cursor-pos)
   (%make-tokenizer-state :input input
                          :len (length input)
                          :cursor-pos (or cursor-pos (length input))))

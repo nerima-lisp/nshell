@@ -103,10 +103,15 @@ letting word-reading stop on an unconsumed terminator."
     (is (null (route-kind #\Newline)))
     (is (null (route-kind nil)))))
 
+(test tokenizer-state-constructor-is-internal-boundary
+  "Tokenizer state construction should not keep an unprefixed compatibility helper."
+  (is (fboundp 'nshell.domain.parsing::%make-tokenizer-state-for-input))
+  (is (not (fboundp 'nshell.domain.parsing::make-tokenizer-state))))
+
 (test tokenizer-dispatch-kind-projects-main-loop-boundaries
   "Tokenizer dispatch classification should remain separate from state mutation."
   (flet ((kind (input)
-           (let ((state (nshell.domain.parsing::make-tokenizer-state input)))
+           (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input)))
              (nshell.domain.parsing::%tokenizer-dispatch-kind
               state
               (nshell.domain.parsing::%tokenizer-state-peek state)))))
@@ -120,7 +125,7 @@ letting word-reading stop on an unconsumed terminator."
 (test tokenizer-left-paren-route-projects-command-substitution-policy
   "Left-paren handling should project command-substitution routing before mutation."
   (flet ((route-facts (input)
-           (let* ((state (nshell.domain.parsing::make-tokenizer-state input))
+           (let* ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input))
                   (route (nshell.domain.parsing::%tokenizer-left-paren-route-for
                           state)))
              (is (nshell.domain.parsing::%tokenizer-left-paren-route-p route))
@@ -134,7 +139,7 @@ letting word-reading stop on an unconsumed terminator."
 (test tokenizer-ampersand-route-projects-operator-policy
   "Ampersand handling should project operator token facts before mutation."
   (flet ((route-facts (input)
-           (let* ((state (nshell.domain.parsing::make-tokenizer-state input))
+           (let* ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input))
                   (route (nshell.domain.parsing::%tokenizer-ampersand-route-for
                           state)))
              (is (nshell.domain.parsing::%tokenizer-ampersand-route-p route))
@@ -149,7 +154,7 @@ letting word-reading stop on an unconsumed terminator."
 (test tokenizer-pipe-route-projects-operator-policy
   "Pipe handling should project separator token facts before mutation."
   (flet ((route-facts (input)
-           (let* ((state (nshell.domain.parsing::make-tokenizer-state input))
+           (let* ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input))
                   (route (nshell.domain.parsing::%tokenizer-pipe-route-for
                           state)))
              (is (nshell.domain.parsing::%tokenizer-pipe-route-p route))
@@ -162,7 +167,7 @@ letting word-reading stop on an unconsumed terminator."
 (test tokenizer-redirect-route-projects-operator-policy
   "Redirect handling should project redirect token facts before mutation."
   (flet ((right-route-value (input)
-           (let* ((state (nshell.domain.parsing::make-tokenizer-state input))
+           (let* ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input))
                   (route
                     (nshell.domain.parsing::%tokenizer-right-redirect-route-for
                      state)))
@@ -171,7 +176,7 @@ letting word-reading stop on an unconsumed terminator."
              (nshell.domain.parsing::%tokenizer-right-redirect-route-value
               route)))
          (left-route-facts (input)
-           (let* ((state (nshell.domain.parsing::make-tokenizer-state input))
+           (let* ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input))
                   (route
                     (nshell.domain.parsing::%tokenizer-left-angle-route-for
                      state)))
@@ -358,7 +363,7 @@ letting word-reading stop on an unconsumed terminator."
 (test tokenizer-word-scan-action-projects-reader-branches
   "Word scanning should classify reader branches before mutating tokenizer state."
   (flet ((scan-action (input &optional (pos 0))
-           (let ((state (nshell.domain.parsing::make-tokenizer-state input)))
+           (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input)))
              (setf (nshell.domain.parsing::tokenizer-state-pos state) pos)
              (let ((action
                      (nshell.domain.parsing::%tokenizer-word-scan-action-for
@@ -385,7 +390,7 @@ letting word-reading stop on an unconsumed terminator."
 (test tokenizer-balanced-token-boundary-projects-prefixed-substitution-extent
   "Prefixed substitution readers should consume a projected token boundary."
   (flet ((boundary-facts (input)
-           (let ((state (nshell.domain.parsing::make-tokenizer-state input)))
+           (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input)))
              (let ((boundary
                      (nshell.domain.parsing::%tokenizer-balanced-token-boundary-for
                       state

@@ -114,6 +114,16 @@
                   (funcall predicate (%redirect-entry-kind entry)))
           return entry))
 
+(defun map-redirect-entries (function redirects)
+  "Call FUNCTION with kind and target for each redirect in REDIRECTS."
+  (dolist (redirect redirects)
+    (let ((entry (%redirect-entry-from-raw redirect)))
+      (when entry
+        (funcall function
+                 (%redirect-entry-kind entry)
+                 (%redirect-entry-target entry)))))
+  nil)
+
 (defun redirect-input-spec (redirects)
   "Return kind and target for the last input redirect in REDIRECTS."
   (let ((entry (%last-redirect-entry-matching redirects #'redirect-input-kind-p)))

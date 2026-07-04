@@ -1,14 +1,14 @@
 (in-package #:nshell.infrastructure.acl)
 
-(defun %pipeline-output-mode (redirect)
-  (if (nshell.domain.parsing:redirect-append-kind-p (car redirect))
+(defun %pipeline-output-mode (kind)
+  (if (nshell.domain.parsing:redirect-append-kind-p kind)
       :append
       :supersede))
 
-(defun %open-pipeline-output-redirect (redirect redirect-streams)
-  (let ((stream (open (cdr redirect)
+(defun %open-pipeline-output-redirect (kind target redirect-streams)
+  (let ((stream (open target
                       :direction :output
-                      :if-exists (%pipeline-output-mode redirect)
+                      :if-exists (%pipeline-output-mode kind)
                       :if-does-not-exist :create)))
     (values stream (cons stream redirect-streams))))
 
@@ -34,28 +34,30 @@
                          (t default-output))
                        output-materialized-p t))
                output))
-      (dolist (redirect stage-redirects)
-        (case (car redirect)
-          ((:> :>>)
-           (multiple-value-bind (stream streams)
-               (%open-pipeline-output-redirect redirect redirect-streams)
-             (setf output stream
-                   output-materialized-p t
-                   redirect-streams streams)))
-          ((:2> :2>>)
-           (multiple-value-bind (stream streams)
-               (%open-pipeline-output-redirect redirect redirect-streams)
-             (setf error-output stream
-                   redirect-streams streams)))
-          ((:&> :&>>)
-           (multiple-value-bind (stream streams)
-               (%open-pipeline-output-redirect redirect redirect-streams)
-             (setf output stream
-                   output-materialized-p t
-                   error-output stream
-                   redirect-streams streams)))
-          (:2>&1
-           (setf error-output (current-output)))))
+      (nshell.domain.parsing:map-redirect-entries
+       (lambda (kind target)
+         (case kind
+           ((:> :>>)
+            (multiple-value-bind (stream streams)
+                (%open-pipeline-output-redirect kind target redirect-streams)
+              (setf output stream
+                    output-materialized-p t
+                    redirect-streams streams)))
+           ((:2> :2>>)
+            (multiple-value-bind (stream streams)
+                (%open-pipeline-output-redirect kind target redirect-streams)
+              (setf error-output stream
+                    redirect-streams streams)))
+           ((:&> :&>>)
+            (multiple-value-bind (stream streams)
+                (%open-pipeline-output-redirect kind target redirect-streams)
+              (setf output stream
+                    output-materialized-p t
+                    error-output stream
+                    redirect-streams streams)))
+           (:2>&1
+            (setf error-output (current-output)))))
+       stage-redirects)
       (values (current-output)
               error-output
               output-pipe-stream

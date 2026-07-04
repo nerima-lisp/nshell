@@ -139,6 +139,18 @@
     (is (string= "out.txt" stderr-target))
     (is (eq :supersede stderr-mode))))
 
+(test map-redirect-entries-projects-kind-and-target
+  "Redirect consumers receive projected values instead of raw cons cells."
+  (let ((entries nil))
+    (nshell.domain.parsing:map-redirect-entries
+     (lambda (kind target)
+       (push (list kind target) entries))
+     '((:> . "out.txt")
+       (:2>&1)))
+    (is (equal '((:> "out.txt")
+                 (:2>&1 nil))
+               (nreverse entries)))))
+
 (test split-command-node-redirects-preserves-dangling-operator
   "A trailing redirect operator should remain part of the command arguments."
   (multiple-value-bind (clean redirects)

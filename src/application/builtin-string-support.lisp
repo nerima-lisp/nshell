@@ -136,9 +136,7 @@ an error string). BODY runs with both variables in scope."
                    (%required-argument-error "string" option "an integer")))))))
 
 (defun %string-option-argument-p (option)
-  (and option
-       (>= (length option) 2)
-       (char= (char option 0) #\-)))
+  (%builtin-option-like-p option))
 
 (defun %string-parse-option-stream (remaining builtin flag-specs integer-specs on-flag on-integer)
   (labels ((advance-flag (spec)

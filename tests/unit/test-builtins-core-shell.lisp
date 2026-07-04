@@ -165,6 +165,19 @@
       (is (= 2 code))
       (is (search "requires" output)))))
 
+(test function-erase-clears-stored-source-body
+  "function -e removes generated body and original source table entry together."
+  (with-builtins-context (context)
+    (let ((function-table (nshell.application:shell-context-function-table context))
+          (source-table (nshell.application:shell-context-function-source-table context)))
+      (setf (gethash "greet" function-table) '("echo hi")
+            (gethash "greet" source-table) "function greet; echo source; end")
+      (assert-builtin-call (context "function" '("-e" "greet"))
+        :code 0
+        :output-null t)
+      (is (not (nth-value 1 (gethash "greet" function-table))))
+      (is (not (nth-value 1 (gethash "greet" source-table)))))))
+
 (test split-alias-assignment-extracts-name-and-value
   "split-alias-assignment splits NAME=VALUE into (values NAME VALUE); nil for no equals or empty name."
   (flet ((split (arg)

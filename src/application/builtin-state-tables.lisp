@@ -1,8 +1,10 @@
 (in-package #:nshell.application)
 
-(defun %table-erase-names (table names)
+(defun %table-erase-names (table names &key on-erase)
   (dolist (name names)
-    (remhash name table))
+    (remhash name table)
+    (when on-erase
+      (funcall on-erase name)))
   (values nil 0))
 
 (defun %table-query-status (table names)

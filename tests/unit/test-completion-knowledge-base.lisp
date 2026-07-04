@@ -23,6 +23,14 @@
     (is (equal '("alpha" "zeta") (mapcar #'car commands)))
     (is (every #'consp (mapcar #'cdr commands)))))
 
+(test command-candidate-helpers-are-internal-boundaries
+  (flet ((defined-symbol-p (name)
+           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+    (is (not (defined-symbol-p "SORTED-CANDIDATES-BY-TEXT")))
+    (is (not (defined-symbol-p "COMMAND-ENTRY-CANDIDATE"))))
+  (is (fboundp 'nshell.domain.completion::%sorted-candidates-by-text))
+  (is (fboundp 'nshell.domain.completion::%command-entry-candidate)))
+
 (test knowledge-base-completion-uses-explicit-command-facts
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
     (nshell.domain.completion:kb-add-command kb "custom" :flags '("--custom"))

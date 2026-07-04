@@ -2,7 +2,7 @@
 
 (defparameter +option-value-candidate-description+ "option value")
 
-(defun sorted-candidates-by-text (candidates)
+(defun %sorted-candidates-by-text (candidates)
   (sort candidates #'string< :key #'candidate-text))
 
 (defun %candidate-entry-command-name (entry)
@@ -20,17 +20,17 @@
 (defun %candidate-entry-exclusive-option-groups (entry)
   (getf entry :exclusive-options))
 
-(defun command-entry-candidate (name entry)
+(defun %command-entry-candidate (name entry)
   (make-candidate name
                   :kind :command
                   :description (%candidate-entry-description entry)))
 
 (defun builtin-command-candidates (prefix)
-  (sorted-candidates-by-text
+  (%sorted-candidates-by-text
    (loop for entry in +builtin-command-catalog+
          for name = (%candidate-entry-command-name entry)
          when (starts-with-p prefix name)
-           collect (command-entry-candidate name entry))))
+           collect (%command-entry-candidate name entry))))
 
 (defun knowledge-base-command-candidates (kb prefix)
   (let ((results '()))
@@ -38,7 +38,7 @@
      kb
      (lambda (name entry)
        (when (starts-with-p prefix name)
-         (push (command-entry-candidate name entry) results))))
+         (push (%command-entry-candidate name entry) results))))
     (nreverse results)))
 
 (defun %unique-entry-argument-names (entry)
@@ -134,7 +134,7 @@
   (concatenate 'string option "=" value))
 
 (defun %option-value-candidates (values &key (text-function #'identity))
-  (sorted-candidates-by-text
+  (%sorted-candidates-by-text
    (loop for value in values
          collect (%option-value-candidate (funcall text-function value)))))
 
@@ -217,7 +217,7 @@
   (make-candidate name :kind :option :description ""))
 
 (defun %entry-argument-name-candidates (entry prefix argument-words)
-  (sorted-candidates-by-text
+  (%sorted-candidates-by-text
    (loop for name in (%available-entry-argument-names
                       entry
                       prefix

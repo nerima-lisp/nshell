@@ -97,43 +97,36 @@
                    (nshell.domain.completion:candidate-kind (first candidates)))))))))
 
 (test completion-command-position-p-classifies-word-state
-  (let ((command (nshell.domain.completion::%make-completion-word "git" 0 3))
-        (argument (nshell.domain.completion::%make-completion-word "status" 4 10)))
-    (is (nshell.domain.completion::%completion-command-position-p nil nil 0))
-    (is (nshell.domain.completion::%completion-command-position-p command command 3))
-    (is (not (nshell.domain.completion::%completion-command-position-p command nil 4)))
-    (is (not (nshell.domain.completion::%completion-command-position-p
-              command argument 10)))))
+  (let ((empty (nshell.domain.completion:completion-context-for ""))
+        (command (nshell.domain.completion:completion-context-for "git"))
+        (argument (nshell.domain.completion:completion-context-for "git status"))
+        (after-argument (nshell.domain.completion:completion-context-for "git status ")))
+    (is (string= "" (nshell.domain.completion:completion-context-command empty)))
+    (is (nshell.domain.completion:completion-context-command-position-p empty))
+    (is (string= "git" (nshell.domain.completion:completion-context-command command)))
+    (is (nshell.domain.completion:completion-context-command-position-p command))
+    (is (string= "status" (nshell.domain.completion:completion-context-argument-prefix argument)))
+    (is (not (nshell.domain.completion:completion-context-command-position-p argument)))
+    (is (string= "" (nshell.domain.completion:completion-context-argument-prefix after-argument)))
+    (is (not (nshell.domain.completion:completion-context-command-position-p after-argument)))))
 
-(test project-completion-command-word-skips-leading-assignments
-  (let* ((assignment (nshell.domain.completion::%make-completion-word "FOO=bar" 0 7))
-         (command (nshell.domain.completion::%make-completion-word "git" 8 11))
-         (projection
-           (nshell.domain.completion::project-completion-command-word
-            "FOO=bar git"
-            (list assignment command))))
-    (is (eq command
-            (nshell.domain.completion::completion-command-word-projection-word
-             projection)))
-    (is (eq command
-            (nshell.domain.completion::command-word
-             "FOO=bar git"
-             (list assignment command))))))
+(test completion-context-skips-leading-assignments-for-command-word
+  (let ((context (nshell.domain.completion:completion-context-for "FOO=bar git")))
+    (is (string= "git" (nshell.domain.completion:completion-context-command context)))
+    (is (nshell.domain.completion:completion-context-command-position-p context))
+    (is (equal '() (nshell.domain.completion:completion-context-argument-words context)))))
 
-(test latest-completion-word-projects-current-word-boundary
-  (let ((first-word (nshell.domain.completion::%make-completion-word "git" 0 3))
-        (last-word (nshell.domain.completion::%make-completion-word "status" 4 10)))
-    (is (null
-         (nshell.domain.completion::completion-word-stream-projection-latest-word
-          (nshell.domain.completion::project-completion-word-stream '()))))
-    (is (null (nshell.domain.completion::latest-completion-word '())))
-    (is (eq last-word
-            (nshell.domain.completion::completion-word-stream-projection-latest-word
-             (nshell.domain.completion::project-completion-word-stream
-              (list first-word last-word)))))
-    (is (eq last-word
-            (nshell.domain.completion::latest-completion-word
-             (list first-word last-word))))))
+(test completion-context-uses-latest-word-only-at-cursor-boundary
+  (let ((at-argument (nshell.domain.completion:completion-context-for "git status"))
+        (after-argument (nshell.domain.completion:completion-context-for "git status ")))
+    (is (string= "status"
+                 (nshell.domain.completion:completion-context-argument-prefix at-argument)))
+    (is (equal '("status")
+               (nshell.domain.completion:completion-context-argument-words at-argument)))
+    (is (string= ""
+                 (nshell.domain.completion:completion-context-argument-prefix after-argument)))
+    (is (equal '("status")
+               (nshell.domain.completion:completion-context-argument-words after-argument)))))
 
 (test completion-context-constructors-are-internal-boundaries
   "Completion context construction should not expose legacy unprefixed helper names."
@@ -142,11 +135,19 @@
   (is (not (fboundp 'nshell.domain.completion::make-completion-input-analysis)))
   (is (not (fboundp 'nshell.domain.completion::make-completion-command-word-projection)))
   (is (not (fboundp 'nshell.domain.completion::make-completion-word-stream-projection)))
+  (is (not (fboundp 'nshell.domain.completion::project-completion-command-word)))
+  (is (not (fboundp 'nshell.domain.completion::project-completion-word-stream)))
+  (is (not (fboundp 'nshell.domain.completion::completion-command-word-projection-word)))
+  (is (not (fboundp 'nshell.domain.completion::completion-word-stream-projection-latest-word)))
   (is (fboundp 'nshell.domain.completion::%make-completion-context))
   (is (fboundp 'nshell.domain.completion::%make-completion-word))
   (is (fboundp 'nshell.domain.completion::%make-completion-input-analysis))
   (is (fboundp 'nshell.domain.completion::%make-completion-command-word-projection))
-  (is (fboundp 'nshell.domain.completion::%make-completion-word-stream-projection)))
+  (is (fboundp 'nshell.domain.completion::%make-completion-word-stream-projection))
+  (is (fboundp 'nshell.domain.completion::%project-completion-command-word))
+  (is (fboundp 'nshell.domain.completion::%project-completion-word-stream))
+  (is (fboundp 'nshell.domain.completion::%completion-command-word-projection-word))
+  (is (fboundp 'nshell.domain.completion::%completion-word-stream-projection-latest-word)))
 
 (test completion-query-constructor-is-internal-boundary
   "Completion query construction should stay behind completion-query-for."

@@ -26,12 +26,14 @@
   (current-word nil :read-only t)
   (command-word nil :read-only t))
 
-(defstruct (completion-command-word-projection
-            (:constructor %make-completion-command-word-projection (word)))
+(defstruct (%completion-command-word-projection
+            (:constructor %make-completion-command-word-projection (word))
+            (:conc-name %completion-command-word-projection-))
   (word nil :read-only t))
 
-(defstruct (completion-word-stream-projection
-            (:constructor %make-completion-word-stream-projection (latest-word)))
+(defstruct (%completion-word-stream-projection
+            (:constructor %make-completion-word-stream-projection (latest-word))
+            (:conc-name %completion-word-stream-projection-))
   (latest-word nil :read-only t))
 
 (defun starts-with-p (prefix text)
@@ -111,7 +113,7 @@ intervening whitespace are merged."
     (and previous-token
          (redirection-token-p previous-token))))
 
-(defun project-completion-command-word (partial-input words)
+(defun %project-completion-command-word (partial-input words)
   "Return the first non-assignment completion word in WORDS."
   (%make-completion-command-word-projection
    (loop for word in words
@@ -122,8 +124,8 @@ intervening whitespace are merged."
            return word)))
 
 (defun command-word (partial-input words)
-  (completion-command-word-projection-word
-   (project-completion-command-word partial-input words)))
+  (%completion-command-word-projection-word
+   (%project-completion-command-word partial-input words)))
 
 (defun argument-word-values-after-command (words command-word)
   (when command-word
@@ -135,14 +137,14 @@ intervening whitespace are merged."
             when seen-command-p
               collect (completion-word-value word))))
 
-(defun project-completion-word-stream (words)
+(defun %project-completion-word-stream (words)
   (%make-completion-word-stream-projection
    (loop for word in words
          finally (return word))))
 
 (defun latest-completion-word (words)
-  (completion-word-stream-projection-latest-word
-   (project-completion-word-stream words)))
+  (%completion-word-stream-projection-latest-word
+   (%project-completion-word-stream words)))
 
 (defun current-completion-word-at-cursor (words cursor)
   (let ((last-word (latest-completion-word words)))

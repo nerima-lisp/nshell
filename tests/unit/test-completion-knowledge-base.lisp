@@ -198,12 +198,12 @@
     (let ((projection
             (nshell.domain.completion::%kb-option-value-spec-projection spec)))
       (is (string= "--mode"
-                   (nshell.domain.completion::kb-option-value-spec-projection-option
+                   (nshell.domain.completion::%kb-option-value-spec-projection-option
                     projection)))
       (is (equal '("fast" "safe")
-                 (nshell.domain.completion::kb-option-value-spec-projection-values
+                 (nshell.domain.completion::%kb-option-value-spec-projection-values
                   projection)))
-      (is (nshell.domain.completion::kb-option-value-spec-projection-valid-p
+      (is (nshell.domain.completion::%kb-option-value-spec-projection-valid-p
            projection)))
     (is (string= "--mode"
                  (nshell.domain.completion::%kb-option-value-spec-option spec)))
@@ -216,12 +216,22 @@
               spec "--other")))
     (is (not (nshell.domain.completion::%valid-kb-option-value-spec-p
               '(nil "ignored"))))
-    (is (not (nshell.domain.completion::kb-option-value-spec-projection-valid-p
+    (is (not (nshell.domain.completion::%kb-option-value-spec-projection-valid-p
               (nshell.domain.completion::%kb-option-value-spec-projection
                '(nil "ignored")))))
     (is (equal '("--mode" "safe")
                (nshell.domain.completion::%make-kb-option-value-spec
                 "--mode" '("safe"))))))
+
+(test kb-option-value-spec-projection-is-internal-boundary
+  (is (not (fboundp 'nshell.domain.completion::make-kb-option-value-spec-projection)))
+  (is (not (fboundp 'nshell.domain.completion::kb-option-value-spec-projection-option)))
+  (is (not (fboundp 'nshell.domain.completion::kb-option-value-spec-projection-values)))
+  (is (not (fboundp 'nshell.domain.completion::kb-option-value-spec-projection-valid-p)))
+  (is (fboundp 'nshell.domain.completion::%make-kb-option-value-spec-projection))
+  (is (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-option))
+  (is (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-values))
+  (is (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-valid-p)))
 
 (test knowledge-base-option-value-completion-dedupes-duplicates
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

@@ -11,6 +11,10 @@
 (defun make-command-history (&key (max-entries 10000))
   (%make-command-history :max-entries max-entries))
 
+(defun history-capacity (history)
+  "Return the maximum number of entries retained by HISTORY."
+  (command-history-max-entries history))
+
 (defstruct (history-word (:constructor %make-history-word (start end)))
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t))

@@ -20,8 +20,8 @@
                                       :raw-mode (lambda () t)
                                       :restore-mode (lambda () t)))))
     (is (nshell.application:shell-context-p context))
-    (is (typep (nshell.application:shell-context-history context)
-               'nshell.domain.history:command-history))
+    (is (nshell.domain.history:command-history-p
+         (nshell.application:shell-context-history context)))
     (is (nshell.domain.configuration:config-p
          (nshell.application:shell-context-config context)))
     (is (not (null (nshell.application:shell-context-knowledge-base context))))

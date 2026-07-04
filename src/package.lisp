@@ -155,11 +155,10 @@
   (:use #:cl)
   (:export #:make-history-entry #:entry-text #:entry-timestamp #:entry-exit-code
            #:history-entry-texts
-           #:command-history #:command-history-p #:make-command-history
-           #:command-history-entries #:command-history-max-entries
+           #:command-history-p #:make-command-history
            #:history-add #:history-search #:history-entry-line-prefix-suffix #:history-all
            #:history-merge #:history-dedup #:history-clear #:history-delete
-           #:history-empty-p #:history-size
+           #:history-empty-p #:history-size #:history-capacity
            #:command-line-last-argument #:history-last-argument-at
            #:history-previous #:history-next #:history-reset-navigation))
 

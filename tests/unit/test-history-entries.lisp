@@ -19,6 +19,10 @@
         (history (nshell.domain.history:make-command-history :max-entries 7)))
     (is (nshell.domain.history:history-entry-p entry))
     (is (string= "echo ok" (nshell.domain.history:entry-text entry)))
-    (is (= 7 (nshell.domain.history:command-history-max-entries history)))
+    (is (= 7 (nshell.domain.history:history-capacity history)))
+    (is (eq :internal (nth-value 1 (find-symbol "COMMAND-HISTORY-ENTRIES"
+                                                 "NSHELL.DOMAIN.HISTORY"))))
+    (is (eq :internal (nth-value 1 (find-symbol "COMMAND-HISTORY-MAX-ENTRIES"
+                                                 "NSHELL.DOMAIN.HISTORY"))))
     (is (fboundp 'nshell.domain.history::%make-history-entry))
     (is (fboundp 'nshell.domain.history::%make-command-history))))

@@ -113,8 +113,18 @@
 (test redirect-kind-facts-project-classification
   "Redirect kind facts should own input/output/stderr/append classification."
   (let ((input-facts (nshell.domain.parsing::%redirect-kind-facts :<))
+        (input-spec (nshell.domain.parsing::%redirect-kind-fact-spec :<))
         (stderr-append-facts (nshell.domain.parsing::%redirect-kind-facts :2>>))
         (all-output-append-facts (nshell.domain.parsing::%redirect-kind-facts :&>>)))
+    (is (every #'nshell.domain.parsing::%redirect-kind-fact-spec-p
+               nshell.domain.parsing::+redirect-kind-fact-specs+))
+    (is (notany #'listp
+                nshell.domain.parsing::+redirect-kind-fact-specs+))
+    (is (nshell.domain.parsing::%redirect-kind-fact-spec-p input-spec))
+    (is (eq :<
+            (nshell.domain.parsing::%redirect-kind-fact-spec-kind
+             input-spec)))
+    (is (nshell.domain.parsing::%redirect-kind-fact-spec-input-p input-spec))
     (is (nshell.domain.parsing::%redirect-kind-facts-p input-facts))
     (is (nshell.domain.parsing::%redirect-kind-facts-input-p input-facts))
     (is (not (nshell.domain.parsing::%redirect-kind-facts-output-p input-facts)))
@@ -129,6 +139,8 @@
          all-output-append-facts))
     (is (nshell.domain.parsing::%redirect-kind-facts-append-p
          all-output-append-facts))
+    (is (null (nshell.domain.parsing::%redirect-kind-fact-spec nil)))
+    (is (null (nshell.domain.parsing::%redirect-kind-fact-spec :unknown)))
     (is (null (nshell.domain.parsing::%redirect-kind-facts nil)))
     (is (null (nshell.domain.parsing::%redirect-kind-facts :unknown)))))
 

@@ -45,6 +45,15 @@
   stderr-p
   append-p)
 
+(defstruct (%redirect-kind-fact-spec
+            (:constructor %make-redirect-kind-fact-spec
+                (kind input-p output-p stderr-p append-p)))
+  kind
+  input-p
+  output-p
+  stderr-p
+  append-p)
+
 (defstruct (%redirect-entry
             (:constructor %make-redirect-entry (kind target)))
   kind
@@ -59,16 +68,17 @@
   stderr-mode)
 
 (defparameter +redirect-kind-fact-specs+
-  '((:< t nil nil nil)
-    (:<< t nil nil nil)
-    (:<<< t nil nil nil)
-    (:> nil t nil nil)
-    (:>> nil t nil t)
-    (:2> nil nil t nil)
-    (:2>> nil nil t t)
-    (:2>&1 nil nil t nil)
-    (:&> nil t t nil)
-    (:&>> nil t t t)))
+  (list
+   (%make-redirect-kind-fact-spec :< t nil nil nil)
+   (%make-redirect-kind-fact-spec :<< t nil nil nil)
+   (%make-redirect-kind-fact-spec :<<< t nil nil nil)
+   (%make-redirect-kind-fact-spec :> nil t nil nil)
+   (%make-redirect-kind-fact-spec :>> nil t nil t)
+   (%make-redirect-kind-fact-spec :2> nil nil t nil)
+   (%make-redirect-kind-fact-spec :2>> nil nil t t)
+   (%make-redirect-kind-fact-spec :2>&1 nil nil t nil)
+   (%make-redirect-kind-fact-spec :&> nil t t nil)
+   (%make-redirect-kind-fact-spec :&>> nil t t t)))
 
 (defun %redirect-spec-entry (text)
   (let ((spec (and text
@@ -109,18 +119,25 @@
     (and policy
          (not (%redirect-target-policy-target-required-p policy)))))
 
+(defun %redirect-kind-fact-spec (kind)
+  (and kind
+       (find kind +redirect-kind-fact-specs+
+             :key #'%redirect-kind-fact-spec-kind
+             :test #'eq)))
+
+(defun %redirect-kind-facts-from-spec (spec)
+  (when spec
+    (%make-redirect-kind-facts
+     (%redirect-kind-fact-spec-kind spec)
+     (%redirect-kind-fact-spec-input-p spec)
+     (%redirect-kind-fact-spec-output-p spec)
+     (%redirect-kind-fact-spec-stderr-p spec)
+     (%redirect-kind-fact-spec-append-p spec))))
+
 (defun %redirect-kind-facts (kind)
-  (let ((spec (and kind
-                   (assoc kind +redirect-kind-fact-specs+ :test #'eq))))
+  (let ((spec (%redirect-kind-fact-spec kind)))
     (when spec
-      (destructuring-bind (stored-kind input-p output-p stderr-p append-p)
-          spec
-        (%make-redirect-kind-facts
-         stored-kind
-         input-p
-         output-p
-         stderr-p
-         append-p)))))
+      (%redirect-kind-facts-from-spec spec))))
 
 (defun redirect-input-kind-p (kind)
   (let ((facts (%redirect-kind-facts kind)))

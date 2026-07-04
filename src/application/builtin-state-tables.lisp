@@ -181,6 +181,10 @@
        :position position)
       expansion))
 
+(defun %abbr-store (table name expansion position)
+  (setf (gethash name table) (%abbr-value expansion position))
+  (values nil 0))
+
 (defun %builtin-abbr (context args)
   (let ((table (shell-context-abbreviation-table context)))
     (%table-builtin-case args
@@ -191,9 +195,7 @@
            (%abbr-parse-add-arguments (rest args))
          (if error
              (values error 2)
-             (progn
-               (setf (gethash name table) (%abbr-value expansion position))
-               (values nil 0)))))
+             (%abbr-store table name expansion position))))
       (:option ("-e" "--erase")
        (%with-required-argument (%builtin-abbr args "abbr" "-e" "a name" 2)
          (%table-erase-names table (rest args))))

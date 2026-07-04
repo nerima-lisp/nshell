@@ -143,11 +143,27 @@
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t))
 
+(defstruct (%control-flow-node-span
+            (:constructor %make-control-flow-node-span (start end)))
+  (start 0 :type integer :read-only t)
+  (end 0 :type integer :read-only t))
+
+(defun %control-flow-node-span-from-raw-span (span)
+  (when (and (consp span) (consp (rest span)))
+    (%make-control-flow-node-span (first span) (second span))))
+
+(defun %control-flow-diagnostic-span-from-node-span (span input-length)
+  (if span
+      (%make-control-flow-diagnostic-span
+       (%control-flow-node-span-start span)
+       (%control-flow-node-span-end span))
+      (%make-control-flow-diagnostic-span input-length input-length)))
+
 (defun %control-flow-diagnostic-span-from-node (node input-length)
-  (let ((span (and (ast-node-p node) (ast-node-span node))))
-    (if (and (consp span) (consp (rest span)))
-        (%make-control-flow-diagnostic-span (first span) (second span))
-        (%make-control-flow-diagnostic-span input-length input-length))))
+  (%control-flow-diagnostic-span-from-node-span
+   (%control-flow-node-span-from-raw-span
+    (and (ast-node-p node) (ast-node-span node)))
+   input-length))
 
 (defun %push-control-flow-diagnostic (diagnostics node keyword input-length)
   (let ((span (%control-flow-diagnostic-span-from-node node input-length)))

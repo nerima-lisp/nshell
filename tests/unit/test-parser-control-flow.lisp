@@ -152,6 +152,9 @@
   "Unexpected control-flow diagnostics should consume a typed span projection."
   (let* ((node (nshell.domain.parsing:make-command-node
                 "else" nil '(7 11)))
+         (node-span
+           (nshell.domain.parsing::%control-flow-node-span-from-raw-span
+            (nshell.domain.parsing::ast-node-span node)))
          (span
            (nshell.domain.parsing::%control-flow-diagnostic-span-from-node
             node 20))
@@ -159,6 +162,13 @@
            (nshell.domain.parsing::%control-flow-diagnostic-span-from-node
             (nshell.domain.parsing:make-command-node "else" nil)
             20)))
+    (is (nshell.domain.parsing::%control-flow-node-span-p node-span))
+    (is (= 7
+           (nshell.domain.parsing::%control-flow-node-span-start node-span)))
+    (is (= 11
+           (nshell.domain.parsing::%control-flow-node-span-end node-span)))
+    (is (null
+         (nshell.domain.parsing::%control-flow-node-span-from-raw-span nil)))
     (is (nshell.domain.parsing::%control-flow-diagnostic-span-p span))
     (is (= 7
            (nshell.domain.parsing::%control-flow-diagnostic-span-start span)))

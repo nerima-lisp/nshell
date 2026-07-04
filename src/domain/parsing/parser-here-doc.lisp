@@ -14,14 +14,32 @@
   (and (eq (token-type token) :redirect)
        (string= (token-value token) "<<")))
 
+(defstruct (%here-doc-delimiter-scan
+            (:constructor %make-here-doc-delimiter-scan
+                (reversed-delimiters)))
+  (reversed-delimiters '() :type list :read-only t))
+
+(defun %empty-here-doc-delimiter-scan ()
+  (%make-here-doc-delimiter-scan '()))
+
+(defun %here-doc-delimiter-scan-add (scan delimiter)
+  (%make-here-doc-delimiter-scan
+   (cons delimiter
+         (%here-doc-delimiter-scan-reversed-delimiters scan))))
+
+(defun %here-doc-delimiter-scan-result (scan)
+  (nreverse (%here-doc-delimiter-scan-reversed-delimiters scan)))
+
 (defun %here-doc-delimiters (tokens)
-  (let ((delimiters '()))
+  (let ((scan (%empty-here-doc-delimiter-scan)))
     (loop for (tok next) on tokens
           when (and (%here-doc-redirect-token-p tok)
                     next
                     (eq (token-type next) :word))
-            do (push (token-value next) delimiters))
-    (nreverse delimiters)))
+            do (setf scan
+                     (%here-doc-delimiter-scan-add scan
+                                                   (token-value next))))
+    (%here-doc-delimiter-scan-result scan)))
 
 (defstruct (%here-doc-line
             (:constructor %make-here-doc-line

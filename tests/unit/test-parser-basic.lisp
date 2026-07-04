@@ -1384,6 +1384,18 @@
     (is (not
          (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body)))))
 
+(test parser-here-doc-delimiter-scan-projects-left-to-right-delimiters
+  "Here-doc delimiter scanning owns accumulation order."
+  (let ((scan (nshell.domain.parsing::%here-doc-delimiter-scan-add
+               (nshell.domain.parsing::%here-doc-delimiter-scan-add
+                (nshell.domain.parsing::%empty-here-doc-delimiter-scan)
+                "EOF")
+               "NEXT")))
+    (is (nshell.domain.parsing::%here-doc-delimiter-scan-p scan))
+    (is (equal '("EOF" "NEXT")
+               (nshell.domain.parsing::%here-doc-delimiter-scan-result
+                scan)))))
+
 (test parser-here-doc-consumption-projects-body-position-and-incomplete-state
   "Here-doc consumption returns one explicit domain result for tokenizer assembly."
   (let* ((consumed-prefix (format nil "one~%A~%two~%B~%"))

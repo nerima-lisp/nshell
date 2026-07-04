@@ -100,6 +100,16 @@
   bodies
   (target-pending-p nil :type boolean))
 
+(defstruct (%here-doc-target-body-cursor
+            (:constructor %make-here-doc-target-body-cursor
+                (body remaining-bodies))
+            (:conc-name %here-doc-target-body-cursor-))
+  body
+  remaining-bodies)
+
+(defun %here-doc-target-body-cursor (bodies)
+  (%make-here-doc-target-body-cursor (first bodies) (rest bodies)))
+
 (defun %here-doc-target-replacer-has-body-p (replacer)
   (not (null (here-doc-target-replacer-bodies replacer))))
 
@@ -109,10 +119,11 @@
   replacer)
 
 (defun %consume-next-here-doc-target-body (replacer)
-  (let ((body (first (here-doc-target-replacer-bodies replacer))))
+  (let ((cursor (%here-doc-target-body-cursor
+                 (here-doc-target-replacer-bodies replacer))))
     (setf (here-doc-target-replacer-bodies replacer)
-          (rest (here-doc-target-replacer-bodies replacer)))
-    body))
+          (%here-doc-target-body-cursor-remaining-bodies cursor))
+    (%here-doc-target-body-cursor-body cursor)))
 
 (defun %here-doc-target-replacer-should-replace-p (replacer token)
   (and (here-doc-target-replacer-target-pending-p replacer)

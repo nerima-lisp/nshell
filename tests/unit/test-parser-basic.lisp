@@ -914,6 +914,17 @@
          (nshell.domain.parsing::%consume-next-here-doc-target-body
           replacer)))))
 
+(test parser-here-doc-target-body-cursor-projects-current-and-remaining-bodies
+  "Here-doc target body cursor owns raw body-list projection."
+  (let ((cursor (nshell.domain.parsing::%here-doc-target-body-cursor
+                 (list "first" "second"))))
+    (is (nshell.domain.parsing::%here-doc-target-body-cursor-p cursor))
+    (is (string= "first"
+                 (nshell.domain.parsing::%here-doc-target-body-cursor-body cursor)))
+    (is (equal '("second")
+               (nshell.domain.parsing::%here-doc-target-body-cursor-remaining-bodies
+                cursor)))))
+
 (test parse-mixed-sequence-and-pipeline
   (with-complete-ast (ast "echo one | cat; echo two")
     (is (nshell.domain.parsing:sequence-node-p ast))

@@ -11,25 +11,25 @@
     (getf subcommand :description)))
 
 (defun %catalog-command (entry)
-  (getf entry :command))
+  (%catalog-command-entry-command entry))
 
 (defun %catalog-description (entry)
-  (getf entry :description))
+  (%catalog-command-entry-description entry))
 
 (defun %catalog-synopsis (entry)
-  (getf entry :synopsis))
+  (%catalog-command-entry-synopsis entry))
 
 (defun %catalog-subcommands (entry)
-  (getf entry :subcommands))
+  (%catalog-command-entry-subcommands entry))
 
 (defun %catalog-flags (entry)
-  (getf entry :flags))
+  (%catalog-command-entry-flags entry))
 
 (defun %catalog-option-values (entry)
-  (getf entry :option-values))
+  (%catalog-command-entry-option-values entry))
 
 (defun %catalog-exclusive-options (entry)
-  (getf entry :exclusive-options))
+  (%catalog-command-entry-exclusive-options entry))
 
 (defstruct (%catalog-command-projection
             (:constructor %make-catalog-command-projection

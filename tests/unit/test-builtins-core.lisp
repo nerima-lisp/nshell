@@ -43,7 +43,7 @@
 (test builtin-registry-covers-the-canonical-builtin-catalog
   "Every builtin listed in the canonical catalog should be registered at load time."
   (dolist (entry nshell.domain.completion::+builtin-command-catalog+)
-    (let ((command (getf entry :command)))
+    (let ((command (nshell.domain.completion::%catalog-command-entry-command entry)))
       (is (nshell.application:lookup-builtin command)
           command))))
 

@@ -2,6 +2,9 @@
 
 (in-suite completion-rules-tests)
 
+(defun %test-catalog-entry (&rest source-entry)
+  (first (nshell.domain.completion::%command-catalog (list source-entry))))
+
 (test knowledge-base-constructor-is-internal-boundary
   (is (not (fboundp 'nshell.domain.completion::make-knowledge-base)))
   (is (fboundp 'nshell.domain.completion::%make-knowledge-base))
@@ -88,11 +91,14 @@
                candidates))))
 
 (test entry-candidate-projection-boundaries-name-command-entry-parts
-  (let ((entry (list :command "tool"
-                     :description "tool description"
-                     :flags '("--flag")
-                     :subcommands '("run")
-                     :exclusive-options '(("--json" "--yaml")))))
+  (let ((entry (%test-catalog-entry
+                :command "tool"
+                :description "tool description"
+                :flags '("--flag")
+                :subcommands '("run")
+                :exclusive-options '(("--json" "--yaml"))))
+        (empty-description-entry (%test-catalog-entry
+                                  :command "empty-description")))
     (is (string= "tool"
                  (nshell.domain.completion::%candidate-entry-command-name
                   entry)))
@@ -101,7 +107,7 @@
                   entry)))
     (is (string= ""
                  (nshell.domain.completion::%candidate-entry-description
-                  '(:command "empty-description"))))
+                  empty-description-entry)))
     (is (equal '("--flag")
                (nshell.domain.completion::%candidate-entry-flag-specs entry)))
     (is (equal '("run")
@@ -152,8 +158,10 @@
   (is (fboundp 'nshell.domain.completion::%candidate-entry-exclusive-option-groups)))
 
 (test entry-option-values-projects-option-value-spec-boundary
-  (let ((entry (list :option-values '(("--mode" "fast" "safe")
-                                      ("--format" "json")))))
+  (let ((entry (%test-catalog-entry
+                :command "tool"
+                :option-values '(("--mode" "fast" "safe")
+                                 ("--format" "json")))))
     (is (equal '(("--mode" "fast" "safe")
                  ("--format" "json"))
                (nshell.domain.completion::%entry-option-value-specs entry)))

@@ -6,27 +6,27 @@
   (sort candidates #'string< :key #'candidate-text))
 
 (defun %candidate-entry-command-name (entry)
-  (getf entry :command))
+  (%catalog-command-entry-command entry))
 
 (defun %candidate-entry-description (entry)
   (if (%kb-command-entry-p entry)
       (or (%kb-command-entry-description entry) "")
-      (or (getf entry :description) "")))
+      (or (%catalog-command-entry-description entry) "")))
 
 (defun %candidate-entry-flag-specs (entry)
   (if (%kb-command-entry-p entry)
       (%kb-command-entry-flags entry)
-      (getf entry :flags)))
+      (%catalog-command-entry-flags entry)))
 
 (defun %candidate-entry-subcommand-specs (entry)
   (if (%kb-command-entry-p entry)
       (%kb-command-entry-subcommands entry)
-      (getf entry :subcommands)))
+      (%catalog-command-entry-subcommands entry)))
 
 (defun %candidate-entry-exclusive-option-groups (entry)
   (if (%kb-command-entry-p entry)
       (%kb-command-entry-exclusive-options entry)
-      (getf entry :exclusive-options)))
+      (%catalog-command-entry-exclusive-options entry)))
 
 (defun %command-entry-candidate (name entry)
   (make-candidate name
@@ -91,7 +91,7 @@
 (defun %entry-option-value-specs (entry)
   (if (%kb-command-entry-p entry)
       (%kb-command-entry-option-values entry)
-      (getf entry :option-values)))
+      (%catalog-command-entry-option-values entry)))
 
 (defstruct (%entry-option-value-spec-projection
             (:constructor %make-entry-option-value-spec-projection

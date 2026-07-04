@@ -9,7 +9,7 @@
   value
   present-p)
 
-(defun %project-catalog-entry-property (entry property)
+(defun %project-catalog-source-entry-property (entry property)
   (loop for (key value) on entry by #'cddr
         when (eq key property)
           return (%make-catalog-entry-property-projection key value t)
@@ -19,35 +19,65 @@
 (defun %catalog-entry-property-key (projection)
   (%catalog-entry-property-projection-key projection))
 
-(defun %catalog-entry-property-present-p (entry property)
+(defun %catalog-source-entry-property-present-p (entry property)
   (%catalog-entry-property-projection-present-p
-   (%project-catalog-entry-property entry property)))
+   (%project-catalog-source-entry-property entry property)))
 
-(defun %catalog-entry-property-value (entry property)
+(defun %catalog-source-entry-property-value (entry property)
   (%catalog-entry-property-projection-value
-   (%project-catalog-entry-property entry property)))
+   (%project-catalog-source-entry-property entry property)))
 
-(defun %catalog-entry-command (entry)
-  (%catalog-entry-property-value entry :command))
+(defun %catalog-source-entry-command (entry)
+  (%catalog-source-entry-property-value entry :command))
 
 (defun %command-catalog-preserved-properties ()
   '(:synopsis :description :subcommands :flags :option-values :exclusive-options))
 
-(defun %catalog-entry-property (entry property)
-  (when (%catalog-entry-property-present-p entry property)
-    (list property (%catalog-entry-property-value entry property))))
+(defun %catalog-source-entry-property (entry property)
+  (when (%catalog-source-entry-property-present-p entry property)
+    (list property (%catalog-source-entry-property-value entry property))))
 
-(defun %command-catalog-entry (entry)
-  (let ((command (%catalog-entry-command entry)))
+(defstruct (%catalog-command-entry
+            (:constructor %make-catalog-command-entry
+                (&key command synopsis description subcommands flags option-values
+                      exclusive-options))
+            (:conc-name %catalog-command-entry-))
+  command
+  synopsis
+  description
+  subcommands
+  flags
+  option-values
+  exclusive-options)
+
+(defun %catalog-entry-property-value (entry property)
+  (ecase property
+    (:command (%catalog-command-entry-command entry))
+    (:synopsis (%catalog-command-entry-synopsis entry))
+    (:description (%catalog-command-entry-description entry))
+    (:subcommands (%catalog-command-entry-subcommands entry))
+    (:flags (%catalog-command-entry-flags entry))
+    (:option-values (%catalog-command-entry-option-values entry))
+    (:exclusive-options (%catalog-command-entry-exclusive-options entry))))
+
+(defun %catalog-entry-command (entry)
+  (%catalog-entry-property-value entry :command))
+
+(defun %build-command-catalog-entry (entry)
+  (let ((command (%catalog-source-entry-command entry)))
     (unless (stringp command)
       (error "Command catalog entry requires a string :command: ~S" entry))
-    (append (list :command command)
-            (mapcan (lambda (property)
-                      (%catalog-entry-property entry property))
-                    (%command-catalog-preserved-properties)))))
+    (%make-catalog-command-entry
+     :command command
+     :synopsis (%catalog-source-entry-property-value entry :synopsis)
+     :description (%catalog-source-entry-property-value entry :description)
+     :subcommands (%catalog-source-entry-property-value entry :subcommands)
+     :flags (%catalog-source-entry-property-value entry :flags)
+     :option-values (%catalog-source-entry-property-value entry :option-values)
+     :exclusive-options (%catalog-source-entry-property-value entry :exclusive-options))))
 
 (defun %command-catalog (entries)
-  (mapcar #'%command-catalog-entry entries))
+  (mapcar #'%build-command-catalog-entry entries))
 
 (defparameter +builtin-command-catalog+
   (%command-catalog

@@ -376,11 +376,14 @@
                         (nshell.domain.parsing:case-node-clauses ast))))
       (is (nshell.domain.parsing:case-node-p ast))
       (is (string= "chocolate" (nshell.domain.parsing:case-node-value ast)))
+      (is (every #'nshell.domain.parsing:case-clause-p clauses))
       (is (equal '("vanilla" "chocolate" "strawberry" "*")
-                 (mapcar #'car clauses)))
+                 (mapcar #'nshell.domain.parsing:case-clause-pattern
+                         clauses)))
       (is (string= "echo"
                    (nshell.domain.parsing:command-node-command
-                    (first (cdr (second clauses)))))))))
+                    (first (nshell.domain.parsing:case-clause-body
+                            (second clauses)))))))))
 
 (test parse-else-if-becomes-nested-if-branch
   (with-complete-ast (ast "if true; echo yes; else if false; echo no; end")

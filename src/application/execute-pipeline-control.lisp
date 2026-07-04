@@ -108,9 +108,11 @@ Builds the final output string by joining all pushed chunks in order."
                     raw-value (shell-context-environment context)))
          (value (or (first expanded) raw-value)))
     (loop for clause in (nshell.domain.parsing:case-node-clauses ast)
-          for pattern = (car clause)
+          for pattern = (nshell.domain.parsing:case-clause-pattern clause)
           when (nshell.domain.expansion:glob-match-p pattern value)
-            do (return (%execute-ast-list-in-context context (cdr clause)))
+            do (return (%execute-ast-list-in-context
+                        context
+                        (nshell.domain.parsing:case-clause-body clause)))
           finally (return (values nil 0)))))
 
 (defun %execute-begin-end-node-in-context (context ast)

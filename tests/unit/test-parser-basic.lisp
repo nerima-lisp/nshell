@@ -414,8 +414,14 @@
          (node (nshell.domain.parsing::make-while-node condition body)))
     (setf (car body) body-replacement)
     (is (eq body-original (first (nshell.domain.parsing:while-node-body node)))))
-  (let* ((clause-original (list "a" (nshell.domain.parsing:make-command-node "echo" '("case"))))
-         (clause-replacement (list "b" (nshell.domain.parsing:make-command-node "echo" '("changed"))))
+  (let* ((clause-original
+           (nshell.domain.parsing:make-case-clause
+            "a"
+            (list (nshell.domain.parsing:make-command-node "echo" '("case")))))
+         (clause-replacement
+           (nshell.domain.parsing:make-case-clause
+            "b"
+            (list (nshell.domain.parsing:make-command-node "echo" '("changed")))))
          (clauses (list clause-original))
          (node (nshell.domain.parsing::make-case-node "value" clauses)))
     (setf (car clauses) clause-replacement)

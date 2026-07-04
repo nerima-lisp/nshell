@@ -160,8 +160,9 @@
                (let ((pattern (%command-first-arg-value (first nodes) "*")))
                  (let ((scan (%group-control-flow-body (rest nodes) '("end"))))
                    (%make-control-flow-clause-parse-result
-                    (list (cons pattern
-                                (%control-flow-body-scan-body scan)))
+                    (list (make-case-clause
+                           pattern
+                           (%control-flow-body-scan-body scan)))
                     (%control-flow-body-scan-rest scan))))))))
       (%make-control-flow-node-grouping
        (make-case-node value
@@ -211,16 +212,18 @@
                                     '("case" "end"))))
                          (%make-control-flow-clause-parse-result
                           (mapcar (lambda (pattern)
-                                    (cons pattern
-                                          (%control-flow-body-scan-body scan)))
+                                    (make-case-clause
+                                     pattern
+                                     (%control-flow-body-scan-body scan)))
                                   patterns)
                           (%control-flow-body-scan-rest scan))))
                      (let ((scan (%group-control-flow-body
                                   nodes
                                   '("case" "end"))))
                        (%make-control-flow-clause-parse-result
-                        (list (cons "*"
-                                    (%control-flow-body-scan-body scan)))
+                        (list (make-case-clause
+                               "*"
+                               (%control-flow-body-scan-body scan)))
                         (%control-flow-body-scan-rest scan)))))))))
       (%make-control-flow-node-grouping
        (make-case-node value

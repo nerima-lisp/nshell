@@ -85,6 +85,10 @@
 (defun make-while-node (condition body &optional span)
   (%make-while-node condition (%copy-ast-list body) span))
 
+(defstruct (case-clause (:constructor make-case-clause (pattern body)))
+  (pattern "*" :type string :read-only t)
+  (body nil :type list :read-only t))
+
 (defstruct (case-node (:include ast-node)
                       (:constructor %make-case-node (value clauses &optional span)))
   (value "" :type string :read-only t)

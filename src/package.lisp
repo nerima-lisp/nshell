@@ -90,6 +90,8 @@
              #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch
              #:for-node-p #:for-node-var-name #:for-node-in-values #:for-node-body
              #:while-node-p #:while-node-condition #:while-node-body
+             #:case-clause #:case-clause-p #:make-case-clause
+             #:case-clause-pattern #:case-clause-body
              #:case-node-p #:case-node-value #:case-node-clauses
              #:begin-end-node-p #:begin-end-node-body
              #:var-p #:make-var #:unify #:walk #:extend-bindings #:backtrack #:unify-p

@@ -30,6 +30,20 @@
   (is (fboundp 'nshell.domain.parsing::%make-normalized-parse-result))
   (is (fboundp 'nshell.domain.parsing::%make-parse-diagnostic)))
 
+(test parse-result-errors-list-is-domain-owned
+  "Parse result diagnostics should not expose mutable aggregate storage."
+  (let* ((diagnostic (nshell.domain.parsing::%make-parse-diagnostic
+                      :error "original" 1 2))
+         (result (nshell.domain.parsing::%make-normalized-parse-result
+                  nil (list diagnostic)))
+         (errors (nshell.domain.parsing:parse-errors result)))
+    (setf (first errors)
+          (nshell.domain.parsing::%make-parse-diagnostic
+           :error "mutated" 3 4))
+    (is (string= "original"
+                 (nshell.domain.parsing:parse-diagnostic-message
+                  (first (nshell.domain.parsing:parse-errors result)))))))
+
 (test parse-incomplete-quote
   (with-first-parsed-diagnostic (diagnostic result "echo 'hello")
     (assert-parsed-diagnostic result diagnostic

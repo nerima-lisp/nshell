@@ -1,10 +1,12 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (parse-result (:constructor %make-parse-result
-                            (ast &optional errors incomplete)))
-  (ast nil :type (or null ast-node))
-  (errors nil :type list)
-  (incomplete nil :type boolean))
+(defstruct (parse-result
+            (:constructor %make-parse-result
+                (ast &optional errors incomplete))
+            (:conc-name %parse-result-))
+  (ast nil :type (or null ast-node) :read-only t)
+  (errors nil :type list :read-only t)
+  (incomplete nil :type boolean :read-only t))
 
 (defun %make-normalized-parse-result (ast &optional errors incomplete)
   (%make-parse-result ast
@@ -19,6 +21,15 @@
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t)
   (token nil :read-only t))
+
+(defun parse-result-ast (result)
+  (%parse-result-ast result))
+
+(defun parse-result-errors (result)
+  (copy-list (%parse-result-errors result)))
+
+(defun parse-result-incomplete (result)
+  (%parse-result-incomplete result))
 
 (defun parse-errors (result)
   (parse-result-errors result))

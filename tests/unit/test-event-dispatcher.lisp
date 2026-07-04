@@ -9,6 +9,11 @@
 (defun test-event (type)
   (nshell.domain.events:make-generic-domain-event type))
 
+(test dispatcher-raw-constructor-is-internal-boundary
+  "The dispatcher struct constructor is internal; callers use the application factory."
+  (is (fboundp 'nshell.application:make-event-dispatcher))
+  (is (fboundp 'nshell.application::%make-event-dispatcher)))
+
 (test dispatcher-drains-events-in-fifo-order-per-type
   "Events published for a type are delivered in FIFO order."
   (let ((dispatcher (nshell.application:make-event-dispatcher)))

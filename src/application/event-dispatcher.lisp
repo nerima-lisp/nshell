@@ -1,7 +1,11 @@
 (in-package #:nshell.application)
-(defstruct (event-dispatcher (:constructor make-event-dispatcher ()))
+(defstruct (event-dispatcher (:constructor %make-event-dispatcher ()))
   (subscribers (make-hash-table :test #'eq) :type hash-table)
   (queue nil :type list))
+
+(defun make-event-dispatcher ()
+  (%make-event-dispatcher))
+
 (defun publish-event (dispatcher event)
   (push event (event-dispatcher-queue dispatcher))
   event)

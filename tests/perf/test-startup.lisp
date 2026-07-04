@@ -13,35 +13,7 @@
        internal-time-units-per-second)))
 
 (defun %test-startup-shell-context ()
-  (let ((filesystem-fns (list :list-dir (lambda (dir)
-                                          (declare (ignore dir))
-                                          nil)
-                              :stat (lambda (path)
-                                      (declare (ignore path))
-                                      nil)
-                              :cwd (lambda () #p"/tmp/")
-                              :chdir (lambda (path)
-                                       (declare (ignore path))
-                                       t)))
-        (process-fns (list :run-external (lambda (command args)
-                                           (declare (ignore command args))
-                                           0)))
-        (terminal-fns (list :get-size (lambda () (values 80 24)))))
-    (nshell.application:make-shell-context
-     :history (nshell.domain.history:make-command-history)
-     :config (nshell.domain.configuration:default-config)
-     :knowledge-base (nshell.domain.completion:make-empty-knowledge-base)
-     :environment (nshell.domain.environment:make-default-environment)
-     :dispatcher (nshell.application:make-event-dispatcher)
-     :job-monitor (nshell.domain.job-control:make-job-monitor)
-     :alias-table (make-hash-table :test #'equal)
-     :abbreviation-table (make-hash-table :test #'equal)
-     :function-table (make-hash-table :test #'equal)
-     :filesystem-fns filesystem-fns
-     :process-fns process-fns
-     :terminal-fns terminal-fns
-     :execution-strategy :cps
-     :running t)))
+  (make-test-shell-context :running t))
 
 (test startup-hot-context-composition-under-budget
   "Composing an interactive shell context remains cheap."

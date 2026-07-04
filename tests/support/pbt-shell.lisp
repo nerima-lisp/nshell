@@ -59,7 +59,8 @@
                                   (process-fns nil process-fns-supplied-p)
                                   redirect-fns
                                   (terminal-fns nil terminal-fns-supplied-p)
-                                  (execution-strategy :cps))
+                                  (execution-strategy :cps)
+                                  (running nil))
   (let ((filesystem-fns (if filesystem-fns-supplied-p
                             filesystem-fns
                             (%default-test-filesystem-fns)))
@@ -84,7 +85,8 @@
      :process-fns process-fns
      :redirect-fns redirect-fns
      :terminal-fns terminal-fns
-     :execution-strategy execution-strategy)))
+     :execution-strategy execution-strategy
+     :running running)))
 
 (defmacro with-parsed-command-line ((result line) &body body)
   `(nshell.domain.parsing:with-parsed-command-line (,result ,line)

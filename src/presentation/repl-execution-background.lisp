@@ -16,14 +16,12 @@
          command style environment)
       (if error
           (values nil nil error)
-          (multiple-value-bind (args redirects)
-              (extract-redirects
-               (%expand-command-args cmd environment))
-            (values (nshell.domain.parsing:make-command-node
-                     expanded
-                     args)
-                    redirects
-                    nil))))))
+          (multiple-value-bind (clean-cmd redirects)
+              (nshell.domain.parsing:split-command-node-redirects
+               (nshell.domain.parsing:make-command-node
+                expanded
+                (%expand-command-args cmd environment)))
+            (values clean-cmd redirects nil))))))
 
 (defun %prepare-pipeline-node (pipeline)
   (let ((prepared '())

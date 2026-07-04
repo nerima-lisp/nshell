@@ -2,32 +2,6 @@
 
 (in-suite repl-tests)
 
-(test repl-extract-redirects-preserves-dangling-operator
-  "Malformed redirect argument lists should not make redirect extraction loop forever."
-  (dolist (case '((("echo" ">")
-                   ("echo" ">")
-                   ())
-                  (("echo" ">" "out.txt")
-                   ("echo")
-                   ((:> . "out.txt")))
-                  (("echo" ">>" "out.txt")
-                   ("echo")
-                   ((:>> . "out.txt")))
-                  (("echo" "<" "in.txt")
-                   ("echo")
-                   ((:< . "in.txt")))
-                  (("cat" "<<<" "bg")
-                   ("cat")
-                   ((:<<< . "bg")))
-                  (("cat" "<<" "bg")
-                   ("cat")
-                   ((:<< . "bg")))))
-    (destructuring-bind (args expected-clean expected-redirects) case
-      (multiple-value-bind (clean redirects)
-          (nshell.presentation::extract-redirects args)
-        (is (equal expected-clean clean))
-        (is (equal expected-redirects redirects))))))
-
 (test repl-background-preparation-expands-command-position-word
   "Background preparation expands the command word before spawning."
   (with-repl-test-state

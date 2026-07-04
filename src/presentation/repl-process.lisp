@@ -26,20 +26,3 @@
              *proc-registry*)
     (dolist (jid completed-jobs)
       (remhash jid *proc-registry*))))
-
-(defun extract-redirects (args)
-  (let ((clean nil)
-        (redirects nil)
-        (index 0)
-        (limit (length args)))
-    (loop while (< index limit)
-          for value = (nth index args)
-          for spec = (cdr (assoc value nshell.domain.parsing:+redirect-specs+ :test #'string=))
-          do (if (and spec (< (1+ index) limit))
-                 (progn
-                   (push (cons spec (nth (1+ index) args)) redirects)
-                   (incf index 2))
-                 (progn
-                   (push value clean)
-                   (incf index))))
-    (values (nreverse clean) (nreverse redirects))))

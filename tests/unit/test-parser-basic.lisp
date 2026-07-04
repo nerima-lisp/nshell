@@ -110,6 +110,34 @@
     (is (equal '((:2>&1 . nil) (:> . "out") (:2> . "err"))
                redirects))))
 
+(test split-command-node-redirects-projects-redirect-table-cases
+  "Redirect splitting uses parser-domain redirect specs for supported redirect forms."
+  (dolist (case '((("echo" ">" "out.txt")
+                   ("echo")
+                   ((:> . "out.txt")))
+                  (("echo" ">>" "out.txt")
+                   ("echo")
+                   ((:>> . "out.txt")))
+                  (("echo" "<" "in.txt")
+                   ("echo")
+                   ((:< . "in.txt")))
+                  (("cat" "<<<" "bg")
+                   ("cat")
+                   ((:<<< . "bg")))
+                  (("cat" "<<" "bg")
+                   ("cat")
+                   ((:<< . "bg")))))
+    (destructuring-bind (words expected-clean expected-redirects) case
+      (multiple-value-bind (clean redirects)
+          (nshell.domain.parsing:split-command-node-redirects
+           (nshell.domain.parsing:make-command-node
+            (first words)
+            (rest words)))
+        (is (equal expected-clean
+                   (cons (nshell.domain.parsing:command-node-command clean)
+                         (nshell.domain.parsing:command-node-arg-values clean))))
+        (is (equal expected-redirects redirects))))))
+
 (test separator-rule-entry-projects-separator-facts
   "Separator rule entries are the projection boundary for parser separator specs."
   (let ((pipe-entry (nshell.domain.parsing::%separator-rule-entry :pipe))

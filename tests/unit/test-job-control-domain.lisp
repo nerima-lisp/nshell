@@ -47,6 +47,20 @@
     (nshell.domain.job-control:monitor-update monitor id :completed 0)
     (is (= 0 (nshell.domain.execution:job-exit-code job)))))
 
+(test foreground-and-background-job-own-visibility-flag
+  "Job-control owns foreground/background visibility changes."
+  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+         (job (make-test-job 0 "sleep"))
+         (id (nshell.domain.job-control:monitor-add-job monitor job)))
+    (is (eq job (nshell.domain.job-control:background-job monitor id)))
+    (is (nshell.domain.execution:job-background-p job))
+    (is (eq :background (nshell.domain.execution:job-state job)))
+    (is (eq job (nshell.domain.job-control:foreground-job monitor id)))
+    (is (not (nshell.domain.execution:job-background-p job)))
+    (is (eq :running (nshell.domain.execution:job-state job)))
+    (is (null (nshell.domain.job-control:background-job monitor 999)))
+    (is (null (nshell.domain.job-control:foreground-job monitor 999)))))
+
 (test pbt-invalid-job-state-transitions-are-rejected
   "Generated invalid job states are rejected by the job state transition guard."
   (for-all ((state-number (gen-integer :min 0 :max 1000)))

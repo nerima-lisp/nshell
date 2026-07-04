@@ -66,5 +66,13 @@
 (defun foreground-job (monitor job-id)
   (let ((job (monitor-find-job monitor job-id)))
     (when job
+      (setf (nshell.domain.execution:job-background-p job) nil)
       (monitor-update monitor job-id :running)
+      job)))
+
+(defun background-job (monitor job-id)
+  (let ((job (monitor-find-job monitor job-id)))
+    (when job
+      (setf (nshell.domain.execution:job-background-p job) t)
+      (monitor-update monitor job-id :background)
       job)))

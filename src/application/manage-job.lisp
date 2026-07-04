@@ -27,14 +27,12 @@
     (when job
       (let ((pgid (nshell.domain.execution:job-pgid job)))
         (when (%valid-job-pgid-p pgid)
-          (setf *foreground-job-pgid* pgid
-                (nshell.domain.execution:job-background-p job) nil)
+          (setf *foreground-job-pgid* pgid)
           (unwind-protect
                (progn
                  (%set-acl-foreground-pgid pgid)
                  (%continue-process-group pgid)
-                 (nshell.domain.job-control:monitor-update
-                  job-monitor job-id :running)
+                 (nshell.domain.job-control:foreground-job job-monitor job-id)
                  (when dispatcher
                    (publish-event dispatcher
                                   (nshell.domain.events:make-job-continued-event job-id)))
@@ -52,9 +50,7 @@
       (let ((pgid (nshell.domain.execution:job-pgid job)))
         (when (%valid-job-pgid-p pgid)
           (%continue-process-group pgid))
-        (setf (nshell.domain.execution:job-background-p job) t)
-        (nshell.domain.job-control:monitor-update
-         job-monitor job-id :background)
+        (nshell.domain.job-control:background-job job-monitor job-id)
         (when dispatcher
           (publish-event dispatcher
                          (nshell.domain.events:make-job-continued-event job-id)))

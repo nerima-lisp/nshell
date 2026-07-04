@@ -232,6 +232,7 @@
             #:shell-context-process-registry #:shell-context-terminal-rows
             #:shell-context-terminal-cols
             #:lookup-builtin
+            #:collect-source-lines #:source-lines
             #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
             #:execute-command-node-in-context
             #:execute-ast-in-context

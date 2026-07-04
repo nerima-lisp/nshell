@@ -14,10 +14,10 @@
 
 (defun %run-batch-source-lines (lines)
   (handler-case
-      (multiple-value-bind (output code)
-          (%execute-with-repl-shell-context
-           (lambda (context)
-             (nshell.application::%source-lines context lines)))
+         (multiple-value-bind (output code)
+             (%execute-with-repl-shell-context
+              (lambda (context)
+                (nshell.application:source-lines context lines)))
         (declare (ignore output))
         (setf *last-exit-code* (or code 0)))
     (error (condition)
@@ -29,10 +29,10 @@
 SCRIPT-ARGS are exposed as $argv for `nshell -c COMMAND ARGS...'."
   (%initialize-batch-state)
   (let ((nshell.domain.expansion:*positional-args* script-args))
-    (if line
-        (%run-batch-source-lines (list line))
-        (%run-batch-source-lines
-         (nshell.application::%collect-source-lines *standard-input*))))
+         (if line
+             (%run-batch-source-lines (list line))
+             (%run-batch-source-lines
+              (nshell.application:collect-source-lines *standard-input*))))
   *last-exit-code*)
 
 (defun run-repl-script (path &optional script-args)

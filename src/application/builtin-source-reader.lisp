@@ -32,6 +32,10 @@
         while line
         collect line))
 
+(defun collect-source-lines (stream)
+  "Collect source lines from STREAM for application-level batch execution."
+  (%collect-source-lines stream))
+
 (defparameter +source-definition-opening-keywords+
   '("if" "for" "while" "switch" "begin" "function"))
 
@@ -256,3 +260,7 @@ which are skipped rather than parsed."
                   (when (%source-lines-step-result-stop-p step)
                     (return))))))
     (values (apply #'concatenate 'string (nreverse output)) code)))
+
+(defun source-lines (context lines &optional source-path)
+  "Execute source LINES in CONTEXT through the application source use case."
+  (%source-lines context lines source-path))

@@ -2,6 +2,14 @@
 
 (in-suite builtin-tests)
 
+(test source-reader-use-case-boundary-is-public
+  "The application layer exposes source reader use cases for presentation callers."
+  (is (fboundp 'nshell.application:source-lines))
+  (is (fboundp 'nshell.application:collect-source-lines))
+  (is (equal '("echo one" "echo two")
+             (with-input-from-string (stream (format nil "echo one~%echo two~%"))
+               (nshell.application:collect-source-lines stream)))))
+
 (defun %source-sequence-call-order (separator first-code second-code)
   (let ((context (make-test-builtins-context))
         (calls nil))

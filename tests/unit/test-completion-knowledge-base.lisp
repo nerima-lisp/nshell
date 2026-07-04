@@ -166,16 +166,16 @@
                  ("--format" "json"))
                (nshell.domain.completion::%entry-option-value-specs entry)))
     (let ((projection
-            (nshell.domain.completion::%project-entry-option-value-spec
+            (nshell.domain.completion::%project-option-value-spec-list
              '("--mode" "fast"))))
       (is (string= "--mode"
-                   (nshell.domain.completion::%entry-option-value-spec-projection-option
+                   (nshell.domain.completion::%option-value-spec-list-projection-option
                     projection)))
       (is (equal '("fast")
-                 (nshell.domain.completion::%entry-option-value-spec-projection-values
+                 (nshell.domain.completion::%option-value-spec-list-projection-values
                   projection)))
-      (is (nshell.domain.completion::%entry-option-value-spec-projection-valid-p
-           projection)))
+      (is (nshell.domain.completion::%option-value-spec-list-projection-valid-p
+            projection)))
     (is (string= "--mode"
                  (nshell.domain.completion::%entry-option-value-spec-option
                   '("--mode" "fast"))))
@@ -188,8 +188,8 @@
     (is (not (nshell.domain.completion::%entry-option-value-spec-for-option-p
               '("--format" "json")
               "--mode")))
-    (is (not (nshell.domain.completion::%entry-option-value-spec-projection-valid-p
-              (nshell.domain.completion::%project-entry-option-value-spec
+    (is (not (nshell.domain.completion::%option-value-spec-list-projection-valid-p
+              (nshell.domain.completion::%project-option-value-spec-list
                '(nil "ignored")))))
     (is (equal '("fast" "safe")
                (nshell.domain.completion::%entry-option-values entry "--mode")))
@@ -202,7 +202,6 @@
            (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
     (is (not (defined-symbol-p "UNIQUE-STRING-VALUES")))
     (is (not (defined-symbol-p "ENTRY-OPTION-VALUE-SPECS")))
-    (is (not (defined-symbol-p "PROJECT-ENTRY-OPTION-VALUE-SPEC")))
     (is (not (defined-symbol-p "ENTRY-OPTION-VALUE-SPEC-OPTION")))
     (is (not (defined-symbol-p "ENTRY-OPTION-VALUE-SPEC-VALUES")))
     (is (not (defined-symbol-p "ENTRY-OPTION-VALUE-SPEC-FOR-OPTION-P")))
@@ -219,23 +218,22 @@
     (is (not (defined-symbol-p "ENTRY-OPTION-VALUE-SPEC-PROJECTION-VALID-P"))))
   (is (fboundp 'nshell.domain.completion::%unique-string-values))
   (is (fboundp 'nshell.domain.completion::%entry-option-value-specs))
-  (is (fboundp 'nshell.domain.completion::%project-entry-option-value-spec))
   (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-option))
   (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-values))
   (is (fboundp
-       'nshell.domain.completion::%entry-option-value-spec-for-option-p))
+        'nshell.domain.completion::%entry-option-value-spec-for-option-p))
   (is (fboundp 'nshell.domain.completion::%entry-option-values))
   (is (fboundp 'nshell.domain.completion::%matching-entry-option-values))
   (is (fboundp 'nshell.domain.completion::%option-value-candidate))
   (is (fboundp
-       'nshell.domain.completion::%attached-option-value-candidate-text))
+        'nshell.domain.completion::%attached-option-value-candidate-text))
   (is (fboundp 'nshell.domain.completion::%option-value-candidates))
   (is (fboundp 'nshell.domain.completion::%attached-option-value-candidates))
   (is (fboundp 'nshell.domain.completion::%separate-option-value-candidates))
-  (is (fboundp 'nshell.domain.completion::%make-entry-option-value-spec-projection))
-  (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-projection-option))
-  (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-projection-values))
-  (is (fboundp 'nshell.domain.completion::%entry-option-value-spec-projection-valid-p)))
+  (is (fboundp 'nshell.domain.completion::%option-value-spec-list-projection-p))
+  (is (fboundp 'nshell.domain.completion::%option-value-spec-list-projection-option))
+  (is (fboundp 'nshell.domain.completion::%option-value-spec-list-projection-values))
+  (is (fboundp 'nshell.domain.completion::%option-value-spec-list-projection-valid-p)))
 
 (test option-value-spec-list-projection-owns-raw-list-boundary
   (let ((projection
@@ -311,10 +309,9 @@
            (not (null (find-symbol name '#:nshell.domain.completion)))))
     (is (not (internal-symbol-p "MAKE-ATTACHED-OPTION-VALUE-PREFIX")))
     (is (not (internal-symbol-p "MAKE-SEPARATE-OPTION-VALUE-PREFIX")))
-    (is (not (internal-symbol-p "MAKE-ENTRY-OPTION-VALUE-SPEC-PROJECTION")))
     (is (internal-symbol-p "%MAKE-ATTACHED-OPTION-VALUE-PREFIX"))
     (is (internal-symbol-p "%MAKE-SEPARATE-OPTION-VALUE-PREFIX"))
-    (is (internal-symbol-p "%MAKE-ENTRY-OPTION-VALUE-SPEC-PROJECTION"))))
+    (is (not (fboundp 'nshell.domain.completion::%make-entry-option-value-spec-projection)))))
 
 (test argument-words-without-value-prefix-removes-in-progress-value-word
   (is (equal '("--mode")
@@ -376,14 +373,14 @@
 (test kb-option-value-spec-projection-boundaries-name-domain-parts
   (let ((spec '("--mode" "fast" "safe")))
     (let ((projection
-            (nshell.domain.completion::%kb-option-value-spec-projection spec)))
+            (nshell.domain.completion::%project-option-value-spec-list spec)))
       (is (string= "--mode"
-                   (nshell.domain.completion::%kb-option-value-spec-projection-option
+                   (nshell.domain.completion::%option-value-spec-list-projection-option
                     projection)))
       (is (equal '("fast" "safe")
-                 (nshell.domain.completion::%kb-option-value-spec-projection-values
+                 (nshell.domain.completion::%option-value-spec-list-projection-values
                   projection)))
-      (is (nshell.domain.completion::%kb-option-value-spec-projection-valid-p
+      (is (nshell.domain.completion::%option-value-spec-list-projection-valid-p
            projection)))
     (is (string= "--mode"
                  (nshell.domain.completion::%kb-option-value-spec-option spec)))
@@ -396,8 +393,8 @@
               spec "--other")))
     (is (not (nshell.domain.completion::%valid-kb-option-value-spec-p
               '(nil "ignored"))))
-    (is (not (nshell.domain.completion::%kb-option-value-spec-projection-valid-p
-              (nshell.domain.completion::%kb-option-value-spec-projection
+    (is (not (nshell.domain.completion::%option-value-spec-list-projection-valid-p
+              (nshell.domain.completion::%project-option-value-spec-list
                '(nil "ignored")))))
     (is (equal '("--mode" "safe")
                (nshell.domain.completion::%make-kb-option-value-spec
@@ -418,10 +415,10 @@
   (is (fboundp 'nshell.domain.completion::%option-value-spec-list-projection-values))
   (is (fboundp 'nshell.domain.completion::%option-value-spec-list-projection-valid-p))
   (is (fboundp 'nshell.domain.completion::%project-option-value-spec-list))
-  (is (fboundp 'nshell.domain.completion::%make-kb-option-value-spec-projection))
-  (is (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-option))
-  (is (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-values))
-  (is (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-valid-p)))
+  (is (not (fboundp 'nshell.domain.completion::%make-kb-option-value-spec-projection)))
+  (is (not (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-option)))
+  (is (not (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-values)))
+  (is (not (fboundp 'nshell.domain.completion::%kb-option-value-spec-projection-valid-p))))
 
 (test knowledge-base-option-value-completion-dedupes-duplicates
   (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

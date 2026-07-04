@@ -16,9 +16,6 @@
         finally (return (%make-catalog-entry-property-projection
                          property nil nil))))
 
-(defun %catalog-entry-property-key (projection)
-  (%catalog-entry-property-projection-key projection))
-
 (defun %catalog-source-entry-property-present-p (entry property)
   (%catalog-entry-property-projection-present-p
    (%project-catalog-source-entry-property entry property)))

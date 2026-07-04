@@ -62,32 +62,17 @@
          (stringp option)))
       (%make-option-value-spec-list-projection nil nil nil)))
 
-(defstruct (%kb-option-value-spec-projection
-            (:constructor %make-kb-option-value-spec-projection
-                (option values valid-p))
-            (:conc-name %kb-option-value-spec-projection-))
-  option
-  values
-  valid-p)
-
-(defun %kb-option-value-spec-projection (spec)
-  (let ((projection (%project-option-value-spec-list spec)))
-    (%make-kb-option-value-spec-projection
-     (%option-value-spec-list-projection-option projection)
-     (%option-value-spec-list-projection-values projection)
-     (%option-value-spec-list-projection-valid-p projection))))
-
 (defun %kb-option-value-spec-option (spec)
-  (%kb-option-value-spec-projection-option
-   (%kb-option-value-spec-projection spec)))
+  (%option-value-spec-list-projection-option
+   (%project-option-value-spec-list spec)))
 
 (defun %kb-option-value-spec-values (spec)
-  (%kb-option-value-spec-projection-values
-   (%kb-option-value-spec-projection spec)))
+  (%option-value-spec-list-projection-values
+   (%project-option-value-spec-list spec)))
 
 (defun %valid-kb-option-value-spec-p (spec)
-  (%kb-option-value-spec-projection-valid-p
-   (%kb-option-value-spec-projection spec)))
+  (%option-value-spec-list-projection-valid-p
+   (%project-option-value-spec-list spec)))
 
 (defun %kb-option-value-spec-for-option-p (spec opt-name)
   (and (%valid-kb-option-value-spec-p spec)

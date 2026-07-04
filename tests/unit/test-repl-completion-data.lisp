@@ -232,14 +232,14 @@
     (is (equal (list :flags nil)
                (nshell.domain.completion::%catalog-source-entry-property
                 source-entry :flags)))
-    (let ((flags-projection
+      (let ((flags-projection
             (nshell.domain.completion::%project-catalog-source-entry-property
              source-entry :flags))
           (synopsis-projection
             (nshell.domain.completion::%project-catalog-source-entry-property
              source-entry :synopsis)))
       (is (eq :flags
-              (nshell.domain.completion::%catalog-entry-property-key
+              (nshell.domain.completion::%catalog-entry-property-projection-key
                flags-projection)))
       (is (nshell.domain.completion::%catalog-entry-property-projection-present-p
            flags-projection))
@@ -263,7 +263,6 @@
                         "CATALOG-ENTRY-PROPERTY-PROJECTION-KEY"
                         "CATALOG-ENTRY-PROPERTY-PROJECTION-VALUE"
                         "CATALOG-ENTRY-PROPERTY-PROJECTION-PRESENT-P"
-                        "CATALOG-ENTRY-PROPERTY-KEY"
                         "CATALOG-ENTRY-PROPERTY-PRESENT-P"
                         "CATALOG-ENTRY-PROPERTY-VALUE"
                         "CATALOG-ENTRY-COMMAND"
@@ -278,14 +277,13 @@
       (is (not (defined-symbol-p old-name))))
     (dolist (internal-name '("%MAKE-CATALOG-ENTRY-PROPERTY-PROJECTION"
                              "%CATALOG-ENTRY-PROPERTY-PROJECTION-P"
-                             "%CATALOG-ENTRY-PROPERTY-PROJECTION-KEY"
-                             "%CATALOG-ENTRY-PROPERTY-PROJECTION-VALUE"
-                             "%CATALOG-ENTRY-PROPERTY-PROJECTION-PRESENT-P"
-                             "%PROJECT-CATALOG-SOURCE-ENTRY-PROPERTY"
-                             "%CATALOG-ENTRY-PROPERTY-KEY"
-                             "%CATALOG-ENTRY-PROPERTY-VALUE"
-                             "%CATALOG-SOURCE-ENTRY-PROPERTY-PRESENT-P"
-                             "%CATALOG-SOURCE-ENTRY-PROPERTY-VALUE"
+                        "%CATALOG-ENTRY-PROPERTY-PROJECTION-KEY"
+                        "%CATALOG-ENTRY-PROPERTY-PROJECTION-VALUE"
+                        "%CATALOG-ENTRY-PROPERTY-PROJECTION-PRESENT-P"
+                        "%PROJECT-CATALOG-SOURCE-ENTRY-PROPERTY"
+                        "%CATALOG-ENTRY-PROPERTY-VALUE"
+                        "%CATALOG-SOURCE-ENTRY-PROPERTY-PRESENT-P"
+                        "%CATALOG-SOURCE-ENTRY-PROPERTY-VALUE"
                              "%CATALOG-SOURCE-ENTRY-PROPERTY"
                              "%CATALOG-SOURCE-ENTRY-COMMAND"
                              "%CATALOG-COMMAND-ENTRY-P"
@@ -300,7 +298,8 @@
                              "%COMMAND-CATALOG-PRESERVED-PROPERTIES"
                              "%BUILD-COMMAND-CATALOG-ENTRY"
                              "%COMMAND-CATALOG"))
-      (is (defined-symbol-p internal-name)))))
+      (is (defined-symbol-p internal-name)))
+    (is (not (fboundp 'nshell.domain.completion::%catalog-entry-property-key)))))
 
 (test pbt-builtin-catalog-projects-into-help-and-repl-seed
   "Each builtin catalog entry should project consistently into help and REPL seed data."

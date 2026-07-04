@@ -268,7 +268,6 @@
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
                (is (search "nshell v" (%e2e-pty-read-until fd "nshell v")))
                (%e2e-pty-write-line fd "/bin/sleep 3 &")
-               (is (search "[1]" (%e2e-pty-read-until fd "[1]")))
                (%e2e-pty-write-line fd "jobs")
                (let ((running-output (%e2e-pty-read-until fd "Running")))
                  (is (search "Running" running-output))

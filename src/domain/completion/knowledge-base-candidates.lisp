@@ -90,34 +90,19 @@
       (%kb-command-entry-option-values entry)
       (%catalog-command-entry-option-values entry)))
 
-(defstruct (%entry-option-value-spec-projection
-            (:constructor %make-entry-option-value-spec-projection
-                (option values valid-p))
-            (:conc-name %entry-option-value-spec-projection-))
-  option
-  values
-  valid-p)
-
-(defun %project-entry-option-value-spec (spec)
-  (let ((projection (%project-option-value-spec-list spec)))
-    (%make-entry-option-value-spec-projection
-     (%option-value-spec-list-projection-option projection)
-     (%option-value-spec-list-projection-values projection)
-     (%option-value-spec-list-projection-valid-p projection))))
-
 (defun %entry-option-value-spec-option (spec)
-  (%entry-option-value-spec-projection-option
-   (%project-entry-option-value-spec spec)))
+  (%option-value-spec-list-projection-option
+   (%project-option-value-spec-list spec)))
 
 (defun %entry-option-value-spec-values (spec)
-  (%entry-option-value-spec-projection-values
-   (%project-entry-option-value-spec spec)))
+  (%option-value-spec-list-projection-values
+   (%project-option-value-spec-list spec)))
 
 (defun %entry-option-value-spec-for-option-p (spec option)
-  (let ((projection (%project-entry-option-value-spec spec)))
-    (and (%entry-option-value-spec-projection-valid-p projection)
+  (let ((projection (%project-option-value-spec-list spec)))
+    (and (%option-value-spec-list-projection-valid-p projection)
          (string= option
-                  (%entry-option-value-spec-projection-option projection)))))
+                  (%option-value-spec-list-projection-option projection)))))
 
 (defun %entry-option-values (entry option)
   (%unique-string-values

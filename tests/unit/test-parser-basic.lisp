@@ -1129,10 +1129,7 @@
             (nshell.domain.parsing::%token-reduction-state-clear-command-context
              state)))
     (is (null (nshell.domain.parsing::%token-reduction-state-current-cmd state)))
-    (is (null (nshell.domain.parsing::%token-reduction-state-current-args state)))
-    (is (null (nshell.domain.parsing::%token-reduction-state-pending-sep state)))
-    (is (null (nshell.domain.parsing::%token-reduction-state-pending-sep-token
-               state)))))
+    (is (null (nshell.domain.parsing::%token-reduction-state-current-args state)))))
 
 (test parser-reduction-state-updates-command-and-arguments
   "Token reduction state owns command start and argument accumulation transitions."
@@ -1192,7 +1189,13 @@
             (nshell.domain.parsing::%token-reduction-state-pending-sep state)))
     (is (eq separator-token
             (nshell.domain.parsing::%token-reduction-state-pending-sep-token
-             state)))))
+             state)))
+    (is (eq state
+            (nshell.domain.parsing::%token-reduction-state-clear-pending-separator
+             state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-pending-sep state)))
+    (is (null (nshell.domain.parsing::%token-reduction-state-pending-sep-token
+               state)))))
 
 (test parser-reduction-state-folds-token-stream
   "Token stream reduction folds tokens through an explicit state boundary."

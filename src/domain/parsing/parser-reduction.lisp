@@ -99,6 +99,11 @@
         (%token-reduction-state-pending-sep-token state) token)
   state)
 
+(defun %token-reduction-state-clear-pending-separator (state)
+  (setf (%token-reduction-state-pending-sep state) nil
+        (%token-reduction-state-pending-sep-token state) nil)
+  state)
+
 (defstruct (%token-reduction-diagnostic-policy
             (:constructor %make-token-reduction-diagnostic-policy
                 (kind message)))
@@ -167,9 +172,8 @@
   (setf (%token-reduction-state-current-cmd state) nil
         (%token-reduction-state-current-cmd-token state) nil
         (%token-reduction-state-current-args state) '()
-        (%token-reduction-state-pending-redirect-token state) nil
-        (%token-reduction-state-pending-sep state) nil
-        (%token-reduction-state-pending-sep-token state) nil)
+        (%token-reduction-state-pending-redirect-token state) nil)
+  (%token-reduction-state-clear-pending-separator state)
   state)
 
 (defun %flush-token-reduction-command (state)

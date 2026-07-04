@@ -28,16 +28,6 @@
   (current-word nil :read-only t)
   (command-word nil :read-only t))
 
-(defstruct (%completion-command-word-projection
-            (:constructor %make-completion-command-word-projection (word))
-            (:conc-name %completion-command-word-projection-))
-  (word nil :read-only t))
-
-(defstruct (%completion-word-stream-projection
-            (:constructor %make-completion-word-stream-projection (latest-word))
-            (:conc-name %completion-word-stream-projection-))
-  (latest-word nil :read-only t))
-
 (defun %starts-with-p (prefix text)
   (and (>= (length text) (length prefix))
        (string-equal prefix text :end2 (length prefix))))
@@ -115,19 +105,14 @@ intervening whitespace are merged."
     (and previous-token
          (%redirection-token-p previous-token))))
 
-(defun %project-completion-command-word (partial-input words)
-  "Return the first non-assignment completion word in WORDS."
-  (%make-completion-command-word-projection
-   (loop for word in words
-         for source = (subseq partial-input
-                              (%completion-word-start word)
-                              (%completion-word-end word))
-         unless (nshell.domain.parsing:shell-assignment-word-p source)
-           return word)))
-
 (defun %command-word (partial-input words)
-  (%completion-command-word-projection-word
-   (%project-completion-command-word partial-input words)))
+  "Return the first non-assignment completion word in WORDS."
+  (loop for word in words
+        for source = (subseq partial-input
+                             (%completion-word-start word)
+                             (%completion-word-end word))
+        unless (nshell.domain.parsing:shell-assignment-word-p source)
+          return word))
 
 (defun %argument-word-values-after-command (words command-word)
   (when command-word
@@ -139,14 +124,9 @@ intervening whitespace are merged."
             when seen-command-p
               collect (%completion-word-value word))))
 
-(defun %project-completion-word-stream (words)
-  (%make-completion-word-stream-projection
-   (loop for word in words
-         finally (return word))))
-
 (defun %latest-completion-word (words)
-  (%completion-word-stream-projection-latest-word
-   (%project-completion-word-stream words)))
+  (loop for word in words
+        finally (return word)))
 
 (defun %current-completion-word-at-cursor (words cursor)
   (let ((last-word (%latest-completion-word words)))

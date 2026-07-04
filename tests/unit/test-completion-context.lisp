@@ -135,10 +135,6 @@
     (dolist (name '("%MAKE-COMPLETION-CONTEXT"
                     "%MAKE-COMPLETION-WORD"
                     "%MAKE-COMPLETION-INPUT-ANALYSIS"
-                    "%MAKE-COMPLETION-COMMAND-WORD-PROJECTION"
-                    "%MAKE-COMPLETION-WORD-STREAM-PROJECTION"
-                    "%PROJECT-COMPLETION-COMMAND-WORD"
-                    "%PROJECT-COMPLETION-WORD-STREAM"
                     "%STARTS-WITH-P"
                     "%WORD-LIKE-TOKEN-P"
                     "%REDIRECTION-TOKEN-P"
@@ -161,23 +157,15 @@
                     "%COMPLETION-WORD-VALUE"
                     "%COMPLETION-WORD-START"
                     "%COMPLETION-WORD-END"
-                    "%COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"
-                    "%COMPLETION-COMMAND-WORD-PROJECTION-WORD"
-                    "%COMPLETION-WORD-STREAM-PROJECTION-LATEST-WORD"))
+                    "%COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"))
       (is (fboundp (find-symbol name '#:nshell.domain.completion))))
     (dolist (name '("MAKE-COMPLETION-CONTEXT"
                     "MAKE-COMPLETION-WORD"
                     "MAKE-COMPLETION-INPUT-ANALYSIS"
-                    "MAKE-COMPLETION-COMMAND-WORD-PROJECTION"
-                    "MAKE-COMPLETION-WORD-STREAM-PROJECTION"
-                    "PROJECT-COMPLETION-COMMAND-WORD"
-                    "PROJECT-COMPLETION-WORD-STREAM"
                     "COMPLETION-WORD-VALUE"
                     "COMPLETION-WORD-START"
                     "COMPLETION-WORD-END"
-                    "COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"
-                    "COMPLETION-COMMAND-WORD-PROJECTION-WORD"
-                    "COMPLETION-WORD-STREAM-PROJECTION-LATEST-WORD"))
+                    "COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"))
       (is (not (defined-symbol-p name))))
     (dolist (name '("STARTS-WITH-P"
                     "WORD-LIKE-TOKEN-P"

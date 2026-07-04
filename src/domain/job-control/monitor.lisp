@@ -76,3 +76,6 @@
       (setf (nshell.domain.execution:job-background-p job) t)
       (monitor-update monitor job-id :background)
       job)))
+
+(defun complete-job (monitor job-id &optional (exit-code 0))
+  (monitor-update monitor job-id :completed (or exit-code 0)))

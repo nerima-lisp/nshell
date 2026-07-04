@@ -17,8 +17,8 @@
                               (t (list entry)))))
                  (when (and entry
                             (not (some *background-proc-alive-p* procs)))
-                   (nshell.domain.job-control:monitor-update
-                    nshell.application:*job-monitor* jid :completed
+                   (nshell.domain.job-control:complete-job
+                    nshell.application:*job-monitor* jid
                     (let ((proc (car (last procs))))
                       (or (and proc (funcall *background-proc-exit-code* proc))
                           0)))

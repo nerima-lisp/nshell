@@ -159,7 +159,8 @@
             #:monitor-update
             #:monitor-jobs #:monitor-entries #:monitor-find-job
             #:monitor-remove-job
-            #:suspend-job #:resume-job #:foreground-job #:background-job))
+            #:suspend-job #:resume-job #:foreground-job #:background-job
+            #:complete-job))
 
 (defpackage #:nshell.domain.configuration
   (:use #:cl)

@@ -47,6 +47,16 @@
     (nshell.domain.job-control:monitor-update monitor id :completed 0)
     (is (= 0 (nshell.domain.execution:job-exit-code job)))))
 
+(test complete-job-owns-terminal-state-and-default-exit-code
+  "Job-control owns completion transitions and nil exit-code normalization."
+  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+         (job (make-test-job 0 "sleep"))
+         (id (nshell.domain.job-control:monitor-add-job monitor job)))
+    (is (eq job (nshell.domain.job-control:complete-job monitor id nil)))
+    (is (eq :completed (nshell.domain.execution:job-state job)))
+    (is (= 0 (nshell.domain.execution:job-exit-code job)))
+    (is (null (nshell.domain.job-control:complete-job monitor 999 7)))))
+
 (test foreground-and-background-job-own-visibility-flag
   "Job-control owns foreground/background visibility changes."
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))

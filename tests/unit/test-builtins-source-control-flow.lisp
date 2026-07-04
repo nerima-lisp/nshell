@@ -256,3 +256,14 @@
                                      "end"))
       ""))
 
+(test source-for-loop-updates-current-environment
+  "for loop assignment updates the current shell environment for following commands."
+  (with-builtins-source-ok (output code context
+                                   '("for item in first second"
+                                     "end"
+                                     "echo $item"))
+      (format nil "second~%")
+    (is (equal "second"
+               (nshell.domain.environment:env-get
+                (nshell.application:shell-context-environment context)
+                "item")))))

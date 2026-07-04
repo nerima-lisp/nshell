@@ -82,11 +82,11 @@ Builds the final output string by joining all pushed chunks in order."
   (%with-output-code-accumulator (output code)
     (dolist (value (loop for value-arg in (nshell.domain.parsing:for-node-in-values ast)
                          append (%expand-source-arg-in-context context value-arg)))
-      (setf (shell-context-environment context)
-            (nshell.domain.environment:env-set
-             (shell-context-environment context)
-             (nshell.domain.parsing:for-node-var-name ast)
-             value nil))
+      (%update-shell-environment context
+                                 #'nshell.domain.environment:env-set
+                                 (nshell.domain.parsing:for-node-var-name ast)
+                                 value
+                                 nil)
       (%collect-execution-result
        (output code)
        (%execute-ast-list-in-context context (nshell.domain.parsing:for-node-body ast))))))

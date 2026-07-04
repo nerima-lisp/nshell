@@ -84,6 +84,23 @@
                          :suggestion :clear
                          :cursor-pos (cursor-move-edit-cursor-pos edit)))
 
+(defstruct (buffer-clear-edit
+             (:constructor %make-buffer-clear-edit ())
+             (:conc-name %buffer-clear-edit-)))
+
+(defun make-buffer-clear-edit ()
+  (%make-buffer-clear-edit))
+
+(defun commit-buffer-clear-edit (state edit)
+  (declare (ignore edit))
+  (clear-history-search-session-state
+   (copy-input-state-clearing-completion state
+                                         :buffer ""
+                                         :cursor-pos 0
+                                         :mode :insert
+                                         :vi-count nil
+                                         :vi-visual-anchor :clear)))
+
 (defun backspace-before-cursor (state)
   (with-buffer-edit (state buffer cursor) state
     (let ((deletion (buffer-deletion-before-cursor cursor)))
@@ -117,13 +134,7 @@
             :redraw)))
 
 (defun clear-input-state (state)
-  (values (clear-history-search-session-state
-           (copy-input-state-clearing-completion state
-                                                 :buffer ""
-                                                 :cursor-pos 0
-                                                 :mode :insert
-                                                 :vi-count nil
-                                                 :vi-visual-anchor :clear))
+  (values (commit-buffer-clear-edit state (make-buffer-clear-edit))
           :redraw))
 
 (defun insert-char-at-cursor (state ch)

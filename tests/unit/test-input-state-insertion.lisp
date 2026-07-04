@@ -124,6 +124,34 @@
                     :cursor-pos 6
                     :suggestion nil)))
 
+(test input-state-buffer-clear-edit-resets-editing-session
+  (let* ((state (completion-session-state
+                 :buffer "abcdef"
+                 :cursor-pos 3
+                 :mode :search
+                 :vi-count 4
+                 :vi-visual-anchor 2
+                 :search-query "abc"
+                 :search-original-buffer "original"
+                 :search-original-cursor 5
+                 :search-index 2
+                 :completion-index 1
+                 :completion-base-buffer "abc"
+                 :completion-base-cursor 3
+                 :last-candidates (list "abcdef")
+                 :suggestion "def"))
+         (edit (nshell.presentation::make-buffer-clear-edit))
+         (committed (nshell.presentation::commit-buffer-clear-edit state edit)))
+    (is (nshell.presentation::buffer-clear-edit-p edit))
+    (is (fboundp 'nshell.presentation::%make-buffer-clear-edit))
+    (is-input-state-with-completion-cleared committed
+                                            :buffer ""
+                                            :cursor-pos 0
+                                            :mode :insert
+                                            :vi-visual-anchor nil)
+    (is (null (nshell.presentation::input-state-vi-count committed)))
+    (is-search-session-cleared committed)))
+
 (test input-state-space-expands-abbreviation-before-cursor
   (let ((state (completion-session-state
                 :buffer "gco"

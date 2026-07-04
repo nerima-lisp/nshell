@@ -410,10 +410,10 @@
   "Parser assembly should keep background metadata out of command nodes."
   (let* ((command (nshell.domain.parsing:make-command-node "sleep" '("1")))
          (foreground-ast
-           (nshell.domain.parsing::%build-ast-from-command-list
+           (nshell.domain.parsing::%build-ast-from-reducer-entries
             (list (list command nil nil))))
          (background-ast
-           (nshell.domain.parsing::%build-ast-from-command-list
+           (nshell.domain.parsing::%build-ast-from-reducer-entries
             (list (list command :amp nil)))))
     (is (eq command foreground-ast))
     (is (nshell.domain.parsing:sequence-node-p background-ast))
@@ -427,11 +427,16 @@
   "Parser assembly should project command-list pairs before AST construction."
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" '("one")))
          (second-command (nshell.domain.parsing:make-command-node "cat" nil))
-         (command-list (list (list first-command :pipe nil)
-                             (list second-command :amp nil)))
+         (reducer-entries (list (list first-command :pipe nil)
+                                (list second-command :amp nil)))
+         (entries
+           (nshell.domain.parsing::%command-list-entries-from-reducer-entries
+            reducer-entries))
          (assembly
-           (nshell.domain.parsing::%command-list-assembly-from-list
-            command-list)))
+           (nshell.domain.parsing::%command-list-assembly-from-entries
+            entries)))
+    (is (every #'nshell.domain.parsing::%command-list-entry-p entries))
+    (is (not (some #'listp entries)))
     (is (equal (list first-command second-command)
                (nshell.domain.parsing::%command-list-assembly-commands
                 assembly)))
@@ -446,10 +451,10 @@
   "Single-command assembly should expose command and background intent."
   (let* ((command (nshell.domain.parsing:make-command-node "sleep" '("1")))
          (foreground
-           (nshell.domain.parsing::%command-list-assembly-from-list
+           (nshell.domain.parsing::%command-list-assembly-from-reducer-entries
             (list (list command nil nil))))
          (background
-           (nshell.domain.parsing::%command-list-assembly-from-list
+           (nshell.domain.parsing::%command-list-assembly-from-reducer-entries
             (list (list command :amp nil)))))
     (is (eq command
             (nshell.domain.parsing::%command-list-assembly-single-command
@@ -501,7 +506,7 @@
          (second-command (nshell.domain.parsing:make-command-node "grep" '("two")))
          (third-command (nshell.domain.parsing:make-command-node "wc" nil))
          (assembly
-           (nshell.domain.parsing::%command-list-assembly-from-list
+           (nshell.domain.parsing::%command-list-assembly-from-reducer-entries
             (list (list first-command :pipe nil)
                   (list second-command :and nil)
                   (list third-command nil nil))))
@@ -576,7 +581,7 @@
          (third-command (nshell.domain.parsing:make-command-node "wc" nil)))
     (flet ((policy (command-list)
              (nshell.domain.parsing::%command-list-assembly-policy
-              (nshell.domain.parsing::%command-list-assembly-from-list
+              (nshell.domain.parsing::%command-list-assembly-from-reducer-entries
                command-list))))
       (is (eq :empty (policy nil)))
       (is (eq :single-command
@@ -597,7 +602,7 @@
   (let* ((first-command (nshell.domain.parsing:make-command-node "echo" nil))
          (second-command (nshell.domain.parsing:make-command-node "cat" nil))
          (assembly
-           (nshell.domain.parsing::%command-list-assembly-from-list
+           (nshell.domain.parsing::%command-list-assembly-from-reducer-entries
             (list (list first-command :pipe nil)
                   (list second-command :amp nil))))
          (decision

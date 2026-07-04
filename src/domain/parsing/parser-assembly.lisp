@@ -19,11 +19,25 @@
   (%pipeline-or-command-node
    (%pipeline-group-commands group)))
 
-(defun %command-list-commands (command-list)
-  (mapcar #'first command-list))
+(defstruct (%command-list-entry
+            (:constructor %make-command-list-entry
+                (command separator)))
+  (command nil :read-only t)
+  (separator nil :read-only t))
 
-(defun %command-list-separators (command-list)
-  (mapcar #'second command-list))
+(defun %command-list-entry-from-reducer-entry (entry)
+  (destructuring-bind (command separator separator-token) entry
+    (declare (ignore separator-token))
+    (%make-command-list-entry command separator)))
+
+(defun %command-list-entries-from-reducer-entries (entries)
+  (mapcar #'%command-list-entry-from-reducer-entry entries))
+
+(defun %command-list-commands (entries)
+  (mapcar #'%command-list-entry-command entries))
+
+(defun %command-list-separators (entries)
+  (mapcar #'%command-list-entry-separator entries))
 
 (defun %command-boundary-separators (separators)
   (butlast separators))
@@ -38,12 +52,16 @@
   (separators nil :type list :read-only t)
   (last-separator nil :read-only t))
 
-(defun %command-list-assembly-from-list (command-list)
-  (let ((separators (%command-list-separators command-list)))
+(defun %command-list-assembly-from-entries (entries)
+  (let ((separators (%command-list-separators entries)))
     (%make-command-list-assembly
-     (%command-list-commands command-list)
+     (%command-list-commands entries)
      separators
      (%trailing-command-separator separators))))
+
+(defun %command-list-assembly-from-reducer-entries (reducer-entries)
+  (%command-list-assembly-from-entries
+   (%command-list-entries-from-reducer-entries reducer-entries)))
 
 (defun %command-list-assembly-single-command (assembly)
   (first (%command-list-assembly-commands assembly)))
@@ -203,6 +221,6 @@
   (%command-list-assembly-decision-ast
    (%command-list-assembly-decision-from-assembly assembly)))
 
-(defun %build-ast-from-command-list (command-list)
+(defun %build-ast-from-reducer-entries (reducer-entries)
   (%command-list-assembly-ast
-   (%command-list-assembly-from-list command-list)))
+   (%command-list-assembly-from-reducer-entries reducer-entries)))

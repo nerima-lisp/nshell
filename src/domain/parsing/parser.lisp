@@ -47,7 +47,7 @@
      (%command-list-components-commands components)
      (%command-list-components-separators components)
      (%command-list-components-separator-tokens components)
-     (%build-ast-from-command-list reducer-entries))))
+     (%build-ast-from-reducer-entries reducer-entries))))
 
 (defun %reduced-command-stream-last-separator (stream)
   (%last-list-element (%reduced-command-stream-separators stream)))

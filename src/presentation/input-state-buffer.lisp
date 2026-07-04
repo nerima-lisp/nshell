@@ -44,6 +44,25 @@
 (defun buffer-insertion-cursor-pos (insertion)
   (buffer-splice-cursor-pos (%buffer-insertion-splice insertion)))
 
+(defstruct (cursor-move-edit
+             (:constructor %make-cursor-move-edit (cursor-pos))
+             (:conc-name %cursor-move-edit-))
+  (cursor-pos 0 :type fixnum :read-only t))
+
+(defun cursor-move-edit-by (cursor-pos delta)
+  (%make-cursor-move-edit (+ cursor-pos delta)))
+
+(defun cursor-move-edit-to (position)
+  (%make-cursor-move-edit position))
+
+(defun cursor-move-edit-cursor-pos (edit)
+  (%cursor-move-edit-cursor-pos edit))
+
+(defun commit-cursor-move-edit (state edit)
+  (copy-input-state-with state
+                         :suggestion :clear
+                         :cursor-pos (cursor-move-edit-cursor-pos edit)))
+
 (defun backspace-before-cursor (state)
   (with-buffer-edit (state buffer cursor) state
     (if (zerop cursor)
@@ -62,17 +81,16 @@
 
 (defun move-cursor-clearing-suggestion (state delta)
   (with-normalized-input-state (state state)
-    (values (copy-input-state-with state
-                                   :suggestion :clear
-                                   :cursor-pos (+ (input-state-cursor-pos state)
-                                                  delta))
+    (values (commit-cursor-move-edit
+             state
+             (cursor-move-edit-by (input-state-cursor-pos state) delta))
             :redraw)))
 
 (defun move-cursor-to-clearing-suggestion (state position)
   (with-normalized-input-state (state state)
-    (values (copy-input-state-with state
-                                   :suggestion :clear
-                                   :cursor-pos position)
+    (values (commit-cursor-move-edit
+             state
+             (cursor-move-edit-to position))
             :redraw)))
 
 (defun clear-input-state (state)

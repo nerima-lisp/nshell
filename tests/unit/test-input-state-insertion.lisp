@@ -79,6 +79,30 @@
     (is (null (nshell.presentation::buffer-insertion-at-cursor
                buffer 4096 "x")))))
 
+(test input-state-cursor-move-edit-projects-position-through-commit
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 3
+                             :suggestion "def"))
+         (edit (nshell.presentation::cursor-move-edit-by 3 2))
+         (committed (nshell.presentation::commit-cursor-move-edit state edit)))
+    (is (fboundp 'nshell.presentation::%make-cursor-move-edit))
+    (is (fboundp 'nshell.presentation::%cursor-move-edit-cursor-pos))
+    (is (not (fboundp 'nshell.presentation::make-cursor-move-edit)))
+    (is (= 5 (nshell.presentation::cursor-move-edit-cursor-pos edit)))
+    (is-input-state committed
+                    :buffer "abcdef"
+                    :cursor-pos 5
+                    :suggestion nil))
+  (let* ((state (input-state :buffer "abcdef"
+                             :cursor-pos 3
+                             :suggestion "def"))
+         (edit (nshell.presentation::cursor-move-edit-to 99))
+         (committed (nshell.presentation::commit-cursor-move-edit state edit)))
+    (is-input-state committed
+                    :buffer "abcdef"
+                    :cursor-pos 6
+                    :suggestion nil)))
+
 (test input-state-space-expands-abbreviation-before-cursor
   (let ((state (completion-session-state
                 :buffer "gco"

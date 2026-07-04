@@ -36,6 +36,34 @@
                     :cursor-pos 4)
     (is-completion-session-cleared new-state)))
 
+(test input-completion-session-clear-is-private-value
+  (let* ((state (input-state
+                 :buffer "git"
+                 :cursor-pos 2
+                 :completion-index 1
+                 :completion-base-buffer "g"
+                 :completion-base-cursor 1
+                 :last-candidates '("git" "grep")
+                 :suggestion " status"
+                 :search-query "g"
+                 :search-original-buffer "git"
+                 :search-original-cursor 3
+                 :search-index 4))
+         (clear (nshell.presentation::completion-session-clear))
+         (cleared (nshell.presentation::apply-completion-session-clear state clear)))
+    (is (nshell.presentation::%completion-session-clear-p clear))
+    (is (not (listp clear)))
+    (is (not (fboundp 'nshell.presentation::make-completion-session-clear)))
+    (is-input-state cleared
+                    :buffer "git"
+                    :cursor-pos 2)
+    (is-completion-session-cleared cleared)
+    (is-search-state cleared
+                     :query "g"
+                     :original-buffer "git"
+                     :original-cursor 3
+                     :index 4)))
+
 (test input-state-escape-clears-completion-session-without-editing
   (let ((state (completion-session-state
                 :buffer "g"

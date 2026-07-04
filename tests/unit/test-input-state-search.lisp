@@ -58,6 +58,36 @@
                     :completion-base-cursor 0
                     :last-candidates '("git"))))
 
+(test input-history-search-session-clear-is-private-value
+  (let* ((state (input-state
+                 :buffer "git"
+                 :cursor-pos 2
+                 :search-query "g"
+                 :search-original-buffer "git"
+                 :search-original-cursor 3
+                 :search-index 4
+                 :completion-index 0
+                 :completion-base-buffer "g"
+                 :completion-base-cursor 1
+                 :last-candidates '("git" "grep")))
+         (clear (nshell.presentation::history-search-session-clear))
+         (cleared (nshell.presentation::apply-history-search-session-clear
+                   state clear)))
+    (is (nshell.presentation::%history-search-session-clear-p clear))
+    (is (not (listp clear)))
+    (is (not (fboundp 'nshell.presentation::make-history-search-session-clear)))
+    (is-input-state cleared
+                    :buffer "git"
+                    :cursor-pos 2
+                    :completion-index 0
+                    :completion-base-buffer "g"
+                    :completion-base-cursor 1
+                    :last-candidates '("git" "grep"))
+    (is (string= "" (nshell.presentation:input-state-search-query cleared)))
+    (is (string= "" (nshell.presentation:input-state-search-original-buffer cleared)))
+    (is (null (nshell.presentation:input-state-search-original-cursor cleared)))
+    (is (= 0 (nshell.presentation:input-state-search-index cleared)))))
+
 (test input-state-history-search-input-clears-stale-completion-session
   (let ((state (history-search-state
                 :buffer "git"

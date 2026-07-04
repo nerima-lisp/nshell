@@ -32,7 +32,22 @@
     (= (input-state-cursor-pos state)
        (length (input-state-buffer state)))))
 
-(defun clear-completion-session-state (state)
+(defstruct (%completion-session-clear
+            (:constructor %make-completion-session-clear ())
+            (:conc-name %completion-session-clear-)))
+
+(defstruct (%history-search-session-clear
+            (:constructor %make-history-search-session-clear ())
+            (:conc-name %history-search-session-clear-)))
+
+(defun completion-session-clear ()
+  (%make-completion-session-clear))
+
+(defun history-search-session-clear ()
+  (%make-history-search-session-clear))
+
+(defun apply-completion-session-clear (state clear)
+  (declare (ignore clear))
   (copy-input-state-with state
                          :completion-index -1
                          :completion-base-buffer :clear
@@ -40,12 +55,19 @@
                          :last-candidates :clear
                          :suggestion :clear))
 
-(defun clear-history-search-session-state (state)
+(defun apply-history-search-session-clear (state clear)
+  (declare (ignore clear))
   (copy-input-state-with state
                          :search-query :clear
                          :search-original-buffer :clear
                          :search-original-cursor :clear
                          :search-index 0))
+
+(defun clear-completion-session-state (state)
+  (apply-completion-session-clear state (completion-session-clear)))
+
+(defun clear-history-search-session-state (state)
+  (apply-history-search-session-clear state (history-search-session-clear)))
 
 (defun copy-input-state-clearing-completion (state &rest args)
   (apply #'copy-input-state-with

@@ -3,6 +3,7 @@
 (defstruct (%parse-result
             (:constructor %make-parse-result
                 (ast &optional errors incomplete))
+            (:copier nil)
             (:conc-name %parse-result-))
   (ast nil :type (or null ast-node) :read-only t)
   (errors nil :type list :read-only t)
@@ -16,6 +17,7 @@
 (defstruct (%parse-diagnostic
             (:constructor %make-parse-diagnostic
                 (kind message start end &optional token))
+            (:copier nil)
             (:conc-name %parse-diagnostic-))
   (kind :error :type keyword :read-only t)
   (message "" :type string :read-only t)
@@ -52,7 +54,8 @@
 
 (defstruct (%parse-result-facts
             (:constructor %make-parse-result-facts
-                (ast errors incomplete)))
+                (ast errors incomplete))
+            (:copier nil))
   (ast nil :read-only t)
   (errors nil :type list :read-only t)
   (incomplete nil :type boolean :read-only t))

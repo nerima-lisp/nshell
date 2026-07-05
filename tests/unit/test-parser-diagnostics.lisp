@@ -36,8 +36,11 @@
   (is (not (nth-value 1 (find-symbol "PARSE-DIAGNOSTIC" :nshell.domain.parsing))))
   (is (not (fboundp 'nshell.domain.parsing::parse-result-p)))
   (is (not (fboundp 'nshell.domain.parsing::copy-parse-result)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-%parse-result)))
   (is (not (fboundp 'nshell.domain.parsing::parse-diagnostic-p)))
   (is (not (fboundp 'nshell.domain.parsing::copy-parse-diagnostic)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-%parse-diagnostic)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-%parse-result-facts)))
   (is (fboundp 'nshell.domain.parsing::%parse-result-p))
   (is (fboundp 'nshell.domain.parsing::%parse-diagnostic-p)))
 

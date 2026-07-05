@@ -1,6 +1,7 @@
 (in-package #:nshell.domain.execution)
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (job (:constructor %make-job (id-int pipeline-pipe))
+  (defstruct (job (:constructor %allocate-job (id-int pipeline-pipe))
+                  (:copier nil)
                   (:conc-name job-))
     (id-int 0 :type integer :read-only t)
     (pipeline-pipe nil :type (or null pipeline) :read-only t)
@@ -56,7 +57,34 @@
 (defun %set-job-background-p (job background-p)
   (setf (job-background-visible-p job) (not (null background-p))))
 
-(defun make-job (id pipeline) (%make-job id pipeline))
+(defun %assert-job-id (id)
+  (unless (integerp id)
+    (error "Invalid job id: ~s" id)))
+
+(defun %assert-job-pipeline (pipeline)
+  (unless (or (null pipeline)
+              (pipeline-p pipeline))
+    (error "Invalid job pipeline: ~s" pipeline)))
+
+(defun %assert-job-pgid (pgid)
+  (unless (integerp pgid)
+    (error "Invalid job process group id: ~s" pgid)))
+
+(defun %assert-job-pids (pids)
+  (unless (listp pids)
+    (error "Invalid job pid list: ~s" pids)))
+
+(defun %assert-job-command-line (command-line)
+  (unless (stringp command-line)
+    (error "Invalid job command line: ~s" command-line)))
+
+(defun %make-job-with-invariants (id pipeline)
+  (%assert-job-id id)
+  (%assert-job-pipeline pipeline)
+  (%allocate-job id pipeline))
+
+(defun make-job (id pipeline)
+  (%make-job-with-invariants id pipeline))
 (defun job-id (j) (job-id-int j))
 (defun job-state (j) (%job-state j))
 (defun job-pipeline (j) (%job-pipeline j))
@@ -92,10 +120,26 @@
 (defun job-completed-p (job)
   (not (null (member (%job-state job) '(:completed :done)))))
 
+(defun job-record-runtime-metadata (job &key
+                                          (pids nil pids-supplied-p)
+                                          (pgid nil pgid-supplied-p)
+                                          (command-line nil command-line-supplied-p))
+  (when pids-supplied-p
+    (%assert-job-pids pids)
+    (%set-job-pids job pids))
+  (when pgid-supplied-p
+    (%assert-job-pgid pgid)
+    (%set-job-pgid job pgid))
+  (when command-line-supplied-p
+    (%assert-job-command-line command-line)
+    (%set-job-command-line job command-line))
+  job)
+
 (defun job-register-background-processes (job pids command-line)
-  (%set-job-pids job pids)
-  (%set-job-pgid job (or (first pids) 0))
-  (%set-job-command-line job command-line)
+  (job-record-runtime-metadata job
+                               :pids pids
+                               :pgid (or (first pids) 0)
+                               :command-line command-line)
   (%set-job-background-p job t)
   (job-state-transition job :running))
 

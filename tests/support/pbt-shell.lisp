@@ -169,13 +169,14 @@
 (defun make-test-job (id command &key (args nil) (pgid 0) (pids nil))
   (let* ((cmd (nshell.domain.execution:make-command command args))
          (pipeline (nshell.domain.execution:make-pipeline cmd))
-         (job (nshell.domain.execution:make-job id pipeline)))
-    (setf (nshell.domain.execution::job-command-line-str job)
-          (format nil "~{~a~^ ~}"
-                  (nshell.domain.execution:command-to-list cmd))
-          (nshell.domain.execution::job-pgid-int job) pgid
-          (nshell.domain.execution::job-pids-list job) (copy-list pids))
-    job))
+         (job (nshell.domain.execution:make-job id pipeline))
+         (command-line (format nil "~{~a~^ ~}"
+                               (nshell.domain.execution:command-to-list cmd))))
+    (nshell.domain.execution:job-record-runtime-metadata
+     job
+     :pids pids
+     :pgid pgid
+     :command-line command-line)))
 
 (defstruct (test-monitor-entry (:constructor make-test-monitor-entry (job-id job)))
   (job-id 0 :type integer :read-only t)

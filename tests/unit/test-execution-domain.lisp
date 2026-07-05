@@ -141,6 +141,24 @@
     (is (eq :created (nshell.domain.execution:job-state job)))
     (is (zerop (nshell.domain.execution:job-pgid job)))))
 
+(test job-creation-validates-aggregate-boundary
+  "Job aggregate construction validates identity and pipeline value."
+  (let* ((cmd (nshell.domain.execution:make-command "sleep" '("10")))
+         (pipe (nshell.domain.execution:make-pipeline cmd)))
+    (is (nshell.domain.execution:make-job 1 pipe))
+    (signals error
+      (nshell.domain.execution:make-job "1" pipe))
+    (signals error
+      (nshell.domain.execution:make-job 1 :not-a-pipeline))))
+
+(test job-struct-allocation-is-internal
+  "Callers cannot bypass job aggregate construction via exported struct helpers."
+  (is (not (fboundp 'nshell.domain.execution::%make-job)))
+  (is (not (fboundp 'nshell.domain.execution::copy-job)))
+  (is (eq :internal
+          (nth-value 1
+                     (find-symbol "JOB-STATE-KW" "NSHELL.DOMAIN.EXECUTION")))))
+
 (test job-state-transitions
   "Job state transitions are owned by the job aggregate."
   (let* ((cmd (nshell.domain.execution:make-command "ls"))
@@ -174,6 +192,25 @@
     (is (string= "left | right" (nshell.domain.execution:job-command-line job)))
     (is (nshell.domain.execution:job-background-p job))
     (is (eq :running (nshell.domain.execution:job-state job)))))
+
+(test job-record-runtime-metadata-is-domain-owned
+  "Job runtime metadata is updated through one aggregate operation."
+  (let ((job (make-test-job 0 "sleep")))
+    (is (eq job
+            (nshell.domain.execution:job-record-runtime-metadata
+             job
+             :pids '(10 nil 20)
+             :pgid 10
+             :command-line "sleep 10")))
+    (is (equal '(10 nil 20) (nshell.domain.execution:job-pids job)))
+    (is (= 10 (nshell.domain.execution:job-pgid job)))
+    (is (string= "sleep 10" (nshell.domain.execution:job-command-line job)))
+    (signals error
+      (nshell.domain.execution:job-record-runtime-metadata job :pids #(1)))
+    (signals error
+      (nshell.domain.execution:job-record-runtime-metadata job :pgid nil))
+    (signals error
+      (nshell.domain.execution:job-record-runtime-metadata job :command-line :sleep))))
 
 (test job-runtime-metadata-projections-are-domain-owned
   "Job runtime metadata projections cannot mutate job state."

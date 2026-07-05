@@ -52,9 +52,10 @@
             #:pipeline-plan-stage-piped-output-p
             #:make-job #:job-id #:job-state #:job-pipeline
             #:job-state-valid-p #:job-state-transition #:job-register-background-processes
+            #:job-record-runtime-metadata
             #:job-set-background-visible #:job-record-terminal-exit-code
             #:valid-process-group-id-p #:job-control-pgid #:job-command-display-string
-            #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p #:job-known-pids #:job-last-pid #:job-pgid #:job-exit-code #:job-state-kw #:make-job-monitor #:monitor-find-job
+            #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p #:job-known-pids #:job-last-pid #:job-pgid #:job-exit-code #:make-job-monitor #:monitor-find-job
             #:job-pids #:job-command-line #:job-background-p))
 
   (defpackage #:nshell.domain.parsing

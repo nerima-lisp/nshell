@@ -6,6 +6,9 @@
 
 (in-suite domain-events-tests)
 
+(defun domain-events-external-symbol-p (name)
+  (eq (nth-value 1 (find-symbol name :nshell.domain.events)) :external))
+
 (defmacro assert-event-types (&rest cases)
   `(progn
      ,@(loop for (event-form expected-type) in cases
@@ -28,14 +31,14 @@
     (is (eq (nshell.domain.events:domain-event-type event) :command-entered))
     (is (integerp (nshell.domain.events:domain-event-timestamp event)))))
 
-(test domain-event-values-do-not-export-raw-struct-api
-  "Domain events expose factories and projections, not raw struct helpers."
-  (is (not (nth-value 1 (find-symbol "DOMAIN-EVENT" :nshell.domain.events))))
-  (is (not (fboundp 'nshell.domain.events::domain-event-p)))
-  (is (not (fboundp 'nshell.domain.events::copy-domain-event)))
-  (is (fboundp 'nshell.domain.events::%domain-event-p))
-  (is (fboundp 'nshell.domain.events:domain-event-type))
-  (is (fboundp 'nshell.domain.events:domain-event-timestamp)))
+(test domain-event-values-expose-public-contract
+  "Domain events expose factories and projections, not raw struct details."
+  (is (domain-events-external-symbol-p "MAKE-GENERIC-DOMAIN-EVENT"))
+  (is (domain-events-external-symbol-p "DOMAIN-EVENT-TYPE"))
+  (is (domain-events-external-symbol-p "DOMAIN-EVENT-TIMESTAMP"))
+  (is (not (domain-events-external-symbol-p "DOMAIN-EVENT")))
+  (is (not (domain-events-external-symbol-p "%DOMAIN-EVENT")))
+  (is (not (domain-events-external-symbol-p "%MAKE-DOMAIN-EVENT"))))
 
 (test command-events-have-correct-types
   "All command event constructors produce correct types"

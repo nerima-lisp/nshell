@@ -16,7 +16,8 @@
     ("begin" . %group-control-flow-begin)))
 
 (defstruct (control-flow-frame
-            (:constructor %make-control-flow-frame (keyword else-seen)))
+            (:constructor %make-control-flow-frame (keyword else-seen))
+            (:copier nil))
   (keyword nil :type string :read-only t)
   (else-seen nil :type boolean :read-only t))
 
@@ -33,7 +34,8 @@
   (not (null (member keyword +control-flow-block-keywords+ :test #'string=))))
 
 (defstruct (%control-flow-header-args
-            (:constructor %make-control-flow-header-args (first rest all)))
+            (:constructor %make-control-flow-header-args (first rest all))
+            (:copier nil))
   (first nil :read-only t)
   (rest nil :type list :read-only t)
   (all nil :type list :read-only t))
@@ -97,7 +99,8 @@
 
 (defstruct (%control-flow-stack-transition
             (:constructor %make-control-flow-stack-transition
-                (stack unexpected-keyword)))
+                (stack unexpected-keyword))
+            (:copier nil))
   (stack nil :type list :read-only t)
   (unexpected-keyword nil :read-only t))
 
@@ -139,12 +142,14 @@
         finally (return (not (null stack)))))
 
 (defstruct (%control-flow-diagnostic-span
-            (:constructor %make-control-flow-diagnostic-span (start end)))
+            (:constructor %make-control-flow-diagnostic-span (start end))
+            (:copier nil))
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t))
 
 (defstruct (%control-flow-node-span
-            (:constructor %make-control-flow-node-span (start end)))
+            (:constructor %make-control-flow-node-span (start end))
+            (:copier nil))
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t))
 

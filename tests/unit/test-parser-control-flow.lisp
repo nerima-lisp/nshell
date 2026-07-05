@@ -78,6 +78,10 @@
               same-stack end-command)))
       (is (nshell.domain.parsing::%control-flow-stack-transition-p
            if-transition))
+      (is (not (fboundp
+                'nshell.domain.parsing::copy-control-flow-frame)))
+      (is (not (fboundp
+                'nshell.domain.parsing::copy-%control-flow-stack-transition)))
       (is (null
            (nshell.domain.parsing::%control-flow-stack-transition-unexpected-keyword
             if-transition)))
@@ -163,6 +167,10 @@
             (nshell.domain.parsing:make-command-node "else" nil)
             20)))
     (is (nshell.domain.parsing::%control-flow-node-span-p node-span))
+    (is (not (fboundp
+              'nshell.domain.parsing::copy-%control-flow-node-span)))
+    (is (not (fboundp
+              'nshell.domain.parsing::copy-%control-flow-diagnostic-span)))
     (is (= 7
            (nshell.domain.parsing::%control-flow-node-span-start node-span)))
     (is (= 11
@@ -191,6 +199,8 @@
          (header-args (nshell.domain.parsing::%control-flow-header-args header))
          (condition (nshell.domain.parsing::%command-from-header-args header)))
     (is (nshell.domain.parsing::%control-flow-header-args-p header-args))
+    (is (not (fboundp
+              'nshell.domain.parsing::copy-%control-flow-header-args)))
     (is (string= "if"
                  (nshell.domain.parsing:arg-value
                   (nshell.domain.parsing::%control-flow-header-args-first

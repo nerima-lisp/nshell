@@ -14,12 +14,22 @@
     (is (string= "custom" (nshell.domain.configuration:theme-name theme)))
     (is (nshell.domain.configuration:config-p config))
     (is (nshell.domain.configuration:theme-p (nshell.domain.configuration:config-theme config)))
-    (is (string= "[%u@%h %w]> " (nshell.domain.configuration::config-prompt-format config)))
+    (is (string= "[%u@%h %w]> " (nshell.domain.configuration:config-prompt config)))
     (is (not (fboundp 'nshell.domain.configuration::theme-colors)))
     (is (not (fboundp 'nshell.domain.configuration::copy-theme)))
     (is (not (fboundp 'nshell.domain.configuration::%make-theme)))
     (is (fboundp 'nshell.domain.configuration::%allocate-theme))
-    (is (fboundp 'nshell.domain.configuration::%make-config))))
+    (is (not (fboundp 'nshell.domain.configuration::config-prompt-format)))
+    (is (not (fboundp 'nshell.domain.configuration::copy-config)))
+    (is (not (fboundp 'nshell.domain.configuration::%make-config)))
+    (is (fboundp 'nshell.domain.configuration::%allocate-config))))
+
+(test config-construction-validates-aggregate-values
+  "Configuration construction accepts only valid aggregate values."
+  (signals type-error
+    (nshell.domain.configuration:make-config :theme nil))
+  (signals type-error
+    (nshell.domain.configuration:make-config :prompt-format 42)))
 
 (test theme-colors-are-detached-from-constructor-input
   "Theme construction owns the mutable color table."

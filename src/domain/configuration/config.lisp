@@ -1,17 +1,32 @@
 ;;; Shell configuration entity
 (in-package #:nshell.domain.configuration)
 
-(defstruct (config (:constructor %make-config (&key theme prompt-format)))
-  "Shell configuration aggregating all settings."
-  (theme (default-theme) :type theme)
-  (prompt-format "[%u@%h %w]> " :type string))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defstruct (config
+              (:constructor %allocate-config (theme prompt-format))
+              (:conc-name %config-)
+              (:predicate %config-p)
+              (:copier nil))
+    "Shell configuration aggregating all settings."
+    (theme (default-theme) :type theme :read-only t)
+    (prompt-format "[%u@%h %w]> " :type string :read-only t)))
 
 (defun make-config (&key (theme (default-theme)) (prompt-format "[%u@%h %w]> "))
-  (%make-config :theme theme :prompt-format prompt-format))
+  (check-type theme theme)
+  (check-type prompt-format string)
+  (%allocate-config theme prompt-format))
 
-;; config-theme is auto-generated as the accessor for the 'theme' slot
+(defun config-p (object)
+  "Return true when OBJECT is a configuration aggregate."
+  (%config-p object))
+
+(defun config-theme (config)
+  "Return CONFIG's theme."
+  (%config-theme config))
+
 (defun config-prompt (config)
-  (config-prompt-format config))
+  "Return CONFIG's prompt format."
+  (%config-prompt-format config))
 
 (defun default-config ()
   (make-config :theme (default-theme)))

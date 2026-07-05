@@ -59,8 +59,7 @@
         *function-sources* (nshell.application:shell-context-function-source-table context)
         *running* (nshell.application:shell-context-running context)
         *last-exit-code* code
-        *input-state* (nshell.application:shell-context-input-state context)
-        *proc-registry* (nshell.application:shell-context-process-registry context))
+        *input-state* (nshell.application:shell-context-input-state context))
   code)
 
 (defun %execute-with-repl-shell-context (thunk)

@@ -7,7 +7,7 @@
 (in-suite shell-context-tests)
 
 (test shell-context-constructs-with-all-dependencies
-  "MAKE-SHELL-CONTEXT stores each dependency in an accessor-readable slot."
+  "MAKE-SHELL-CONTEXT stores each public dependency behind the context boundary."
   (let ((context (make-test-shell-context
                   :filesystem-fns (list :list-dir (lambda (dir) (declare (ignore dir)) '("a" "b"))
                                         :stat (lambda (path) (declare (ignore path)) t)
@@ -32,6 +32,23 @@
     (is (hash-table-p (nshell.application:shell-context-alias-table context)))
     (is (hash-table-p (nshell.application:shell-context-abbreviation-table context)))
     (is (eq :cps (nshell.application:shell-context-execution-strategy context)))))
+
+(test shell-context-process-registry-exposes-job-query-only
+  "Process registry storage stays internal; callers query by job id."
+  (let ((context (make-test-shell-context)))
+    (nshell.application::%store-shell-process-registry-entry
+     context 42 '(:left-process :right-process))
+    (is (equal '(:left-process :right-process)
+               (nshell.application:shell-context-job-processes context 42)))
+    (is (null (nshell.application:shell-context-job-processes context 99)))
+    (multiple-value-bind (_ status)
+        (find-symbol "SHELL-CONTEXT-PROCESS-REGISTRY" :nshell.application)
+      (declare (ignore _))
+      (is (not (eq :external status))))
+    (is (eq :external
+            (nth-value 1
+                       (find-symbol "SHELL-CONTEXT-JOB-PROCESSES"
+                                    :nshell.application))))))
 
 (test shell-context-supports-fake-adapters
   "Adapter plists can be replaced with test fakes."

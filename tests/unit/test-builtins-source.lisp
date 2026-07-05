@@ -169,9 +169,8 @@
                              (nshell.domain.execution:job-command-display-string
                               job)))
                 (is (eq process
-                        (gethash job-id
-                                 (nshell.application:shell-context-process-registry
-                                  context))))))))))))
+                        (nshell.application:shell-context-job-processes
+                         context job-id)))))))))))
 
 (test source-sequence-amp-registers-background-pipeline-job
   "source registers background pipelines with every spawned process."
@@ -225,9 +224,8 @@
                              (nshell.domain.execution:job-command-display-string
                               job)))
                 (is (eq processes
-                        (gethash job-id
-                                 (nshell.application:shell-context-process-registry
-                                  context))))))))))))
+                        (nshell.application:shell-context-job-processes
+                         context job-id)))))))))))
 
 (test comment-or-blank-source-line-p-skips-empty-and-hash-lines
   "comment-or-blank-source-line-p returns true for blank lines, comments, and shebangs."

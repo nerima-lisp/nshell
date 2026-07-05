@@ -49,6 +49,10 @@
   (setf (gethash job-id (shell-context-process-registry context)) processes)
   processes)
 
+(defun shell-context-job-processes (context job-id)
+  "Return registered process objects for JOB-ID in CONTEXT."
+  (gethash job-id (shell-context-process-registry context)))
+
 (defun %stop-shell-context (context)
   (setf (shell-context-running context) nil)
   context)

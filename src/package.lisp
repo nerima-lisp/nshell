@@ -230,7 +230,7 @@
             #:shell-context-history-fns #:shell-context-git-fns
             #:shell-context-execution-strategy #:shell-context-running
             #:shell-context-last-exit-code #:shell-context-input-state
-            #:shell-context-process-registry #:shell-context-terminal-rows
+            #:shell-context-job-processes #:shell-context-terminal-rows
             #:shell-context-terminal-cols
             #:lookup-builtin
             #:collect-source-lines #:source-lines

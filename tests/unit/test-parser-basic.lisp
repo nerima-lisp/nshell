@@ -1122,6 +1122,7 @@
                (format nil "body~%tail")
                0)))
     (is (nshell.domain.parsing::%here-doc-line-p line))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%here-doc-line)))
     (is (string= "body"
                  (nshell.domain.parsing::%here-doc-line-text line)))
     (is (= 5
@@ -1135,6 +1136,7 @@
                0
                "EOF")))
     (is (nshell.domain.parsing::%here-doc-body-p body))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%here-doc-body)))
     (is (string= (format nil "one~%")
                  (nshell.domain.parsing::%here-doc-body-body body)))
     (is (= 8
@@ -1148,8 +1150,9 @@
                (nshell.domain.parsing::%here-doc-delimiter-scan-add
                 (nshell.domain.parsing::%empty-here-doc-delimiter-scan)
                 "EOF")
-               "NEXT")))
+                "NEXT")))
     (is (nshell.domain.parsing::%here-doc-delimiter-scan-p scan))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%here-doc-delimiter-scan)))
     (is (equal '("EOF" "NEXT")
                (nshell.domain.parsing::%here-doc-delimiter-scan-result
                 scan)))))
@@ -1168,6 +1171,7 @@
          (consumption
            (nshell.domain.parsing::%here-doc-consumption-from-state state)))
     (is (nshell.domain.parsing::%here-doc-consumption-state-p state))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%here-doc-consumption-state)))
     (is (equal (list (format nil "one~%") (format nil "two~%"))
                (nshell.domain.parsing::%here-doc-consumption-bodies
                 consumption)))
@@ -1187,6 +1191,7 @@
             0
             '("A" "B"))))
     (is (nshell.domain.parsing::%here-doc-consumption-p consumption))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%here-doc-consumption)))
     (is (equal (list (format nil "one~%") (format nil "two~%"))
                (nshell.domain.parsing::%here-doc-consumption-bodies
                 consumption)))
@@ -1217,6 +1222,7 @@
          (plain (nshell.domain.parsing:make-token :word "plain" 7 12))
          (replacer (nshell.domain.parsing::%make-here-doc-target-replacer
                     (list (format nil "body~%")))))
+    (is (not (fboundp 'nshell.domain.parsing::copy-here-doc-target-replacer)))
     (is (eq redirect
             (nshell.domain.parsing::%here-doc-target-replacer-accept
              replacer
@@ -1253,6 +1259,7 @@
   (let ((cursor (nshell.domain.parsing::%here-doc-target-body-cursor
                  (list "first" "second"))))
     (is (nshell.domain.parsing::%here-doc-target-body-cursor-p cursor))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%here-doc-target-body-cursor)))
     (is (string= "first"
                  (nshell.domain.parsing::%here-doc-target-body-cursor-body cursor)))
     (is (equal '("second")

@@ -68,6 +68,48 @@
                (nshell.domain.execution:command-to-list cmd)))))
 
 ;;; Pipeline tests
+(test pipeline-value-boundary-is-public-api-only
+  "Pipeline exposes construction and projections without raw allocation helpers."
+  (is (execution-domain-external-symbol-p "MAKE-PIPELINE"))
+  (is (execution-domain-external-symbol-p "PIPELINE-P"))
+  (is (execution-domain-external-symbol-p "PIPELINE-COMMANDS"))
+  (is (execution-domain-external-symbol-p "PIPELINE-LENGTH"))
+  (is (execution-domain-external-symbol-p "PIPELINE-EMPTY-P"))
+  (is (execution-domain-external-symbol-p "PIPELINE-SINGLE-COMMAND-P"))
+  (is (not (execution-domain-external-symbol-p "PIPELINE-COMMANDS-LIST")))
+  (is (not (fboundp 'nshell.domain.execution::%make-pipeline)))
+  (is (not (fboundp 'nshell.domain.execution::copy-pipeline)))
+  (is (fboundp 'nshell.domain.execution::%allocate-pipeline))
+  (is (fboundp 'nshell.domain.execution::%make-pipeline-with-invariants)))
+
+(test pipeline-plan-value-boundary-is-public-api-only
+  "Pipeline plans expose behavior queries, not stage/config allocation details."
+  (is (execution-domain-external-symbol-p "MAKE-PIPELINE-PLAN"))
+  (is (execution-domain-external-symbol-p "PIPELINE-PLAN-P"))
+  (is (execution-domain-external-symbol-p "PIPELINE-PLAN-STAGE-COUNT"))
+  (is (execution-domain-external-symbol-p "PIPELINE-PLAN-COMMANDS"))
+  (is (execution-domain-external-symbol-p "PIPELINE-PLAN-STAGE-PIPED-INPUT-P"))
+  (is (execution-domain-external-symbol-p "PIPELINE-PLAN-STAGE-PIPED-OUTPUT-P"))
+  (is (not (execution-domain-external-symbol-p "PIPELINE-PLAN-STAGES")))
+  (is (not (execution-domain-external-symbol-p "PIPELINE-STAGE-STAGE-COMMAND")))
+  (is (not (execution-domain-external-symbol-p "PIPELINE-STAGE-PIPE-CONFIG")))
+  (is (not (execution-domain-external-symbol-p "PIPE-CONFIG-STDIN")))
+  (is (not (execution-domain-external-symbol-p "PIPE-CONFIG-STDOUT")))
+  (is (not (fboundp 'nshell.domain.execution::%make-pipeline-plan)))
+  (is (not (fboundp 'nshell.domain.execution::%make-pipe-config)))
+  (is (not (fboundp 'nshell.domain.execution::%make-pipeline-stage)))
+  (is (not (fboundp 'nshell.domain.execution::copy-pipeline-plan)))
+  (is (not (fboundp 'nshell.domain.execution::copy-pipe-config)))
+  (is (not (fboundp 'nshell.domain.execution::copy-pipeline-stage)))
+  (is (not (fboundp 'nshell.domain.execution::pipe-config-p)))
+  (is (not (fboundp 'nshell.domain.execution::pipeline-stage-p)))
+  (is (fboundp 'nshell.domain.execution::%allocate-pipeline-plan))
+  (is (fboundp 'nshell.domain.execution::%allocate-pipe-config))
+  (is (fboundp 'nshell.domain.execution::%allocate-pipeline-stage))
+  (is (fboundp 'nshell.domain.execution::%make-pipeline-plan-with-invariants))
+  (is (fboundp 'nshell.domain.execution::%make-pipe-config-with-invariants))
+  (is (fboundp 'nshell.domain.execution::%make-pipeline-stage-with-invariants)))
+
 (test pipeline-creation
   "Pipeline can be created with multiple commands"
   (let* ((cmd1 (nshell.domain.execution:make-command "ls"))

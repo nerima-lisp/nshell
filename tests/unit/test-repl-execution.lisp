@@ -6,12 +6,8 @@
   "Interactive for loops expand variables in the in list before assignment."
   (with-repl-test-state
     (repl-test-set-env "FIRST" "alpha")
-    (let ((ast (nshell.domain.parsing::make-for-node
-                "item"
-                (list "$FIRST" "beta")
-                (list (nshell.domain.parsing:make-command-node
-                       "echo"
-                       (list "$item"))))))
+    (with-complete-command-line (result ast "for item in $FIRST beta; do echo $item; done")
+      (is (null (nshell.domain.parsing:parse-errors result)))
       (multiple-value-bind (output code)
           (call-repl-execute-ast ast)
         (is (= 0 code))
@@ -130,11 +126,8 @@
 (test repl-if-node-uses-contextual-pipeline-semantics
   "Interactive control-flow bodies should use the application executor semantics."
   (with-repl-test-state
-    (let ((ast (nshell.domain.parsing::make-if-node
-                (nshell.domain.parsing:make-command-node "test" (list "ok" "=" "ok"))
-                (list (nshell.domain.parsing:make-pipeline-node
-                       (list (nshell.domain.parsing:make-command-node "echo" (list "from-if"))
-                             (nshell.domain.parsing:make-command-node "read" (list "captured"))))))))
+    (with-complete-command-line (result ast "if test ok = ok; then echo from-if | read captured; fi")
+      (is (null (nshell.domain.parsing:parse-errors result)))
       (multiple-value-bind (output code)
           (call-repl-execute-ast ast)
         (is (= 0 code))
@@ -146,9 +139,8 @@
   "Aliases should expand inside interactive control-flow execution."
   (with-repl-test-state
     (repl-test-define-alias "say" "echo aliased")
-    (let ((ast (nshell.domain.parsing::make-if-node
-                (nshell.domain.parsing:make-command-node "test" (list "ok" "=" "ok"))
-                (list (nshell.domain.parsing:make-command-node "say" (list "value"))))))
+    (with-complete-command-line (result ast "if test ok = ok; then say value; fi")
+      (is (null (nshell.domain.parsing:parse-errors result)))
       (multiple-value-bind (output code)
           (call-repl-execute-ast ast)
         (is (= 0 code))
@@ -157,10 +149,8 @@
 (test repl-sequence-and-short-circuits-on-failure
   "Interactive `&&` sequences should stop after the first failing command."
   (with-repl-test-state
-    (let ((ast (nshell.domain.parsing::make-sequence-node
-                (list (nshell.domain.parsing:make-command-node "false" nil)
-                      (nshell.domain.parsing:make-command-node "echo" (list "second")))
-                '(:and))))
+    (with-complete-command-line (result ast "false && echo second")
+      (is (null (nshell.domain.parsing:parse-errors result)))
       (multiple-value-bind (output code)
           (call-repl-execute-ast ast)
         (is (= 1 code))
@@ -169,10 +159,8 @@
 (test repl-sequence-or-short-circuits-on-success
   "Interactive `||` sequences should stop after the first successful command."
   (with-repl-test-state
-    (let ((ast (nshell.domain.parsing::make-sequence-node
-                (list (nshell.domain.parsing:make-command-node "true" nil)
-                      (nshell.domain.parsing:make-command-node "echo" (list "second")))
-                '(:or))))
+    (with-complete-command-line (result ast "true || echo second")
+      (is (null (nshell.domain.parsing:parse-errors result)))
       (multiple-value-bind (output code)
           (call-repl-execute-ast ast)
         (is (= 0 code))

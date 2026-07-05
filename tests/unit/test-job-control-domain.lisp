@@ -11,12 +11,14 @@
 (test monitor-collection-shape-is-internal-boundary
   "Job monitor exposes ordered traversal, not hash-table or alist shape."
   (dolist (name '("MONITOR-JOBS" "MONITOR-ENTRIES"
-                  "%MAKE-JOB-MONITOR"
+                  "%MAKE-JOB-MONITOR" "COPY-JOB-MONITOR"
                   "JOB-MONITOR-JOBS-TABLE" "JOB-MONITOR-NEXT-ID-INT"))
     (multiple-value-bind (_symbol status)
         (find-symbol name "NSHELL.DOMAIN.JOB-CONTROL")
       (declare (ignore _symbol))
       (is (not (eq :external status)))))
+  (is (fboundp 'nshell.domain.job-control::%make-job-monitor))
+  (is (not (fboundp 'nshell.domain.job-control::copy-job-monitor)))
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
          (second-job (make-test-job 0 "second"))
          (first-job (make-test-job 1 "first"))

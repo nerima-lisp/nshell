@@ -10,7 +10,7 @@
 ;; -- Domain packages (pure, no side effects) ----------------
 (defpackage #:nshell.domain.events
   (:use #:cl)
-  (:export #:domain-event #:domain-event-p #:domain-event-type #:domain-event-timestamp
+  (:export #:domain-event-type #:domain-event-timestamp
            #:make-generic-domain-event
            #:make-command-entered-event #:make-command-parsed-event
            #:make-parse-failed-event #:make-pipeline-started-event

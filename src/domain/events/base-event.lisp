@@ -1,6 +1,8 @@
 (in-package #:nshell.domain.events)
 
-(defstruct (domain-event (:constructor %make-domain-event (type &optional (timestamp (get-universal-time)))))
+(defstruct (%domain-event
+            (:constructor %make-domain-event (type &optional (timestamp (get-universal-time))))
+            (:conc-name domain-event-))
   (type nil :type keyword :read-only t)
   (timestamp (get-universal-time) :type integer :read-only t))
 

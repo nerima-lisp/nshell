@@ -25,9 +25,17 @@
   (signals type-error
     (nshell.domain.events:make-generic-domain-event :test :timestamp nil))
   (let ((event (nshell.domain.events:make-command-entered-event "ls")))
-    (is (nshell.domain.events:domain-event-p event))
     (is (eq (nshell.domain.events:domain-event-type event) :command-entered))
     (is (integerp (nshell.domain.events:domain-event-timestamp event)))))
+
+(test domain-event-values-do-not-export-raw-struct-api
+  "Domain events expose factories and projections, not raw struct helpers."
+  (is (not (nth-value 1 (find-symbol "DOMAIN-EVENT" :nshell.domain.events))))
+  (is (not (fboundp 'nshell.domain.events::domain-event-p)))
+  (is (not (fboundp 'nshell.domain.events::copy-domain-event)))
+  (is (fboundp 'nshell.domain.events::%domain-event-p))
+  (is (fboundp 'nshell.domain.events:domain-event-type))
+  (is (fboundp 'nshell.domain.events:domain-event-timestamp)))
 
 (test command-events-have-correct-types
   "All command event constructors produce correct types"

@@ -148,7 +148,7 @@ preceded by a backslash."
   (and (nshell.domain.parsing:shell-token-separator-p (char input position))
        (not (%completion-escaped-position-p input position))))
 
-(defstruct (completion-token-slice
+(defstruct (%completion-token-slice
             (:constructor %make-completion-token-slice (start end))
             (:conc-name %completion-token-slice-))
   (start 0 :type fixnum :read-only t)
@@ -160,7 +160,7 @@ preceded by a backslash."
 (defun completion-token-slice-end (slice)
   (%completion-token-slice-end slice))
 
-(defstruct (completion-token-context
+(defstruct (%completion-token-context
             (:constructor %make-completion-token-context
                 (bounds body-bounds quote-context raw-token))
             (:conc-name %completion-token-context-))

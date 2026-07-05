@@ -242,10 +242,11 @@
          (empty-bounds (nshell.presentation::%completion-token-bounds
                         "echo "
                         5)))
-    (is (nshell.presentation::completion-token-slice-p token-bounds))
+    (is (nshell.presentation::%completion-token-slice-p token-bounds))
+    (is (not (fboundp 'nshell.presentation::completion-token-slice-p)))
     (is (= 5 (nshell.presentation::completion-token-slice-start token-bounds)))
     (is (= 14 (nshell.presentation::completion-token-slice-end token-bounds)))
-    (is (nshell.presentation::completion-token-slice-p body-bounds))
+    (is (nshell.presentation::%completion-token-slice-p body-bounds))
     (is (= 6 (nshell.presentation::completion-token-slice-start body-bounds)))
     (is (= 13 (nshell.presentation::completion-token-slice-end body-bounds)))
     (is (= 5 (nshell.presentation::completion-token-slice-start empty-bounds)))
@@ -254,7 +255,8 @@
 (test completion-token-context-captures-raw-token-and-quote-state
   "completion-token-context centralizes bounds, quote state, and raw token extraction."
   (let ((context (nshell.presentation::%completion-token-context "cat 'my\\ " 9)))
-    (is (nshell.presentation::completion-token-context-p context))
+    (is (nshell.presentation::%completion-token-context-p context))
+    (is (not (fboundp 'nshell.presentation::completion-token-context-p)))
     (is (eq :single
             (nshell.presentation::completion-token-context-quote-context context)))
     (is (string= "my\\ "

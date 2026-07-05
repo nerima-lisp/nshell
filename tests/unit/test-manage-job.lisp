@@ -25,7 +25,22 @@
           (is (string= "echo hello"
                        (nshell.application:job-listing-command listing)))
           (is (string= (format nil "[1] Created echo hello~%")
-                       (nshell.application:format-job-listing listing))))))))
+                        (nshell.application:format-job-listing listing))))))))
+
+(test job-listing-construction-is-use-case-owned
+  "Job listings expose read access only; construction stays inside the use case."
+  (let ((listing (first (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+                               (job (make-test-job 0 "printf" :args '("ok"))))
+                    (nshell.domain.job-control:monitor-add-job monitor job)
+                    (nshell.application:jobs monitor)))))
+    (is (nshell.application:job-listing-p listing))
+    (is (not (eq :external
+                 (nth-value 1 (find-symbol "MAKE-JOB-LISTING"
+                                           "NSHELL.APPLICATION")))))
+    (is (not (fboundp 'nshell.application::copy-job-listing)))
+    (is (not (fboundp '(setf nshell.application:job-listing-command))))
+    (is (string= "printf ok"
+                 (nshell.application:job-listing-command listing)))))
 
 (test bg-marks-job-as-background-and-publishes-continuation
   "BG updates the job state without requiring terminal control when PGID is zero."

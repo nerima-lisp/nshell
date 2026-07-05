@@ -7,10 +7,21 @@
 (defvar *shell-pgid* (sb-posix:getpid))
 (defvar *foreground-job-pgid* nil)
 
-(defstruct (job-listing (:constructor make-job-listing (id status command)))
-  id
-  status
-  command)
+(defstruct (job-listing
+            (:constructor %allocate-job-listing (id status command))
+            (:copier nil))
+  (id 0 :read-only t)
+  (status "" :read-only t)
+  (command "" :read-only t))
+
+(defun make-job-listing (id status command)
+  (unless (and (integerp id) (plusp id))
+    (error "Job listing id must be a positive integer: ~s" id))
+  (unless (stringp status)
+    (error "Job listing status must be a string: ~s" status))
+  (unless (stringp command)
+    (error "Job listing command must be a string: ~s" command))
+  (%allocate-job-listing id status command))
 
 (defstruct (job-wait-event (:constructor %make-job-wait-event (pid state status-code)))
   pid

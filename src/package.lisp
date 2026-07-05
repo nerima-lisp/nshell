@@ -240,7 +240,7 @@
             #:execute-ast-in-context
             #:execute-external
             #:expand-command-alias-node
-            #:job-listing #:job-listing-p #:make-job-listing
+            #:job-listing #:job-listing-p
             #:job-listing-id #:job-listing-status #:job-listing-command
             #:format-job-listing
             #:fg #:bg #:jobs #:disown #:interrupt-foreground #:suspend-foreground

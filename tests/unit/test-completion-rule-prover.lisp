@@ -26,6 +26,42 @@
   (is (nshell.domain.completion::rule-knowledge-base-p
        (nshell.domain.completion::make-empty-rule-knowledge-base))))
 
+(test fact-and-rule-constructors-validate-domain-values
+  (is (fboundp 'nshell.domain.completion:make-fact))
+  (is (fboundp 'nshell.domain.completion:make-rule))
+  (is (fboundp 'nshell.domain.completion::%allocate-fact))
+  (is (fboundp 'nshell.domain.completion::%allocate-rule))
+  (is (not (fboundp 'nshell.domain.completion::copy-fact)))
+  (is (not (fboundp 'nshell.domain.completion::copy-rule)))
+  (signals type-error
+    (nshell.domain.completion:make-fact :predicate "completes"
+                                        :args '("ls" "--help")))
+  (signals type-error
+    (nshell.domain.completion:make-fact :predicate 'completes
+                                        :args "ls"))
+  (signals type-error
+    (nshell.domain.completion:make-rule :head "bad"
+                                        :body '()))
+  (signals type-error
+    (nshell.domain.completion:make-rule :head '(suggests-dir ?input)
+                                        :body "bad"))
+  (let* ((args (list "ls" "--help"))
+         (head (list 'suggests-dir '?input))
+         (body (list '(command-is ?input "cd")))
+         (fact (nshell.domain.completion:make-fact :predicate 'completes
+                                                   :args args))
+         (rule (nshell.domain.completion:make-rule :head head
+                                                   :body body)))
+    (setf (first args) "git")
+    (setf (first head) 'changed)
+    (setf (first body) '(changed ?input))
+    (is (equal '("ls" "--help")
+               (nshell.domain.completion::fact-args fact)))
+    (is (equal '(suggests-dir ?input)
+               (nshell.domain.completion::rule-head rule)))
+    (is (equal '((command-is ?input "cd"))
+               (nshell.domain.completion::rule-body rule)))))
+
 (test rule-with-one-body-goal-resolves
   (let ((kb (make-empty-rule-kb)))
     (nshell.domain.completion:assert-fact!

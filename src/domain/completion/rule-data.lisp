@@ -1,11 +1,13 @@
 ; Prolog-style logic engine: facts, rules, unification, and proof search.
 (in-package #:nshell.domain.completion)
 
-(defstruct fact
+(defstruct (fact (:constructor %allocate-fact (predicate args))
+                 (:copier nil))
   (predicate nil :type symbol :read-only t)
   (args '() :type list :read-only t))
 
-(defstruct rule
+(defstruct (rule (:constructor %allocate-rule (head body))
+                 (:copier nil))
   (head '() :type list :read-only t)
   (body '() :type list :read-only t))
 
@@ -58,6 +60,16 @@
 
 (defun %project-proof-goal (goal)
   (%make-proof-goal-projection (first goal) (rest goal)))
+
+(defun make-fact (&key predicate (args '()))
+  (check-type predicate symbol)
+  (check-type args list)
+  (%allocate-fact predicate (copy-list args)))
+
+(defun make-rule (&key (head '()) (body '()))
+  (check-type head list)
+  (check-type body list)
+  (%allocate-rule (copy-list head) (copy-list body)))
 
 (defun %make-fact-from-spec (spec)
   (let ((projection (%project-fact-spec spec)))

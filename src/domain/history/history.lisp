@@ -1,23 +1,85 @@
 (in-package #:nshell.domain.history)
 
-(defstruct (command-history (:constructor %make-command-history (&key (max-entries 10000))))
-  "In-memory command history plus transient navigation state."
-  (entries nil :type list)
-  (max-entries 10000 :type integer :read-only t)
-  (navigate-index -1 :type integer)
-  (navigate-prefix nil :type (or null string))
-  (navigate-origin nil :type (or null string)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defstruct (command-history
+              (:constructor %allocate-command-history (&key (max-entries 10000)))
+              (:conc-name %command-history-)
+              (:predicate %command-history-p)
+              (:copier nil))
+    "In-memory command history plus transient navigation state."
+    (entries nil :type list)
+    (max-entries 10000 :type (integer 0 *) :read-only t)
+    (navigate-index -1 :type integer)
+    (navigate-prefix nil :type (or null string))
+    (navigate-origin nil :type (or null string))))
+
+(defun %make-command-history (&key (max-entries 10000))
+  (check-type max-entries (integer 0 *))
+  (%allocate-command-history :max-entries max-entries))
 
 (defun make-command-history (&key (max-entries 10000))
   (%make-command-history :max-entries max-entries))
+
+(defun command-history-p (object)
+  "Return true when OBJECT is a command history aggregate."
+  (%command-history-p object))
+
+(defun command-history-entries (history)
+  (%command-history-entries history))
+
+(defun (setf command-history-entries) (entries history)
+  (check-type entries list)
+  (setf (%command-history-entries history) entries))
+
+(defun command-history-max-entries (history)
+  (%command-history-max-entries history))
+
+(defun command-history-navigate-index (history)
+  (%command-history-navigate-index history))
+
+(defun (setf command-history-navigate-index) (index history)
+  (check-type index integer)
+  (setf (%command-history-navigate-index history) index))
+
+(defun command-history-navigate-prefix (history)
+  (%command-history-navigate-prefix history))
+
+(defun (setf command-history-navigate-prefix) (prefix history)
+  (check-type prefix (or null string))
+  (setf (%command-history-navigate-prefix history) prefix))
+
+(defun command-history-navigate-origin (history)
+  (%command-history-navigate-origin history))
+
+(defun (setf command-history-navigate-origin) (origin history)
+  (check-type origin (or null string))
+  (setf (%command-history-navigate-origin history) origin))
 
 (defun history-capacity (history)
   "Return the maximum number of entries retained by HISTORY."
   (command-history-max-entries history))
 
-(defstruct (history-word (:constructor %make-history-word (start end)))
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defstruct (history-word
+              (:constructor %allocate-history-word (start end))
+              (:conc-name %history-word-)
+              (:predicate nil)
+              (:copier nil))
+    (start 0 :type (integer 0 *) :read-only t)
+    (end 0 :type (integer 0 *) :read-only t)))
+
+(defun %make-history-word (start end)
+  (check-type start (integer 0 *))
+  (check-type end (integer 0 *))
+  (assert (<= start end) (start end)
+          "History word start must not exceed end.")
+  (%allocate-history-word start end))
+
+(defun history-word-start (word)
+  (%history-word-start word))
+
+(defun history-word-end (word)
+  (%history-word-end word))
 
 (defstruct (%history-token-window
             (:constructor %make-history-token-window (current next)))

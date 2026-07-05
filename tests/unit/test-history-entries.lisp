@@ -37,6 +37,15 @@
                                                  "NSHELL.DOMAIN.HISTORY"))))
     (is (not (fboundp 'nshell.domain.history::history-entry-p)))
     (is (not (fboundp 'nshell.domain.history::copy-history-entry)))
+    (is (not (fboundp 'nshell.domain.history::copy-command-history)))
+    (is (not (fboundp 'nshell.domain.history::copy-history-word)))
     (is (fboundp 'nshell.domain.history::%make-history-entry-with-invariants))
     (is (fboundp 'nshell.domain.history::%allocate-history-entry))
-    (is (fboundp 'nshell.domain.history::%make-command-history))))
+    (is (fboundp 'nshell.domain.history::%make-command-history))
+    (is (fboundp 'nshell.domain.history::%allocate-command-history))))
+
+(test command-history-construction-validates-capacity
+  (signals type-error
+    (nshell.domain.history:make-command-history :max-entries -1))
+  (signals type-error
+    (nshell.domain.history:make-command-history :max-entries "many")))

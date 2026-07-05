@@ -59,7 +59,7 @@
 
   (defpackage #:nshell.domain.parsing
     (:use #:cl)
-    (:export #:tokenize #:shell-assignment-word-p #:parse-command-line #:parse-result
+    (:export #:tokenize #:shell-assignment-word-p #:parse-command-line
            #:shell-input-blank-p
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
@@ -113,10 +113,9 @@
            #:parse-complete-p #:parse-result-state #:parse-errors
            #:parse-error-messages #:format-parse-error-messages
            #:parse-result-ast #:parse-result-incomplete
-            #:parse-diagnostic #:parse-diagnostic-p
-            #:parse-diagnostic-kind #:parse-diagnostic-kind-p #:parse-diagnostic-message
-            #:parse-diagnostic-start #:parse-diagnostic-end
-            #:parse-diagnostic-token))
+           #:parse-diagnostic-kind #:parse-diagnostic-kind-p #:parse-diagnostic-message
+           #:parse-diagnostic-start #:parse-diagnostic-end
+           #:parse-diagnostic-token))
 
 (defpackage #:nshell.domain.environment
   (:use #:cl)

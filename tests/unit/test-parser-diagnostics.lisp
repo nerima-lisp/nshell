@@ -30,6 +30,17 @@
   (is (fboundp 'nshell.domain.parsing::%make-normalized-parse-result))
   (is (fboundp 'nshell.domain.parsing::%make-parse-diagnostic)))
 
+(test parse-result-values-do-not-export-raw-struct-api
+  "Parse result values should expose projections, not raw struct types or generated helpers."
+  (is (not (nth-value 1 (find-symbol "PARSE-RESULT" :nshell.domain.parsing))))
+  (is (not (nth-value 1 (find-symbol "PARSE-DIAGNOSTIC" :nshell.domain.parsing))))
+  (is (not (fboundp 'nshell.domain.parsing::parse-result-p)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-parse-result)))
+  (is (not (fboundp 'nshell.domain.parsing::parse-diagnostic-p)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-parse-diagnostic)))
+  (is (fboundp 'nshell.domain.parsing::%parse-result-p))
+  (is (fboundp 'nshell.domain.parsing::%parse-diagnostic-p)))
+
 (test parse-result-errors-list-is-domain-owned
   "Parse result diagnostics should not expose mutable aggregate storage."
   (let* ((diagnostic (nshell.domain.parsing::%make-parse-diagnostic

@@ -1,6 +1,6 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (parse-result
+(defstruct (%parse-result
             (:constructor %make-parse-result
                 (ast &optional errors incomplete))
             (:conc-name %parse-result-))
@@ -13,9 +13,10 @@
                       (or errors '())
                       (not (null incomplete))))
 
-(defstruct (parse-diagnostic
+(defstruct (%parse-diagnostic
             (:constructor %make-parse-diagnostic
-                (kind message start end &optional token)))
+                (kind message start end &optional token))
+            (:conc-name %parse-diagnostic-))
   (kind :error :type keyword :read-only t)
   (message "" :type string :read-only t)
   (start 0 :type integer :read-only t)
@@ -33,6 +34,21 @@
 
 (defun parse-errors (result)
   (parse-result-errors result))
+
+(defun parse-diagnostic-kind (diagnostic)
+  (%parse-diagnostic-kind diagnostic))
+
+(defun parse-diagnostic-message (diagnostic)
+  (%parse-diagnostic-message diagnostic))
+
+(defun parse-diagnostic-start (diagnostic)
+  (%parse-diagnostic-start diagnostic))
+
+(defun parse-diagnostic-end (diagnostic)
+  (%parse-diagnostic-end diagnostic))
+
+(defun parse-diagnostic-token (diagnostic)
+  (%parse-diagnostic-token diagnostic))
 
 (defstruct (%parse-result-facts
             (:constructor %make-parse-result-facts

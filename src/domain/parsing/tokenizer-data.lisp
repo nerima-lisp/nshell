@@ -2,7 +2,8 @@
 (in-package #:nshell.domain.parsing)
 
 (defstruct (token (:constructor %make-token (type value &optional (start 0) (end 0)
-                                             (quote-style nil))))
+                                             (quote-style nil)))
+                  (:copier nil))
   (type :word :type keyword :read-only t)
   (value "" :type string :read-only t)
   (start 0 :type integer :read-only t)
@@ -14,7 +15,8 @@
 (defstruct (tokenization-result
             (:constructor %make-tokenization-result
                 (tokens cursor-token incomplete-p))
-            (:conc-name %tokenization-result-))
+            (:conc-name %tokenization-result-)
+            (:copier nil))
   (tokens nil :type list :read-only t)
   (cursor-token nil :read-only t)
   (incomplete-p nil :type boolean :read-only t))
@@ -35,7 +37,8 @@
   (or value ""))
 
 (defstruct (%token-extent
-            (:constructor %make-token-extent (start end value)))
+            (:constructor %make-token-extent (start end value))
+            (:copier nil))
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t)
   (value "" :type string :read-only t))
@@ -54,7 +57,9 @@
                (%token-position end)
                quote-style))
 
-(defstruct (tokenizer-state (:constructor %make-tokenizer-state))
+(defstruct (tokenizer-state
+            (:constructor %make-tokenizer-state)
+            (:copier nil))
   input
   len
   cursor-pos
@@ -92,12 +97,14 @@
   "Token types that separate shell command segments.")
 
 (defstruct (%shell-character-boundary
-            (:constructor %make-shell-character-boundary (character kind)))
+            (:constructor %make-shell-character-boundary (character kind))
+            (:copier nil))
   (character nil :read-only t)
   (kind nil :type (or null keyword) :read-only t))
 
 (defstruct (%shell-input-blankness-spec
-            (:constructor %make-shell-input-blankness-spec (include-return-p)))
+            (:constructor %make-shell-input-blankness-spec (include-return-p))
+            (:copier nil))
   (include-return-p nil :type boolean :read-only t))
 
 (defun %shell-separator-character-p (ch separators)

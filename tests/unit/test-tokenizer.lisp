@@ -22,9 +22,20 @@
          (tokens (nshell.domain.parsing:tokenization-result-tokens
                   result)))
     (is (nshell.domain.parsing:tokenization-result-p result))
+    (is (not (fboundp 'nshell.domain.parsing::copy-tokenization-result)))
     (is (= 2 (length tokens)))
     (is (not (nshell.domain.parsing:tokenization-result-incomplete-p
-              result)))))
+               result)))))
+
+(test token-factory-is-public-boundary
+  "Token construction should stay behind the public normalizing factory."
+  (let ((token (nshell.domain.parsing:make-token :word nil nil nil)))
+    (is (fboundp 'nshell.domain.parsing:make-token))
+    (is (fboundp 'nshell.domain.parsing::%make-token))
+    (is (not (fboundp 'nshell.domain.parsing::copy-token)))
+    (is (string= "" (nshell.domain.parsing:token-value token)))
+    (is (= 0 (nshell.domain.parsing:token-start token)))
+    (is (= 0 (nshell.domain.parsing:token-end token)))))
 
 (test tokenization-result-token-list-is-domain-owned
   (let* ((result (nshell.domain.parsing:tokenize "echo ok"))
@@ -117,7 +128,8 @@ letting word-reading stop on an unconsumed terminator."
 (test tokenizer-state-constructor-is-internal-boundary
   "Tokenizer state construction should not keep an unprefixed compatibility helper."
   (is (fboundp 'nshell.domain.parsing::%make-tokenizer-state-for-input))
-  (is (not (fboundp 'nshell.domain.parsing::make-tokenizer-state))))
+  (is (not (fboundp 'nshell.domain.parsing::make-tokenizer-state)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-tokenizer-state))))
 
 (test tokenizer-dispatch-kind-projects-main-loop-boundaries
   "Tokenizer dispatch classification should remain separate from state mutation."
@@ -207,6 +219,7 @@ letting word-reading stop on an unconsumed terminator."
   (let ((empty-extent (nshell.domain.parsing::%token-extent nil nil))
         (operator-extent (nshell.domain.parsing::%token-extent 3 "&&")))
     (is (nshell.domain.parsing::%token-extent-p empty-extent))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%token-extent)))
     (is (= 0 (nshell.domain.parsing::%token-extent-start empty-extent)))
     (is (= 0 (nshell.domain.parsing::%token-extent-end empty-extent)))
     (is (string= "" (nshell.domain.parsing::%token-extent-value empty-extent)))
@@ -221,6 +234,7 @@ letting word-reading stop on an unconsumed terminator."
            (let ((boundary (nshell.domain.parsing::%shell-character-boundary ch)))
              (and boundary
                   (nshell.domain.parsing::%shell-character-boundary-kind boundary)))))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%shell-character-boundary)))
     (is (eq :token-separator (boundary-kind #\Space)))
     (is (eq :token-separator (boundary-kind #\|)))
     (is (eq :word-boundary-delimiter (boundary-kind #\()))
@@ -234,9 +248,10 @@ letting word-reading stop on an unconsumed terminator."
   (let ((default-spec
           (nshell.domain.parsing::%shell-input-blankness-spec-from-options))
         (return-spec
-          (nshell.domain.parsing::%shell-input-blankness-spec-from-options
-           :include-return-p t)))
+           (nshell.domain.parsing::%shell-input-blankness-spec-from-options
+            :include-return-p t)))
     (is (nshell.domain.parsing::%shell-input-blankness-spec-p default-spec))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%shell-input-blankness-spec)))
     (is (not (nshell.domain.parsing::%shell-input-blankness-spec-include-return-p
               default-spec)))
     (is (nshell.domain.parsing::%shell-input-blankness-spec-include-return-p

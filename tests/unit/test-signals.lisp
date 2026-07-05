@@ -8,8 +8,21 @@
 
 (test signal-raw-constructor-is-internal-boundary
   "Signals are created through the domain factory rather than raw struct construction."
-  (is (fboundp 'nshell.domain.signals:make-signal))
-  (is (fboundp 'nshell.domain.signals::%make-signal)))
+  (multiple-value-bind (copy-symbol copy-status)
+      (find-symbol "COPY-OS-SIGNAL" '#:nshell.domain.signals)
+    (is (fboundp 'nshell.domain.signals:make-signal))
+    (is (fboundp 'nshell.domain.signals::%make-signal))
+    (is (fboundp 'nshell.domain.signals::%allocate-signal))
+    (is (or (null copy-status)
+            (not (fboundp copy-symbol)))))
+  (signals type-error
+    (nshell.domain.signals:make-signal "sigint" 2))
+  (signals type-error
+    (nshell.domain.signals:make-signal :sigint 0))
+  (signals type-error
+    (nshell.domain.signals:make-signal :sigint 65))
+  (signals type-error
+    (nshell.domain.signals:make-signal :sigint "2")))
 
 (test signal-creation
   (let ((sig (nshell.domain.signals:make-signal :sigint 2)))

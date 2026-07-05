@@ -2,7 +2,7 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (buffer-splice
+(defstruct (%buffer-splice
              (:constructor %make-buffer-splice (start end inserted))
              (:conc-name %buffer-splice-))
   (start 0 :type fixnum :read-only t)
@@ -22,7 +22,7 @@
   (+ (%buffer-splice-start splice)
      (length (%buffer-splice-inserted splice))))
 
-(defstruct (buffer-insertion-plan
+(defstruct (%buffer-insertion-plan
              (:constructor %make-buffer-insertion-plan (splice))
              (:conc-name %buffer-insertion-plan-))
   splice)
@@ -30,7 +30,7 @@
 (defun buffer-insertion-plan-splice (plan)
   (%buffer-insertion-plan-splice plan))
 
-(defstruct (buffer-insertion
+(defstruct (%buffer-insertion
              (:constructor %make-buffer-insertion (plan))
              (:conc-name %buffer-insertion-))
   plan)
@@ -59,12 +59,12 @@
   (buffer-splice-cursor-pos
    (buffer-insertion-plan-splice (buffer-insertion-plan insertion))))
 
-(defstruct (buffer-deletion
+(defstruct (%buffer-deletion
              (:constructor %make-buffer-deletion (plan))
              (:conc-name %buffer-deletion-))
   plan)
 
-(defstruct (buffer-deletion-plan
+(defstruct (%buffer-deletion-plan
              (:constructor %make-buffer-deletion-plan (splice))
              (:conc-name %buffer-deletion-plan-))
   splice)
@@ -75,7 +75,7 @@
 (defun buffer-deletion-plan (deletion)
   (%buffer-deletion-plan deletion))
 
-(defstruct (buffer-deletion-request
+(defstruct (%buffer-deletion-request
              (:constructor %make-buffer-deletion-request (kind cursor))
              (:conc-name %buffer-deletion-request-))
   (kind :before-cursor :read-only t)
@@ -116,7 +116,7 @@
   (buffer-splice-cursor-pos
    (buffer-deletion-plan-splice (buffer-deletion-plan deletion))))
 
-(defstruct (cursor-move-request
+(defstruct (%cursor-move-request
              (:constructor %make-cursor-move-request (kind cursor delta position))
              (:conc-name %cursor-move-request-))
   (kind :by :read-only t)
@@ -142,7 +142,7 @@
 (defun cursor-move-request-position (request)
   (%cursor-move-request-position request))
 
-(defstruct (cursor-move-edit
+(defstruct (%cursor-move-edit
              (:constructor %make-cursor-move-edit (cursor-pos))
              (:conc-name %cursor-move-edit-))
   (cursor-pos 0 :type fixnum :read-only t))
@@ -165,7 +165,7 @@
                          :suggestion :clear
                          :cursor-pos (cursor-move-edit-cursor-pos edit)))
 
-(defstruct (buffer-clear-plan
+(defstruct (%buffer-clear-plan
              (:constructor %make-buffer-clear-plan
                  (&key buffer cursor-pos mode vi-count vi-visual-anchor
                        clear-completion-p clear-history-search-p))
@@ -209,7 +209,7 @@
 (defun buffer-clear-plan-clear-history-search-p (plan)
   (%buffer-clear-plan-clear-history-search-p plan))
 
-(defstruct (buffer-clear-edit
+(defstruct (%buffer-clear-edit
              (:constructor %make-buffer-clear-edit (plan))
              (:conc-name %buffer-clear-edit-))
   plan)

@@ -100,7 +100,7 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
 (defstruct (%suggestion-append-plan
             (:constructor %make-suggestion-append-plan (splice))
             (:conc-name %suggestion-append-plan-))
-  (splice (error "SPLICE is required.") :type buffer-splice :read-only t))
+  (splice (error "SPLICE is required.") :type %buffer-splice :read-only t))
 
 (defun suggestion-append-plan-splice (plan)
   (%suggestion-append-plan-splice plan))

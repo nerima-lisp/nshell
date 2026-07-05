@@ -4,7 +4,7 @@
 (defun clamp-cursor (position buffer)
   (max 0 (min position (length buffer))))
 
-(defstruct (input-state-copy-override
+(defstruct (%input-state-copy-override
             (:constructor %make-input-state-copy-override (kind value))
             (:conc-name %input-state-copy-override-))
   kind

@@ -26,7 +26,8 @@
                         "%COPY-INPUT-STATE-OR-CURRENT"
                         "%COPY-INPUT-STATE-CLEARABLE-OR-CURRENT"
                         "%COPY-INPUT-STATE-CLEARABLE-VALUE-OR-CURRENT"
-                        "%COPY-INPUT-STATE-CLAMPED-ANCHOR-OR-CURRENT"))
+                        "%COPY-INPUT-STATE-CLAMPED-ANCHOR-OR-CURRENT"
+                        "INPUT-STATE-COPY-OVERRIDE"))
       (is (not (present-p old-name))))
     (dolist (new-name '("%COPY-INPUT-STATE-COMPLETION-VALUES"
                         "%COPY-INPUT-STATE-TRANSIENT-VALUES"
@@ -34,7 +35,7 @@
                         "%COPY-INPUT-STATE-COMPLETION-INITARGS"
                         "%COPY-INPUT-STATE-TRANSIENT-INITARGS"
                         "%COPY-INPUT-STATE-SESSION-INITARGS"
-                        "INPUT-STATE-COPY-OVERRIDE"
+                        "%INPUT-STATE-COPY-OVERRIDE"
                         "%MAKE-INPUT-STATE-COPY-OVERRIDE"
                         "INPUT-STATE-COPY-OVERRIDE-KIND"
                         "INPUT-STATE-COPY-OVERRIDE-VALUE"
@@ -54,7 +55,8 @@
         (value (nshell.presentation::input-state-copy-override-for t "new"))
         (optional-current
           (nshell.presentation::input-state-copy-optional-value-override nil)))
-    (is (nshell.presentation::input-state-copy-override-p current))
+    (is (nshell.presentation::%input-state-copy-override-p current))
+    (is (not (fboundp 'nshell.presentation::input-state-copy-override-p)))
     (is (eq :current
             (nshell.presentation::input-state-copy-override-kind current)))
     (is (eq :clear

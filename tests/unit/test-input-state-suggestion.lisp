@@ -248,8 +248,9 @@
       (is (nshell.presentation::%suggestion-append-plan-p plan))
       (is (not (fboundp 'nshell.presentation::suggestion-append-plan-p)))
       (is (not (fboundp 'nshell.presentation::suggestion-append-edit-p)))
-      (is (nshell.presentation::buffer-splice-p
+      (is (nshell.presentation::%buffer-splice-p
            (nshell.presentation::suggestion-append-plan-splice plan))))
+    (is (not (fboundp 'nshell.presentation::buffer-splice-p)))
     (is (string= "git status"
                  (nshell.presentation::suggestion-append-edit-buffer
                   edit

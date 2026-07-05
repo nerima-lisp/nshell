@@ -10,7 +10,8 @@
                        pending-redirect-token
                        pending-sep
                        pending-sep-token
-                       (errors '()))))
+                       (errors '())))
+             (:copier nil))
   (all-cmds '() :type list)
   (current-args '() :type list)
   current-cmd
@@ -21,7 +22,8 @@
   (errors '() :type list))
 
 (defstruct (%token-reduction-result
-             (:constructor %make-token-reduction-result (commands errors)))
+             (:constructor %make-token-reduction-result (commands errors))
+             (:copier nil))
   (commands '() :type list)
   (errors '() :type list))
 
@@ -41,7 +43,8 @@
 
 (defstruct (%token-reduction-argument
             (:constructor %make-token-reduction-argument
-                (value quote-style syntactic-p)))
+                (value quote-style syntactic-p))
+            (:copier nil))
   (value "" :type string :read-only t)
   (quote-style nil :read-only t)
   (syntactic-p nil :type boolean :read-only t))
@@ -106,7 +109,8 @@
 
 (defstruct (%token-reduction-diagnostic-policy
             (:constructor %make-token-reduction-diagnostic-policy
-                (kind message)))
+                (kind message))
+            (:copier nil))
   (kind nil :type keyword :read-only t)
   (message "" :type string :read-only t))
 

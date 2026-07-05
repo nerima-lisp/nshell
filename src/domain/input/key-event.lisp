@@ -2,7 +2,9 @@
 
 (in-package #:nshell.domain.input)
 
-(defstruct (key-event (:constructor %make-key-event (type &optional char number data)))
+(defstruct (key-event
+             (:constructor %make-key-event (type &optional char number data))
+             (:copier nil))
   "Decoded shell input event.
 
 TYPE is a keyword such as :CHAR, :PASTE, :ENTER, :TAB, :LEFT, :CTRL-C, or :SHIFT-TAB.

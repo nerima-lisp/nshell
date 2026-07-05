@@ -2,7 +2,8 @@
 
 (defstruct (logic-var
             (:constructor %make-var (name))
-            (:predicate var-p))
+            (:predicate var-p)
+            (:copier nil))
   name)
 
 (defun make-var (name)
@@ -14,7 +15,8 @@
   (eq result *unify-fail*))
 
 (defstruct (%binding-entry
-            (:constructor %make-binding-entry (variable value)))
+            (:constructor %make-binding-entry (variable value))
+            (:copier nil))
   (variable nil :read-only t)
   (value nil :read-only t))
 
@@ -26,7 +28,8 @@
   (%binding-entry-from-pair (assoc var bindings :test #'eq)))
 
 (defstruct (%cons-term
-            (:constructor %make-cons-term (head tail)))
+            (:constructor %make-cons-term (head tail))
+            (:copier nil))
   (head nil :read-only t)
   (tail nil :read-only t))
 
@@ -35,7 +38,8 @@
     (%make-cons-term (car term) (cdr term))))
 
 (defstruct (%goal-cursor
-            (:constructor %make-goal-cursor (goal rest)))
+            (:constructor %make-goal-cursor (goal rest))
+            (:copier nil))
   (goal nil :read-only t)
   (rest nil :read-only t))
 

@@ -101,6 +101,9 @@
          (argument-word (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
                          cursor
                          word-token)))
+    (is (not (fboundp 'nshell.domain.history::copy-%history-token-window)))
+    (is (not (fboundp 'nshell.domain.history::copy-%history-logical-word-cursor)))
+    (is (not (fboundp 'nshell.domain.history::copy-%history-last-argument-scan-state)))
     (is (eq word-token (nshell.domain.history::%history-token-window-current window)))
     (is (eq (third tokens) (nshell.domain.history::%history-token-window-next window)))
     (is (string= "echo"

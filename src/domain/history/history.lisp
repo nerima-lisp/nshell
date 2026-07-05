@@ -82,16 +82,19 @@
   (%history-word-end word))
 
 (defstruct (%history-token-window
-            (:constructor %make-history-token-window (current next)))
+            (:constructor %make-history-token-window (current next))
+            (:copier nil))
   (current nil :read-only t)
   (next nil :read-only t))
 
 (defstruct (%history-logical-word-cursor
-            (:constructor %make-history-logical-word-cursor (remaining)))
+            (:constructor %make-history-logical-word-cursor (remaining))
+            (:copier nil))
   (remaining nil :type list))
 
 (defstruct (%history-last-argument-scan-state
-            (:constructor %make-history-last-argument-scan-state (logical-word-cursor)))
+            (:constructor %make-history-last-argument-scan-state (logical-word-cursor))
+            (:copier nil))
   (last-argument nil :type (or null string))
   (skip-redirect-target nil :type boolean)
   (seen-command-word nil :type boolean)

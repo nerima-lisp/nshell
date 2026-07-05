@@ -24,7 +24,8 @@
 (test logic-variable-raw-constructor-is-internal-boundary
   (let ((x (nshell.domain.parsing:make-var "X")))
     (is (nshell.domain.parsing:var-p x))
-    (is (fboundp 'nshell.domain.parsing::%make-var))))
+    (is (fboundp 'nshell.domain.parsing::%make-var))
+    (is (not (fboundp 'nshell.domain.parsing::copy-logic-var)))))
 
 (test binding-entry-projects-association-shape
   "Binding lookup should project alist storage before resolving variables."
@@ -35,7 +36,8 @@
     (is (nshell.domain.parsing::%binding-entry-p entry))
     (is (eq x (nshell.domain.parsing::%binding-entry-variable entry)))
     (is (eq y (nshell.domain.parsing::%binding-entry-value entry)))
-    (is (null (nshell.domain.parsing::%binding-entry-for-var y bindings)))))
+    (is (null (nshell.domain.parsing::%binding-entry-for-var y bindings)))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%binding-entry)))))
 
 (test cons-term-projects-recursive-term-shape
   "Recursive unification paths should project raw cons terms once."
@@ -43,7 +45,8 @@
     (is (nshell.domain.parsing::%cons-term-p term))
     (is (eq 'head (nshell.domain.parsing::%cons-term-head term)))
     (is (eq 'tail (nshell.domain.parsing::%cons-term-tail term)))
-    (is (null (nshell.domain.parsing::%cons-term-from-raw 'atom)))))
+    (is (null (nshell.domain.parsing::%cons-term-from-raw 'atom)))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%cons-term)))))
 
 (test unify-lists
   (let* ((x (nshell.domain.parsing:make-var "X"))
@@ -89,7 +92,8 @@
     (is (eq first-goal (nshell.domain.parsing::%goal-cursor-goal cursor)))
     (is (eq second-goal
             (first (nshell.domain.parsing::%goal-cursor-rest cursor))))
-    (is (null (nshell.domain.parsing::%goal-cursor-from-goals nil)))))
+    (is (null (nshell.domain.parsing::%goal-cursor-from-goals nil)))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%goal-cursor)))))
 
 (test walk-resolves-chain
   (let* ((x (nshell.domain.parsing:make-var "X"))

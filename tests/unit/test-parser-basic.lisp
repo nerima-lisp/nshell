@@ -825,6 +825,7 @@
            (nshell.domain.parsing::%token-reduction-argument-from-redirect-token
             redirect-token)))
     (is (nshell.domain.parsing::%token-reduction-argument-p plain))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%token-reduction-argument)))
     (let ((plain-arg
             (nshell.domain.parsing::%token-reduction-argument-raw-value
              plain))
@@ -871,6 +872,7 @@
   (let ((state (nshell.domain.parsing::%make-token-reduction-state)))
     (is (nshell.domain.parsing::%token-reduction-state-p state))
     (is (not (vectorp state)))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%token-reduction-state)))
     (is (null (nshell.domain.parsing::%token-reduction-state-all-cmds state)))
     (is (null (nshell.domain.parsing::%token-reduction-state-current-args state)))
     (is (null (nshell.domain.parsing::%token-reduction-state-errors state))))
@@ -912,6 +914,7 @@
         (unexpected-token
           (nshell.domain.parsing::%token-reduction-unexpected-token-policy
            (nshell.domain.parsing:make-token :unknown "@" 0 1))))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%token-reduction-diagnostic-policy)))
     (is (eq :missing-command
             (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind
              missing-command)))
@@ -1057,6 +1060,7 @@
                   (nshell.domain.parsing:make-token :redirect ">" 5 6)
                   separator-token))))
     (is (nshell.domain.parsing::%token-reduction-result-p result))
+    (is (not (fboundp 'nshell.domain.parsing::copy-%token-reduction-result)))
     (destructuring-bind (command separator token)
         (first (nshell.domain.parsing::%token-reduction-result-commands result))
       (is (string= "echo"

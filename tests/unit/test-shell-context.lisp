@@ -33,6 +33,32 @@
     (is (hash-table-p (nshell.application:shell-context-abbreviation-table context)))
     (is (eq :cps (nshell.application:shell-context-execution-strategy context)))))
 
+(test shell-context-construction-boundary-is-public-factory-only
+  "The context can be built only through the public factory, not copied as a raw struct."
+  (let ((context (make-test-shell-context :terminal-fns nil)))
+    (is (nshell.application:shell-context-p context))
+    (is (not (fboundp 'nshell.application::copy-shell-context)))
+    (is (fboundp 'nshell.application::%allocate-shell-context))
+    (multiple-value-bind (_ status)
+        (find-symbol "%ALLOCATE-SHELL-CONTEXT" :nshell.application)
+      (declare (ignore _))
+      (is (not (eq :external status))))))
+
+(test shell-context-factory-validates-composition-values
+  "Invalid session composition is rejected before the context is allocated."
+  (signals type-error
+    (nshell.application:make-shell-context :execution-strategy :legacy))
+  (signals type-error
+    (nshell.application:make-shell-context :terminal-rows 0))
+  (signals type-error
+    (nshell.application:make-shell-context :terminal-cols 0))
+  (signals type-error
+    (nshell.application:make-shell-context :alias-table nil))
+  (signals type-error
+    (nshell.application:make-shell-context :process-registry nil))
+  (signals type-error
+    (nshell.application:make-shell-context :filesystem-fns :not-a-plist)))
+
 (test shell-context-process-registry-exposes-job-query-only
   "Process registry storage stays internal; callers query by job id."
   (let ((context (make-test-shell-context)))

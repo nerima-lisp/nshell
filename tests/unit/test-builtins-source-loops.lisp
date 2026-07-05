@@ -71,47 +71,49 @@
 
 (test source-while-repeats-while-condition-succeeds
   "source repeats fish-style while loops until the condition returns non-zero."
-  (let ((context (make-test-builtins-context))
-        (condition-codes '(0 0 1))
+  (let ((condition-codes '(0 0 1))
         (calls nil))
-    (with-temporary-function
-        ('nshell.application::execute-ast-in-context
-         (lambda (_context ast)
-           (declare (ignore _context))
-           (let ((command (nshell.domain.parsing:command-node-command ast)))
-             (push command calls)
-             (if (string= command "condition")
-                 (values nil (pop condition-codes))
-                 (values (format nil "~a~%" command) 0)))))
-      (let ((ast (nshell.domain.parsing::make-while-node
-                  (nshell.domain.parsing:make-command-node "condition" nil)
-                  (list (nshell.domain.parsing:make-command-node "body" nil)))))
-        (multiple-value-bind (output code)
-            (nshell.application::%execute-while-node-in-context context ast)
-          (is (= 0 code))
-          (is (string= (format nil "body~%body~%") output))
-          (is (equal '("condition" "body" "condition" "body" "condition")
-                     (nreverse calls))))))))
+    (let ((context (make-test-builtins-context
+                    :external-capture-runner
+                    (lambda (command args)
+                      (is (null args))
+                      (push command calls)
+                      (cond
+                        ((string= command "condition")
+                         (values "ignored-condition-output" (pop condition-codes)))
+                        ((string= command "body")
+                         (values (format nil "body~%") 0))
+                        (t
+                         (values "" 127)))))))
+      (with-called-source (output code context
+                                  '("while condition"
+                                    "body"
+                                    "end"))
+        (is (= 0 code))
+        (is (string= (format nil "body~%body~%") output))
+        (is (equal '("condition" "body" "condition" "body" "condition")
+                   (nreverse calls)))))))
 
 (test source-while-returns-last-body-status
   "source while returns the last executed body status, not the failing condition status."
-  (let ((context (make-test-builtins-context))
-        (condition-codes '(0 1)))
-    (with-temporary-function
-        ('nshell.application::execute-ast-in-context
-         (lambda (_context ast)
-           (declare (ignore _context))
-           (let ((command (nshell.domain.parsing:command-node-command ast)))
-             (if (string= command "condition")
-                 (values nil (pop condition-codes))
-                 (values nil 7)))))
-      (let ((ast (nshell.domain.parsing::make-while-node
-                  (nshell.domain.parsing:make-command-node "condition" nil)
-                  (list (nshell.domain.parsing:make-command-node "body" nil)))))
-        (multiple-value-bind (output code)
-            (nshell.application::%execute-while-node-in-context context ast)
-          (is (= 7 code))
-          (is (string= "" output)))))))
+  (let ((condition-codes '(0 1)))
+    (let ((context (make-test-builtins-context
+                    :external-capture-runner
+                    (lambda (command args)
+                      (is (null args))
+                      (cond
+                        ((string= command "condition")
+                         (values nil (pop condition-codes)))
+                        ((string= command "body")
+                         (values nil 7))
+                        (t
+                         (values nil 127)))))))
+      (with-called-source (output code context
+                                  '("while condition"
+                                    "body"
+                                    "end"))
+        (is (= 7 code))
+        (is (string= "" output))))))
 
 (test source-function-body-supports-nested-switch
   "source keeps nested switch/case blocks inside function definitions."
@@ -189,4 +191,3 @@
                                      "end || echo should-not-run"
                                      "echo after"))
       (format nil "after~%")))
-

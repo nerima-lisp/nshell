@@ -178,6 +178,16 @@
   "Structural diagnostics should not retain the old raw-argument multiple-value API."
   (is (not (fboundp 'nshell.domain.parsing::%parse-structural-diagnostics))))
 
+(test parser-internal-value-objects-have-no-copy-api
+  "Parser-internal value objects should not expose generated copy helpers."
+  (is (not (fboundp 'nshell.domain.parsing::copy-%command-list-components)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-%reduced-command-stream)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-%structural-diagnostics)))
+  (is (not (fboundp
+            'nshell.domain.parsing::copy-%structural-diagnostics-accumulator)))
+  (is (not (fboundp
+            'nshell.domain.parsing::copy-%structural-diagnostics-input))))
+
 (test continuation-separator-diagnostic-uses-token-boundary
   "Trailing continuation diagnostics should preserve separator token position."
   (let* ((token (nshell.domain.parsing:make-token :pipe "|" 5 6))

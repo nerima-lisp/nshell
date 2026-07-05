@@ -1,10 +1,18 @@
 ;;; Shell abbreviation engine
 (in-package #:nshell.domain.abbreviation)
 
-(defstruct abbreviation
+(defstruct (abbreviation
+            (:constructor %allocate-abbreviation (expansion position))
+            (:copier nil))
   "Abbreviation expansion metadata."
-  (expansion "" :type string)
-  (position :anywhere :type (member :anywhere :command)))
+  (expansion "" :type string :read-only t)
+  (position :anywhere :type (member :anywhere :command) :read-only t))
+
+(defun make-abbreviation (&key (expansion "") (position :anywhere))
+  "Create validated abbreviation expansion metadata."
+  (check-type expansion string)
+  (check-type position (member :anywhere :command))
+  (%allocate-abbreviation (copy-seq expansion) position))
 
 (defstruct (abbreviation-token-range
             (:constructor %make-abbreviation-token-range (start end)))

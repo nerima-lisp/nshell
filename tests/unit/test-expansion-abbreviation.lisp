@@ -3,6 +3,28 @@
 
 (in-suite expansion-tests)
 
+(test abbreviation-domain-construction-boundary-is-factory-only
+  (is (fboundp 'nshell.domain.abbreviation:make-abbreviation))
+  (is (fboundp 'nshell.domain.abbreviation::%allocate-abbreviation))
+  (is (not (fboundp 'nshell.domain.abbreviation::copy-abbreviation))))
+
+(test abbreviation-domain-factory-validates-input
+  (signals type-error
+    (nshell.domain.abbreviation:make-abbreviation :expansion '("git checkout")))
+  (signals type-error
+    (nshell.domain.abbreviation:make-abbreviation :position :middle)))
+
+(test abbreviation-domain-factory-detaches-mutable-expansion-string
+  (let* ((expansion (copy-seq "git checkout"))
+         (abbr (nshell.domain.abbreviation:make-abbreviation
+                :expansion expansion
+                :position :command)))
+    (setf (char expansion 0) #\X)
+    (is (string= "git checkout"
+                 (nshell.domain.abbreviation:abbreviation-expansion abbr)))
+    (is (eq :command
+            (nshell.domain.abbreviation:abbreviation-position abbr)))))
+
 (test abbreviation-domain-finds-token-before-cursor
   (multiple-value-bind (token start end found-p)
       (nshell.domain.abbreviation:abbreviation-target-before-cursor

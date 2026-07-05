@@ -1,13 +1,41 @@
 (in-package #:nshell.domain.configuration)
+
+(defun %copy-theme-colors (colors)
+  "Return a detached theme color table."
+  (check-type colors hash-table)
+  (let ((copy (make-hash-table :test (hash-table-test colors))))
+    (maphash (lambda (key value)
+               (check-type value string)
+               (setf (gethash key copy) value))
+             colors)
+    copy))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (theme (:constructor %make-theme (&key (name "default") (colors (make-hash-table :test #'eq)))))
+  (defstruct (theme
+              (:constructor %allocate-theme (name colors))
+              (:conc-name %theme-)
+              (:copier nil))
     (name "default" :type string :read-only t)
     (colors (make-hash-table :test #'eq) :type hash-table :read-only t))
 
   (defun make-theme (&key (name "default") (colors (make-hash-table :test #'eq)))
-    (%make-theme :name name :colors colors)))
-(defun theme-color (theme key) (gethash key (theme-colors theme)))
-(defun theme-set-color (theme key value) (setf (gethash key (theme-colors theme)) value) theme)
+    (check-type name string)
+    (%allocate-theme name (%copy-theme-colors colors))))
+
+(defun theme-name (theme)
+  "Return THEME's display name."
+  (%theme-name theme))
+
+(defun theme-color (theme key)
+  "Return THEME's color value for KEY, or NIL when KEY is not configured."
+  (gethash key (%theme-colors theme)))
+
+(defun theme-set-color (theme key value)
+  "Set THEME's color value for KEY and return THEME."
+  (check-type value string)
+  (setf (gethash key (%theme-colors theme)) value)
+  theme)
+
 (defun default-theme ()
   (let ((th (make-theme :name "nshell-default")))
     (theme-set-color th :normal "00FF00")

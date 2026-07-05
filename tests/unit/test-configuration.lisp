@@ -12,12 +12,25 @@
         (config (nshell.domain.configuration:make-config)))
     (is (nshell.domain.configuration:theme-p theme))
     (is (string= "custom" (nshell.domain.configuration:theme-name theme)))
-    (is (hash-table-p (nshell.domain.configuration::theme-colors theme)))
     (is (nshell.domain.configuration:config-p config))
     (is (nshell.domain.configuration:theme-p (nshell.domain.configuration:config-theme config)))
     (is (string= "[%u@%h %w]> " (nshell.domain.configuration::config-prompt-format config)))
-    (is (fboundp 'nshell.domain.configuration::%make-theme))
+    (is (not (fboundp 'nshell.domain.configuration::theme-colors)))
+    (is (not (fboundp 'nshell.domain.configuration::copy-theme)))
+    (is (not (fboundp 'nshell.domain.configuration::%make-theme)))
+    (is (fboundp 'nshell.domain.configuration::%allocate-theme))
     (is (fboundp 'nshell.domain.configuration::%make-config))))
+
+(test theme-colors-are-detached-from-constructor-input
+  "Theme construction owns the mutable color table."
+  (let ((colors (make-hash-table :test #'eq)))
+    (setf (gethash :command colors) "00AFFF")
+    (let ((theme (nshell.domain.configuration:make-theme
+                  :name "custom"
+                  :colors colors)))
+      (setf (gethash :command colors) "FF0000")
+      (is (string= "00AFFF"
+                   (nshell.domain.configuration:theme-color theme :command))))))
 
 (test default-theme-creation
   "Default theme has all expected colors"

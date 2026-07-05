@@ -177,8 +177,18 @@ git old"
 (test interactive-history-search-candidate-uses-typed-boundary
   "Contains fallback candidates should stay behind a typed internal boundary."
   (is (fboundp 'nshell.application::%make-interactive-history-candidate))
+  (is (fboundp 'nshell.application::%allocate-interactive-history-candidate))
   (is (fboundp 'nshell.application::%interactive-history-candidate-text))
-  (is (fboundp 'nshell.application::%interactive-history-candidate-entry)))
+  (is (fboundp 'nshell.application::%interactive-history-candidate-entry))
+  (is (not (fboundp 'nshell.application::copy-%interactive-history-candidate)))
+  (with-history (history "git status")
+    (let ((entry (first (nshell.domain.history:history-all history))))
+      (signals error
+        (nshell.application::%make-interactive-history-candidate 42 entry))
+      (signals error
+        (nshell.application::%make-interactive-history-candidate
+         "git status"
+         "not-entry")))))
 
 (test interactive-history-search-ignores-blank-query
   "Interactive reverse search should not preselect history before the user types."

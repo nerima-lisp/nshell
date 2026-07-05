@@ -1,9 +1,22 @@
 (in-package #:nshell.application)
 
 (defstruct (%interactive-history-candidate
-            (:constructor %make-interactive-history-candidate (text entry)))
+            (:constructor %allocate-interactive-history-candidate (text entry))
+            (:copier nil))
   (text "" :type string :read-only t)
   (entry nil :read-only t))
+
+(defun %interactive-history-entry-p (entry)
+  (multiple-value-bind (text ok)
+      (ignore-errors (values (nshell.domain.history:entry-text entry) t))
+    (and ok (stringp text))))
+
+(defun %make-interactive-history-candidate (text entry)
+  (unless (stringp text)
+    (error "Interactive history candidate text must be a string: ~s" text))
+  (unless (%interactive-history-entry-p entry)
+    (error "Interactive history candidate entry must be a history entry: ~s" entry))
+  (%allocate-interactive-history-candidate text entry))
 
 (defun %interactive-history-query-case-sensitive-p (query)
   (some #'upper-case-p query))

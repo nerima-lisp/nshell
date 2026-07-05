@@ -19,6 +19,47 @@
     (is (fboundp 'nshell.domain.prompting:make-prompt-model))
     (is (fboundp 'nshell.domain.prompting:make-prompt-segment))))
 
+(test prompt-model-factory-owns-input-segment-lists
+  "Prompt model construction detaches list identity from caller-owned collections."
+  (let* ((caller-segments
+           (list (nshell.domain.prompting:make-prompt-segment "h" :host)))
+         (caller-right-segments
+           (list (nshell.domain.prompting:make-prompt-segment "" :git)))
+         (pm (nshell.domain.prompting:make-prompt-model
+              :hostname "h"
+              :cwd "/repo/"
+              :segments caller-segments
+              :right-segments caller-right-segments)))
+    (setf (first caller-segments)
+          (nshell.domain.prompting:make-prompt-segment "changed" :path))
+    (setf (first caller-right-segments)
+          (nshell.domain.prompting:make-prompt-segment "changed" :literal))
+    (is (string= "h"
+                 (nshell.domain.prompting:prompt-segment-text
+                  (first (nshell.domain.prompting:prompt-model-segments pm)))))
+    (is (eq :git
+            (nshell.domain.prompting:prompt-segment-kind
+             (first (nshell.domain.prompting:prompt-model-right-segments pm)))))
+    (let ((returned (nshell.domain.prompting:prompt-model-segments pm)))
+      (setf (first returned)
+            (nshell.domain.prompting:make-prompt-segment "returned" :path))
+      (is (string= "h"
+                   (nshell.domain.prompting:prompt-segment-text
+                    (first (nshell.domain.prompting:prompt-model-segments pm))))))))
+
+(test prompt-construction-boundary-hides-raw-copy-and-validates-values
+  "Prompt domain values are created through semantic factories, not generated copy APIs."
+  (is (not (fboundp 'nshell.domain.prompting::copy-prompt-model)))
+  (is (not (fboundp 'nshell.domain.prompting::copy-prompt-segment)))
+  (signals error
+    (nshell.domain.prompting:make-prompt-model :hostname :not-a-string))
+  (signals error
+    (nshell.domain.prompting:make-prompt-model :segments :not-a-list))
+  (signals error
+    (nshell.domain.prompting:make-prompt-segment 42 :host))
+  (signals error
+    (nshell.domain.prompting:make-prompt-segment "x" 'host)))
+
 (test git-segment-resolves-branch-and-dirty-marker
   "A :git segment is resolved through the domain git status resolver."
   (let ((nshell.domain.prompting:*git-status-resolver*

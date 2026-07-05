@@ -17,6 +17,7 @@
   (let ((output nil)
         (output-materialized-p nil)
         (output-pipe-stream nil)
+        (output-redirected-p nil)
         (error-output t))
     (labels ((current-output ()
                (unless output-materialized-p
@@ -42,6 +43,7 @@
                 (%open-pipeline-output-redirect kind target redirect-streams)
               (setf output stream
                     output-materialized-p t
+                    output-redirected-p t
                     redirect-streams streams)))
            ((:2> :2>>)
             (multiple-value-bind (stream streams)
@@ -53,10 +55,14 @@
                 (%open-pipeline-output-redirect kind target redirect-streams)
               (setf output stream
                     output-materialized-p t
-                    error-output stream
+                    output-redirected-p t
+                    error-output :output
                     redirect-streams streams)))
            (:2>&1
-            (setf error-output (current-output)))))
+            (setf error-output
+                  (if output-redirected-p
+                      :output
+                      (current-output))))))
        stage-redirects)
       (values (current-output)
               error-output

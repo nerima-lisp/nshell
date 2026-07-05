@@ -32,147 +32,74 @@
         :suggest-update
         (:buffer "" :cursor-pos 0))))
 
-(test input-state-sudo-prefix-operation-classifies-buffer
-  (let ((insert (nshell.presentation::sudo-prefix-operation-for-buffer "apt update"))
-        (remove-prefix (nshell.presentation::sudo-prefix-operation-for-buffer
-                        "sudo apt update"))
-        (remove-command (nshell.presentation::sudo-prefix-operation-for-buffer
-                         "sudo")))
-    (is (nshell.presentation::%sudo-prefix-operation-p insert))
-    (is (not (fboundp 'nshell.presentation::sudo-prefix-operation-p)))
-    (is (eq :insert-prefix
-            (nshell.presentation::sudo-prefix-operation-kind insert)))
-    (is (eq :remove-prefix
-            (nshell.presentation::sudo-prefix-operation-kind remove-prefix)))
-    (is (eq :remove-command
-            (nshell.presentation::sudo-prefix-operation-kind remove-command)))))
+(test input-state-alt-s-projects-prefix-cases-through-reducer
+  (dolist (scenario '(("apt update" 3 "sudo apt update" 8)
+                      ("sudo apt update" 3 "apt update" 0)
+                      ("sudo" 4 "" 0)))
+    (destructuring-bind (buffer cursor-pos expected-buffer expected-cursor-pos)
+        scenario
+      (let ((state (input-state :buffer buffer :cursor-pos cursor-pos)))
+        (with-expected-input-state-reduction (new-state output)
+            state
+            (reduce-once state :alt-s)
+            :suggest-update
+            (:buffer expected-buffer
+             :cursor-pos expected-cursor-pos))))))
 
-(test input-state-sudo-prefix-operation-raw-accessors-stay-internal
-  "sudo-prefix-operation exposes explicit readers; generated slot readers stay internal."
-  (let ((operation (nshell.presentation::sudo-prefix-operation-for-buffer "apt update")))
-    (is (fboundp 'nshell.presentation::%sudo-prefix-operation-kind))
-    (is (not (eq (symbol-function
-                  'nshell.presentation::sudo-prefix-operation-kind)
-                 (symbol-function
-                  'nshell.presentation::%sudo-prefix-operation-kind))))
-    (is (not (fboundp 'nshell.presentation::make-sudo-prefix-operation)))
-    (is (not (fboundp 'nshell.presentation::sudo-prefix-edit-for-buffer)))
-    (is (eq :insert-prefix
-            (nshell.presentation::sudo-prefix-operation-kind operation)))))
-
-(test input-state-sudo-prefix-edit-projects-buffer-and-cursor
-  (labels ((edit-for (buffer)
-             (nshell.presentation::sudo-prefix-edit-for-operation
-              (nshell.presentation::sudo-prefix-operation-for-buffer buffer))))
-    (let ((edit (edit-for "apt update")))
-      (is (nshell.presentation::%sudo-prefix-edit-p edit))
-      (is (nshell.presentation::%sudo-prefix-plan-p
-           (nshell.presentation::sudo-prefix-edit-plan edit)))
-      (is (not (fboundp 'nshell.presentation::sudo-prefix-edit-p)))
-      (is (not (fboundp 'nshell.presentation::sudo-prefix-plan-p)))
-      (is (not (fboundp 'nshell.presentation::make-sudo-prefix-edit)))
-      (is (not (fboundp 'nshell.presentation::make-sudo-prefix-plan)))
-      (is (not (fboundp 'nshell.presentation::sudo-prefix-edit-splice)))
-      (is (not (fboundp 'nshell.presentation::sudo-prefix-edit-cursor-delta)))
-      (is (string= "sudo apt update"
-                   (nshell.presentation::sudo-prefix-edit-buffer edit
-                                                                 "apt update")))
-      (is (= 8 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 3))))
-    (let ((edit (edit-for "sudo apt update")))
-      (is (string= "apt update"
-                   (nshell.presentation::sudo-prefix-edit-buffer edit
-                                                                 "sudo apt update")))
-      (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 3))))
-    (let ((edit (edit-for "sudo")))
-      (is (string= ""
-                   (nshell.presentation::sudo-prefix-edit-buffer edit "sudo")))
-      (is (= 0 (nshell.presentation::sudo-prefix-edit-cursor-pos edit 4))))))
-
-(test input-state-dispatch-action-classifies-key-events
-  (labels ((action-for (type &optional char data)
-             (nshell.presentation::input-dispatch-action-for-key-event
-              (input-key-event type char nil data))))
-    (let ((char-action (action-for :char #\x))
-          (next-history-action (action-for :ctrl-n))
-          (eol-action (action-for :ctrl-e))
-          (paste-action (action-for :paste nil "abc"))
-          (unknown-action (action-for :unknown)))
-      (is (nshell.presentation::%input-dispatch-action-p char-action))
-      (is (eq :insert-char
-              (nshell.presentation::input-dispatch-action-kind char-action)))
-      (is (char= #\x
-                 (nshell.presentation::input-dispatch-action-value
-                  char-action)))
-      (is (eq :emit
-              (nshell.presentation::input-dispatch-action-kind
-               next-history-action)))
-      (is (eq :history-next
-              (nshell.presentation::input-dispatch-action-value
-               next-history-action)))
-      (is (eq :move-eol-or-accept-suggestion
-              (nshell.presentation::input-dispatch-action-kind eol-action)))
-      (is (eq :paste
-              (nshell.presentation::input-dispatch-action-kind paste-action)))
-      (is (eq :none
-              (nshell.presentation::input-dispatch-action-kind
-               unknown-action))))))
-
-(test input-state-dispatch-action-raw-accessors-stay-internal
-  "input-dispatch-action exposes explicit readers; generated slots and predicates stay internal."
-  (let ((action (nshell.presentation::input-dispatch-action-for-key-event
-                 (input-key-event :ctrl-l))))
-    (is (not (fboundp 'nshell.presentation::input-dispatch-action-p)))
-    (is (fboundp 'nshell.presentation::%input-dispatch-action-kind))
-    (is (not (eq (symbol-function
-                  'nshell.presentation::input-dispatch-action-kind)
-                 (symbol-function
-                  'nshell.presentation::%input-dispatch-action-kind))))
-    (is (not (fboundp 'nshell.presentation::make-input-dispatch-action)))
-    (is (eq :emit
-            (nshell.presentation::input-dispatch-action-kind action)))
-    (is (eq :clear-screen
-            (nshell.presentation::input-dispatch-action-value action)))))
-
-(test input-state-dispatch-transition-commits-action-output
-  "Dispatch actions project to transition values before returning reducer values."
-  (let* ((state (completion-session-state
-                 :buffer "git"
-                 :cursor-pos 2
-                 :completion-index 1
-                 :suggestion " status"))
-         (action (nshell.presentation::input-dispatch-action-for-key-event
-                  (input-key-event :ctrl-l)))
-         (transition (nshell.presentation::input-dispatch-transition-for-action
-                      state
-                      action)))
-    (is (nshell.presentation::%input-dispatch-transition-p transition))
-    (is (not (fboundp 'nshell.presentation::input-dispatch-transition-p)))
-    (is (not (fboundp 'nshell.presentation::make-input-dispatch-transition)))
-    (is (fboundp 'nshell.presentation::%input-dispatch-transition-state))
-    (is (eq :clear-screen
-            (nshell.presentation::input-dispatch-transition-output
-             transition)))
+(test input-state-public-dispatch-inserts-char-and-paste
+  (let ((state (input-state :buffer "ab" :cursor-pos 1)))
     (with-expected-input-state-reduction (new-state output)
         state
-        (nshell.presentation::commit-input-dispatch-transition transition)
+        (reduce-once state :char #\x)
+        :suggest-update
+        (:buffer "axb" :cursor-pos 2)))
+  (let ((state (input-state :buffer "ab" :cursor-pos 1)))
+    (with-expected-input-state-reduction (new-state output)
+        state
+        (reduce-once state :paste nil nil (list :text "XY"))
+        :suggest-update
+        (:buffer "aXYb" :cursor-pos 3))))
+
+(test input-state-public-dispatch-moves-to-eol
+  (let ((state (completion-session-state
+                :buffer "git"
+                :cursor-pos 1
+                :completion-index 1
+                :suggestion " status")))
+    (with-expected-input-state-reduction (new-state output)
+        state
+        (reduce-once state :ctrl-e)
+        :redraw
+        (:buffer "git"
+         :cursor-pos 3
+         :completion-index 1
+         :suggestion " status"))))
+
+(test input-state-ctrl-l-emits-clear-screen-without-state-change
+  (let ((state (completion-session-state
+                :buffer "git"
+                :cursor-pos 2
+                :completion-index 1
+                :suggestion " status")))
+    (with-expected-input-state-reduction (new-state output)
+        state
+        (reduce-once state :ctrl-l)
         :clear-screen
         (:buffer "git"
          :cursor-pos 2
          :completion-index 1
          :suggestion " status"))))
 
-(test input-state-dispatch-action-applies-output-actions-without-state-change
-  (let* ((state (completion-session-state
-                 :buffer "git"
-                 :cursor-pos 2
-                 :completion-index 1
-                 :suggestion " status"))
-         (action (nshell.presentation::input-dispatch-action-for-key-event
-                  (input-key-event :ctrl-l))))
+(test input-state-unknown-key-event-noops-through-reducer
+  (let ((state (completion-session-state
+                :buffer "git"
+                :cursor-pos 2
+                :completion-index 1
+                :suggestion " status")))
     (with-expected-input-state-reduction (new-state output)
         state
-        (nshell.presentation::reduce-insert-input-state-action state action)
-        :clear-screen
+        (reduce-once state :unknown)
+        :none
         (:buffer "git"
          :cursor-pos 2
          :completion-index 1

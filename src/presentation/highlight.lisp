@@ -1,7 +1,7 @@
 (in-package #:nshell.presentation)
 
-;; Highlight data tables and span type.
-(defstruct (highlight-span
+;; Highlight data tables and span value object.
+(defstruct (%highlight-span
             (:constructor %make-highlight-span (start end role))
             (:conc-name %highlight-span-))
   (start 0 :type integer :read-only t)

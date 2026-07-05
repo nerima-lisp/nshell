@@ -332,7 +332,7 @@
             #:trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion
              #:render-completions #:cycle-completion #:apply-completion
-             #:highlight-line #:highlight-span
+             #:highlight-line
              #:highlight-span-start #:highlight-span-end
              #:highlight-span-role
              #:highlight->ansi #:theme-color->ansi #:segment-kind->role))

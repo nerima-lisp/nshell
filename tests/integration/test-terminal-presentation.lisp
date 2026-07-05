@@ -54,7 +54,15 @@
 (test terminal-highlight-span-constructor-is-internal-boundary
   "Highlight spans are produced by highlight-line rather than public raw construction."
   (is (not (fboundp 'nshell.presentation::make-highlight-span)))
+  (is (not (fboundp 'nshell.presentation::highlight-span-p)))
+  (is (not (fboundp 'nshell.presentation::copy-highlight-span)))
   (is (fboundp 'nshell.presentation::%make-highlight-span)))
+
+(test terminal-highlight-span-type-is-internal-boundary
+  "Highlight spans are opaque presentation values with public projections only."
+  (let ((span (first (nshell.presentation:highlight-line "| echo nope"))))
+    (is (typep span 'nshell.presentation::%highlight-span))
+    (is (not (find-symbol "HIGHLIGHT-SPAN" :nshell.presentation)))))
 
 (test terminal-highlight-span-raw-accessors-stay-internal
   "Highlight span projections stay behind explicit public accessors."

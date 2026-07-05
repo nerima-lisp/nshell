@@ -77,7 +77,7 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
              (shell-token-end suggestion operator-end))
             (t operator-end)))))))
 
-(defstruct (suggestion-acceptance-segment
+(defstruct (%suggestion-acceptance-segment
             (:constructor %make-suggestion-acceptance-segment (end))
             (:conc-name %suggestion-acceptance-segment-))
   (end 0 :type fixnum :read-only t))
@@ -85,7 +85,7 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
 (defun suggestion-acceptance-segment-end (segment)
   (%suggestion-acceptance-segment-end segment))
 
-(defstruct (suggestion-acceptance
+(defstruct (%suggestion-acceptance
             (:constructor %make-suggestion-acceptance (accepted remaining))
             (:conc-name %suggestion-acceptance-))
   (accepted "" :type string :read-only t)
@@ -97,7 +97,7 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
 (defun suggestion-acceptance-remaining (acceptance)
   (%suggestion-acceptance-remaining acceptance))
 
-(defstruct (suggestion-append-plan
+(defstruct (%suggestion-append-plan
             (:constructor %make-suggestion-append-plan (splice))
             (:conc-name %suggestion-append-plan-))
   (splice (error "SPLICE is required.") :type buffer-splice :read-only t))
@@ -105,10 +105,10 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
 (defun suggestion-append-plan-splice (plan)
   (%suggestion-append-plan-splice plan))
 
-(defstruct (suggestion-append-edit
+(defstruct (%suggestion-append-edit
             (:constructor %make-suggestion-append-edit (plan remaining))
             (:conc-name %suggestion-append-edit-))
-  (plan (error "PLAN is required.") :type suggestion-append-plan :read-only t)
+  (plan (error "PLAN is required.") :type %suggestion-append-plan :read-only t)
   (remaining nil :type (or null string) :read-only t))
 
 (defun suggestion-append-edit-plan (edit)

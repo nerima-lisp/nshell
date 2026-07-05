@@ -206,13 +206,15 @@
     (is (fboundp 'nshell.presentation::suggestion-next-acceptance-segment))
     (is (not (fboundp 'nshell.presentation::make-suggestion-acceptance-segment)))
     (is (not (fboundp 'nshell.presentation::%suggestion-next-word-end)))
-    (is (nshell.presentation::suggestion-acceptance-segment-p segment))
+    (is (nshell.presentation::%suggestion-acceptance-segment-p segment))
+    (is (not (fboundp 'nshell.presentation::suggestion-acceptance-segment-p)))
     (is (= 7
            (nshell.presentation::suggestion-acceptance-segment-end segment)))
     (is (fboundp 'nshell.presentation::%make-suggestion-acceptance))
     (is (fboundp 'nshell.presentation::%suggestion-acceptance-accepted))
     (is (fboundp 'nshell.presentation::%suggestion-acceptance-remaining))
     (is (not (fboundp 'nshell.presentation::make-suggestion-acceptance)))
+    (is (not (fboundp 'nshell.presentation::suggestion-acceptance-p)))
     (is (not (fboundp 'nshell.presentation::suggestion-next-word-end)))
     (is (string= " status"
                  (nshell.presentation::suggestion-acceptance-accepted acceptance)))
@@ -243,7 +245,9 @@
     (is (not (fboundp 'nshell.presentation::make-suggestion-append-edit)))
     (is (not (fboundp 'nshell.presentation::suggestion-append-edit-splice)))
     (let ((plan (nshell.presentation::suggestion-append-edit-plan edit)))
-      (is (nshell.presentation::suggestion-append-plan-p plan))
+      (is (nshell.presentation::%suggestion-append-plan-p plan))
+      (is (not (fboundp 'nshell.presentation::suggestion-append-plan-p)))
+      (is (not (fboundp 'nshell.presentation::suggestion-append-edit-p)))
       (is (nshell.presentation::buffer-splice-p
            (nshell.presentation::suggestion-append-plan-splice plan))))
     (is (string= "git status"

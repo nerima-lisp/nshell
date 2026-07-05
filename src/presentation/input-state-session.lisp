@@ -14,7 +14,7 @@
 (defparameter +argument-session-preserving-key-event-types+
   '(:alt-dot))
 
-(defstruct (input-session-transition-policy
+(defstruct (%input-session-transition-policy
              (:constructor %make-input-session-transition-policy
                  (&key preserve-all-p
                        preserve-completion-p
@@ -26,7 +26,7 @@
   (preserve-yank-session-p nil :type boolean :read-only t)
   (preserve-argument-session-p nil :type boolean :read-only t))
 
-(defstruct (input-session-reduction
+(defstruct (%input-session-reduction
              (:constructor %make-input-session-reduction
                  (state output))
              (:conc-name %input-session-reduction-))

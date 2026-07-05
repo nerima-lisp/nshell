@@ -376,11 +376,12 @@
                   state
                   state
                   (input-key-event :ctrl-l))))
-    (is (nshell.presentation::input-session-transition-policy-p policy))
+    (is (nshell.presentation::%input-session-transition-policy-p policy))
     (is (nshell.presentation::input-session-transition-policy-preserve-all-p policy))
     (is (nshell.presentation::input-session-transition-policy-preserve-completion-p policy))
     (is (not (nshell.presentation::input-session-transition-policy-preserve-yank-session-p policy)))
     (is (not (nshell.presentation::input-session-transition-policy-preserve-argument-session-p policy)))
+    (is (not (fboundp 'nshell.presentation::input-session-transition-policy-p)))
     (is (not (fboundp 'nshell.presentation::make-input-session-transition-policy)))))
 
 (test input-state-session-reduction-is-private-value
@@ -388,8 +389,9 @@
          (reduction (nshell.presentation::input-session-reduction-for-key-event
                      state
                      (input-key-event :char #\c))))
-    (is (nshell.presentation::input-session-reduction-p reduction))
+    (is (nshell.presentation::%input-session-reduction-p reduction))
     (is (not (listp reduction)))
+    (is (not (fboundp 'nshell.presentation::input-session-reduction-p)))
     (is (not (fboundp 'nshell.presentation::make-input-session-reduction)))
     (is (eq :suggest-update
             (nshell.presentation::input-session-reduction-output reduction)))

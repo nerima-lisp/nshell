@@ -6,7 +6,25 @@
 
 (in-suite execution-domain-tests)
 
+(defun execution-domain-external-symbol-p (name)
+  (eq :external
+      (nth-value 1 (find-symbol name '#:nshell.domain.execution))))
+
 ;;; Command tests
+(test command-value-boundary-is-public-api-only
+  "Command exposes constructor and projections, not raw structure internals."
+  (is (execution-domain-external-symbol-p "MAKE-COMMAND"))
+  (is (execution-domain-external-symbol-p "COMMAND-NAME"))
+  (is (execution-domain-external-symbol-p "COMMAND-ARGS"))
+  (is (execution-domain-external-symbol-p "COMMAND-TO-LIST"))
+  (is (not (execution-domain-external-symbol-p "COMMAND-NAME-STR")))
+  (is (not (execution-domain-external-symbol-p "COMMAND-ARGS-LIST")))
+  (is (not (fboundp 'nshell.domain.execution::%make-command)))
+  (is (not (fboundp 'nshell.domain.execution::copy-command)))
+  (is (not (fboundp 'nshell.domain.execution::command-p)))
+  (is (fboundp 'nshell.domain.execution::%allocate-command))
+  (is (fboundp 'nshell.domain.execution::%make-command-with-invariants)))
+
 (test command-creation
   "Command can be created with name and optional args"
   (let ((cmd (nshell.domain.execution:make-command "ls" '("-l" "-a"))))
@@ -24,6 +42,13 @@
   (let ((cmd (nshell.domain.execution:make-command "echo" '("hello" "world"))))
     (is (equal '("echo" "hello" "world")
                (nshell.domain.execution:command-to-list cmd)))))
+
+(test command-rejects-invalid-values-at-domain-boundary
+  "Command construction validates values before allocating the structure."
+  (signals type-error
+    (nshell.domain.execution:make-command :echo '("hello")))
+  (signals type-error
+    (nshell.domain.execution:make-command "echo" "hello")))
 
 (test command-projections-are-domain-owned
   "Command name and argument projections cannot mutate command state."

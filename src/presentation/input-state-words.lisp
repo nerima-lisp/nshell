@@ -2,7 +2,7 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (word-motion-target
+(defstruct (%word-motion-target
             (:constructor %make-word-motion-target (cursor-pos))
             (:conc-name %word-motion-target-))
   (cursor-pos 0 :type fixnum :read-only t))
@@ -52,17 +52,17 @@
      (word-motion-target-cursor-pos
       (word-motion-target-right buffer cursor)))))
 
-(defstruct (word-transform-plan
+(defstruct (%word-transform-plan
             (:constructor %make-word-transform-plan (start end replacement))
             (:conc-name %word-transform-plan-))
   (start 0 :type fixnum :read-only t)
   (end 0 :type fixnum :read-only t)
   (replacement "" :type string :read-only t))
 
-(defstruct (word-transform-edit
+(defstruct (%word-transform-edit
             (:constructor %make-word-transform-edit (plan))
             (:conc-name %word-transform-edit-))
-  (plan (error "PLAN is required.") :type word-transform-plan :read-only t))
+  (plan (error "PLAN is required.") :type %word-transform-plan :read-only t))
 
 (defun word-transform-edit-plan (edit)
   (%word-transform-edit-plan edit))
@@ -134,7 +134,7 @@
   "Capitalize the shell token at or after the cursor."
   (transform-word-at-cursor state #'capitalize-token-text))
 
-(defstruct (word-transposition-plan
+(defstruct (%word-transposition-plan
             (:constructor %make-word-transposition-plan
                 (left-start left-end middle-start middle-end right-start right-end))
             (:conc-name %word-transposition-plan-))
@@ -145,10 +145,10 @@
   (right-start 0 :type fixnum :read-only t)
   (right-end 0 :type fixnum :read-only t))
 
-(defstruct (word-transposition
+(defstruct (%word-transposition
             (:constructor %make-word-transposition (plan))
             (:conc-name %word-transposition-))
-  (plan (error "PLAN is required.") :type word-transposition-plan :read-only t))
+  (plan (error "PLAN is required.") :type %word-transposition-plan :read-only t))
 
 (defun word-transposition-plan (transposition)
   (%word-transposition-plan transposition))

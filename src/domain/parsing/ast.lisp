@@ -1,11 +1,19 @@
 ;;; AST Node Types
 (in-package #:nshell.domain.parsing)
 
+(defun %ensure-ast-string (value field-name)
+  (unless (stringp value)
+    (error "~A must be a string: ~S" field-name value))
+  value)
+
 (defun %copy-ast-list (items)
-  (copy-list (or items '())))
+  (let ((items (or items '())))
+    (unless (listp items)
+      (error "AST list slot must be a list: ~S" items))
+    (copy-list items)))
 
 (defun %copy-command-args (args)
-  (mapcar #'%command-arg args))
+  (mapcar #'%command-arg (%copy-ast-list args)))
 
 (defstruct (ast-node (:constructor %make-ast-node (type &optional span)))
   (type :unknown :type keyword :read-only t)
@@ -88,9 +96,27 @@
 (defun make-while-node (condition body &optional span)
   (%make-while-node condition (%copy-ast-list body) span))
 
-(defstruct (case-clause (:constructor make-case-clause (pattern body)))
+(defstruct (case-clause
+            (:constructor %allocate-case-clause)
+            (:copier nil)
+            (:predicate %case-clause-p)
+            (:conc-name %case-clause-))
   (pattern "*" :type string :read-only t)
   (body nil :type list :read-only t))
+
+(defun case-clause-p (value)
+  (%case-clause-p value))
+
+(defun make-case-clause (pattern body)
+  (%allocate-case-clause
+   :pattern (%ensure-ast-string pattern "CASE-CLAUSE pattern")
+   :body (%copy-ast-list body)))
+
+(defun case-clause-pattern (clause)
+  (%case-clause-pattern clause))
+
+(defun case-clause-body (clause)
+  (%copy-ast-list (%case-clause-body clause)))
 
 (defstruct (case-node (:include ast-node)
                       (:constructor %make-case-node (value clauses &optional span)))
@@ -128,9 +154,26 @@
 
 ;; -- Arg utilities ------------------------------------------
 (defstruct (command-arg
-            (:constructor make-command-arg (value &optional quote-style)))
+            (:constructor %allocate-command-arg)
+            (:copier nil)
+            (:predicate %command-arg-p)
+            (:conc-name %command-arg-))
   (value "" :type string :read-only t)
   (quote-style nil :type (member nil :single :double) :read-only t))
+
+(defun command-arg-p (value)
+  (%command-arg-p value))
+
+(defun make-command-arg (value &optional quote-style)
+  (%allocate-command-arg
+   :value (%ensure-ast-string value "COMMAND-ARG value")
+   :quote-style (%validated-command-arg-quote-style value quote-style)))
+
+(defun command-arg-value (arg)
+  (%command-arg-value arg))
+
+(defun command-arg-quote-style (arg)
+  (%command-arg-quote-style arg))
 
 (defun %command-arg (arg)
   (etypecase arg

@@ -587,6 +587,17 @@
   (is (fboundp 'nshell.domain.parsing::%make-error-node))
   (is (fboundp 'nshell.domain.parsing::%make-incomplete-node)))
 
+(test ast-node-value-object-constructors-are-domain-boundaries
+  "AST value objects expose factories while hiding raw allocation and copy APIs."
+  (is (not (fboundp 'nshell.domain.parsing::copy-command-arg)))
+  (is (not (fboundp 'nshell.domain.parsing::copy-case-clause)))
+  (is (fboundp 'nshell.domain.parsing::%allocate-command-arg))
+  (is (fboundp 'nshell.domain.parsing::%allocate-case-clause))
+  (signals error (nshell.domain.parsing:make-command-arg 42))
+  (signals error (nshell.domain.parsing:make-command-arg "value" :invalid))
+  (signals error (nshell.domain.parsing:make-case-clause 42 '()))
+  (signals error (nshell.domain.parsing:make-case-clause "pattern" "not-a-list")))
+
 (test ast-node-constructors-copy-list-slots
   "AST constructors should not share mutable list slots with callers."
   (let* ((args (list "one"))
@@ -656,6 +667,15 @@
          (node (nshell.domain.parsing::make-case-node "value" clauses)))
     (setf (car clauses) clause-replacement)
     (is (eq clause-original (first (nshell.domain.parsing:case-node-clauses node)))))
+  (let* ((body-original (nshell.domain.parsing:make-command-node "echo" '("case-body")))
+         (body-replacement (nshell.domain.parsing:make-command-node "echo" '("changed-body")))
+         (body (list body-original))
+         (clause (nshell.domain.parsing:make-case-clause "a" body)))
+    (setf (car body) body-replacement)
+    (is (eq body-original (first (nshell.domain.parsing:case-clause-body clause))))
+    (let ((projected-body (nshell.domain.parsing:case-clause-body clause)))
+      (setf (car projected-body) body-replacement)
+      (is (eq body-original (first (nshell.domain.parsing:case-clause-body clause))))))
   (let* ((body-original (nshell.domain.parsing:make-command-node "echo" '("begin")))
          (body-replacement (nshell.domain.parsing:make-command-node "echo" '("changed")))
          (body (list body-original))

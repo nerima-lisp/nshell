@@ -21,6 +21,37 @@
   (is (not (nshell.domain.completion::%candidate-description-present-p
             (nshell.domain.completion:make-candidate "tool")))))
 
+(test make-candidate-normalizes-optional-values
+  "make-candidate keeps optional nil values at the domain defaults."
+  (let ((candidate (nshell.domain.completion:make-candidate "tool"
+                                                            :description nil
+                                                            :score nil)))
+    (is (string= "tool"
+                 (nshell.domain.completion:candidate-text candidate)))
+    (is (eq :command
+            (nshell.domain.completion:candidate-kind candidate)))
+    (is (string= ""
+                 (nshell.domain.completion:candidate-description candidate)))
+    (is (= 0
+           (nshell.domain.completion:candidate-score candidate)))))
+
+(test completion-candidate-construction-boundary-is-closed
+  "candidate construction rejects invalid values and keeps raw copy construction unbound."
+  (multiple-value-bind (copy-symbol copy-status)
+      (find-symbol "COPY-%COMPLETION-CANDIDATE" '#:nshell.domain.completion)
+    (is (fboundp 'nshell.domain.completion::%make-completion-candidate))
+    (is (fboundp 'nshell.domain.completion::%allocate-completion-candidate))
+    (is (or (null copy-status)
+            (not (fboundp copy-symbol)))))
+  (signals type-error
+    (nshell.domain.completion:make-candidate 42))
+  (signals type-error
+    (nshell.domain.completion:make-candidate "tool" :kind "command"))
+  (signals type-error
+    (nshell.domain.completion:make-candidate "tool" :description :bad))
+  (signals type-error
+    (nshell.domain.completion:make-candidate "tool" :score "10")))
+
 (test completion-rank-score-applies-exact-and-prefix-bonuses
   "completion-rank-score stacks bonuses: exact (+100000), prefix (+10000), described (+1000)."
   (flet ((score (prefix text &key (description "") (base 0))

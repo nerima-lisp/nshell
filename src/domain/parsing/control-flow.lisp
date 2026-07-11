@@ -1,10 +1,7 @@
 (in-package #:nshell.domain.parsing)
 
 (declaim (ftype (function (list) t)
-                %group-control-flow-next
-                %group-control-flow-if)
-         (ftype (function (t) t)
-                group-control-flow))
+                %group-control-flow-if))
 
 (defstruct (%control-flow-body-scan
             (:constructor %make-control-flow-body-scan
@@ -18,6 +15,27 @@
                 (node rest)))
   (node nil :read-only t)
   (rest nil :type list :read-only t))
+
+(defmacro %with-control-flow-body-scan ((body rest terminator)
+                                        nodes
+                                        terminators
+                                        &body forms)
+  (let ((scan (gensym "SCAN")))
+    `(let* ((,scan (%group-control-flow-body ,nodes ,terminators))
+            (,body (%control-flow-body-scan-body ,scan))
+            (,rest (%control-flow-body-scan-rest ,scan))
+       (,terminator (%control-flow-body-scan-terminator ,scan)))
+       ,@forms)))
+
+(defmacro %with-control-flow-clause-body-scan ((body rest terminator)
+                                               nodes
+                                               terminators
+                                               &body forms)
+  `(%with-control-flow-body-scan (,body ,rest ,terminator)
+       ,nodes
+       ,terminators
+     (declare (ignore ,terminator))
+     ,@forms))
 
 (defun %group-control-flow-body (nodes terminators)
   (let ((body nil)
@@ -67,13 +85,13 @@
     (%make-control-flow-clause-scan (nreverse clauses) remaining)))
 
 (defun %group-control-flow-with-end-body (nodes builder)
-  (let ((scan (%group-control-flow-body (rest nodes) '("end"))))
+  (%with-control-flow-body-scan (body rest terminator)
+      (rest nodes)
+      '("end")
+    (declare (ignore terminator))
     (%make-control-flow-node-grouping
-     (funcall builder
-              (%control-flow-body-scan-body scan))
-     (%consume-control-flow-terminator
-      (%control-flow-body-scan-rest scan)
-      "end"))))
+     (funcall builder body)
+     (%consume-control-flow-terminator rest "end"))))
 
 (defun %group-control-flow-else-if (condition then-branch rest)
   (let ((else-if
@@ -89,33 +107,40 @@
 (defun %group-control-flow-if-else (condition then-branch rest)
   (if (%else-if-header-p (first rest))
       (%group-control-flow-else-if condition then-branch rest)
-      (let ((scan (%group-control-flow-body (rest rest) '("end"))))
+      (%with-control-flow-body-scan (body scan-rest scan-terminator)
+          (rest rest)
+          '("end")
+        (declare (ignore scan-terminator))
         (%make-control-flow-node-grouping
-         (make-if-node condition
-                       then-branch
-                       (%control-flow-body-scan-body scan))
-         (%consume-control-flow-terminator
-          (%control-flow-body-scan-rest scan)
-          "end")))))
+         (make-if-node condition then-branch body)
+         (%consume-control-flow-terminator scan-rest "end")))))
 
 (defun %group-control-flow-if (nodes)
   (let* ((header (first nodes))
          (condition (%command-from-header-args header)))
-    (let ((scan (%group-control-flow-body (rest nodes) '("else" "end"))))
-      (let ((then-branch (%control-flow-body-scan-body scan))
-            (rest (%control-flow-body-scan-rest scan))
-            (terminator (%control-flow-body-scan-terminator scan)))
-        (cond
-          ((and terminator (string= terminator "else"))
-           (%group-control-flow-if-else condition then-branch rest))
-          ((and terminator (string= terminator "end"))
-           (%make-control-flow-node-grouping
-            (make-if-node condition then-branch)
-            (%consume-control-flow-terminator rest "end")))
-          (t
-           (%make-control-flow-node-grouping
-            (make-if-node condition then-branch)
-            rest)))))))
+    (%with-control-flow-body-scan (then-branch rest terminator)
+        (rest nodes)
+        '("else" "end")
+      (cond
+        ((and terminator (string= terminator "else"))
+         (%group-control-flow-if-else condition then-branch rest))
+        ((and terminator (string= terminator "end"))
+         (%make-control-flow-node-grouping
+          (make-if-node condition then-branch)
+          (%consume-control-flow-terminator rest "end")))
+        (t
+         (%make-control-flow-node-grouping
+          (make-if-node condition then-branch)
+          rest))))))
+
+(defun %control-flow-case-clause-parse-result (nodes)
+  (let ((pattern (%command-first-arg-value (first nodes) "*")))
+    (%with-control-flow-clause-body-scan (body rest terminator)
+        (rest nodes)
+        '("end")
+      (%make-control-flow-clause-parse-result
+       (list (make-case-clause pattern body))
+       rest))))
 
 (defstruct (%control-flow-for-header-binding
             (:constructor %make-control-flow-for-header-binding
@@ -153,21 +178,11 @@
 (defun %group-control-flow-case (nodes)
   (let* ((header (first nodes))
          (value (%command-first-arg-value header)))
-    (let ((scan
-            (%group-control-flow-clauses
-             nodes
-             (lambda (nodes)
-               (let ((pattern (%command-first-arg-value (first nodes) "*")))
-                 (let ((scan (%group-control-flow-body (rest nodes) '("end"))))
-                   (%make-control-flow-clause-parse-result
-                    (list (make-case-clause
-                           pattern
-                           (%control-flow-body-scan-body scan)))
-                    (%control-flow-body-scan-rest scan))))))))
-      (%make-control-flow-node-grouping
-       (make-case-node value
-                       (%control-flow-clause-scan-clauses scan))
-       (%control-flow-clause-scan-rest scan)))))
+    (%group-control-flow-case-node-grouping
+     value
+     (%group-control-flow-clauses
+      nodes
+      #'%control-flow-case-clause-parse-result))))
 
 (defstruct (%control-flow-switch-case-patterns
             (:constructor %make-control-flow-switch-case-patterns
@@ -178,179 +193,49 @@
   (%make-control-flow-switch-case-patterns
    (or (command-node-arg-values header) '("*"))))
 
-(defstruct (%control-flow-grouper-entry
-            (:constructor %make-control-flow-grouper-entry (keyword grouper)))
-  (keyword nil :type (or null string) :read-only t)
-  (grouper nil :read-only t))
+(defun %control-flow-switch-case-clause-parse-result (header nodes)
+  (let ((patterns (%control-flow-switch-case-patterns-values
+                   (%control-flow-switch-case-patterns-from-header
+                    header))))
+    (%with-control-flow-clause-body-scan (body rest terminator)
+        (rest nodes)
+        '("case" "end")
+      (%make-control-flow-clause-parse-result
+       (mapcar (lambda (pattern)
+                 (make-case-clause pattern body))
+               patterns)
+       rest))))
 
-(defun %control-flow-grouper-entry (keyword)
-  (let ((entry (assoc keyword +control-flow-grouper-specs+ :test #'string=)))
-    (when entry
-      (%make-control-flow-grouper-entry (car entry) (cdr entry)))))
+(defun %control-flow-switch-default-clause-parse-result (nodes)
+  (%with-control-flow-clause-body-scan (body rest terminator)
+      nodes
+      '("case" "end")
+    (%make-control-flow-clause-parse-result
+     (list (make-case-clause "*" body))
+     rest)))
 
-(defstruct (%control-flow-grouping-route
-            (:constructor %make-control-flow-grouping-route (keyword grouper)))
-  (keyword nil :type (or null string) :read-only t)
-  (grouper nil :read-only t))
-
-(defun %control-flow-grouping-route (keyword)
-  (let ((entry (%control-flow-grouper-entry keyword)))
-    (when entry
-      (%make-control-flow-grouping-route
-       (%control-flow-grouper-entry-keyword entry)
-       (%control-flow-grouper-entry-grouper entry)))))
-
-(defun %control-flow-grouper (keyword)
-  (let ((route (%control-flow-grouping-route keyword)))
-    (and route
-         (%control-flow-grouping-route-grouper route))))
+(defun %group-control-flow-case-node-grouping (value scan)
+  (%make-control-flow-node-grouping
+   (make-case-node value
+                   (%control-flow-clause-scan-clauses scan))
+   (%control-flow-clause-scan-rest scan)))
 
 (defun %group-control-flow-switch (nodes)
   (let* ((header (first nodes))
          (value (%command-first-arg-value header)))
-    (let ((scan
-            (%group-control-flow-clauses
-             nodes
-             (lambda (nodes)
-               (let* ((header (first nodes))
-                      (keyword (%command-keyword header)))
-                 (if (and keyword (string= keyword "case"))
-                     (let ((patterns
-                             (%control-flow-switch-case-patterns-values
-                              (%control-flow-switch-case-patterns-from-header
-                               header))))
-                       (let ((scan (%group-control-flow-body
-                                    (rest nodes)
-                                    '("case" "end"))))
-                         (%make-control-flow-clause-parse-result
-                          (mapcar (lambda (pattern)
-                                    (make-case-clause
-                                     pattern
-                                     (%control-flow-body-scan-body scan)))
-                                  patterns)
-                          (%control-flow-body-scan-rest scan))))
-                     (let ((scan (%group-control-flow-body
-                                  nodes
-                                  '("case" "end"))))
-                       (%make-control-flow-clause-parse-result
-                        (list (make-case-clause
-                               "*"
-                               (%control-flow-body-scan-body scan)))
-                        (%control-flow-body-scan-rest scan)))))))))
-      (%make-control-flow-node-grouping
-       (make-case-node value
-                       (%control-flow-clause-scan-clauses scan))
-       (%control-flow-clause-scan-rest scan)))))
+    (%group-control-flow-case-node-grouping
+     value
+     (%group-control-flow-clauses
+      nodes
+      (lambda (nodes)
+        (let* ((header (first nodes))
+               (keyword (%command-keyword header)))
+          (if (and keyword (string= keyword "case"))
+              (%control-flow-switch-case-clause-parse-result header nodes)
+              (%control-flow-switch-default-clause-parse-result nodes))))))))
 
 (defun %group-control-flow-begin (nodes)
   (%group-control-flow-with-end-body
    nodes
    (lambda (body)
      (make-begin-end-node body))))
-
-(defun %group-control-flow-next (nodes)
-  (let* ((node (first nodes))
-         (keyword (%command-keyword node)))
-    (let ((grouper (%control-flow-grouper keyword)))
-      (if grouper
-          (funcall grouper nodes)
-          (%make-control-flow-node-grouping
-           (group-control-flow node)
-           (rest nodes))))))
-
-(defstruct (%control-flow-boundary-consumption
-            (:constructor %make-control-flow-boundary-consumption
-                (separator rest-separators)))
-  (separator nil :read-only t)
-  (rest-separators nil :type list :read-only t))
-
-(defun %control-flow-boundary-consumption-from-consumed-commands
-    (commands rest separators)
-  (let ((command-cursor commands)
-        (separator-cursor separators)
-        (boundary nil))
-    (loop while (and command-cursor
-                     (not (eq command-cursor rest)))
-          do (setf boundary (first separator-cursor)
-                   command-cursor (rest command-cursor)
-                   separator-cursor (rest separator-cursor)))
-    (%make-control-flow-boundary-consumption boundary separator-cursor)))
-
-(defstruct (%control-flow-sequence-step
-            (:constructor %make-control-flow-sequence-step
-                (grouped-command boundary-separator rest-commands rest-separators)))
-  (grouped-command nil :read-only t)
-  (boundary-separator nil :read-only t)
-  (rest-commands nil :type list :read-only t)
-  (rest-separators nil :type list :read-only t))
-
-(defun %control-flow-sequence-step-result (commands separators)
-  (let* ((grouping (%group-control-flow-next commands))
-         (rest (%control-flow-node-grouping-rest grouping)))
-    (let ((consumption
-            (%control-flow-boundary-consumption-from-consumed-commands
-             commands rest separators)))
-      (%make-control-flow-sequence-step
-       (%control-flow-node-grouping-node grouping)
-       (%control-flow-boundary-consumption-separator consumption)
-       rest
-       (%control-flow-boundary-consumption-rest-separators consumption)))))
-
-(defstruct (%control-flow-sequence
-            (:constructor %make-control-flow-sequence
-                (commands separators)))
-  (commands nil :type list :read-only t)
-  (separators nil :type list :read-only t))
-
-(defun %control-flow-sequence-from-node (node)
-  (%make-control-flow-sequence
-   (sequence-node-commands node)
-   (sequence-node-separators node)))
-
-(defun %control-flow-sequence-single-command-p (sequence)
-  (and (%control-flow-sequence-commands sequence)
-       (null (rest (%control-flow-sequence-commands sequence)))))
-
-(defun %control-flow-sequence-background-p (sequence)
-  (eq :amp (first (%control-flow-sequence-separators sequence))))
-
-(defun %collapse-control-flow-sequence (sequence)
-  (let ((commands (%control-flow-sequence-commands sequence))
-        (separators (%control-flow-sequence-separators sequence)))
-    (if (and (%control-flow-sequence-single-command-p sequence)
-             (not (%control-flow-sequence-background-p sequence)))
-        (first commands)
-        (make-sequence-node commands separators))))
-
-(defun %group-control-flow-sequence (commands separators)
-  (let ((grouped-commands '())
-        (grouped-separators '())
-        (remaining-commands commands)
-        (remaining-separators separators))
-    (loop while remaining-commands
-          do (let ((step (%control-flow-sequence-step-result remaining-commands
-                                                             remaining-separators)))
-               (push (%control-flow-sequence-step-grouped-command step)
-                     grouped-commands)
-               (when (%control-flow-sequence-step-boundary-separator step)
-                 (push (%control-flow-sequence-step-boundary-separator step)
-                       grouped-separators))
-               (setf remaining-commands
-                     (%control-flow-sequence-step-rest-commands step)
-                     remaining-separators
-                     (%control-flow-sequence-step-rest-separators step))))
-    (%make-control-flow-sequence
-     (nreverse grouped-commands)
-     (nreverse grouped-separators))))
-
-(defun group-control-flow (ast)
-  (cond
-    ((sequence-node-p ast)
-      (let ((sequence (%control-flow-sequence-from-node ast)))
-        (%collapse-control-flow-sequence
-         (%group-control-flow-sequence
-          (%control-flow-sequence-commands sequence)
-          (%control-flow-sequence-separators sequence)))))
-    ((pipeline-node-p ast)
-     (make-pipeline-node (mapcar #'group-control-flow (pipeline-node-commands ast))))
-    (t ast)))

@@ -146,25 +146,20 @@
     (when spec
       (%redirect-kind-facts-from-spec spec))))
 
-(defun redirect-input-kind-p (kind)
-  (let ((facts (%redirect-kind-facts kind)))
-    (and facts
-         (%redirect-kind-facts-input-p facts))))
+(defmacro %define-redirect-kind-predicate (name accessor)
+  `(defun ,name (kind)
+     (let ((facts (%redirect-kind-facts kind)))
+       (and facts
+            (,accessor facts)))))
 
-(defun redirect-output-kind-p (kind)
-  (let ((facts (%redirect-kind-facts kind)))
-    (and facts
-         (%redirect-kind-facts-output-p facts))))
-
-(defun redirect-stderr-kind-p (kind)
-  (let ((facts (%redirect-kind-facts kind)))
-    (and facts
-         (%redirect-kind-facts-stderr-p facts))))
-
-(defun redirect-append-kind-p (kind)
-  (let ((facts (%redirect-kind-facts kind)))
-    (and facts
-         (%redirect-kind-facts-append-p facts))))
+(%define-redirect-kind-predicate redirect-input-kind-p
+  %redirect-kind-facts-input-p)
+(%define-redirect-kind-predicate redirect-output-kind-p
+  %redirect-kind-facts-output-p)
+(%define-redirect-kind-predicate redirect-stderr-kind-p
+  %redirect-kind-facts-stderr-p)
+(%define-redirect-kind-predicate redirect-append-kind-p
+  %redirect-kind-facts-append-p)
 
 (defun %redirect-mode (kind)
   (let ((facts (%redirect-kind-facts kind)))
@@ -354,23 +349,9 @@
   (separator nil :read-only t)
   (separator-token nil :read-only t))
 
-(defstruct (%reducer-entry-shape
-            (:constructor %make-reducer-entry-shape
-                (command separator separator-token)))
-  (command nil :read-only t)
-  (separator nil :read-only t)
-  (separator-token nil :read-only t))
-
-(defun %reducer-entry-shape-from-entry (entry)
-  (destructuring-bind (command separator separator-token) entry
-    (%make-reducer-entry-shape command separator separator-token)))
-
 (defun %reduced-command-entry-from-reducer-entry (entry)
-  (let ((shape (%reducer-entry-shape-from-entry entry)))
-    (%make-reduced-command-entry
-     (%reducer-entry-shape-command shape)
-     (%reducer-entry-shape-separator shape)
-     (%reducer-entry-shape-separator-token shape))))
+  (destructuring-bind (command separator separator-token) entry
+    (%make-reduced-command-entry command separator separator-token)))
 
 (defun %reduced-command-entries-from-reducer-entries (entries)
   (mapcar #'%reduced-command-entry-from-reducer-entry entries))

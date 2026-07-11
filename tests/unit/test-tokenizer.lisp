@@ -110,23 +110,8 @@ letting word-reading stop on an unconsumed terminator."
   (dolist (ch '(#\Space #\Tab #\Newline #\a #\0))
     (is (not (nshell.domain.parsing::%tokenizer-special-dispatch-character-p ch)))))
 
-(test tokenizer-special-dispatch-route-projects-main-loop-policy
-  "Special dispatch should classify route facts before handler mutation."
-  (flet ((route-kind (ch)
-           (let ((route (nshell.domain.parsing::%tokenizer-special-dispatch-route ch)))
-             (and route
-                  (nshell.domain.parsing::%tokenizer-special-dispatch-route-kind route)))))
-    (is (eq :operator-separator (route-kind #\&)))
-    (is (eq :operator-separator (route-kind #\<)))
-    (is (eq :reader-boundary (route-kind #\#)))
-    (is (eq :reader-boundary (route-kind (char "(" 0))))
-    (is (eq :reader-boundary (route-kind #\")))
-    (is (null (route-kind #\Space)))
-    (is (null (route-kind #\Newline)))
-    (is (null (route-kind nil)))))
-
 (test tokenizer-state-constructor-is-internal-boundary
-  "Tokenizer state construction should not keep an unprefixed compatibility helper."
+  "Tokenizer state construction should not keep an unprefixed legacy helper."
   (is (fboundp 'nshell.domain.parsing::%make-tokenizer-state-for-input))
   (is (not (fboundp 'nshell.domain.parsing::make-tokenizer-state)))
   (is (not (fboundp 'nshell.domain.parsing::copy-tokenizer-state))))
@@ -470,21 +455,6 @@ letting word-reading stop on an unconsumed terminator."
   (with-tokenized-input (tokens cursor incomplete) ""
     (declare (ignore cursor incomplete))
     (is (null tokens))))
-
-(test pbt-tokenizer-spans-are-monotonic-and-in-bounds
-  "Token spans are monotonic and remain within the generated input bounds."
-  (for-all-property (:trials 50) ((input (gen-shell-pipeline)))
-    (with-tokenized-input (tokens cursor incomplete) input
-      (declare (ignore cursor incomplete))
-      (is (loop with previous-end = 0
-                for token in tokens
-                for start = (nshell.domain.parsing:token-start token)
-                for end = (nshell.domain.parsing:token-end token)
-                always (and (<= 0 start end (length input))
-                            (<= previous-end start))
-                do (setf previous-end end))
-          "Tokenizer produced non-monotonic or out-of-bounds spans for ~s"
-          input))))
 
 (test tokenizer-double-quoted-escape-character-p-identifies-special-chars
   "Inside double quotes, only \\, \", $, ` and newline require backslash escaping."

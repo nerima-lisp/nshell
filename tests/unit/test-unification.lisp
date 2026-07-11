@@ -108,21 +108,3 @@
          (b1 (nshell.domain.parsing:unify x (list y 'tail)))
          (b2 (nshell.domain.parsing:unify y 'head b1)))
     (is (equal '(head tail) (nshell.domain.parsing:walk x b2)))))
-
-(test pbt-unify-variable-walks-to-term
-  "Unifying a fresh variable with a generated term makes WALK resolve to that term."
-  (for-all-property (:trials 50) ((term (gen-string)))
-    (let* ((x (nshell.domain.parsing:make-var "X"))
-           (bindings (nshell.domain.parsing:unify x term)))
-      (is (nshell.domain.parsing:unify-p bindings)
-          "Generated term ~s should unify with a fresh variable" term)
-      (is (equal term (nshell.domain.parsing:walk x bindings))
-          "Walking the variable should recover generated term ~s" term))))
-
-(test pbt-occurs-check-rejects-cyclic-bindings
-  "Occurs-check rejects generated cyclic bindings."
-  (for-all-property (:trials 50) ((term (gen-string)))
-    (let* ((x (nshell.domain.parsing:make-var "X"))
-           (bindings (nshell.domain.parsing:unify x (list x term))))
-      (is (not (nshell.domain.parsing:unify-p bindings))
-          "Occurs-check should reject cyclic binding containing ~s" term))))

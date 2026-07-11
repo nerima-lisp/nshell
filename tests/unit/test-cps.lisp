@@ -1,36 +1,34 @@
 (in-package #:nshell/test)
 (def-suite cps-tests :description "CPS trampoline tests" :in nshell-tests)
 (in-suite cps-tests)
-(test trampoline-sequential
+
+(defun %trampoline-result-sequence (sequence)
   (let ((results '()))
-    (nshell.presentation:trampoline
-     (lambda () (push 1 results)
-       (lambda () (push 2 results)
-         (lambda () (push 3 results) nil))))
-    (is (equal '(3 2 1) results))))
+    (labels ((next-continuation (remaining)
+               (when remaining
+                 (lambda ()
+                   (push (first remaining) results)
+                   (next-continuation (rest remaining))))))
+      (nshell.presentation:trampoline
+       (lambda ()
+         (next-continuation sequence))))
+    results))
+
+(defmacro assert-trampoline-sequence (expected values)
+  `(is (equal ,expected (%trampoline-result-sequence ,values))))
+
+(test trampoline-sequential
+  (assert-trampoline-sequence '(3 2 1) '(1 2 3)))
 
 (test trampoline-stops-after-done
-  (let ((results '()))
-    (nshell.presentation:trampoline
-     (lambda ()
-       (push :start results)
-       nil))
-    (is (equal '(:start) results))))
+  (assert-trampoline-sequence '(:start) '(:start)))
 
 (test pbt-trampoline-preserves-continuation-order
   (check-property (:trials 50)
       ((depth (gen-in-range 1 8) nil))
-    (let ((results '()))
-      (labels ((walk-continuations (n)
-                (if (zerop n)
-                    nil
-                    (lambda ()
-                       (push n results)
-                       (walk-continuations (1- n))))))
-        (nshell.presentation:trampoline
-         (lambda () (walk-continuations depth)))
-        (equal (loop for i from 1 to depth collect i)
-               results)))))
+    (equal (reverse (loop for i from 1 to depth collect i))
+           (%trampoline-result-sequence
+            (loop for i from 1 to depth collect i)))))
 
 (test trampoline-termination
-  (is (null nil)))
+  (assert-trampoline-sequence nil nil))

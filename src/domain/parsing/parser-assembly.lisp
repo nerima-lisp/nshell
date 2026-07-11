@@ -21,13 +21,10 @@
 (defun %command-list-separators (entries)
   (mapcar #'second entries))
 
-(defun %command-list-separator-layout-from-separators (separators)
-  separators)
-
 (defun %command-list-assembly-from-entries (entries)
   (let ((separators (%command-list-separators entries)))
     (cons (%command-list-commands entries)
-          (%command-list-separator-layout-from-separators separators))))
+          separators)))
 
 (defun %command-list-assembly-from-reduced-entries (entries)
   (%command-list-assembly-from-entries
@@ -114,21 +111,15 @@
       (cons (cons (%pending-pipeline-group-ast pipe-group) sequence-commands)
             (%empty-pending-pipeline-group))))
 
+(defstruct (%mixed-sequence-build-state
+            (:constructor %make-mixed-sequence-build-state
+                (sequence-commands sequence-separators pipe-group)))
+  (sequence-commands nil :type list)
+  (sequence-separators nil :type list)
+  (pipe-group nil :type list))
+
 (defun %empty-mixed-sequence-build-state ()
-  (list nil nil (%empty-pending-pipeline-group)))
-
-(defun %mixed-sequence-build-state-sequence-commands (state)
-  (first state))
-
-(defun %mixed-sequence-build-state-sequence-separators (state)
-  (second state))
-
-(defun %mixed-sequence-build-state-pipe-group (state)
-  (third state))
-
-(defun %make-mixed-sequence-build-state
-    (sequence-commands sequence-separators pipe-group)
-  (list sequence-commands sequence-separators pipe-group))
+  (%make-mixed-sequence-build-state nil nil (%empty-pending-pipeline-group)))
 
 (defun %mixed-sequence-build-state-push-command (state command)
   (%make-mixed-sequence-build-state

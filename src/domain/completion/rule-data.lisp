@@ -15,12 +15,6 @@
   (facts nil :type list)
   (rules nil :type list))
 
-(defstruct (proof-search (:constructor %make-proof-search (kb goal bindings depth)))
-  (kb nil :read-only t)
-  (goal '() :type list :read-only t)
-  (bindings '() :type list :read-only t)
-  (depth 0 :type integer :read-only t))
-
 (defparameter *max-proof-depth* 32
   "Maximum rule-expansion depth for completion proof search.")
 

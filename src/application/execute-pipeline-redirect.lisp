@@ -17,19 +17,6 @@ Redirect args (and their targets) are removed from the args list."
   "Split COMMANDS into a command-list redirect split result."
   (nshell.domain.parsing:split-command-nodes-redirects commands))
 
-(defun %write-redirected-stage-output (redirects output)
-  "Write OUTPUT to the redirect file if REDIRECTS contains an output redirect.
-Returns T when a file was written (suppressing stdout capture), NIL otherwise."
-  (multiple-value-bind (target mode)
-      (nshell.domain.parsing:redirect-output-spec redirects)
-    (when target
-      (with-open-file (stream target
-                              :direction :output
-                              :if-exists mode
-                              :if-does-not-exist :create)
-      (write-string (or output "") stream))
-      t)))
-
 ;; -- Logic: context-level redirect application ----------------------
 
 (defun %redirect-fn (context key)

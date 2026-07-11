@@ -38,6 +38,3 @@ EXIT-CODE is the exit code (nil if not yet executed)."
   "Return the exit code for ENTRY, or NIL if unknown."
   (history-entry-exit-code entry))
 
-(defun entry-equal-p (a b)
-  "Compare two history entries by text (same command text = same entry)."
-  (string= (history-entry-text a) (history-entry-text b)))

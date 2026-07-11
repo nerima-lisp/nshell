@@ -1,8 +1,5 @@
 (in-package #:nshell.application)
 
-(defun %interactive-history-query-case-sensitive-p (query)
-  (some #'upper-case-p query))
-
 (defun %interactive-history-query-valid-p (query)
   (and query
        (not (nshell.domain.parsing:shell-input-blank-p

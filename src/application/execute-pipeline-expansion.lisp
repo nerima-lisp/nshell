@@ -21,12 +21,6 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
                  (values ,parts ,pos)
                  (%try-substitution-match ,@(rest forms))))))))
 
-(defun %read-stream-to-string (stream)
-  (with-output-to-string (out)
-    (loop for char = (read-char stream nil nil)
-          while char
-          do (write-char char out))))
-
 (defun %make-pipeline-shell-context ()
   (make-shell-context
    :environment (nshell.domain.environment:inject-os-environment

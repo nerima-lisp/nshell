@@ -87,10 +87,6 @@
   (%parse-result-facts-complete-p
    (%parse-result-facts-from-result result)))
 
-(defun parse-empty-p (result)
-  (%parse-result-facts-empty-p
-   (%parse-result-facts-from-result result)))
-
 (defun parse-result-state (result)
   (%parse-result-facts-state
    (%parse-result-facts-from-result result)))

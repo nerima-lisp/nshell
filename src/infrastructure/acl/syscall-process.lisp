@@ -38,9 +38,6 @@
     (ignore-errors
      (sb-thread:join-thread thread))))
 
-(defun %join-process-output-copier (thread)
-  (%join-stream-copier thread))
-
 (defun %join-process-output-copiers (copiers)
   (dolist (copier copiers)
     (%join-stream-copier copier)))

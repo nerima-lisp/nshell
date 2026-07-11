@@ -148,10 +148,6 @@
        ,@(when within-input
            `((is (parse-diagnostic-within-input-p ,diagnostic ,line)))))))
 
-(defmacro assert-all-parsed-diagnostics-within-input (result line)
-  `(dolist (diagnostic (nshell.domain.parsing:parse-errors ,result))
-     (is (parse-diagnostic-within-input-p diagnostic ,line))))
-
 (defun parse-diagnostic-span= (diagnostic start end)
   (and (= start (nshell.domain.parsing:parse-diagnostic-start diagnostic))
        (= end (nshell.domain.parsing:parse-diagnostic-end diagnostic))))

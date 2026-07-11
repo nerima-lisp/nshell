@@ -115,7 +115,9 @@
     (is (equal "zz"
                (nshell.domain.completion::%catalog-command-projection-command
                 projection)))
-    (is (not (fboundp 'nshell.domain.completion::make-catalog-command-projection)))
+    (assert-package-function-boundaries
+        :package "NSHELL.DOMAIN.COMPLETION"
+        :absent (nshell.domain.completion::make-catalog-command-projection))
     (is (equal '("run" (:name "test" :description "run tests"))
                (nshell.domain.completion::%catalog-command-projection-subcommands
                 projection)))
@@ -141,77 +143,75 @@
                 projection)))))
 
 (test catalog-derived-data-helpers-are-internal-boundaries
-  "Catalog-derived-data helpers should not leave unprefixed compatibility symbols."
-  (labels ((defined-symbol-p (name)
-             (multiple-value-bind (symbol status)
-                 (find-symbol name "NSHELL.DOMAIN.COMPLETION")
-               (and status (fboundp symbol)))))
-    (dolist (old-name '("CATALOG-SUBCOMMAND-NAME"
-                        "CATALOG-SUBCOMMAND-DESCRIPTION"
-                        "CATALOG-COMMAND"
-                        "CATALOG-DESCRIPTION"
-                        "CATALOG-SYNOPSIS"
-                        "CATALOG-SUBCOMMANDS"
-                        "CATALOG-FLAGS"
-                        "CATALOG-OPTION-VALUES"
-                        "CATALOG-EXCLUSIVE-OPTIONS"
-                        "CATALOG-COMMAND-PROJECTION-P"
-                        "CATALOG-COMMAND-PROJECTION-COMMAND"
-                        "CATALOG-COMMAND-PROJECTION-DESCRIPTION"
-                        "CATALOG-COMMAND-PROJECTION-SYNOPSIS"
-                        "CATALOG-COMMAND-PROJECTION-SUBCOMMANDS"
-                        "CATALOG-COMMAND-PROJECTION-FLAGS"
-                        "CATALOG-COMMAND-PROJECTION-OPTION-VALUES"
-                        "CATALOG-COMMAND-PROJECTION-EXCLUSIVE-OPTIONS"
-                        "CATALOG-ENTRY-COMMAND-PROJECTION"
-                        "CATALOG-COMMAND-PROJECTIONS"
-                        "CATALOG-COMMAND-FACT"
-                        "CATALOG-DESCRIPTION-FACT"
-                        "CATALOG-FLAG-FACTS"
-                        "CATALOG-SUBCOMMAND-COMPLETION-FACTS"
-                        "CATALOG-SUBCOMMAND-DESCRIPTION-FACTS"
-                        "CATALOG-COMMAND-RULE-FACTS"
-                        "CATALOG-COMMAND-WITH-SUBCOMMAND-RULE-FACTS"
-                        "CATALOG-HELP-ENTRY"
-                        "CATALOG-COMPLETION-METADATA"
-                        "CATALOG-COMPLETION-COMMAND-SPEC"
-                        "BUILTIN-COMMAND-FLAG-FACTS"
-                        "EXTERNAL-COMMAND-RULE-FACTS"
-                        "COMPLETION-COMMAND-SPECS-FROM-CATALOG"))
-      (is (not (defined-symbol-p old-name))))
-    (dolist (internal-name '("%CATALOG-SUBCOMMAND-NAME"
-                             "%CATALOG-SUBCOMMAND-DESCRIPTION"
-                             "%CATALOG-COMMAND"
-                             "%CATALOG-DESCRIPTION"
-                             "%CATALOG-SYNOPSIS"
-                             "%CATALOG-SUBCOMMANDS"
-                             "%CATALOG-FLAGS"
-                             "%CATALOG-OPTION-VALUES"
-                             "%CATALOG-EXCLUSIVE-OPTIONS"
-                             "%CATALOG-COMMAND-PROJECTION-P"
-                             "%CATALOG-COMMAND-PROJECTION-COMMAND"
-                             "%CATALOG-COMMAND-PROJECTION-DESCRIPTION"
-                             "%CATALOG-COMMAND-PROJECTION-SYNOPSIS"
-                             "%CATALOG-COMMAND-PROJECTION-SUBCOMMANDS"
-                             "%CATALOG-COMMAND-PROJECTION-FLAGS"
-                             "%CATALOG-COMMAND-PROJECTION-OPTION-VALUES"
-                             "%CATALOG-COMMAND-PROJECTION-EXCLUSIVE-OPTIONS"
-                             "%CATALOG-ENTRY-COMMAND-PROJECTION"
-                             "%CATALOG-COMMAND-PROJECTIONS"
-                             "%CATALOG-COMMAND-FACT"
-                             "%CATALOG-DESCRIPTION-FACT"
-                             "%CATALOG-FLAG-FACTS"
-                             "%CATALOG-SUBCOMMAND-COMPLETION-FACTS"
-                             "%CATALOG-SUBCOMMAND-DESCRIPTION-FACTS"
-                             "%CATALOG-COMMAND-RULE-FACTS"
-                             "%CATALOG-COMMAND-WITH-SUBCOMMAND-RULE-FACTS"
-                             "%CATALOG-HELP-ENTRY"
-                             "%CATALOG-COMPLETION-METADATA"
-                             "%CATALOG-COMPLETION-COMMAND-SPEC"
-                             "%BUILTIN-COMMAND-FLAG-FACTS"
-                             "%EXTERNAL-COMMAND-RULE-FACTS"
-                             "%COMPLETION-COMMAND-SPECS-FROM-CATALOG"))
-      (is (defined-symbol-p internal-name)))))
+  "Catalog-derived-data helpers should not leave unprefixed legacy symbols."
+  (assert-package-symbol-boundaries
+      :package "NSHELL.DOMAIN.COMPLETION"
+      :absent (nshell.domain.completion::catalog-subcommand-name
+               nshell.domain.completion::catalog-subcommand-description
+               nshell.domain.completion::catalog-command
+               nshell.domain.completion::catalog-description
+               nshell.domain.completion::catalog-synopsis
+               nshell.domain.completion::catalog-subcommands
+               nshell.domain.completion::catalog-flags
+               nshell.domain.completion::catalog-option-values
+               nshell.domain.completion::catalog-exclusive-options
+               nshell.domain.completion::catalog-command-projection-p
+               nshell.domain.completion::catalog-command-projection-command
+               nshell.domain.completion::catalog-command-projection-description
+               nshell.domain.completion::catalog-command-projection-synopsis
+               nshell.domain.completion::catalog-command-projection-subcommands
+               nshell.domain.completion::catalog-command-projection-flags
+               nshell.domain.completion::catalog-command-projection-option-values
+               nshell.domain.completion::catalog-command-projection-exclusive-options
+               nshell.domain.completion::catalog-entry-command-projection
+               nshell.domain.completion::catalog-command-projections
+               nshell.domain.completion::catalog-command-fact
+               nshell.domain.completion::catalog-description-fact
+               nshell.domain.completion::catalog-flag-facts
+               nshell.domain.completion::catalog-subcommand-completion-facts
+               nshell.domain.completion::catalog-subcommand-description-facts
+               nshell.domain.completion::catalog-command-rule-facts
+               nshell.domain.completion::catalog-command-with-subcommand-rule-facts
+               nshell.domain.completion::catalog-help-entry
+               nshell.domain.completion::catalog-completion-metadata
+               nshell.domain.completion::catalog-completion-command-spec
+               nshell.domain.completion::builtin-command-flag-facts
+               nshell.domain.completion::external-command-rule-facts
+               nshell.domain.completion::completion-command-specs-from-catalog))
+  (assert-package-function-boundaries
+      :package "NSHELL.DOMAIN.COMPLETION"
+      :present (nshell.domain.completion::%catalog-subcommand-name
+                nshell.domain.completion::%catalog-subcommand-description
+                nshell.domain.completion::%catalog-command
+                nshell.domain.completion::%catalog-description
+                nshell.domain.completion::%catalog-synopsis
+                nshell.domain.completion::%catalog-subcommands
+                nshell.domain.completion::%catalog-flags
+                nshell.domain.completion::%catalog-option-values
+                nshell.domain.completion::%catalog-exclusive-options
+                nshell.domain.completion::%catalog-command-projection-p
+                nshell.domain.completion::%catalog-command-projection-command
+                nshell.domain.completion::%catalog-command-projection-description
+                nshell.domain.completion::%catalog-command-projection-synopsis
+                nshell.domain.completion::%catalog-command-projection-subcommands
+                nshell.domain.completion::%catalog-command-projection-flags
+                nshell.domain.completion::%catalog-command-projection-option-values
+                nshell.domain.completion::%catalog-command-projection-exclusive-options
+                nshell.domain.completion::%catalog-entry-command-projection
+                nshell.domain.completion::%catalog-command-projections
+                nshell.domain.completion::%catalog-command-fact
+                nshell.domain.completion::%catalog-description-fact
+                nshell.domain.completion::%catalog-flag-facts
+                nshell.domain.completion::%catalog-subcommand-completion-facts
+                nshell.domain.completion::%catalog-subcommand-description-facts
+                nshell.domain.completion::%catalog-command-rule-facts
+                nshell.domain.completion::%catalog-command-with-subcommand-rule-facts
+                nshell.domain.completion::%catalog-help-entry
+                nshell.domain.completion::%catalog-completion-metadata
+                nshell.domain.completion::%catalog-completion-command-spec
+                nshell.domain.completion::%builtin-command-flag-facts
+                nshell.domain.completion::%external-command-rule-facts
+                nshell.domain.completion::%completion-command-specs-from-catalog)))
 
 (test command-catalog-entry-projection-boundaries-separate-source-plists-from-entries
   "Static catalog normalization should parse source plists into private catalog entries."
@@ -232,74 +232,66 @@
     (is (equal (list :flags nil)
                (nshell.domain.completion::%catalog-source-entry-property
                 source-entry :flags)))
-      (let ((flags-projection
-            (nshell.domain.completion::%project-catalog-source-entry-property
-             source-entry :flags))
-          (synopsis-projection
-            (nshell.domain.completion::%project-catalog-source-entry-property
-             source-entry :synopsis)))
-      (is (eq :flags
-              (nshell.domain.completion::%catalog-entry-property-projection-key
-               flags-projection)))
-      (is (nshell.domain.completion::%catalog-entry-property-projection-present-p
-           flags-projection))
-      (is (not (nshell.domain.completion::%catalog-entry-property-projection-present-p
-                synopsis-projection)))
-      (is (null (nshell.domain.completion::%catalog-entry-property-projection-value
-                 flags-projection))))
-    (is (equal '(:synopsis :description :subcommands :flags :option-values :exclusive-options)
-               (nshell.domain.completion::%command-catalog-preserved-properties)))))
+    (multiple-value-bind (key value present-p)
+        (nshell.domain.completion::%catalog-source-entry-property-values
+         source-entry :flags)
+      (is (eq :flags key))
+      (is (not (null present-p)))
+      (is (null value)))
+    (multiple-value-bind (key value present-p)
+        (nshell.domain.completion::%catalog-source-entry-property-values
+         source-entry :synopsis)
+      (is (eq :synopsis key))
+      (is (not present-p))
+      (is (null value)))))
 
 (test command-catalog-static-helper-boundaries-are-internal
   "Static catalog helpers should only exist behind percent-prefixed boundaries."
-  (labels ((defined-symbol-p (name)
-             (multiple-value-bind (symbol status)
-                 (find-symbol name "NSHELL.DOMAIN.COMPLETION")
-               (and status (or (fboundp symbol)
-                               (ignore-errors
-                                (typep (symbol-value symbol) 'function)))))))
-    (dolist (old-name '("CATALOG-ENTRY-PROPERTY-PROJECTION"
-                        "MAKE-CATALOG-ENTRY-PROPERTY-PROJECTION"
-                        "CATALOG-ENTRY-PROPERTY-PROJECTION-KEY"
-                        "CATALOG-ENTRY-PROPERTY-PROJECTION-VALUE"
-                        "CATALOG-ENTRY-PROPERTY-PROJECTION-PRESENT-P"
-                        "CATALOG-ENTRY-PROPERTY-PRESENT-P"
-                        "CATALOG-ENTRY-PROPERTY-VALUE"
-                        "CATALOG-ENTRY-COMMAND"
-                        "COMMAND-CATALOG-PRESERVED-PROPERTIES"
-                        "CATALOG-ENTRY-PROPERTY"
-                        "COMMAND-CATALOG-ENTRY"
-                        "%PROJECT-CATALOG-ENTRY-PROPERTY"
-                        "%CATALOG-ENTRY-PROPERTY-PRESENT-P"
-                        "%CATALOG-ENTRY-PROPERTY"
-                        "%COMMAND-CATALOG-ENTRY"
-                        "COMMAND-CATALOG"))
-      (is (not (defined-symbol-p old-name))))
-    (dolist (internal-name '("%MAKE-CATALOG-ENTRY-PROPERTY-PROJECTION"
-                             "%CATALOG-ENTRY-PROPERTY-PROJECTION-P"
-                        "%CATALOG-ENTRY-PROPERTY-PROJECTION-KEY"
-                        "%CATALOG-ENTRY-PROPERTY-PROJECTION-VALUE"
-                        "%CATALOG-ENTRY-PROPERTY-PROJECTION-PRESENT-P"
-                        "%PROJECT-CATALOG-SOURCE-ENTRY-PROPERTY"
-                        "%CATALOG-ENTRY-PROPERTY-VALUE"
-                        "%CATALOG-SOURCE-ENTRY-PROPERTY-PRESENT-P"
-                        "%CATALOG-SOURCE-ENTRY-PROPERTY-VALUE"
-                             "%CATALOG-SOURCE-ENTRY-PROPERTY"
-                             "%CATALOG-SOURCE-ENTRY-COMMAND"
-                             "%CATALOG-COMMAND-ENTRY-P"
-                             "%CATALOG-COMMAND-ENTRY-COMMAND"
-                             "%CATALOG-COMMAND-ENTRY-SYNOPSIS"
-                             "%CATALOG-COMMAND-ENTRY-DESCRIPTION"
-                             "%CATALOG-COMMAND-ENTRY-SUBCOMMANDS"
-                             "%CATALOG-COMMAND-ENTRY-FLAGS"
-                             "%CATALOG-COMMAND-ENTRY-OPTION-VALUES"
-                             "%CATALOG-COMMAND-ENTRY-EXCLUSIVE-OPTIONS"
-                             "%CATALOG-ENTRY-COMMAND"
-                             "%COMMAND-CATALOG-PRESERVED-PROPERTIES"
-                             "%BUILD-COMMAND-CATALOG-ENTRY"
-                             "%COMMAND-CATALOG"))
-      (is (defined-symbol-p internal-name)))
-    (is (not (fboundp 'nshell.domain.completion::%catalog-entry-property-key)))))
+  (assert-package-symbol-boundaries
+      :package "NSHELL.DOMAIN.COMPLETION"
+      :absent (nshell.domain.completion::catalog-entry-property-projection
+               nshell.domain.completion::make-catalog-entry-property-projection
+               nshell.domain.completion::catalog-entry-property-projection-key
+               nshell.domain.completion::catalog-entry-property-projection-value
+               nshell.domain.completion::catalog-entry-property-projection-present-p
+               nshell.domain.completion::catalog-entry-property-present-p
+               nshell.domain.completion::catalog-entry-property-value
+               nshell.domain.completion::catalog-entry-command
+               nshell.domain.completion::command-catalog-preserved-properties
+               nshell.domain.completion::catalog-entry-property
+               nshell.domain.completion::command-catalog-entry
+               nshell.domain.completion::project-catalog-entry-property
+               nshell.domain.completion::catalog-entry-property-present-p
+               nshell.domain.completion::catalog-entry-property
+               nshell.domain.completion::command-catalog-entry
+               nshell.domain.completion::command-catalog))
+  (assert-package-function-boundaries
+      :package "NSHELL.DOMAIN.COMPLETION"
+      :present (nshell.domain.completion::%catalog-source-entry-property-values
+                nshell.domain.completion::%catalog-entry-property-value
+                nshell.domain.completion::%catalog-source-entry-property-present-p
+                nshell.domain.completion::%catalog-source-entry-property-value
+                nshell.domain.completion::%catalog-source-entry-property
+                nshell.domain.completion::%catalog-source-entry-command
+                nshell.domain.completion::%catalog-command-entry-p
+                nshell.domain.completion::%catalog-command-entry-command
+                nshell.domain.completion::%catalog-command-entry-synopsis
+                nshell.domain.completion::%catalog-command-entry-description
+                nshell.domain.completion::%catalog-command-entry-subcommands
+                nshell.domain.completion::%catalog-command-entry-flags
+                nshell.domain.completion::%catalog-command-entry-option-values
+                nshell.domain.completion::%catalog-command-entry-exclusive-options
+                nshell.domain.completion::%catalog-entry-command
+                nshell.domain.completion::%build-command-catalog-entry
+                nshell.domain.completion::%command-catalog)
+      :absent (nshell.domain.completion::%catalog-entry-property-key
+               nshell.domain.completion::%catalog-entry-property-projection
+               nshell.domain.completion::%make-catalog-entry-property-projection
+               nshell.domain.completion::%catalog-entry-property-projection-key
+               nshell.domain.completion::%catalog-entry-property-projection-value
+               nshell.domain.completion::%catalog-entry-property-projection-present-p
+               nshell.domain.completion::%project-catalog-source-entry-property
+               nshell.domain.completion::%command-catalog-preserved-properties)))
 
 (test pbt-builtin-catalog-projects-into-help-and-repl-seed
   "Each builtin catalog entry should project consistently into help and REPL seed data."

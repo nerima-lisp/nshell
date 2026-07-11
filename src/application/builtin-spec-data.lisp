@@ -38,6 +38,22 @@
     ("type" . %builtin-type)
     ("which" . %builtin-which)))
 
+(defparameter +complete-option-specs+
+  '(("-c" :kind :command :requirement "command")
+    ("--command" :kind :command :requirement "command")
+    ("-f" :kind :flag :requirement "flag")
+    ("--flag" :kind :flag :requirement "flag")
+    ("-l" :kind :long-option :requirement "option")
+    ("--long-option" :kind :long-option :requirement "option")
+    ("-s" :kind :short-option :requirement "option")
+    ("--short-option" :kind :short-option :requirement "option")
+    ("-a" :kind :arguments :requirement "arguments")
+    ("--arguments" :kind :arguments :requirement "arguments")
+    ("-d" :kind :description :requirement "description")
+    ("--description" :kind :description :requirement "description")
+    ("-e" :kind :erase)
+    ("--erase" :kind :erase)))
+
 (defparameter +builtin-string-subcommand-specs+
   '((:name "collect" :handler %builtin-string-collect :manipulation-p t)
     (:name "length" :handler %builtin-string-length)

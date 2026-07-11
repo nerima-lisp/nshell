@@ -4,18 +4,16 @@
 (test complete-builtin-adds-command-and-argument-completions
   "complete updates the session knowledge base used by interactive completion."
   (with-builtins-context (context)
-    (multiple-value-bind (output code)
-        (call-builtin context "complete"
-                      '("-c" "deploy" "-f" "--dry-run" "-f" "--target"
-                        "-d" "release service"))
-      (is (null output))
-      (is (= 0 code)))
-    (multiple-value-bind (output code)
-        (call-builtin context "complete"
-                      '("--command" "deploy" "--flag" "--dry-run"
-                        "--flag" "--target" "--description" "release service"))
-      (is (null output))
-      (is (= 0 code)))
+    (assert-builtin-call (context "complete"
+                               '("-c" "deploy" "-f" "--dry-run" "-f" "--target"
+                                 "-d" "release service"))
+      :code 0
+      :output-null t)
+    (assert-builtin-call (context "complete"
+                               '("--command" "deploy" "--flag" "--dry-run"
+                                 "--flag" "--target" "--description" "release service"))
+      :code 0
+      :output-null t)
     (let* ((kb (nshell.application:shell-context-knowledge-base context))
            (command (find "deploy"
                           (nshell.domain.completion:complete kb "dep")
@@ -27,12 +25,11 @@
       (is (string= "release service"
                    (nshell.domain.completion:candidate-description command)))
       (is (equal '("--dry-run" "--target") arguments)))
-    (multiple-value-bind (output code)
-        (call-builtin context "complete"
-                      '("-c" "deploy" "-l" "color" "-s" "o"
-                        "-a" "always auto never"))
-      (is (null output))
-      (is (= 0 code)))
+    (assert-builtin-call (context "complete"
+                               '("-c" "deploy" "-l" "color" "-s" "o"
+                                 "-a" "always auto never"))
+      :code 0
+      :output-null t)
     (let* ((kb (nshell.application:shell-context-knowledge-base context))
            (candidates (nshell.domain.completion:complete kb "deploy --color=")))
       (is (equal '("--color=always" "--color=auto" "--color=never")
@@ -49,28 +46,25 @@
 (test complete-builtin-rejects-missing-command
   "complete requires an explicit command name."
   (with-builtins-context (context)
-    (multiple-value-bind (output code)
-        (call-builtin context "complete" '("-f" "--bad"))
-      (is (= 1 code))
-      (is (search "usage" output)))))
+    (assert-builtin-call (context "complete" '("-f" "--bad"))
+      :code 1
+      :contains '("usage"))))
 
 (test complete-builtin-erases-command-completions
   "complete -e removes session completion metadata for a command."
   (with-builtins-context (context)
     (let ((command "__nshell-deploy"))
-      (multiple-value-bind (output code)
-          (call-builtin context "complete"
-                        (list "-c" command "-f" "--dry-run"
-                              "-l" "color" "-a" "always auto"
-                              "-d" "test-only deploy command"))
-        (is (null output))
-        (is (= 0 code)))
+      (assert-builtin-call (context "complete"
+                                 (list "-c" command "-f" "--dry-run"
+                                       "-l" "color" "-a" "always auto"
+                                       "-d" "test-only deploy command"))
+        :code 0
+        :output-null t)
       (let ((kb (nshell.application:shell-context-knowledge-base context)))
         (is (nshell.domain.completion:kb-command-present-p kb command)))
-      (multiple-value-bind (output code)
-          (call-builtin context "complete" (list "-c" command "--erase"))
-        (is (null output))
-        (is (= 0 code)))
+      (assert-builtin-call (context "complete" (list "-c" command "--erase"))
+        :code 0
+        :output-null t)
       (let ((kb (nshell.application:shell-context-knowledge-base context)))
         (is (not (nshell.domain.completion:kb-command-present-p kb command)))
         (is (not (member command

@@ -1,20 +1,14 @@
 (in-package #:nshell.application)
 
-(defparameter +complete-option-specs+
-  '(("-c" :kind :command :requirement "command")
-    ("--command" :kind :command :requirement "command")
-    ("-f" :kind :flag :requirement "flag")
-    ("--flag" :kind :flag :requirement "flag")
-    ("-l" :kind :long-option :requirement "option")
-    ("--long-option" :kind :long-option :requirement "option")
-    ("-s" :kind :short-option :requirement "option")
-    ("--short-option" :kind :short-option :requirement "option")
-    ("-a" :kind :arguments :requirement "arguments")
-    ("--arguments" :kind :arguments :requirement "arguments")
-    ("-d" :kind :description :requirement "description")
-    ("--description" :kind :description :requirement "description")
-    ("-e" :kind :erase)
-    ("--erase" :kind :erase)))
+(defstruct (%complete-parse-state
+            (:constructor %make-complete-parse-state))
+  command
+  flags
+  long-options
+  short-options
+  arguments
+  description
+  erase)
 
 (defun %complete-option-spec (option)
   (cdr (assoc option +complete-option-specs+ :test #'string=)))
@@ -36,33 +30,37 @@
              (uiop:split-string arguments
                                 :separator (list #\Space #\Tab #\Newline))))
 
-(defun %complete-apply-option
-    (spec remaining command flags long-options short-options arguments description erase)
+(defun %complete-apply-option-value (spec state value)
   (ecase (getf spec :kind)
     (:command
-     (values (second remaining) flags long-options short-options arguments description
-             erase (cddr remaining)))
+     (setf (%complete-parse-state-command state) value))
     (:flag
-     (values command (cons (second remaining) flags) long-options short-options
-             arguments description erase (cddr remaining)))
+     (setf (%complete-parse-state-flags state)
+           (cons value (%complete-parse-state-flags state))))
     (:long-option
-     (values command flags (cons (%complete-long-option-name (second remaining))
-                                 long-options)
-             short-options arguments description erase (cddr remaining)))
+     (setf (%complete-parse-state-long-options state)
+           (cons (%complete-long-option-name value)
+                 (%complete-parse-state-long-options state))))
     (:short-option
-     (values command flags long-options
-             (cons (%complete-short-option-name (second remaining)) short-options)
-             arguments description erase (cddr remaining)))
+     (setf (%complete-parse-state-short-options state)
+           (cons (%complete-short-option-name value)
+                 (%complete-parse-state-short-options state))))
     (:arguments
-     (values command flags long-options short-options
-             (append arguments (%complete-argument-values (second remaining)))
-             description erase (cddr remaining)))
+     (setf (%complete-parse-state-arguments state)
+           (append (%complete-parse-state-arguments state)
+                   (%complete-argument-values value))))
     (:description
-     (values command flags long-options short-options arguments (second remaining)
-             erase (cddr remaining)))
+     (setf (%complete-parse-state-description state) value))
     (:erase
-     (values command flags long-options short-options arguments description
-             t (cdr remaining)))))
+     (setf (%complete-parse-state-erase state) t)))
+  state)
+
+(defun %complete-apply-option (spec remaining state)
+  (let ((value (second remaining)))
+    (values (%complete-apply-option-value spec state value)
+            (if (eq (getf spec :kind) :erase)
+                (cdr remaining)
+                (cddr remaining)))))
 
 (defun %complete-merge-strings (new existing)
   (remove-duplicates (append (or new nil) (or existing nil))
@@ -85,52 +83,80 @@
                                :key #'first
                                :test #'string=)))))))
 
+(defun %complete-state->values (state)
+  (values (%complete-parse-state-command state)
+          (%complete-parse-state-flags state)
+          (%complete-parse-state-long-options state)
+          (%complete-parse-state-short-options state)
+          (%complete-parse-state-arguments state)
+          (%complete-parse-state-description state)
+          (%complete-parse-state-erase state)))
+
 (defun %parse-complete-args (args)
-  (let ((command nil)
-        (flags nil)
-        (long-options nil)
-        (short-options nil)
-        (arguments nil)
-        (description nil)
-        (erase nil)
-        (remaining args))
-    (%with-option-arguments (remaining option)
-          (return)
-        (return-from %parse-complete-args
-              (values nil nil nil nil nil nil nil
-                      (format nil "complete: unknown option ~a" option)))
-      (return)
-      ((%complete-option-spec option)
-            (let ((spec (%complete-option-spec option)))
-              (if (or (null (getf spec :requirement))
-                      (rest remaining))
-                  (multiple-value-bind
-                        (new-command new-flags new-long-options new-short-options
-                         new-arguments new-description new-erase new-remaining)
-                      (%complete-apply-option spec remaining command flags
-                                              long-options short-options arguments
-                                              description erase)
-                    (setf command new-command
-                          flags new-flags
-                          long-options new-long-options
-                          short-options new-short-options
-                          arguments new-arguments
-                          description new-description
-                          erase new-erase
-                          remaining new-remaining))
-                  (return-from %parse-complete-args
-                    (values nil nil nil nil nil nil nil
-                            (%required-argument-error "complete"
-                                                      option
-                                                      (getf spec :requirement))))))))
-        (values command
-                (nreverse flags)
-                (nreverse long-options)
-                (nreverse short-options)
-                arguments
-                description
-                erase
-                nil)))
+  (labels ((unknown-option (option)
+             (values nil nil nil nil nil nil nil
+                     (format nil "complete: unknown option ~a" option)))
+           (missing-argument (option spec)
+             (values nil nil nil nil nil nil nil
+                     (%required-argument-error "complete"
+                                               option
+                                               (getf spec :requirement))))
+           (finalize (state)
+             (multiple-value-bind (command flags long-options short-options arguments description erase)
+                 (%complete-state->values state)
+               (values command
+                       (nreverse flags)
+                       (nreverse long-options)
+                       (nreverse short-options)
+                       arguments
+                       description
+                       erase
+                       nil)))
+           (parse (remaining state)
+             (if (endp remaining)
+                 (finalize state)
+                 (let ((option (first remaining)))
+                   (cond
+                     ((string= option "--")
+                      (finalize state))
+                     ((%builtin-option-like-p option)
+                      (let ((spec (%complete-option-spec option)))
+                        (if spec
+                            (if (or (null (getf spec :requirement))
+                                    (rest remaining))
+                                (multiple-value-bind (next-state next-remaining)
+                                    (%complete-apply-option spec remaining state)
+                                  (parse next-remaining next-state))
+                                (missing-argument option spec))
+                            (unknown-option option))))
+                     (t
+                      (finalize state)))))))
+    (parse args (%make-complete-parse-state))))
+
+(defun %complete-upsert-command (kb command flags long-options short-options arguments description)
+  (let* ((option-flags (append long-options short-options))
+         (generic-arguments (and (null option-flags) arguments))
+         (merged-subcommands
+           (%complete-merge-strings
+            generic-arguments
+            (nshell.domain.completion:kb-command-subcommands kb command)))
+         (merged-flags
+           (%complete-merge-strings (append flags option-flags)
+                                    (nshell.domain.completion:kb-command-flags
+                                     kb command)))
+         (merged-option-values
+           (%complete-merge-option-values
+            (nshell.domain.completion:kb-command-option-values kb command)
+            option-flags
+            arguments))
+         (existing-description
+           (nshell.domain.completion:kb-command-description kb command)))
+    (nshell.domain.completion:kb-add-command
+     kb command
+     :subcommands merged-subcommands
+     :flags merged-flags
+     :option-values merged-option-values
+     :description (or description existing-description))))
 
 (defun %builtin-complete (context args)
   (multiple-value-bind
@@ -149,28 +175,11 @@
         command)
        (values nil 0))
       (t
-       (let* ((kb (shell-context-knowledge-base context))
-              (option-flags (append long-options short-options))
-              (generic-arguments (and (null option-flags) arguments))
-              (merged-subcommands
-                (%complete-merge-strings
-                 generic-arguments
-                 (nshell.domain.completion:kb-command-subcommands kb command)))
-              (merged-flags
-                (%complete-merge-strings (append flags option-flags)
-                                         (nshell.domain.completion:kb-command-flags
-                                          kb command)))
-              (merged-option-values
-                (%complete-merge-option-values
-                 (nshell.domain.completion:kb-command-option-values kb command)
-                 option-flags
-                 arguments))
-              (existing-description
-                (nshell.domain.completion:kb-command-description kb command)))
-         (nshell.domain.completion:kb-add-command
-          kb command
-          :subcommands merged-subcommands
-          :flags merged-flags
-          :option-values merged-option-values
-          :description (or description existing-description))
-         (values nil 0))))))
+       (%complete-upsert-command (shell-context-knowledge-base context)
+                                 command
+                                 flags
+                                 long-options
+                                 short-options
+                                 arguments
+                                 description)
+       (values nil 0)))))

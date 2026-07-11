@@ -47,7 +47,7 @@ Please keep dependencies pointing inward:
 3. **Keep tests hermetic.** Tests must not depend on the ambient working
    directory, terminal size, or environment. Use the provided fixtures (e.g.
    `with-stable-repl-prompt`, `with-fixed-terminal-size`) for rendering tests.
-4. **Preserve user-facing compatibility.** If a change intentionally diverges
+4. **Prefer the intended nshell semantics.** If a change intentionally diverges
    from POSIX, bash, zsh, fish, or nushell behavior, document the reason in the
    pull request and add regression coverage for the chosen semantics.
 5. **Run `nix flake check`** locally — CI runs that hermetic gate on Linux and
@@ -67,6 +67,12 @@ nix develop -c sbcl --non-interactive \
   --eval '(require :asdf)' \
   --eval '(push (truename "./") asdf:*central-registry*)' \
   --eval '(asdf:test-system :nshell/test)'
+```
+
+For coverage-oriented validation, run:
+
+```sh
+nix develop -c sbcl --script scripts/coverage.lisp
 ```
 
 For parser, expansion, execution, or builtin changes, include focused unit tests
@@ -130,7 +136,7 @@ Please use GitHub Issues. For bugs, include:
 - Whether the same input behaves differently in another shell.
 
 For feature requests, describe the workflow you are trying to support and cite
-the reference shell behavior if compatibility is part of the request.
+the behavior you want nshell to own.
 
 By contributing, you agree that your contributions are licensed under the
 project's [MIT License](./LICENSE).

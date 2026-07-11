@@ -102,10 +102,11 @@
 (test e2e-main-command-expands-documented-core-forms
   "The -c command path expands arithmetic, parameter, and brace forms documented for scripts."
   (%assert-nshell-main-result
-   '("-c" "set FOO bar; echo arith=$((1 + 2 * 3)); echo param=${FOO:-fallback}; echo alt=${FOO:+yes}; echo brace=a{b,c}; echo range={1..3}")
+   '("-c" "set FOO bar; echo arith=$((1 + 2 * 3)); echo param=${FOO:-fallback}; echo alt=${FOO:+yes}; echo sub=${FOO:1:2}; echo brace=a{b,c}; echo range={1..3}")
    '("arith=7"
      "param=bar"
      "alt=yes"
+     "sub=ar"
      "brace=ab brace=ac"
      "range=1 range=2 range=3")
    0))

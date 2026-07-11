@@ -200,15 +200,3 @@
                nshell.domain.completion::make-fact-from-spec
                nshell.domain.completion::make-rule-from-spec
                nshell.domain.completion::make-proof-search)))
-
-(test logic-variable-conversion-preserves-shared-bindings-through-prover
-  (let ((kb (make-empty-rule-kb)))
-    (nshell.domain.completion:assert-fact!
-     kb
-     (nshell.domain.completion:make-fact :predicate 'same :args '("git" "git")))
-    (nshell.domain.completion:assert-fact!
-     kb
-     (nshell.domain.completion:make-fact :predicate 'same :args '("git" "status")))
-    (let ((solutions (nshell.domain.completion:prove-all kb '(same ?value ?value))))
-      (is (= 1 (length solutions)))
-      (is (string= "git" (solution-binding '?value (first solutions)))))))

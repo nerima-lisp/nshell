@@ -91,19 +91,24 @@ still applies once earlier body goals have grounded it."
 
 (defun prove (kb goal &optional (bindings '()) (max-depth *max-proof-depth*))
   (declare (ignore bindings))
-  ;; cl-prolog signals PROLOG-DEPTH-LIMIT-EXCEEDED (an ISO resource_error) and
-  ;; unwinds QUERY-PROLOG's whole search when any branch exceeds MAX-DEPTH,
-  ;; discarding solutions already found on other branches. The completion
-  ;; engine wants exactly those already-found solutions instead, so collect
-  ;; via MAP-PROLOG-SOLUTIONS and treat the condition as "search exhausted
-  ;; its budget" rather than a failure.
+  ;; cl-prolog signals an ISO PROLOG-RUNTIME-ERROR (existence_error for a
+  ;; goal naming an undefined predicate, resource_error/PROLOG-DEPTH-LIMIT-
+  ;; EXCEEDED past MAX-DEPTH, and so on) and unwinds QUERY-PROLOG's whole
+  ;; search, discarding solutions already found on other branches. Standard
+  ;; ISO behavior for a real Prolog program, but the completion engine's
+  ;; rule bodies routinely reference predicates that only PREDICATE-TRUE-P
+  ;; resolves (never a cl-prolog clause or foreign predicate), and searches
+  ;; are deliberately depth-bounded for an interactive tool — both are
+  ;; "this path found nothing," not a program error. Collect via MAP-
+  ;; PROLOG-SOLUTIONS and treat any such runtime error as exactly that,
+  ;; keeping whatever solutions were already found on other branches.
   (let ((rulebase (%make-prolog-rulebase kb))
         (solutions '()))
     (handler-case
         (cl-prolog:map-prolog-solutions
          (lambda (solution) (push solution solutions))
          rulebase (copy-tree goal) :max-depth max-depth)
-      (cl-prolog:prolog-depth-limit-exceeded () nil))
+      (cl-prolog:prolog-runtime-error () nil))
     (append (nreverse solutions) (%built-in-solution goal))))
 
 (defun prove-all (kb goal &key (max-depth *max-proof-depth*))

@@ -19,10 +19,13 @@
           (cons "nshell" arguments)))
 
 (defun %asdf-bootstrap-forms (root)
+  ;; Ask the already-loaded parent process where it actually found cl-prolog
+  ;; instead of guessing a "../cl-prolog/" sibling checkout: the parent
+  ;; resolved it however the current environment provides it (a sibling
+  ;; checkout locally, or a nix store path via lispLibs in the hermetic
+  ;; sandbox), and the spawned subprocess needs that same real location.
   (let ((cl-prolog-root
-          (namestring
-           (uiop:ensure-directory-pathname
-            (merge-pathnames "../cl-prolog/" root)))))
+          (namestring (asdf:system-source-directory :cl-prolog))))
     (list "--eval" "(require :asdf)"
           "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
           "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" cl-prolog-root))))

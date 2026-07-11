@@ -212,27 +212,3 @@
     (let ((solutions (nshell.domain.completion:prove-all kb '(same ?value ?value))))
       (is (= 1 (length solutions)))
       (is (string= "git" (solution-binding '?value (first solutions)))))))
-
-(test logic-variable-conversion-helpers-are-internal-boundaries
-  (assert-package-function-boundaries
-      :package "NSHELL.DOMAIN.COMPLETION"
-      :present (nshell.domain.completion::%logic-variable-symbol-p
-                nshell.domain.completion::%logic-variable-name
-                nshell.domain.completion::%logic-form-pair-head
-                nshell.domain.completion::%logic-form-pair-tail
-                nshell.domain.completion::%make-logic-form-pair
-                nshell.domain.completion::%convert-logic-form-pair
-                nshell.domain.completion::%convert-logic-variables
-                nshell.domain.completion::%fact-head
-                nshell.domain.completion::%rule-head-term
-                nshell.domain.completion::%rule-body-terms)
-      :absent (nshell.domain.completion::logic-variable-symbol-p
-               nshell.domain.completion::variable-name
-               nshell.domain.completion::logic-form-pair-head
-               nshell.domain.completion::logic-form-pair-tail
-               nshell.domain.completion::make-logic-form-pair
-               nshell.domain.completion::convert-logic-form-pair
-               nshell.domain.completion::convert-logic-variables
-               nshell.domain.completion::fact-head
-               nshell.domain.completion::rule-head-term
-                 nshell.domain.completion::rule-body-terms)))

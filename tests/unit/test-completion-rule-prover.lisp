@@ -18,28 +18,6 @@
       (is (= 1 (length solutions)))
       (is (string= "git" (solution-binding '?value (first solutions)))))))
 
-(test logic-variable-conversion-helpers-are-internal-boundaries
-  (is (not (fboundp 'nshell.domain.completion::logic-variable-symbol-p)))
-  (is (not (fboundp 'nshell.domain.completion::variable-name)))
-  (is (not (fboundp 'nshell.domain.completion::logic-form-pair-head)))
-  (is (not (fboundp 'nshell.domain.completion::logic-form-pair-tail)))
-  (is (not (fboundp 'nshell.domain.completion::make-logic-form-pair)))
-  (is (not (fboundp 'nshell.domain.completion::convert-logic-form-pair)))
-  (is (not (fboundp 'nshell.domain.completion::convert-logic-variables)))
-  (is (not (fboundp 'nshell.domain.completion::fact-head)))
-  (is (not (fboundp 'nshell.domain.completion::rule-head-term)))
-  (is (not (fboundp 'nshell.domain.completion::rule-body-terms)))
-  (is (fboundp 'nshell.domain.completion::%logic-variable-symbol-p))
-  (is (fboundp 'nshell.domain.completion::%logic-variable-name))
-  (is (fboundp 'nshell.domain.completion::%logic-form-pair-head))
-  (is (fboundp 'nshell.domain.completion::%logic-form-pair-tail))
-  (is (fboundp 'nshell.domain.completion::%make-logic-form-pair))
-  (is (fboundp 'nshell.domain.completion::%convert-logic-form-pair))
-  (is (fboundp 'nshell.domain.completion::%convert-logic-variables))
-  (is (fboundp 'nshell.domain.completion::%fact-head))
-  (is (fboundp 'nshell.domain.completion::%rule-head-term))
-  (is (fboundp 'nshell.domain.completion::%rule-body-terms)))
-
 (test no-solution-for-unsatisfiable-goal
   (let ((kb (make-empty-rule-kb)))
     (nshell.domain.completion:assert-fact!

@@ -16,10 +16,11 @@
   (make-test-shell-context :running t))
 
 (defun %startup-asdf-bootstrap-args (root)
+  ;; See tests/e2e/test-smoke.lisp's %asdf-bootstrap-forms: ask the parent
+  ;; process where it actually resolved cl-prolog rather than guessing a
+  ;; sibling-checkout path, so this also works in a hermetic build sandbox.
   (let ((cl-prolog-root
-          (namestring
-           (uiop:ensure-directory-pathname
-            (merge-pathnames "../cl-prolog/" root)))))
+          (namestring (asdf:system-source-directory :cl-prolog))))
     (list "--eval" "(require :asdf)"
           "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
           "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" cl-prolog-root))))

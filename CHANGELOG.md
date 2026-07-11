@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Vi-mode char-wise visual selection (`v`) with motion, yank, delete, change,
   and count-aware editing coverage.
+- Parameter expansion now covers substring slicing (`${VAR:offset[:length]}`)
+  and required-value diagnostics (`${VAR:?word}`).
+- Completion help metadata now warms on demand and caches missing external
+  command lookups so repeated completion requests stay responsive.
 
 ### Fixed
 - Prompt command-duration tracking now records a non-negative millisecond value,
@@ -22,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   evidence, vi visual selection, here-document, and here-string support.
 - README testing and contribution guidance now distinguishes hermetic Nix checks
   from full dev-shell integration coverage and links security reporting.
+- Added an SBCL `sb-cover` coverage runner plus a dev-shell alias, and split
+  control-flow sequence traversal into its own source file.
 - Added `PUBLIC_READINESS.md` to make the world-level interactive-shell release
   bar, evidence requirements, and remaining public gaps explicit.
 - CONTRIBUTING and the PR checklist now distinguish hermetic checks from

@@ -9,14 +9,14 @@
 nshell is an interactive shell that puts the *interactive* experience first:
 real-time syntax highlighting, history-aware autosuggestions, fish-style
 abbreviations, and a fast, context-aware completion engine — all built on a
-clean, test-driven Common Lisp core (5,800+ checks) and a reproducible Nix
+clean, test-driven Common Lisp core (8,800+ checks) and a reproducible Nix
 build.
 
 > **Status: early development (0.4.x).** The interactive editor and core
 > pipeline execution are solid and heavily tested. The shell *language* is a
 > growing subset of POSIX/fish semantics — see [Roadmap](#roadmap) for what is
 > and isn't supported yet. nshell is usable as a daily interactive shell for
-> common workflows; it is not yet a drop-in `/bin/sh` replacement for scripts.
+> common workflows; it is not a script-compatible `/bin/sh` replacement.
 
 ---
 
@@ -166,6 +166,15 @@ nix develop -c sbcl --non-interactive \
   --eval '(asdf:test-system :nshell/test)'
 ```
 
+Generate an HTML coverage report for the same suite:
+
+```sh
+nix develop -c sbcl --script scripts/coverage.lisp
+```
+
+The report is written to `coverage/cover-index.html` by default. Set
+`NSHELL_COVERAGE_DIR` to redirect the output.
+
 Unit, integration, property-based, and end-to-end tests live under `tests/`.
 New shell-language, expansion, completion, job-control, and input-state changes
 should include focused regression tests plus the relevant property or PTY
@@ -176,12 +185,13 @@ coverage when behavior crosses process, terminal, or parser boundaries. See
 
 nshell is converging on world-class interactive-shell parity. Near-term focus:
 
-- **Shell language depth** — richer list variables and stricter compatibility
+- **Shell language depth** — richer list variables and explicit semantics
   around compound expansions.
-  (Quoting, parameter expansion incl. patterns, arithmetic `$((...))`, brace
-  expansion, command substitution `$(...)`/`(...)`, fd redirections
-  `2>`/`2>&1`/`&>`, here-docs `<<`, here-strings `<<<`, and function arguments via
-  `$argv`/`$argv[N]` are done.)
+  (Quoting, parameter expansion with defaults, required checks, substring
+  slicing, and patterns, arithmetic `$((...))`, brace expansion, command
+  substitution `$(...)`/`(...)`, fd redirections `2>`/`2>&1`/`&>`, here-docs
+  `<<`, here-strings `<<<`, and function arguments via `$argv`/`$argv[N]` are
+  done.)
 - **Job control hardening** — robust foreground process-group handling so
   `Ctrl-C` / `Ctrl-Z` reliably interrupt and suspend pipelines.
 - **Completion intelligence** — broader command metadata and higher-fidelity
@@ -197,7 +207,7 @@ For release qualification, see [PUBLIC_READINESS.md](./PUBLIC_READINESS.md).
 Contributions are welcome. Please run `nix flake check --print-build-logs`
 before opening a pull request; CI runs that hermetic gate on Linux and macOS
 and also runs the full non-sandboxed integration suite on Linux. See
-`CONTRIBUTING.md` for style, test, compatibility, and issue-reporting
+`CONTRIBUTING.md` for style, test, semantics, and issue-reporting
 expectations.
 
 ## Security

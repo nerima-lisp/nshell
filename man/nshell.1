@@ -70,8 +70,9 @@ parameter expansion, command substitution (\fB$(cmd)\fR and fish-style
 \fB(cmd)\fR), and globbing (\fB* ? [\&.\&.\&.]\fR).
 .PP
 Parameter expansion supports \fB${VAR}\fR, defaults \fB${VAR:-word}\fR and
-relatives (\fB:= :+ :?\fR), length \fB${#VAR}\fR, prefix/suffix stripping
-(\fB${VAR#pat} ## % %%\fR), and substitution (\fB${VAR/pat/rep} //\fR).
+relatives (\fB:= :+ :?\fR), substring slicing \fB${VAR:offset[:length]}\fR,
+length \fB${#VAR}\fR, prefix/suffix stripping (\fB${VAR#pat} ## % %%\fR), and
+substitution (\fB${VAR/pat/rep} //\fR).
 .PP
 Double quotes suppress globbing and word-splitting but allow variable,
 arithmetic, and command-substitution expansion; single quotes are fully

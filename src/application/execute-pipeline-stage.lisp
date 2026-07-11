@@ -1,5 +1,7 @@
 (in-package #:nshell.application)
 
+(declaim (special nshell.infrastructure.acl:*external-command-timeout*))
+
 ;;; Pipeline stage execution and command expansion.
 ;;; execute-ast-in-context (defined in execute-pipeline-control.lisp) is
 ;;; forward-referenced by %execute-pipeline-stage-in-context and
@@ -11,21 +13,24 @@
   "Expand the command name and all args in COMMAND-NODE under CONTEXT.
 Returns (expanded-node nil) on success or (nil error-string) when the
 command name expands to zero or multiple fields (ambiguous)."
-  (let* ((alias-expanded (expand-command-alias-node
-                          command-node
-                          (shell-context-alias-table context)))
-         (raw-command (nshell.domain.parsing:command-node-command alias-expanded))
-         (command-style (nshell.domain.parsing:command-node-command-quote-style alias-expanded))
-         (environment (shell-context-environment context)))
-    (multiple-value-bind (command error)
-        (nshell.domain.expansion:expand-command-name-by-quote-style
-         raw-command command-style environment)
-      (if error
-          (values nil error)
-          (values (nshell.domain.parsing:make-command-node
-                   command
-                   (%line-command-args-in-context context alias-expanded))
-                  nil)))))
+  (handler-case
+      (let* ((alias-expanded (expand-command-alias-node
+                              command-node
+                              (shell-context-alias-table context)))
+             (raw-command (nshell.domain.parsing:command-node-command alias-expanded))
+             (command-style (nshell.domain.parsing:command-node-command-quote-style alias-expanded))
+             (environment (shell-context-environment context)))
+        (multiple-value-bind (command error)
+            (nshell.domain.expansion:expand-command-name-by-quote-style
+             raw-command command-style environment)
+          (if error
+              (values nil error)
+              (values (nshell.domain.parsing:make-command-node
+                       command
+                       (%line-command-args-in-context context alias-expanded))
+                      nil))))
+    (nshell.domain.expansion:parameter-expansion-error (condition)
+      (values nil (format nil "nshell: ~a~%" condition)))))
 
 (defun %expand-command-nodes-in-context (context commands)
   "Expand all COMMANDS; return (expanded-list nil) or (nil error-string) on first error."
@@ -36,91 +41,6 @@ command name expands to zero or multiple fields (ambiguous)."
         (if error
             (return (values nil error))
             (push expanded expanded-commands))))))
-
-;; -- External process execution -------------------------------------------------
-
-(defun %execute-external-pipeline-stage (command-node input redirects)
-  "Execute COMMAND-NODE as an external process with optional INPUT string.
-Applies REDIRECTS and returns (output exit-code)."
-  (let* ((command (nshell.domain.parsing:command-node-command command-node))
-         (args (%line-command-args command-node))
-         (input-target (nshell.domain.parsing:redirect-input-file-target redirects))
-         (opened-input nil)
-         (stdin (cond
-                  (input-target
-                   (setf opened-input
-                         (open input-target :direction :input :if-does-not-exist :error)))
-                  (input (make-string-input-stream input))
-                  (t *standard-input*))))
-    (let* ((destinations
-             (nshell.domain.parsing:redirect-output-destinations redirects))
-           (stdout-target
-             (nshell.domain.parsing:redirect-output-destinations-stdout-target
-              destinations))
-           (stdout-mode
-             (nshell.domain.parsing:redirect-output-destinations-stdout-mode
-              destinations))
-           (stderr-target
-             (nshell.domain.parsing:redirect-output-destinations-stderr-target
-              destinations))
-           (stderr-mode
-             (nshell.domain.parsing:redirect-output-destinations-stderr-mode
-              destinations))
-           (merge-stderr-p (or (and (null stdout-target) (null stderr-target))
-                               (and stdout-target stderr-target
-                                    (equal stdout-target stderr-target)))))
-        (handler-case
-            (unwind-protect
-                 (let ((process
-                         (sb-ext:run-program command args
-                                             :input stdin
-                                             :output :stream
-                                             :error (if merge-stderr-p :output :stream)
-                                             :wait nil
-                                             :search t)))
-                   (let ((output (%read-stream-to-string (sb-ext:process-output process)))
-                         (errout (when (not merge-stderr-p)
-                                   (%read-stream-to-string (sb-ext:process-error process)))))
-                     (sb-ext:process-wait process)
-                     (cond
-                       (merge-stderr-p
-                        (when stdout-target
-                          (with-open-file (stream stdout-target
-                                                  :direction :output
-                                                  :if-exists stdout-mode
-                                                  :if-does-not-exist :create)
-                            (write-string output stream)))
-                        (values (and (null stdout-target) output)
-                                (nshell.infrastructure.acl:process-exit-status-code process)))
-                       (stdout-target
-                        (with-open-file (stream stdout-target
-                                                :direction :output
-                                                :if-exists stdout-mode
-                                                :if-does-not-exist :create)
-                          (write-string output stream))
-                        (when stderr-target
-                          (with-open-file (stream stderr-target
-                                                  :direction :output
-                                                  :if-exists stderr-mode
-                                                  :if-does-not-exist :create)
-                            (write-string (or errout "") stream)))
-                        (values (and (null stderr-target) output)
-                                (nshell.infrastructure.acl:process-exit-status-code process)))
-                       (stderr-target
-                        (with-open-file (stream stderr-target
-                                                :direction :output
-                                                :if-exists stderr-mode
-                                                :if-does-not-exist :create)
-                          (write-string (or errout "") stream))
-                        (values output
-                                (nshell.infrastructure.acl:process-exit-status-code process)))
-                       (t
-                        (values output
-                                (nshell.infrastructure.acl:process-exit-status-code process))))))
-              (when opened-input
-                (close opened-input)))
-          (error (condition)
-            (values (format nil "nshell: ~a: ~a~%" command condition) 127))))))
 
 ;; -- Internal vs external dispatch -------------------------------------------
 

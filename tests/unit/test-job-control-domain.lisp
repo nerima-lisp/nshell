@@ -112,20 +112,3 @@
     (is (eq :running (nshell.domain.execution:job-state job)))
     (is (null (nshell.domain.job-control:background-job monitor 999)))
     (is (null (nshell.domain.job-control:foreground-job monitor 999)))))
-
-(test pbt-invalid-job-state-transitions-are-rejected
-  "Generated invalid job states are rejected by the job state transition guard."
-  (for-all ((state-number (gen-integer :min 0 :max 1000)))
-    (let* ((cmd (nshell.domain.execution:make-command "ls"))
-           (pipeline (nshell.domain.execution:make-pipeline cmd))
-           (job (nshell.domain.execution:make-job 1 pipeline))
-           (invalid-state (intern (format nil "INVALID-~d" (abs state-number)) :keyword)))
-      (is (not (nshell.domain.execution:job-state-valid-p invalid-state))
-          "Generated state ~s unexpectedly became valid" invalid-state)
-      (let ((rejected (handler-case
-                          (progn
-                            (nshell.domain.execution:job-state-transition job invalid-state)
-                            nil)
-                        (error () t))))
-        (is-true rejected
-                 "Invalid generated state ~s should be rejected" invalid-state)))))

@@ -160,14 +160,6 @@
           (when output-pipe-stream
             (ignore-errors (close output-pipe-stream))))))))
 
-(defun %drain-process-output (proc)
-  (when (and proc (sb-ext:process-output proc))
-    (handler-case
-        (loop for line = (read-line (sb-ext:process-output proc) nil nil)
-              while line
-              do (write-line line))
-      (error ()))))
-
 (defun %wait-pipeline-processes (procs)
   (let ((last-proc (car procs))
         (exit 0))
@@ -213,12 +205,12 @@
                  (%wait-pipeline-exit-with-timeout procs *external-command-timeout*))
              (progn
                (prog1 (%wait-pipeline-processes procs)
-                 (%join-process-output-copier copier)))
+                 (%join-process-output-copiers (list copier))))
              (progn
                (%terminate-pipeline-processes procs)
-               (%join-process-output-copier copier)
+               (%join-process-output-copiers (list copier))
                (funcall timeout-fn)))
-      (%join-process-output-copier copier))))
+      (%join-process-output-copiers (list copier)))))
 
 (defun %pipeline-spawn-loop (commands pipes redirects redirect-streams
                              &key default-output pgid-assign-fn error-sentinel)

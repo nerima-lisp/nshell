@@ -9,11 +9,14 @@
 (defun %process-test-sbcl-command-node (form)
   (nshell.domain.parsing:make-command-node
    (current-sbcl-executable)
-   (list "--noinform"
-         "--non-interactive"
-         "--disable-debugger"
-         "--eval"
-         form)))
+   (%process-test-sbcl-argv form)))
+
+(defun %process-test-sbcl-argv (form)
+  (list "--noinform"
+        "--non-interactive"
+        "--disable-debugger"
+        "--eval"
+        form))
 
 (test run-external-echo
   "External echo command executes and returns exit 0"
@@ -32,11 +35,7 @@
              (setf exit
                    (nshell.infrastructure.acl:run-external
                     (current-sbcl-executable)
-                    (list "--noinform"
-                          "--non-interactive"
-                          "--disable-debugger"
-                          "--eval"
-                          form))))))
+                    (%process-test-sbcl-argv form))))))
     (is (= 0 exit))
     (is (= size (length output)))
     (let ((bad-index (position-if-not (lambda (char) (char= #\x char)) output)))
@@ -74,11 +73,7 @@
     (multiple-value-bind (output exit)
         (nshell.infrastructure.acl:run-external-capture
          (current-sbcl-executable)
-         (list "--noinform"
-               "--non-interactive"
-               "--disable-debugger"
-               "--eval"
-               "(sleep 5)"))
+         (%process-test-sbcl-argv "(sleep 5)"))
       (is (= 124 exit))
       (is (search "timed out after" output)))))
 

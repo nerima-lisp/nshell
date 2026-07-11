@@ -93,6 +93,19 @@
         (is (string= (format nil "nshell: $NSHELL_PIPELINE_CMD: command name expansion produced 2 fields~%")
                      error-output))))))
 
+(test execute-pipeline-use-case-rejects-required-parameter-expansion-errors
+  "Required parameter expansion errors are reported without reaching process spawn."
+  (let ((ast (nshell.domain.parsing:make-command-node
+              "printf"
+              (list "%s" "${NSHELL_MISSING_REQUIRED:?required value}")))
+        (code nil))
+    (let ((error-output
+            (with-output-to-string (*error-output*)
+              (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
+      (is (= 127 code))
+      (is (string= (format nil "nshell: NSHELL_MISSING_REQUIRED: required value~%")
+                   error-output)))))
+
 (test execute-pipeline-use-case-applies-stage-redirections
   "Pipeline execution through the application API preserves per-stage redirects."
   (let* ((root (merge-pathnames (format nil "nshell-app-pipeline-redir-~d/"
@@ -185,6 +198,27 @@
               "definitely-not-a-real-command"
               nil)))
     (is (= 127 (nshell.application:execute-pipeline-use-case ast nil)))))
+
+(test execute-pipeline-node-in-context-times-out-external-stages-in-cps-mode
+  "The CPS execution path drains external output and times out long-running stages."
+  (let* ((context (make-test-shell-context))
+         (ast (nshell.domain.parsing:make-pipeline-node
+               (list (nshell.domain.parsing:make-command-node
+                      "sh"
+                      (list "-c" "printf ready; sleep 5")))))
+         (stdout nil)
+         (stderr nil)
+         (code nil))
+    (let ((nshell.infrastructure.acl:*external-command-timeout* 0.2))
+      (setf stderr
+            (with-output-to-string (*error-output*)
+              (multiple-value-setq (stdout code)
+                (nshell.application::execute-pipeline-node-in-context
+                 context
+                 ast))))
+      (is (= 124 code))
+      (is (string= "ready" stdout))
+      (is (search "timed out after" stderr)))))
 
 (test trim-command-substitution-output-strips-trailing-newlines
   "Trailing \\n and \\r characters are removed; nil input becomes empty string."

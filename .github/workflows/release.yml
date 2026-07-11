@@ -28,8 +28,11 @@ jobs:
             target: aarch64-darwin
     env:
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      RELEASE_REF: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_REF }}
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
@@ -50,17 +53,18 @@ jobs:
       - name: Package tarball + checksum
         run: |
           set -euo pipefail
-          ref="${{ github.ref_name }}"
+          ref="${RELEASE_REF}"
           name="nshell-${ref}-${{ matrix.target }}"
           mkdir -p "dist/${name}"
           cp result/bin/nshell "dist/${name}/"
-          cp README.md LICENSE "dist/${name}/" 2>/dev/null || true
+          cp README.md LICENSE man/nshell.1 "dist/${name}/"
           tar -czf "dist/${name}.tar.gz" -C dist "${name}"
           ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_REF }}
           files: |
             dist/*.tar.gz
             dist/*.sha256

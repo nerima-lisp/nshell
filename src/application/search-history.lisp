@@ -1,23 +1,5 @@
 (in-package #:nshell.application)
 
-(defstruct (%interactive-history-candidate
-            (:constructor %allocate-interactive-history-candidate (text entry))
-            (:copier nil))
-  (text "" :type string :read-only t)
-  (entry nil :read-only t))
-
-(defun %interactive-history-entry-p (entry)
-  (multiple-value-bind (text ok)
-      (ignore-errors (values (nshell.domain.history:entry-text entry) t))
-    (and ok (stringp text))))
-
-(defun %make-interactive-history-candidate (text entry)
-  (unless (stringp text)
-    (error "Interactive history candidate text must be a string: ~s" text))
-  (unless (%interactive-history-entry-p entry)
-    (error "Interactive history candidate entry must be a history entry: ~s" entry))
-  (%allocate-interactive-history-candidate text entry))
-
 (defun %interactive-history-query-case-sensitive-p (query)
   (some #'upper-case-p query))
 
@@ -27,54 +9,22 @@
              query
              :include-return-p t))))
 
-(defun %interactive-history-line-prefix-match-p (text query case-sensitive)
-  (loop with line-start = 0
-        for newline = (position #\Newline text :start line-start)
-        for line-end = (or newline (length text))
-        for query-end = (+ line-start (length query))
-        thereis (and (<= query-end line-end)
-                     (if case-sensitive
-                         (string= text query :start1 line-start :end1 query-end)
-                         (string-equal text query :start1 line-start :end1 query-end)))
-        while newline
-        do (setf line-start (1+ newline))))
-
-(defun %interactive-history-contains-match-p (text query case-sensitive)
-  (if case-sensitive
-      (search query text)
-      (search query text :test #'char-equal)))
-
-(defun %interactive-history-line-prefix-matches (history query case-sensitive)
-  (let ((entries nil)
-        (texts (make-hash-table :test #'equal)))
-    (dolist (entry (nshell.domain.history:history-all history))
-      (let ((text (nshell.domain.history:entry-text entry)))
-        (when (%interactive-history-line-prefix-match-p text query case-sensitive)
-          (setf (gethash text texts) t)
-          (push entry entries))))
-    (values (nreverse entries) texts)))
-
-(defun %interactive-history-contains-candidates (history query case-sensitive)
-  (let ((candidates nil))
-    (dolist (entry (nshell.domain.history:history-all history))
-      (let ((text (nshell.domain.history:entry-text entry)))
-        (when (%interactive-history-contains-match-p text query case-sensitive)
-          (push (%make-interactive-history-candidate text entry)
-                candidates))))
-    (nreverse candidates)))
-
 (defun %interactive-history-search-matches (history query)
   (when (%interactive-history-query-valid-p query)
-    (let ((case-sensitive (%interactive-history-query-case-sensitive-p query)))
-      (multiple-value-bind (line-prefix-matches line-prefix-texts)
-          (%interactive-history-line-prefix-matches history query case-sensitive)
-        (let ((contains-candidates
-                (%interactive-history-contains-candidates history query case-sensitive)))
-          (append line-prefix-matches
-                  (loop for candidate in contains-candidates
-                        for text = (%interactive-history-candidate-text candidate)
-                        unless (gethash text line-prefix-texts)
-                          collect (%interactive-history-candidate-entry candidate))))))))
+    (let ((prefix-matches
+            (nshell.domain.history:history-search history query :mode :line-prefix))
+          (contains-matches
+            (nshell.domain.history:history-search history query :mode :contains))
+          (seen (make-hash-table :test #'equal))
+          (unique-contains nil))
+      (dolist (entry prefix-matches)
+        (setf (gethash (nshell.domain.history:entry-text entry) seen) t))
+      (dolist (entry contains-matches)
+        (let ((text (nshell.domain.history:entry-text entry)))
+          (unless (gethash text seen)
+            (setf (gethash text seen) t)
+            (push entry unique-contains))))
+      (append prefix-matches (nreverse unique-contains)))))
 
 (defun %interactive-history-best-entry (matches)
   (or (find-if (lambda (entry)
@@ -111,7 +61,7 @@
   "Search for interactive reverse search, preferring command-line starts.
 
   Line-prefix matches make multi-line history feel command-aware: a continuation
-line that starts with QUERY ranks before incidental mid-line substring matches,
+  line that starts with QUERY ranks before incidental mid-line substring matches,
 while the contains fallback preserves the usual Ctrl-R substring search."
   (let ((matches (%interactive-history-search-matches history query)))
     (when dispatcher

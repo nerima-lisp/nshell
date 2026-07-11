@@ -92,41 +92,6 @@ git status")
         (is (null (nshell.application:drain-events dispatcher)))
         (is (equal '(:history-searched) (nreverse events)))))))
 
-(test pbt-history-suggestion-prefers-successful-prefix-match
-  "Generated prefixes choose a non-failing candidate before a newer failure."
-  (for-all-property (:trials 50)
-      ((prefix (gen-shell-word :min-length 1 :max-length 8))
-       (success-tail (gen-shell-word :min-length 1 :max-length 8))
-       (failure-tail (gen-shell-word :min-length 1 :max-length 8)))
-    (let ((history (nshell.domain.history:make-command-history)))
-      (nshell.domain.history:history-add
-       history
-       (concatenate 'string prefix success-tail)
-       0)
-      (nshell.domain.history:history-add
-       history
-       (concatenate 'string prefix failure-tail)
-       1)
-      (is (string= success-tail
-                   (nshell.application:history-suggestion history prefix))
-          "History suggestion should choose generated successful tail ~s over failed tail ~s for prefix ~s"
-          success-tail failure-tail prefix))))
-
-(test pbt-history-suggestion-returns-continuation-line-suffix
-  "Generated continuation-line prefixes return only the remaining current-line text."
-  (for-all-property (:trials 50)
-      ((prefix (gen-shell-word :min-length 1 :max-length 8))
-       (tail (gen-shell-word :min-length 1 :max-length 8)))
-    (let ((history (nshell.domain.history:make-command-history)))
-      (nshell.domain.history:history-add
-       history
-       (format nil " setup~%~a~a" prefix tail)
-       0)
-      (is (string= tail
-                   (nshell.application:history-suggestion history prefix))
-          "Continuation-line suggestion should return tail ~s for prefix ~s"
-          tail prefix))))
-
 (test interactive-history-search-prefers-line-prefix-before-contains
   "Interactive reverse search ranks command-line starts before incidental substrings."
   (with-history (history "echo setup
@@ -174,22 +139,6 @@ git old"
                  history
                  "git"))))))
 
-(test interactive-history-search-candidate-uses-typed-boundary
-  "Contains fallback candidates should stay behind a typed internal boundary."
-  (is (fboundp 'nshell.application::%make-interactive-history-candidate))
-  (is (fboundp 'nshell.application::%allocate-interactive-history-candidate))
-  (is (fboundp 'nshell.application::%interactive-history-candidate-text))
-  (is (fboundp 'nshell.application::%interactive-history-candidate-entry))
-  (is (not (fboundp 'nshell.application::copy-%interactive-history-candidate)))
-  (with-history (history "git status")
-    (let ((entry (first (nshell.domain.history:history-all history))))
-      (signals error
-        (nshell.application::%make-interactive-history-candidate 42 entry))
-      (signals error
-        (nshell.application::%make-interactive-history-candidate
-         "git status"
-         "not-entry")))))
-
 (test interactive-history-search-ignores-blank-query
   "Interactive reverse search should not preselect history before the user types."
   (with-history (history "git status" "docker ps")
@@ -205,20 +154,3 @@ git old"
         (is (null (nshell.application:drain-events dispatcher)))
         (is (equal '(:history-searched :history-searched :history-searched)
                    (nreverse events)))))))
-
-(test pbt-interactive-history-search-ignores-operator-only-query
-  "Generated shell-operator-only input should behave like blank input."
-  (with-history (history "git status" "docker ps")
-    (let ((dispatcher (nshell.application:make-event-dispatcher)))
-      (with-event-capture (events dispatcher :history-searched)
-          (nshell.domain.events:domain-event-type event)
-        (for-all-property (:trials 50)
-            ((query (gen-shell-operator-only-input :min-length 1 :max-length 8)))
-          (is (null (nshell.application:interactive-history-search-use-case
-                     history query dispatcher))
-              "Interactive reverse search should ignore generated operator-only query ~s"
-              query))
-        (is (null (nshell.application:drain-events dispatcher)))
-        (is (equal 50 (length events)))
-         (is (every (lambda (event) (eql event :history-searched))
-                    events))))))

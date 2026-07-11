@@ -47,7 +47,7 @@
 (test shell-context-factory-validates-composition-values
   "Invalid session composition is rejected before the context is allocated."
   (signals type-error
-    (nshell.application:make-shell-context :execution-strategy :legacy))
+    (nshell.application:make-shell-context :execution-strategy :unsupported))
   (signals type-error
     (nshell.application:make-shell-context :terminal-rows 0))
   (signals type-error

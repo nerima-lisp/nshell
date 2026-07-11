@@ -195,9 +195,6 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
       (recursive-directory-files root)
       (immediate-directory-files root)))
 
-(defun %glob-candidate (root file)
-  (%glob-match-subject-candidate (%glob-file-match-subject "" root file)))
-
 (defun %glob-match-file-p (pattern root file)
   (let ((subject (%glob-file-match-subject pattern root file)))
     (glob-match-p (glob-match-subject-pattern subject)
@@ -291,6 +288,21 @@ range CONTENT, or NIL when CONTENT is not a valid range."
   (suffix "" :type string :read-only t)
   (options nil :read-only t))
 
+(defun %brace-expansion-literal-results (frame suffix-expansions)
+  (let ((literal (%brace-expansion-frame-literal frame)))
+    (mapcar (lambda (suffix)
+              (concatenate 'string literal suffix))
+            suffix-expansions)))
+
+(defun %brace-expansion-cartesian-product (frame suffix-expansions)
+  (loop for option in (brace-expansion-frame-options frame)
+        append (loop for option-expansion in (expand-braces option)
+                     append (loop for suffix in suffix-expansions
+                                  collect (concatenate 'string
+                                                       (brace-expansion-frame-prefix frame)
+                                                       option-expansion
+                                                       suffix)))))
+
 (defun %brace-expansion-frame (input open close)
   "Create the domain frame for the first matched brace group in INPUT."
   (let ((content (subseq input (1+ open) close)))
@@ -316,25 +328,16 @@ range CONTENT, or NIL when CONTENT is not a valid range."
 list of strings (always at least one). A brace group with no top-level comma and
 no valid range is left literal, matching shell behavior."
   (let ((open (position #\{ input)))
-    (if (null open)
-        (list input)
-        (let ((close (%find-matching-brace input open)))
-          (if (null close)
-              (list input)
-              (let ((frame (%brace-expansion-frame input open close)))
-                (if (null (brace-expansion-frame-options frame))
-                    (mapcar (lambda (s)
-                              (concatenate 'string
-                                           (%brace-expansion-frame-literal frame)
-                                           s))
-                            (expand-braces (brace-expansion-frame-suffix frame)))
-                    (let ((suffix-expansions
-                            (expand-braces (brace-expansion-frame-suffix frame))))
-                      (loop for opt in (brace-expansion-frame-options frame)
-                            append (loop for opt-exp in (expand-braces opt)
-                                         append (loop for suf in suffix-expansions
-                                                      collect (concatenate
-                                                               'string
-                                                               (brace-expansion-frame-prefix frame)
-                                                               opt-exp
-                                                               suf))))))))))))
+    (cond
+      ((null open)
+       (list input))
+      (t
+       (let ((close (%find-matching-brace input open)))
+         (if (null close)
+             (list input)
+             (let* ((frame (%brace-expansion-frame input open close))
+                    (suffix-expansions
+                      (expand-braces (brace-expansion-frame-suffix frame))))
+               (if (null (brace-expansion-frame-options frame))
+                   (%brace-expansion-literal-results frame suffix-expansions)
+                   (%brace-expansion-cartesian-product frame suffix-expansions)))))))))

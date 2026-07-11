@@ -3,6 +3,20 @@
 
 (in-suite expansion-tests)
 
+(defmacro %assert-parameter-operator-fields (form op word colon-p)
+  `(let ((operator ,form))
+     (is (equal ,op (nshell.domain.expansion::parameter-operator-op operator)))
+     (is (string= ,word
+                  (nshell.domain.expansion::parameter-operator-word-text operator)))
+     (is (eq ,colon-p
+             (nshell.domain.expansion::parameter-operator-colon-p operator)))))
+
+(defmacro %assert-parameter-binding-fields (form set-p value)
+  `(let ((binding ,form))
+     (is (eq ,set-p (nshell.domain.expansion::parameter-binding-set-p binding)))
+     (is (string= ,value
+                  (nshell.domain.expansion::parameter-binding-value binding)))))
+
 (test parameter-default-when-unset
   "${VAR:-word} yields the value when set and the word when unset/empty."
   (let ((env (test-expansion-env)))
@@ -21,6 +35,41 @@
                                        env)
       ("yes" "${FOO:+yes}")
       ("" "${MISSING:+yes}"))))
+
+(test parameter-required-operator-signals-for-unset-or-null-values
+  "${VAR?word} and ${VAR:?word} signal only when their unset/null predicate matches."
+  (let ((env (nshell.domain.environment:make-environment)))
+    (setf env (nshell.domain.environment:env-set env "FULL" "value" nil))
+    (setf env (nshell.domain.environment:env-set env "EMPTY" "" nil))
+    (is (string= "value"
+                 (nshell.domain.expansion:expand-variables "${FULL:?required}" env)))
+    (is (string= ""
+                 (nshell.domain.expansion:expand-variables "${EMPTY?required}" env)))
+    (signals nshell.domain.expansion:parameter-expansion-error
+      (nshell.domain.expansion:expand-variables "${MISSING?required}" env))
+    (signals nshell.domain.expansion:parameter-expansion-error
+      (nshell.domain.expansion:expand-variables "${EMPTY:?required}" env))
+    (handler-case
+        (nshell.domain.expansion:expand-variables "${MISSING:?required value}" env)
+      (nshell.domain.expansion:parameter-expansion-error (condition)
+        (is (string= "MISSING"
+                     (nshell.domain.expansion:parameter-expansion-error-name condition)))
+        (is (string= "required value"
+                     (nshell.domain.expansion:parameter-expansion-error-message condition)))))))
+
+(test parameter-required-operator-uses-default-diagnostics
+  "${VAR?} and ${VAR:?} provide useful diagnostics when no word is supplied."
+  (let ((env (nshell.domain.environment:make-environment)))
+    (handler-case
+        (nshell.domain.expansion:expand-variables "${MISSING?}" env)
+      (nshell.domain.expansion:parameter-expansion-error (condition)
+        (is (string= "parameter not set"
+                     (nshell.domain.expansion:parameter-expansion-error-message condition)))))
+    (handler-case
+        (nshell.domain.expansion:expand-variables "${MISSING:?}" env)
+      (nshell.domain.expansion:parameter-expansion-error (condition)
+        (is (string= "parameter null or not set"
+                     (nshell.domain.expansion:parameter-expansion-error-message condition)))))))
 
 (test parameter-assign-default-side-effect
   "${VAR:=word} assigns the expanded default only when the operator fires."
@@ -65,6 +114,24 @@
       ("3" "${#FOO}")
       ("0" "${#MISSING}"))))
 
+(test parameter-substring
+  "${VAR:offset[:length]} extracts substrings without stealing :- operators."
+  (let ((env (nshell.domain.environment:make-environment)))
+    (setf env (nshell.domain.environment:env-set env "LONG" "abcdef" nil))
+    (%assert-expansion-cases-with-env (string=
+                                       #'nshell.domain.expansion:expand-variables
+                                       env)
+      ("bcdef" "${LONG:1}")
+      ("bcd" "${LONG:1:3}")
+      ("" "${LONG:0:0}")
+      ("ef" "${LONG: -2}")
+      ("cd" "${LONG:2:-2}")
+      ("abcdef" "${LONG:-1}")
+      ("1" "${MISSING:-1}")
+      ("" "${LONG:99}")
+      ("fallback" "${MISSING:-fallback}")
+      ("abcdef:abc" "${LONG:abc}"))))
+
 (test parameter-prefix-and-suffix-strip
   "${VAR#pat} / ## strip a prefix; ${VAR%pat} / %% strip a suffix (glob)."
   (let ((env (test-expansion-env)))            ; FOO = bar
@@ -95,50 +162,33 @@
                                      (test-expansion-env))
     ("value=bar" "value=${FOO}")))
 
-(test parameter-operator-parts-classifies-colon-and-word
-  "parameter-operator-parts projects a braced operator tail into a value object."
-  (flet ((operator (rest)
-           (nshell.domain.expansion::%parameter-operator-parts rest)))
-    (let ((default (operator ":-fallback"))
-          (alternate (operator "+yes"))
-          (long-prefix (operator "##pat"))
-          (empty (operator "")))
-      (is (nshell.domain.expansion::parameter-operator-p default))
-      (is (char= #\- (nshell.domain.expansion::parameter-operator-op default)))
-      (is (string= "fallback"
-                   (nshell.domain.expansion::parameter-operator-word-text default)))
-      (is (nshell.domain.expansion::parameter-operator-colon-p default))
-      (is (char= #\+ (nshell.domain.expansion::parameter-operator-op alternate)))
-      (is (string= "yes"
-                   (nshell.domain.expansion::parameter-operator-word-text alternate)))
-      (is (not (nshell.domain.expansion::parameter-operator-colon-p alternate)))
-      (is (char= #\# (nshell.domain.expansion::parameter-operator-op long-prefix)))
-      (is (string= "#pat"
-                   (nshell.domain.expansion::parameter-operator-word-text long-prefix)))
-      (is (null (nshell.domain.expansion::parameter-operator-op empty)))
-      (is (string= "" (nshell.domain.expansion::parameter-operator-word-text empty)))
-      (is (not (nshell.domain.expansion::parameter-operator-colon-p empty))))))
+  (test parameter-operator-parts-classifies-colon-and-word
+    "parameter-operator-parts projects a braced operator tail into a value object."
+    (flet ((operator (rest)
+             (nshell.domain.expansion::%parameter-operator-parts rest)))
+      (%assert-parameter-operator-fields (operator ":-fallback") #\- "fallback" t)
+      (%assert-parameter-operator-fields (operator "+yes") #\+ "yes" nil)
+      (%assert-parameter-operator-fields (operator "##pat") #\# "#pat" nil)
+      (%assert-parameter-operator-fields (operator "") nil "" nil)))
 
-(test parameter-binding-tracks-set-empty-and-default-applicability
-  "parameter-binding keeps env lookup state separate from braced operator parsing."
-  (let ((env (nshell.domain.environment:make-environment)))
-    (setf env (nshell.domain.environment:env-set env "EMPTY" "" nil))
-    (setf env (nshell.domain.environment:env-set env "FULL" "value" nil))
-    (let ((missing (nshell.domain.expansion::%parameter-binding "MISSING" env))
-          (empty (nshell.domain.expansion::%parameter-binding "EMPTY" env))
-          (full (nshell.domain.expansion::%parameter-binding "FULL" env))
-          (colon-default (nshell.domain.expansion::%parameter-operator-parts ":-fallback"))
-          (unset-default (nshell.domain.expansion::%parameter-operator-parts "-fallback")))
-      (is (nshell.domain.expansion::parameter-binding-p missing))
-      (is (not (nshell.domain.expansion::parameter-binding-set-p missing)))
-      (is (string= "" (nshell.domain.expansion::parameter-binding-value missing)))
-      (is (nshell.domain.expansion::parameter-binding-set-p empty))
-      (is (string= "" (nshell.domain.expansion::parameter-binding-value empty)))
-      (is (string= "value" (nshell.domain.expansion::parameter-binding-value full)))
-      (is (nshell.domain.expansion::%parameter-default-applicable-p missing unset-default))
-      (is (not (nshell.domain.expansion::%parameter-default-applicable-p empty unset-default)))
-      (is (nshell.domain.expansion::%parameter-default-applicable-p empty colon-default))
-      (is (not (nshell.domain.expansion::%parameter-default-applicable-p full colon-default))))))
+  (test parameter-binding-tracks-set-empty-and-default-applicability
+    "parameter-binding keeps env lookup state separate from braced operator parsing."
+    (let ((env (nshell.domain.environment:make-environment)))
+      (setf env (nshell.domain.environment:env-set env "EMPTY" "" nil))
+      (setf env (nshell.domain.environment:env-set env "FULL" "value" nil))
+      (let ((missing (nshell.domain.expansion::%parameter-binding "MISSING" env))
+            (empty (nshell.domain.expansion::%parameter-binding "EMPTY" env))
+            (full (nshell.domain.expansion::%parameter-binding "FULL" env))
+            (colon-default (nshell.domain.expansion::%parameter-operator-parts ":-fallback"))
+            (unset-default (nshell.domain.expansion::%parameter-operator-parts "-fallback")))
+        (%assert-parameter-binding-fields missing nil "")
+        (%assert-parameter-binding-fields empty t "")
+        (%assert-parameter-binding-fields full t "value")
+        (is (nshell.domain.expansion::parameter-binding-p missing))
+        (is (nshell.domain.expansion::%parameter-default-applicable-p missing unset-default))
+        (is (not (nshell.domain.expansion::%parameter-default-applicable-p empty unset-default)))
+        (is (nshell.domain.expansion::%parameter-default-applicable-p empty colon-default))
+        (is (not (nshell.domain.expansion::%parameter-default-applicable-p full colon-default))))))
 
 (test apply-parameter-operator-owns-braced-operator-semantics
   "apply-parameter-operator maps parsed operators and bindings to expansion results."
@@ -148,6 +198,7 @@
           (full (nshell.domain.expansion::%parameter-binding "FULL" env))
           (default (nshell.domain.expansion::%parameter-operator-parts ":-fallback"))
           (alternate (nshell.domain.expansion::%parameter-operator-parts ":+alt"))
+          (required (nshell.domain.expansion::%parameter-operator-parts ":?required"))
           (unknown (nshell.domain.expansion::%parameter-operator-parts ":!tail")))
       (flet ((apply-op (binding operator word rest)
                (nshell.domain.expansion::%apply-parameter-operator
@@ -156,16 +207,19 @@
         (is (string= "value" (apply-op full default "fallback" ":-fallback")))
         (is (string= "" (apply-op missing alternate "alt" ":+alt")))
         (is (string= "alt" (apply-op full alternate "alt" ":+alt")))
+        (is (string= "value" (apply-op full required "required" ":?required")))
+        (signals nshell.domain.expansion:parameter-expansion-error
+          (apply-op missing required "required" ":?required"))
         (is (string= "value:!tail" (apply-op full unknown "tail" ":!tail")))))))
 
 (test parse-argv-index-parses-integer-or-returns-default
   "parse-argv-index returns the parsed integer, default for empty string, nil on failure."
   (flet ((parse (text &optional default)
            (nshell.domain.expansion::%parse-argv-index text default)))
-    (is (= 3  (parse "3")))
+    (is (= 3 (parse "3")))
     (is (= -1 (parse "-1")))
     (is (null (parse "abc")))
-    (is (= 0  (parse "" 0)))
+    (is (= 0 (parse "" 0)))
     (is (null (parse "")))))
 
 (test list-selection-spec-classifies-index-and-range
@@ -189,13 +243,13 @@
 
 (test bracket-spec-after-name-classifies-index-syntax
   "Bracket syntax is classified before argv/env lookup applies index semantics."
-  (flet ((scan (input name-end)
-           (multiple-value-list
-            (nshell.domain.expansion::%bracket-spec-after-name
-             input name-end (length input)))))
-    (is (equal '("2..-1" 12 :indexed) (scan "$argv[2..-1]" 5)))
-    (is (equal '(nil 5 :unbalanced) (scan "$argv[2" 5)))
-    (is (equal '(nil) (scan "$argv" 5)))))
+  (%assert-multiple-value-cases (equal
+                                 (lambda (input name-end)
+                                   (nshell.domain.expansion::%bracket-spec-after-name
+                                    input name-end (length input))))
+    (("2..-1" 12 :indexed) "$argv[2..-1]" 5)
+    ((nil 5 :unbalanced) "$argv[2" 5)
+    ((nil) "$argv" 5)))
 
 (test variable-reference-syntax-at-projects-name-and-bracket
   "variable-reference-syntax-at owns $NAME scanning and bracket classification."
@@ -228,12 +282,12 @@
 (test argv-expansion-after-name-resolves-bare-and-indexed-argv
   "argv-expansion-after-name owns bare join vs indexed argv expansion semantics."
   (let ((nshell.domain.expansion:*positional-args* '("alpha" "beta" "gamma")))
-    (flet ((expand (input)
-             (multiple-value-list
-              (nshell.domain.expansion::%argv-expansion-after-name
-               input 5 (length input)))))
-      (is (equal '("alpha beta gamma" 5) (expand "$argv")))
-      (is (equal '("beta" 8) (expand "$argv[2]"))))))
+    (%assert-after-name-expansion-cases
+        ((lambda (input)
+           (nshell.domain.expansion::%argv-expansion-after-name
+            input 5 (length input))))
+      (("alpha beta gamma" 5) "$argv")
+      (("beta" 8) "$argv[2]"))))
 
 (test variable-expansion-after-name-resolves-scalar-and-indexed-values
   "variable-expansion-after-name owns scalar fallback vs indexed env expansion semantics."
@@ -241,12 +295,12 @@
     (setf env (nshell.domain.environment:env-set env "SCALAR" "plain" nil))
     (setf env (nshell.domain.environment:env-set-values
                env "WORDS" '("one" "two" "three") nil))
-    (flet ((expand (input name name-end)
-             (multiple-value-list
-              (nshell.domain.expansion::%variable-expansion-after-name
-               input name env name-end (length input)))))
-      (is (equal '("plain" 7) (expand "$SCALAR" "SCALAR" 7)))
-      (is (equal '("two" 9) (expand "$WORDS[2]" "WORDS" 6))))))
+    (%assert-after-name-expansion-cases
+        ((lambda (input name name-end)
+           (nshell.domain.expansion::%variable-expansion-after-name
+            input name env name-end (length input))))
+      (("plain" 7) "$SCALAR" "SCALAR" 7)
+      (("two" 9) "$WORDS[2]" "WORDS" 6))))
 
 (test argv-normalized-index-converts-fish-style-indices-to-zero-based
   "argv-normalized-index converts 1-based and negative indices to 0-based offsets."

@@ -139,7 +139,9 @@
            #:expand-command-name-fields-by-quote-style
            #:expand-command-name-by-quote-style
            #:expand-double-quoted #:expand-arithmetic #:evaluate-arithmetic
-           #:expand-braces #:argv-reference-fields #:*positional-args*))
+           #:expand-braces #:argv-reference-fields #:*positional-args*
+           #:parameter-expansion-error #:parameter-expansion-error-name
+           #:parameter-expansion-error-message))
 
   (defpackage #:nshell.domain.completion
   (:use #:cl)

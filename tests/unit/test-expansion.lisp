@@ -36,6 +36,17 @@ Each case is (EXPECTED INPUT &rest ARGS)."
                                    (funcall ,expander-fn ,input ,env)))
          ,@cases))))
 
+(defmacro %assert-multiple-value-cases ((predicate builder) &body cases)
+  "Assert CASES against a BUILDER that returns multiple values."
+  (let ((expander (gensym "EXPANDER-")))
+    `(let ((,expander ,builder))
+       ,@(mapcar (lambda (case)
+                   (destructuring-bind (expected &rest args) case
+                     `(is (,predicate ',expected
+                                      (multiple-value-list
+                                       (funcall ,expander ,@args))))))
+                 cases))))
+
 (defmacro %assert-quote-style-dispatch-case (style expected branch)
   `(let ((observed-branch nil))
      (is (equal ,expected

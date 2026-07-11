@@ -15,13 +15,6 @@
   (exclusive-options nil :type list)
   description)
 
-(defstruct (%completion-help-command-facts
-            (:constructor %make-completion-help-command-facts
-                (flags option-values))
-            (:conc-name %completion-help-command-facts-))
-  (flags nil :type list :read-only t)
-  (option-values nil :type list :read-only t))
-
 (defun make-empty-knowledge-base ()
   (%make-knowledge-base))
 
@@ -45,34 +38,17 @@
         (push value seen)
         (push value result)))))
 
-(defstruct (%option-value-spec-list-projection
-            (:constructor %make-option-value-spec-list-projection
-                (option values valid-p))
-            (:conc-name %option-value-spec-list-projection-))
-  option
-  values
-  valid-p)
-
-(defun %project-option-value-spec-list (spec)
-  (if (consp spec)
-      (let ((option (first spec)))
-        (%make-option-value-spec-list-projection
-         option
-         (rest spec)
-         (stringp option)))
-      (%make-option-value-spec-list-projection nil nil nil)))
-
 (defun %kb-option-value-spec-option (spec)
-  (%option-value-spec-list-projection-option
-   (%project-option-value-spec-list spec)))
+  (and (consp spec)
+       (first spec)))
 
 (defun %kb-option-value-spec-values (spec)
-  (%option-value-spec-list-projection-values
-   (%project-option-value-spec-list spec)))
+  (if (consp spec)
+      (rest spec)
+      nil))
 
 (defun %valid-kb-option-value-spec-p (spec)
-  (%option-value-spec-list-projection-valid-p
-   (%project-option-value-spec-list spec)))
+  (stringp (%kb-option-value-spec-option spec)))
 
 (defun %kb-option-value-spec-for-option-p (spec opt-name)
   (and (%valid-kb-option-value-spec-p spec)
@@ -130,25 +106,22 @@
 (defun kb-command-present-p (kb cmd-name)
   (not (null (%kb-command-entry kb cmd-name))))
 
-(defun %kb-command-entry-slot (kb cmd-name accessor)
-  (let ((entry (%kb-command-entry kb cmd-name)))
-    (when entry
-      (funcall accessor entry))))
+(defmacro %define-kb-command-accessor (name accessor)
+  `(defun ,name (kb cmd-name)
+     (let ((entry (%kb-command-entry kb cmd-name)))
+       (and entry
+            (,accessor entry)))))
 
-(defun kb-command-subcommands (kb cmd-name)
-  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-subcommands))
-
-(defun kb-command-flags (kb cmd-name)
-  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-flags))
-
-(defun kb-command-option-values (kb cmd-name)
-  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-option-values))
-
-(defun kb-command-exclusive-options (kb cmd-name)
-  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-exclusive-options))
-
-(defun kb-command-description (kb cmd-name)
-  (%kb-command-entry-slot kb cmd-name #'%kb-command-entry-description))
+(%define-kb-command-accessor kb-command-subcommands
+  %kb-command-entry-subcommands)
+(%define-kb-command-accessor kb-command-flags
+  %kb-command-entry-flags)
+(%define-kb-command-accessor kb-command-option-values
+  %kb-command-entry-option-values)
+(%define-kb-command-accessor kb-command-exclusive-options
+  %kb-command-entry-exclusive-options)
+(%define-kb-command-accessor kb-command-description
+  %kb-command-entry-description)
 
 (defun %merge-kb-command-entry-facts
     (entry &key subcommands flags option-values exclusive-options description)
@@ -198,116 +171,6 @@
 (defun kb-add-option (kb cmd-name opt-name &key values)
   (let ((entry (%ensure-kb-command-entry kb cmd-name)))
     (%add-kb-command-entry-option entry opt-name values)))
-
-(defun %completion-help-lines (text)
-  (let ((lines nil)
-        (start 0)
-        (length (length text)))
-    (loop
-      for position = (position #\Newline text :start start)
-      do (let ((end (or position length)))
-           (push (subseq text start end) lines))
-      while position
-      do (setf start (1+ position)))
-    (nreverse lines)))
-
-(defun %completion-help-token-delimiter-p (char)
-  (find char '(#\Space #\Tab #\, #\; #\) #\( #\[ #\] #\{ #\})))
-
-(defun %completion-help-option-end (line start)
-  (or (position-if #'%completion-help-token-delimiter-p line :start start)
-      (length line)))
-
-(defun %completion-help-clean-option-token (token)
-  (let* ((trimmed (string-trim '(#\Space #\Tab #\, #\; #\. #\: #\) #\( #\[ #\] #\{ #\})
-                               token))
-         (equals-position (position #\= trimmed)))
-    (if equals-position
-        (subseq trimmed 0 equals-position)
-        trimmed)))
-
-(defun %completion-help-option-token-p (token)
-  (and (stringp token)
-       (< 1 (length token))
-       (char= (char token 0) #\-)
-       (not (string= token "-"))
-       (not (string= token "--"))))
-
-(defun %completion-help-options-in-line (line)
-  (let ((options nil)
-        (start 0)
-        (length (length line)))
-    (loop while (< start length)
-          for position = (position #\- line :start start)
-          while position
-          do (let* ((end (%completion-help-option-end line position))
-                    (token (%completion-help-clean-option-token
-                            (subseq line position end))))
-               (when (%completion-help-option-token-p token)
-                 (push token options))
-               (setf start (max (1+ position) end))))
-    (%unique-string-values (nreverse options))))
-
-(defun %completion-split-on-char (text delimiter)
-  (let ((parts nil)
-        (start 0)
-        (length (length text)))
-    (loop
-      for position = (position delimiter text :start start)
-      do (let ((end (or position length)))
-           (push (subseq text start end) parts))
-      while position
-      do (setf start (1+ position)))
-    (nreverse parts)))
-
-(defun %completion-help-enum-value-p (value)
-  (and (< 0 (length value))
-       (not (position-if (lambda (char)
-                           (find char '(#\Space #\Tab #\Newline #\Return)))
-                         value))))
-
-(defun %completion-help-enum-values (line)
-  (let ((open-position (position #\( line)))
-    (when open-position
-      (let ((close-position (position #\) line :start (1+ open-position))))
-        (when close-position
-          (let ((content (subseq line (1+ open-position) close-position)))
-            (when (position #\| content)
-              (let ((values (remove-if-not
-                             #'%completion-help-enum-value-p
-                             (mapcar (lambda (value)
-                                       (string-trim '(#\Space #\Tab #\' #\") value))
-                                     (%completion-split-on-char content #\|)))))
-                (when values values)))))))))
-
-(defun %completion-help-option-value-specs (options values)
-  (when values
-    (loop for option in options
-          when (%starts-with-p "--" option)
-            collect (%make-kb-option-value-spec option values))))
-
-(defun %completion-help-command-facts (help-text)
-  (let ((flags nil)
-        (option-values nil))
-    (dolist (line (%completion-help-lines help-text))
-      (let* ((options (%completion-help-options-in-line line))
-             (values (%completion-help-enum-values line)))
-        (setf flags (append flags options)
-              option-values
-              (append option-values
-                      (%completion-help-option-value-specs options values)))))
-    (%make-completion-help-command-facts
-     (%unique-string-values flags)
-     option-values)))
-
-(defun kb-add-command-from-help (kb cmd-name help-text &key description)
-  "Add command completion metadata by parsing already-fetched help text."
-  (let ((facts (%completion-help-command-facts help-text)))
-    (kb-add-command kb cmd-name
-                    :flags (%completion-help-command-facts-flags facts)
-                    :option-values
-                    (%completion-help-command-facts-option-values facts)
-                    :description description)))
 
 (defun kb-remove-command (kb cmd-name)
   (remhash cmd-name (%knowledge-base-commands kb)))

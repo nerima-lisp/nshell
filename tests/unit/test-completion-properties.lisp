@@ -121,8 +121,8 @@
 
 (test pbt-rule-prover-fact-round-trips-generated-values
   (check-property (:trials 50)
-      ((command (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
-       (completion (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text))
+      ((command (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
+       (completion (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word))
     (let ((kb (make-empty-rule-kb)))
       (nshell.domain.completion:assert-fact!
        kb
@@ -138,7 +138,7 @@
 
 (test pbt-knowledge-base-description-preserves-command-completion
   (check-property (:trials 50)
-      ((suffix (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
+      ((suffix (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
        (description (gen-prompt-text :min-length 0 :max-length 24) #'shrink-prompt-text))
     (let* ((command (concatenate 'string "zz-nshell-" suffix))
            (kb (nshell.domain.completion:make-empty-knowledge-base)))
@@ -181,8 +181,8 @@
 (test pbt-completion-ranking-prefers-higher-score
   (check-property (:trials 50)
       ((prefix (gen-command-prefix :min-length 1 :max-length 4) nil)
-       (low-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
-       (high-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
+       (low-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
+       (high-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
        (base-score (gen-in-range 0 100) nil)
        (score-delta (gen-in-range 1 100) nil))
     (let* ((low-text (concatenate 'string prefix "-z-" low-tail))
@@ -197,8 +197,8 @@
 (test pbt-completion-ranking-breaks-score-ties-lexically
   (check-property (:trials 50)
       ((prefix (gen-command-prefix :min-length 1 :max-length 4) nil)
-       (early-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
-       (late-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
+       (early-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
+       (late-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
        (score (gen-in-range 0 100) nil))
     (let* ((early-text (concatenate 'string prefix "-a-" early-tail))
            (late-text (concatenate 'string prefix "-z-" late-tail))
@@ -210,7 +210,7 @@
 
 (test pbt-completion-merge-keeps-higher-scored-duplicate
   (check-property (:trials 50)
-      ((text (gen-shell-word :min-length 1 :max-length 10) #'shrink-prompt-text)
+      ((text (gen-shell-word :min-length 1 :max-length 10) #'shrink-shell-word)
        (low-score (gen-in-range 0 50) nil)
        (score-delta (gen-in-range 1 50) nil)
        (description (gen-prompt-text :min-length 1 :max-length 16) #'shrink-prompt-text))
@@ -229,7 +229,7 @@
 
 (test pbt-completion-merge-keeps-described-duplicate-on-score-tie
   (check-property (:trials 50)
-      ((text (gen-shell-word :min-length 1 :max-length 10) #'shrink-prompt-text)
+      ((text (gen-shell-word :min-length 1 :max-length 10) #'shrink-shell-word)
        (score (gen-in-range 0 100) nil)
        (description (gen-prompt-text :min-length 1 :max-length 16) #'shrink-prompt-text))
     (let* ((plain (nshell.domain.completion:make-candidate text
@@ -317,8 +317,8 @@
 (test pbt-argument-completion-is-shell-token-aware
   (check-property (:trials 50)
       ((suffix (gen-command-prefix :min-length 1 :max-length 8) nil)
-       (left (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
-       (right (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
+       (left (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
+       (right (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
        (stem (gen-command-prefix :min-length 1 :max-length 4) nil))
     (let* ((command (concatenate 'string "zz-nshell-" suffix))
            (prefix (concatenate 'string "--" stem))

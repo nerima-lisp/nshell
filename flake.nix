@@ -3,9 +3,13 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    cl-prolog = {
+      url = "path:../cl-prolog";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, cl-prolog }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -29,6 +33,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           src = sourceFor pkgs;
+          clProlog = cl-prolog.packages.${system}.default;
         in
         {
           default = pkgs.sbcl.buildASDFSystem {
@@ -36,7 +41,7 @@
             version = "0.4.0";
             src = src;
             systems = [ "nshell" ];
-            lispLibs = [];
+            lispLibs = [ clProlog ];
             buildScript = pkgs.writeText "build-nshell.lisp" ''
               (require :asdf)
               (setf asdf:*compile-file-warnings-behaviour* :warn)
@@ -75,7 +80,10 @@
             version = "0.4.0";
             src = src;
             systems = [ "nshell/test" ];
-            lispLibs = [ pkgs.sbclPackages.fiveam ];
+            lispLibs = [
+              clProlog
+              pkgs.sbclPackages.fiveam
+            ];
           };
         });
 
@@ -90,6 +98,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         src = sourceFor pkgs;
         bin = "${self.packages.${system}.default}/bin/nshell";
+        clProlog = cl-prolog.packages.${system}.default;
       in {
         # Verify the default package compiles and builds successfully
         build = self.packages.${system}.default;
@@ -100,7 +109,10 @@
           version = "0.4.0";
           src = src;
           systems = [ "nshell/test" ];
-          lispLibs = [ pkgs.sbclPackages.fiveam ];
+          lispLibs = [
+            clProlog
+            pkgs.sbclPackages.fiveam
+          ];
           buildScript = pkgs.writeText "run-tests.lisp" ''
             (require :asdf)
             (setf asdf:*compile-file-warnings-behaviour* :warn)
@@ -170,14 +182,19 @@
         {
           default = pkgs.mkShell {
             packages = [
-              (pkgs.sbcl.withPackages (ps: [ ps.fiveam ]))
+              pkgs.sbcl
+              pkgs.sbclPackages.fiveam
+              cl-prolog.packages.${system}.default
             ];
             shellHook = ''
               export CL_SOURCE_REGISTRY=$PWD
-              alias test='sbcl --noinform --eval "(require :asdf)" --eval "(push (truename \"./\") asdf:*central-registry*)" --eval "(asdf:test-system :nshell/test)" --quit'
+              export NSHELL_ROOT=$PWD
+              alias test='cd "$NSHELL_ROOT" && sbcl --noinform --eval "(require :asdf)" --eval "(push (truename \"./\") asdf:*central-registry*)" --eval "(asdf:test-system :nshell/test)" --quit'
+              alias coverage='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'
               echo ""
               echo "nshell development environment"
               echo "  test  - Run the nshell test suite"
+              echo "  coverage - Run the test suite and write HTML coverage to coverage/"
               echo "  sbcl  - Interactive Common Lisp (with fiveam)"
               echo ""
             '';

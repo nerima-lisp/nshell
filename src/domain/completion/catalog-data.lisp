@@ -10,26 +10,17 @@
   (when (consp subcommand)
     (getf subcommand :description)))
 
-(defun %catalog-command (entry)
-  (%catalog-command-entry-command entry))
+(defmacro define-catalog-entry-accessor (name slot)
+  `(defun ,name (entry)
+     (,slot entry)))
 
-(defun %catalog-description (entry)
-  (%catalog-command-entry-description entry))
-
-(defun %catalog-synopsis (entry)
-  (%catalog-command-entry-synopsis entry))
-
-(defun %catalog-subcommands (entry)
-  (%catalog-command-entry-subcommands entry))
-
-(defun %catalog-flags (entry)
-  (%catalog-command-entry-flags entry))
-
-(defun %catalog-option-values (entry)
-  (%catalog-command-entry-option-values entry))
-
-(defun %catalog-exclusive-options (entry)
-  (%catalog-command-entry-exclusive-options entry))
+(define-catalog-entry-accessor %catalog-command %catalog-command-entry-command)
+(define-catalog-entry-accessor %catalog-description %catalog-command-entry-description)
+(define-catalog-entry-accessor %catalog-synopsis %catalog-command-entry-synopsis)
+(define-catalog-entry-accessor %catalog-subcommands %catalog-command-entry-subcommands)
+(define-catalog-entry-accessor %catalog-flags %catalog-command-entry-flags)
+(define-catalog-entry-accessor %catalog-option-values %catalog-command-entry-option-values)
+(define-catalog-entry-accessor %catalog-exclusive-options %catalog-command-entry-exclusive-options)
 
 (defstruct (%catalog-command-projection
             (:constructor %make-catalog-command-projection

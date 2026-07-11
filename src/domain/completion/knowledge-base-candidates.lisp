@@ -91,18 +91,13 @@
       (%catalog-command-entry-option-values entry)))
 
 (defun %entry-option-value-spec-option (spec)
-  (%option-value-spec-list-projection-option
-   (%project-option-value-spec-list spec)))
+  (%kb-option-value-spec-option spec))
 
 (defun %entry-option-value-spec-values (spec)
-  (%option-value-spec-list-projection-values
-   (%project-option-value-spec-list spec)))
+  (%kb-option-value-spec-values spec))
 
 (defun %entry-option-value-spec-for-option-p (spec option)
-  (let ((projection (%project-option-value-spec-list spec)))
-    (and (%option-value-spec-list-projection-valid-p projection)
-         (string= option
-                  (%option-value-spec-list-projection-option projection)))))
+  (%kb-option-value-spec-for-option-p spec option))
 
 (defun %entry-option-values (entry option)
   (%unique-string-values

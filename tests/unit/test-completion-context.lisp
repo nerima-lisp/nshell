@@ -332,7 +332,7 @@
                 "git" ":/bin" #'executable-p :empty-directory ".")))))
 
 (test path-command-helpers-are-internal-boundaries
-  "Path command helper functions should not expose unprefixed compatibility names."
+  "Path command helper functions should not expose unprefixed legacy names."
   (is (eq :external
           (nth-value 1
                      (find-symbol "COMMAND-PATH-CANDIDATES"
@@ -440,7 +440,7 @@
     (is (not (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-FILE-PREFIX")))))
 
 (test file-completion-helpers-are-internal-boundaries
-  "File completion helper functions should not expose unprefixed compatibility names."
+  "File completion helper functions should not expose unprefixed legacy names."
   (flet ((defined-symbol-p (name)
            (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
     (dolist (name '("%TRIM-TRAILING-PATH-SEPARATORS"

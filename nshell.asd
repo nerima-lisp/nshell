@@ -5,7 +5,7 @@
   :homepage "https://github.com/takeokunn/nshell"
   :source-control (:git "https://github.com/takeokunn/nshell.git")
   :description "Modern interactive shell in Common Lisp"
-  :depends-on ()
+  :depends-on ("cl-prolog")
   :pathname "src"
   :serial t
   :components

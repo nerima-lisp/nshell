@@ -95,9 +95,10 @@
                  :mode :vi-d))
          (edit (nshell.presentation::vi-operator-edit-for-motion
                 state #\w :d)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-vi-operator-edit)
+        :absent (nshell.presentation::make-vi-operator-edit))
     (is (nshell.presentation::vi-operator-edit-p edit))
-    (is (fboundp 'nshell.presentation::%make-vi-operator-edit))
-    (is (not (fboundp 'nshell.presentation::make-vi-operator-edit)))
     (is (= 4 (nshell.presentation::vi-operator-edit-start edit)))
     (is (= 7 (nshell.presentation::vi-operator-edit-end edit)))
     (is (= 4 (nshell.presentation::vi-operator-edit-cursor edit)))
@@ -267,9 +268,10 @@
                              :vi-count 12))
          (transition (nshell.presentation::vi-input-transition-clearing-count
                       state :history-prev)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-vi-input-transition)
+        :absent (nshell.presentation::make-vi-input-transition))
     (is (nshell.presentation::vi-input-transition-p transition))
-    (is (fboundp 'nshell.presentation::%make-vi-input-transition))
-    (is (not (fboundp 'nshell.presentation::make-vi-input-transition)))
     (is (eq :history-prev
             (nshell.presentation::vi-input-transition-output transition)))
     (is (null (nshell.presentation::input-state-vi-count
@@ -288,9 +290,10 @@
                              :mode :vi-visual
                              :vi-visual-anchor 4))
          (selection (nshell.presentation::vi-visual-selection-for-state state)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-vi-visual-selection)
+        :absent (nshell.presentation::make-vi-visual-selection))
     (is (nshell.presentation::vi-visual-selection-p selection))
-    (is (fboundp 'nshell.presentation::%make-vi-visual-selection))
-    (is (not (fboundp 'nshell.presentation::make-vi-visual-selection)))
     (is (= 1 (nshell.presentation::vi-visual-selection-start selection)))
     (is (= 5 (nshell.presentation::vi-visual-selection-end selection)))
     (is (= 1 (nshell.presentation::vi-visual-selection-cursor selection)))))
@@ -329,9 +332,10 @@
                              :last-candidates '("alpha")
                              :suggestion "ab"))
          (edit (nshell.presentation::vi-visual-yank-edit-for-range state 0 3 0)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-vi-visual-yank-edit)
+        :absent (nshell.presentation::make-vi-visual-yank-edit))
     (is (nshell.presentation::vi-visual-yank-edit-p edit))
-    (is (fboundp 'nshell.presentation::%make-vi-visual-yank-edit))
-    (is (not (fboundp 'nshell.presentation::make-vi-visual-yank-edit)))
     (is (= 0 (nshell.presentation::vi-visual-yank-edit-cursor edit)))
     (is (string= "abc" (nshell.presentation::vi-visual-yank-edit-selected edit)))
     (multiple-value-bind (committed output)
@@ -366,9 +370,10 @@
                              :vi-count 2
                              :vi-visual-anchor 1))
          (edit (nshell.presentation::vi-visual-anchor-swap-edit-for-state state)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-vi-visual-anchor-swap-edit)
+        :absent (nshell.presentation::make-vi-visual-anchor-swap-edit))
     (is (nshell.presentation::vi-visual-anchor-swap-edit-p edit))
-    (is (fboundp 'nshell.presentation::%make-vi-visual-anchor-swap-edit))
-    (is (not (fboundp 'nshell.presentation::make-vi-visual-anchor-swap-edit)))
     (is (= 4 (nshell.presentation::vi-visual-anchor-swap-edit-cursor edit)))
     (is (= 1 (nshell.presentation::vi-visual-anchor-swap-edit-anchor edit)))
     (multiple-value-bind (committed output)

@@ -67,9 +67,9 @@
 (test pbt-input-state-alt-d-kills-one-escaped-space-token
   "Meta-D treats an escaped space as token content instead of splitting the token."
   (check-property (:trials 50)
-      ((left (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
-       (right (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
-       (tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text))
+      ((left (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
+       (right (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
+       (tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word))
     (let* ((token (format nil "~a\\ ~a" left right))
            (line (format nil "echo ~a ~a" token tail))
            (state (input-state :buffer line :cursor-pos 4)))
@@ -83,8 +83,8 @@
 (test pbt-input-state-alt-d-then-yank-restores-operator-token
   "Meta-D at a shell operator kills through the following token and yank restores it."
   (check-property (:trials 50)
-      ((left (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
-       (right (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
+      ((left (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
+       (right (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
        (operator-seed (gen-in-range 0 4) nil))
     (let* ((operators "|;&<>")
            (operator (char operators operator-seed))

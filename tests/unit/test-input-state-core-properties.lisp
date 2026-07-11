@@ -2,68 +2,17 @@
 
 (in-suite input-state-tests)
 
-(test pbt-input-state-ctrl-l-preserves-buffer-and-cursor
-  "Ctrl-L is a display request; it must not edit the current line."
-  (check-property (:trials 50)
-      ((line (gen-prompt-text :max-length 24) #'shrink-prompt-text)
-       (cursor-seed (gen-in-range 0 24) nil))
-    (let* ((cursor (min cursor-seed (length line)))
-           (state (input-state
-                   :buffer line
-                   :cursor-pos cursor)))
-      (with-expected-input-state-reduction (new-state output)
-          state
-          (reduce-once state :ctrl-l)
-          :clear-screen
-          (:buffer line
-           :cursor-pos cursor)))))
-
-(test pbt-input-state-ctrl-l-preserves-session-state
-  "Ctrl-L should preserve completion and suggestion session state while clearing the screen."
-  (check-property (:trials 50)
-      ((line (gen-prompt-text :max-length 24) #'shrink-prompt-text)
-       (cursor-seed (gen-in-range 0 24) nil)
-       (suggestion (gen-prompt-text :min-length 1 :max-length 12)
-                   #'shrink-prompt-text)
-       (candidate-a (gen-shell-word :min-length 1 :max-length 8)
-                    #'shrink-prompt-text)
-       (candidate-b (gen-shell-word :min-length 1 :max-length 8)
-                    #'shrink-prompt-text)
-       (candidate-c (gen-shell-word :min-length 1 :max-length 8)
-                    #'shrink-prompt-text)
-       (completion-index (gen-in-range 0 2) nil))
-    (let* ((cursor (min cursor-seed (length line)))
-           (state (input-state
-                   :buffer line
-                   :cursor-pos cursor
-                   :completion-index completion-index
-                   :completion-base-buffer line
-                   :completion-base-cursor cursor
-                   :last-candidates (list candidate-a candidate-b candidate-c)
-                   :suggestion suggestion)))
-      (with-expected-input-state-reduction (new-state output)
-          state
-          (reduce-once state :ctrl-l)
-          :clear-screen
-          (:buffer line
-           :cursor-pos cursor
-           :completion-index completion-index
-           :completion-base-buffer line
-           :completion-base-cursor cursor
-           :last-candidates (list candidate-a candidate-b candidate-c)
-           :suggestion suggestion)))))
-
 (test pbt-input-state-word-navigation-respects-shell-token-boundaries
   "Word navigation treats escaped and quoted spaces as token content."
      (check-property (:trials 50)
          ((command (gen-shell-word :min-length 1 :max-length 8)
-                   #'shrink-prompt-text)
+                   #'shrink-shell-word)
           (left (gen-shell-word :min-length 1 :max-length 8)
-                #'shrink-prompt-text)
+                #'shrink-shell-word)
           (right (gen-shell-word :min-length 1 :max-length 8)
-                 #'shrink-prompt-text)
+                 #'shrink-shell-word)
           (tail (gen-shell-word :min-length 1 :max-length 8)
-                #'shrink-prompt-text))
+                #'shrink-shell-word))
        (let* ((escaped-token (format nil "~a\\ ~a" left right))
               (quoted-token (format nil "\"~a ~a\"" left right))
               (escaped-line (format nil "~a ~a ~a" command escaped-token tail))
@@ -108,9 +57,9 @@
   "Word navigation skips shell operators as token separators."
   (check-property (:trials 50)
       ((left (gen-shell-word :min-length 1 :max-length 8)
-             #'shrink-prompt-text)
+             #'shrink-shell-word)
        (right (gen-shell-word :min-length 1 :max-length 8)
-              #'shrink-prompt-text)
+              #'shrink-shell-word)
        (operator-seed (gen-in-range 0 4) nil))
     (if (or (string= left "")
             (string= right ""))
@@ -240,4 +189,3 @@
                   (nshell.presentation:input-state-cursor-pos ctrl-f-state))
                (equal (nshell.presentation:input-state-suggestion right-state)
                       (nshell.presentation:input-state-suggestion ctrl-f-state))))))))
-

@@ -52,14 +52,16 @@
                      buffer 5 "hello")))
     (is (nshell.presentation::%buffer-insertion-p insertion))
     (is (nshell.presentation::%buffer-insertion-plan-p
-         (nshell.presentation::buffer-insertion-plan insertion)))
-    (is (fboundp 'nshell.presentation::%make-buffer-insertion-plan))
-    (is (fboundp 'nshell.presentation::%buffer-insertion-plan-splice))
-    (is (not (fboundp 'nshell.presentation::make-buffer-insertion)))
-    (is (not (fboundp 'nshell.presentation::make-buffer-insertion-plan)))
-    (is (not (fboundp 'nshell.presentation::buffer-insertion-splice)))
-    (is (not (fboundp 'nshell.presentation::buffer-insertion-p)))
-    (is (not (fboundp 'nshell.presentation::buffer-insertion-plan-p)))
+         (nshell.presentation::%buffer-insertion-plan insertion)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-buffer-insertion-plan
+                  nshell.presentation::%buffer-insertion-plan-splice)
+        :absent (nshell.presentation::make-buffer-insertion
+                 nshell.presentation::make-buffer-insertion-plan
+                 nshell.presentation::buffer-insertion-plan
+                 nshell.presentation::buffer-insertion-plan-splice
+                 nshell.presentation::buffer-insertion-p
+                 nshell.presentation::buffer-insertion-plan-p))
     (is (string= "echo hello done"
                  (nshell.presentation::buffer-insertion-result
                   insertion
@@ -103,36 +105,40 @@
     (is (nshell.presentation::%buffer-deletion-request-p before-request))
     (is (nshell.presentation::%buffer-deletion-request-p at-request))
     (is (eq :before-cursor
-            (nshell.presentation::buffer-deletion-request-kind
+            (nshell.presentation::%buffer-deletion-request-kind
              before-request)))
     (is (eq :at-cursor
-            (nshell.presentation::buffer-deletion-request-kind
+            (nshell.presentation::%buffer-deletion-request-kind
              at-request)))
-    (is (= 2 (nshell.presentation::buffer-deletion-request-cursor
+    (is (= 2 (nshell.presentation::%buffer-deletion-request-cursor
               before-request)))
-    (is (= 1 (nshell.presentation::buffer-deletion-request-cursor
+    (is (= 1 (nshell.presentation::%buffer-deletion-request-cursor
               at-request)))
     (is (nshell.presentation::%buffer-deletion-p before))
     (is (nshell.presentation::%buffer-deletion-p at))
     (is (nshell.presentation::%buffer-deletion-plan-p
-         (nshell.presentation::buffer-deletion-plan before)))
+         (nshell.presentation::%buffer-deletion-plan before)))
     (is (nshell.presentation::%buffer-deletion-plan-p
-         (nshell.presentation::buffer-deletion-plan at)))
-    (is (fboundp 'nshell.presentation::%make-buffer-deletion-request))
-    (is (fboundp 'nshell.presentation::%buffer-deletion-request-kind))
-    (is (fboundp 'nshell.presentation::%buffer-deletion-request-cursor))
-    (is (not (fboundp 'nshell.presentation::make-buffer-deletion-request)))
-    (is (not (fboundp 'nshell.presentation::buffer-deletion-before-cursor)))
-    (is (not (fboundp 'nshell.presentation::buffer-deletion-at-cursor)))
-    (is (fboundp 'nshell.presentation::%make-buffer-deletion))
-    (is (fboundp 'nshell.presentation::%make-buffer-deletion-plan))
-    (is (fboundp 'nshell.presentation::%buffer-deletion-plan-splice))
-    (is (not (fboundp 'nshell.presentation::make-buffer-deletion)))
-    (is (not (fboundp 'nshell.presentation::make-buffer-deletion-plan)))
-    (is (not (fboundp 'nshell.presentation::buffer-deletion-splice)))
-    (is (not (fboundp 'nshell.presentation::buffer-deletion-request-p)))
-    (is (not (fboundp 'nshell.presentation::buffer-deletion-p)))
-    (is (not (fboundp 'nshell.presentation::buffer-deletion-plan-p)))
+         (nshell.presentation::%buffer-deletion-plan at)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-buffer-deletion-request
+                  nshell.presentation::%buffer-deletion-request-kind
+                  nshell.presentation::%buffer-deletion-request-cursor
+                  nshell.presentation::%make-buffer-deletion
+                  nshell.presentation::%make-buffer-deletion-plan
+                  nshell.presentation::%buffer-deletion-plan-splice)
+        :absent (nshell.presentation::make-buffer-deletion-request
+                 nshell.presentation::buffer-deletion-before-cursor
+                 nshell.presentation::buffer-deletion-at-cursor
+                 nshell.presentation::make-buffer-deletion
+                 nshell.presentation::make-buffer-deletion-plan
+                 nshell.presentation::buffer-deletion-plan
+                 nshell.presentation::buffer-deletion-plan-splice
+                 nshell.presentation::buffer-deletion-request-kind
+                 nshell.presentation::buffer-deletion-request-cursor
+                 nshell.presentation::buffer-deletion-request-p
+                 nshell.presentation::buffer-deletion-p
+                 nshell.presentation::buffer-deletion-plan-p))
     (is (string= "acd"
                  (nshell.presentation::buffer-deletion-result before buffer)))
     (is (= 1 (nshell.presentation::buffer-deletion-cursor-pos before)))
@@ -158,24 +164,30 @@
          (request (nshell.presentation::cursor-move-request-by 3 2))
          (edit (nshell.presentation::cursor-move-edit-for-request request))
          (committed (nshell.presentation::commit-cursor-move-edit state edit)))
-    (is (fboundp 'nshell.presentation::%make-cursor-move-request))
-    (is (fboundp 'nshell.presentation::%cursor-move-request-kind))
-    (is (fboundp 'nshell.presentation::%cursor-move-request-cursor))
-    (is (fboundp 'nshell.presentation::%cursor-move-request-delta))
-    (is (fboundp 'nshell.presentation::%cursor-move-request-position))
-    (is (fboundp 'nshell.presentation::%make-cursor-move-edit))
-    (is (fboundp 'nshell.presentation::%cursor-move-edit-cursor-pos))
-    (is (not (fboundp 'nshell.presentation::make-cursor-move-request)))
-    (is (not (fboundp 'nshell.presentation::make-cursor-move-edit)))
-    (is (not (fboundp 'nshell.presentation::cursor-move-edit-by)))
-    (is (not (fboundp 'nshell.presentation::cursor-move-edit-to)))
-    (is (not (fboundp 'nshell.presentation::cursor-move-request-p)))
-    (is (not (fboundp 'nshell.presentation::cursor-move-edit-p)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-cursor-move-request
+                  nshell.presentation::%cursor-move-request-kind
+                  nshell.presentation::%cursor-move-request-cursor
+                  nshell.presentation::%cursor-move-request-delta
+                  nshell.presentation::%cursor-move-request-position
+                  nshell.presentation::%make-cursor-move-edit
+                  nshell.presentation::%cursor-move-edit-cursor-pos)
+        :absent (nshell.presentation::make-cursor-move-request
+                 nshell.presentation::make-cursor-move-edit
+                 nshell.presentation::cursor-move-request-kind
+                 nshell.presentation::cursor-move-request-cursor
+                 nshell.presentation::cursor-move-request-delta
+                 nshell.presentation::cursor-move-request-position
+                 nshell.presentation::cursor-move-edit-by
+                 nshell.presentation::cursor-move-edit-to
+                 nshell.presentation::cursor-move-edit-cursor-pos
+                 nshell.presentation::cursor-move-request-p
+                 nshell.presentation::cursor-move-edit-p))
     (is (nshell.presentation::%cursor-move-request-p request))
-    (is (eq :by (nshell.presentation::cursor-move-request-kind request)))
-    (is (= 3 (nshell.presentation::cursor-move-request-cursor request)))
-    (is (= 2 (nshell.presentation::cursor-move-request-delta request)))
-    (is (= 5 (nshell.presentation::cursor-move-edit-cursor-pos edit)))
+    (is (eq :by (nshell.presentation::%cursor-move-request-kind request)))
+    (is (= 3 (nshell.presentation::%cursor-move-request-cursor request)))
+    (is (= 2 (nshell.presentation::%cursor-move-request-delta request)))
+    (is (= 5 (nshell.presentation::%cursor-move-edit-cursor-pos edit)))
     (is-input-state committed
                     :buffer "abcdef"
                     :cursor-pos 5
@@ -188,9 +200,9 @@
          (committed (nshell.presentation::commit-cursor-move-edit state edit)))
     (is (nshell.presentation::%cursor-move-request-p request))
     (is (nshell.presentation::%cursor-move-edit-p edit))
-    (is (eq :to (nshell.presentation::cursor-move-request-kind request)))
-    (is (= 99 (nshell.presentation::cursor-move-request-position request)))
-    (is (= 99 (nshell.presentation::cursor-move-edit-cursor-pos edit)))
+    (is (eq :to (nshell.presentation::%cursor-move-request-kind request)))
+    (is (= 99 (nshell.presentation::%cursor-move-request-position request)))
+    (is (= 99 (nshell.presentation::%cursor-move-edit-cursor-pos edit)))
     (is-input-state committed
                     :buffer "abcdef"
                     :cursor-pos 6
@@ -213,23 +225,32 @@
                  :last-candidates (list "abcdef")
                  :suggestion "def"))
          (edit (nshell.presentation::make-buffer-clear-edit))
-         (plan (nshell.presentation::buffer-clear-edit-plan edit))
+         (plan (nshell.presentation::%buffer-clear-edit-plan edit))
          (committed (nshell.presentation::commit-buffer-clear-edit state edit)))
     (is (nshell.presentation::%buffer-clear-edit-p edit))
     (is (nshell.presentation::%buffer-clear-plan-p plan))
-    (is (eq plan (nshell.presentation::buffer-clear-edit-plan edit)))
-    (is (fboundp 'nshell.presentation::%make-buffer-clear-edit))
-    (is (fboundp 'nshell.presentation::%make-buffer-clear-plan))
-    (is (not (fboundp 'nshell.presentation::buffer-clear-edit-p)))
-    (is (not (fboundp 'nshell.presentation::buffer-clear-plan-p)))
-    (is (string= "" (nshell.presentation::buffer-clear-plan-buffer plan)))
-    (is (= 0 (nshell.presentation::buffer-clear-plan-cursor-pos plan)))
-    (is (eq :insert (nshell.presentation::buffer-clear-plan-mode plan)))
-    (is (null (nshell.presentation::buffer-clear-plan-vi-count plan)))
+    (is (eq plan (nshell.presentation::%buffer-clear-edit-plan edit)))
+    (assert-symbol-boundaries
+        :present (nshell.presentation::%make-buffer-clear-edit
+                  nshell.presentation::%make-buffer-clear-plan)
+        :absent (nshell.presentation::buffer-clear-edit-plan
+                 nshell.presentation::buffer-clear-edit-p
+                 nshell.presentation::buffer-clear-plan-buffer
+                 nshell.presentation::buffer-clear-plan-cursor-pos
+                 nshell.presentation::buffer-clear-plan-mode
+                 nshell.presentation::buffer-clear-plan-vi-count
+                 nshell.presentation::buffer-clear-plan-vi-visual-anchor
+                 nshell.presentation::buffer-clear-plan-clear-completion-p
+                 nshell.presentation::buffer-clear-plan-clear-history-search-p
+                 nshell.presentation::buffer-clear-plan-p))
+    (is (string= "" (nshell.presentation::%buffer-clear-plan-buffer plan)))
+    (is (= 0 (nshell.presentation::%buffer-clear-plan-cursor-pos plan)))
+    (is (eq :insert (nshell.presentation::%buffer-clear-plan-mode plan)))
+    (is (null (nshell.presentation::%buffer-clear-plan-vi-count plan)))
     (is (eq :clear
-            (nshell.presentation::buffer-clear-plan-vi-visual-anchor plan)))
-    (is (nshell.presentation::buffer-clear-plan-clear-completion-p plan))
-    (is (nshell.presentation::buffer-clear-plan-clear-history-search-p plan))
+            (nshell.presentation::%buffer-clear-plan-vi-visual-anchor plan)))
+    (is (nshell.presentation::%buffer-clear-plan-clear-completion-p plan))
+    (is (nshell.presentation::%buffer-clear-plan-clear-history-search-p plan))
     (is-input-state-with-completion-cleared committed
                                             :buffer ""
                                             :cursor-pos 0
@@ -329,8 +350,8 @@
 
 (test pbt-input-state-space-expands-current-abbreviation-token-only
   (check-property (:trials 50)
-      ((token (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text)
-       (tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-prompt-text))
+      ((token (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
+       (tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word))
     (let* ((prefix "echo ")
            (suffix (concatenate 'string " --" tail))
            (expansion (concatenate 'string "expanded-" token))
@@ -351,7 +372,9 @@
            :suggest-update
            (:buffer (concatenate 'string prefix expansion " " suffix)
             :cursor-pos (+ (length prefix) (length expansion) 1))
-         (is-completion-session-cleared new-state)))))
+         (progn
+           (is-completion-session-cleared new-state)
+           t)))))
 
 (test input-state-paste-inserts-text-at-cursor
   (let ((state (completion-session-state
@@ -414,9 +437,9 @@
       ((prefix (gen-prompt-text :max-length 16) #'shrink-prompt-text)
        (suffix (gen-prompt-text :max-length 16) #'shrink-prompt-text)
        (left (gen-shell-word :min-length 1 :max-length 8)
-             #'shrink-prompt-text)
+             #'shrink-shell-word)
        (right (gen-shell-word :min-length 1 :max-length 8)
-              #'shrink-prompt-text)
+              #'shrink-shell-word)
        (separator-seed (gen-in-range 0 2) nil))
     (let* ((separator (case separator-seed
                         (0 (format nil "~C~C" #\Return #\Newline))

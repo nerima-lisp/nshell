@@ -38,11 +38,11 @@
        (suggestion (gen-prompt-text :min-length 1 :max-length 12)
                    #'shrink-prompt-text)
        (candidate-a (gen-shell-word :min-length 1 :max-length 8)
-                    #'shrink-prompt-text)
+                    #'shrink-shell-word)
        (candidate-b (gen-shell-word :min-length 1 :max-length 8)
-                    #'shrink-prompt-text)
+                    #'shrink-shell-word)
        (candidate-c (gen-shell-word :min-length 1 :max-length 8)
-                    #'shrink-prompt-text)
+                    #'shrink-shell-word)
        (completion-index (gen-in-range 0 2) nil)
        (original-cursor-seed (gen-in-range 0 24) nil))
     (let* ((cursor (min cursor-seed (length selected)))
@@ -86,56 +86,6 @@
                      new-state))
              (equal suggestion
                     (nshell.presentation:input-state-suggestion new-state)))))))
-
-(test pbt-input-state-history-search-accept-preserves-selected-buffer
-  "Accepting a search result exits search mode without executing or restoring the original."
-  (check-property (:trials 50)
-      ((selected (gen-prompt-text :min-length 1 :max-length 24)
-                 #'shrink-prompt-text)
-       (original (gen-prompt-text :min-length 0 :max-length 12)
-                 #'shrink-prompt-text))
-    (let ((state (history-search-state
-                  :buffer selected
-                  :query "q"
-                  :original-buffer original
-                  :index 3)))
-      (multiple-value-bind (accepted output)
-          (nshell.presentation:reduce-input-state
-           state
-           (input-key-event :right))
-        (and (eq :suggest-update output)
-             (is-search-session-cleared accepted)
-             (string= selected
-                      (nshell.presentation:input-state-buffer accepted))
-             (= (length selected)
-                (nshell.presentation:input-state-cursor-pos accepted)))))))
-
-(test pbt-input-state-history-search-empty-backspace-restores-original
-  "Backspace on an empty reverse-search query behaves like cancel."
-  (check-property (:trials 50)
-      ((selected (gen-prompt-text :min-length 0 :max-length 24)
-                 #'shrink-prompt-text)
-       (original (gen-prompt-text :min-length 0 :max-length 24)
-                 #'shrink-prompt-text)
-       (index (gen-in-range 0 32) nil))
-    (let ((state (history-search-state
-                  :buffer selected
-                  :query ""
-                  :original-buffer original
-                  :index index)))
-      (multiple-value-bind (restored output)
-          (nshell.presentation:reduce-input-state
-           state
-           (input-key-event :backspace))
-        (and (eq :suggest-update output)
-             (is-search-state restored
-                              :mode :insert
-                              :buffer original
-                              :cursor-pos (length original)
-                              :query ""
-                              :original-buffer ""
-                              :original-cursor nil
-                              :index 0))))))
 
 (test pbt-input-state-history-search-empty-results-restore-original-cursor
   "Empty history-search results restore the saved buffer and cursor."

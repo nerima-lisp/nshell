@@ -125,34 +125,43 @@
   (values (apply #'copy-input-state-clearing-completion state initargs)
           :search-update))
 
+(defun %commit-history-search-query-edit (state plan)
+  (let ((insertion
+          (history-search-query-insertion-for-text
+           (input-state-search-query state)
+           (history-search-edit-plan-text plan))))
+    (if (history-search-query-insertion-ignored-p insertion)
+        (values state :none)
+        (%history-search-update
+         state
+         :search-query (history-search-query-insertion-query insertion)
+         :search-index 0))))
+
+(defun %commit-history-search-selection-edit (state plan)
+  (%history-search-update
+   state
+   :search-index (+ (input-state-search-index state)
+                    (history-search-edit-plan-delta plan))))
+
+(defun %commit-history-search-backspace-edit (state)
+  (let ((query (input-state-search-query state)))
+    (if (zerop (length query))
+        (%history-search-abort state)
+        (%history-search-update
+         state
+         :search-query (subseq query 0 (1- (length query)))
+         :search-index 0))))
+
 (defun commit-history-search-edit (state edit)
   (let ((plan (history-search-edit-plan edit)))
     (with-normalized-cleared-completion-state (state state)
       (ecase (history-search-edit-plan-kind plan)
         (:query
-         (let ((insertion
-                 (history-search-query-insertion-for-text
-                  (input-state-search-query state)
-                  (history-search-edit-plan-text plan))))
-           (if (history-search-query-insertion-ignored-p insertion)
-               (values state :none)
-               (%history-search-update
-                state
-                :search-query (history-search-query-insertion-query insertion)
-                :search-index 0))))
+         (%commit-history-search-query-edit state plan))
         (:selection
-         (%history-search-update
-          state
-          :search-index (+ (input-state-search-index state)
-                           (history-search-edit-plan-delta plan))))
+         (%commit-history-search-selection-edit state plan))
         (:backspace
-         (let ((query (input-state-search-query state)))
-           (if (zerop (length query))
-               (%history-search-abort state)
-               (%history-search-update
-                state
-                :search-query (subseq query 0 (1- (length query)))
-                :search-index 0))))))))
+         (%commit-history-search-backspace-edit state))))))
 
 (defun %history-search-finished-state (state)
   (copy-input-state-with

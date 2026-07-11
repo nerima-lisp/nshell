@@ -63,9 +63,12 @@
 
 (defun backward-kill-word (state)
   (with-normalized-cleared-completion-state (state state)
-    (let ((cursor (input-state-cursor-pos state)))
-      (let ((start (previous-kill-word-start (input-state-buffer state) cursor)))
-        (%kill-range state start cursor start)))))
+    (let* ((cursor (input-state-cursor-pos state))
+           (start (previous-kill-word-start (input-state-buffer state) cursor)))
+      (%kill-range state
+                   start
+                   cursor
+                   start))))
 
 (defun forward-kill-word (state)
   (with-normalized-cleared-completion-state (state state)

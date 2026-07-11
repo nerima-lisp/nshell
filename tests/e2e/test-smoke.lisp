@@ -18,17 +18,25 @@
                (funcall (symbol-function (find-symbol \"MAIN\" \"NSHELL\")))))"
           (cons "nshell" arguments)))
 
+(defun %asdf-bootstrap-forms (root)
+  (let ((cl-prolog-root
+          (namestring
+           (uiop:ensure-directory-pathname
+            (merge-pathnames "../cl-prolog/" root)))))
+    (list "--eval" "(require :asdf)"
+          "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
+          "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" cl-prolog-root))))
+
 (defun %run-nshell-main (arguments &key input)
   ; Use file-based I/O to avoid pipe fd exhaustion in hermetic build sandboxes.
   ; The :output :string approach creates a stdout pipe whose read-fd can become
   ; invalid (EBADF on select) when fd-stream finalizers race with pipe creation
   ; after many source files are compiled. Writing to temp files is race-free.
   (let ((root (asdf:system-source-directory :nshell))
-        (program (list (current-sbcl-executable)
-                       "--noinform"
-                       "--eval" "(require :asdf)"
-                       "--eval" "(push (truename \"./\") asdf:*central-registry*)"
-                       "--eval" (%nshell-main-form arguments))))
+        (program (append (list (current-sbcl-executable)
+                               "--noinform")
+                         (%asdf-bootstrap-forms (namestring (asdf:system-source-directory :nshell)))
+                         (list "--eval" (%nshell-main-form arguments)))))
     (uiop:with-temporary-file (:pathname stdout-file)
       (uiop:with-temporary-file (:pathname stderr-file)
         (flet ((run-main (&key input-stream)
@@ -86,11 +94,10 @@
 
 (defun %nshell-main-pty-arguments ()
   (let ((root (namestring (asdf:system-source-directory :nshell))))
-    (list "--noinform"
-          "--disable-debugger"
-          "--eval" "(require :asdf)"
-          "--eval" (format nil "(push (truename ~S) asdf:*central-registry*)" root)
-          "--eval" (%nshell-main-form nil))))
+    (append (list "--noinform"
+                  "--disable-debugger")
+            (%asdf-bootstrap-forms root)
+            (list "--eval" (%nshell-main-form nil)))))
 
 (defun %e2e-pty-read-available (fd &key (timeout-usec 100000) (limit 8192))
   (let ((buffer (make-array limit :element-type '(unsigned-byte 8))))

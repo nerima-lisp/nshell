@@ -29,15 +29,28 @@
   (coerce (list #\Space #\Tab #\Newline #\Return #\| #\; #\& #\< #\>) 'string)
   "Characters that should be treated as shell-operator-only blank input.")
 
+(defun gen-integer (&key (min -1000000) (max 1000000))
+  "Return a generator for integers in the inclusive range [MIN, MAX]."
+  (check-type min integer)
+  (check-type max integer)
+  (assert (<= min max) (min max) "MIN must be <= MAX.")
+  (let ((width (1+ (- max min))))
+    (lambda ()
+      (+ min (random width)))))
+
 (defun gen-in-range (min max)
   "Return a generator for integers in the inclusive range [MIN, MAX]."
   (check-type min integer)
   (check-type max integer)
   (assert (<= min max) (min max) "MIN must be <= MAX.")
-  (let ((integer-generator (gen-integer))
-        (width (1+ (- max min))))
-    (lambda ()
-      (+ min (mod (abs (funcall integer-generator)) width)))))
+  (gen-integer :min min :max max))
+
+(defun gen-string (&key (min-length 0) (max-length 24)
+                        (characters *pbt-prompt-characters*))
+  "Return a generator for strings built from CHARACTERS."
+  (%pbt-sampled-string characters
+                       :min-length min-length
+                       :max-length max-length))
 
 (defun %pbt-sampled-string (characters &key (min-length 1) (max-length 12))
   (let ((length-generator (gen-in-range min-length max-length))
@@ -66,6 +79,10 @@
   (%pbt-sampled-string *pbt-shell-word-characters*
                        :min-length min-length
                        :max-length max-length))
+
+(defun gen-logic-atom (&key (min-length 1) (max-length 12))
+  "Return a generator for simple unification atoms."
+  (gen-shell-word :min-length min-length :max-length max-length))
 
 (defun gen-shell-command (&key (min-words 1) (max-words 4) (max-word-length 12))
   "Return a generator for simple valid shell command strings."
@@ -133,6 +150,15 @@ autosuggest blank-input semantics."
     (t (list (subseq text 0 (floor (length text) 2))
              ""))))
 
+(defun shrink-shell-word (text)
+  "Return shrink candidates that keep TEXT within shell-word constraints."
+  (cond
+    ((<= (length text) 1) nil)
+    (t (remove-duplicates
+        (list (subseq text 0 (max 1 (floor (length text) 2)))
+              (subseq text 0 1))
+        :test #'string=))))
+
 (defun gen-terminal-width (&key (min 0) (max 80))
   "Return a generator for terminal widths used by prompt truncation tests."
   (gen-in-range min max))
@@ -147,9 +173,57 @@ autosuggest blank-input semantics."
   (mapcar #'third bindings))
 
 (defun %pbt-report-failure (trial bindings condition)
-  (is (null t) "Property failed on trial ~d with counterexample ~s~@[; condition: ~a~]"
-      trial bindings condition)
+  (fail "Property failed on trial ~d with counterexample ~s~@[; condition: ~a~]"
+        trial bindings condition)
   nil)
+
+(defun %pbt-generated-values (generators)
+  (mapcar #'funcall generators))
+
+(defun %pbt-property-holds-p (property values)
+  (handler-case
+      (not (null (funcall property values)))
+    (condition () nil)))
+
+(defun %pbt-condition-for (property values)
+  (handler-case
+      (progn
+        (funcall property values)
+        nil)
+    (condition (condition) condition)))
+
+(defun %pbt-shrink-values (values shrinkers property)
+  (let ((current (copy-list values)))
+    (loop repeat 64
+          do (let ((changed-p nil))
+               (loop for index below (length current)
+                     for shrinker in shrinkers
+                     when shrinker
+                       do (dolist (candidate (funcall shrinker (nth index current)))
+                            (let ((next (copy-list current)))
+                              (setf (nth index next) candidate)
+                              (unless (%pbt-property-holds-p property next)
+                                (setf current next
+                                      changed-p t)
+                                (return)))))
+               (unless changed-p
+                 (return current)))
+          finally (return current))))
+
+(defun %pbt-counterexample-bindings (names values)
+  (mapcar #'cons names values))
+
+(defun %pbt-run-property (trials names generators shrinkers property)
+  (loop for trial from 1 to trials
+        for values = (%pbt-generated-values generators)
+        always (if (%pbt-property-holds-p property values)
+                   t
+                   (%pbt-report-failure
+                    trial
+                    (%pbt-counterexample-bindings
+                     names
+                     (%pbt-shrink-values values shrinkers property))
+                    (%pbt-condition-for property values)))))
 
 (defmacro check-property ((&key (trials '*pbt-default-trials*)) bindings &body body)
   "Run BODY for TRIALS generated examples from BINDINGS.
@@ -159,64 +233,27 @@ generalized boolean. A binding may optionally include a third element: a
 shrinker function of one argument returning smaller candidate values. The first
 failing generated binding set is shrunk greedily and reported as the
 counterexample. No external shrinking library is used."
-  (let ((trial (gensym "TRIAL-"))
-        (values (gensym "VALUES-"))
-        (current (gensym "CURRENT-"))
-        (candidate (gensym "CANDIDATE-"))
-        (next (gensym "NEXT-"))
-        (changed-p (gensym "CHANGED-P"))
-        (condition-var (gensym "CONDITION-")))
-    `(loop for ,trial from 1 to ,trials
-           for ,values = (list ,@(mapcar (lambda (generator)
-                                           `(funcall ,generator))
-                                         (%pbt-binding-generators bindings)))
-           always
-              (labels ((try-property (,values)
-                         (destructuring-bind ,(%pbt-binding-names bindings) ,values
-                           (handler-case
-                               (not (null (progn ,@body)))
-                             (condition () nil))))
-                       (shrink-values (,values)
-	                         (let ((,current (copy-list ,values)))
-	                           (loop repeat 64
-	                                 do (let ((,changed-p nil))
-	                                      (loop for index below (length ,current)
-	                                            for shrinker in (list ,@(%pbt-binding-shrinkers bindings))
-                                            when shrinker
-                                              do (dolist (,candidate
-                                                          (funcall shrinker (nth index ,current)))
-                                                   (let ((,next (copy-list ,current)))
-                                                     (setf (nth index ,next) ,candidate)
-                                                     (unless (try-property ,next)
-                                                       (setf ,current ,next
-                                                             ,changed-p t)
-	                                                       (return)))))
-	                                      (unless ,changed-p
-	                                        (return ,current)))
-	                                 finally (return ,current)))))
-                (if (try-property ,values)
-                    t
-                    (let ((,condition-var
-                            (handler-case
-                                (progn
-                                  (destructuring-bind ,(%pbt-binding-names bindings) ,values
-                                    (declare (ignorable ,@(%pbt-binding-names bindings)))
-                                    ,@body)
-                                  nil)
-                              (condition (condition) condition))))
-                      (%pbt-report-failure
-                       ,trial
-                       (mapcar #'cons
-                               ',(%pbt-binding-names bindings)
-                               (shrink-values ,values))
-                       ,condition-var)))))))
+  (let ((values (gensym "VALUES-"))
+        (property (gensym "PROPERTY-")))
+    `(let ((,property
+             (lambda (,values)
+               (destructuring-bind ,(%pbt-binding-names bindings) ,values
+                 (declare (ignorable ,@(%pbt-binding-names bindings)))
+                 ,@body))))
+       (%pbt-run-property
+        ,trials
+        ',(%pbt-binding-names bindings)
+        (list ,@(mapcar (lambda (generator)
+                          `(lambda () (funcall ,generator)))
+                        (%pbt-binding-generators bindings)))
+        (list ,@(%pbt-binding-shrinkers bindings))
+        ,property))))
 
 (defmacro for-all-property ((&key (trials '*pbt-default-trials*)) bindings &body body)
-  "Run FIVEAM:FOR-ALL with TRIALS examples and BODY assertions."
-  `(let ((*num-trials* ,trials)
-         (*max-trials* ,trials))
-     (for-all ,bindings
-       ,@body)))
+  "Run BODY as a property test for TRIALS generated examples."
+  `(check-property (:trials ,trials)
+       ,bindings
+     ,@body))
 
 (defmacro with-event-capture ((events dispatcher &rest types) projection &body body)
   "Subscribe to TYPES on DISPATCHER and collect PROJECTION values into EVENTS."
@@ -228,4 +265,3 @@ counterexample. No external shrinking library is used."
      ,@body))
 
 ;;; Shared test fixtures and adapters used across integration, e2e, and unit tests.
-

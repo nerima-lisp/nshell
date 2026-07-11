@@ -15,6 +15,15 @@
 (defun %test-startup-shell-context ()
   (make-test-shell-context :running t))
 
+(defun %startup-asdf-bootstrap-args (root)
+  (let ((cl-prolog-root
+          (namestring
+           (uiop:ensure-directory-pathname
+            (merge-pathnames "../cl-prolog/" root)))))
+    (list "--eval" "(require :asdf)"
+          "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
+          "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" cl-prolog-root))))
+
 (test startup-hot-context-composition-under-budget
   "Composing an interactive shell context remains cheap."
   (let ((elapsed (%elapsed-real-seconds
@@ -33,12 +42,10 @@
            (%elapsed-real-seconds
             (lambda ()
               (uiop:run-program
-               (list sbcl
-                     "--noinform"
-                     "--eval" "(require :asdf)"
-                     "--eval" "(push (truename \"./\") asdf:*central-registry*)"
-                     "--eval" "(asdf:load-system :nshell)"
-                     "--eval" "(sb-ext:quit :unix-status 0)")
+               (append (list sbcl "--noinform")
+                       (%startup-asdf-bootstrap-args (namestring root))
+                       (list "--eval" "(asdf:load-system :nshell)"
+                             "--eval" "(sb-ext:quit :unix-status 0)"))
                :directory root
                :output nil
                :error-output nil

@@ -5,7 +5,12 @@
   :homepage "https://github.com/takeokunn/nshell"
   :source-control (:git "https://github.com/takeokunn/nshell.git")
   :description "Modern interactive shell in Common Lisp"
-  :depends-on ("cl-prolog")
+  :depends-on ("cl-prolog"
+               "cl-parser-kit"
+               "cl-dataflow"
+               "cl-boundary-kit"
+               "cl-cli"
+               "cl-tty-kit")
   :pathname "src"
   :serial t
   :components
@@ -69,6 +74,7 @@
 	   (:file "application/execute-pipeline-stage")
 	   (:file "application/execute-pipeline-control")
    (:file "application/manage-job")
+   (:file "application/pipeline-diagram")
    (:file "application/builtin-spec-data")
    (:file "application/builtin-runtime")
    (:file "application/builtin-type-helpers")
@@ -126,6 +132,7 @@
 	   (:file "presentation/input-state-vi")
 	   (:file "presentation/input-state-vi-edit")
    (:file "presentation/input-state-session")
+   (:file "presentation/repl-boundaries")
    (:file "presentation/prompt-display")
    (:file "presentation/completion-ui")
    (:file "presentation/autosuggest")
@@ -237,8 +244,10 @@
    (:file "unit/test-input-state-search-properties")
    (:file "unit/test-job-control-domain")
    (:file "unit/test-pipeline-plan")
+   (:file "unit/test-pipeline-diagram")
    (:file "unit/test-event-dispatcher")
    (:file "unit/test-shell-context")
+   (:file "unit/test-repl-boundaries")
    (:file "unit/test-builtins")
    (:file "unit/test-builtins-core")
    (:file "unit/test-builtins-core-io")

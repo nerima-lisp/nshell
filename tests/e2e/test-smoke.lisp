@@ -16,17 +16,27 @@
                (funcall (symbol-function (find-symbol \"MAIN\" \"NSHELL\")))))"
           (cons "nshell" arguments)))
 
+(defparameter +nshell-runtime-dependencies+
+  '(:cl-prolog :cl-parser-kit :cl-dataflow :cl-boundary-kit :cl-cli :cl-tty-kit)
+  "Every external ASDF system nshell depends on at runtime.  The subprocess
+that loads :nshell needs each of their source directories on its central
+registry, exactly as the parent process resolved them.")
+
 (defun %asdf-bootstrap-forms (root)
-  ;; Ask the already-loaded parent process where it actually found cl-prolog
-  ;; instead of guessing a "../cl-prolog/" sibling checkout: the parent
-  ;; resolved it however the current environment provides it (a sibling
-  ;; checkout locally, or a nix store path via lispLibs in the hermetic
-  ;; sandbox), and the spawned subprocess needs that same real location.
-  (let ((cl-prolog-root
-          (namestring (asdf:system-source-directory :cl-prolog))))
-    (list "--eval" "(require :asdf)"
-          "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
-          "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" cl-prolog-root))))
+  ;; Ask the already-loaded parent process where it actually found each
+  ;; dependency instead of guessing a "../<name>/" sibling checkout: the parent
+  ;; resolved them however the current environment provides them (sibling
+  ;; checkouts locally, or nix store paths via lispLibs in the hermetic
+  ;; sandbox), and the spawned subprocess needs those same real locations.
+  (let ((dependency-roots
+          (loop for system in +nshell-runtime-dependencies+
+                collect (namestring (asdf:system-source-directory system)))))
+    (list* "--eval" "(require :asdf)"
+           "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
+           (loop for dependency-root in dependency-roots
+                 collect "--eval"
+                 collect (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)"
+                                 dependency-root)))))
 
 (defun %run-nshell-main (arguments &key input)
   ; Use file-based I/O to avoid pipe fd exhaustion in hermetic build sandboxes.

@@ -132,6 +132,16 @@
 (defpackage #:nshell.domain.expansion
   (:use #:cl)
   (:import-from #:nshell.domain.environment #:env-get)
+  ;; cl-parser-kit powers the $((...)) arithmetic tokenizer + Pratt parser.
+  (:import-from #:cl-parser-kit
+                #:make-tokenizer #:tokenize
+                #:make-whitespace-rule #:make-predicate-rule
+                #:make-identifier-rule #:make-operator-rule
+                #:token-value
+                #:make-pratt-table #:register-atom #:register-prefix
+                #:register-infix-left #:register-infix-right
+                #:register-grouping #:register-ternary
+                #:parse-pratt-all #:parse-failure->string)
   (:export #:*glob-directory-files-fn* #:*glob-subdirectories-fn*
            #:glob-match-p
            #:expand-variables #:expand-tilde #:expand-glob #:expand-all

@@ -17,35 +17,32 @@
        (plusp (length argument))
        (char= (char argument 0) #\-)))
 
-(defun %cli-action (arguments)
-  "Classify top-level CLI arguments."
-  (if (null arguments)
-      :run
-      (let ((first-argument (first arguments)))
-        (cond ((or (string= first-argument "--help")
-                   (string= first-argument "-h"))
-               :help)
-              ((or (string= first-argument "--version")
-                   (string= first-argument "-V"))
-               :version)
-              ((and (>= (length arguments) 2)
-                    (or (string= first-argument "-c")
-                        (string= first-argument "--command")))
-               :command)
-              ;; A leading non-flag argument names a script file to execute; any
-              ;; remaining arguments become the script's $argv.
-              ((not (%flag-argument-p first-argument))
-               :script)
-              (t
-               :invalid)))))
-
-(defun %cli-command (arguments)
-  "Return the command string for command mode."
-  (second arguments))
-
-(defun %cli-command-arguments (arguments)
-  "Return trailing arguments for command mode."
-  (cddr arguments))
+;;; The flag-led surface (`--help`/`-h`, `--version`/`-V`, `-c COMMAND [ARGS…]`,
+;;; no-args) is parsed by cl-cli.  We keep nshell's own help/version text and
+;;; exit codes, so the app suppresses cl-cli's built-in help (`:auto-help nil`)
+;;; and omits `:version`, declaring flags with non-reserved keys instead.  The
+;;; `-c` option uses `:stop-parsing-p` so every token after COMMAND — including
+;;; flag-like ones — becomes a literal argument for $argv.
+(defun %build-cli-app ()
+  "Build the cl-cli application spec describing nshell's command line."
+  (cl-cli:make-app
+   :name "nshell"
+   :summary "fish-inspired shell in Common Lisp"
+   :auto-help nil
+   :global-options
+   (list
+    (cl-cli:make-option :key :show-help :name "help" :short #\h :kind :flag
+                        :description "Show usage and exit.")
+    (cl-cli:make-option :key :show-version :name "version" :short #\V :kind :flag
+                        :description "Show version and exit.")
+    (cl-cli:make-option :key :command :name "command" :short #\c :kind :value
+                        :stop-parsing-p t
+                        :description
+                        "Execute COMMAND once in batch mode; ARGS become $argv."))
+   :positionals
+   ;; Only reached via the `-c` stop-parsing tail; a leading SCRIPT is handled
+   ;; before parsing (see MAIN) to preserve its arguments verbatim.
+   (list (cl-cli:make-positional :key :command-args :rest-p t))))
 
 (defun %print-usage (&optional (stream *standard-output*))
   (format stream "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]~%")
@@ -63,35 +60,46 @@
   (format *error-output* "Fatal error: ~a~%" error)
   1)
 
+(defun %run-parsed-invocation (invocation)
+  "Dispatch a parsed cl-cli INVOCATION to the matching nshell entry point."
+  (cond
+    ((cl-cli:option-value invocation :show-help)
+     (%print-usage) 0)
+    ((cl-cli:option-value invocation :show-version)
+     (%print-version) 0)
+    ((cl-cli:option-value invocation :command)
+     ;; `-c` consumed COMMAND; the rest positional holds the literal tail.
+     (nshell.presentation:run-repl-batch
+      :line (cl-cli:option-value invocation :command)
+      :script-args (cl-cli:positional-value invocation :command-args)))
+    (t
+     ;; No flags and no -c: interactive when stdin is a tty, batch otherwise.
+     (if (tty-p)
+         (progn
+           (%print-version)
+           (nshell.presentation:run-repl)
+           0)
+         (nshell.presentation:run-repl-batch)))))
+
 (defun main ()
   "Entry point for the nshell binary."
   (let* ((arguments (%command-line-arguments))
          (exit-code
            (handler-case
-               (case (%cli-action arguments)
-                 (:help
-                  (%print-usage)
-                  0)
-                 (:version
-                  (%print-version)
-                  0)
-                 (:command
-                  (nshell.presentation:run-repl-batch
-                   :line (%cli-command arguments)
-                   :script-args (%cli-command-arguments arguments)))
-                 (:script
-                  (nshell.presentation:run-repl-script
-                   (first arguments) (rest arguments)))
-                 (:invalid
-                  (%print-usage *error-output*)
-                  1)
-                 (:run
-                  (if (tty-p)
-                      (progn
-                        (%print-version)
-                        (nshell.presentation:run-repl)
-                        0)
-                      (nshell.presentation:run-repl-batch))))
+               ;; A leading non-flag token names a SCRIPT to run; the remaining
+               ;; arguments become $argv verbatim (including flag-like ones), so
+               ;; short-circuit before cl-cli, which would parse them as options.
+               (if (and arguments (not (%flag-argument-p (first arguments))))
+                   (nshell.presentation:run-repl-script
+                    (first arguments) (rest arguments))
+                   (handler-case
+                       (%run-parsed-invocation
+                        (cl-cli:parse-argv (%build-cli-app)
+                                           (cl-cli:current-process-argv)))
+                     ;; Unknown flag / missing -c value / unexpected argument.
+                     (cl-cli:cli-usage-error ()
+                       (%print-usage *error-output*)
+                       1)))
              (error (error)
                (%fatal-error error)))))
     (sb-ext:quit :unix-status (or exit-code 0))))

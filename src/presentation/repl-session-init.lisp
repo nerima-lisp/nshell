@@ -2,7 +2,8 @@
 (in-package #:nshell.presentation)
 
 (defun initialize-repl-state ()
-  (setf *running* t
+  (setf *boundaries* (make-real-boundary-context)
+        *running* t
         *last-exit-code* 0
         *last-command-duration-ms* nil
         *history* (nshell.domain.history:make-command-history)

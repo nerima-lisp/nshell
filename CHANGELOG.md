@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Integrated the `nerima-lisp` Common Lisp toolkit family across the layers:
+  - **cl-parser-kit** now backs `$((...))` arithmetic via a rule-based tokenizer
+    and a Pratt (operator-precedence) parser that builds an AST evaluated
+    separately. This adds exponentiation `**` (right-associative, binding tighter
+    than unary minus), bitwise `& | ^ ~`, shifts `<< >>`, and the ternary `?:`,
+    and fixes a short-circuit quirk where `1 || 5` and `0 && 5` previously erred.
+  - **cl-dataflow** powers a new `pipeline-graph` builtin that renders a typed
+    pipeline as a validated Graphviz DOT graph (or Mermaid with `--mermaid`)
+    without executing it, and models the job lifecycle as an analyzable state
+    machine.
+  - **cl-cli** now declaratively describes the `nshell` command line
+    (`--help`/`--version`/`-c COMMAND`/script dispatch), replacing the
+    hand-rolled argument classifier.
+  - **cl-boundary-kit** makes the REPL edge's OS effects (hostname, working
+    directory, monotonic clock) explicit, swappable boundaries, making the prompt
+    and command timing deterministic under test.
+  - **cl-tty-kit** provides Unicode-correct display-width, truncation, and
+    padding (replacing two divergent hand-rolled width tables) and the ANSI/SGR
+    escape vocabulary used across rendering, prompt, and completion.
 - `nshell/weave`: a cl-weave regression suite covering the completion engine.
   It exercises the cl-prolog knowledge base with property-based tests, fixtures,
   and benchmarks; runs direct Prolog queries (`findall`, negation-as-failure,

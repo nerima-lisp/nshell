@@ -14,9 +14,35 @@
       url = "github:nerima-lisp/cl-weave";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # The nerima-lisp toolkit family nshell integrates against.  We only need
+    # each one's source tree (built as an SBCL lisp library below via
+    # buildASDFSystem), so consume them as non-flake sources: this avoids
+    # evaluating their flakes and pulling in their transitive inputs, and works
+    # uniformly even for checkouts that ship no flake.nix (cl-tty-kit).
+    cl-parser-kit = {
+      url = "github:nerima-lisp/cl-parser-kit";
+      flake = false;
+    };
+    cl-dataflow = {
+      url = "github:nerima-lisp/cl-dataflow";
+      flake = false;
+    };
+    cl-boundary-kit = {
+      url = "github:nerima-lisp/cl-boundary-kit";
+      flake = false;
+    };
+    cl-cli = {
+      url = "github:nerima-lisp/cl-cli";
+      flake = false;
+    };
+    cl-tty-kit = {
+      url = "github:nerima-lisp/cl-tty-kit";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, cl-prolog, cl-weave }:
+  outputs = { self, nixpkgs, cl-prolog, cl-weave
+            , cl-parser-kit, cl-dataflow, cl-boundary-kit, cl-cli, cl-tty-kit }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -49,6 +75,44 @@
             src = cl-weave;
             systems = [ "cl-weave" ];
           };
+          # The nerima-lisp toolkit family, each built as an SBCL lisp library.
+          # cl-parser-kit / cl-boundary-kit / cl-tty-kit are self-contained;
+          # cl-dataflow and cl-cli sit on cl-prolog (already a dependency).
+          clParserKit = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-parser-kit";
+            version = "0.1.0";
+            src = cl-parser-kit;
+            systems = [ "cl-parser-kit" ];
+          };
+          clDataflow = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-dataflow";
+            version = "0.2.0";
+            src = cl-dataflow;
+            systems = [ "cl-dataflow" ];
+            lispLibs = [ clProlog ];
+          };
+          clBoundaryKit = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-boundary-kit";
+            version = "0.1.0";
+            src = cl-boundary-kit;
+            systems = [ "cl-boundary-kit" ];
+          };
+          clCli = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-cli";
+            version = "0.1.0";
+            src = cl-cli;
+            systems = [ "cl-cli" ];
+            lispLibs = [ clProlog ];
+          };
+          clTtyKit = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-tty-kit";
+            version = "0.1.0";
+            src = cl-tty-kit;
+            systems = [ "cl-tty-kit" ];
+          };
+          nshellLibs = [
+            clProlog clParserKit clDataflow clBoundaryKit clCli clTtyKit
+          ];
         in
         {
           default = pkgs.sbcl.buildASDFSystem {
@@ -56,7 +120,7 @@
             version = "0.4.0";
             src = src;
             systems = [ "nshell" ];
-            lispLibs = [ clProlog ];
+            lispLibs = nshellLibs;
             buildScript = pkgs.writeText "build-nshell.lisp" ''
               (require :asdf)
               (setf asdf:*compile-file-warnings-behaviour* :warn)
@@ -95,10 +159,7 @@
             version = "0.4.0";
             src = src;
             systems = [ "nshell/test" ];
-            lispLibs = [
-              clProlog
-              clWeaveLib
-            ];
+            lispLibs = nshellLibs ++ [ clWeaveLib ];
           };
         });
 
@@ -121,6 +182,41 @@
           src = cl-weave;
           systems = [ "cl-weave" ];
         };
+        clParserKit = pkgs.sbcl.buildASDFSystem {
+          pname = "cl-parser-kit";
+          version = "0.1.0";
+          src = cl-parser-kit;
+          systems = [ "cl-parser-kit" ];
+        };
+        clDataflow = pkgs.sbcl.buildASDFSystem {
+          pname = "cl-dataflow";
+          version = "0.2.0";
+          src = cl-dataflow;
+          systems = [ "cl-dataflow" ];
+          lispLibs = [ clProlog ];
+        };
+        clBoundaryKit = pkgs.sbcl.buildASDFSystem {
+          pname = "cl-boundary-kit";
+          version = "0.1.0";
+          src = cl-boundary-kit;
+          systems = [ "cl-boundary-kit" ];
+        };
+        clCli = pkgs.sbcl.buildASDFSystem {
+          pname = "cl-cli";
+          version = "0.1.0";
+          src = cl-cli;
+          systems = [ "cl-cli" ];
+          lispLibs = [ clProlog ];
+        };
+        clTtyKit = pkgs.sbcl.buildASDFSystem {
+          pname = "cl-tty-kit";
+          version = "0.1.0";
+          src = cl-tty-kit;
+          systems = [ "cl-tty-kit" ];
+        };
+        nshellLibs = [
+          clProlog clParserKit clDataflow clBoundaryKit clCli clTtyKit
+        ];
       in {
         # Verify the default package compiles and builds successfully
         build = self.packages.${system}.default;
@@ -138,7 +234,7 @@
           export HOME="$TMPDIR/home"
           export XDG_CACHE_HOME="$TMPDIR/cache"
           mkdir -p "$HOME" "$XDG_CACHE_HOME"
-          export CL_SOURCE_REGISTRY="${cl-weave}//:${cl-prolog}//:$PWD//:"
+          export CL_SOURCE_REGISTRY="${cl-weave}//:${cl-prolog}//:${cl-parser-kit}//:${cl-dataflow}//:${cl-boundary-kit}//:${cl-cli}//:${cl-tty-kit}//:$PWD//:"
           sbcl --non-interactive \
             --eval '(require :asdf)' \
             --eval '(setf asdf:*compile-file-warnings-behaviour* :warn)' \
@@ -153,10 +249,7 @@
           version = "0.4.0";
           src = src;
           systems = [ "nshell/test" ];
-          lispLibs = [
-            clProlog
-            clWeaveLib
-          ];
+          lispLibs = nshellLibs ++ [ clWeaveLib ];
           buildScript = pkgs.writeText "run-tests.lisp" ''
             (require :asdf)
             (setf asdf:*compile-file-warnings-behaviour* :warn)
@@ -235,7 +328,7 @@
               # Resolve every dependency from its source checkout: cl-weave,
               # cl-prolog (and the cl-prolog/weave system it ships), and nshell
               # itself.  Each .asd sits at the root of its tree.
-              export CL_SOURCE_REGISTRY="${cl-weave}//:${cl-prolog}//:$PWD//:''${CL_SOURCE_REGISTRY:-}"
+              export CL_SOURCE_REGISTRY="${cl-weave}//:${cl-prolog}//:${cl-parser-kit}//:${cl-dataflow}//:${cl-boundary-kit}//:${cl-cli}//:${cl-tty-kit}//:$PWD//:''${CL_SOURCE_REGISTRY:-}"
               export NSHELL_ROOT=$PWD
               alias test='cd "$NSHELL_ROOT" && sbcl --noinform --eval "(require :asdf)" --eval "(push (truename \"./\") asdf:*central-registry*)" --eval "(asdf:test-system :nshell/test)" --quit'
               alias coverage='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'

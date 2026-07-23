@@ -34,19 +34,33 @@ runners, so skip both the hermetic sandbox and CI."
     (expect "nshell" :to-equal "nshell"))
 
   (it "main-cli-action"
-    "CLI argument dispatch should recognize help, version, and invalid inputs."
-    (expect :help :to-be (nshell::%cli-action '("--help")))
-    (expect :help :to-be (nshell::%cli-action '("-h")))
-    (expect :version :to-be (nshell::%cli-action '("--version")))
-    (expect :version :to-be (nshell::%cli-action '("-V")))
-    (expect :command :to-be (nshell::%cli-action '("-c" "echo hello")))
-    (expect :command :to-be (nshell::%cli-action '("--command" "echo hello")))
-    (expect :run :to-be (nshell::%cli-action nil))
-    ;; A leading non-flag argument names a script file (with optional $argv).
-    (expect :script :to-be (nshell::%cli-action '("script")))
-    (expect :script :to-be (nshell::%cli-action '("script.nsh" "arg1" "arg2")))
-    (expect :invalid :to-be (nshell::%cli-action '("-c")))
-    (expect :invalid :to-be (nshell::%cli-action '("--unknown"))))
+    "The cl-cli app spec should classify help, version, command, and invalid inputs."
+    (labels ((parse (args)
+               ;; Mirror MAIN: parse the flag-led surface through cl-cli.
+               (cl-cli:parse-argv (nshell::%build-cli-app) (cons "nshell" args)))
+             (usage-error-p (args)
+               (handler-case (progn (parse args) nil)
+                 (cl-cli:cli-usage-error () t))))
+      ;; Help / version flags (short and long).
+      (expect (cl-cli:option-value (parse '("--help")) :show-help) :to-be-truthy)
+      (expect (cl-cli:option-value (parse '("-h")) :show-help) :to-be-truthy)
+      (expect (cl-cli:option-value (parse '("--version")) :show-version) :to-be-truthy)
+      (expect (cl-cli:option-value (parse '("-V")) :show-version) :to-be-truthy)
+      ;; -c / --command carry the command string; the tail becomes $argv.
+      (expect "echo hello" :to-equal
+              (cl-cli:option-value (parse '("-c" "echo hello")) :command))
+      (expect "echo hello" :to-equal
+              (cl-cli:option-value (parse '("--command" "echo hello")) :command))
+      (expect '("a" "b") :to-equal
+              (cl-cli:positional-value (parse '("-c" "cmd" "a" "b")) :command-args))
+      ;; No arguments: no flags set (MAIN then chooses interactive vs batch).
+      (expect (cl-cli:option-value (parse nil) :command) :to-be-falsy)
+      ;; A leading non-flag argument is a SCRIPT, handled before cl-cli parsing.
+      (expect (nshell::%flag-argument-p "script") :to-be-falsy)
+      (expect (nshell::%flag-argument-p "script.nsh") :to-be-falsy)
+      ;; Missing -c value and unknown flags are usage errors (exit 1 in MAIN).
+      (expect (usage-error-p '("-c")) :to-be-truthy)
+      (expect (usage-error-p '("--unknown")) :to-be-truthy)))
 
   (it "main-cli-output"
     "Top-level text should include a usage line and version banner."

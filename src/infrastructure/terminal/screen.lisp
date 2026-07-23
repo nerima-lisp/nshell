@@ -37,24 +37,15 @@
   (when (%in-screen-p screen row col)
     (aref (screen-cells screen) row col)))
 
-(defun %wide-character-p (char)
-  (let ((code (char-code char)))
-    (or (<= #x1100 code #x115F)
-        (<= #x2329 code #x232A)
-        (<= #x2E80 code #xA4CF)
-        (<= #xAC00 code #xD7A3)
-        (<= #xF900 code #xFAFF)
-        (<= #xFE10 code #xFE19)
-        (<= #xFE30 code #xFE6F)
-        (<= #xFF00 code #xFF60)
-        (<= #xFFE0 code #xFFE6)
-        (<= #x1F300 code #x1FAFF))))
-
 (defun %screen-character-width (char)
+  "Column span of CHAR within the screen grid.  A blank cell (NIL) and Tab keep
+their grid-specific widths; the wide-vs-narrow decision for real characters is
+delegated to cl-tty-kit's Unicode-aware classifier so emoji and CJK occupy two
+cells, matching the display-width used elsewhere in nshell."
   (cond
     ((null char) 1)
     ((char= char #\Tab) 4)
-    ((%wide-character-p char) 2)
+    ((= (cl-tty-kit:char-width char) 2) 2)
     (t 1)))
 
 (defun %clear-screen-cell (screen row col)

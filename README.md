@@ -111,8 +111,14 @@ Inside `nix develop`, you can load the system into a REPL:
 
 `alias`, `abbr`, `bg`, `cd`, `complete`, `contains`, `count`, `disown`, `echo`,
 `exec`, `exit`, `export`, `false`, `fg`, `function`, `help`, `history`, `jobs`,
-`ls`, `not`, `pwd`, `read`, `seq`, `set`, `source`, `string`, `test`, `true`,
-`type`, `which`.
+`ls`, `not`, `pipeline-graph`, `pwd`, `read`, `seq`, `set`, `source`, `string`,
+`test`, `true`, `type`, `which`.
+
+`pipeline-graph 'CMD | CMD ...'` renders a typed pipeline as a Graphviz DOT
+graph (or a Mermaid flowchart with `--mermaid`) without executing it — a
+diagnostic built on the `cl-dataflow` computation-graph toolkit. Quote the
+pipeline so the shell passes it as a single argument rather than running it,
+e.g. `pipeline-graph 'cat access.log | grep 404 | wc -l'`.
 
 Run `help` inside nshell for details.
 
@@ -136,6 +142,28 @@ The REPL is structured as a **continuation-passing / trampoline loop**: each
 keystroke runs a pure reducer over an immutable `input-state`, and rendering is
 derived from that state. This keeps the interactive core deterministic and
 unit-testable without a terminal.
+
+### Toolkit foundation
+
+nshell builds on the `nerima-lisp` Common Lisp toolkit family, each wired at the
+layer where it fits the domain-driven design:
+
+- **[cl-parser-kit](https://github.com/nerima-lisp/cl-parser-kit)** — its
+  rule-based tokenizer and Pratt (operator-precedence) parser drive `$((...))`
+  arithmetic, which parses to an AST and then evaluates (adding `**`, bitwise
+  `& | ^ ~`, shifts `<< >>`, and the ternary `?:`).
+- **[cl-dataflow](https://github.com/nerima-lisp/cl-dataflow)** — renders
+  pipelines as validated computation graphs (`pipeline-graph`) and models the
+  job lifecycle as an analyzable state machine.
+- **[cl-boundary-kit](https://github.com/nerima-lisp/cl-boundary-kit)** — makes
+  the REPL edge's OS effects (hostname, working directory, clock) explicit,
+  swappable boundaries, so the prompt and command timing are deterministic under
+  test.
+- **[cl-cli](https://github.com/nerima-lisp/cl-cli)** — declaratively describes
+  the `nshell` command line (`--help`/`--version`/`-c`/script dispatch).
+- **[cl-tty-kit](https://github.com/nerima-lisp/cl-tty-kit)** — provides
+  Unicode-correct display-width, truncation, and padding, plus the ANSI/SGR
+  escape vocabulary used by rendering, prompt, and completion.
 
 ## Testing
 
@@ -204,7 +232,8 @@ nshell is converging on world-class interactive-shell parity. Near-term focus:
 - **Shell language depth** — richer list variables and explicit semantics
   around compound expansions.
   (Quoting, parameter expansion with defaults, required checks, substring
-  slicing, and patterns, arithmetic `$((...))`, brace expansion, command
+  slicing, and patterns, arithmetic `$((...))` — including `**`, bitwise,
+  shift, and ternary operators — brace expansion, command
   substitution `$(...)`/`(...)`, fd redirections `2>`/`2>&1`/`&>`, here-docs
   `<<`, here-strings `<<<`, and function arguments via `$argv`/`$argv[N]` are
   done.)

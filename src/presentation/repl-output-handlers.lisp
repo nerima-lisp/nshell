@@ -114,13 +114,15 @@
     (nshell.domain.history:history-reset-navigation *history*)
     (nshell.infrastructure.persistence:append-history-entry text)
     (sync-exported-environment)
-    (let ((start-time (get-internal-real-time)))
+    ;; Time the command through the clock boundary (real clock == monotonic
+    ;; get-internal-real-time), so a fake clock makes duration deterministic.
+    (let ((start-time (boundary-monotonic)))
       (unwind-protect
            (setf *last-exit-code* (or (execute-ast ast) 0))
         (setf *last-command-duration-ms*
               (%elapsed-command-duration-ms
                start-time
-               (get-internal-real-time)))))
+               (boundary-monotonic)))))
     (setf *input-state* (make-repl-input-state))))
 
 (defun %execute-parse-error (result)

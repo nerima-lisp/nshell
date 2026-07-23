@@ -1,199 +1,153 @@
 ;;; Shell arithmetic expansion: $((expression))
 ;;;
-;;; A small recursive-descent evaluator over integers supporting the common
-;;; POSIX arithmetic operators. Variables inside the expression are resolved
-;;; from the shell environment (an unset or non-numeric name evaluates to 0,
-;;; matching POSIX shells). The evaluator is pure domain logic with no I/O.
+;;; An integer expression evaluator supporting the common POSIX/bash arithmetic
+;;; operators.  Parsing is delegated to cl-parser-kit: a rule-based tokenizer
+;;; feeds a Pratt (operator-precedence) table that produces an AST, which a
+;;; separate walker then evaluates.  Splitting parse from eval lets `&&`/`||`
+;;; short-circuit and the ternary evaluate only the taken branch without the
+;;; leftover-token quirk of the previous parse-while-evaluating design.
+;;;
+;;; Variables inside the expression are resolved from the shell environment (an
+;;; unset or non-numeric name evaluates to 0, matching POSIX shells).  The
+;;; evaluator is pure domain logic with no I/O.
 (in-package #:nshell.domain.expansion)
 
-(defstruct (arith-lexer (:constructor %make-arith-lexer (input)))
-  (input "" :type string :read-only t)
-  (pos 0 :type fixnum))
+;;; --- Tokenizer ---------------------------------------------------------
+;;;
+;;; Three deliberate choices keep integer shell semantics intact:
+;;;   * numbers use a digit predicate (not cl-parser-kit's number rule, which
+;;;     would accept "1.5" as a float);
+;;;   * identifier predicates are pinned to the shell rule so "x-y" tokenizes
+;;;     as x - y (cl-parser-kit's default identifier chars include #\-);
+;;;   * operators carry no token-type (so the Pratt table dispatches on their
+;;;     text), except "?"/":" which need eql-comparable keyword keys for
+;;;     register-ternary's colon match.
 
-(defun %arith-peek (lx &optional (offset 0))
-  (let ((p (+ (arith-lexer-pos lx) offset)))
-    (when (< p (length (arith-lexer-input lx)))
-      (char (arith-lexer-input lx) p))))
+(defun %arith-variable-start-p (char)
+  (or (alpha-char-p char) (char= char #\_)))
 
-(defun %arith-skip-space (lx)
-  (loop for ch = (%arith-peek lx)
-        while (and ch (member ch '(#\Space #\Tab #\Newline)))
-        do (incf (arith-lexer-pos lx))))
+(defun %arith-variable-char-p (char)
+  (or (alphanumericp char) (char= char #\_)))
 
-(defparameter +arith-operators+
-  ;; Longest-match-first so that two-character operators win over one-character.
-  '("<<" ">>" "<=" ">=" "==" "!=" "&&" "||"
-    "+" "-" "*" "/" "%" "(" ")" "<" ">" "!" "&" "|" "^" "~")
-  "Operator lexemes recognized by the arithmetic evaluator.")
+(defparameter *arith-tokenizer*
+  (make-tokenizer
+   :rules (list (make-whitespace-rule :skip-p t)
+                (make-predicate-rule :number #'digit-char-p
+                                     :value-function (lambda (s) (parse-integer s)))
+                (make-identifier-rule :type :variable
+                                      :start-predicate #'%arith-variable-start-p
+                                      :continue-predicate #'%arith-variable-char-p)
+                (make-operator-rule :question '("?"))
+                (make-operator-rule :colon '(":"))
+                (make-operator-rule nil
+                                    '("<<" ">>" "<=" ">=" "==" "!=" "&&" "||" "**"
+                                      "+" "-" "*" "/" "%" "(" ")"
+                                      "<" ">" "!" "&" "|" "^" "~"))))
+  "Tokenizer for $((...)) arithmetic, shared across evaluations.")
 
-(defstruct (arith-token (:constructor %make-arith-token (kind value)))
-  (kind nil :read-only t)
-  (value nil :read-only t))
+;;; --- Pratt table (binding-power ladder, C/bash order low -> high) ------
+;;;
+;;; Registrars build an AST node per operator; the evaluator below walks it.
+;;; register-infix-left/right handle the +1 right-binding-power for you, so
+;;; equal-precedence chains associate correctly and "**" stays right-assoc and
+;;; binds tighter than unary minus (so -2**2 = -(2**2) = -4, matching bash).
 
-(defun %arith-token-kind (ch)
-  "Classify the arithmetic lexer branch for CH."
-  (cond
-    ((null ch) nil)
-    ((digit-char-p ch) :number)
-    ((or (alpha-char-p ch) (char= ch #\_)) :variable)
-    (t :operator)))
+(defparameter *arith-pratt-table*
+  (let ((table (make-pratt-table)))
+    (register-atom table :number (lambda (token) (token-value token)))
+    (register-atom table :variable (lambda (token) (list :var (token-value token))))
+    (register-grouping table "(" ")")
+    (register-infix-right table "**" 130 (lambda (l r) (list :pow l r)))
+    (register-prefix table "-" 120 (lambda (x) (list :neg x)))
+    (register-prefix table "+" 120 (lambda (x) (list :pos x)))
+    (register-prefix table "!" 120 (lambda (x) (list :lnot x)))
+    (register-prefix table "~" 120 (lambda (x) (list :bnot x)))
+    (register-infix-left table "*" 110 (lambda (l r) (list :mul l r)))
+    (register-infix-left table "/" 110 (lambda (l r) (list :div l r)))
+    (register-infix-left table "%" 110 (lambda (l r) (list :mod l r)))
+    (register-infix-left table "+" 100 (lambda (l r) (list :add l r)))
+    (register-infix-left table "-" 100 (lambda (l r) (list :sub l r)))
+    (register-infix-left table "<<" 90 (lambda (l r) (list :shl l r)))
+    (register-infix-left table ">>" 90 (lambda (l r) (list :shr l r)))
+    (register-infix-left table "<" 80 (lambda (l r) (list :lt l r)))
+    (register-infix-left table ">" 80 (lambda (l r) (list :gt l r)))
+    (register-infix-left table "<=" 80 (lambda (l r) (list :le l r)))
+    (register-infix-left table ">=" 80 (lambda (l r) (list :ge l r)))
+    (register-infix-left table "==" 70 (lambda (l r) (list :eq l r)))
+    (register-infix-left table "!=" 70 (lambda (l r) (list :ne l r)))
+    (register-infix-left table "&" 60 (lambda (l r) (list :band l r)))
+    (register-infix-left table "^" 50 (lambda (l r) (list :bxor l r)))
+    (register-infix-left table "|" 40 (lambda (l r) (list :bor l r)))
+    (register-infix-left table "&&" 30 (lambda (l r) (list :and l r)))
+    (register-infix-left table "||" 20 (lambda (l r) (list :or l r)))
+    (register-ternary table :question :colon 10 (lambda (c th el) (list :if c th el)))
+    table)
+  "Pratt operator table mapping arithmetic operators to AST builders.")
 
-(defun %arith-next-token (lx)
-  "Return the next arithmetic token, or NIL at end of input."
-  (%arith-skip-space lx)
-  (let ((ch (%arith-peek lx)))
-    (case (%arith-token-kind ch)
-      ((nil) nil)
-      (:number
-       (let ((start (arith-lexer-pos lx)))
-         (loop for c = (%arith-peek lx)
-               while (and c (digit-char-p c))
-               do (incf (arith-lexer-pos lx)))
-         (%make-arith-token :num
-                            (parse-integer (arith-lexer-input lx)
-                                           :start start
-                                           :end (arith-lexer-pos lx)))))
-      (:variable
-       (let ((start (arith-lexer-pos lx)))
-         (loop for c = (%arith-peek lx)
-               while (and c (or (alphanumericp c) (char= c #\_)))
-               do (incf (arith-lexer-pos lx)))
-         (%make-arith-token :var
-                            (subseq (arith-lexer-input lx)
-                                    start
-                                    (arith-lexer-pos lx)))))
-      (:operator
-       (let ((op (find-if (lambda (candidate)
-                            (let ((end (+ (arith-lexer-pos lx) (length candidate))))
-                              (and (<= end (length (arith-lexer-input lx)))
-                                   (string= candidate (arith-lexer-input lx)
-                                            :start2 (arith-lexer-pos lx) :end2 end))))
-                          +arith-operators+)))
-         (if op
-             (progn
-               (incf (arith-lexer-pos lx) (length op))
-               (%make-arith-token :op op))
-             (error "nshell: invalid arithmetic character ~s" ch)))))))
-
-(defstruct (arith-parser (:constructor %make-arith-parser (lexer env)))
-  lexer env (lookahead nil) (primed nil))
-
-(defun %arith-advance (p)
-  (setf (arith-parser-lookahead p) (%arith-next-token (arith-parser-lexer p))
-        (arith-parser-primed p) t))
-
-(defun %arith-current (p)
-  (unless (arith-parser-primed p) (%arith-advance p))
-  (arith-parser-lookahead p))
-
-(defun %arith-token-kind-p (token kind)
-  (and token (eq (arith-token-kind token) kind)))
-
-(defun %arith-token-value (token)
-  (arith-token-value token))
-
-(defun %arith-op-p (p text)
-  (let ((tok (%arith-current p)))
-    (and (%arith-token-kind-p tok :op)
-         (string= (%arith-token-value tok) text))))
-
-(defun %arith-eat-op (p text)
-  (if (%arith-op-p p text)
-      (prog1 t (%arith-advance p))
-      nil))
-
-(defun %arith-var-value (p name)
-  (let ((raw (env-get (arith-parser-env p) name)))
-    (or (and raw (ignore-errors (parse-integer raw :junk-allowed t))) 0)))
-
-;; Grammar (lowest to highest precedence):
-;;   or    -> and ( '||' and )*
-;;   and   -> cmp ( '&&' cmp )*
-;;   cmp   -> add ( ('=='|'!='|'<'|'>'|'<='|'>=') add )*
-;;   add   -> mul ( ('+'|'-') mul )*
-;;   mul   -> unary ( ('*'|'/'|'%') unary )*
-;;   unary -> ('-'|'+'|'!') unary | primary
-;;   primary -> NUM | VAR | '(' or ')'
-
-(defun %arith-primary (p)
-  (let ((tok (%arith-current p)))
-    (cond
-      ((%arith-eat-op p "(")
-       (prog1 (%arith-or p)
-         (unless (%arith-eat-op p ")")
-           (error "nshell: unbalanced parenthesis in arithmetic expression"))))
-      ((%arith-token-kind-p tok :num)
-       (%arith-advance p)
-       (%arith-token-value tok))
-      ((%arith-token-kind-p tok :var)
-       (%arith-advance p)
-       (%arith-var-value p (%arith-token-value tok)))
-      (t (error "nshell: unexpected token in arithmetic expression: ~s" tok)))))
-
-(defun %arith-unary (p)
-  (cond
-    ((%arith-eat-op p "-") (- (%arith-unary p)))
-    ((%arith-eat-op p "+") (%arith-unary p))
-    ((%arith-eat-op p "!") (if (zerop (%arith-unary p)) 1 0))
-    ((%arith-eat-op p "~") (lognot (%arith-unary p)))
-    (t (%arith-primary p))))
+;;; --- Evaluator ---------------------------------------------------------
 
 (defun %arith-nonzero (n)
   (if (zerop n) (error "nshell: division by zero in arithmetic expression") n))
 
 (defun %arith-bool (n) (if n 1 0))
 
-;; Each binary tier is a Prolog-style rule table: (operator . semantic-action).
-;; define-arith-binary generates the left-associative loop from the table.
-(defmacro define-arith-binary (name higher-prec &rest op-rules)
-  "Generate a left-associative binary-operator parsing function from OP-RULES.
-Each rule is (op-string expr) where LEFT is the accumulated left-side value."
-  (let ((left (gensym "LEFT-")))
-    `(defun ,name (p)
-       (let ((,left (,higher-prec p)))
-         (loop (cond ,@(mapcar (lambda (rule)
-                                 (destructuring-bind (op expr) rule
-                                   `((%arith-eat-op p ,op)
-                                     (setf ,left ,(subst left 'left expr)))))
-                               op-rules)
-                     (t (return ,left))))))))
+(defun %arith-var-value (env name)
+  "Resolve NAME from ENV as an integer; unset or non-numeric names are 0."
+  (let ((raw (env-get env name)))
+    (or (and raw (ignore-errors (parse-integer raw :junk-allowed t))) 0)))
 
-(define-arith-binary %arith-mul %arith-unary
-  ("*" (* left (%arith-unary p)))
-  ("/" (truncate left (%arith-nonzero (%arith-unary p))))
-  ("%" (rem left (%arith-nonzero (%arith-unary p)))))
-
-(define-arith-binary %arith-add %arith-mul
-  ("+" (+ left (%arith-mul p)))
-  ("-" (- left (%arith-mul p))))
-
-(define-arith-binary %arith-cmp %arith-add
-  ("<=" (%arith-bool (<= left (%arith-add p))))
-  (">=" (%arith-bool (>= left (%arith-add p))))
-  ("==" (%arith-bool (= left (%arith-add p))))
-  ("!=" (%arith-bool (/= left (%arith-add p))))
-  ("<"  (%arith-bool (< left (%arith-add p))))
-  (">"  (%arith-bool (> left (%arith-add p)))))
-
-(define-arith-binary %arith-and %arith-cmp
-  ("&&" (%arith-bool (and (not (zerop left)) (not (zerop (%arith-cmp p)))))))
-
-(define-arith-binary %arith-or %arith-and
-  ("||" (%arith-bool (or (not (zerop left)) (not (zerop (%arith-and p)))))))
-
-(defun %arith-complete-result (parser result)
-  "Return RESULT after verifying PARSER consumed the whole expression."
-  (when (%arith-current parser)
-    (error "nshell: trailing tokens in arithmetic expression: ~s"
-           (%arith-current parser)))
-  result)
+(defun %arith-eval (node env)
+  "Recursively evaluate an arithmetic AST NODE against ENV, returning an integer."
+  (if (integerp node)
+      node
+      (destructuring-bind (op &rest operands) node
+        (flet ((a () (%arith-eval (first operands) env))
+               (b () (%arith-eval (second operands) env)))
+          (ecase op
+            (:var  (%arith-var-value env (first operands)))
+            (:neg  (- (a)))
+            (:pos  (a))
+            (:lnot (if (zerop (a)) 1 0))
+            (:bnot (lognot (a)))
+            (:pow  (let ((exponent (b)))
+                     (when (minusp exponent)
+                       (error "nshell: exponent less than 0 in arithmetic expression"))
+                     (expt (a) exponent)))
+            (:mul  (* (a) (b)))
+            (:div  (truncate (a) (%arith-nonzero (b))))
+            (:mod  (rem (a) (%arith-nonzero (b))))
+            (:add  (+ (a) (b)))
+            (:sub  (- (a) (b)))
+            (:shl  (ash (a) (b)))
+            (:shr  (ash (a) (- (b))))
+            (:lt   (%arith-bool (< (a) (b))))
+            (:gt   (%arith-bool (> (a) (b))))
+            (:le   (%arith-bool (<= (a) (b))))
+            (:ge   (%arith-bool (>= (a) (b))))
+            (:eq   (%arith-bool (= (a) (b))))
+            (:ne   (%arith-bool (/= (a) (b))))
+            (:band (logand (a) (b)))
+            (:bxor (logxor (a) (b)))
+            (:bor  (logior (a) (b)))
+            ;; Logical operators short-circuit on the evaluated left operand.
+            (:and  (%arith-bool (and (not (zerop (a))) (not (zerop (b))))))
+            (:or   (%arith-bool (or (not (zerop (a))) (not (zerop (b))))))
+            ;; Ternary evaluates only the taken branch.
+            (:if   (if (zerop (a)) (%arith-eval (third operands) env) (b))))))))
 
 (defun evaluate-arithmetic (expression env)
   "Evaluate EXPRESSION (a string) as shell integer arithmetic, returning an
 integer. Variables are resolved from ENV."
-  (let* ((parser (%make-arith-parser (%make-arith-lexer expression) env))
-         (result (%arith-or parser)))
-    (%arith-complete-result parser result)))
+  (let ((tokens (tokenize expression *arith-tokenizer*)))
+    (multiple-value-bind (ok ast next failure)
+        (parse-pratt-all tokens *arith-pratt-table*)
+      (declare (ignore next))
+      (unless ok
+        (error "nshell: ~A"
+               (if failure
+                   (parse-failure->string failure)
+                   "invalid arithmetic expression")))
+      (%arith-eval ast env))))
 
 (defun %arithmetic-substitution-end (input start)
   "Given INPUT and START pointing at the first #\( of a $(( opener, return the

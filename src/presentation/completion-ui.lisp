@@ -26,12 +26,10 @@
         (format nil "~a ~a" (%kind-icon kind) text))))
 
 (defun %pad-to-visible-width (text width)
-  (let ((visible-width (%string-visible-width text)))
-    (if (>= visible-width width)
-        text
-        (concatenate 'string text
-                     (make-string (- width visible-width)
-                                  :initial-element #\Space)))))
+  "Right-pad TEXT with spaces to occupy WIDTH terminal columns, leaving it
+unchanged when it is already at least that wide.  Delegates to cl-tty-kit's
+display-width-aware padding so wide glyphs are accounted for correctly."
+  (cl-tty-kit:pad-string text width :align :left :pad #\Space))
 
 (defun %compute-columns (candidates &key (terminal-width (%terminal-width)) (padding 2))
   (let* ((formatted (mapcar #'%format-candidate candidates))

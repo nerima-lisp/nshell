@@ -21,6 +21,7 @@
     ("help" . %builtin-help)
     ("history" . %builtin-history)
     ("jobs" . %builtin-jobs)
+    ("pipeline-graph" . %builtin-pipeline-graph)
     ("echo" . %builtin-echo)
     ("exit" . %builtin-exit)
     ("ls" . %builtin-ls)

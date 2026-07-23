@@ -1,25 +1,13 @@
 (in-package #:nshell.presentation)
 
-(defun %wide-character-p (char)
-  (let ((code (char-code char)))
-    (or (<= #x1100 code #x115f)
-        (<= #x2e80 code #xa4cf)
-        (<= #xac00 code #xd7a3)
-        (<= #xf900 code #xfaff)
-        (<= #xfe10 code #xfe19)
-        (<= #xfe30 code #xfe6f)
-        (<= #xff00 code #xff60)
-        (<= #xffe0 code #xffe6))))
-
 (defun %char-visible-width (char)
-  (cond
-    ((member char '(#\Newline #\Return #\Tab) :test #'char=) 0)
-    ((%wide-character-p char) 2)
-    (t 1)))
+  "Terminal column width of CHAR, delegating to cl-tty-kit's Unicode-aware
+classifier (control/combining -> 0, wide/emoji -> 2, otherwise 1)."
+  (cl-tty-kit:char-width char))
 
 (defun %string-visible-width (text)
-  (loop for char across text
-        sum (%char-visible-width char)))
+  "Sum of the terminal column widths of the characters in TEXT."
+  (cl-tty-kit:string-width text))
 
 (defun %segments-visible-width (segments)
   (loop for segment in segments
@@ -45,14 +33,10 @@
         cwd)))
 
 (defun %truncate-string-to-width (text width)
-  (with-output-to-string (out)
-    (loop with used = 0
-          for char across text
-          for char-width = (%char-visible-width char)
-          while (<= (+ used char-width) width)
-          do (progn
-               (write-char char out)
-               (incf used char-width)))))
+  "Longest prefix of TEXT whose terminal width is at most WIDTH.
+Delegates to cl-tty-kit, which drops a wide glyph whole rather than splitting
+it and treats a negative WIDTH as 0."
+  (cl-tty-kit:truncate-string text width :ellipsis ""))
 
 (defun %truncate-segments (segments width)
   "Return SEGMENTS shortened so their visible terminal width is at most WIDTH."
@@ -97,9 +81,12 @@
     (t :normal)))
 
 (defun %current-prompt-model (last-exit last-command-duration-ms)
+  ;; Hostname and working directory come from the cl-boundary-kit context so the
+  ;; prompt is deterministic under test (see repl-boundaries); the real context
+  ;; reads the actual host, preserving interactive behavior.
   (nshell.domain.prompting:make-prompt-model
-   :hostname (or (uiop:hostname) "localhost")
-   :cwd (%display-cwd (namestring (uiop:getcwd)))
+   :hostname (boundary-hostname)
+   :cwd (%display-cwd (boundary-current-directory))
    :exit-code last-exit
    :duration-ms last-command-duration-ms))
 

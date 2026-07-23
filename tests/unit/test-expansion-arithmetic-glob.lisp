@@ -26,6 +26,49 @@
       (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "X > 0 && Y > 0" env))
       (expect 0 :to-equal (nshell.domain.expansion:evaluate-arithmetic "!1" env))))
 
+  (it "arithmetic-exponentiation-is-right-associative"
+    "** binds tighter than unary minus and associates to the right (bash parity)."
+    (let ((env (arith-env)))
+      (expect 512 :to-equal (nshell.domain.expansion:evaluate-arithmetic "2 ** 3 ** 2" env))
+      (expect -4 :to-equal (nshell.domain.expansion:evaluate-arithmetic "-2 ** 2" env))
+      (expect 8 :to-equal (nshell.domain.expansion:evaluate-arithmetic "2 ** 3" env))
+      (expect (lambda () (nshell.domain.expansion:evaluate-arithmetic "2 ** -1" env))
+              :to-throw 'error)))
+
+  (it "arithmetic-bitwise-and-shift-operators"
+    "Bitwise &, |, ^, ~ and the << >> shifts evaluate over integers."
+    (let ((env (arith-env)))
+      (expect 16 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 << 4" env))
+      (expect 64 :to-equal (nshell.domain.expansion:evaluate-arithmetic "256 >> 2" env))
+      (expect 2 :to-equal (nshell.domain.expansion:evaluate-arithmetic "6 & 3" env))
+      (expect 7 :to-equal (nshell.domain.expansion:evaluate-arithmetic "6 | 1" env))
+      (expect 4 :to-equal (nshell.domain.expansion:evaluate-arithmetic "5 ^ 1" env))
+      (expect -1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "~0" env))
+      ;; Bitwise precedence: & binds tighter than ^ binds tighter than |.
+      (expect 7 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 | 2 & 3 ^ 4" env))))
+
+  (it "arithmetic-ternary-conditional"
+    "?: selects a branch, associates right, and sits below the other operators."
+    (let ((env (arith-env)))
+      (expect 2 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 ? 2 : 3" env))
+      (expect 3 :to-equal (nshell.domain.expansion:evaluate-arithmetic "0 ? 2 : 3" env))
+      ;; Right associative: 1 ? 2 : (3 ? 4 : 5) -> condition true -> then branch 2.
+      (expect 2 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 ? 2 : 3 ? 4 : 5" env))
+      ;; 0 ? 2 : (3 ? 4 : 5) -> condition false -> else branch (3 ? 4 : 5) -> 4.
+      (expect 4 :to-equal (nshell.domain.expansion:evaluate-arithmetic "0 ? 2 : 3 ? 4 : 5" env))
+      ;; The condition is a full expression to the left of `?`.
+      (expect 10 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 + 2 ? 10 : 20" env))
+      (expect (lambda () (nshell.domain.expansion:evaluate-arithmetic "1 ? 2" env))
+              :to-throw 'error)))
+
+  (it "arithmetic-logical-operators-short-circuit-without-trailing-error"
+    "&& and || evaluate to 1/0 for every operand combination (no leftover-token error)."
+    (let ((env (arith-env)))
+      (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 || 5" env))
+      (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "0 || 5" env))
+      (expect 0 :to-equal (nshell.domain.expansion:evaluate-arithmetic "0 && 5" env))
+      (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 && 5" env))))
+
   (it "arithmetic-substitution-in-text"
     "$((expr)) is substituted within surrounding text, with variable expansion."
     (let ((env (arith-env)))

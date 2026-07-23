@@ -14,46 +14,55 @@ environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
 (defmacro skip-in-sandbox (reason &body body)
   "Run BODY only when not in a hermetic sandbox; otherwise skip with REASON."
   `(if (in-hermetic-sandbox-p)
-       (skip "~a (skipped in hermetic sandbox)" ,reason)
+       (skip (format nil "~a (skipped in hermetic sandbox)" ,reason))
        (progn ,@body)))
 
-(def-suite nshell-tests
-  :description "nshell test suite - all tests")
+(defmacro skip-when-pty-round-trip-unreliable (reason &body body)
+  "Run BODY only where raw PTY master/slave round-trip I/O is reliable.
 
-(in-suite nshell-tests)
+Reading bytes straight back through a PTY depends on the terminal line
+discipline, which differs across platforms and is not honored by hosted CI
+runners, so skip both the hermetic sandbox and CI."
+  `(if (or (in-hermetic-sandbox-p) (uiop:getenv "CI"))
+       (skip (format nil "~a (skipped in sandbox/CI)" ,reason))
+       (progn ,@body)))
 
-(test smoke-test
-  "Basic sanity check that the test framework and project are loaded correctly."
-  (is (= 1 1))
-  (is (string= "nshell" "nshell")))
+(describe "nshell-tests"
+  (it "smoke-test"
+    "Basic sanity check that the test framework and project are loaded correctly."
+    (expect 1 :to-equal 1)
+    (expect "nshell" :to-equal "nshell"))
 
-(test main-cli-action
-  "CLI argument dispatch should recognize help, version, and invalid inputs."
-  (is (eq :help (nshell::%cli-action '("--help"))))
-  (is (eq :help (nshell::%cli-action '("-h"))))
-  (is (eq :version (nshell::%cli-action '("--version"))))
-  (is (eq :version (nshell::%cli-action '("-V"))))
-  (is (eq :command (nshell::%cli-action '("-c" "echo hello"))))
-  (is (eq :command (nshell::%cli-action '("--command" "echo hello"))))
-  (is (eq :run (nshell::%cli-action nil)))
-  ;; A leading non-flag argument names a script file (with optional $argv).
-  (is (eq :script (nshell::%cli-action '("script"))))
-  (is (eq :script (nshell::%cli-action '("script.nsh" "arg1" "arg2"))))
-  (is (eq :invalid (nshell::%cli-action '("-c"))))
-  (is (eq :invalid (nshell::%cli-action '("--unknown")))))
+  (it "main-cli-action"
+    "CLI argument dispatch should recognize help, version, and invalid inputs."
+    (expect :help :to-be (nshell::%cli-action '("--help")))
+    (expect :help :to-be (nshell::%cli-action '("-h")))
+    (expect :version :to-be (nshell::%cli-action '("--version")))
+    (expect :version :to-be (nshell::%cli-action '("-V")))
+    (expect :command :to-be (nshell::%cli-action '("-c" "echo hello")))
+    (expect :command :to-be (nshell::%cli-action '("--command" "echo hello")))
+    (expect :run :to-be (nshell::%cli-action nil))
+    ;; A leading non-flag argument names a script file (with optional $argv).
+    (expect :script :to-be (nshell::%cli-action '("script")))
+    (expect :script :to-be (nshell::%cli-action '("script.nsh" "arg1" "arg2")))
+    (expect :invalid :to-be (nshell::%cli-action '("-c")))
+    (expect :invalid :to-be (nshell::%cli-action '("--unknown"))))
 
-(test main-cli-output
-  "Top-level text should include a usage line and version banner."
-  (let ((usage (with-output-to-string (stream)
-                 (nshell::%print-usage stream)))
-        (version (with-output-to-string (stream)
-                   (nshell::%print-version stream))))
-    (is (search "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]" usage))
-    (is (search "stdin is a terminal" usage))
-    (is (search "With -c/--command" usage))
-    (is (search "nshell v" version)))
-  )
+  (it "main-cli-output"
+    "Top-level text should include a usage line and version banner."
+    (let ((usage (with-output-to-string (stream)
+                   (nshell::%print-usage stream)))
+          (version (with-output-to-string (stream)
+                     (nshell::%print-version stream))))
+      (expect (search "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]" usage) :to-be-truthy)
+      (expect (search "stdin is a terminal" usage) :to-be-truthy)
+      (expect (search "With -c/--command" usage) :to-be-truthy)
+      (expect (search "nshell v" version) :to-be-truthy))))
 
 (defun run-tests ()
-  "Run all nshell tests."
-  (run! 'nshell-tests))
+  "Run all nshell tests through cl-weave.
+
+Runs single-threaded: many suites share process-global state (mock command
+tables, abbreviation/alias/history registries, dynamic completion hooks), so
+concurrent execution would race.  This mirrors how the FiveAM suite ran."
+  (run-all :reporter :spec :max-workers 1))

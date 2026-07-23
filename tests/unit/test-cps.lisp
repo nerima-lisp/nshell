@@ -1,6 +1,4 @@
 (in-package #:nshell/test)
-(def-suite cps-tests :description "CPS trampoline tests" :in nshell-tests)
-(in-suite cps-tests)
 
 (defun %trampoline-result-sequence (sequence)
   (let ((results '()))
@@ -15,20 +13,21 @@
     results))
 
 (defmacro assert-trampoline-sequence (expected values)
-  `(is (equal ,expected (%trampoline-result-sequence ,values))))
+  `(expect ,expected :to-equal (%trampoline-result-sequence ,values)))
 
-(test trampoline-sequential
-  (assert-trampoline-sequence '(3 2 1) '(1 2 3)))
+(describe "cps-tests"
+  (it "trampoline-sequential"
+    (assert-trampoline-sequence '(3 2 1) '(1 2 3)))
 
-(test trampoline-stops-after-done
-  (assert-trampoline-sequence '(:start) '(:start)))
+  (it "trampoline-stops-after-done"
+    (assert-trampoline-sequence '(:start) '(:start)))
 
-(test pbt-trampoline-preserves-continuation-order
-  (check-property (:trials 50)
-      ((depth (gen-in-range 1 8) nil))
-    (equal (reverse (loop for i from 1 to depth collect i))
-           (%trampoline-result-sequence
-            (loop for i from 1 to depth collect i)))))
+  (it "pbt-trampoline-preserves-continuation-order"
+    (check-property (:trials 50)
+        ((depth (gen-in-range 1 8) nil))
+      (equal (reverse (loop for i from 1 to depth collect i))
+             (%trampoline-result-sequence
+              (loop for i from 1 to depth collect i)))))
 
-(test trampoline-termination
-  (assert-trampoline-sequence nil nil))
+  (it "trampoline-termination"
+    (assert-trampoline-sequence nil nil)))

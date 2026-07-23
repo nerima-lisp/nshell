@@ -1,167 +1,160 @@
 (in-package #:nshell/test)
 
-(in-suite repl-tests)
+(describe "repl-tests"
+  (it "repl-for-loop-expands-in-values"
+    "Interactive for loops expand variables in the in list before assignment."
+    (with-repl-test-state
+      (repl-test-set-env "FIRST" "alpha")
+      (with-complete-command-line (result ast "for item in $FIRST beta; do echo $item; done")
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect (search "alpha" output) :to-be-truthy)
+          (expect (search "beta" output) :to-be-truthy)
+          (expect (search "$item" output) :to-be-falsy)))))
 
-(test repl-for-loop-expands-in-values
-  "Interactive for loops expand variables in the in list before assignment."
-  (with-repl-test-state
-    (repl-test-set-env "FIRST" "alpha")
-    (with-complete-command-line (result ast "for item in $FIRST beta; do echo $item; done")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (search "alpha" output))
-        (is (search "beta" output))
-        (is (not (search "$item" output)))))))
-
-(test repl-execute-output-event-records-command-duration
-  "Interactive execution records the elapsed runtime through the output event path."
-  (with-repl-test-state
-    (with-repl-input-state (:buffer "echo done" :cursor-pos 9)
-      (with-temporary-function
-          ('nshell.infrastructure.persistence:append-history-entry
-           (lambda (text)
-             (declare (ignore text))))
+  (it "repl-execute-output-event-records-command-duration"
+    "Interactive execution records the elapsed runtime through the output event path."
+    (with-repl-test-state
+      (with-repl-input-state (:buffer "echo done" :cursor-pos 9)
         (with-temporary-function
-            ('nshell.presentation::execute-ast
-             (lambda (ignored-ast)
-               (declare (ignore ignored-ast))
-               (sleep 0.05)
-               0))
-          (capture-process-output-event :execute))))
-    (is (integerp nshell.presentation::*last-command-duration-ms*))
-    (is (>= nshell.presentation::*last-command-duration-ms* 0))
-    (is (= 0 nshell.presentation::*last-exit-code*))))
+            ('nshell.infrastructure.persistence:append-history-entry
+             (lambda (text)
+               (declare (ignore text))))
+          (with-temporary-function
+              ('nshell.presentation::execute-ast
+               (lambda (ignored-ast)
+                 (declare (ignore ignored-ast))
+                 (sleep 0.05)
+                 0))
+            (capture-process-output-event :execute))))
+      (expect (integerp nshell.presentation::*last-command-duration-ms*) :to-be-truthy)
+      (expect nshell.presentation::*last-command-duration-ms* :to-be-greater-than-or-equal 0)
+      (expect 0 :to-equal nshell.presentation::*last-exit-code*)))
 
-(test repl-command-duration-allows-sub-millisecond-execution
-  "Sub-millisecond commands should be recorded as a non-negative integer duration."
-  (is (= 0 (nshell.presentation::%elapsed-command-duration-ms 100 100)))
-  (is (integerp (nshell.presentation::%elapsed-command-duration-ms 100 100))))
+  (it "repl-command-duration-allows-sub-millisecond-execution"
+    "Sub-millisecond commands should be recorded as a non-negative integer duration."
+    (expect 0 :to-equal (nshell.presentation::%elapsed-command-duration-ms 100 100))
+    (expect (integerp (nshell.presentation::%elapsed-command-duration-ms 100 100)) :to-be-truthy))
 
-(test repl-executes-user-function-in-current-context
-  "Interactive command execution should invoke user-defined functions."
-  (with-repl-test-state
-    (repl-test-define-function "hi" '("echo from-function"))
-    (let ((ast (nshell.domain.parsing:make-command-node "hi" nil)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= (format nil "from-function~%") output))))))
+  (it "repl-executes-user-function-in-current-context"
+    "Interactive command execution should invoke user-defined functions."
+    (with-repl-test-state
+      (repl-test-define-function "hi" '("echo from-function"))
+      (let ((ast (nshell.domain.parsing:make-command-node "hi" nil)))
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect (format nil "from-function~%") :to-equal output)))))
 
-(test repl-expands-command-position-word
-  "Interactive foreground execution expands variables in command position before dispatch."
-  (with-repl-test-state
-    (repl-test-set-env "CMD" "echo")
-    (with-complete-command-line (result ast "$CMD repl-word")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= (format nil "repl-word~%") output))))))
+  (it "repl-expands-command-position-word"
+    "Interactive foreground execution expands variables in command position before dispatch."
+    (with-repl-test-state
+      (repl-test-set-env "CMD" "echo")
+      (with-complete-command-line (result ast "$CMD repl-word")
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect (format nil "repl-word~%") :to-equal output)))))
 
-(test repl-rejects-multi-field-command-position-expansion
-  "Interactive foreground execution should not dispatch an ambiguous expanded command name."
-  (with-repl-test-state
-    (repl-test-set-env "CMD" "echo split")
-    (with-complete-command-line (result ast "$CMD repl-word")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 127 code))
-        (is (string= (format nil "nshell: $CMD: command name expansion produced 2 fields~%")
-                     output))))))
+  (it "repl-rejects-multi-field-command-position-expansion"
+    "Interactive foreground execution should not dispatch an ambiguous expanded command name."
+    (with-repl-test-state
+      (repl-test-set-env "CMD" "echo split")
+      (with-complete-command-line (result ast "$CMD repl-word")
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 127 :to-equal code)
+          (expect (format nil "nshell: $CMD: command name expansion produced 2 fields~%") :to-equal output)))))
 
-(test repl-pipeline-feeds-builtin-output-to-read
-  "Interactive pipelines should feed builtin output into later builtin stages in-process."
-  (with-repl-test-state
-    (let ((ast (nshell.domain.parsing:make-pipeline-node
-                (list (nshell.domain.parsing:make-command-node "echo" (list "piped-value"))
-                      (nshell.domain.parsing:make-command-node "read" (list "captured"))))))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= "" output))
-        (is (string= "piped-value"
-                     (repl-test-env "captured")))))))
+  (it "repl-pipeline-feeds-builtin-output-to-read"
+    "Interactive pipelines should feed builtin output into later builtin stages in-process."
+    (with-repl-test-state
+      (let ((ast (nshell.domain.parsing:make-pipeline-node
+                  (list (nshell.domain.parsing:make-command-node "echo" (list "piped-value"))
+                        (nshell.domain.parsing:make-command-node "read" (list "captured"))))))
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect "" :to-equal output)
+          (expect "piped-value" :to-equal (repl-test-env "captured"))))))
 
-(test repl-pipeline-feeds-function-output-to-read
-  "Interactive pipelines should pipe function output into builtin stages."
-  (with-repl-test-state
-    (repl-test-define-function "produce" '("echo function-value"))
-    (let ((ast (nshell.domain.parsing:make-pipeline-node
-                (list (nshell.domain.parsing:make-command-node "produce" nil)
-                      (nshell.domain.parsing:make-command-node "read" (list "captured"))))))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= "" output))
-        (is (string= "function-value"
-                     (repl-test-env "captured")))))))
+  (it "repl-pipeline-feeds-function-output-to-read"
+    "Interactive pipelines should pipe function output into builtin stages."
+    (with-repl-test-state
+      (repl-test-define-function "produce" '("echo function-value"))
+      (let ((ast (nshell.domain.parsing:make-pipeline-node
+                  (list (nshell.domain.parsing:make-command-node "produce" nil)
+                        (nshell.domain.parsing:make-command-node "read" (list "captured"))))))
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect "" :to-equal output)
+          (expect "function-value" :to-equal (repl-test-env "captured"))))))
 
-(test repl-here-string-feeds-builtin-stdin
-  "Here-strings should feed interactive builtin stdin with a trailing newline."
-  (with-repl-test-state
-    (with-complete-command-line (result ast "read captured <<< inline-value")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= "" output))
-        (is (string= "inline-value"
-                     (repl-test-env "captured")))))))
+  (it "repl-here-string-feeds-builtin-stdin"
+    "Here-strings should feed interactive builtin stdin with a trailing newline."
+    (with-repl-test-state
+      (with-complete-command-line (result ast "read captured <<< inline-value")
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect "" :to-equal output)
+          (expect "inline-value" :to-equal (repl-test-env "captured"))))))
 
-(test repl-here-document-feeds-builtin-stdin
-  "Here-documents should feed interactive builtin stdin without adding bytes."
-  (with-repl-test-state
-    (with-complete-command-line (result ast (format nil "read captured << EOF~%inline-doc~%EOF"))
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= "" output))
-        (is (string= "inline-doc"
-                     (repl-test-env "captured")))))))
+  (it "repl-here-document-feeds-builtin-stdin"
+    "Here-documents should feed interactive builtin stdin without adding bytes."
+    (with-repl-test-state
+      (with-complete-command-line (result ast (format nil "read captured << EOF~%inline-doc~%EOF"))
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect "" :to-equal output)
+          (expect "inline-doc" :to-equal (repl-test-env "captured"))))))
 
-(test repl-if-node-uses-contextual-pipeline-semantics
-  "Interactive control-flow bodies should use the application executor semantics."
-  (with-repl-test-state
-    (with-complete-command-line (result ast "if test ok = ok; then echo from-if | read captured; fi")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= "" output))
-        (is (string= "from-if"
-                     (repl-test-env "captured")))))))
+  (it "repl-if-node-uses-contextual-pipeline-semantics"
+    "Interactive control-flow bodies should use the application executor semantics."
+    (with-repl-test-state
+      (with-complete-command-line (result ast "if test ok = ok; then echo from-if | read captured; fi")
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect "" :to-equal output)
+          (expect "from-if" :to-equal (repl-test-env "captured"))))))
 
-(test repl-control-flow-expands-aliases-through-context
-  "Aliases should expand inside interactive control-flow execution."
-  (with-repl-test-state
-    (repl-test-define-alias "say" "echo aliased")
-    (with-complete-command-line (result ast "if test ok = ok; then say value; fi")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= (format nil "aliased value~%") output))))))
+  (it "repl-control-flow-expands-aliases-through-context"
+    "Aliases should expand inside interactive control-flow execution."
+    (with-repl-test-state
+      (repl-test-define-alias "say" "echo aliased")
+      (with-complete-command-line (result ast "if test ok = ok; then say value; fi")
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect (format nil "aliased value~%") :to-equal output)))))
 
-(test repl-sequence-and-short-circuits-on-failure
-  "Interactive `&&` sequences should stop after the first failing command."
-  (with-repl-test-state
-    (with-complete-command-line (result ast "false && echo second")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 1 code))
-        (is (string= "" output))))))
+  (it "repl-sequence-and-short-circuits-on-failure"
+    "Interactive `&&` sequences should stop after the first failing command."
+    (with-repl-test-state
+      (with-complete-command-line (result ast "false && echo second")
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 1 :to-equal code)
+          (expect "" :to-equal output)))))
 
-(test repl-sequence-or-short-circuits-on-success
-  "Interactive `||` sequences should stop after the first successful command."
-  (with-repl-test-state
-    (with-complete-command-line (result ast "true || echo second")
-      (is (null (nshell.domain.parsing:parse-errors result)))
-      (multiple-value-bind (output code)
-          (call-repl-execute-ast ast)
-        (is (= 0 code))
-        (is (string= "" output))))))
+  (it "repl-sequence-or-short-circuits-on-success"
+    "Interactive `||` sequences should stop after the first successful command."
+    (with-repl-test-state
+      (with-complete-command-line (result ast "true || echo second")
+        (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+        (multiple-value-bind (output code)
+            (call-repl-execute-ast ast)
+          (expect 0 :to-equal code)
+          (expect "" :to-equal output))))))

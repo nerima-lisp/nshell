@@ -158,7 +158,7 @@
   :author "nshell contributors"
   :license "MIT"
   :description "Test system for nshell"
-  :depends-on ("nshell" "fiveam")
+  :depends-on ("nshell" "cl-weave")
   :pathname "tests"
   :serial t
   :components
@@ -284,7 +284,29 @@
    (:file "perf/test-startup"))
    :perform (asdf:test-op (o s)
               (declare (ignore o s))
-              (let ((result (uiop:symbol-call :fiveam '#:run!
-                                              (uiop:find-symbol* '#:nshell-tests :nshell/test))))
-                (unless result
-                  (error "FiveAM tests failed")))))
+              (unless (uiop:symbol-call :nshell/test '#:run-tests)
+                (error "cl-weave tests failed"))))
+
+(asdf:defsystem "nshell/weave"
+  :version "0.4.0"
+  :author "nshell contributors"
+  :license "MIT"
+  :description
+  "cl-weave regression suite for nshell: property-based, fixture, benchmark,
+and cl-prolog-query coverage of the completion engine, complementing the
+primary suite in nshell/test."
+  :depends-on ("nshell" "cl-weave" "cl-prolog" "cl-prolog/weave")
+  :pathname "tests"
+  :serial t
+  :components
+  ((:file "weave/package")
+   (:file "weave/support")
+   (:file "weave/completion-logic")
+   (:file "weave/completion-advanced")
+   (:file "weave/completion-properties")
+   (:file "weave/logic-crosscheck")
+   (:file "weave/entry"))
+  :perform (asdf:test-op (o s)
+             (declare (ignore o s))
+             (unless (uiop:symbol-call :nshell/weave '#:run :reporter :spec)
+               (error "cl-weave suite failed"))))

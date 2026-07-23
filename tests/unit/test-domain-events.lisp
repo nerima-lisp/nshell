@@ -1,66 +1,58 @@
 (in-package #:nshell/test)
 
-(def-suite domain-events-tests
-  :description "Domain event unit tests"
-  :in nshell-tests)
-
-(in-suite domain-events-tests)
-
 (defun domain-events-external-symbol-p (name)
   (eq (nth-value 1 (find-symbol name :nshell.domain.events)) :external))
 
 (defmacro assert-event-types (&rest cases)
   `(progn
      ,@(loop for (event-form expected-type) in cases
-             collect `(is (eq (nshell.domain.events:domain-event-type ,event-form)
-                              ,expected-type)))))
+             collect `(expect (nshell.domain.events:domain-event-type ,event-form) :to-be ,expected-type))))
 
-(test generic-event-factory
-  "Generic domain events can be created through an explicit factory."
-  (let ((event (nshell.domain.events:make-generic-domain-event :test-event :timestamp 0)))
-    (is (eq (nshell.domain.events:domain-event-type event) :test-event))
-    (is (= 0 (nshell.domain.events:domain-event-timestamp event)))))
+(describe "domain-events-tests"
+  (it "generic-event-factory"
+    "Generic domain events can be created through an explicit factory."
+    (let ((event (nshell.domain.events:make-generic-domain-event :test-event :timestamp 0)))
+      (expect (nshell.domain.events:domain-event-type event) :to-be :test-event)
+      (expect 0 :to-equal (nshell.domain.events:domain-event-timestamp event))))
 
-(test domain-event-factory-enforces-event-invariants
-  "Domain events are created through invariant-checking factories."
-  (signals type-error
-    (nshell.domain.events:make-generic-domain-event "not-a-keyword"))
-  (signals type-error
-    (nshell.domain.events:make-generic-domain-event :test :timestamp nil))
-  (let ((event (nshell.domain.events:make-command-entered-event "ls")))
-    (is (eq (nshell.domain.events:domain-event-type event) :command-entered))
-    (is (integerp (nshell.domain.events:domain-event-timestamp event)))))
+  (it "domain-event-factory-enforces-event-invariants"
+    "Domain events are created through invariant-checking factories."
+    (expect (lambda () (nshell.domain.events:make-generic-domain-event "not-a-keyword")) :to-throw 'type-error)
+    (expect (lambda () (nshell.domain.events:make-generic-domain-event :test :timestamp nil)) :to-throw 'type-error)
+    (let ((event (nshell.domain.events:make-command-entered-event "ls")))
+      (expect (nshell.domain.events:domain-event-type event) :to-be :command-entered)
+      (expect (integerp (nshell.domain.events:domain-event-timestamp event)) :to-be-truthy)))
 
-(test domain-event-values-expose-public-contract
-  "Domain events expose factories and projections, not raw struct details."
-  (is (domain-events-external-symbol-p "MAKE-GENERIC-DOMAIN-EVENT"))
-  (is (domain-events-external-symbol-p "DOMAIN-EVENT-TYPE"))
-  (is (domain-events-external-symbol-p "DOMAIN-EVENT-TIMESTAMP"))
-  (is (not (domain-events-external-symbol-p "DOMAIN-EVENT")))
-  (is (not (domain-events-external-symbol-p "%DOMAIN-EVENT")))
-  (is (not (domain-events-external-symbol-p "%MAKE-DOMAIN-EVENT"))))
+  (it "domain-event-values-expose-public-contract"
+    "Domain events expose factories and projections, not raw struct details."
+    (expect (domain-events-external-symbol-p "MAKE-GENERIC-DOMAIN-EVENT") :to-be-truthy)
+    (expect (domain-events-external-symbol-p "DOMAIN-EVENT-TYPE") :to-be-truthy)
+    (expect (domain-events-external-symbol-p "DOMAIN-EVENT-TIMESTAMP") :to-be-truthy)
+    (expect (domain-events-external-symbol-p "DOMAIN-EVENT") :to-be-falsy)
+    (expect (domain-events-external-symbol-p "%DOMAIN-EVENT") :to-be-falsy)
+    (expect (domain-events-external-symbol-p "%MAKE-DOMAIN-EVENT") :to-be-falsy))
 
-(test command-events-have-correct-types
-  "All command event constructors produce correct types"
-  (assert-event-types
-   ((nshell.domain.events:make-command-entered-event "ls") :command-entered)
-   ((nshell.domain.events:make-command-parsed-event '()) :command-parsed)
-   ((nshell.domain.events:make-parse-failed-event "bad" "error") :parse-failed)))
+  (it "command-events-have-correct-types"
+    "All command event constructors produce correct types"
+    (assert-event-types
+     ((nshell.domain.events:make-command-entered-event "ls") :command-entered)
+     ((nshell.domain.events:make-command-parsed-event '()) :command-parsed)
+     ((nshell.domain.events:make-parse-failed-event "bad" "error") :parse-failed)))
 
-(test job-events-have-correct-types
-  "All job event constructors produce correct types"
-  (assert-event-types
-   ((nshell.domain.events:make-job-created-event 1 "ls" 100) :job-created)
-   ((nshell.domain.events:make-job-stopped-event 1 :sigterm) :job-stopped)
-   ((nshell.domain.events:make-job-completed-event 1 0) :job-completed)))
+  (it "job-events-have-correct-types"
+    "All job event constructors produce correct types"
+    (assert-event-types
+     ((nshell.domain.events:make-job-created-event 1 "ls" 100) :job-created)
+     ((nshell.domain.events:make-job-stopped-event 1 :sigterm) :job-stopped)
+     ((nshell.domain.events:make-job-completed-event 1 0) :job-completed)))
 
-(test history-events-have-correct-types
-  "History event constructors produce correct types"
-  (assert-event-types
-   ((nshell.domain.events:make-history-searched-event) :history-searched)))
+  (it "history-events-have-correct-types"
+    "History event constructors produce correct types"
+    (assert-event-types
+     ((nshell.domain.events:make-history-searched-event) :history-searched)))
 
-(test event-timestamp-is-monotonic
-  "Event timestamps are set at creation time"
-  (let* ((t1 (get-universal-time))
-         (event (nshell.domain.events:make-generic-domain-event :test)))
-    (is (<= t1 (nshell.domain.events:domain-event-timestamp event)))))
+  (it "event-timestamp-is-monotonic"
+    "Event timestamps are set at creation time"
+    (let* ((t1 (get-universal-time))
+           (event (nshell.domain.events:make-generic-domain-event :test)))
+      (expect t1 :to-be-less-than-or-equal (nshell.domain.events:domain-event-timestamp event)))))

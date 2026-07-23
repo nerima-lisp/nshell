@@ -1,114 +1,111 @@
 (in-package #:nshell/test)
-(def-suite job-control-domain-tests :description "Job control domain tests" :in nshell-tests)
-(in-suite job-control-domain-tests)
 
-(test job-monitor-construction-exposes-aggregate-facts
-  (let ((monitor (nshell.domain.job-control:make-job-monitor)))
-    (is (nshell.domain.job-control:job-monitor-p monitor))
-    (is (nshell.domain.job-control:monitor-empty-p monitor))
-    (is (= 1 (nshell.domain.job-control:monitor-next-job-id monitor)))))
+(describe "job-control-domain-tests"
+  (it "job-monitor-construction-exposes-aggregate-facts"
+    (let ((monitor (nshell.domain.job-control:make-job-monitor)))
+      (expect (nshell.domain.job-control:job-monitor-p monitor) :to-be-truthy)
+      (expect (nshell.domain.job-control:monitor-empty-p monitor) :to-be-truthy)
+      (expect 1 :to-equal (nshell.domain.job-control:monitor-next-job-id monitor))))
 
-(test monitor-collection-shape-is-internal-boundary
-  "Job monitor exposes ordered traversal, not hash-table or alist shape."
-  (dolist (name '("MONITOR-JOBS" "MONITOR-ENTRIES"
-                  "%MAKE-JOB-MONITOR" "COPY-JOB-MONITOR"
-                  "JOB-MONITOR-JOBS-TABLE" "JOB-MONITOR-NEXT-ID-INT"))
-    (multiple-value-bind (_symbol status)
-        (find-symbol name "NSHELL.DOMAIN.JOB-CONTROL")
-      (declare (ignore _symbol))
-      (is (not (eq :external status)))))
-  (is (fboundp 'nshell.domain.job-control::%make-job-monitor))
-  (is (not (fboundp 'nshell.domain.job-control::copy-job-monitor)))
-  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (second-job (make-test-job 0 "second"))
-         (first-job (make-test-job 1 "first"))
-         (second-id (nshell.domain.job-control:monitor-add-job monitor second-job))
-         (first-id (nshell.domain.job-control:monitor-add-job monitor first-job))
-         (entries (collect-monitor-entries monitor)))
-    (is (every #'test-monitor-entry-p entries))
-    (is (equal (list second-id first-id)
-               (mapcar #'test-monitor-entry-job-id entries)))
-    (is (equal (list second-job first-job)
-               (mapcar #'test-monitor-entry-job entries)))))
+  (it "monitor-collection-shape-is-internal-boundary"
+    "Job monitor exposes ordered traversal, not hash-table or alist shape."
+    (dolist (name '("MONITOR-JOBS" "MONITOR-ENTRIES"
+                    "%MAKE-JOB-MONITOR" "COPY-JOB-MONITOR"
+                    "JOB-MONITOR-JOBS-TABLE" "JOB-MONITOR-NEXT-ID-INT"))
+      (multiple-value-bind (_symbol status)
+          (find-symbol name "NSHELL.DOMAIN.JOB-CONTROL")
+        (declare (ignore _symbol))
+        (expect (eq :external status) :to-be-falsy)))
+    (expect (fboundp 'nshell.domain.job-control::%make-job-monitor) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.job-control::copy-job-monitor) :to-be-falsy)
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (second-job (make-test-job 0 "second"))
+           (first-job (make-test-job 1 "first"))
+           (second-id (nshell.domain.job-control:monitor-add-job monitor second-job))
+           (first-id (nshell.domain.job-control:monitor-add-job monitor first-job))
+           (entries (collect-monitor-entries monitor)))
+      (expect (every #'test-monitor-entry-p entries) :to-be-truthy)
+      (expect (list second-id first-id) :to-equal (mapcar #'test-monitor-entry-job-id entries))
+      (expect (list second-job first-job) :to-equal (mapcar #'test-monitor-entry-job entries))))
 
-(test monitor-map-jobs-uses-stable-id-snapshot
-  "Monitor traversal is ordered by a stable id snapshot and skips jobs removed before visitation."
-  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (first-id (nshell.domain.job-control:monitor-add-job
-                    monitor (make-test-job 0 "first")))
-         (second-id (nshell.domain.job-control:monitor-add-job
-                     monitor (make-test-job 0 "second")))
-         (third-id (nshell.domain.job-control:monitor-add-job
-                    monitor (make-test-job 0 "third")))
-         (visited nil))
-    (nshell.domain.job-control:monitor-map-jobs
-     monitor
-     (lambda (job-id job)
-       (declare (ignore job))
-       (push job-id visited)
-       (when (= job-id first-id)
-         (nshell.domain.job-control:monitor-remove-job monitor second-id))))
-    (is (equal (list first-id third-id) (nreverse visited)))))
+  (it "monitor-map-jobs-uses-stable-id-snapshot"
+    "Monitor traversal is ordered by a stable id snapshot and skips jobs removed before visitation."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (first-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "first")))
+           (second-id (nshell.domain.job-control:monitor-add-job
+                       monitor (make-test-job 0 "second")))
+           (third-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "third")))
+           (visited nil))
+      (nshell.domain.job-control:monitor-map-jobs
+       monitor
+       (lambda (job-id job)
+         (declare (ignore job))
+         (push job-id visited)
+         (when (= job-id first-id)
+           (nshell.domain.job-control:monitor-remove-job monitor second-id))))
+      (expect (list first-id third-id) :to-equal (nreverse visited))))
 
-(test monitor-creates-jobs
-  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (cmd (nshell.domain.execution:make-command "ls"))
-         (pipe (nshell.domain.execution:make-pipeline cmd))
-         (job (nshell.domain.execution:make-job 1 pipe))
-     (id (nshell.domain.job-control:monitor-add-job monitor job)))
-    (is (= 1 id))
-    (is (nshell.domain.job-control:monitor-find-job monitor id))))
+  (it "monitor-creates-jobs"
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (cmd (nshell.domain.execution:make-command "ls"))
+           (pipe (nshell.domain.execution:make-pipeline cmd))
+           (job (nshell.domain.execution:make-job 1 pipe))
+       (id (nshell.domain.job-control:monitor-add-job monitor job)))
+      (expect 1 :to-equal id)
+      (expect (nshell.domain.job-control:monitor-find-job monitor id) :to-be-truthy)))
 
-(test monitor-add-background-job-initializes-tracked-job
-  "Background job registration owns the job aggregate initialization."
-  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (id (nshell.domain.job-control:monitor-add-background-job
-              monitor '(4321 4322) "left | right"))
-         (job (nshell.domain.job-control:monitor-find-job monitor id)))
-    (is (= 1 id))
-    (is (equal '(4321 4322) (nshell.domain.execution:job-pids job)))
-    (is (= 4321 (nshell.domain.execution:job-pgid job)))
-    (is (string= "left | right" (nshell.domain.execution:job-command-line job)))
-    (is (nshell.domain.execution:job-background-p job))
-    (is (eq :running (nshell.domain.execution:job-state job)))))
+  (it "monitor-add-background-job-initializes-tracked-job"
+    "Background job registration owns the job aggregate initialization."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (id (nshell.domain.job-control:monitor-add-background-job
+                monitor '(4321 4322) "left | right"))
+           (job (nshell.domain.job-control:monitor-find-job monitor id)))
+      (expect 1 :to-equal id)
+      (expect '(4321 4322) :to-equal (nshell.domain.execution:job-pids job))
+      (expect 4321 :to-equal (nshell.domain.execution:job-pgid job))
+      (expect "left | right" :to-equal (nshell.domain.execution:job-command-line job))
+      (expect (nshell.domain.execution:job-background-p job) :to-be-truthy)
+      (expect :running :to-be (nshell.domain.execution:job-state job))))
 
-(test monitor-update-returns-nil-for-missing-job
-  "Missing job IDs are outside the monitor aggregate and produce no update."
-  (let ((monitor (nshell.domain.job-control:make-job-monitor)))
-    (is (null (nshell.domain.job-control:monitor-update monitor 404 :running)))))
+  (it "monitor-update-returns-nil-for-missing-job"
+    "Missing job IDs are outside the monitor aggregate and produce no update."
+    (let ((monitor (nshell.domain.job-control:make-job-monitor)))
+      (expect (nshell.domain.job-control:monitor-update monitor 404 :running) :to-be-null)))
 
-(test monitor-records-exit-code-only-for-terminal-jobs
-  "Exit codes are facts about terminal jobs, not active monitor updates."
-  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (cmd (nshell.domain.execution:make-command "ls"))
-         (pipe (nshell.domain.execution:make-pipeline cmd))
-         (job (nshell.domain.execution:make-job 1 pipe))
-         (id (nshell.domain.job-control:monitor-add-job monitor job)))
-    (nshell.domain.job-control:monitor-update monitor id :running 7)
-    (is (null (nshell.domain.execution:job-exit-code job)))
-    (nshell.domain.job-control:monitor-update monitor id :completed 0)
-    (is (= 0 (nshell.domain.execution:job-exit-code job)))))
+  (it "monitor-records-exit-code-only-for-terminal-jobs"
+    "Exit codes are facts about terminal jobs, not active monitor updates."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (cmd (nshell.domain.execution:make-command "ls"))
+           (pipe (nshell.domain.execution:make-pipeline cmd))
+           (job (nshell.domain.execution:make-job 1 pipe))
+           (id (nshell.domain.job-control:monitor-add-job monitor job)))
+      (nshell.domain.job-control:monitor-update monitor id :running 7)
+      (expect (nshell.domain.execution:job-exit-code job) :to-be-null)
+      (nshell.domain.job-control:monitor-update monitor id :completed 0)
+      (expect 0 :to-equal (nshell.domain.execution:job-exit-code job))))
 
-(test complete-job-owns-terminal-state-and-default-exit-code
-  "Job-control owns completion transitions and nil exit-code normalization."
-  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (job (make-test-job 0 "sleep"))
-         (id (nshell.domain.job-control:monitor-add-job monitor job)))
-    (is (eq job (nshell.domain.job-control:complete-job monitor id nil)))
-    (is (eq :completed (nshell.domain.execution:job-state job)))
-    (is (= 0 (nshell.domain.execution:job-exit-code job)))
-    (is (null (nshell.domain.job-control:complete-job monitor 999 7)))))
+  (it "complete-job-owns-terminal-state-and-default-exit-code"
+    "Job-control owns completion transitions and nil exit-code normalization."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "sleep"))
+           (id (nshell.domain.job-control:monitor-add-job monitor job)))
+      (expect job :to-be (nshell.domain.job-control:complete-job monitor id nil))
+      (expect :completed :to-be (nshell.domain.execution:job-state job))
+      (expect 0 :to-equal (nshell.domain.execution:job-exit-code job))
+      (expect (nshell.domain.job-control:complete-job monitor 999 7) :to-be-null)))
 
-(test foreground-and-background-job-own-visibility-flag
-  "Job-control owns foreground/background visibility changes."
-  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (job (make-test-job 0 "sleep"))
-         (id (nshell.domain.job-control:monitor-add-job monitor job)))
-    (is (eq job (nshell.domain.job-control:background-job monitor id)))
-    (is (nshell.domain.execution:job-background-p job))
-    (is (eq :background (nshell.domain.execution:job-state job)))
-    (is (eq job (nshell.domain.job-control:foreground-job monitor id)))
-    (is (not (nshell.domain.execution:job-background-p job)))
-    (is (eq :running (nshell.domain.execution:job-state job)))
-    (is (null (nshell.domain.job-control:background-job monitor 999)))
-    (is (null (nshell.domain.job-control:foreground-job monitor 999)))))
+  (it "foreground-and-background-job-own-visibility-flag"
+    "Job-control owns foreground/background visibility changes."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "sleep"))
+           (id (nshell.domain.job-control:monitor-add-job monitor job)))
+      (expect job :to-be (nshell.domain.job-control:background-job monitor id))
+      (expect (nshell.domain.execution:job-background-p job) :to-be-truthy)
+      (expect :background :to-be (nshell.domain.execution:job-state job))
+      (expect job :to-be (nshell.domain.job-control:foreground-job monitor id))
+      (expect (nshell.domain.execution:job-background-p job) :to-be-falsy)
+      (expect :running :to-be (nshell.domain.execution:job-state job))
+      (expect (nshell.domain.job-control:background-job monitor 999) :to-be-null)
+      (expect (nshell.domain.job-control:foreground-job monitor 999) :to-be-null))))

@@ -8,7 +8,9 @@
         (nshell.domain.completion:completion-context-argument-prefix context))))
 
 (defun %autosuggest-closed-quoted-token-p (input start end)
-  (and (< start end)
+  ;; A closed quoted token needs at least two characters: an opening quote and a
+  ;; matching closing quote.  A lone quote (end - start = 1) is still open.
+  (and (< (1+ start) end)
        (member (char input start) '(#\" #\') :test #'char=)
        (char= (char input start) (char input (1- end)))))
 

@@ -13,7 +13,7 @@
   (completion-texts (nshell.domain.completion:complete kb input)))
 
 (defmacro assert-completion-texts (expected candidates)
-  `(is (equal ,expected (completion-texts ,candidates))))
+  `(expect ,expected :to-equal (completion-texts ,candidates)))
 
 (defmacro assert-completion-texts-for (expected kb input)
   `(assert-completion-texts ,expected
@@ -29,39 +29,36 @@
 (defmacro assert-completion-texts-include (candidates &rest texts)
   `(let ((actual-texts (completion-texts ,candidates)))
      ,@(loop for text in texts
-             collect `(is (member ,text actual-texts :test #'string=)))))
+             collect `(expect (member ,text actual-texts :test #'string=) :to-be-truthy))))
 
 (defmacro assert-completion-texts-exclude (candidates &rest texts)
   `(let ((actual-texts (completion-texts ,candidates)))
      ,@(loop for text in texts
-             collect `(is (not (member ,text actual-texts :test #'string=))))))
+             collect `(expect (member ,text actual-texts :test #'string=) :to-be-falsy))))
 
 (defmacro assert-texts-include (texts &rest expected-texts)
   `(progn
      ,@(loop for text in expected-texts
-             collect `(is (member ,text ,texts :test #'string=)))))
+             collect `(expect (member ,text ,texts :test #'string=) :to-be-truthy))))
 
 (defmacro assert-texts-exclude (texts &rest unexpected-texts)
   `(progn
      ,@(loop for text in unexpected-texts
-             collect `(is (not (member ,text ,texts :test #'string=))))))
+             collect `(expect (member ,text ,texts :test #'string=) :to-be-falsy))))
 
 (defmacro assert-completion-help-command-facts (facts &key subcommands flags option-values)
   `(progn
-     (is (nshell.domain.completion::%completion-help-command-facts-p ,facts))
-     (is (not (listp ,facts)))
+     (expect (nshell.domain.completion::%completion-help-command-facts-p ,facts) :to-be-truthy)
+     (expect (listp ,facts) :to-be-falsy)
      ,(when subcommands
-        `(is (equal ,subcommands
-                    (nshell.domain.completion::%completion-help-command-facts-subcommands
-                     ,facts))))
+        `(expect ,subcommands :to-equal (nshell.domain.completion::%completion-help-command-facts-subcommands
+                     ,facts)))
      ,(when flags
-        `(is (equal ,flags
-                    (nshell.domain.completion::%completion-help-command-facts-flags
-                     ,facts))))
+        `(expect ,flags :to-equal (nshell.domain.completion::%completion-help-command-facts-flags
+                     ,facts)))
      ,(when option-values
-        `(is (equal ,option-values
-                    (nshell.domain.completion::%completion-help-command-facts-option-values
-                     ,facts))))))
+        `(expect ,option-values :to-equal (nshell.domain.completion::%completion-help-command-facts-option-values
+                     ,facts)))))
 
 (defun completion-candidate-by-text (text candidates)
   (find text candidates
@@ -119,12 +116,8 @@
 
 (defmacro assert-completion-candidate (text candidates &key kind description)
   `(let ((candidate (completion-candidate-by-text ,text ,candidates)))
-     (is (not (null candidate)) ,text)
+     (expect (null candidate) :to-be-falsy)
      ,(when kind
-        `(is (eq ,kind
-                 (nshell.domain.completion:candidate-kind candidate))
-             ,text))
+        `(expect ,kind :to-be (nshell.domain.completion:candidate-kind candidate)))
      ,(when description
-        `(is (string= ,description
-                      (nshell.domain.completion:candidate-description candidate))
-             ,text))))
+        `(expect ,description :to-equal (nshell.domain.completion:candidate-description candidate)))))

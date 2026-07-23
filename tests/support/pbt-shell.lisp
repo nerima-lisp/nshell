@@ -93,8 +93,7 @@
      ,@body))
 
 (defmacro assert-arg-quote-styles (args &rest styles)
-  `(is (equal ',styles
-              (mapcar #'nshell.domain.parsing:arg-quote-style ,args))))
+  `(expect ',styles :to-equal (mapcar #'nshell.domain.parsing:arg-quote-style ,args)))
 
 (defmacro with-complete-command-line ((result ast line) &body body)
   `(nshell.domain.parsing:with-complete-command-line (,result ,ast ,line)
@@ -135,18 +134,17 @@
         (line (getf options :line)))
     `(progn
        ,@(when present
-           `((is (not (null ,diagnostic)))))
+           `((expect (null ,diagnostic) :to-be-falsy)))
        ,@(when incomplete
-           `((is (nshell.domain.parsing:parse-result-incomplete ,result))))
+           `((expect (nshell.domain.parsing:parse-result-incomplete ,result) :to-be-truthy)))
        ,@(when complete
-           `((is (nshell.domain.parsing:parse-complete-p ,result))))
+           `((expect (nshell.domain.parsing:parse-complete-p ,result) :to-be-truthy)))
        ,@(when kind
-           `((is (eq ,kind
-                     (nshell.domain.parsing:parse-diagnostic-kind ,diagnostic)))))
+           `((expect ,kind :to-be (nshell.domain.parsing:parse-diagnostic-kind ,diagnostic))))
        ,@(when (and start end)
-           `((is (parse-diagnostic-span= ,diagnostic ,start ,end))))
+           `((expect (parse-diagnostic-span= ,diagnostic ,start ,end) :to-be-truthy)))
        ,@(when within-input
-           `((is (parse-diagnostic-within-input-p ,diagnostic ,line)))))))
+           `((expect (parse-diagnostic-within-input-p ,diagnostic ,line) :to-be-truthy))))))
 
 (defun parse-diagnostic-span= (diagnostic start end)
   (and (= start (nshell.domain.parsing:parse-diagnostic-start diagnostic))

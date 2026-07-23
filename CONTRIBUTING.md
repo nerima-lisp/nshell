@@ -12,7 +12,7 @@ reproducible toolchain is [Nix](https://nixos.org/download) with flakes enabled.
 ```sh
 git clone https://github.com/takeokunn/nshell
 cd nshell
-nix develop          # SBCL + FiveAM dev shell
+nix develop          # SBCL + cl-weave dev shell
 nix build            # build ./result/bin/nshell
 nix flake check --print-build-logs
 ```
@@ -41,7 +41,7 @@ Please keep dependencies pointing inward:
 ## Making changes
 
 1. **Branch** off `main`.
-2. **Add tests.** Every behavior change should come with FiveAM tests under
+2. **Add tests.** Every behavior change should come with cl-weave tests under
    `tests/` (unit, integration, property-based, or e2e as appropriate). Prefer
    testing pure domain logic directly.
 3. **Keep tests hermetic.** Tests must not depend on the ambient working
@@ -73,6 +73,13 @@ For coverage-oriented validation, run:
 
 ```sh
 nix develop -c sbcl --script scripts/coverage.lisp
+```
+
+For completion-engine or cl-prolog knowledge-base changes, also run the
+cl-weave suite (property-based, fixture, benchmark, and Prolog-query coverage):
+
+```sh
+sbcl --script scripts/weave.lisp        # or the `weave` alias in nix develop
 ```
 
 For parser, expansion, execution, or builtin changes, include focused unit tests

@@ -42,14 +42,11 @@
                ,mode
                (nshell.presentation:input-state-mode ,state-var))))
           (when buffer-p
-            `((is (string= ,buffer
-                           (nshell.presentation:input-state-buffer ,state-var)))))
+            `((expect ,buffer :to-equal (nshell.presentation:input-state-buffer ,state-var))))
           (when cursor-pos-p
-            `((is (= ,cursor-pos
-                     (nshell.presentation:input-state-cursor-pos ,state-var)))))
+            `((expect ,cursor-pos :to-equal (nshell.presentation:input-state-cursor-pos ,state-var))))
           (when completion-index-p
-            `((is (= ,completion-index
-                     (nshell.presentation:input-state-completion-index ,state-var)))))
+            `((expect ,completion-index :to-equal (nshell.presentation:input-state-completion-index ,state-var))))
           (when suggestion-p
             `((is-maybe-string
                ,suggestion
@@ -81,15 +78,13 @@
                ,completion-base-cursor
                (nshell.presentation:input-state-completion-base-cursor ,state-var))))
           (when last-candidates-p
-            `((is (equal ,last-candidates
-                         (nshell.presentation:input-state-last-candidates ,state-var)))))
+            `((expect ,last-candidates :to-equal (nshell.presentation:input-state-last-candidates ,state-var))))
           (when vi-visual-anchor-p
             `((is-maybe-number
                ,vi-visual-anchor
                (nshell.presentation:input-state-vi-visual-anchor ,state-var))))
           (when kill-ring-p
-            `((is (equal ,kill-ring
-                         (nshell.presentation:input-state-kill-ring ,state-var)))))
+            `((expect ,kill-ring :to-equal (nshell.presentation:input-state-kill-ring ,state-var))))
           (when last-argument-start-p
             `((is-maybe-number
                ,last-argument-start

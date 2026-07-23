@@ -1,20 +1,15 @@
 (in-package #:nshell/test)
 
-(def-suite repl-tests
-  :description "REPL presentation boundary tests"
-  :in nshell-tests)
+(describe "repl-tests"
+  (it "repl-entrypoints-are-public"
+    "CLI-facing REPL entrypoints should be exported presentation APIs."
+    (expect (fboundp 'nshell.presentation:run-repl) :to-be-truthy)
+    (expect (fboundp 'nshell.presentation:run-repl-batch) :to-be-truthy)
+    (expect (fboundp 'nshell.presentation:run-repl-script) :to-be-truthy))
 
-(in-suite repl-tests)
-
-(test repl-entrypoints-are-public
-  "CLI-facing REPL entrypoints should be exported presentation APIs."
-  (is (fboundp 'nshell.presentation:run-repl))
-  (is (fboundp 'nshell.presentation:run-repl-batch))
-  (is (fboundp 'nshell.presentation:run-repl-script)))
-
-(test repl-batch-returns-last-exit-code
-  "Batch execution should return the last command status for process exit."
-  (with-repl-test-state
-    (let ((code (nshell.presentation:run-repl-batch :line "false")))
-      (is (= 1 code))
-      (is (= 1 nshell.presentation::*last-exit-code*)))))
+  (it "repl-batch-returns-last-exit-code"
+    "Batch execution should return the last command status for process exit."
+    (with-repl-test-state
+      (let ((code (nshell.presentation:run-repl-batch :line "false")))
+        (expect 1 :to-equal code)
+        (expect 1 :to-equal nshell.presentation::*last-exit-code*)))))

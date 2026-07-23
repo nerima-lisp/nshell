@@ -1,491 +1,458 @@
 (in-package #:nshell/test)
-(in-suite completion-rules-tests)
 
-(test completion-context-for-escaped-space-keeps-logical-argument-prefix
-  (let ((context (nshell.domain.completion:completion-context-for "git ch\\ file")))
-    (is (string= "git"
-                 (nshell.domain.completion:completion-context-command context)))
-    (is (string= "ch file"
-                 (nshell.domain.completion:completion-context-argument-prefix context)))
-    (is (not (nshell.domain.completion:completion-context-command-position-p context)))
-    (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
+(describe "completion-rules-tests"
+  (it "completion-context-for-escaped-space-keeps-logical-argument-prefix"
+    (let ((context (nshell.domain.completion:completion-context-for "git ch\\ file")))
+      (expect "git" :to-equal (nshell.domain.completion:completion-context-command context))
+      (expect "ch file" :to-equal (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect (nshell.domain.completion:completion-context-command-position-p context) :to-be-falsy)
+      (expect (nshell.domain.completion:completion-context-redirection-target-p context) :to-be-null)))
 
-(test completion-context-for-double-quoted-backslash-space-keeps-literal-prefix
-  (let ((context (nshell.domain.completion:completion-context-for "git \"ch\\ ")))
-    (is (string= "git"
-                 (nshell.domain.completion:completion-context-command context)))
-    (is (string= "ch\\ "
-                 (nshell.domain.completion:completion-context-argument-prefix context)))
-    (is (not (nshell.domain.completion:completion-context-command-position-p context)))
-    (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
+  (it "completion-context-for-double-quoted-backslash-space-keeps-literal-prefix"
+    (let ((context (nshell.domain.completion:completion-context-for "git \"ch\\ ")))
+      (expect "git" :to-equal (nshell.domain.completion:completion-context-command context))
+      (expect "ch\\ " :to-equal (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect (nshell.domain.completion:completion-context-command-position-p context) :to-be-falsy)
+      (expect (nshell.domain.completion:completion-context-redirection-target-p context) :to-be-null)))
 
-(test completion-context-for-leading-assignment-words-uses-real-command
-  (let ((context (nshell.domain.completion:completion-context-for "FOO=bar git ch")))
-    (is (string= "git"
-                 (nshell.domain.completion:completion-context-command context)))
-    (is (string= "ch"
-                 (nshell.domain.completion:completion-context-argument-prefix context)))
-    (is (equal '("ch")
-               (nshell.domain.completion:completion-context-argument-words context)))
-    (is (not (nshell.domain.completion:completion-context-command-position-p context)))
-    (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
+  (it "completion-context-for-leading-assignment-words-uses-real-command"
+    (let ((context (nshell.domain.completion:completion-context-for "FOO=bar git ch")))
+      (expect "git" :to-equal (nshell.domain.completion:completion-context-command context))
+      (expect "ch" :to-equal (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect '("ch") :to-equal (nshell.domain.completion:completion-context-argument-words context))
+      (expect (nshell.domain.completion:completion-context-command-position-p context) :to-be-falsy)
+      (expect (nshell.domain.completion:completion-context-redirection-target-p context) :to-be-null)))
 
-(test completion-context-for-leading-assignment-command-prefix-stays-command-position
-  (let ((context (nshell.domain.completion:completion-context-for "FOO=bar gi")))
-    (is (string= "gi"
-                 (nshell.domain.completion:completion-context-command context)))
-    (is (string= ""
-                 (nshell.domain.completion:completion-context-argument-prefix context)))
-    (is (equal '()
-               (nshell.domain.completion:completion-context-argument-words context)))
-    (is (nshell.domain.completion:completion-context-command-position-p context))
-    (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))
+  (it "completion-context-for-leading-assignment-command-prefix-stays-command-position"
+    (let ((context (nshell.domain.completion:completion-context-for "FOO=bar gi")))
+      (expect "gi" :to-equal (nshell.domain.completion:completion-context-command context))
+      (expect "" :to-equal (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect '() :to-equal (nshell.domain.completion:completion-context-argument-words context))
+      (expect (nshell.domain.completion:completion-context-command-position-p context) :to-be-truthy)
+      (expect (nshell.domain.completion:completion-context-redirection-target-p context) :to-be-null)))
 
-(test completion-context-for-respects-command-separators
-  (dolist (case '(("echo ignored && git ch" "git" "ch")
-                  ("echo ignored || git ch" "git" "ch")
-                  ("echo ignored ; git ch" "git" "ch")
-                  ("echo ignored & git ch" "git" "ch")))
-    (destructuring-bind (line expected-command expected-prefix) case
-      (let ((context (nshell.domain.completion:completion-context-for line)))
-        (is (string= expected-command
-                     (nshell.domain.completion:completion-context-command context)))
-        (is (string= expected-prefix
-                     (nshell.domain.completion:completion-context-argument-prefix context)))
-        (is (equal (list expected-prefix)
-                   (nshell.domain.completion:completion-context-argument-words context)))
-        (is (not (nshell.domain.completion:completion-context-command-position-p context)))
-        (is (null (nshell.domain.completion:completion-context-redirection-target-p context)))))))
+  (it "completion-context-for-respects-command-separators"
+    (dolist (case '(("echo ignored && git ch" "git" "ch")
+                    ("echo ignored || git ch" "git" "ch")
+                    ("echo ignored ; git ch" "git" "ch")
+                    ("echo ignored & git ch" "git" "ch")))
+      (destructuring-bind (line expected-command expected-prefix) case
+        (let ((context (nshell.domain.completion:completion-context-for line)))
+          (expect expected-command :to-equal (nshell.domain.completion:completion-context-command context))
+          (expect expected-prefix :to-equal (nshell.domain.completion:completion-context-argument-prefix context))
+          (expect (list expected-prefix) :to-equal (nshell.domain.completion:completion-context-argument-words context))
+          (expect (nshell.domain.completion:completion-context-command-position-p context) :to-be-falsy)
+          (expect (nshell.domain.completion:completion-context-redirection-target-p context) :to-be-null)))))
 
-(test completion-context-keeps-segment-local-argument-words
-  (let ((context (nshell.domain.completion:completion-context-for
-                  "FOO=bar git --color a")))
-    (is (string= "git"
-                 (nshell.domain.completion:completion-context-command context)))
-    (is (string= "a"
-                 (nshell.domain.completion:completion-context-argument-prefix context)))
-    (is (equal '("--color" "a")
-               (nshell.domain.completion:completion-context-argument-words context)))))
+  (it "completion-context-keeps-segment-local-argument-words"
+    (let ((context (nshell.domain.completion:completion-context-for
+                    "FOO=bar git --color a")))
+      (expect "git" :to-equal (nshell.domain.completion:completion-context-command context))
+      (expect "a" :to-equal (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect '("--color" "a") :to-equal (nshell.domain.completion:completion-context-argument-words context))))
 
-(test completion-context-argument-words-respect-command-separators
-  (let ((context (nshell.domain.completion:completion-context-for
-                  "echo ignored; kubectl -o ")))
-    (is (string= "kubectl"
-                 (nshell.domain.completion:completion-context-command context)))
-    (is (string= ""
-                 (nshell.domain.completion:completion-context-argument-prefix context)))
-    (is (equal '("-o")
-               (nshell.domain.completion:completion-context-argument-words context)))))
+  (it "completion-context-argument-words-respect-command-separators"
+    (let ((context (nshell.domain.completion:completion-context-for
+                    "echo ignored; kubectl -o ")))
+      (expect "kubectl" :to-equal (nshell.domain.completion:completion-context-command context))
+      (expect "" :to-equal (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect '("-o") :to-equal (nshell.domain.completion:completion-context-argument-words context))))
 
-(test pbt-redirection-target-completion-does-not-leak-command-options
-  (check-property (:trials 50)
-      ((suffix (gen-command-prefix :min-length 1 :max-length 8) nil)
-       (stem (gen-command-prefix :min-length 1 :max-length 4) nil))
-    (let* ((command (concatenate 'string "zz-nshell-" suffix))
-           (option (concatenate 'string stem "-option"))
-           (kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (nshell.domain.completion:kb-add-command kb command :flags (list option))
-      (with-file-completion-adapters (nil nil)
+  (it "pbt-redirection-target-completion-does-not-leak-command-options"
+    (check-property (:trials 50)
+        ((suffix (gen-command-prefix :min-length 1 :max-length 8) nil)
+         (stem (gen-command-prefix :min-length 1 :max-length 4) nil))
+      (let* ((command (concatenate 'string "zz-nshell-" suffix))
+             (option (concatenate 'string stem "-option"))
+             (kb (nshell.domain.completion:make-empty-knowledge-base)))
+        (nshell.domain.completion:kb-add-command kb command :flags (list option))
+        (with-file-completion-adapters (nil nil)
+          (let ((candidates
+                  (nshell.domain.completion:complete
+                   kb
+                   (format nil "~a > ~a" command stem))))
+            (and (= 1 (length candidates))
+                 (string= stem
+                          (nshell.domain.completion:candidate-text (first candidates)))
+                 (eq :file
+                     (nshell.domain.completion:candidate-kind (first candidates)))))))))
+
+  (it "completion-command-position-p-classifies-word-state"
+    (let ((empty (nshell.domain.completion:completion-context-for ""))
+          (command (nshell.domain.completion:completion-context-for "git"))
+          (argument (nshell.domain.completion:completion-context-for "git status"))
+          (after-argument (nshell.domain.completion:completion-context-for "git status ")))
+      (expect "" :to-equal (nshell.domain.completion:completion-context-command empty))
+      (expect (nshell.domain.completion:completion-context-command-position-p empty) :to-be-truthy)
+      (expect "git" :to-equal (nshell.domain.completion:completion-context-command command))
+      (expect (nshell.domain.completion:completion-context-command-position-p command) :to-be-truthy)
+      (expect "status" :to-equal (nshell.domain.completion:completion-context-argument-prefix argument))
+      (expect (nshell.domain.completion:completion-context-command-position-p argument) :to-be-falsy)
+      (expect "" :to-equal (nshell.domain.completion:completion-context-argument-prefix after-argument))
+      (expect (nshell.domain.completion:completion-context-command-position-p after-argument) :to-be-falsy)))
+
+  (it "completion-context-skips-leading-assignments-for-command-word"
+    (let ((context (nshell.domain.completion:completion-context-for "FOO=bar git")))
+      (expect "git" :to-equal (nshell.domain.completion:completion-context-command context))
+      (expect (nshell.domain.completion:completion-context-command-position-p context) :to-be-truthy)
+      (expect '() :to-equal (nshell.domain.completion:completion-context-argument-words context))))
+
+  (it "completion-context-uses-latest-word-only-at-cursor-boundary"
+    (let ((at-argument (nshell.domain.completion:completion-context-for "git status"))
+          (after-argument (nshell.domain.completion:completion-context-for "git status ")))
+      (expect "status" :to-equal (nshell.domain.completion:completion-context-argument-prefix at-argument))
+      (expect '("status") :to-equal (nshell.domain.completion:completion-context-argument-words at-argument))
+      (expect "" :to-equal (nshell.domain.completion:completion-context-argument-prefix after-argument))
+      (expect '("status") :to-equal (nshell.domain.completion:completion-context-argument-words after-argument))))
+
+  (it "completion-context-argument-words-list-is-domain-owned"
+    "Completion contexts should not expose mutable aggregate storage."
+    (let* ((words (list "status" "--short"))
+           (context (nshell.domain.completion::%make-completion-context
+                     :command "git"
+                     :argument-prefix "--short"
+                     :argument-words words
+                     :command-position-p nil
+                     :redirection-target-p nil))
+           (projected
+             (nshell.domain.completion:completion-context-argument-words context)))
+      (setf (first words) "mutated-input")
+      (setf (first projected) "mutated-projection")
+      (expect '("status" "--short") :to-equal (nshell.domain.completion:completion-context-argument-words context))))
+
+  (it "completion-context-constructors-are-internal-boundaries"
+    "Completion context construction should not expose legacy unprefixed helper names."
+    (flet ((defined-symbol-p (name)
+             (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+      (dolist (name '("%MAKE-COMPLETION-CONTEXT"
+                      "%MAKE-RAW-COMPLETION-CONTEXT"
+                      "%COMPLETION-CONTEXT-COMMAND"
+                      "%COMPLETION-CONTEXT-ARGUMENT-PREFIX"
+                      "%COMPLETION-CONTEXT-ARGUMENT-WORDS"
+                      "%COMPLETION-CONTEXT-COMMAND-POSITION-P"
+                      "%COMPLETION-CONTEXT-REDIRECTION-TARGET-P"
+                      "%MAKE-COMPLETION-WORD"
+                      "%MAKE-COMPLETION-INPUT-ANALYSIS"
+                      "%STARTS-WITH-P"
+                      "%WORD-LIKE-TOKEN-P"
+                      "%REDIRECTION-TOKEN-P"
+                      "%COMMAND-SEGMENT-TOKENS"
+                      "%SHELL-COMPLETION-WORDS"
+                      "%TOKEN-ENDING-BEFORE-POSITION"
+                      "%REDIRECTION-TARGET-POSITION-P"
+                      "%COMMAND-WORD"
+                      "%ARGUMENT-WORD-VALUES-AFTER-COMMAND"
+                      "%LATEST-COMPLETION-WORD"
+                      "%CURRENT-COMPLETION-WORD-AT-CURSOR"
+                      "%ANALYZE-COMPLETION-INPUT"
+                      "%COMPLETION-COMMAND-POSITION-P"
+                      "%COMPLETION-ANALYSIS-COMMAND-POSITION-P"
+                      "%COMPLETION-ANALYSIS-COMMAND"
+                      "%COMPLETION-ANALYSIS-ARGUMENT-PREFIX"
+                      "%COMPLETION-ANALYSIS-ARGUMENT-WORDS"
+                      "%COMPLETION-ANALYSIS-REDIRECTION-TARGET-P"
+                      "%COMPLETION-CONTEXT-FROM-ANALYSIS"
+                      "%COMPLETION-WORD-VALUE"
+                      "%COMPLETION-WORD-START"
+                      "%COMPLETION-WORD-END"
+                      "%COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"))
+        (expect (fboundp (find-symbol name '#:nshell.domain.completion)) :to-be-truthy))
+      (dolist (name '("MAKE-COMPLETION-CONTEXT"
+                      "MAKE-COMPLETION-WORD"
+                      "MAKE-COMPLETION-INPUT-ANALYSIS"
+                      "COMPLETION-WORD-VALUE"
+                      "COMPLETION-WORD-START"
+                      "COMPLETION-WORD-END"
+                      "COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"))
+        (expect (defined-symbol-p name) :to-be-falsy))
+      (dolist (name '("STARTS-WITH-P"
+                      "WORD-LIKE-TOKEN-P"
+                      "REDIRECTION-TOKEN-P"
+                      "COMMAND-SEGMENT-TOKENS"
+                      "SHELL-COMPLETION-WORDS"
+                      "TOKEN-ENDING-BEFORE-POSITION"
+                      "REDIRECTION-TARGET-POSITION-P"
+                      "COMMAND-WORD"
+                      "ARGUMENT-WORD-VALUES-AFTER-COMMAND"
+                      "LATEST-COMPLETION-WORD"
+                      "CURRENT-COMPLETION-WORD-AT-CURSOR"
+                      "ANALYZE-COMPLETION-INPUT"
+                      "COMPLETION-COMMAND-POSITION-P"
+                      "COMPLETION-ANALYSIS-COMMAND-POSITION-P"
+                      "COMPLETION-ANALYSIS-COMMAND"
+                      "COMPLETION-ANALYSIS-ARGUMENT-PREFIX"
+                      "COMPLETION-ANALYSIS-ARGUMENT-WORDS"
+                      "COMPLETION-ANALYSIS-REDIRECTION-TARGET-P"
+                      "COMPLETION-CONTEXT-FROM-ANALYSIS"))
+        (multiple-value-bind (symbol status)
+            (find-symbol name '#:nshell.domain.completion)
+          (expect (and status (fboundp symbol)) :to-be-falsy)))))
+
+  (it "completion-query-constructor-is-internal-boundary"
+    "Completion query construction should stay behind completion-query-for."
+    (expect (fboundp 'nshell.domain.completion::make-completion-query) :to-be-falsy)
+    (expect (fboundp 'nshell.domain.completion::%make-completion-query) :to-be-truthy))
+
+  (it "completion-context-word-like-token-p-returns-canonical-booleans"
+    (expect t :to-be (nshell.domain.completion::%word-like-token-p
+               (nshell.domain.parsing:make-token :word "git")))
+    (expect t :to-be (nshell.domain.completion::%word-like-token-p
+               (nshell.domain.parsing:make-token :error "git")))
+    (expect (nshell.domain.completion::%word-like-token-p
+               (nshell.domain.parsing:make-token :pipe "|")) :to-be-null))
+
+  (it "completion-context-starts-with-p-performs-case-insensitive-prefix-match"
+    "%starts-with-p returns true when text starts with prefix (case-folded)."
+    (flet ((swp (prefix text)
+             (nshell.domain.completion::%starts-with-p prefix text)))
+      (expect (swp "" "anything") :to-be-truthy)
+      (expect (swp "git" "git checkout") :to-be-truthy)
+      (expect (swp "GIT" "git checkout") :to-be-truthy)
+      (expect (swp "gitx" "git") :to-be-falsy)
+      (expect (swp "checkout" "git") :to-be-falsy)))
+
+  (it "completion-context-redirection-token-p-recognizes-redirect-type"
+    "%redirection-token-p returns true only for :redirect tokens."
+    (flet ((redir (type)
+             (nshell.domain.completion::%redirection-token-p
+              (nshell.domain.parsing:make-token type ""))))
+      (expect (redir :redirect) :to-be-truthy)
+      (expect (redir :pipe) :to-be-falsy)
+      (expect (redir :word) :to-be-falsy)
+      (expect (redir :newline) :to-be-falsy)))
+
+  (it "completion-context-command-segment-tokens-returns-tokens-after-last-separator"
+    "%command-segment-tokens strips everything up to and including the last separator."
+    (flet ((tokens (input)
+             (nshell.domain.parsing:tokenization-result-tokens
+              (nshell.domain.parsing:tokenize input))))
+      (flet ((seg (input)
+               (nshell.domain.completion::%command-segment-tokens
+                (tokens input))))
+        ;; no separator: whole token list returned
+        (expect 2 :to-equal (length (seg "git checkout")))
+        ;; after &&: only "git" and "ch" returned
+        (expect 2 :to-equal (length (seg "echo a && git ch")))
+        ;; after semicolon
+        (expect 1 :to-equal (length (seg "a ; b"))))))
+
+  (it "completion-context-shell-completion-words-merges-adjacent-word-tokens"
+    "%shell-completion-words combines adjacent word-like tokens into single logical words."
+    (flet ((tokens (input)
+             (nshell.domain.parsing:tokenization-result-tokens
+              (nshell.domain.parsing:tokenize input))))
+      (flet ((words (input)
+               (mapcar #'nshell.domain.completion::%completion-word-value
+                       (nshell.domain.completion::%shell-completion-words
+                        (tokens input)))))
+        (expect '("git" "checkout") :to-equal (words "git checkout"))
+        ;; pipe is not word-like so it triggers a flush
+        (expect '("ls" "foo") :to-equal (words "ls | foo"))
+        ;; multiple args
+        (expect '("git" "--color" "status") :to-equal (words "git --color status")))))
+
+  (it "pbt-filesystem-redirection-completion-preserves-prefix"
+    (check-property (:trials 50)
+        ((prefix (gen-command-prefix :min-length 1 :max-length 4) nil))
+      (with-file-completion-adapters
+          ((lambda (dir)
+             (declare (ignore dir))
+             (list (concatenate 'string prefix "-out.log")
+                   "unrelated.log"))
+           (lambda (dir)
+             (declare (ignore dir))
+             (list (concatenate 'string prefix "-dir/"))))
         (let ((candidates
                 (nshell.domain.completion:complete
-                 kb
-                 (format nil "~a > ~a" command stem))))
-          (and (= 1 (length candidates))
-               (string= stem
-                        (nshell.domain.completion:candidate-text (first candidates)))
-               (eq :file
-                   (nshell.domain.completion:candidate-kind (first candidates)))))))))
+                 nshell.domain.completion::*built-in-rule-knowledge-base*
+                 (concatenate 'string "git > " prefix))))
+          (and candidates
+               (every (lambda (candidate)
+                        (completion-prefix-p
+                         prefix
+                         (nshell.domain.completion:candidate-text candidate)))
+                      candidates)
+               (every (lambda (candidate)
+                        (member (nshell.domain.completion:candidate-kind candidate)
+                                '(:file :directory)))
+                      candidates))))))
 
-(test completion-command-position-p-classifies-word-state
-  (let ((empty (nshell.domain.completion:completion-context-for ""))
-        (command (nshell.domain.completion:completion-context-for "git"))
-        (argument (nshell.domain.completion:completion-context-for "git status"))
-        (after-argument (nshell.domain.completion:completion-context-for "git status ")))
-    (is (string= "" (nshell.domain.completion:completion-context-command empty)))
-    (is (nshell.domain.completion:completion-context-command-position-p empty))
-    (is (string= "git" (nshell.domain.completion:completion-context-command command)))
-    (is (nshell.domain.completion:completion-context-command-position-p command))
-    (is (string= "status" (nshell.domain.completion:completion-context-argument-prefix argument)))
-    (is (not (nshell.domain.completion:completion-context-command-position-p argument)))
-    (is (string= "" (nshell.domain.completion:completion-context-argument-prefix after-argument)))
-    (is (not (nshell.domain.completion:completion-context-command-position-p after-argument)))))
+  (it "command-path-candidates-projects-path-directories"
+    "command-path-candidates returns matching executable candidates in PATH order."
+    (flet ((executable-p (path)
+             (member path '("/bin/git" "/usr/bin/git") :test #'string=)))
+      (expect '("/bin/git" "/usr/bin/git") :to-equal (nshell.domain.completion:command-path-candidates
+                  "git" "/bin:/usr/bin" #'executable-p))))
 
-(test completion-context-skips-leading-assignments-for-command-word
-  (let ((context (nshell.domain.completion:completion-context-for "FOO=bar git")))
-    (is (string= "git" (nshell.domain.completion:completion-context-command context)))
-    (is (nshell.domain.completion:completion-context-command-position-p context))
-    (is (equal '() (nshell.domain.completion:completion-context-argument-words context)))))
+  (it "command-path-candidates-honors-directory-command"
+    "command-path-candidates checks directory-qualified commands directly."
+    (flet ((executable-p (path)
+             (string= path "./git")))
+      (expect '("./git") :to-equal (nshell.domain.completion:command-path-candidates
+                  "./git" "/bin:/usr/bin" #'executable-p))
+      (expect (nshell.domain.completion:command-path-candidates
+            "./missing" "/bin:/usr/bin" #'executable-p) :to-be-null)))
 
-(test completion-context-uses-latest-word-only-at-cursor-boundary
-  (let ((at-argument (nshell.domain.completion:completion-context-for "git status"))
-        (after-argument (nshell.domain.completion:completion-context-for "git status ")))
-    (is (string= "status"
-                 (nshell.domain.completion:completion-context-argument-prefix at-argument)))
-    (is (equal '("status")
-               (nshell.domain.completion:completion-context-argument-words at-argument)))
-    (is (string= ""
-                 (nshell.domain.completion:completion-context-argument-prefix after-argument)))
-    (is (equal '("status")
-               (nshell.domain.completion:completion-context-argument-words after-argument)))))
+  (it "command-path-candidates-keeps-empty-directory-policy-explicit"
+    "command-path-candidates lets callers choose how empty PATH elements are projected."
+    (flet ((executable-p (path)
+             (member path '("git" "./git" "/bin/git") :test #'string=)))
+      (expect '("git" "/bin/git") :to-equal (nshell.domain.completion:command-path-candidates
+                  "git" ":/bin" #'executable-p :empty-directory ""))
+      (expect '("./git" "/bin/git") :to-equal (nshell.domain.completion:command-path-candidates
+                  "git" ":/bin" #'executable-p :empty-directory "."))))
 
-(test completion-context-argument-words-list-is-domain-owned
-  "Completion contexts should not expose mutable aggregate storage."
-  (let* ((words (list "status" "--short"))
-         (context (nshell.domain.completion::%make-completion-context
-                   :command "git"
-                   :argument-prefix "--short"
-                   :argument-words words
-                   :command-position-p nil
-                   :redirection-target-p nil))
-         (projected
-           (nshell.domain.completion:completion-context-argument-words context)))
-    (setf (first words) "mutated-input")
-    (setf (first projected) "mutated-projection")
-    (is (equal '("status" "--short")
-               (nshell.domain.completion:completion-context-argument-words context)))))
+  (it "path-command-helpers-are-internal-boundaries"
+    "Path command helper functions should not expose unprefixed legacy names."
+    (expect :external :to-be (nth-value 1
+                       (find-symbol "COMMAND-PATH-CANDIDATES"
+                                    '#:nshell.domain.completion)))
+    (flet ((defined-symbol-p (name)
+             (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+      (dolist (name '("%PATH-SEPARATOR-P"
+                      "%COMMAND-PREFIX-HAS-DIRECTORY-P"
+                      "%SPLIT-PATH"
+                      "%JOIN-DIRECTORY-COMMAND"
+                      "%ENTRY-COMMAND-NAME"
+                      "%EXECUTABLE-CANDIDATE-P"
+                      "%PATH-COMMAND-DIRECTORY-PATHNAME"
+                      "%LIST-PATH-COMMAND-DIRECTORY"
+                      "%PATH-COMMAND-ENTRY-CANDIDATE"
+                      "%ADD-PATH-COMMAND-DIRECTORY-CANDIDATES"
+                      "%COMMAND-CANDIDATES-FROM-PATH"))
+        (expect (fboundp (find-symbol name '#:nshell.domain.completion)) :to-be-truthy))
+      (dolist (name '("PATH-SEPARATOR-P"
+                      "COMMAND-PREFIX-HAS-DIRECTORY-P"
+                      "SPLIT-PATH"
+                      "JOIN-DIRECTORY-COMMAND"
+                      "ENTRY-COMMAND-NAME"
+                      "EXECUTABLE-CANDIDATE-P"
+                      "PATH-COMMAND-DIRECTORY-PATHNAME"
+                      "LIST-PATH-COMMAND-DIRECTORY"
+                      "PATH-COMMAND-ENTRY-CANDIDATE"
+                      "ADD-PATH-COMMAND-DIRECTORY-CANDIDATES"
+                      "COMMAND-CANDIDATES-FROM-PATH"))
+        (expect (defined-symbol-p name) :to-be-falsy))))
 
-(test completion-context-constructors-are-internal-boundaries
-  "Completion context construction should not expose legacy unprefixed helper names."
-  (flet ((defined-symbol-p (name)
-           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
-    (dolist (name '("%MAKE-COMPLETION-CONTEXT"
-                    "%MAKE-RAW-COMPLETION-CONTEXT"
-                    "%COMPLETION-CONTEXT-COMMAND"
-                    "%COMPLETION-CONTEXT-ARGUMENT-PREFIX"
-                    "%COMPLETION-CONTEXT-ARGUMENT-WORDS"
-                    "%COMPLETION-CONTEXT-COMMAND-POSITION-P"
-                    "%COMPLETION-CONTEXT-REDIRECTION-TARGET-P"
-                    "%MAKE-COMPLETION-WORD"
-                    "%MAKE-COMPLETION-INPUT-ANALYSIS"
-                    "%STARTS-WITH-P"
-                    "%WORD-LIKE-TOKEN-P"
-                    "%REDIRECTION-TOKEN-P"
-                    "%COMMAND-SEGMENT-TOKENS"
-                    "%SHELL-COMPLETION-WORDS"
-                    "%TOKEN-ENDING-BEFORE-POSITION"
-                    "%REDIRECTION-TARGET-POSITION-P"
-                    "%COMMAND-WORD"
-                    "%ARGUMENT-WORD-VALUES-AFTER-COMMAND"
-                    "%LATEST-COMPLETION-WORD"
-                    "%CURRENT-COMPLETION-WORD-AT-CURSOR"
-                    "%ANALYZE-COMPLETION-INPUT"
-                    "%COMPLETION-COMMAND-POSITION-P"
-                    "%COMPLETION-ANALYSIS-COMMAND-POSITION-P"
-                    "%COMPLETION-ANALYSIS-COMMAND"
-                    "%COMPLETION-ANALYSIS-ARGUMENT-PREFIX"
-                    "%COMPLETION-ANALYSIS-ARGUMENT-WORDS"
-                    "%COMPLETION-ANALYSIS-REDIRECTION-TARGET-P"
-                    "%COMPLETION-CONTEXT-FROM-ANALYSIS"
-                    "%COMPLETION-WORD-VALUE"
-                    "%COMPLETION-WORD-START"
-                    "%COMPLETION-WORD-END"
-                    "%COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"))
-      (is (fboundp (find-symbol name '#:nshell.domain.completion))))
-    (dolist (name '("MAKE-COMPLETION-CONTEXT"
-                    "MAKE-COMPLETION-WORD"
-                    "MAKE-COMPLETION-INPUT-ANALYSIS"
-                    "COMPLETION-WORD-VALUE"
-                    "COMPLETION-WORD-START"
-                    "COMPLETION-WORD-END"
-                    "COMPLETION-INPUT-ANALYSIS-COMMAND-WORD"))
-      (is (not (defined-symbol-p name))))
-    (dolist (name '("STARTS-WITH-P"
-                    "WORD-LIKE-TOKEN-P"
-                    "REDIRECTION-TOKEN-P"
-                    "COMMAND-SEGMENT-TOKENS"
-                    "SHELL-COMPLETION-WORDS"
-                    "TOKEN-ENDING-BEFORE-POSITION"
-                    "REDIRECTION-TARGET-POSITION-P"
-                    "COMMAND-WORD"
-                    "ARGUMENT-WORD-VALUES-AFTER-COMMAND"
-                    "LATEST-COMPLETION-WORD"
-                    "CURRENT-COMPLETION-WORD-AT-CURSOR"
-                    "ANALYZE-COMPLETION-INPUT"
-                    "COMPLETION-COMMAND-POSITION-P"
-                    "COMPLETION-ANALYSIS-COMMAND-POSITION-P"
-                    "COMPLETION-ANALYSIS-COMMAND"
-                    "COMPLETION-ANALYSIS-ARGUMENT-PREFIX"
-                    "COMPLETION-ANALYSIS-ARGUMENT-WORDS"
-                    "COMPLETION-ANALYSIS-REDIRECTION-TARGET-P"
-                    "COMPLETION-CONTEXT-FROM-ANALYSIS"))
-      (multiple-value-bind (symbol status)
-          (find-symbol name '#:nshell.domain.completion)
-        (is (not (and status (fboundp symbol))))))))
+  (it "trim-trailing-path-separators-removes-trailing-slashes"
+    "trim-trailing-path-separators strips trailing / unless the string is only slashes."
+    (flet ((trim (s) (nshell.domain.completion::%trim-trailing-path-separators s)))
+      (expect "/usr/bin" :to-equal (trim "/usr/bin/"))
+      (expect "/usr/bin" :to-equal (trim "/usr/bin"))
+      ;; single slash preserved (only-separator case)
+      (expect "/" :to-equal (trim "/"))))
 
-(test completion-query-constructor-is-internal-boundary
-  "Completion query construction should stay behind completion-query-for."
-  (is (not (fboundp 'nshell.domain.completion::make-completion-query)))
-  (is (fboundp 'nshell.domain.completion::%make-completion-query)))
+  (it "entry-path-name-falls-back-to-directory-tail-component"
+    "entry-path-name uses the final directory component when no file component exists."
+    (flet ((entry-name (path) (nshell.domain.completion::%entry-path-name path)))
+      (expect "project" :to-equal (entry-name (make-pathname :directory '(:absolute "tmp" "project"))))
+      (expect (entry-name (make-pathname :directory '(:absolute))) :to-be-null)))
 
-(test completion-context-word-like-token-p-returns-canonical-booleans
-  (is (eq t (nshell.domain.completion::%word-like-token-p
-             (nshell.domain.parsing:make-token :word "git"))))
-  (is (eq t (nshell.domain.completion::%word-like-token-p
-             (nshell.domain.parsing:make-token :error "git"))))
-  (is (null (nshell.domain.completion::%word-like-token-p
-             (nshell.domain.parsing:make-token :pipe "|")))))
+  (it "filesystem-query-constructors-are-internal-boundaries"
+    "Filesystem completion query construction should not expose unprefixed helpers."
+    (expect (fboundp 'nshell.domain.completion::%make-file-completion-prefix-projection) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%make-path-command-query) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%make-file-completion-query) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%make-empty-filesystem-candidate-set) :to-be-truthy)
+    (flet ((defined-symbol-p (name)
+             (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+      (expect (defined-symbol-p "MAKE-FILE-COMPLETION-PREFIX-PROJECTION") :to-be-falsy)
+      (expect (defined-symbol-p "MAKE-PATH-COMMAND-QUERY") :to-be-falsy)
+      (expect (defined-symbol-p "MAKE-FILE-COMPLETION-QUERY") :to-be-falsy)
+      (expect (defined-symbol-p "MAKE-FILESYSTEM-CANDIDATE-SET") :to-be-falsy)))
 
-(test completion-context-starts-with-p-performs-case-insensitive-prefix-match
-  "%starts-with-p returns true when text starts with prefix (case-folded)."
-  (flet ((swp (prefix text)
-           (nshell.domain.completion::%starts-with-p prefix text)))
-    (is (swp "" "anything"))
-    (is (swp "git" "git checkout"))
-    (is (swp "GIT" "git checkout"))
-    (is (not (swp "gitx" "git")))
-    (is (not (swp "checkout" "git")))))
+  (it "filesystem-query-state-accessors-are-internal-boundaries"
+    "Filesystem query state should be read through internal accessors only."
+    (expect (fboundp 'nshell.domain.completion::%path-command-query-path) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%path-command-query-prefix) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%file-completion-query-directory-prefix) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%file-completion-query-name-prefix) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%file-completion-query-directory) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%file-completion-query-include-files) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%file-completion-query-include-directories) :to-be-truthy)
+    (flet ((defined-symbol-p (name)
+             (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+      (expect (defined-symbol-p "PATH-COMMAND-QUERY-PATH") :to-be-falsy)
+      (expect (defined-symbol-p "PATH-COMMAND-QUERY-PREFIX") :to-be-falsy)
+      (expect (defined-symbol-p "FILE-COMPLETION-QUERY-DIRECTORY-PREFIX") :to-be-falsy)
+      (expect (defined-symbol-p "FILE-COMPLETION-QUERY-NAME-PREFIX") :to-be-falsy)
+      (expect (defined-symbol-p "FILE-COMPLETION-QUERY-DIRECTORY") :to-be-falsy)
+      (expect (defined-symbol-p "FILE-COMPLETION-QUERY-INCLUDE-FILES") :to-be-falsy)
+      (expect (defined-symbol-p "FILE-COMPLETION-QUERY-INCLUDE-DIRECTORIES") :to-be-falsy)
+      (expect (defined-symbol-p "PATH-COMMAND-QUERY-ACTIVE-P") :to-be-falsy)
+      (expect (defined-symbol-p "FILE-COMPLETION-QUERY-FROM-PREFIX") :to-be-falsy)))
 
-(test completion-context-redirection-token-p-recognizes-redirect-type
-  "%redirection-token-p returns true only for :redirect tokens."
-  (flet ((redir (type)
-           (nshell.domain.completion::%redirection-token-p
-            (nshell.domain.parsing:make-token type ""))))
-    (is (redir :redirect))
-    (is (not (redir :pipe)))
-    (is (not (redir :word)))
-    (is (not (redir :newline)))))
+  (it "split-file-completion-prefix-splits-on-last-slash"
+    "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."
+    (flet ((split (s)
+             (multiple-value-list
+              (nshell.domain.completion::%split-file-completion-prefix s))))
+      (expect '("" "foo") :to-equal (split "foo"))
+      (expect '("/usr/" "bin") :to-equal (split "/usr/bin"))
+      (expect '("src/" "") :to-equal (split "src/")))
+    (let ((projection
+            (nshell.domain.completion::%project-file-completion-prefix "src/main")))
+      (expect "src/" :to-equal (nshell.domain.completion::%file-completion-prefix-projection-directory-prefix
+                    projection))
+      (expect "main" :to-equal (nshell.domain.completion::%file-completion-prefix-projection-file-prefix
+                    projection))))
 
-(test completion-context-command-segment-tokens-returns-tokens-after-last-separator
-  "%command-segment-tokens strips everything up to and including the last separator."
-  (flet ((tokens (input)
-           (nshell.domain.parsing:tokenization-result-tokens
-            (nshell.domain.parsing:tokenize input))))
-    (flet ((seg (input)
-             (nshell.domain.completion::%command-segment-tokens
-              (tokens input))))
-      ;; no separator: whole token list returned
-      (is (= 2 (length (seg "git checkout"))))
-      ;; after &&: only "git" and "ch" returned
-      (is (= 2 (length (seg "echo a && git ch"))))
-      ;; after semicolon
-      (is (= 1 (length (seg "a ; b")))))))
+  (it "file-completion-prefix-projection-accessors-are-internal-boundaries"
+    "File prefix projection readers should stay internal to the filesystem boundary."
+    (expect (fboundp 'nshell.domain.completion::%file-completion-prefix-projection-directory-prefix) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.completion::%file-completion-prefix-projection-file-prefix) :to-be-truthy)
+    (flet ((defined-symbol-p (name)
+             (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+      (expect (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-DIRECTORY-PREFIX") :to-be-falsy)
+      (expect (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-FILE-PREFIX") :to-be-falsy)))
 
-(test completion-context-shell-completion-words-merges-adjacent-word-tokens
-  "%shell-completion-words combines adjacent word-like tokens into single logical words."
-  (flet ((tokens (input)
-           (nshell.domain.parsing:tokenization-result-tokens
-            (nshell.domain.parsing:tokenize input))))
-    (flet ((words (input)
-             (mapcar #'nshell.domain.completion::%completion-word-value
-                     (nshell.domain.completion::%shell-completion-words
-                      (tokens input)))))
-      (is (equal '("git" "checkout") (words "git checkout")))
-      ;; pipe is not word-like so it triggers a flush
-      (is (equal '("ls" "foo") (words "ls | foo")))
-      ;; multiple args
-      (is (equal '("git" "--color" "status") (words "git --color status"))))))
+  (it "file-completion-helpers-are-internal-boundaries"
+    "File completion helper functions should not expose unprefixed legacy names."
+    (flet ((defined-symbol-p (name)
+             (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
+      (dolist (name '("%TRIM-TRAILING-PATH-SEPARATORS"
+                      "%PATHNAME-DIRECTORY-TAIL-COMPONENT"
+                      "%PATHNAME-LAST-DIRECTORY-COMPONENT"
+                      "%PATHNAME-FILE-COMPONENT-NAME"
+                      "%ENTRY-PATH-NAME"
+                      "%PROJECT-FILE-COMPLETION-PREFIX"
+                      "%SPLIT-FILE-COMPLETION-PREFIX"
+                      "%FILE-COMPLETION-DIRECTORY-PATHNAME"
+                      "%SAFE-FILE-COMPLETION-LIST"
+                      "%ENSURE-DIRECTORY-CANDIDATE-SUFFIX"
+                      "%FILE-COMPLETION-ENTRY-CANDIDATE"
+                      "%ADD-FILE-COMPLETION-ENTRIES"
+                      "%FILE-CANDIDATES-FROM-DIRECTORY"))
+        (expect (fboundp (find-symbol name '#:nshell.domain.completion)) :to-be-truthy))
+      (dolist (name '("TRIM-TRAILING-PATH-SEPARATORS"
+                      "PATHNAME-DIRECTORY-TAIL-COMPONENT"
+                      "PATHNAME-LAST-DIRECTORY-COMPONENT"
+                      "PATHNAME-FILE-COMPONENT-NAME"
+                      "ENTRY-PATH-NAME"
+                      "PROJECT-FILE-COMPLETION-PREFIX"
+                      "SPLIT-FILE-COMPLETION-PREFIX"
+                      "FILE-COMPLETION-DIRECTORY-PATHNAME"
+                      "SAFE-FILE-COMPLETION-LIST"
+                      "ENSURE-DIRECTORY-CANDIDATE-SUFFIX"
+                      "FILE-COMPLETION-ENTRY-CANDIDATE"
+                      "ADD-FILE-COMPLETION-ENTRIES"
+                      "FILE-CANDIDATES-FROM-DIRECTORY"))
+        (expect (defined-symbol-p name) :to-be-falsy))))
 
-(test pbt-filesystem-redirection-completion-preserves-prefix
-  (check-property (:trials 50)
-      ((prefix (gen-command-prefix :min-length 1 :max-length 4) nil))
+  (it "file-candidates-from-directory-deduplicates-by-candidate-text"
     (with-file-completion-adapters
         ((lambda (dir)
            (declare (ignore dir))
-           (list (concatenate 'string prefix "-out.log")
-                 "unrelated.log"))
+           (list #p"tool" #p"tool"))
          (lambda (dir)
            (declare (ignore dir))
-           (list (concatenate 'string prefix "-dir/"))))
-      (let ((candidates
-              (nshell.domain.completion:complete
-               nshell.domain.completion::*built-in-rule-knowledge-base*
-               (concatenate 'string "git > " prefix))))
-        (and candidates
-             (every (lambda (candidate)
-                      (completion-prefix-p
-                       prefix
-                       (nshell.domain.completion:candidate-text candidate)))
-                    candidates)
-             (every (lambda (candidate)
-                      (member (nshell.domain.completion:candidate-kind candidate)
-                              '(:file :directory)))
-                    candidates))))))
-
-(test command-path-candidates-projects-path-directories
-  "command-path-candidates returns matching executable candidates in PATH order."
-  (flet ((executable-p (path)
-           (member path '("/bin/git" "/usr/bin/git") :test #'string=)))
-    (is (equal '("/bin/git" "/usr/bin/git")
-               (nshell.domain.completion:command-path-candidates
-                "git" "/bin:/usr/bin" #'executable-p)))))
-
-(test command-path-candidates-honors-directory-command
-  "command-path-candidates checks directory-qualified commands directly."
-  (flet ((executable-p (path)
-           (string= path "./git")))
-    (is (equal '("./git")
-               (nshell.domain.completion:command-path-candidates
-                "./git" "/bin:/usr/bin" #'executable-p)))
-    (is (null
-         (nshell.domain.completion:command-path-candidates
-          "./missing" "/bin:/usr/bin" #'executable-p)))))
-
-(test command-path-candidates-keeps-empty-directory-policy-explicit
-  "command-path-candidates lets callers choose how empty PATH elements are projected."
-  (flet ((executable-p (path)
-           (member path '("git" "./git" "/bin/git") :test #'string=)))
-    (is (equal '("git" "/bin/git")
-               (nshell.domain.completion:command-path-candidates
-                "git" ":/bin" #'executable-p :empty-directory "")))
-    (is (equal '("./git" "/bin/git")
-               (nshell.domain.completion:command-path-candidates
-                "git" ":/bin" #'executable-p :empty-directory ".")))))
-
-(test path-command-helpers-are-internal-boundaries
-  "Path command helper functions should not expose unprefixed legacy names."
-  (is (eq :external
-          (nth-value 1
-                     (find-symbol "COMMAND-PATH-CANDIDATES"
-                                  '#:nshell.domain.completion))))
-  (flet ((defined-symbol-p (name)
-           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
-    (dolist (name '("%PATH-SEPARATOR-P"
-                    "%COMMAND-PREFIX-HAS-DIRECTORY-P"
-                    "%SPLIT-PATH"
-                    "%JOIN-DIRECTORY-COMMAND"
-                    "%ENTRY-COMMAND-NAME"
-                    "%EXECUTABLE-CANDIDATE-P"
-                    "%PATH-COMMAND-DIRECTORY-PATHNAME"
-                    "%LIST-PATH-COMMAND-DIRECTORY"
-                    "%PATH-COMMAND-ENTRY-CANDIDATE"
-                    "%ADD-PATH-COMMAND-DIRECTORY-CANDIDATES"
-                    "%COMMAND-CANDIDATES-FROM-PATH"))
-      (is (fboundp (find-symbol name '#:nshell.domain.completion))))
-    (dolist (name '("PATH-SEPARATOR-P"
-                    "COMMAND-PREFIX-HAS-DIRECTORY-P"
-                    "SPLIT-PATH"
-                    "JOIN-DIRECTORY-COMMAND"
-                    "ENTRY-COMMAND-NAME"
-                    "EXECUTABLE-CANDIDATE-P"
-                    "PATH-COMMAND-DIRECTORY-PATHNAME"
-                    "LIST-PATH-COMMAND-DIRECTORY"
-                    "PATH-COMMAND-ENTRY-CANDIDATE"
-                    "ADD-PATH-COMMAND-DIRECTORY-CANDIDATES"
-                    "COMMAND-CANDIDATES-FROM-PATH"))
-      (is (not (defined-symbol-p name))))))
-
-(test trim-trailing-path-separators-removes-trailing-slashes
-  "trim-trailing-path-separators strips trailing / unless the string is only slashes."
-  (flet ((trim (s) (nshell.domain.completion::%trim-trailing-path-separators s)))
-    (is (string= "/usr/bin" (trim "/usr/bin/")))
-    (is (string= "/usr/bin" (trim "/usr/bin")))
-    ;; single slash preserved (only-separator case)
-    (is (string= "/" (trim "/")))))
-
-(test entry-path-name-falls-back-to-directory-tail-component
-  "entry-path-name uses the final directory component when no file component exists."
-  (flet ((entry-name (path) (nshell.domain.completion::%entry-path-name path)))
-    (is (string= "project"
-                 (entry-name (make-pathname :directory '(:absolute "tmp" "project")))))
-    (is (null (entry-name (make-pathname :directory '(:absolute)))))))
-
-(test filesystem-query-constructors-are-internal-boundaries
-  "Filesystem completion query construction should not expose unprefixed helpers."
-  (is (fboundp 'nshell.domain.completion::%make-file-completion-prefix-projection))
-  (is (fboundp 'nshell.domain.completion::%make-path-command-query))
-  (is (fboundp 'nshell.domain.completion::%make-file-completion-query))
-  (is (fboundp 'nshell.domain.completion::%make-empty-filesystem-candidate-set))
-  (flet ((defined-symbol-p (name)
-           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
-    (is (not (defined-symbol-p "MAKE-FILE-COMPLETION-PREFIX-PROJECTION")))
-    (is (not (defined-symbol-p "MAKE-PATH-COMMAND-QUERY")))
-    (is (not (defined-symbol-p "MAKE-FILE-COMPLETION-QUERY")))
-    (is (not (defined-symbol-p "MAKE-FILESYSTEM-CANDIDATE-SET")))))
-
-(test filesystem-query-state-accessors-are-internal-boundaries
-  "Filesystem query state should be read through internal accessors only."
-  (is (fboundp 'nshell.domain.completion::%path-command-query-path))
-  (is (fboundp 'nshell.domain.completion::%path-command-query-prefix))
-  (is (fboundp 'nshell.domain.completion::%file-completion-query-directory-prefix))
-  (is (fboundp 'nshell.domain.completion::%file-completion-query-name-prefix))
-  (is (fboundp 'nshell.domain.completion::%file-completion-query-directory))
-  (is (fboundp 'nshell.domain.completion::%file-completion-query-include-files))
-  (is (fboundp 'nshell.domain.completion::%file-completion-query-include-directories))
-  (flet ((defined-symbol-p (name)
-           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
-    (is (not (defined-symbol-p "PATH-COMMAND-QUERY-PATH")))
-    (is (not (defined-symbol-p "PATH-COMMAND-QUERY-PREFIX")))
-    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-DIRECTORY-PREFIX")))
-    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-NAME-PREFIX")))
-    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-DIRECTORY")))
-    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-INCLUDE-FILES")))
-    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-INCLUDE-DIRECTORIES")))
-    (is (not (defined-symbol-p "PATH-COMMAND-QUERY-ACTIVE-P")))
-    (is (not (defined-symbol-p "FILE-COMPLETION-QUERY-FROM-PREFIX")))))
-
-(test split-file-completion-prefix-splits-on-last-slash
-  "split-file-completion-prefix returns (dir-prefix . file-prefix) split at last /."
-  (flet ((split (s)
-           (multiple-value-list
-            (nshell.domain.completion::%split-file-completion-prefix s))))
-    (is (equal '("" "foo")      (split "foo")))
-    (is (equal '("/usr/" "bin") (split "/usr/bin")))
-    (is (equal '("src/" "")     (split "src/"))))
-  (let ((projection
-          (nshell.domain.completion::%project-file-completion-prefix "src/main")))
-    (is (string= "src/"
-                 (nshell.domain.completion::%file-completion-prefix-projection-directory-prefix
-                  projection)))
-    (is (string= "main"
-                 (nshell.domain.completion::%file-completion-prefix-projection-file-prefix
-                  projection)))))
-
-(test file-completion-prefix-projection-accessors-are-internal-boundaries
-  "File prefix projection readers should stay internal to the filesystem boundary."
-  (is (fboundp 'nshell.domain.completion::%file-completion-prefix-projection-directory-prefix))
-  (is (fboundp 'nshell.domain.completion::%file-completion-prefix-projection-file-prefix))
-  (flet ((defined-symbol-p (name)
-           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
-    (is (not (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-DIRECTORY-PREFIX")))
-    (is (not (defined-symbol-p "FILE-COMPLETION-PREFIX-PROJECTION-FILE-PREFIX")))))
-
-(test file-completion-helpers-are-internal-boundaries
-  "File completion helper functions should not expose unprefixed legacy names."
-  (flet ((defined-symbol-p (name)
-           (nth-value 1 (find-symbol name '#:nshell.domain.completion))))
-    (dolist (name '("%TRIM-TRAILING-PATH-SEPARATORS"
-                    "%PATHNAME-DIRECTORY-TAIL-COMPONENT"
-                    "%PATHNAME-LAST-DIRECTORY-COMPONENT"
-                    "%PATHNAME-FILE-COMPONENT-NAME"
-                    "%ENTRY-PATH-NAME"
-                    "%PROJECT-FILE-COMPLETION-PREFIX"
-                    "%SPLIT-FILE-COMPLETION-PREFIX"
-                    "%FILE-COMPLETION-DIRECTORY-PATHNAME"
-                    "%SAFE-FILE-COMPLETION-LIST"
-                    "%ENSURE-DIRECTORY-CANDIDATE-SUFFIX"
-                    "%FILE-COMPLETION-ENTRY-CANDIDATE"
-                    "%ADD-FILE-COMPLETION-ENTRIES"
-                    "%FILE-CANDIDATES-FROM-DIRECTORY"))
-      (is (fboundp (find-symbol name '#:nshell.domain.completion))))
-    (dolist (name '("TRIM-TRAILING-PATH-SEPARATORS"
-                    "PATHNAME-DIRECTORY-TAIL-COMPONENT"
-                    "PATHNAME-LAST-DIRECTORY-COMPONENT"
-                    "PATHNAME-FILE-COMPONENT-NAME"
-                    "ENTRY-PATH-NAME"
-                    "PROJECT-FILE-COMPLETION-PREFIX"
-                    "SPLIT-FILE-COMPLETION-PREFIX"
-                    "FILE-COMPLETION-DIRECTORY-PATHNAME"
-                    "SAFE-FILE-COMPLETION-LIST"
-                    "ENSURE-DIRECTORY-CANDIDATE-SUFFIX"
-                    "FILE-COMPLETION-ENTRY-CANDIDATE"
-                    "ADD-FILE-COMPLETION-ENTRIES"
-                    "FILE-CANDIDATES-FROM-DIRECTORY"))
-      (is (not (defined-symbol-p name))))))
-
-(test file-candidates-from-directory-deduplicates-by-candidate-text
-  (with-file-completion-adapters
-      ((lambda (dir)
-         (declare (ignore dir))
-         (list #p"tool" #p"tool"))
-       (lambda (dir)
-         (declare (ignore dir))
-         nil))
-    (let* ((candidates
-             (nshell.domain.completion::%file-candidates-from-directory
-              "to"
-              :include-files t
-              :include-directories nil))
-           (texts (completion-texts candidates)))
-      (is (equal '("tool") texts))
-      (is (eq :file (nshell.domain.completion:candidate-kind
-                     (first candidates)))))))
+           nil))
+      (let* ((candidates
+               (nshell.domain.completion::%file-candidates-from-directory
+                "to"
+                :include-files t
+                :include-directories nil))
+             (texts (completion-texts candidates)))
+        (expect '("tool") :to-equal texts)
+        (expect :file :to-be (nshell.domain.completion:candidate-kind
+                       (first candidates)))))))

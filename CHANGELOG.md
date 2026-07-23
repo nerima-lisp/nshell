@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `nshell/weave`: a cl-weave regression suite covering the completion engine.
+  It exercises the cl-prolog knowledge base with property-based tests, fixtures,
+  and benchmarks; runs direct Prolog queries (`findall`, negation-as-failure,
+  and a Lisp foreign predicate composed with domain facts); and uses the
+  `cl-prolog/weave` `deftest-queries`/`assert-query` bridge. Runnable via
+  `scripts/weave.lisp`, the `weave` dev-shell alias, and the `weave` Nix check.
+- `nshell.domain.completion:completion-rulebase` now publicly compiles the
+  completion knowledge base into a first-class `cl-prolog:rulebase`, and the
+  completion logic predicates (`completes`, `describes`, `has-flag`,
+  `command-is`, `suggests-dir`, `suggests-file`) are exported so the rulebase
+  answers the full cl-prolog query API.
 - Vi-mode char-wise visual selection (`v`) with motion, yank, delete, change,
   and count-aware editing coverage.
 - Parameter expansion now covers substring slicing (`${VAR:offset[:length]}`)
@@ -16,12 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command lookups so repeated completion requests stay responsive.
 
 ### Fixed
+- `%autosuggest-closed-quoted-token-p` no longer reports a lone quote character
+  (`end - start = 1`) as a closed quoted token — a latent bug surfaced by a
+  test that a stray missing paren had kept from ever running under FiveAM.
 - Prompt command-duration tracking now records a non-negative millisecond value,
   including sub-millisecond commands.
 - `source` command substitution scanning now preserves literal
   non-substitution `$` characters.
 
 ### Changed
+- Migrated the entire test suite from FiveAM to
+  [cl-weave](https://github.com/takeokunn/cl-weave). All ~1,290 cases now use
+  `describe`/`it`/`expect`; the FiveAM dependency is removed from the ASDF
+  system, the Nix flake, and the dev shell. Pass/fail parity with the previous
+  FiveAM run was verified case by case.
 - README and man page claims now align with the current 0.4.x status, test-count
   evidence, vi visual selection, here-document, and here-string support.
 - README testing and contribution guidance now distinguishes hermetic Nix checks

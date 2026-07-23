@@ -16,9 +16,9 @@
              (handler-case
                  (progn
                     (asdf:load-system :nshell/test :force t)
-                    (uiop:symbol-call :fiveam '#:run!
-                                      (uiop:find-symbol* '#:nshell-tests
-                                                         :nshell/test))
+                    ;; Drive the cl-weave suite for its coverage side effects;
+                    ;; the report is produced regardless of pass/fail.
+                    (uiop:symbol-call :nshell/test '#:run-tests)
                     t)
                 (error (condition)
                   (format *error-output* "~&nshell/test failed: ~A~%" condition)

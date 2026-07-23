@@ -155,6 +155,14 @@
             #:kb-command-description
             #:make-fact #:make-rule #:fact-p #:rule-p
             #:assert-fact! #:assert-rule! #:prove #:prove-all #:predicate-true-p
+            #:completion-rulebase
+            ;; Completion logic predicates: the public vocabulary of the
+            ;; cl-prolog rulebase produced by COMPLETION-RULEBASE.  Exporting
+            ;; the predicate symbols lets callers (and the cl-weave/cl-prolog
+            ;; query suites) write goals such as (completes "git" ?c) that
+            ;; unify against the same interned symbols the rulebase stores.
+            #:completes #:describes #:has-flag
+            #:command-is #:suggests-dir #:suggests-file
             #:+command-path-builtin-specs+
             #:+type-builtin-spec+
             #:builtin-help-entries

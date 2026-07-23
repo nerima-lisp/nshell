@@ -97,7 +97,7 @@ git clone https://github.com/takeokunn/nshell
 cd nshell
 nix build            # produces ./result/bin/nshell
 nix flake check --print-build-logs
-nix develop          # dev shell with SBCL + FiveAM
+nix develop          # dev shell with SBCL + cl-weave
 ```
 
 Inside `nix develop`, you can load the system into a REPL:
@@ -139,10 +139,18 @@ unit-testable without a terminal.
 
 ## Testing
 
-The suite uses [FiveAM](https://github.com/lispci/fiveam) and is exposed through
-Nix checks.
+nshell runs entirely on [cl-weave](https://github.com/takeokunn/cl-weave), with
+two complementary suites exposed through Nix checks:
 
-Run the same hermetic Linux/macOS gate used by CI:
+- **`nshell/test`** — the primary regression suite (~1,290 cases,
+  `describe`/`it`/`expect`).
+- **`nshell/weave`** — a focused suite that exercises the completion engine's
+  [cl-prolog](https://github.com/takeokunn/cl-prolog) knowledge base with
+  property-based tests, fixtures, benchmarks, and direct Prolog queries
+  (`findall`, negation-as-failure, foreign predicates) plus the
+  `cl-prolog/weave` query bridge.
+
+Run the same hermetic Linux/macOS gate used by CI (it runs both suites):
 
 ```sh
 nix flake check --print-build-logs
@@ -174,6 +182,14 @@ nix develop -c sbcl --script scripts/coverage.lisp
 
 The report is written to `coverage/cover-index.html` by default. Set
 `NSHELL_COVERAGE_DIR` to redirect the output.
+
+Run the cl-weave suite on its own (the `weave` alias in `nix develop`, or
+directly). The runner self-registers sibling `../cl-weave` and `../cl-prolog`
+checkouts, so no extra environment setup is needed:
+
+```sh
+sbcl --script scripts/weave.lisp
+```
 
 Unit, integration, property-based, and end-to-end tests live under `tests/`.
 New shell-language, expansion, completion, job-control, and input-state changes

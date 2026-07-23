@@ -152,7 +152,7 @@
          ,reduction-form
        (declare (ignorable ,state-var ,output-var))
        (is-input-state ,state-var ,@state-args)
-       (is (eq ,expected-output ,output-var))
+       (expect ,expected-output :to-be ,output-var)
        ,@body)))
 
 (defmacro with-expected-noop-input-state-reductions ((state-var output-var)
@@ -216,15 +216,15 @@
 
 (defun is-maybe-string (expected actual)
   (if expected
-      (is (string= expected actual))
-      (is (null actual))))
+      (expect expected :to-equal actual)
+      (expect actual :to-be-null)))
 
 (defun is-maybe-number (expected actual)
   (if expected
-      (is (= expected actual))
-      (is (null actual))))
+      (expect expected :to-equal actual)
+      (expect actual :to-be-null)))
 
 (defun is-maybe-symbol (expected actual)
   (if expected
-      (is (eq expected actual))
-      (is (null actual))))
+      (expect expected :to-be actual)
+      (expect actual :to-be-null)))

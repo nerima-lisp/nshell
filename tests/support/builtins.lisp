@@ -92,15 +92,15 @@
                                                         output-empty contains)
   (append
    (when (not (null code))
-     `((is (= ,code ,actual-code))))
+     `((expect ,code :to-equal ,actual-code)))
    (when output
-     `((is (string= ,output ,actual-output))))
+     `((expect ,output :to-equal ,actual-output)))
    (when output-null
-     `((is (null ,actual-output))))
+     `((expect ,actual-output :to-be-null)))
    (when output-empty
-     `((is (string= "" ,actual-output))))
+     `((expect "" :to-equal ,actual-output)))
    (when contains
-     `((is (%builtin-output-contains-all-p ,actual-output ,contains))))
+     `((expect (%builtin-output-contains-all-p ,actual-output ,contains) :to-be-truthy)))
    `((values ,actual-output ,actual-code))))
 
 (defmacro %with-builtin-call-values ((output code) call-form &body body)
@@ -137,8 +137,8 @@
 (defmacro with-builtins-source-ok ((output code context lines) expected-output &body extra-assertions)
   "Like WITH-BUILTINS-SOURCE but automatically asserts exit-code=0 and string output equality."
   `(with-builtins-source (,output ,code ,context ,lines)
-     (is (= 0 ,code))
-     (is (string= ,expected-output ,output))
+     (expect 0 :to-equal ,code)
+     (expect ,expected-output :to-equal ,output)
      ,@extra-assertions))
 
 (defmacro with-stubbed-command-executor ((&rest cases) &body body)
@@ -190,24 +190,24 @@ form should return (values output exit-code).  Example:
   `(progn
      (multiple-value-bind (output code)
          (call-builtin ,context ,name ,add-args)
-       (is (null output))
-       (is (= 0 code)))
-     (is (equal ,expansion (gethash ,key ,table-form)))
-     (is (= 0 (nth-value 1 (call-builtin ,context ,name (list "-q" ,key)))))
-     (is (= 1 (nth-value 1 (call-builtin ,context ,name (list "-q" ,missing-key)))))
+       (expect output :to-be-null)
+       (expect 0 :to-equal code))
+     (expect ,expansion :to-equal (gethash ,key ,table-form))
+     (expect 0 :to-equal (nth-value 1 (call-builtin ,context ,name (list "-q" ,key))))
+     (expect 1 :to-equal (nth-value 1 (call-builtin ,context ,name (list "-q" ,missing-key))))
      ,@(when body-contains
          `((multiple-value-bind (output code)
                (call-builtin ,context ,name (list ,key))
-             (is (= 0 code))
+             (expect 0 :to-equal code)
              ,@(mapcar (lambda (needle)
-                         `(is (search ,needle output)))
+                         `(expect (search ,needle output) :to-be-truthy))
                        body-contains))))
      (multiple-value-bind (output code)
          (call-builtin ,context ,name nil)
-       (is (= 0 code))
-       (is (search ,list-fragment output)))
+       (expect 0 :to-equal code)
+       (expect (search ,list-fragment output) :to-be-truthy))
      (assert-builtin-call (,context ,name '("-e"))
        :code 2
        :output ,erase-error-output)
-     (is (= 0 (nth-value 1 (call-builtin ,context ,name ,erase-args))))
-     (is (null (gethash ,key ,table-form)))))
+     (expect 0 :to-equal (nth-value 1 (call-builtin ,context ,name ,erase-args)))
+     (expect (gethash ,key ,table-form) :to-be-null)))

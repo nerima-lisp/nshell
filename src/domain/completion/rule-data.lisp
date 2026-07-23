@@ -60,7 +60,15 @@
 (defun %make-prolog-rule (rule)
   (cl-prolog:make-clause (copy-tree (rule-head rule)) (copy-tree (rule-body rule))))
 
-(defun %make-prolog-rulebase (kb)
+(defun completion-rulebase (kb)
+  "Compile the completion KB into a first-class CL-PROLOG:RULEBASE.
+
+Every completion fact and rule becomes a Prolog clause, so the resulting
+rulebase answers the full cl-prolog query API (QUERY-PROLOG, FINDALL,
+negation-as-failure, ...) over nshell's completion knowledge, not just the
+depth-bounded PROVE search used on the interactive path.  Facts and rules are
+inserted in definition order (the KB accumulates them reversed via PUSH) so
+solution order stays stable for callers that depend on it."
   (let ((rulebase (cl-prolog:make-rulebase)))
     (dolist (fact (reverse (rule-knowledge-base-facts kb)) rulebase)
       (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-fact fact)))
@@ -102,7 +110,7 @@ still applies once earlier body goals have grounded it."
   ;; "this path found nothing," not a program error. Collect via MAP-
   ;; PROLOG-SOLUTIONS and treat any such runtime error as exactly that,
   ;; keeping whatever solutions were already found on other branches.
-  (let ((rulebase (%make-prolog-rulebase kb))
+  (let ((rulebase (completion-rulebase kb))
         (solutions '()))
     (handler-case
         (cl-prolog:map-prolog-solutions

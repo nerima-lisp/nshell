@@ -3,21 +3,10 @@
 (in-package #:cl-user)
 
 (defpackage #:nshell/test
-  (:use #:cl #:fiveam)
-  (:shadow #:gen-integer
-           #:gen-in-range
-           #:gen-string
-           #:gen-shell-word
-           #:gen-logic-atom
-           #:gen-shell-command
-           #:gen-shell-variable-name
-           #:gen-shell-operator-only-input
-           #:gen-shell-pipeline
-           #:gen-prompt-text
-           #:shrink-prompt-text
-           #:shrink-shell-word
-           #:gen-terminal-width
-           #:check-property
-           #:for-all-property
-           #:with-event-capture)
+  (:use #:cl)
+  ;; cl-weave owns describe (it shadows cl:describe).  The rest of the DSL is
+  ;; imported by name so nshell's own PBT generators (gen-integer, gen-string,
+  ;; ...) keep their meanings instead of colliding with cl-weave's exports.
+  (:shadowing-import-from #:cl-weave #:describe)
+  (:import-from #:cl-weave #:it #:expect #:skip #:fail #:run-all)
   (:export #:run-tests))

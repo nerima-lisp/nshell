@@ -7,9 +7,16 @@
       url = "path:../cl-prolog";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # cl-weave is the testing framework behind the nshell/weave suite.  Its
+    # package ships loadable ASDF source under share/common-lisp/source, and a
+    # `cl-weave` CLI, both of which the suite and dev shell consume.
+    cl-weave = {
+      url = "path:../cl-weave";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, cl-prolog }:
+  outputs = { self, nixpkgs, cl-prolog, cl-weave }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -34,6 +41,14 @@
           pkgs = nixpkgs.legacyPackages.${system};
           src = sourceFor pkgs;
           clProlog = cl-prolog.packages.${system}.default;
+          # cl-weave built as an ASDF lisp library from its source input, so
+          # nshell/test (now cl-weave-based) can list it in lispLibs.
+          clWeaveLib = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-weave";
+            version = "0.8.0";
+            src = cl-weave;
+            systems = [ "cl-weave" ];
+          };
         in
         {
           default = pkgs.sbcl.buildASDFSystem {
@@ -82,7 +97,7 @@
             systems = [ "nshell/test" ];
             lispLibs = [
               clProlog
-              pkgs.sbclPackages.fiveam
+              clWeaveLib
             ];
           };
         });
@@ -99,11 +114,40 @@
         src = sourceFor pkgs;
         bin = "${self.packages.${system}.default}/bin/nshell";
         clProlog = cl-prolog.packages.${system}.default;
+        clWeave = cl-weave.packages.${system}.default;
+        clWeaveLib = pkgs.sbcl.buildASDFSystem {
+          pname = "cl-weave";
+          version = "0.8.0";
+          src = cl-weave;
+          systems = [ "cl-weave" ];
+        };
       in {
         # Verify the default package compiles and builds successfully
         build = self.packages.${system}.default;
 
-        # Run the full test suite
+        # Run the cl-weave suite (nshell/weave).  cl-weave and cl-prolog both
+        # publish their ASDF source under share/common-lisp/source, so the
+        # suite -- which also pulls in cl-prolog/weave from the cl-prolog
+        # checkout -- resolves entirely through CL_SOURCE_REGISTRY.
+        weave = pkgs.runCommand "nshell-weave-suite" {
+          nativeBuildInputs = [ pkgs.sbcl ];
+        } ''
+          cp -R ${src} source
+          chmod -R u+w source
+          cd source
+          export HOME="$TMPDIR/home"
+          export XDG_CACHE_HOME="$TMPDIR/cache"
+          mkdir -p "$HOME" "$XDG_CACHE_HOME"
+          export CL_SOURCE_REGISTRY="${clWeave}/share/common-lisp/source//:${clProlog}/share/common-lisp/source//:$PWD//:"
+          sbcl --non-interactive \
+            --eval '(require :asdf)' \
+            --eval '(setf asdf:*compile-file-warnings-behaviour* :warn)' \
+            --eval '(setf asdf:*compile-file-failure-behaviour* :warn)' \
+            --eval '(let ((ok (handler-case (asdf:test-system :nshell/weave) (error (e) (format t "FATAL: ~a~%" e) nil)))) (unless ok (sb-ext:quit :unix-status 1)))'
+          touch $out
+        '';
+
+        # Run the full test suite (cl-weave-backed)
         test = pkgs.sbcl.buildASDFSystem {
           pname = "nshell-test-check";
           version = "0.4.0";
@@ -111,7 +155,7 @@
           systems = [ "nshell/test" ];
           lispLibs = [
             clProlog
-            pkgs.sbclPackages.fiveam
+            clWeaveLib
           ];
           buildScript = pkgs.writeText "run-tests.lisp" ''
             (require :asdf)
@@ -178,24 +222,29 @@
       devShells = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          clWeave = cl-weave.packages.${system}.default;
         in
         {
           default = pkgs.mkShell {
             packages = [
               pkgs.sbcl
-              pkgs.sbclPackages.fiveam
               cl-prolog.packages.${system}.default
+              clWeave
             ];
             shellHook = ''
-              export CL_SOURCE_REGISTRY=$PWD
+              # cl-weave ships loadable ASDF source alongside its CLI; expose
+              # both so nshell/weave resolves without a sibling checkout.
+              export CL_SOURCE_REGISTRY="${clWeave}/share/common-lisp/source//:$PWD//:''${CL_SOURCE_REGISTRY:-}"
               export NSHELL_ROOT=$PWD
               alias test='cd "$NSHELL_ROOT" && sbcl --noinform --eval "(require :asdf)" --eval "(push (truename \"./\") asdf:*central-registry*)" --eval "(asdf:test-system :nshell/test)" --quit'
               alias coverage='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'
+              alias weave='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/scripts/weave.lisp"'
               echo ""
               echo "nshell development environment"
-              echo "  test  - Run the nshell test suite"
+              echo "  test  - Run the full nshell suite (cl-weave, nshell/test)"
+              echo "  weave - Run the focused completion suite (nshell/weave)"
               echo "  coverage - Run the test suite and write HTML coverage to coverage/"
-              echo "  sbcl  - Interactive Common Lisp (with fiveam)"
+              echo "  sbcl  - Interactive Common Lisp (with cl-weave)"
               echo ""
             '';
           };

@@ -125,10 +125,10 @@
         # Verify the default package compiles and builds successfully
         build = self.packages.${system}.default;
 
-        # Run the cl-weave suite (nshell/weave).  cl-weave and cl-prolog both
-        # publish their ASDF source under share/common-lisp/source, so the
-        # suite -- which also pulls in cl-prolog/weave from the cl-prolog
-        # checkout -- resolves entirely through CL_SOURCE_REGISTRY.
+        # Run the cl-weave suite (nshell/weave).  Point CL_SOURCE_REGISTRY at
+        # the raw dependency checkouts: nshell/weave also needs cl-prolog/weave,
+        # which lives in the cl-prolog repository, and every .asd (cl-weave.asd,
+        # cl-prolog.asd, nshell.asd) sits at the root of its source tree.
         weave = pkgs.runCommand "nshell-weave-suite" {
           nativeBuildInputs = [ pkgs.sbcl ];
         } ''
@@ -138,7 +138,7 @@
           export HOME="$TMPDIR/home"
           export XDG_CACHE_HOME="$TMPDIR/cache"
           mkdir -p "$HOME" "$XDG_CACHE_HOME"
-          export CL_SOURCE_REGISTRY="${clWeave}/share/common-lisp/source//:${clProlog}/share/common-lisp/source//:$PWD//:"
+          export CL_SOURCE_REGISTRY="${cl-weave}//:${cl-prolog}//:$PWD//:"
           sbcl --non-interactive \
             --eval '(require :asdf)' \
             --eval '(setf asdf:*compile-file-warnings-behaviour* :warn)' \

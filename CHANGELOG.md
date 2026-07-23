@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README CLI usage now documents script-file execution and trailing `$argv`
   arguments consistently with `nshell --help` and the man page.
 
+### Removed
+- Deleted the unused in-memory virtual-screen / cell-diff renderer
+  (`infrastructure/terminal/screen.lisp`) and its tests. It had no production
+  callers; terminal rendering goes through the `ansi.lisp`/cl-tty-kit path and
+  direct line writes.
+
 ## [0.4.0] - 2026-06-21
 
 ### Added

@@ -2,17 +2,9 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (%shell-token-range
-            (:constructor %make-shell-token-range (start end))
-            (:conc-name %shell-token-range-))
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t))
-
-(defun shell-token-range-start (range)
-  (%shell-token-range-start range))
-
-(defun shell-token-range-end (range)
-  (%shell-token-range-end range))
+(define-value-struct %shell-token-range
+    ((start 0 :type fixnum)
+     (end 0 :type fixnum)))
 
 (defstruct (%shell-token-range-set
             (:constructor %make-shell-token-range-set (ranges))

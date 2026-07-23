@@ -2,31 +2,13 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (%input-dispatch-action
-             (:constructor %make-input-dispatch-action
-                 (kind &optional value))
-             (:conc-name %input-dispatch-action-))
-  (kind :none :type symbol :read-only t)
-  (value nil :read-only t))
+(define-value-struct %input-dispatch-action
+    ((kind :none :type symbol)
+     (value nil :optional t)))
 
-(defun input-dispatch-action-kind (action)
-  (%input-dispatch-action-kind action))
-
-(defun input-dispatch-action-value (action)
-  (%input-dispatch-action-value action))
-
-(defstruct (%input-dispatch-transition
-             (:constructor %make-input-dispatch-transition
-                 (state output))
-             (:conc-name %input-dispatch-transition-))
-  (state nil :read-only t)
-  (output :none :type symbol :read-only t))
-
-(defun input-dispatch-transition-state (transition)
-  (%input-dispatch-transition-state transition))
-
-(defun input-dispatch-transition-output (transition)
-  (%input-dispatch-transition-output transition))
+(define-value-struct %input-dispatch-transition
+    ((state nil)
+     (output :none :type symbol)))
 
 (defun input-dispatch-transition (state output)
   (%make-input-dispatch-transition state output))

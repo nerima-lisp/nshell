@@ -106,14 +106,6 @@ reap step (:completed -> :done)."
     (:background :exit       :completed)
     (:completed  :reap       :done)))
 
-(defun job-lifecycle->dot (&key (name "job"))
-  "Render the job lifecycle as a Graphviz DOT string."
-  (cl-dataflow:state-machine->dot (job-lifecycle-machine) :name name))
-
-(defun job-lifecycle->mermaid ()
-  "Render the job lifecycle as a Mermaid stateDiagram-v2 string."
-  (cl-dataflow:state-machine->mermaid (job-lifecycle-machine)))
-
 (defun job-lifecycle-analysis ()
   "Return a plist summarizing the job lifecycle machine's structure."
   (let ((machine (job-lifecycle-machine)))

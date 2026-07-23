@@ -14,16 +14,12 @@
                       (or errors '())
                       (not (null incomplete))))
 
-(defstruct (%parse-diagnostic
-            (:constructor %make-parse-diagnostic
-                (kind message start end &optional token))
-            (:copier nil)
-            (:conc-name %parse-diagnostic-))
-  (kind :error :type keyword :read-only t)
-  (message "" :type string :read-only t)
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t)
-  (token nil :read-only t))
+(define-value-struct %parse-diagnostic
+    ((kind :error :type keyword)
+     (message "" :type string)
+     (start 0 :type integer)
+     (end 0 :type integer)
+     (token nil :optional t)))
 
 (defun parse-result-ast (result)
   (%parse-result-ast result))
@@ -36,21 +32,6 @@
 
 (defun parse-errors (result)
   (parse-result-errors result))
-
-(defun parse-diagnostic-kind (diagnostic)
-  (%parse-diagnostic-kind diagnostic))
-
-(defun parse-diagnostic-message (diagnostic)
-  (%parse-diagnostic-message diagnostic))
-
-(defun parse-diagnostic-start (diagnostic)
-  (%parse-diagnostic-start diagnostic))
-
-(defun parse-diagnostic-end (diagnostic)
-  (%parse-diagnostic-end diagnostic))
-
-(defun parse-diagnostic-token (diagnostic)
-  (%parse-diagnostic-token diagnostic))
 
 (defstruct (%parse-result-facts
             (:constructor %make-parse-result-facts

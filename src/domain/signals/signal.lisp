@@ -25,10 +25,6 @@
        (= (signal-number a) (signal-number b))))
 
 (defvar +sigint+  (load-time-value (make-signal :sigint 2)))
-(defvar +sigquit+ (load-time-value (make-signal :sigquit 3)))
-(defvar +sigkill+ (load-time-value (make-signal :sigkill 9)))
 (defvar +sigterm+ (load-time-value (make-signal :sigterm 15)))
-(defvar +sigtstp+ (load-time-value (make-signal :sigtstp 20)))
 (defvar +sigcont+ (load-time-value (make-signal :sigcont 18)))
 (defvar +sigchld+ (load-time-value (make-signal :sigchld 17)))
-(defvar +sigwinch+ (load-time-value (make-signal :sigwinch 28)))

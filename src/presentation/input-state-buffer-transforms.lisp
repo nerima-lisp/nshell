@@ -5,13 +5,8 @@
 (defparameter *sudo-prefix-text* "sudo ")
 (defparameter *sudo-command-text* "sudo")
 
-(defstruct (%sudo-prefix-operation
-             (:constructor %make-sudo-prefix-operation (kind))
-             (:conc-name %sudo-prefix-operation-))
-  (kind :insert-prefix :type keyword :read-only t))
-
-(defun sudo-prefix-operation-kind (operation)
-  (%sudo-prefix-operation-kind operation))
+(define-value-struct %sudo-prefix-operation
+    ((kind :insert-prefix :type keyword)))
 
 (defun sudo-prefix-operation-for-buffer (buffer)
   (cond
@@ -24,25 +19,12 @@
     (t
      (%make-sudo-prefix-operation :insert-prefix))))
 
-(defstruct (%sudo-prefix-plan
-             (:constructor %make-sudo-prefix-plan (splice cursor-delta))
-             (:conc-name %sudo-prefix-plan-))
-  splice
-  (cursor-delta 0 :type fixnum :read-only t))
+(define-value-struct %sudo-prefix-plan
+    ((splice nil)
+     (cursor-delta 0 :type fixnum)))
 
-(defun sudo-prefix-plan-splice (plan)
-  (%sudo-prefix-plan-splice plan))
-
-(defun sudo-prefix-plan-cursor-delta (plan)
-  (%sudo-prefix-plan-cursor-delta plan))
-
-(defstruct (%sudo-prefix-edit
-             (:constructor %make-sudo-prefix-edit (plan))
-             (:conc-name %sudo-prefix-edit-))
-  (plan nil :type %sudo-prefix-plan :read-only t))
-
-(defun sudo-prefix-edit-plan (edit)
-  (%sudo-prefix-edit-plan edit))
+(define-value-struct %sudo-prefix-edit
+    ((plan nil :type %sudo-prefix-plan)))
 
 (defun sudo-prefix-edit-for-operation (operation)
   (case (sudo-prefix-operation-kind operation)
@@ -78,29 +60,13 @@
       (commit-buffer-edit (sudo-prefix-edit-buffer edit buffer)
                           :cursor-pos (sudo-prefix-edit-cursor-pos edit cursor)))))
 
-(defstruct (%char-transposition-plan
-             (:constructor %make-char-transposition-plan (left right cursor-pos))
-             (:conc-name %char-transposition-plan-))
-  (left 0 :type fixnum :read-only t)
-  (right 0 :type fixnum :read-only t)
-  (cursor-pos 0 :type fixnum :read-only t))
+(define-value-struct %char-transposition-plan
+    ((left 0 :type fixnum)
+     (right 0 :type fixnum)
+     (cursor-pos 0 :type fixnum)))
 
-(defun char-transposition-plan-left (plan)
-  (%char-transposition-plan-left plan))
-
-(defun char-transposition-plan-right (plan)
-  (%char-transposition-plan-right plan))
-
-(defun char-transposition-plan-cursor-pos (plan)
-  (%char-transposition-plan-cursor-pos plan))
-
-(defstruct (%char-transposition
-             (:constructor %make-char-transposition (plan))
-             (:conc-name %char-transposition-))
-  (plan nil :type %char-transposition-plan :read-only t))
-
-(defun char-transposition-plan (transposition)
-  (%char-transposition-plan transposition))
+(define-value-struct %char-transposition
+    ((plan nil :type %char-transposition-plan)))
 
 (defun char-transposition-at-cursor (buffer cursor)
   (let ((buffer-length (length buffer)))

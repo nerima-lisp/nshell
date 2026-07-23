@@ -2,55 +2,31 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (%history-search-edit-plan
-            (:constructor %make-history-search-edit-plan (&key kind text delta))
-            (:conc-name %history-search-edit-plan-))
-  (kind :query :read-only t)
-  (text "" :read-only t)
-  (delta 0 :read-only t))
+(define-value-struct %history-search-edit-plan
+    ((kind :query)
+     (text "")
+     (delta 0))
+  :keyword-constructor t)
 
-(defstruct (%history-search-edit
-            (:constructor %make-history-search-edit (plan))
-            (:conc-name %history-search-edit-))
-  (plan (error "PLAN is required.") :read-only t))
+(define-value-struct %history-search-edit
+    ((plan (error "PLAN is required."))))
 
-(defstruct (%history-search-query-insertion
-            (:constructor %make-history-search-query-insertion
-                (&key query accepted-text ignored-p))
-            (:conc-name %history-search-query-insertion-))
-  (query "" :type string :read-only t)
-  (accepted-text "" :type string :read-only t)
-  (ignored-p nil :type boolean :read-only t))
+(define-value-struct %history-search-query-insertion
+    ((query "" :type string)
+     (accepted-text "" :type string)
+     (ignored-p nil :type boolean))
+  :keyword-constructor t)
 
-(defstruct (%history-search-transition
-            (:constructor %make-history-search-transition (state output))
-            (:conc-name %history-search-transition-))
-  (state nil :read-only t)
-  (output :none :type symbol :read-only t))
+(define-value-struct %history-search-transition
+    ((state nil)
+     (output :none :type symbol)))
 
-(defstruct (%history-search-key-command
-            (:constructor %make-history-search-key-command
-                (&key kind text delta output))
-            (:conc-name %history-search-key-command-))
-  (kind :none :type symbol :read-only t)
-  (text "" :type string :read-only t)
-  (delta 0 :type integer :read-only t)
-  (output :none :type symbol :read-only t))
-
-(defun history-search-query-insertion-query (insertion)
-  (%history-search-query-insertion-query insertion))
-
-(defun history-search-query-insertion-accepted-text (insertion)
-  (%history-search-query-insertion-accepted-text insertion))
-
-(defun history-search-query-insertion-ignored-p (insertion)
-  (%history-search-query-insertion-ignored-p insertion))
-
-(defun history-search-transition-state (transition)
-  (%history-search-transition-state transition))
-
-(defun history-search-transition-output (transition)
-  (%history-search-transition-output transition))
+(define-value-struct %history-search-key-command
+    ((kind :none :type symbol)
+     (text "" :type string)
+     (delta 0 :type integer)
+     (output :none :type symbol))
+  :keyword-constructor t)
 
 (defun history-search-transition (state output)
   (%make-history-search-transition state output))
@@ -58,30 +34,6 @@
 (defun commit-history-search-transition (transition)
   (values (history-search-transition-state transition)
           (history-search-transition-output transition)))
-
-(defun history-search-key-command-kind (command)
-  (%history-search-key-command-kind command))
-
-(defun history-search-key-command-text (command)
-  (%history-search-key-command-text command))
-
-(defun history-search-key-command-delta (command)
-  (%history-search-key-command-delta command))
-
-(defun history-search-key-command-output (command)
-  (%history-search-key-command-output command))
-
-(defun history-search-edit-plan (edit)
-  (%history-search-edit-plan edit))
-
-(defun history-search-edit-plan-kind (plan)
-  (%history-search-edit-plan-kind plan))
-
-(defun history-search-edit-plan-text (plan)
-  (%history-search-edit-plan-text plan))
-
-(defun history-search-edit-plan-delta (plan)
-  (%history-search-edit-plan-delta plan))
 
 (defun make-history-search-query-edit (text)
   (%make-history-search-edit

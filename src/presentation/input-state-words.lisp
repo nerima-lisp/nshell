@@ -2,13 +2,8 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (%word-motion-target
-            (:constructor %make-word-motion-target (cursor-pos))
-            (:conc-name %word-motion-target-))
-  (cursor-pos 0 :type fixnum :read-only t))
-
-(defun word-motion-target-cursor-pos (target)
-  (%word-motion-target-cursor-pos target))
+(define-value-struct %word-motion-target
+    ((cursor-pos 0 :type fixnum)))
 
 (defun word-motion-target-left (buffer cursor)
   (let ((scan-limit cursor))
@@ -52,29 +47,13 @@
      (word-motion-target-cursor-pos
       (word-motion-target-right buffer cursor)))))
 
-(defstruct (%word-transform-plan
-            (:constructor %make-word-transform-plan (start end replacement))
-            (:conc-name %word-transform-plan-))
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t)
-  (replacement "" :type string :read-only t))
+(define-value-struct %word-transform-plan
+    ((start 0 :type fixnum)
+     (end 0 :type fixnum)
+     (replacement "" :type string)))
 
-(defstruct (%word-transform-edit
-            (:constructor %make-word-transform-edit (plan))
-            (:conc-name %word-transform-edit-))
-  (plan (error "PLAN is required.") :type %word-transform-plan :read-only t))
-
-(defun word-transform-edit-plan (edit)
-  (%word-transform-edit-plan edit))
-
-(defun word-transform-plan-start (plan)
-  (%word-transform-plan-start plan))
-
-(defun word-transform-plan-end (plan)
-  (%word-transform-plan-end plan))
-
-(defun word-transform-plan-replacement (plan)
-  (%word-transform-plan-replacement plan))
+(define-value-struct %word-transform-edit
+    ((plan (error "PLAN is required.") :type %word-transform-plan)))
 
 (defun word-transform-edit-at-cursor (buffer cursor transform)
   (let ((range (shell-token-range-at-or-after-cursor buffer cursor)))
@@ -134,42 +113,16 @@
   "Capitalize the shell token at or after the cursor."
   (transform-word-at-cursor state #'capitalize-token-text))
 
-(defstruct (%word-transposition-plan
-            (:constructor %make-word-transposition-plan
-                (left-start left-end middle-start middle-end right-start right-end))
-            (:conc-name %word-transposition-plan-))
-  (left-start 0 :type fixnum :read-only t)
-  (left-end 0 :type fixnum :read-only t)
-  (middle-start 0 :type fixnum :read-only t)
-  (middle-end 0 :type fixnum :read-only t)
-  (right-start 0 :type fixnum :read-only t)
-  (right-end 0 :type fixnum :read-only t))
+(define-value-struct %word-transposition-plan
+    ((left-start 0 :type fixnum)
+     (left-end 0 :type fixnum)
+     (middle-start 0 :type fixnum)
+     (middle-end 0 :type fixnum)
+     (right-start 0 :type fixnum)
+     (right-end 0 :type fixnum)))
 
-(defstruct (%word-transposition
-            (:constructor %make-word-transposition (plan))
-            (:conc-name %word-transposition-))
-  (plan (error "PLAN is required.") :type %word-transposition-plan :read-only t))
-
-(defun word-transposition-plan (transposition)
-  (%word-transposition-plan transposition))
-
-(defun word-transposition-plan-left-start (plan)
-  (%word-transposition-plan-left-start plan))
-
-(defun word-transposition-plan-left-end (plan)
-  (%word-transposition-plan-left-end plan))
-
-(defun word-transposition-plan-middle-start (plan)
-  (%word-transposition-plan-middle-start plan))
-
-(defun word-transposition-plan-middle-end (plan)
-  (%word-transposition-plan-middle-end plan))
-
-(defun word-transposition-plan-right-start (plan)
-  (%word-transposition-plan-right-start plan))
-
-(defun word-transposition-plan-right-end (plan)
-  (%word-transposition-plan-right-end plan))
+(define-value-struct %word-transposition
+    ((plan (error "PLAN is required.") :type %word-transposition-plan)))
 
 (defun word-transposition-at-cursor (buffer cursor)
   (let ((right-range (shell-token-range-at-or-after-cursor buffer cursor)))

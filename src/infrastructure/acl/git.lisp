@@ -73,10 +73,3 @@ Returns two values: output string and exit code."
           (setf (gethash key *git-status-cache*) (list branch dirty))
           (values branch dirty)))))
 
-(defun get-git-branch (dir)
-  "Return the current git branch name for DIR, or NIL outside a repository."
-  (nth-value 0 (get-git-status dir)))
-
-(defun git-dirty-p (dir)
-  "Return true when DIR is in a git repository with uncommitted changes."
-  (nth-value 1 (get-git-status dir)))

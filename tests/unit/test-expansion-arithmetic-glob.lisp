@@ -89,6 +89,10 @@
     "Division by zero is an error rather than a crash-producing value."
     (expect (lambda () (nshell.domain.expansion:evaluate-arithmetic "1 / 0" (arith-env))) :to-throw 'error))
 
+  (it "arithmetic-modulo-by-zero-signals"
+    "Modulo by zero is an error rather than a crash-producing value."
+    (expect (lambda () (nshell.domain.expansion:evaluate-arithmetic "1 % 0" (arith-env))) :to-throw 'error))
+
   (it "arithmetic-lexer-branches-through-public-evaluator"
     "Numbers, variables, operators, and whitespace are accepted through evaluate-arithmetic."
     (let ((env (arith-env)))

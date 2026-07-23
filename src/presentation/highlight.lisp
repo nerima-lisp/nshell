@@ -1,41 +1,10 @@
 (in-package #:nshell.presentation)
 
-;; Highlight data tables and span value object.
-(defstruct (%highlight-span
-            (:constructor %make-highlight-span (start end role))
-            (:conc-name %highlight-span-))
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t)
-  (role :normal :type keyword :read-only t))
-
-(defun highlight-span-start (span)
-  (%highlight-span-start span))
-
-(defun highlight-span-end (span)
-  (%highlight-span-end span))
-
-(defun highlight-span-role (span)
-  (%highlight-span-role span))
-
-(defvar *builtin-commands*
-  '("echo" "pwd" "ls" "cd" "exit" "fg" "bg" "jobs" "disown"
-    "set" "export" "alias" "abbr" "function" "source" "exec"
-    "true" "false" "contains" "test" "type" "which" "history" "help")
-  "Commands built into nshell that get distinct highlighting.")
-
-(defparameter +operator-token-types+
-  '(:pipe :and :or :semicolon :ampersand :redirect))
-
-(defparameter +fallback-highlight-ansi+
-  '((:command . "~C[34m")
-    (:builtin . "~C[34;1m")
-    (:argument . "~C[37m")
-    (:option . "~C[36m")
-    (:operator . "~C[33m")
-    (:error . "~C[31m")
-    (:comment . "~C[2;37m")
-    (:quote . "~C[33m")
-    (:normal . "~C[0m")))
+;; Highlight span value object; literal data tables live in highlight-data.lisp.
+(define-value-struct %highlight-span
+    ((start 0 :type integer)
+     (end 0 :type integer)
+     (role :normal :type keyword)))
 
 ;; -- Highlight roles (fish-inspired) ----------------------
 (defun builtin-command-p (name)

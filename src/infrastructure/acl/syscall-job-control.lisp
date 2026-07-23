@@ -52,10 +52,6 @@
             (when (and (integerp restore-pgid) (plusp restore-pgid))
               (ignore-errors (set-foreground-pgroup restore-pgid))))))))
 
-(defun make-process-group-leader ()
-  "Create a new session and make this process its leader."
-  (sb-posix:setsid))
-
 (defstruct (child-status
             (:constructor %make-child-status (pid status)))
   (pid 0 :type integer :read-only t)

@@ -7,6 +7,12 @@
   (:use #:cl)
   (:export #:main))
 
+;; -- Foundational, dependency-free utility package -----------
+;; No layer restrictions apply: every layer may use this package's macros.
+(defpackage #:nshell.util
+  (:use #:cl)
+  (:export #:define-value-struct))
+
 ;; -- Domain packages (pure, no side effects) ----------------
 (defpackage #:nshell.domain.events
   (:use #:cl)
@@ -24,7 +30,7 @@
 (defpackage #:nshell.domain.signals
   (:use #:cl)
   (:export #:make-signal #:signal-name #:signal-number #:signal-p #:signal=
-           #:+sigint+ #:+sigterm+ #:+sigtstp+ #:+sigcont+ #:+sigchld+))
+           #:+sigint+ #:+sigterm+ #:+sigcont+ #:+sigchld+))
 
 (defpackage #:nshell.domain.input
   (:use #:cl)
@@ -60,6 +66,7 @@
 
   (defpackage #:nshell.domain.parsing
     (:use #:cl)
+    (:import-from #:nshell.util #:define-value-struct)
     (:export #:tokenize #:shell-assignment-word-p #:parse-command-line
            #:shell-input-blank-p
            #:shell-word-separator-p #:shell-operator-separator-p
@@ -109,7 +116,6 @@
              #:case-clause-pattern #:case-clause-body
              #:case-node-p #:case-node-value #:case-node-clauses
              #:begin-end-node-p #:begin-end-node-body
-             #:var-p #:make-var #:unify #:walk #:extend-bindings #:backtrack #:unify-p
            #:with-parsed-command-line #:with-parsed-command-line-case #:with-complete-command-line
            #:parse-complete-p #:parse-result-state #:parse-errors
            #:parse-error-messages #:format-parse-error-messages
@@ -155,6 +161,7 @@
 
   (defpackage #:nshell.domain.completion
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-candidate #:candidate-text #:candidate-kind
             #:candidate-description #:candidate-score
             #:make-empty-knowledge-base #:kb-add-command #:kb-add-command-from-help
@@ -195,6 +202,7 @@
 
 (defpackage #:nshell.domain.history
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-history-entry #:entry-text #:entry-timestamp #:entry-exit-code
            #:history-entry-texts
            #:command-history-p #:make-command-history
@@ -212,7 +220,7 @@
             #:monitor-update
             #:monitor-map-jobs #:monitor-find-job
             #:monitor-remove-job
-            #:suspend-job #:resume-job #:foreground-job #:background-job
+            #:suspend-job #:foreground-job #:background-job
             #:complete-job))
 
 (defpackage #:nshell.domain.configuration
@@ -224,6 +232,7 @@
 
 (defpackage #:nshell.domain.prompting
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-prompt-model #:prompt-model-hostname #:prompt-model-cwd
            #:prompt-model-directory #:prompt-model-exit-code
            #:prompt-model-duration-ms #:prompt-model-segments
@@ -271,7 +280,7 @@
 (defpackage #:nshell.infrastructure.acl
   (:use #:cl)
   (:export #:*exported-environment*
-           #:spawn-command #:spawn-pipeline #:spawn-pipeline-async #:wait-job
+           #:spawn-pipeline #:spawn-pipeline-async #:wait-job
             #:spawn-async
             #:kill-process #:os-signal->domain
             #:redirect-output #:redirect-error #:redirect-output-and-error
@@ -282,14 +291,12 @@
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
-            #:make-process-group-leader
             #:child-status #:child-status-p #:child-status-pid #:child-status-status
             #:reap-children #:get-terminal-size
             #:*external-command-timeout*
             #:run-external #:run-external-capture #:process-exit-status-code
             #:with-git-process-fns #:clear-git-status-cache
-            #:invalidate-git-status-cache #:get-git-status
-            #:get-git-branch #:git-dirty-p))
+            #:invalidate-git-status-cache #:get-git-status))
 
 (defpackage #:nshell.infrastructure.terminal
   (:use #:cl)
@@ -297,9 +304,9 @@
                 #:key-event #:key-event-p #:make-key-event
                 #:key-event-type #:key-event-char #:key-event-number
                 #:key-event-data)
-  (:export #:with-raw-terminal #:enable-raw-mode #:restore-terminal-mode
+  (:export #:enable-raw-mode #:restore-terminal-mode
             #:ansi-clear-screen #:ansi-clear-line #:ansi-move-cursor
-            #:ansi-set-color #:ansi-reset #:ansi-bold #:ansi-dim
+            #:ansi-reset #:ansi-bold #:ansi-dim
             #:ansi-color-code
             #:ansi-save-cursor #:ansi-restore-cursor
             #:ansi-hide-cursor #:ansi-show-cursor
@@ -326,6 +333,7 @@
 ;; -- Presentation packages ----------------------------------
 (defpackage #:nshell.presentation
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:input-state #:input-state-p #:make-input-state
             #:input-state-buffer #:input-state-cursor-pos
             #:input-state-completion-index

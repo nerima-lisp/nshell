@@ -77,9 +77,6 @@
   (declare (ignore kont))
   (monitor-update monitor job-id :stopped))
 
-(defun resume-job (monitor job-id)
-  (monitor-update monitor job-id :running))
-
 (defun foreground-job (monitor job-id)
   (let ((job (monitor-find-job monitor job-id)))
     (when job

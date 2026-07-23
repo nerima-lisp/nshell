@@ -77,42 +77,19 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
              (shell-token-end suggestion operator-end))
             (t operator-end)))))))
 
-(defstruct (%suggestion-acceptance-segment
-            (:constructor %make-suggestion-acceptance-segment (end))
-            (:conc-name %suggestion-acceptance-segment-))
-  (end 0 :type fixnum :read-only t))
+(define-value-struct %suggestion-acceptance-segment
+    ((end 0 :type fixnum)))
 
-(defun suggestion-acceptance-segment-end (segment)
-  (%suggestion-acceptance-segment-end segment))
+(define-value-struct %suggestion-acceptance
+    ((accepted "" :type string)
+     (remaining "" :type string)))
 
-(defstruct (%suggestion-acceptance
-            (:constructor %make-suggestion-acceptance (accepted remaining))
-            (:conc-name %suggestion-acceptance-))
-  (accepted "" :type string :read-only t)
-  (remaining "" :type string :read-only t))
+(define-value-struct %suggestion-append-plan
+    ((splice (error "SPLICE is required.") :type %buffer-splice)))
 
-(defun suggestion-acceptance-accepted (acceptance)
-  (%suggestion-acceptance-accepted acceptance))
-
-(defun suggestion-acceptance-remaining (acceptance)
-  (%suggestion-acceptance-remaining acceptance))
-
-(defstruct (%suggestion-append-plan
-            (:constructor %make-suggestion-append-plan (splice))
-            (:conc-name %suggestion-append-plan-))
-  (splice (error "SPLICE is required.") :type %buffer-splice :read-only t))
-
-(defun suggestion-append-plan-splice (plan)
-  (%suggestion-append-plan-splice plan))
-
-(defstruct (%suggestion-append-edit
-            (:constructor %make-suggestion-append-edit (plan remaining))
-            (:conc-name %suggestion-append-edit-))
-  (plan (error "PLAN is required.") :type %suggestion-append-plan :read-only t)
-  (remaining nil :type (or null string) :read-only t))
-
-(defun suggestion-append-edit-plan (edit)
-  (%suggestion-append-edit-plan edit))
+(define-value-struct %suggestion-append-edit
+    ((plan (error "PLAN is required.") :type %suggestion-append-plan)
+     (remaining nil :type (or null string))))
 
 (defun suggestion-append-edit-for-state (state accepted remaining)
   (let* ((buffer (input-state-buffer state))
@@ -131,9 +108,6 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
 (defun suggestion-append-edit-cursor-pos (edit)
   (buffer-splice-cursor-pos
    (suggestion-append-plan-splice (suggestion-append-edit-plan edit))))
-
-(defun suggestion-append-edit-remaining (edit)
-  (%suggestion-append-edit-remaining edit))
 
 (defun commit-suggestion-append-edit (state edit)
   (copy-input-state-clearing-completion

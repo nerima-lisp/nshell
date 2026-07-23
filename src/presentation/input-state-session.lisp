@@ -14,48 +14,22 @@
 (defparameter +argument-session-preserving-key-event-types+
   '(:alt-dot))
 
-(defstruct (%input-session-transition-policy
-             (:constructor %make-input-session-transition-policy
-                 (&key preserve-all-p
-                       preserve-completion-p
-                       preserve-yank-session-p
-                       preserve-argument-session-p))
-             (:conc-name %input-session-transition-policy-))
-  (preserve-all-p nil :type boolean :read-only t)
-  (preserve-completion-p nil :type boolean :read-only t)
-  (preserve-yank-session-p nil :type boolean :read-only t)
-  (preserve-argument-session-p nil :type boolean :read-only t))
+(define-value-struct %input-session-transition-policy
+    ((preserve-all-p nil :type boolean)
+     (preserve-completion-p nil :type boolean)
+     (preserve-yank-session-p nil :type boolean)
+     (preserve-argument-session-p nil :type boolean))
+  :keyword-constructor t)
 
-(defstruct (%input-session-reduction
-             (:constructor %make-input-session-reduction
-                 (state output))
-             (:conc-name %input-session-reduction-))
-  (state nil :read-only t)
-  (output :none :type symbol :read-only t))
+(define-value-struct %input-session-reduction
+    ((state nil)
+     (output :none :type symbol)))
 
 (defstruct (%transient-session-clear
             (:constructor %make-transient-session-clear (kind overrides))
             (:conc-name %transient-session-clear-))
   kind
   overrides)
-
-(defun input-session-transition-policy-preserve-all-p (policy)
-  (%input-session-transition-policy-preserve-all-p policy))
-
-(defun input-session-transition-policy-preserve-completion-p (policy)
-  (%input-session-transition-policy-preserve-completion-p policy))
-
-(defun input-session-transition-policy-preserve-yank-session-p (policy)
-  (%input-session-transition-policy-preserve-yank-session-p policy))
-
-(defun input-session-transition-policy-preserve-argument-session-p (policy)
-  (%input-session-transition-policy-preserve-argument-session-p policy))
-
-(defun input-session-reduction-state (reduction)
-  (%input-session-reduction-state reduction))
-
-(defun input-session-reduction-output (reduction)
-  (%input-session-reduction-output reduction))
 
 (defun input-session-reduction (state output)
   (%make-input-session-reduction state output))

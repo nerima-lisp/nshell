@@ -2,29 +2,13 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (%kill-edit-plan
-            (:constructor %make-kill-edit-plan (start end cursor-pos))
-            (:conc-name %kill-edit-plan-))
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t)
-  (cursor-pos 0 :type fixnum :read-only t))
+(define-value-struct %kill-edit-plan
+    ((start 0 :type fixnum)
+     (end 0 :type fixnum)
+     (cursor-pos 0 :type fixnum)))
 
-(defstruct (%kill-edit
-            (:constructor %make-kill-edit (plan))
-            (:conc-name %kill-edit-))
-  (plan (error "PLAN is required.") :type %kill-edit-plan :read-only t))
-
-(defun kill-edit-plan (edit)
-  (%kill-edit-plan edit))
-
-(defun kill-edit-plan-start (plan)
-  (%kill-edit-plan-start plan))
-
-(defun kill-edit-plan-end (plan)
-  (%kill-edit-plan-end plan))
-
-(defun kill-edit-plan-cursor-pos (plan)
-  (%kill-edit-plan-cursor-pos plan))
+(define-value-struct %kill-edit
+    ((plan (error "PLAN is required.") :type %kill-edit-plan)))
 
 (defun kill-edit-empty-p (edit)
   (let ((plan (kill-edit-plan edit)))
@@ -78,17 +62,9 @@
                    (next-kill-word-end (input-state-buffer state) cursor)
                    cursor))))
 
-(defstruct (%kill-ring-selection
-            (:constructor %make-kill-ring-selection (index text))
-            (:conc-name %kill-ring-selection-))
-  (index 0 :type fixnum :read-only t)
-  (text "" :type string :read-only t))
-
-(defun kill-ring-selection-index (selection)
-  (%kill-ring-selection-index selection))
-
-(defun kill-ring-selection-text (selection)
-  (%kill-ring-selection-text selection))
+(define-value-struct %kill-ring-selection
+    ((index 0 :type fixnum)
+     (text "" :type string)))
 
 (defun kill-ring-first-selection (state)
   (let ((ring (input-state-kill-ring state)))
@@ -104,33 +80,14 @@
                          (length ring))))
     (%make-kill-ring-selection next-index (nth next-index ring))))
 
-(defstruct (%yank-edit-plan
-            (:constructor %make-yank-edit-plan (start text buffer cursor-pos))
-            (:conc-name %yank-edit-plan-))
-  (start 0 :type fixnum :read-only t)
-  (text "" :type string :read-only t)
-  (buffer "" :type string :read-only t)
-  (cursor-pos 0 :type fixnum :read-only t))
+(define-value-struct %yank-edit-plan
+    ((start 0 :type fixnum)
+     (text "" :type string)
+     (buffer "" :type string)
+     (cursor-pos 0 :type fixnum)))
 
-(defstruct (%yank-edit
-            (:constructor %make-yank-edit (plan))
-            (:conc-name %yank-edit-))
-  (plan (error "PLAN is required.") :type %yank-edit-plan :read-only t))
-
-(defun yank-edit-plan (edit)
-  (%yank-edit-plan edit))
-
-(defun yank-edit-plan-start (plan)
-  (%yank-edit-plan-start plan))
-
-(defun yank-edit-plan-text (plan)
-  (%yank-edit-plan-text plan))
-
-(defun yank-edit-plan-buffer (plan)
-  (%yank-edit-plan-buffer plan))
-
-(defun yank-edit-plan-cursor-pos (plan)
-  (%yank-edit-plan-cursor-pos plan))
+(define-value-struct %yank-edit
+    ((plan (error "PLAN is required.") :type %yank-edit-plan)))
 
 (defun yank-edit-for-state (state)
   (let ((selection (kill-ring-first-selection state)))
@@ -165,34 +122,14 @@
           (commit-yank-edit state edit)
           (values state :none)))))
 
-(defstruct (%yank-pop-edit-plan
-            (:constructor %make-yank-pop-edit-plan
-                (start end next-index replacement))
-            (:conc-name %yank-pop-edit-plan-))
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t)
-  (next-index 0 :type fixnum :read-only t)
-  (replacement "" :type string :read-only t))
+(define-value-struct %yank-pop-edit-plan
+    ((start 0 :type fixnum)
+     (end 0 :type fixnum)
+     (next-index 0 :type fixnum)
+     (replacement "" :type string)))
 
-(defstruct (%yank-pop-edit
-            (:constructor %make-yank-pop-edit (plan))
-            (:conc-name %yank-pop-edit-))
-  (plan (error "PLAN is required.") :type %yank-pop-edit-plan :read-only t))
-
-(defun yank-pop-edit-plan (edit)
-  (%yank-pop-edit-plan edit))
-
-(defun yank-pop-edit-plan-start (plan)
-  (%yank-pop-edit-plan-start plan))
-
-(defun yank-pop-edit-plan-end (plan)
-  (%yank-pop-edit-plan-end plan))
-
-(defun yank-pop-edit-plan-next-index (plan)
-  (%yank-pop-edit-plan-next-index plan))
-
-(defun yank-pop-edit-plan-replacement (plan)
-  (%yank-pop-edit-plan-replacement plan))
+(define-value-struct %yank-pop-edit
+    ((plan (error "PLAN is required.") :type %yank-pop-edit-plan)))
 
 (defun yank-pop-edit-plan-cursor-pos (plan)
   (+ (yank-pop-edit-plan-start plan)

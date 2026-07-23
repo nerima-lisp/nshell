@@ -37,16 +37,6 @@
       (let ((results (nshell.domain.history:history-search h "ls" :mode :prefix)))
         (expect 1 :to-equal (length results)))))
 
-  (it "unification-backtracking-integration"
-    (let* ((x (nshell.domain.parsing:make-var "X"))
-           (y (nshell.domain.parsing:make-var "Y"))
-           (goal1 (lambda (b) (nshell.domain.parsing:unify x 'command b)))
-           (goal2 (lambda (b) (nshell.domain.parsing:unify y 'ls b)))
-           (result (nshell.domain.parsing:backtrack (list goal1 goal2))))
-      (expect (null result) :to-be-falsy)
-      (expect 'command :to-be (nshell.domain.parsing:walk x result))
-      (expect 'ls :to-be (nshell.domain.parsing:walk y result))))
-
   (it "completion-knowledge-base-integration"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "git" :subcommands '("status") :flags '("-m"))

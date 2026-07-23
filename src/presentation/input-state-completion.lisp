@@ -2,26 +2,11 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (%completion-cycle-selection
-            (:constructor %make-completion-cycle-selection
-                (base-buffer base-cursor index candidate))
-            (:conc-name %completion-cycle-selection-))
-  (base-buffer "" :type string :read-only t)
-  (base-cursor 0 :type fixnum :read-only t)
-  (index 0 :type fixnum :read-only t)
-  (candidate "" :read-only t))
-
-(defun completion-cycle-selection-base-buffer (selection)
-  (%completion-cycle-selection-base-buffer selection))
-
-(defun completion-cycle-selection-base-cursor (selection)
-  (%completion-cycle-selection-base-cursor selection))
-
-(defun completion-cycle-selection-index (selection)
-  (%completion-cycle-selection-index selection))
-
-(defun completion-cycle-selection-candidate (selection)
-  (%completion-cycle-selection-candidate selection))
+(define-value-struct %completion-cycle-selection
+    ((base-buffer "" :type string)
+     (base-cursor 0 :type fixnum)
+     (index 0 :type fixnum)
+     (candidate "")))
 
 (defun completion-cycle-selection-for-state (state direction candidates)
   (let* ((count (length candidates))
@@ -46,15 +31,12 @@
      index
      (nth index candidates))))
 
-(defstruct (%completion-cycle-edit
-            (:constructor %make-completion-cycle-edit
-                (base-buffer base-cursor index buffer cursor))
-            (:conc-name %completion-cycle-edit-))
-  (base-buffer "" :type string :read-only t)
-  (base-cursor 0 :type fixnum :read-only t)
-  (index 0 :type fixnum :read-only t)
-  (buffer "" :type string :read-only t)
-  (cursor 0 :type fixnum :read-only t))
+(define-value-struct %completion-cycle-edit
+    ((base-buffer "" :type string)
+     (base-cursor 0 :type fixnum)
+     (index 0 :type fixnum)
+     (buffer "" :type string)
+     (cursor-pos 0 :type fixnum)))
 
 (defun completion-cycle-edit-for-selection (selection)
   (let ((base-buffer (completion-cycle-selection-base-buffer selection))
@@ -69,21 +51,6 @@
        (completion-cycle-selection-index selection)
        buffer
        cursor))))
-
-(defun completion-cycle-edit-buffer (edit)
-  (%completion-cycle-edit-buffer edit))
-
-(defun completion-cycle-edit-cursor-pos (edit)
-  (%completion-cycle-edit-cursor edit))
-
-(defun completion-cycle-edit-index (edit)
-  (%completion-cycle-edit-index edit))
-
-(defun completion-cycle-edit-base-buffer (edit)
-  (%completion-cycle-edit-base-buffer edit))
-
-(defun completion-cycle-edit-base-cursor (edit)
-  (%completion-cycle-edit-base-cursor edit))
 
 (defun commit-completion-cycle-edit (state edit)
   (copy-input-state-with state

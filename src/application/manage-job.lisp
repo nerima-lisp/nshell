@@ -97,18 +97,6 @@
   "Remove JOB-ID from the job monitor."
   (nshell.domain.job-control:monitor-remove-job job-monitor job-id))
 
-(defun interrupt-foreground ()
-  "Send SIGINT to the foreground job process group."
-  (let ((pgid (%foreground-signal-target-pgid)))
-    (when pgid
-      (sb-posix:kill (- pgid) sb-unix:sigint))))
-
-(defun suspend-foreground ()
-  "Send SIGTSTP to the foreground job process group."
-  (let ((pgid (%foreground-signal-target-pgid)))
-    (when pgid
-      (sb-posix:kill (- pgid) sb-unix:sigtstp))))
-
 (defun %foreground-signal-target-pgid ()
   (let ((pgid (or *foreground-job-pgid*
                   (ignore-errors (nshell.infrastructure.acl:get-foreground-pgroup)))))

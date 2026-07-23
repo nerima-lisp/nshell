@@ -87,7 +87,6 @@
   (%make-job-with-invariants id pipeline))
 (defun job-id (j) (job-id-int j))
 (defun job-state (j) (%job-state j))
-(defun job-pipeline (j) (%job-pipeline j))
 (defun job-pgid (j) (%job-pgid j))
 (defun job-exit-code (j) (%job-exit-code j))
 (defun job-pids (j) (%job-pid-list (%job-pids j)))

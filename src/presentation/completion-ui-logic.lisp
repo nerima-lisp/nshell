@@ -246,10 +246,6 @@ preceded by a backslash."
                           t))
                 (values state nil)))))))
 
-(defun cycle-completion (candidates current)
-  (let ((n (length candidates)))
-    (if (zerop n) 0 (mod (1+ current) n))))
-
 (defun apply-completion (input candidate &key (cursor (length input)))
   (let* ((context (%completion-token-context input cursor))
          (text (%completion-insertion-text

@@ -15,10 +15,6 @@
   "Clear all cached git prompt status."
   (clrhash *git-status-cache*))
 
-(defun invalidate-git-status-cache (dir)
-  "Remove cached git prompt status for DIR."
-  (remhash (namestring (uiop:ensure-directory-pathname dir)) *git-status-cache*))
-
 (defun %git-process-fn (key fallback)
   (or (getf *git-process-fns* key) fallback))
 

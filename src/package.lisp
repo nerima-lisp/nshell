@@ -56,7 +56,7 @@
             #:make-pipeline-plan #:pipeline-plan-p #:pipeline-plan-stage-count
             #:pipeline-plan-commands #:pipeline-plan-stage-piped-input-p
             #:pipeline-plan-stage-piped-output-p
-            #:make-job #:job-id #:job-state #:job-pipeline
+            #:make-job #:job-id #:job-state
             #:job-state-valid-p #:job-state-transition #:job-register-background-processes
             #:job-record-runtime-metadata
             #:job-set-background-visible #:job-record-terminal-exit-code
@@ -272,7 +272,7 @@
             #:job-listing #:job-listing-p
             #:job-listing-id #:job-listing-status #:job-listing-command
             #:format-job-listing
-            #:fg #:bg #:jobs #:disown #:interrupt-foreground #:suspend-foreground
+            #:fg #:bg #:jobs #:disown
             #:history-suggestion #:search-history-use-case
             #:interactive-history-search-use-case))
 
@@ -296,7 +296,7 @@
             #:*external-command-timeout*
             #:run-external #:run-external-capture #:process-exit-status-code
             #:with-git-process-fns #:clear-git-status-cache
-            #:invalidate-git-status-cache #:get-git-status))
+            #:get-git-status))
 
 (defpackage #:nshell.infrastructure.terminal
   (:use #:cl)
@@ -306,7 +306,6 @@
                 #:key-event-data)
   (:export #:enable-raw-mode #:restore-terminal-mode
             #:ansi-clear-screen #:ansi-clear-line #:ansi-move-cursor
-            #:ansi-reset #:ansi-bold #:ansi-dim
             #:ansi-color-code
             #:ansi-save-cursor #:ansi-restore-cursor
             #:ansi-hide-cursor #:ansi-show-cursor
@@ -359,7 +358,7 @@
             #:run-repl #:run-repl-batch #:run-repl-script
             #:trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion
-             #:render-completions #:cycle-completion #:apply-completion
+             #:render-completions #:apply-completion
              #:highlight-line
              #:highlight-span-start #:highlight-span-end
              #:highlight-span-role

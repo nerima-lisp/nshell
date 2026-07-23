@@ -17,6 +17,16 @@ environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
        (skip (format nil "~a (skipped in hermetic sandbox)" ,reason))
        (progn ,@body)))
 
+(defmacro skip-when-pty-round-trip-unreliable (reason &body body)
+  "Run BODY only where raw PTY master/slave round-trip I/O is reliable.
+
+Reading bytes straight back through a PTY depends on the terminal line
+discipline, which differs across platforms and is not honored by hosted CI
+runners, so skip both the hermetic sandbox and CI."
+  `(if (or (in-hermetic-sandbox-p) (uiop:getenv "CI"))
+       (skip (format nil "~a (skipped in sandbox/CI)" ,reason))
+       (progn ,@body)))
+
 (describe "nshell-tests"
   (it "smoke-test"
     "Basic sanity check that the test framework and project are loaded correctly."

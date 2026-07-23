@@ -20,7 +20,7 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (skip-in-sandbox "PTY master/slave round-trip I/O is unreliable in the sandbox"
+    (skip-when-pty-round-trip-unreliable "PTY master/slave round-trip I/O is unreliable"
     (multiple-value-bind (master slave slave-name) (nshell.infrastructure.acl:open-pty)
       (unwind-protect
            (progn

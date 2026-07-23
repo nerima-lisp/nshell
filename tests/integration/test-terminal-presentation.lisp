@@ -75,22 +75,6 @@
     (expect (null (find-symbol "ANSI-COLOR-CODE"
                                 :nshell.infrastructure.terminal)) :to-be-falsy))
 
-  (it "terminal-screen-render-roundtrip-with-input-state"
-    "Decoded input can update presentation state and render through the virtual screen."
-    (let* ((state (input-state))
-           (events (read-key-events-from-string "abc"))
-           (next-state (apply-key-events-to-input-state state events))
-           (old (nshell.infrastructure.terminal:make-screen :width 8 :height 1))
-           (new (nshell.infrastructure.terminal:make-screen :width 8 :height 1)))
-      (expect "abc" :to-equal (nshell.presentation:input-state-buffer next-state))
-      (nshell.infrastructure.terminal:screen-put-line
-       new 0 (nshell.presentation:input-state-buffer next-state))
-      (let ((output (with-output-to-string (stream)
-                      (nshell.infrastructure.terminal:screen-render old new :stream stream))))
-        (expect (search "a" output) :to-be-truthy)
-        (expect (search "b" output) :to-be-truthy)
-        (expect (search "c" output) :to-be-truthy))))
-
   (it "terminal-alt-right-accepts-compact-redirection-suggestion"
     "Decoded Meta-F applies shell-aware autosuggestion word acceptance."
     (let* ((events (read-key-events-from-string (esc-sequence "f")))

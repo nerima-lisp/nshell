@@ -312,11 +312,6 @@
             #:ansi-enable-bracketed-paste #:ansi-disable-bracketed-paste
             #:ansi-enable-sgr-mouse #:ansi-disable-sgr-mouse
             #:ansi-enable-alternate-screen #:ansi-disable-alternate-screen
-            #:make-screen #:screen-render #:screen-diff
-            #:screen-width #:screen-height #:screen-cell #:screen-put-cell
-            #:screen-put-string #:screen-put-line #:screen-resize #:screen-clear
-            #:cell-character #:cell-foreground #:cell-background
-            #:cell-bold-p #:cell-underline-p
             #:read-key-event
             #:key-event #:key-event-p #:make-key-event
             #:key-event-type #:key-event-char #:key-event-number

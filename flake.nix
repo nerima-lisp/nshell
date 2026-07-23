@@ -232,9 +232,10 @@
               clWeave
             ];
             shellHook = ''
-              # cl-weave ships loadable ASDF source alongside its CLI; expose
-              # both so nshell/weave resolves without a sibling checkout.
-              export CL_SOURCE_REGISTRY="${clWeave}/share/common-lisp/source//:$PWD//:''${CL_SOURCE_REGISTRY:-}"
+              # Resolve every dependency from its source checkout: cl-weave,
+              # cl-prolog (and the cl-prolog/weave system it ships), and nshell
+              # itself.  Each .asd sits at the root of its tree.
+              export CL_SOURCE_REGISTRY="${cl-weave}//:${cl-prolog}//:$PWD//:''${CL_SOURCE_REGISTRY:-}"
               export NSHELL_ROOT=$PWD
               alias test='cd "$NSHELL_ROOT" && sbcl --noinform --eval "(require :asdf)" --eval "(push (truename \"./\") asdf:*central-registry*)" --eval "(asdf:test-system :nshell/test)" --quit'
               alias coverage='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'

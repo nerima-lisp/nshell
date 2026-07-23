@@ -4,14 +4,14 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     cl-prolog = {
-      url = "path:../cl-prolog";
+      url = "github:nerima-lisp/cl-prolog";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # cl-weave is the testing framework behind the nshell/weave suite.  Its
-    # package ships loadable ASDF source under share/common-lisp/source, and a
-    # `cl-weave` CLI, both of which the suite and dev shell consume.
+    # cl-weave is the testing framework behind both suites.  Its package ships
+    # loadable ASDF source under share/common-lisp/source, and a `cl-weave`
+    # CLI, both of which the suites and dev shell consume.
     cl-weave = {
-      url = "path:../cl-weave";
+      url = "github:nerima-lisp/cl-weave";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

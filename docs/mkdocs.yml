@@ -1,0 +1,64 @@
+site_name: nshell
+site_description: Modern interactive shell in Common Lisp.
+site_url: https://nerima-lisp.github.io/nshell/
+repo_url: https://github.com/nerima-lisp/nshell
+repo_name: nerima-lisp/nshell
+edit_uri: edit/main/docs/src/
+
+docs_dir: src
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+# Every page under docs/src/ must appear here: --strict fails the build on an
+# unlisted page. That is deliberate, so the nav cannot silently fall behind.
+#
+# Working notes (coverage sweeps, dead-code and CPS audits, paredit usage) are
+# NOT under docs/src/. They live in docs/notes/, which sits outside `docs_dir`
+# and is therefore invisible to MkDocs entirely -- a stronger guarantee than
+# `not_in_nav`, which would still render and link-check them. docs/src/ holds
+# reader-facing documentation only.
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Guide:
+      - Core concepts: guide/concepts.md
+      - Recipes: guide/recipes.md
+  - Reference:
+      - Built-in commands: reference/builtins.md
+      - Architecture: reference/architecture.md
+  - Project:
+      - Roadmap: project/roadmap.md
+      - Contributing: project/contributing.md
+      - Releasing: project/releasing.md
+      - Release readiness: project/public-readiness.md

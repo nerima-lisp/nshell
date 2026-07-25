@@ -1,265 +1,96 @@
 # nshell
 
-**A modern, fish-inspired interactive shell written in Common Lisp.**
+[![CI](https://github.com/nerima-lisp/nshell/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nerima-lisp/nshell/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-MkDocs%20Material-0a7a5a)](https://nerima-lisp.github.io/nshell/)
 
-[![CI](https://github.com/nerima-lisp/nshell/actions/workflows/ci.yml/badge.svg)](https://github.com/nerima-lisp/nshell/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Built with Nix](https://img.shields.io/badge/built%20with-nix-5277C3.svg?logo=nixos&logoColor=white)](https://nixos.org)
-
-nshell is an interactive shell that puts the *interactive* experience first:
-real-time syntax highlighting, history-aware autosuggestions, fish-style
-abbreviations, and a fast, context-aware completion engine — all built on a
-clean, test-driven Common Lisp core (8,800+ checks) and a reproducible Nix
-build.
+nshell is a modern, fish-inspired interactive shell written in Common Lisp for
+SBCL. It puts the *interactive* experience first — real-time syntax
+highlighting, history-aware autosuggestions, fish-style abbreviations, and a
+context-aware completion engine driven by a logic knowledge base — on top of a
+domain-driven core whose line editor is a pure reducer over an immutable input
+state, and a reproducible Nix build that ships as a single dumped SBCL image.
 
 > **Status: early development (0.4.x).** The interactive editor and core
 > pipeline execution are solid and heavily tested. The shell *language* is a
-> growing subset of POSIX/fish semantics — see [Roadmap](#roadmap) for what is
-> and isn't supported yet. nshell is usable as a daily interactive shell for
-> common workflows; it is not a script-compatible `/bin/sh` replacement.
+> growing subset of POSIX/fish semantics. nshell is usable as a daily
+> interactive shell for common workflows; it is not a script-compatible
+> `/bin/sh` replacement.
 
----
+Full documentation is published at <https://nerima-lisp.github.io/nshell/>.
+The source for that site lives in [docs/src/](docs/src/).
 
-## Highlights
-
-- **Syntax highlighting** as you type — commands, strings, operators, and paths
-  are colorized live.
-- **Autosuggestions** from your history, fish-style, accepted with `→` / `Ctrl-F`.
-- **Abbreviations** (`abbr`) that expand inline as you type — keep your muscle
-  memory, type less.
-- **Context-aware completion** — a knowledge base of commands/flags plus
-  filesystem completion, with common-prefix `Tab` extension and a candidate menu.
-- **Rich line editing** — Emacs keybindings, kill-ring & yank, multi-level
-  undo/redo, multiline editing, and incremental history search (`Ctrl-R`).
-  Optional **vi key bindings** (`NSHELL_VI_MODE=1`): normal-mode motions,
-  counts, operators (`dd`, `cw`, …), visual selection, and insert/append.
-- **Configurable prompt** — hostname, working directory, git branch/dirty
-  status, command duration, and exit code, with theming.
-- **Job control** — background jobs (`&`), `jobs`, `fg`, `bg`, `disown`.
-- **Pipelines & redirection** — `|`, `>`, `>>`, `<`, `<<`, `<<<`, logical
-  `&&` / `||`, and command sequencing.
-- **Control flow & functions** — `if`, `for`, `while`, `switch`, `begin`/`end`,
-  and user-defined `function`s.
-- **Reproducible build** — a single statically-dumped SBCL image via Nix;
-  `nix run` and you're in.
-
-## Quick start
-
-With [Nix](https://nixos.org/download) (flakes enabled), run nshell without
-installing anything:
+## Quick Start
 
 ```sh
 nix run github:nerima-lisp/nshell
 ```
 
-Or build a binary into your profile:
+Then type as you would in any shell. Commands and paths colorize live, and a
+dimmed completion of the most recent matching history entry trails the cursor —
+press `→` or `Ctrl-F` to accept it:
+
+```
+~/src/nshell> git com                    # "mit -m " suggested from history
+~/src/nshell> echo hello | string upper
+HELLO
+```
+
+## Install
 
 ```sh
 nix profile install github:nerima-lisp/nshell
-nshell
-man nshell   # the manual page is installed alongside the binary
 ```
 
-### One-off command
+```nix
+# flake.nix
+inputs.nshell = {
+  url = "github:nerima-lisp/nshell/v0.4.0";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+Note the pinned tag. Consumers inside this org must pin a release tag rather
+than follow the default branch. Prebuilt `x86_64-linux` and `aarch64-darwin`
+tarballs with checksums are attached to every
+[release](https://github.com/nerima-lisp/nshell/releases).
+
+## Documentation
+
+- [Getting started](https://nerima-lisp.github.io/nshell/getting-started/)
+- [Core concepts](https://nerima-lisp.github.io/nshell/guide/concepts/)
+- [Built-in commands](https://nerima-lisp.github.io/nshell/reference/builtins/)
+- [Architecture](https://nerima-lisp.github.io/nshell/reference/architecture/)
+
+## Development
 
 ```sh
-nshell -c 'echo hello | string upper'
-```
-
-### Run a script
-
-```sh
-nshell examples/greet.nsh World
-```
-
-Script files support multiline blocks (functions, `if`/`for`/`while`/`switch`),
-comments, and a `#!` shebang; arguments after the script name are available as
-`$argv`. See [`examples/`](./examples) for a runnable sample.
-
-### CLI
-
-```
-Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]
-
-Without arguments, nshell starts an interactive shell when stdin is a terminal
-and reads batch input from stdin otherwise.
-With -c/--command, nshell executes COMMAND once in batch mode; trailing ARGS are available as $argv.
-With SCRIPT, nshell runs the script file; trailing ARGS are available as $argv.
-```
-
-## Building from source
-
-nshell builds with [SBCL](http://www.sbcl.org/) and ASDF. The supported and
-tested path is Nix:
-
-```sh
-git clone https://github.com/nerima-lisp/nshell
-cd nshell
+nix develop          # SBCL with CL_SOURCE_REGISTRY already set
+nix run .#test       # run the test suite
+nix flake check      # tests + formatting + docs, the same gate CI uses
+nix fmt              # format Nix sources (treefmt)
 nix build            # produces ./result/bin/nshell
-nix flake check --print-build-logs
-nix develop          # dev shell with SBCL + cl-weave
 ```
 
-Inside `nix develop`, you can load the system into a REPL:
-
-```lisp
-(asdf:load-system :nshell)
-(nshell:main)
-```
-
-## Built-in commands
-
-`alias`, `abbr`, `bg`, `cd`, `complete`, `contains`, `count`, `disown`, `echo`,
-`exec`, `exit`, `export`, `false`, `fg`, `function`, `help`, `history`, `jobs`,
-`ls`, `not`, `pipeline-graph`, `pwd`, `read`, `seq`, `set`, `source`, `string`,
-`test`, `true`, `type`, `which`.
-
-`pipeline-graph 'CMD | CMD ...'` renders a typed pipeline as a Graphviz DOT
-graph (or a Mermaid flowchart with `--mermaid`) without executing it — a
-diagnostic built on the `cl-dataflow` computation-graph toolkit. Quote the
-pipeline so the shell passes it as a single argument rather than running it,
-e.g. `pipeline-graph 'cat access.log | grep 404 | wc -l'`.
-
-Run `help` inside nshell for details.
-
-## Architecture
-
-nshell follows a domain-driven, layered design. Each layer depends only on the
-layers beneath it:
-
-```
-src/
-├── domain/          Pure shell logic: parsing, expansion, completion,
-│                    history, prompting, job-control — no I/O.
-├── application/     Use cases: builtins, pipeline execution, job management.
-├── infrastructure/  ACLs over the OS: syscalls, PTY, signals, terminal I/O,
-│                    persistence. SBCL-specific code is isolated here.
-└── presentation/    The REPL, line editor (input-state reducer), rendering,
-                     highlighting, autosuggestions, completion UI.
-```
-
-The REPL is structured as a **continuation-passing / trampoline loop**: each
-keystroke runs a pure reducer over an immutable `input-state`, and rendering is
-derived from that state. This keeps the interactive core deterministic and
-unit-testable without a terminal.
-
-### Toolkit foundation
-
-nshell builds on the `nerima-lisp` Common Lisp toolkit family, each wired at the
-layer where it fits the domain-driven design:
-
-- **[cl-parser-kit](https://github.com/nerima-lisp/cl-parser-kit)** — its
-  rule-based tokenizer and Pratt (operator-precedence) parser drive `$((...))`
-  arithmetic, which parses to an AST and then evaluates (adding `**`, bitwise
-  `& | ^ ~`, shifts `<< >>`, and the ternary `?:`).
-- **[cl-dataflow](https://github.com/nerima-lisp/cl-dataflow)** — renders
-  pipelines as validated computation graphs (`pipeline-graph`) and models the
-  job lifecycle as an analyzable state machine.
-- **[cl-boundary-kit](https://github.com/nerima-lisp/cl-boundary-kit)** — makes
-  the REPL edge's OS effects (hostname, working directory, clock) explicit,
-  swappable boundaries, so the prompt and command timing are deterministic under
-  test.
-- **[cl-cli](https://github.com/nerima-lisp/cl-cli)** — declaratively describes
-  the `nshell` command line (`--help`/`--version`/`-c`/script dispatch).
-- **[cl-tty-kit](https://github.com/nerima-lisp/cl-tty-kit)** — provides
-  Unicode-correct display-width, truncation, and padding, plus the ANSI/SGR
-  escape vocabulary used by rendering, prompt, and completion.
-
-## Testing
-
-nshell runs entirely on [cl-weave](https://github.com/nerima-lisp/cl-weave), with
-two complementary suites exposed through Nix checks:
-
-- **`nshell/test`** — the primary regression suite (~1,290 cases,
-  `describe`/`it`/`expect`).
-- **`nshell/weave`** — a focused suite that exercises the completion engine's
-  [cl-prolog](https://github.com/nerima-lisp/cl-prolog) knowledge base with
-  property-based tests, fixtures, benchmarks, and direct Prolog queries
-  (`findall`, negation-as-failure, foreign predicates) plus the
-  `cl-prolog/weave` query bridge.
-
-Run the same hermetic Linux/macOS gate used by CI (it runs both suites):
-
-```sh
-nix flake check --print-build-logs
-```
-
-Run only the current platform's test derivation:
-
-```sh
-nix build .#checks.$(nix eval --impure --raw --expr builtins.currentSystem).test
-```
-
-Run the full non-sandboxed integration suite when changing PTY, subprocess,
-terminal, or job-control behavior. This covers the real-PTY interactive smoke,
-Ctrl-C recovery, and job-control lifecycle checks that are intentionally skipped
-inside hermetic Nix builds:
-
-```sh
-nix develop -c sbcl --non-interactive \
-  --eval '(require :asdf)' \
-  --eval '(push (truename "./") asdf:*central-registry*)' \
-  --eval '(asdf:test-system :nshell/test)'
-```
-
-Generate an HTML coverage report for the same suite:
-
-```sh
-nix develop -c sbcl --script scripts/coverage.lisp
-```
-
-The report is written to `coverage/cover-index.html` by default. Set
-`NSHELL_COVERAGE_DIR` to redirect the output.
-
-Run the cl-weave suite on its own (the `weave` alias in `nix develop`, or
-directly). The runner self-registers sibling `../cl-weave` and `../cl-prolog`
-checkouts, so no extra environment setup is needed:
-
-```sh
-sbcl --script scripts/weave.lisp
-```
-
-Unit, integration, property-based, and end-to-end tests live under `tests/`.
-New shell-language, expansion, completion, job-control, and input-state changes
-should include focused regression tests plus the relevant property or PTY
-coverage when behavior crosses process, terminal, or parser boundaries. See
-`CONTRIBUTING.md` for test-selection expectations.
-
-## Roadmap
-
-nshell is converging on world-class interactive-shell parity. Near-term focus:
-
-- **Shell language depth** — richer list variables and explicit semantics
-  around compound expansions.
-  (Quoting, parameter expansion with defaults, required checks, substring
-  slicing, and patterns, arithmetic `$((...))` — including `**`, bitwise,
-  shift, and ternary operators — brace expansion, command
-  substitution `$(...)`/`(...)`, fd redirections `2>`/`2>&1`/`&>`, here-docs
-  `<<`, here-strings `<<<`, and function arguments via `$argv`/`$argv[N]` are
-  done.)
-- **Job control hardening** — robust foreground process-group handling so
-  `Ctrl-C` / `Ctrl-Z` reliably interrupt and suspend pipelines.
-- **Completion intelligence** — broader command metadata and higher-fidelity
-  flag/value completion.
-- **Distribution** — nixpkgs, Homebrew, and prebuilt release binaries.
-
-See [CHANGELOG.md](./CHANGELOG.md) for released changes.
-
-For release qualification, see [PUBLIC_READINESS.md](./PUBLIC_READINESS.md).
+Tests live in `t/` and run under
+[cl-weave](https://github.com/nerima-lisp/cl-weave), the org's test framework.
+Cases needing a real PTY, `stty`, or external binaries cannot run in the Nix
+sandbox and are covered by CI's separate `integration` job; run them locally
+with the command in
+[Recipes](https://nerima-lisp.github.io/nshell/guide/recipes/).
 
 ## Contributing
 
-Contributions are welcome. Please run `nix flake check --print-build-logs`
-before opening a pull request; CI runs that hermetic gate on Linux and macOS
-and also runs the full non-sandboxed integration suite on Linux. See
-`CONTRIBUTING.md` for style, test, semantics, and issue-reporting
-expectations.
+See the org-wide [CONTRIBUTING](https://github.com/nerima-lisp/.github/blob/main/CONTRIBUTING.md)
+guide and the [package standard](https://github.com/nerima-lisp/.github/blob/main/PACKAGE_STANDARD.md).
 
-## Security
+## Support
 
-Please report vulnerabilities privately instead of opening a public issue. See
-`SECURITY.md` for the supported scope, report contents, and disclosure process.
+See [SUPPORT](https://github.com/nerima-lisp/.github/blob/main/SUPPORT.md).
+Report vulnerabilities privately via the org
+[security policy](https://github.com/nerima-lisp/.github/blob/main/SECURITY.md)
+rather than a public issue.
 
 ## License
 
-[MIT](./LICENSE) © the nshell authors.
+MIT. See [LICENSE](LICENSE).

@@ -1,8 +1,10 @@
 (asdf:defsystem "nshell"
   :version "0.4.0"
-  :author "nshell contributors"
+  :author "takeokunn <bararararatty@gmail.com>"
+  :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
   :homepage "https://github.com/nerima-lisp/nshell"
+  :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
   :source-control (:git "https://github.com/nerima-lisp/nshell.git")
   :description "Modern interactive shell in Common Lisp"
   :depends-on ("cl-prolog"
@@ -163,15 +165,20 @@
 	   (:file "presentation/repl-session")
 	   (:file "presentation/repl-batch")
 	   (:file "presentation/repl")
-	   (:file "main")))
+	   (:file "main"))
+  :in-order-to ((test-op (test-op "nshell/test"))))
 
 (asdf:defsystem "nshell/test"
   :version "0.4.0"
-  :author "nshell contributors"
+  :author "takeokunn <bararararatty@gmail.com>"
+  :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
+  :homepage "https://github.com/nerima-lisp/nshell"
+  :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
+  :source-control (:git "https://github.com/nerima-lisp/nshell.git")
   :description "Test system for nshell"
   :depends-on ("nshell" "cl-weave")
-  :pathname "tests"
+  :pathname "t"
   :serial t
   :components
   ((:file "package")
@@ -303,14 +310,18 @@
 
 (asdf:defsystem "nshell/weave"
   :version "0.4.0"
-  :author "nshell contributors"
+  :author "takeokunn <bararararatty@gmail.com>"
+  :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
+  :homepage "https://github.com/nerima-lisp/nshell"
+  :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
+  :source-control (:git "https://github.com/nerima-lisp/nshell.git")
   :description
   "cl-weave regression suite for nshell: property-based, fixture, benchmark,
 and cl-prolog-query coverage of the completion engine, complementing the
 primary suite in nshell/test."
   :depends-on ("nshell" "cl-weave" "cl-prolog" "cl-prolog/weave")
-  :pathname "tests"
+  :pathname "t"
   :serial t
   :components
   ((:file "weave/package")

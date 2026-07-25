@@ -20,7 +20,7 @@
 
   (it "startup-cold-asdf-load-under-budget"
     "A cold SBCL process can load the nshell system within an interactive budget."
-    ;; Reuses tests/e2e/test-smoke.lisp's %asdf-bootstrap-forms so this
+    ;; Reuses t/e2e/test-smoke.lisp's %asdf-bootstrap-forms so this
     ;; subprocess's central-registry carries the same dependency roots
     ;; (including transitive ones like cl-log-kit) as the e2e bootstrap,
     ;; rather than a second, easily-stale hand-rolled list.

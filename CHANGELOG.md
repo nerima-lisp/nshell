@@ -65,6 +65,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Completion help metadata now warms on demand and caches missing external
   command lookups so repeated completion requests stay responsive.
 
+### Changed
+- `docs/coverage-analysis.md` now includes a systematic re-sweep of every
+  `state-2` ("Not executed") line across all 149 `src/` file reports (2721
+  lines, not a sample), classifying each by its enclosing top-level form.
+  1984 are the already-documented load-time-once declarations
+  (`defpackage`/`defparameter`/catalog data); the remaining 737 are a
+  category not previously named explicitly: `defstruct` slot default-value
+  expressions that the codebase's own custom-`:constructor` convention
+  (`%allocate-*`, confirmed in `docs/value-struct-audit.md`) makes
+  permanently unreachable — verified directly against `env-var`'s
+  `%allocate-env-var`, whose three positional arguments mean its slots'
+  `""`/`nil`/`nil` defaults can never execute. Zero lines fall outside these
+  two mechanical categories.
+
 ### Fixed
 - `run-external` (every plain foreground external command typed at the
   prompt, e.g. `vim file.txt`) no longer applies

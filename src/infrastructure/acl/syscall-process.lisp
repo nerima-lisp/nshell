@@ -172,7 +172,7 @@ group. Returns the process, or NIL when the spawn fails."
     (when proc
       (let ((pid (sb-ext:process-pid proc)))
         (when (plusp pid)
-          (handler-case (set-process-group pid pid) (error ()))))
+          (ignore-errors (set-process-group pid pid))))
       proc)))
 
 (defun spawn-async (cmd args &key redirects)

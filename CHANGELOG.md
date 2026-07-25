@@ -90,6 +90,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-substitution `$` characters.
 
 ### Changed
+- Replaced 20 straggler `(handler-case FORM (error () nil))` /
+  `(handler-case FORM (error ()))` sites across `src/infrastructure/` and
+  `src/presentation/` with `ignore-errors`, the macro the codebase already
+  used 47 times elsewhere for exactly this shape — restoring consistency
+  rather than introducing a new pattern. One site, `%seq-parse-args`
+  (`application/builtin-commands.lisp`), was deliberately left as
+  `handler-case`: it is a genuine multiple-values producer
+  (`(values first step last)`), and `ignore-errors` returns a second
+  `condition` value on its error path that `handler-case`'s explicit
+  `(error () nil)` does not, so it is not a safe substitute for a
+  values-returning function even though its sole caller only binds three
+  values. Found via `docs/`-style audit of remaining macro-consolidation
+  opportunities; every site was verified individually before conversion, and
+  the change was applied and verified with `paredit edit replace` per site.
 - Flattened `%builtin-command-path` (paren depth 14 → 9) by lifting its
   `emit-name` `labels` to a top-level `%emit-command-path`, extracting the
   `format`-inside-`format` "not found" line into `%command-path-missing-message`,

@@ -92,9 +92,7 @@
    :empty-directory ""))
 
 (defun %stat-path (context path)
-  (handler-case
-      (funcall (%filesystem-fn context :stat) path)
-    (error () nil)))
+  (ignore-errors (funcall (%filesystem-fn context :stat) path)))
 
 (defun %path-file-p (context path)
   (let ((fn (%optional-filesystem-fn context :file-exists-p)))

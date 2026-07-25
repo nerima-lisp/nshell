@@ -113,5 +113,4 @@
 
 (defun parse-integer-or-nil (string)
   (when (> (length string) 0)
-    (handler-case (parse-integer string)
-      (error () nil))))
+    (ignore-errors (parse-integer string))))

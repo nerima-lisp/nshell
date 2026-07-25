@@ -31,11 +31,10 @@
              (plusp pid)
              (integerp pgid)
              (plusp pgid))
-    (handler-case
+    (ignore-errors
         (progn
           (set-process-group pid pgid)
-          pgid)
-      (error () nil))))
+          pgid))))
 
 (defun %with-foreground-process-group (pgid thunk)
   (if (not (and (integerp pgid) (plusp pgid)))

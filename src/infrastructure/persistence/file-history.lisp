@@ -18,18 +18,16 @@
   (format stream "~a~%" text))
 
 (defun load-history-file ()
-  (handler-case
+  (ignore-errors
       (let ((path (history-file-path)))
         (when (probe-file path)
           (with-open-file (f path :direction :input :if-does-not-exist nil)
-            (%read-history-lines f))))
-    (error () nil)))
+            (%read-history-lines f))))))
 
 (defun append-history-entry (text)
-  (handler-case
+  (ignore-errors
       (progn
         (ensure-directories-exist (history-file-path))
         (with-open-file (f (history-file-path) :direction :output
                            :if-exists :append :if-does-not-exist :create)
-          (%append-history-line f text)))
-    (error () nil)))
+          (%append-history-line f text)))))

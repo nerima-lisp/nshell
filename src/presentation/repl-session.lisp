@@ -2,34 +2,29 @@
 (in-package #:nshell.presentation)
 
 (defun install-interactive-terminal ()
-  (handler-case
+  (ignore-errors
       (progn
         (setf nshell.application:*shell-pgid* (sb-posix:getpid))
-        (nshell.infrastructure.acl:set-process-group 0 0))
-    (error ()))
+        (nshell.infrastructure.acl:set-process-group 0 0)))
   (handler-case
       (nshell.infrastructure.acl:install-signal-handlers)
     (error (condition)
       (format t "Warning: signal handlers: ~a~%" condition)))
-  (handler-case
+  (ignore-errors
       (nshell.infrastructure.acl:set-foreground-pgroup
-       nshell.application:*shell-pgid*)
-    (error ()))
-  (handler-case
-      (nshell.infrastructure.terminal:enable-raw-mode)
-    (error ()))
-  (handler-case
+       nshell.application:*shell-pgid*))
+  (ignore-errors
+      (nshell.infrastructure.terminal:enable-raw-mode))
+  (ignore-errors
       (progn
         (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
         (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)
-        (finish-output))
-    (error ())))
+        (finish-output))))
 
 (defun restore-interactive-terminal ()
-  (handler-case
+  (ignore-errors
       (progn
         (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
         (nshell.infrastructure.terminal:ansi-disable-bracketed-paste)
-        (finish-output))
-    (error ()))
+        (finish-output)))
   (nshell.infrastructure.terminal:restore-terminal-mode))

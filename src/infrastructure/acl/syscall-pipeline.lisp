@@ -317,8 +317,7 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                                          (when (plusp pid)
                                            (unless pgid
                                              (setf pgid pid))
-                                           (handler-case (set-process-group pid pgid)
-                                             (error ())))))
+                                           (ignore-errors (set-process-group pid pgid)))))
                                      pgid))
            (declare (ignore pgid))
            (setf redirect-streams updated-streams)

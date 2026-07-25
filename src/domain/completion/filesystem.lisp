@@ -51,10 +51,9 @@
   "Function called with a candidate pathname to decide whether it is executable.")
 
 (defun %executable-candidate-p (entry)
-  (handler-case
+  (ignore-errors
       (or (null *path-command-executable-p-fn*)
-          (funcall *path-command-executable-p-fn* entry))
-    (error () nil)))
+          (funcall *path-command-executable-p-fn* entry))))
 
 (defun %trim-trailing-path-separators (text)
   "Return TEXT without trailing path separators, unless it is only separators."
@@ -134,9 +133,7 @@
 (defun %safe-file-completion-list (fn directory)
   "Call completion filesystem adapter FN for DIRECTORY, returning NIL on failure."
   (when fn
-    (handler-case
-        (funcall fn directory)
-      (error () nil))))
+    (ignore-errors (funcall fn directory))))
 
 (defun %ensure-directory-candidate-suffix (text)
   "Return TEXT with a trailing slash for directory candidates."

@@ -19,9 +19,7 @@
              (nshell.domain.environment:make-default-environment)))))
 
 (defun executable-path-p (path)
-  (handler-case
-      (zerop (sb-posix:access (namestring path) sb-posix:x-ok))
-    (error () nil)))
+  (ignore-errors (zerop (sb-posix:access (namestring path) sb-posix:x-ok))))
 
 (defun configure-completion-filesystem ()
   (setf nshell.domain.completion:*path-command-directory-files-fn*

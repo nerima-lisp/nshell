@@ -44,17 +44,15 @@ caller's CONTINUATION, keeping the walk (data) separate from its use (logic)."
 
 (defun recursive-directory-files (root)
   (unless *glob-directory-files-fn* (return-from recursive-directory-files nil))
-  (handler-case
+  (ignore-errors
       (let ((files '()))
         (%walk-directory-files (pathname root)
                                (lambda (file) (push file files)))
-        files)
-    (error () nil)))
+        files)))
 
 (defun immediate-directory-files (root)
   (unless *glob-directory-files-fn* (return-from immediate-directory-files nil))
-  (handler-case (funcall *glob-directory-files-fn* (pathname root))
-    (error () nil)))
+  (ignore-errors (funcall *glob-directory-files-fn* (pathname root))))
 
 (defun enough-path (file root)
   (namestring (enough-namestring file (pathname root))))

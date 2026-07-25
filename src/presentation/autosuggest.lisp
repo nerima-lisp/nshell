@@ -17,7 +17,7 @@
 (defun completion-suggestion (knowledge-base input &key path)
   (when (and knowledge-base
              (not (nshell.domain.parsing:shell-input-blank-p input)))
-    (handler-case
+    (ignore-errors
         (let* ((prefix (autosuggest-token-prefix input))
                (candidates (nshell.domain.completion:complete knowledge-base
                                                               input
@@ -52,8 +52,7 @@
                                     text
                                     :quote-context quote-context)))
                   (unless (%autosuggest-closed-quoted-token-p input token-start token-end)
-                    (subseq escaped-text (length escaped-prefix)))))))
-      (error () nil))))
+                    (subseq escaped-text (length escaped-prefix))))))))))
 
 (defun compute-suggestion (history input &key knowledge-base path)
   (unless (nshell.domain.parsing:shell-input-blank-p input)

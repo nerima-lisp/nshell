@@ -161,15 +161,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test-input-state-commands.lisp` (previous-word transposition, escaped
   space, quoted space, and shell-operator word boundaries) into one
   `it-each` table keyed by `(description buffer cursor expected-buffer
-  expected-cursor)`. Re-ran `paredit inspect duplicates` across
-  `tests/unit`, `tests/integration`, and `tests/e2e` (12674 forms, 1733
-  groups); most matches are single-line `expect` calls or `let` bindings too
-  small/varied to be a genuine cluster (the project's established restraint,
-  per the tokenizer conversions above), but a handful of larger,
-  same-shape-across-many-rows candidates remain for a future pass, e.g. the
-  case-changing tests in `test-input-state-case-undo.lisp` (only 3 rows,
-  below the ~5-row bar the existing tables use) and the completion-rendering
-  tests in `test-input-state-completion-rendering.lisp`.
+  expected-cursor)`, and three `:alt-l`/`:alt-c`/`:alt-u` case-changing tests
+  in `test-input-state-case-undo.lisp` into a second table adding `key` as a
+  per-row column — a 3-row table, matching the existing precedent (the
+  balanced process-substitution table is also 3 rows). Re-ran `paredit
+  inspect duplicates` across `tests/unit`, `tests/integration`, and
+  `tests/e2e` (12674 forms, 1733 groups); most matches are single-line
+  `expect` calls or `let` bindings too small/varied to be a genuine cluster
+  (the project's established restraint, per the tokenizer conversions
+  above). One flagged candidate, the completion-rendering tests in
+  `test-input-state-completion-rendering.lisp`, turned out on inspection
+  *not* to share a real shape (highlighting, line-count arithmetic,
+  terminal-width mocking, and padding are four different concerns that only
+  look similar at the `let*`/`capture-standard-output` surface) — left as
+  four separate `it`s rather than forced into a table, consistent with
+  `docs/cps-audit.md`'s caution against abstracting superficial similarity.
 - Bumped every nerima-lisp dependency pin in `flake.lock` to the latest release
   its SBCL library is tested against, and pinned the `cl-weave` flake input to an
   explicit `v0.10.0` tag (was a floating default-branch ref resolving to an

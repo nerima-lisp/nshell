@@ -23,35 +23,27 @@
            :completion-index -1
            :suggestion nil))))
 
-  (it "input-state-alt-l-downcases-next-word-after-cursor"
-    (let ((state (input-state
-                  :buffer "echo   WORLD tail"
-                  :cursor-pos 4)))
+  ;; Every case here applies a single alt-case reduction and checks the
+  ;; resulting buffer/cursor; only which key, which case transform, and what
+  ;; counts as a word boundary differ per case.
+  (it-each (("downcases the next word after the cursor"
+             "echo   WORLD tail" 4 :alt-l
+             "echo   world tail" 12)
+            ("capitalizes a quoted token"
+             "echo \"HELLO world\" tail" 5 :alt-c
+             "echo \"Hello world\" tail" 18)
+            ("treats shell operators as word boundaries"
+             "echo one|two" 8 :alt-u
+             "echo one|TWO" 12))
+      "input-state-alt-case ~A"
+      (description buffer cursor key expected-buffer expected-cursor)
+    (declare (ignore description))
+    (let ((state (input-state :buffer buffer :cursor-pos cursor)))
       (with-expected-input-state-reduction (new-state output)
           state
-          (reduce-once state :alt-l)
+          (reduce-once state key)
           :suggest-update
-          (:buffer "echo   world tail" :cursor-pos 12))))
-
-  (it "input-state-alt-c-capitalizes-quoted-token"
-    (let ((state (input-state
-                  :buffer "echo \"HELLO world\" tail"
-                  :cursor-pos 5)))
-      (with-expected-input-state-reduction (new-state output)
-          state
-          (reduce-once state :alt-c)
-          :suggest-update
-          (:buffer "echo \"Hello world\" tail" :cursor-pos 18))))
-
-  (it "input-state-alt-case-treats-shell-operators-as-word-boundaries"
-    (let ((state (input-state
-                  :buffer "echo one|two"
-                  :cursor-pos 8)))
-      (with-expected-input-state-reduction (new-state output)
-          state
-          (reduce-once state :alt-u)
-          :suggest-update
-          (:buffer "echo one|TWO" :cursor-pos 12))))
+          (:buffer expected-buffer :cursor-pos expected-cursor))))
 
   (it "input-state-alt-case-noops-without-word"
     (with-expected-noop-input-state-reductions (new-state output)

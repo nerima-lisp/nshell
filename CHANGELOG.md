@@ -66,6 +66,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command lookups so repeated completion requests stay responsive.
 
 ### Fixed
+- `run-external` (every plain foreground external command typed at the
+  prompt, e.g. `vim file.txt`) no longer applies
+  `*external-command-timeout*` (30s default) when its output is connected to
+  a real interactive terminal: previously the shell SIGTERM'd/SIGKILL'd a
+  foreground editor, SSH session, or any other long-running interactive
+  program 30 seconds in, regardless of whether a human was actively driving
+  it. `%foreground-external-command-timeout` now gates the timeout on
+  `(interactive-stream-p *standard-output*)`, which already reflects any
+  active per-command redirect, so `long_cmd > out.txt` typed in the same
+  interactive session still times out as before. Proven with a new
+  real-PTY end-to-end test
+  (`e2e-main-interactive-pty-foreground-command-ignores-external-command-timeout`)
+  that overrides the timeout to 0.5s and confirms a 2-second command still
+  completes. See `docs/timeout-audit.md` for the full trace of every
+  process-spawning site in `src/` and why each other one is already
+  correctly bounded (or, for `exec`, correctly unbounded).
 - Git prompt probes (`get-git-status`, run on every prompt render) are now
   bounded by a dedicated `*git-command-timeout*` (3 s) via cl-process-kit's `run`.
   Previously `%run-git` spawned git with `:wait t` and no timeout, so a slow,

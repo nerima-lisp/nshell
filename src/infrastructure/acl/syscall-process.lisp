@@ -194,6 +194,18 @@ group. Returns the process, or NIL when the spawn fails."
         (dolist (stream redirect-streams)
           (ignore-errors (close stream)))))))
 
+(defun %foreground-external-command-timeout ()
+  "Return the timeout to apply to a foreground external command's wait: NIL
+when *STANDARD-OUTPUT* is connected to a real interactive terminal right now
+-- the user is present and can Ctrl-C a runaway command, so nshell must not
+kill a long-lived foreground program like an editor or SSH session -- and
+*EXTERNAL-COMMAND-TIMEOUT* otherwise, i.e. whenever this command's output is
+redirected to a file/pipe or nshell itself is non-interactive. Per-command
+redirects already rebind *STANDARD-OUTPUT*, so this naturally covers `cmd >
+file` typed at an interactive prompt too."
+  (and (not (interactive-stream-p *standard-output*))
+       *external-command-timeout*))
+
 (defun run-external (cmd args)
   "Execute CMD with ARGS synchronously, printing output. Returns exit code."
   (handler-case
@@ -207,19 +219,20 @@ group. Returns the process, or NIL when the spawn fails."
                                              :output :stream)))
           (if proc
               (let* ((pid (sb-ext:process-pid proc))
-                     (pgid (and (integerp pid) (plusp pid) pid)))
+                     (pgid (and (integerp pid) (plusp pid) pid))
+                     (timeout (%foreground-external-command-timeout)))
                 (when pgid
                   (%assign-process-group pid pgid))
                 (flet ((finish-process ()
                          (%wait-process-with-output
                           proc
                           *standard-output*
-                          *external-command-timeout*
+                          timeout
                           (lambda ()
                             (format *error-output*
                                     "~a"
                                     (%external-command-timeout-message
-                                     cmd *external-command-timeout*))
+                                     cmd timeout))
                             124))))
                   (if pgid
                       (%with-foreground-process-group pgid #'finish-process)

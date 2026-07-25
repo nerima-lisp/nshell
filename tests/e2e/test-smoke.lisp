@@ -16,6 +16,24 @@
                (funcall (symbol-function (find-symbol \"MAIN\" \"NSHELL\")))))"
           (cons "nshell" arguments)))
 
+(defun %nshell-main-form-with-timeout (arguments timeout-seconds)
+  "Like %NSHELL-MAIN-FORM, but overrides
+NSHELL.INFRASTRUCTURE.ACL:*EXTERNAL-COMMAND-TIMEOUT* right after
+:NSHELL loads and before MAIN runs. The whole --eval string is READ as one
+form before any of it evaluates, so a literal
+NSHELL.INFRASTRUCTURE.ACL:*EXTERNAL-COMMAND-TIMEOUT* reference would fail to
+read -- that package does not exist until ASDF:LOAD-SYSTEM has *run*, not
+merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
+%NSHELL-MAIN-FORM already does for MAIN."
+  (format nil
+          "(progn
+             (asdf:load-system :nshell)
+             (set (find-symbol \"*EXTERNAL-COMMAND-TIMEOUT*\" \"NSHELL.INFRASTRUCTURE.ACL\") ~a)
+             (let ((sb-ext:*posix-argv* (list ~{~S~^ ~})))
+               (funcall (symbol-function (find-symbol \"MAIN\" \"NSHELL\")))))"
+          timeout-seconds
+          (cons "nshell" arguments)))
+
 (defparameter +nshell-runtime-dependencies+
   '(:cl-prolog :cl-parser-kit :cl-dataflow :cl-boundary-kit :cl-cli :cl-tty-kit
     :cl-process-kit
@@ -112,6 +130,17 @@ central registry, exactly as the parent process resolved them.")
                   "--disable-debugger")
             (%asdf-bootstrap-forms root)
             (list "--eval" (%nshell-main-form nil)))))
+
+(defun %nshell-main-pty-arguments-with-timeout (timeout-seconds)
+  "Like %NSHELL-MAIN-PTY-ARGUMENTS, but overrides
+*EXTERNAL-COMMAND-TIMEOUT* before MAIN runs, so a real-PTY test can prove the
+timeout is skipped for a foreground command connected to an interactive
+terminal without waiting out the real (30s) default."
+  (let ((root (namestring (asdf:system-source-directory :nshell))))
+    (append (list "--noinform"
+                  "--disable-debugger")
+            (%asdf-bootstrap-forms root)
+            (list "--eval" (%nshell-main-form-with-timeout nil timeout-seconds)))))
 
 (defun %e2e-pty-read-available (fd &key (timeout-usec 100000) (limit 8192))
   (let ((buffer (make-array limit :element-type '(unsigned-byte 8))))
@@ -299,6 +328,38 @@ central registry, exactly as the parent process resolved them.")
                  (let ((done-output (%e2e-pty-read-until fd "Done" :attempts 220)))
                    (expect (search "Done" done-output) :to-be-truthy)
                    (expect (search "/bin/sleep 3" done-output) :to-be-truthy))
+                 (%e2e-pty-write-line fd "exit")
+                 (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
+                 (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))
+          (%terminate-pty-process pty)))))
+
+  (it "e2e-main-interactive-pty-foreground-command-ignores-external-command-timeout"
+    "A foreground external command connected to a real interactive terminal
+must not be killed by *external-command-timeout*, even when the command
+outlives it -- only a human at the terminal (Ctrl-C) or the command itself
+should end it, exactly as in a real shell."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-in-sandbox "launches real nshell under a PTY"
+      (let ((program (%absolute-sbcl-executable))
+            (pty nil))
+        (unless program
+          (skip "requires an absolute SBCL runtime path"))
+        (unwind-protect
+             (progn
+               (setf pty
+                     (nshell.infrastructure.acl:pty-spawn
+                      program
+                      (%nshell-main-pty-arguments-with-timeout 0.5)
+                      :rows 24
+                      :cols 100))
+               (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
+                 (expect (search "nshell v" (%e2e-pty-read-until fd "nshell v")) :to-be-truthy)
+                 (%e2e-pty-write-line fd "sh -c 'sleep 2; echo pty-outlived-timeout'")
+                 (let ((output (%e2e-pty-read-until fd "pty-outlived-timeout" :attempts 220)))
+                   (expect (search "pty-outlived-timeout" output) :to-be-truthy)
+                   (expect (search "timed out after" output) :to-be-falsy))
                  (%e2e-pty-write-line fd "exit")
                  (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
                  (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))

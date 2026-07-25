@@ -176,6 +176,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   look similar at the `let*`/`capture-standard-output` surface) — left as
   four separate `it`s rather than forced into a table, consistent with
   `docs/cps-audit.md`'s caution against abstracting superficial similarity.
+- Bumped the `cl-weave` flake input from the explicit `v0.10.0` tag to
+  `v1.0.0` (cl-weave's own stabilization release: SemVer adoption, a runner
+  concurrency fix, timeout-inside-a-hook reporting, CLI `--seed` fixes, and
+  time-travel debugging/soft-assertion/journal tooling -- no breaking API
+  changes). Every `nshell/test` run performed during this refactor already
+  ran against a local `v1.0.0` checkout via `CL_SOURCE_REGISTRY`, so the
+  1336-passing suite is itself the functional proof, not just the tag bump.
+  Also corrected the `buildASDFSystem` `version` strings for every
+  nerima-lisp dependency in `flake.nix` (`packages` and `checks` alike),
+  which had drifted out of sync with each dependency's actual `.asd`
+  `:version` (e.g. cl-log-kit's real `1.6.0` was labeled `"0.1.0"`) --
+  cosmetic Nix package-name metadata only, not what gets fetched, but wrong.
+  More substantively, `flake.nix`'s `checks` output (`nshellLibs` and the
+  `weave` check's `CL_SOURCE_REGISTRY`) was missing `cl-log-kit` and
+  `cl-process-kit` entirely -- the same "dependency list not updated when
+  cl-process-kit was adopted" gap already found and fixed in
+  `tests/e2e/test-smoke.lisp`'s subprocess bootstrap earlier in this
+  refactor, this time in the Nix hermetic build path itself, which would
+  have made `nix flake check`'s `test`/`weave` checks fail to build.
 - Bumped every nerima-lisp dependency pin in `flake.lock` to the latest release
   its SBCL library is tested against, and pinned the `cl-weave` flake input to an
   explicit `v0.10.0` tag (was a floating default-branch ref resolving to an

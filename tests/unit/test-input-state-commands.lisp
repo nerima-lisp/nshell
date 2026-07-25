@@ -364,45 +364,30 @@
            :completion-index -1
            :suggestion nil))))
 
-  (it "input-state-alt-t-transposes-word-at-cursor-with-previous-word"
-    (let ((state (input-state
-                  :buffer "echo one two"
-                  :cursor-pos 9)))
+  ;; Every case here transposes the two words around $cursor-pos via :alt-t and
+  ;; checks the resulting buffer/cursor; only what counts as a "word" boundary
+  ;; and where the cursor lands differ per case.
+  (it-each (("word at cursor with previous word"
+             "echo one two" 9
+             "echo two one" 12)
+            ("an escaped space as token content"
+             "echo my\\ file.txt tail" 22
+             "echo tail my\\ file.txt" 22)
+            ("a quoted space as token content"
+             "echo \"hello world\" tail" 23
+             "echo tail \"hello world\"" 23)
+            ("shell operators as word boundaries"
+             "echo one|two" 12
+             "echo two|one" 12))
+      "input-state-alt-t transposes ~A"
+      (description buffer cursor expected-buffer expected-cursor)
+    (declare (ignore description))
+    (let ((state (input-state :buffer buffer :cursor-pos cursor)))
       (with-expected-input-state-reduction (new-state output)
           state
           (reduce-once state :alt-t)
           :suggest-update
-          (:buffer "echo two one" :cursor-pos 12))))
-
-  (it "input-state-alt-t-treats-escaped-space-as-token-content"
-    (let ((state (input-state
-                  :buffer "echo my\\ file.txt tail"
-                  :cursor-pos 22)))
-      (with-expected-input-state-reduction (new-state output)
-          state
-          (reduce-once state :alt-t)
-          :suggest-update
-          (:buffer "echo tail my\\ file.txt" :cursor-pos 22))))
-
-  (it "input-state-alt-t-treats-quoted-space-as-token-content"
-    (let ((state (input-state
-                  :buffer "echo \"hello world\" tail"
-                  :cursor-pos 23)))
-      (with-expected-input-state-reduction (new-state output)
-          state
-          (reduce-once state :alt-t)
-          :suggest-update
-          (:buffer "echo tail \"hello world\"" :cursor-pos 23))))
-
-  (it "input-state-alt-t-treats-shell-operators-as-word-boundaries"
-    (let ((state (input-state
-                  :buffer "echo one|two"
-                  :cursor-pos 12)))
-      (with-expected-input-state-reduction (new-state output)
-          state
-          (reduce-once state :alt-t)
-          :suggest-update
-          (:buffer "echo two|one" :cursor-pos 12))))
+          (:buffer expected-buffer :cursor-pos expected-cursor))))
 
   (it "input-state-alt-t-noops-without-two-words"
     (with-expected-noop-input-state-reductions (new-state output)

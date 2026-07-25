@@ -157,6 +157,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test-parser-diagnostics` folds the three leading/trailing operator-diagnostic
   tests into `(line kind start end)` rows. `it-each` blocks in the suite rose
   from 7 to 11, all clusters located with `paredit inspect duplicates`.
+- Folded four `:alt-t` word-transposition tests in
+  `test-input-state-commands.lisp` (previous-word transposition, escaped
+  space, quoted space, and shell-operator word boundaries) into one
+  `it-each` table keyed by `(description buffer cursor expected-buffer
+  expected-cursor)`. Re-ran `paredit inspect duplicates` across
+  `tests/unit`, `tests/integration`, and `tests/e2e` (12674 forms, 1733
+  groups); most matches are single-line `expect` calls or `let` bindings too
+  small/varied to be a genuine cluster (the project's established restraint,
+  per the tokenizer conversions above), but a handful of larger,
+  same-shape-across-many-rows candidates remain for a future pass, e.g. the
+  case-changing tests in `test-input-state-case-undo.lisp` (only 3 rows,
+  below the ~5-row bar the existing tables use) and the completion-rendering
+  tests in `test-input-state-completion-rendering.lisp`.
 - Bumped every nerima-lisp dependency pin in `flake.lock` to the latest release
   its SBCL library is tested against, and pinned the `cl-weave` flake input to an
   explicit `v0.10.0` tag (was a floating default-branch ref resolving to an

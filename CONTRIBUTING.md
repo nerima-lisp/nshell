@@ -10,7 +10,7 @@ nshell is built with [SBCL](http://www.sbcl.org/) and ASDF, and the supported,
 reproducible toolchain is [Nix](https://nixos.org/download) with flakes enabled.
 
 ```sh
-git clone https://github.com/takeokunn/nshell
+git clone https://github.com/nerima-lisp/nshell
 cd nshell
 nix develop          # SBCL + cl-weave dev shell
 nix build            # build ./result/bin/nshell

@@ -298,6 +298,27 @@
       (expect '("c" "b") :to-equal (range '("a" "b" "c") -1 2))
       (expect (range '("a" "b") 0 2) :to-be-null)))
 
+  (property "pbt-argv-normalized-index-maps-one-based-and-negative"
+      "For i in [1,count], a 1-based index normalizes to i-1 and -i to count-i."
+      ((count (gen-in-range 1 12) #'shrink-integer)
+       (raw (gen-in-range 1 12) #'shrink-integer))
+      (let ((i (min raw count)))
+        (and (= (1- i)
+                (nshell.domain.expansion::%argv-normalized-index i count))
+             (= (- count i)
+                (nshell.domain.expansion::%argv-normalized-index (- i) count)))))
+
+  (property "pbt-list-range-fields-reverses-under-swapped-bounds"
+      "Swapping an ascending in-range range's bounds yields the reversed sub-list."
+      ((count (gen-in-range 1 8) #'shrink-integer)
+       (a (gen-in-range 1 8) #'shrink-integer)
+       (b (gen-in-range 1 8) #'shrink-integer))
+      (let* ((fields (loop for k from 1 to count collect (format nil "f~d" k)))
+             (lo (min a b count))
+             (hi (min (max a b) count)))
+        (equal (nshell.domain.expansion::%list-range-fields fields hi lo)
+               (reverse (nshell.domain.expansion::%list-range-fields fields lo hi)))))
+
   (it "join-fields-concatenates-with-spaces"
     "join-fields joins a list of strings with single spaces."
     (flet ((join (fields)

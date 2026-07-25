@@ -115,22 +115,18 @@
         (expect "12:34" :to-equal (nshell.domain.prompting:prompt-segment-text (seventh result)))
         (expect :time :to-be (nshell.domain.prompting:prompt-segment-kind (seventh result))))))
 
-  (it "git-status-uses-process-adapter-and-cache"
-    "Git status is executed through the supplied process adapter and cached per directory."
+  (it "git-status-uses-runner-and-cache"
+    "Git status is executed through the injected runner and cached per directory."
     (let ((calls nil))
       (nshell.infrastructure.acl:clear-git-status-cache)
-      (nshell.infrastructure.acl:with-git-process-fns
-          ((list :spawn (lambda (cmd args &key output error wait process-group)
-                          (declare (ignore cmd output error wait process-group))
-                          (push args calls)
-                          (make-fake-git-process
-                           :output (if (member "rev-parse" args :test #'string=)
-                                       (format nil "main~%")
-                                       (format nil " M file.lisp~%"))
-                           :exit-code 0))
-                 :output (lambda (proc)
-                           (make-string-input-stream (fake-git-process-output proc)))
-                 :exit-code #'fake-git-process-exit-code))
+      (nshell.infrastructure.acl:with-git-runner
+          ((lambda (dir args)
+             (declare (ignore dir))
+             (push args calls)
+             (values (if (member "rev-parse" args :test #'string=)
+                         (format nil "main~%")
+                         (format nil " M file.lisp~%"))
+                     0)))
         (multiple-value-bind (branch dirty-p) (nshell.infrastructure.acl:get-git-status "/repo/")
           (expect "main" :to-equal branch)
           (expect (null dirty-p) :to-be-falsy))

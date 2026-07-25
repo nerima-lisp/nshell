@@ -66,34 +66,19 @@
       (declare (ignore cursor incomplete))
       (expect :redirect :to-be (nshell.domain.parsing:token-type (third tokens)))))
 
-  (it "double-quoted-string"
-    (with-tokenized-input (tokens cursor incomplete) "echo \"hello world\""
-      (declare (ignore cursor incomplete))
-      (expect "hello world" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "double-quoted-backslash-before-space-is-literal"
-    (with-tokenized-input (tokens cursor incomplete) "echo \"my\\ file\""
-      (declare (ignore cursor incomplete))
-      (expect 2 :to-equal (length tokens))
-      (expect "my\\ file" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "escaped-space-word"
-    (with-tokenized-input (tokens cursor incomplete) "echo hello\\ world"
+  ;; Every case here tokenizes `echo WORD' into exactly two tokens and checks how
+  ;; quoting, escaping, and #\# are resolved into the single word token.
+  (it-each (("echo \"hello world\""  "hello world")
+            ("echo \"my\\ file\""    "my\\ file")
+            ("echo hello\\ world"     "hello world")
+            ("echo foo#bar"           "foo#bar")
+            ("echo foo #bar"          "foo"))
+      "tokenizes ~S into the word token ~S"
+      (input expected)
+    (with-tokenized-input (tokens cursor incomplete) input
       (declare (ignore cursor incomplete))
       (expect 2 :to-equal (length tokens))
-      (expect "hello world" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "hash-in-word-remains-literal"
-    (with-tokenized-input (tokens cursor incomplete) "echo foo#bar"
-      (declare (ignore cursor incomplete))
-      (expect 2 :to-equal (length tokens))
-      (expect "foo#bar" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "hash-at-boundary-starts-comment"
-    (with-tokenized-input (tokens cursor incomplete) "echo foo #bar"
-      (declare (ignore cursor incomplete))
-      (expect 2 :to-equal (length tokens))
-      (expect "foo" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
+      (expect expected :to-equal (nshell.domain.parsing:token-value (second tokens)))))
 
   (it "tokenizer-main-loop-dispatches-shell-boundaries"
     "The tokenizer main loop must consume shell boundary characters instead of
@@ -248,38 +233,21 @@ letting word-reading stop on an unconsumed terminator."
       (declare (ignore tokens cursor))
       (expect (null incomplete) :to-be-falsy)))
 
-  (it "append-redirect"
-    (with-tokenized-input (tokens cursor incomplete) "echo >> log"
+  ;; Each row tokenizes INPUT and checks that the redirection operator lands at
+  ;; token POSITION (zero-based) as a :redirect token with the given VALUE, the
+  ;; whole input producing LENGTH tokens.
+  (it-each (("echo >> log"    3 1 ">>")
+            (">"              1 0 ">")
+            ("cat <<< hello"  3 1 "<<<")
+            ("cat << EOF"     3 1 "<<")
+            ("echo err 2>&1"  3 2 "2>&1"))
+      "tokenizes ~S with a :redirect ~S"
+      (input length position value)
+    (with-tokenized-input (tokens cursor incomplete) input
       (declare (ignore cursor incomplete))
-      (expect ">>" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "single-redirect-at-end"
-    (with-tokenized-input (tokens cursor incomplete) ">"
-      (declare (ignore cursor incomplete))
-      (expect 1 :to-equal (length tokens))
-      (expect :redirect :to-be (nshell.domain.parsing:token-type (first tokens)))
-      (expect ">" :to-equal (nshell.domain.parsing:token-value (first tokens)))))
-
-  (it "here-string-redirect"
-    (with-tokenized-input (tokens cursor incomplete) "cat <<< hello"
-      (declare (ignore cursor incomplete))
-      (expect 3 :to-equal (length tokens))
-      (expect :redirect :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "<<<" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "here-document-redirect"
-    (with-tokenized-input (tokens cursor incomplete) "cat << EOF"
-      (declare (ignore cursor incomplete))
-      (expect 3 :to-equal (length tokens))
-      (expect :redirect :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "<<" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "fd-prefixed-redirect-tokenizes-as-redirection"
-    (with-tokenized-input (tokens cursor incomplete) "echo err 2>&1"
-      (declare (ignore cursor incomplete))
-      (expect 3 :to-equal (length tokens))
-      (expect :redirect :to-be (nshell.domain.parsing:token-type (third tokens)))
-      (expect "2>&1" :to-equal (nshell.domain.parsing:token-value (third tokens)))))
+      (expect length :to-equal (length tokens))
+      (expect :redirect :to-be (nshell.domain.parsing:token-type (nth position tokens)))
+      (expect value :to-equal (nshell.domain.parsing:token-value (nth position tokens)))))
 
   (it "fd-redirect-token-text-projects-lookahead-policy"
     "FD redirect token text should be classified before tokenizer state mutation."
@@ -312,45 +280,21 @@ letting word-reading stop on an unconsumed terminator."
       (expect :lparen :to-be (nshell.domain.parsing:token-type (first tokens)))
       (expect :rparen :to-be (nshell.domain.parsing:token-type (second tokens)))))
 
-  (it "command-substitution-tokenizes-as-word-when-balanced"
-    (with-tokenized-input (tokens cursor incomplete) "echo (echo ok)"
+  ;; A balanced command substitution -- fish `(...)`, `$(...)`, or attached to a
+  ;; surrounding word -- stays a single :word token whose value is the whole run.
+  (it-each (("echo (echo ok)"                     "(echo ok)")
+            ("echo prefix=(echo ok).txt"          "prefix=(echo ok).txt")
+            ("echo prefix$(outer (inner))suffix"  "prefix$(outer (inner))suffix")
+            ("echo prefix$(printf \"(\")suffix"   "prefix$(printf \"(\")suffix")
+            ("echo prefix(outer (inner))suffix"   "prefix(outer (inner))suffix"))
+      "keeps a balanced command substitution attached as one word: ~S -> ~S"
+      (input expected)
+    (with-tokenized-input (tokens cursor incomplete) input
       (declare (ignore cursor))
       (expect incomplete :to-be-null)
       (expect 2 :to-equal (length tokens))
       (expect :word :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "(echo ok)" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "command-substitution-stays-attached-inside-word"
-    (with-tokenized-input (tokens cursor incomplete) "echo prefix=(echo ok).txt"
-      (declare (ignore cursor))
-      (expect incomplete :to-be-null)
-      (expect 2 :to-equal (length tokens))
-      (expect :word :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "prefix=(echo ok).txt" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "dollar-command-substitution-stays-attached-with-nested-parens"
-    (with-tokenized-input (tokens cursor incomplete) "echo prefix$(outer (inner))suffix"
-      (declare (ignore cursor))
-      (expect incomplete :to-be-null)
-      (expect 2 :to-equal (length tokens))
-      (expect :word :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "prefix$(outer (inner))suffix" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "dollar-command-substitution-treats-quoted-parens-as-literals"
-    (with-tokenized-input (tokens cursor incomplete) "echo prefix$(printf \"(\")suffix"
-      (declare (ignore cursor))
-      (expect incomplete :to-be-null)
-      (expect 2 :to-equal (length tokens))
-      (expect :word :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "prefix$(printf \"(\")suffix" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "fish-command-substitution-stays-attached-with-nested-parens"
-    (with-tokenized-input (tokens cursor incomplete) "echo prefix(outer (inner))suffix"
-      (declare (ignore cursor))
-      (expect incomplete :to-be-null)
-      (expect 2 :to-equal (length tokens))
-      (expect :word :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "prefix(outer (inner))suffix" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
+      (expect expected :to-equal (nshell.domain.parsing:token-value (second tokens)))))
 
   (it "tokenizer-word-scan-action-projects-reader-branches"
     "Word scanning should classify reader branches before mutating tokenizer state."
@@ -397,29 +341,18 @@ letting word-reading stop on an unconsumed terminator."
       (expect '(9 10) :to-equal (boundary-facts "<(echo ok)"))
       (expect '(nil 9) :to-equal (boundary-facts "<(echo ok"))))
 
-  (it "process-substitution-tokenizes-as-word-when-balanced"
-    (with-tokenized-input (tokens cursor incomplete) "cat <(echo ok)"
+  ;; A balanced process substitution `<(...)` is likewise a single :word token.
+  (it-each (("cat <(echo ok)"        "<(echo ok)")
+            ("cat <(printf \"(\")"   "<(printf \"(\")")
+            ("cat <(outer (inner))"  "<(outer (inner))"))
+      "keeps a balanced process substitution attached as one word: ~S -> ~S"
+      (input expected)
+    (with-tokenized-input (tokens cursor incomplete) input
       (declare (ignore cursor))
       (expect incomplete :to-be-null)
       (expect 2 :to-equal (length tokens))
       (expect :word :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "<(echo ok)" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "process-substitution-treats-quoted-parens-as-literals"
-    (with-tokenized-input (tokens cursor incomplete) "cat <(printf \"(\")"
-      (declare (ignore cursor))
-      (expect incomplete :to-be-null)
-      (expect 2 :to-equal (length tokens))
-      (expect :word :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "<(printf \"(\")" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
-
-  (it "process-substitution-stays-attached-with-nested-parens"
-    (with-tokenized-input (tokens cursor incomplete) "cat <(outer (inner))"
-      (declare (ignore cursor))
-      (expect incomplete :to-be-null)
-      (expect 2 :to-equal (length tokens))
-      (expect :word :to-be (nshell.domain.parsing:token-type (second tokens)))
-      (expect "<(outer (inner))" :to-equal (nshell.domain.parsing:token-value (second tokens)))))
+      (expect expected :to-equal (nshell.domain.parsing:token-value (second tokens)))))
 
   (it "unbalanced-process-substitution-is-incomplete-error-token"
     (with-tokenized-input (tokens cursor incomplete) "cat <(echo ok"
@@ -447,4 +380,36 @@ letting word-reading stop on an unconsumed terminator."
       (expect (esc #\Newline) :to-be-truthy)
       (expect (esc #\Space) :to-be-falsy)
       (expect (esc #\a) :to-be-falsy)
-      (expect (esc #\!) :to-be-falsy))))
+      (expect (esc #\!) :to-be-falsy)))
+
+  (it "pbt-tokenize-is-deterministic"
+    "Tokenizing the same input twice yields identical type/span/value tokens."
+    (check-property (:trials 50)
+        ((cmd (gen-shell-command) #'shrink-shell-word))
+      (flet ((toks (input)
+               (nshell.domain.parsing::tokenization-result-tokens
+                (nshell.domain.parsing:tokenize input))))
+        (let ((a (toks cmd))
+              (b (toks cmd)))
+          (and (= (length a) (length b))
+               (every (lambda (x y)
+                        (and (eq (nshell.domain.parsing:token-type x)
+                                 (nshell.domain.parsing:token-type y))
+                             (= (nshell.domain.parsing:token-start x)
+                                (nshell.domain.parsing:token-start y))
+                             (= (nshell.domain.parsing:token-end x)
+                                (nshell.domain.parsing:token-end y))
+                             (string= (nshell.domain.parsing:token-value x)
+                                      (nshell.domain.parsing:token-value y))))
+                      a b))))))
+
+  (it "pbt-tokenize-spans-are-ordered-and-non-negative"
+    "Every produced token span satisfies 0 <= start <= end."
+    (check-property (:trials 50)
+        ((cmd (gen-shell-command) #'shrink-shell-word))
+      (every (lambda (tok)
+               (and (<= 0 (nshell.domain.parsing:token-start tok))
+                    (<= (nshell.domain.parsing:token-start tok)
+                        (nshell.domain.parsing:token-end tok))))
+             (nshell.domain.parsing::tokenization-result-tokens
+              (nshell.domain.parsing:tokenize cmd))))))

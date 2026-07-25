@@ -1,30 +1,53 @@
 (in-package #:nshell/test)
 
 (describe "expansion-tests"
-  (it "arithmetic-basic-operators"
-    "Integer + - * / % with precedence and parentheses."
-    (let ((env (arith-env)))
-      (expect 7 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 + 2 * 3" env))
-      (expect 9 :to-equal (nshell.domain.expansion:evaluate-arithmetic "(1 + 2) * 3" env))
-      (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "10 % 3" env))
-      (expect 3 :to-equal (nshell.domain.expansion:evaluate-arithmetic "10 / 3" env))
-      (expect -5 :to-equal (nshell.domain.expansion:evaluate-arithmetic "-2 - 3" env))))
+  ;; Pure "expression -> value" cases read as one table each, asserted through
+  ;; the :TO-EVALUATE-TO domain matcher (standard ARITH-ENV: X=10, Y=3).
+  (it-each (("1 + 2 * 3" 7)
+            ("(1 + 2) * 3" 9)
+            ("10 % 3" 1)
+            ("10 / 3" 3)
+            ("-2 - 3" -5))
+      "arithmetic-precedence: ~S evaluates to ~A"
+      (expr value)
+    (expect expr :to-evaluate-to value))
 
-  (it "arithmetic-uses-variables"
-    "Bare names resolve from the environment; unset names are 0."
-    (let ((env (arith-env)))
-      (expect 13 :to-equal (nshell.domain.expansion:evaluate-arithmetic "X + Y" env))
-      (expect 30 :to-equal (nshell.domain.expansion:evaluate-arithmetic "X * Y" env))
-      (expect 0 :to-equal (nshell.domain.expansion:evaluate-arithmetic "UNSET" env))))
+  (it-each (("X + Y" 13)
+            ("X * Y" 30)
+            ("UNSET" 0))
+      "arithmetic-variables: ~S evaluates to ~A (unset names are 0)"
+      (expr value)
+    (expect expr :to-evaluate-to value))
 
-  (it "arithmetic-comparisons-and-logic"
-    "Comparison and logical operators yield 1/0."
-    (let ((env (arith-env)))
-      (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "X > Y" env))
-      (expect 0 :to-equal (nshell.domain.expansion:evaluate-arithmetic "X < Y" env))
-      (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "X == 10" env))
-      (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "X > 0 && Y > 0" env))
-      (expect 0 :to-equal (nshell.domain.expansion:evaluate-arithmetic "!1" env))))
+  (it-each (("X > Y" 1)
+            ("X < Y" 0)
+            ("X == 10" 1)
+            ("X > 0 && Y > 0" 1)
+            ("!1" 0))
+      "arithmetic-comparison/logic: ~S yields ~A"
+      (expr value)
+    (expect expr :to-evaluate-to value))
+
+  ;; >=, <=, and != are distinct Pratt operators from >, <, ==.
+  (it-each (("X >= 10" 1)
+            ("X >= 11" 0)
+            ("X <= 10" 1)
+            ("X <= 9" 0)
+            ("X != Y" 1)
+            ("X != 10" 0))
+      "arithmetic-comparison-le/ge/ne: ~S yields ~A"
+      (expr value)
+    (expect expr :to-evaluate-to value))
+
+  ;; Unary + (the :pos prefix) is distinct from unary - / ! / ~.
+  (it-each (("+5" 5)
+            ("+X" 10)
+            ("-(2 + 3)" -5)
+            ("!0" 1)
+            ("!!5" 1))
+      "arithmetic-unary: ~S yields ~A"
+      (expr value)
+    (expect expr :to-evaluate-to value))
 
   (it "arithmetic-exponentiation-is-right-associative"
     "** binds tighter than unary minus and associates to the right (bash parity)."
@@ -35,17 +58,18 @@
       (expect (lambda () (nshell.domain.expansion:evaluate-arithmetic "2 ** -1" env))
               :to-throw 'error)))
 
-  (it "arithmetic-bitwise-and-shift-operators"
-    "Bitwise &, |, ^, ~ and the << >> shifts evaluate over integers."
-    (let ((env (arith-env)))
-      (expect 16 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 << 4" env))
-      (expect 64 :to-equal (nshell.domain.expansion:evaluate-arithmetic "256 >> 2" env))
-      (expect 2 :to-equal (nshell.domain.expansion:evaluate-arithmetic "6 & 3" env))
-      (expect 7 :to-equal (nshell.domain.expansion:evaluate-arithmetic "6 | 1" env))
-      (expect 4 :to-equal (nshell.domain.expansion:evaluate-arithmetic "5 ^ 1" env))
-      (expect -1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "~0" env))
-      ;; Bitwise precedence: & binds tighter than ^ binds tighter than |.
-      (expect 7 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 | 2 & 3 ^ 4" env))))
+  ;; Bitwise/shift operators over integers; the final row pins precedence
+  ;; (& tighter than ^ tighter than |).
+  (it-each (("1 << 4" 16)
+            ("256 >> 2" 64)
+            ("6 & 3" 2)
+            ("6 | 1" 7)
+            ("5 ^ 1" 4)
+            ("~0" -1)
+            ("1 | 2 & 3 ^ 4" 7))
+      "arithmetic-bitwise/shift: ~S yields ~A"
+      (expr value)
+    (expect expr :to-evaluate-to value))
 
   (it "arithmetic-ternary-conditional"
     "?: selects a branch, associates right, and sits below the other operators."
@@ -269,26 +293,26 @@
 
   (it "glob-bracket-range-matches-characters"
     "Bracket ranges match characters inside the declared span."
-    (expect (nshell.domain.expansion:glob-match-p "file[0-2].lisp" "file1.lisp") :to-be-truthy)
-    (expect (nshell.domain.expansion:glob-match-p "file[0-2].lisp" "file9.lisp") :to-be-falsy))
+    (expect "file[0-2].lisp" :to-glob-match "file1.lisp")
+    (expect "file[0-2].lisp" :not-to-glob-match "file9.lisp"))
 
   (it "glob-bracket-negation-matches-outside-set"
     "Bracket negation matches characters outside the declared set."
-    (expect (nshell.domain.expansion:glob-match-p "file[!0-2].lisp" "file9.lisp") :to-be-truthy)
-    (expect (nshell.domain.expansion:glob-match-p "file[!0-2].lisp" "file1.lisp") :to-be-falsy)
-    (expect (nshell.domain.expansion:glob-match-p "file[^ab].lisp" "filez.lisp") :to-be-truthy)
-    (expect (nshell.domain.expansion:glob-match-p "file[^ab].lisp" "filea.lisp") :to-be-falsy))
+    (expect "file[!0-2].lisp" :to-glob-match "file9.lisp")
+    (expect "file[!0-2].lisp" :not-to-glob-match "file1.lisp")
+    (expect "file[^ab].lisp" :to-glob-match "filez.lisp")
+    (expect "file[^ab].lisp" :not-to-glob-match "filea.lisp"))
 
   (it "glob-unclosed-bracket-matches-literal"
     "An unclosed bracket is treated as a literal character."
-    (expect (nshell.domain.expansion:glob-match-p "file[1" "file[1") :to-be-truthy)
-    (expect (nshell.domain.expansion:glob-match-p "file[1" "file11") :to-be-falsy))
+    (expect "file[1" :to-glob-match "file[1")
+    (expect "file[1" :not-to-glob-match "file11"))
 
   (it "pbt-glob-ranges-match-generated-members"
     "Generated characters inside a bracket range always match that range."
     (check-property (:trials 50)
-        ((start (gen-in-range 97 122) nil)
-         (end (gen-in-range 97 122) nil))
+        ((start (gen-in-range 97 122) #'shrink-integer)
+         (end (gen-in-range 97 122) #'shrink-integer))
       (let* ((lo (code-char (min start end)))
              (hi (code-char (max start end)))
              (mid (code-char (floor (+ (char-code lo) (char-code hi)) 2))))
@@ -298,10 +322,92 @@
   (it "pbt-glob-negated-ranges-reject-generated-members"
     "Generated characters inside a negated bracket range never match that range."
     (check-property (:trials 50)
-        ((start (gen-in-range 97 122) nil)
-         (end (gen-in-range 97 122) nil))
+        ((start (gen-in-range 97 122) #'shrink-integer)
+         (end (gen-in-range 97 122) #'shrink-integer))
       (let* ((lo (code-char (min start end)))
              (hi (code-char (max start end)))
              (mid (code-char (floor (+ (char-code lo) (char-code hi)) 2))))
         (not (nshell.domain.expansion:glob-match-p (format nil "[!~c-~c]" lo hi)
-                                                   (string mid)))))))
+                                                   (string mid))))))
+
+  (it "pbt-glob-literal-matches-only-itself"
+    "A metacharacter-free pattern matches its own text and nothing longer."
+    (check-property (:trials 50)
+        ((word (gen-shell-variable-name :min-length 1 :max-length 10)
+               #'shrink-prompt-text))
+      (and (nshell.domain.expansion:glob-match-p word word)
+           (not (nshell.domain.expansion:glob-match-p
+                 word (concatenate 'string word "x"))))))
+
+  (it "pbt-glob-star-matches-any-single-segment"
+    "* matches any string that contains no path separator."
+    (check-property (:trials 50)
+        ((word (gen-shell-variable-name :min-length 1 :max-length 10)
+               #'shrink-prompt-text))
+      (nshell.domain.expansion:glob-match-p "*" word)))
+
+  (it "pbt-brace-numeric-range-size-matches-span"
+    "A numeric range {lo..hi} (lo<=hi) expands to exactly hi-lo+1 items."
+    (check-property (:trials 50)
+        ((lo (gen-in-range 0 20) #'shrink-integer)
+         (span (gen-in-range 0 15) #'shrink-integer))
+      (let ((result (nshell.domain.expansion:expand-braces
+                     (format nil "{~d..~d}" lo (+ lo span)))))
+        (= (length result) (1+ span)))))
+
+  (it "pbt-brace-comma-group-size-matches-option-count"
+    "A single comma group of N distinct options expands to exactly N items."
+    (check-property (:trials 40)
+        ((n (gen-in-range 2 6) #'shrink-integer))
+      (let* ((options (loop for i from 1 to n collect (format nil "o~d" i)))
+             (result (nshell.domain.expansion:expand-braces
+                      (format nil "{~{~a~^,~}}" options))))
+        (= (length result) n))))
+
+  (it "pbt-arithmetic-integer-literal-is-identity"
+    "Evaluating a bare integer literal yields that integer."
+    (check-property (:trials 50)
+        ((n (gen-in-range -1000 1000) #'shrink-integer))
+      (= n (nshell.domain.expansion:evaluate-arithmetic
+            (format nil "~d" n) (arith-env)))))
+
+  (it "pbt-arithmetic-addition-is-commutative"
+    "a + b and b + a evaluate equal for any generated integers."
+    (check-property (:trials 50)
+        ((a (gen-in-range -500 500) #'shrink-integer)
+         (b (gen-in-range -500 500) #'shrink-integer))
+      (= (nshell.domain.expansion:evaluate-arithmetic
+          (format nil "~d + ~d" a b) (arith-env))
+         (nshell.domain.expansion:evaluate-arithmetic
+          (format nil "~d + ~d" b a) (arith-env)))))
+
+  (it "pbt-arithmetic-add-then-subtract-recovers-operand"
+    "(a + b) - b evaluates to a."
+    (check-property (:trials 50)
+        ((a (gen-in-range -500 500) #'shrink-integer)
+         (b (gen-in-range -500 500) #'shrink-integer))
+      (= a (nshell.domain.expansion:evaluate-arithmetic
+            (format nil "(~d + ~d) - ~d" a b b) (arith-env)))))
+
+  (it "pbt-arithmetic-multiply-by-zero-is-zero"
+    "a * 0 evaluates to 0 for any generated a."
+    (check-property (:trials 50)
+        ((a (gen-in-range -1000 1000) #'shrink-integer))
+      (zerop (nshell.domain.expansion:evaluate-arithmetic
+              (format nil "~d * 0" a) (arith-env)))))
+
+  (it "pbt-glob-double-star-crosses-separators-single-star-does-not"
+    "** spans a path separator that a single * cannot."
+    (check-property (:trials 50)
+        ((a (gen-shell-variable-name :min-length 1 :max-length 6) #'shrink-shell-word)
+         (b (gen-shell-variable-name :min-length 1 :max-length 6) #'shrink-shell-word))
+      (let ((path (concatenate 'string a "/" b)))
+        (and (nshell.domain.expansion:glob-match-p "**" path)
+             (not (nshell.domain.expansion:glob-match-p "*" path))))))
+
+  (it "pbt-brace-without-braces-is-identity"
+    "A string with no brace group expands to exactly itself."
+    (check-property (:trials 50)
+        ((word (gen-shell-variable-name :min-length 1 :max-length 12) #'shrink-shell-word))
+      (equal (list word)
+             (nshell.domain.expansion:expand-braces word)))))

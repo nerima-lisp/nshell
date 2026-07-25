@@ -14,10 +14,9 @@
         (loop for prefix in prefixes
               collect (concatenate 'string prefix expanded)))))
 
-(defstruct (unquoted-field-fragment
-            (:constructor %make-unquoted-field-fragment (kind value)))
-  (kind nil :read-only t)
-  (value nil :read-only t))
+(define-value-struct unquoted-field-fragment
+    ((kind nil)
+     (value nil)))
 
 (defun %literal-unquoted-field-fragment (text)
   (%make-unquoted-field-fragment :literal text))
@@ -110,10 +109,9 @@ word-splitting are suppressed (POSIX semantics), so the result is always a
 single string. Command substitution is applied by the caller before this."
   (expand-variables (expand-arithmetic input env) env))
 
-(defstruct (whitespace-field-boundary
-            (:constructor %make-whitespace-field-boundary (start end)))
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t))
+(define-value-struct whitespace-field-boundary
+    ((start 0 :type integer)
+     (end 0 :type integer)))
 
 (defun whitespace-field-boundary-text (boundary text)
   (subseq text
@@ -183,10 +181,9 @@ single string. Command substitution is applied by the caller before this."
    (list text)
    (list (expand-double-quoted text env))))
 
-(defstruct (command-name-candidate
-            (:constructor %make-command-name-candidate (text fields)))
-  (text "" :type string :read-only t)
-  (fields nil :type list :read-only t))
+(define-value-struct command-name-candidate
+    ((text "" :type string)
+     (fields nil :type list)))
 
 (defun command-name-candidate-non-empty-fields (candidate)
   (remove "" (command-name-candidate-fields candidate) :test #'string=))

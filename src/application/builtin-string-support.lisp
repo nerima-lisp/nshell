@@ -68,10 +68,6 @@ an error string). BODY runs with both variables in scope."
 (defun %builtin-string-usage (&optional (separator "|"))
   (%builtin-usage "string" (%builtin-string-summary separator)))
 
-(defun %string-prefix-p (prefix string)
-  (and (<= (length prefix) (length string))
-       (string= prefix string :end2 (length prefix))))
-
 (defun %string-character-test (ignore-case)
   (if ignore-case #'char-equal #'char=))
 
@@ -80,13 +76,13 @@ an error string). BODY runs with both variables in scope."
         (long (%string-option-spec-long spec)))
     (case (%string-option-spec-kind spec)
       (:prefixed
-       (or (%string-prefix-p short option)
-           (%string-prefix-p long option)))
+       (or (string-prefix-p short option)
+           (string-prefix-p long option)))
       (:required
        (or (string= option short)
            (string= option long)
-           (%string-prefix-p short option)
-           (%string-prefix-p long option)))
+           (string-prefix-p short option)
+           (string-prefix-p long option)))
       (t
        (or (string= option short)
            (string= option long))))))
@@ -106,11 +102,11 @@ an error string). BODY runs with both variables in scope."
   "Return the integer text attached inline to OPTION (e.g. -N5 or --width=5), or NIL."
   (cond
     ((and short-prefix-length
-          (%string-prefix-p short option)
+          (string-prefix-p short option)
           (> (length option) short-prefix-length))
      (subseq option short-prefix-length))
     ((and long-prefix-length
-          (%string-prefix-p long option)
+          (string-prefix-p long option)
           (>= (length option) long-prefix-length)
           (char= (char option (1- long-prefix-length)) #\=))
      (subseq option long-prefix-length))))

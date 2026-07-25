@@ -1,51 +1,53 @@
 (in-package #:nshell.infrastructure.acl)
 
-(defvar *git-process-fns* nil
-  "Process adapter plist used by git prompt probes.")
+(defparameter *git-command-timeout* 3
+  "Seconds a git prompt probe may run before it is abandoned. The prompt must
+never block on a slow, networked, or hung repository, so branch/status queries
+are bounded well below *EXTERNAL-COMMAND-TIMEOUT*; on timeout the segment simply
+renders as if the directory were not a repository.")
+
+(defvar *git-runner* nil
+  "NIL, or a function (DIR ARGS) -> (values OUTPUT EXIT-CODE) substituted for the
+real git invocation in tests. A single deterministic function seam, not a
+process-adapter plist: tests supply the git result directly rather than faking a
+subprocess object with separate spawn/output/exit-code hooks.")
 
 (defvar *git-status-cache* (make-hash-table :test #'equal)
   "Directory keyed cache of git prompt status.")
 
-(defmacro with-git-process-fns ((process-fns) &body body)
-  "Run BODY with PROCESS-FNS used for git subprocesses."
-  `(let ((*git-process-fns* ,process-fns))
+(defmacro with-git-runner ((runner) &body body)
+  "Run BODY with RUNNER, a (DIR ARGS) -> (values OUTPUT EXIT-CODE) function,
+standing in for real git invocations."
+  `(let ((*git-runner* ,runner))
      ,@body))
 
 (defun clear-git-status-cache ()
   "Clear all cached git prompt status."
   (clrhash *git-status-cache*))
 
-(defun %git-process-fn (key fallback)
-  (or (getf *git-process-fns* key) fallback))
-
 (defun %trim-newline (text)
   (string-right-trim '(#\Newline #\Return #\Space #\Tab) text))
 
-(defun %read-all-lines (stream)
-  (with-output-to-string (out)
-    (loop for line = (read-line stream nil nil)
-          while line
-          do (progn (write-string line out) (terpri out)))))
-
 (defun %run-git (dir args)
-  "Run git ARGS in DIR through the configured process adapter.
-Returns two values: output string and exit code."
-  (handler-case
-      (let* ((spawn (%git-process-fn :spawn #'spawn-async))
-             (exit-code (%git-process-fn :exit-code #'sb-ext:process-exit-code))
-             (output (%git-process-fn :output #'sb-ext:process-output))
-             (proc (funcall spawn "git" (append (list "-C" (namestring (uiop:ensure-directory-pathname dir))) args)
-                            :output :stream
-                            :error nil
-                            :wait t
-                            :process-group nil)))
-        (if proc
-            (progn
-              (values (let ((stream (funcall output proc)))
-                        (if stream (%read-all-lines stream) ""))
-                      (or (funcall exit-code proc) 0)))
-            (values "" 1)))
-    (error () (values "" 1))))
+  "Run git ARGS in DIR, returning its stdout and exit code, bounded by
+*GIT-COMMAND-TIMEOUT* through cl-process-kit so a hung repository can never stall
+the prompt. A timeout, launch failure, or any error yields (values \"\" 1).
+Delegates to *GIT-RUNNER* when one is bound."
+  (if *git-runner*
+      (funcall *git-runner* dir args)
+      (handler-case
+          (let ((result (process-kit:run
+                         "git"
+                         (list* "-C" (namestring (uiop:ensure-directory-pathname dir)) args)
+                         :search t
+                         :error :capture
+                         :timeout *git-command-timeout*
+                         :on-timeout :return)))
+            (if (process-kit:process-result-timed-out-p result)
+                (values "" 1)
+                (values (process-kit:process-result-stdout result)
+                        (or (process-kit:process-result-exit-code result) 1))))
+        (error () (values "" 1)))))
 
 (defun %git-branch-uncached (dir)
   (multiple-value-bind (out code) (%run-git dir '("rev-parse" "--abbrev-ref" "HEAD"))

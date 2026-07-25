@@ -105,18 +105,18 @@
                          value))))
 
 (defun %completion-help-enum-values (line)
-  (let ((open-position (position #\( line)))
-    (when open-position
-      (let ((close-position (position #\) line :start (1+ open-position))))
-        (when close-position
-          (let ((content (subseq line (1+ open-position) close-position)))
-            (when (position #\| content)
-              (let ((values (remove-if-not
-                             #'%completion-help-enum-value-p
-                             (mapcar (lambda (value)
-                                       (string-trim '(#\Space #\Tab #\' #\") value))
-                                     (%completion-split-on-char content #\|)))))
-                (when values values)))))))))
+  "Return the trimmed enum values in a `(a|b|c)' fragment of LINE, or NIL when
+LINE carries no parenthesized pipe-separated group. The parse is a linear
+pipeline -- locate the parentheses, take their content, then split/trim/keep the
+values -- rather than a nested bail-out cascade."
+  (let* ((open (position #\( line))
+         (close (and open (position #\) line :start (1+ open))))
+         (content (and close (subseq line (1+ open) close))))
+    (when (and content (position #\| content))
+      (remove-if-not #'%completion-help-enum-value-p
+                     (mapcar (lambda (value)
+                               (string-trim '(#\Space #\Tab #\' #\") value))
+                             (%completion-split-on-char content #\|))))))
 
 (defun %completion-help-blank-line-p (line)
   (string= "" (string-trim '(#\Space #\Tab) line)))

@@ -12,23 +12,10 @@
 
 ;; token-type, token-value, token-start, token-end are auto-generated struct accessors
 
-(defstruct (tokenization-result
-            (:constructor %make-tokenization-result
-                (tokens cursor-token incomplete-p))
-            (:conc-name %tokenization-result-)
-            (:copier nil))
-  (tokens nil :type list :read-only t)
-  (cursor-token nil :read-only t)
-  (incomplete-p nil :type boolean :read-only t))
-
-(defun tokenization-result-tokens (result)
-  (copy-list (%tokenization-result-tokens result)))
-
-(defun tokenization-result-cursor-token (result)
-  (%tokenization-result-cursor-token result))
-
-(defun tokenization-result-incomplete-p (result)
-  (%tokenization-result-incomplete-p result))
+(define-value-struct tokenization-result
+    ((tokens nil :type list :copy :list)
+     (cursor-token nil)
+     (incomplete-p nil :type boolean)))
 
 (defun %token-position (position)
   (or position 0))

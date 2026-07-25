@@ -9,40 +9,47 @@
       (expect :insert :to-be (nshell.presentation:input-state-mode state))
       (expect (fboundp 'nshell.presentation::%make-input-state) :to-be-truthy)))
 
-  (it "input-state-copy-groups-use-private-values-before-initargs"
+  (it "input-state-copy-groups-resolve-overrides-into-initargs"
+    "The copy machinery is exactly override helpers plus per-group initarg
+builders: it resolves each (SUPPLIED-P VALUE) override against the current state
+and returns MAKE-INPUT-STATE plists directly, with no intermediate value record."
     (flet ((present-p (name)
              (multiple-value-bind (symbol status)
                  (find-symbol name '#:nshell.presentation)
                (and status symbol (or (fboundp symbol)
                                       (find-class symbol nil))))))
-      (dolist (old-name '("%COPY-INPUT-STATE-COMPLETION-PLIST"
-                          "%COPY-INPUT-STATE-TRANSIENT-PLIST"
-                          "%COPY-INPUT-STATE-SESSION-PLIST"
-                          "%COPY-INPUT-STATE-OR-CURRENT"
-                          "%COPY-INPUT-STATE-CLEARABLE-OR-CURRENT"
-                          "%COPY-INPUT-STATE-CLEARABLE-VALUE-OR-CURRENT"
-                          "%COPY-INPUT-STATE-CLAMPED-ANCHOR-OR-CURRENT"
-                          "INPUT-STATE-COPY-OVERRIDE"))
-        (expect (present-p old-name) :to-be-falsy))
-      (dolist (new-name '("%COPY-INPUT-STATE-COMPLETION-VALUES"
-                          "%COPY-INPUT-STATE-TRANSIENT-VALUES"
-                          "%COPY-INPUT-STATE-SESSION-VALUES"
-                          "%COPY-INPUT-STATE-COMPLETION-INITARGS"
-                          "%COPY-INPUT-STATE-TRANSIENT-INITARGS"
-                          "%COPY-INPUT-STATE-SESSION-INITARGS"
-                          "%INPUT-STATE-COPY-OVERRIDE"
-                          "%MAKE-INPUT-STATE-COPY-OVERRIDE"
-                          "INPUT-STATE-COPY-OVERRIDE-KIND"
-                          "INPUT-STATE-COPY-OVERRIDE-VALUE"
-                          "INPUT-STATE-COPY-OVERRIDE-FOR"
-                          "INPUT-STATE-COPY-OPTIONAL-VALUE-OVERRIDE"
-                          "INPUT-STATE-COPY-OVERRIDE-RESOLVE"
-                          "INPUT-STATE-COPY-ANCHOR-OVERRIDE-RESOLVE"
-                          "%INPUT-STATE-COPY-SPEC"
-                          "%INPUT-STATE-COMPLETION-COPY"
-                          "%INPUT-STATE-TRANSIENT-COPY"
-                          "%INPUT-STATE-SESSION-COPY"))
-        (expect (present-p new-name) :to-be-truthy))))
+      (dolist (absent-name '(;; earlier hand-rolled plist/resolver names
+                             "%COPY-INPUT-STATE-COMPLETION-PLIST"
+                             "%COPY-INPUT-STATE-TRANSIENT-PLIST"
+                             "%COPY-INPUT-STATE-SESSION-PLIST"
+                             "%COPY-INPUT-STATE-OR-CURRENT"
+                             "%COPY-INPUT-STATE-CLEARABLE-OR-CURRENT"
+                             "%COPY-INPUT-STATE-CLEARABLE-VALUE-OR-CURRENT"
+                             "%COPY-INPUT-STATE-CLAMPED-ANCHOR-OR-CURRENT"
+                             "INPUT-STATE-COPY-OVERRIDE"
+                             ;; the intermediate value records and their builders,
+                             ;; now collapsed straight into the initarg builders
+                             "%COPY-INPUT-STATE-COMPLETION-VALUES"
+                             "%COPY-INPUT-STATE-TRANSIENT-VALUES"
+                             "%COPY-INPUT-STATE-SESSION-VALUES"
+                             "%COPY-INPUT-STATE-INITARGS"
+                             "%INPUT-STATE-COPY-SPEC"
+                             "%INPUT-STATE-COMPLETION-COPY"
+                             "%INPUT-STATE-TRANSIENT-COPY"
+                             "%INPUT-STATE-SESSION-COPY"))
+        (expect (present-p absent-name) :to-be-falsy))
+      (dolist (present-name '("%COPY-INPUT-STATE-COMPLETION-INITARGS"
+                              "%COPY-INPUT-STATE-TRANSIENT-INITARGS"
+                              "%COPY-INPUT-STATE-SESSION-INITARGS"
+                              "%INPUT-STATE-COPY-OVERRIDE"
+                              "%MAKE-INPUT-STATE-COPY-OVERRIDE"
+                              "INPUT-STATE-COPY-OVERRIDE-KIND"
+                              "INPUT-STATE-COPY-OVERRIDE-VALUE"
+                              "INPUT-STATE-COPY-OVERRIDE-FOR"
+                              "INPUT-STATE-COPY-OPTIONAL-VALUE-OVERRIDE"
+                              "INPUT-STATE-COPY-OVERRIDE-RESOLVE"
+                              "INPUT-STATE-COPY-ANCHOR-OVERRIDE-RESOLVE"))
+        (expect (present-p present-name) :to-be-truthy))))
 
   (it "input-state-copy-override-values-resolve-copy-decisions"
     (let ((current (nshell.presentation::input-state-copy-override-for nil "ignored"))
@@ -77,69 +84,63 @@
               0
               "abc"))))
 
-  (it "input-state-copy-initargs-assemble-group-values"
-    (let* ((completion
-             (nshell.presentation::%make-input-state-completion-copy
-              :completion-index 3
-              :completion-base-buffer "base"
-              :completion-base-cursor 4
-              :last-candidates '("one" "two")
-              :suggestion "suggest"))
-           (transient
-             (nshell.presentation::%make-input-state-transient-copy
-              :mode :vi-c
-              :vi-count 9
-              :vi-visual-anchor 7
-              :abbreviation-expander 'expand
-              :kill-ring '("kill")
-              :last-yank-start 1
-              :last-yank-end 2
-              :last-yank-index 3
-              :last-argument-start 4
-              :last-argument-end 5
-              :last-argument-index 6))
-           (session
-             (nshell.presentation::%make-input-state-session-copy
-              :search-query "query"
-              :search-original-buffer "original"
-              :search-original-cursor 8
-              :search-index 11
-              :undo-stack '(:undo)
-              :redo-stack '(:redo)))
-           (spec
-             (nshell.presentation::%make-input-state-copy-spec
-              :buffer "text"
-              :cursor-pos 2
-              :completion completion
-              :transient transient
-              :session session)))
-      (expect (nshell.presentation::%input-state-copy-spec-p spec) :to-be-truthy)
-      (expect (listp spec) :to-be-falsy)
-      (expect '(:buffer "text"
-                   :cursor-pos 2
-                   :completion-index 3
-                   :completion-base-buffer "base"
-                   :completion-base-cursor 4
-                   :last-candidates ("one" "two")
-                   :suggestion "suggest"
-                   :mode :vi-c
-                   :vi-count 9
-                   :vi-visual-anchor 7
-                   :abbreviation-expander expand
-                   :kill-ring ("kill")
-                   :last-yank-start 1
-                   :last-yank-end 2
-                   :last-yank-index 3
-                   :last-argument-start 4
-                   :last-argument-end 5
-                   :last-argument-index 6
-                   :search-query "query"
-                   :search-original-buffer "original"
-                   :search-original-cursor 8
-                   :search-index 11
-                   :undo-stack (:undo)
-                   :redo-stack (:redo)) :to-equal (nshell.presentation::%copy-input-state-initargs
-                  spec))))
+  (it "input-state-copy-with-assembles-all-overridable-fields"
+    "Every overridable field handed to COPY-INPUT-STATE-WITH flows through to the
+rebuilt state, so the completion, transient, and session groups each assemble.
+(VI-VISUAL-ANCHOR is clamped to the new buffer, unlike the raw internal record.)"
+    (let* ((expander (lambda (value) value))
+           (copy (nshell.presentation::copy-input-state-with
+                  (input-state :buffer "abc" :cursor-pos 1)
+                  :buffer "text"
+                  :cursor-pos 2
+                  :completion-index 3
+                  :completion-base-buffer "base"
+                  :completion-base-cursor 4
+                  :last-candidates '("one" "two")
+                  :suggestion "suggest"
+                  :mode :vi-c
+                  :vi-count 9
+                  :vi-visual-anchor 3
+                  :abbreviation-expander expander
+                  :kill-ring '("kill")
+                  :last-yank-start 1
+                  :last-yank-end 2
+                  :last-yank-index 3
+                  :last-argument-start 4
+                  :last-argument-end 5
+                  :last-argument-index 6
+                  :search-query "query"
+                  :search-original-buffer "original"
+                  :search-original-cursor 8
+                  :search-index 11
+                  :undo-stack '(:undo)
+                  :redo-stack '(:redo))))
+      (is-input-state copy
+                      :buffer "text"
+                      :cursor-pos 2
+                      :completion-index 3
+                      :completion-base-buffer "base"
+                      :completion-base-cursor 4
+                      :last-candidates '("one" "two")
+                      :suggestion "suggest"
+                      :mode :vi-c
+                      :vi-visual-anchor 3
+                      :kill-ring '("kill")
+                      :last-argument-start 4
+                      :last-argument-end 5
+                      :last-argument-index 6
+                      :search-query "query"
+                      :search-original-buffer "original"
+                      :search-original-cursor 8
+                      :search-index 11)
+      (expect 9 :to-equal (nshell.presentation::input-state-vi-count copy))
+      (expect expander :to-equal
+              (nshell.presentation::input-state-abbreviation-expander copy))
+      (expect 1 :to-equal (nshell.presentation::input-state-last-yank-start copy))
+      (expect 2 :to-equal (nshell.presentation::input-state-last-yank-end copy))
+      (expect 3 :to-equal (nshell.presentation::input-state-last-yank-index copy))
+      (expect '(:undo) :to-equal (nshell.presentation::input-state-undo-stack copy))
+      (expect '(:redo) :to-equal (nshell.presentation::input-state-redo-stack copy))))
 
   (it "input-state-copy-with-preserves-and-clears-optional-fields"
     (let ((state (input-state

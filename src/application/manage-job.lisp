@@ -7,12 +7,11 @@
 (defvar *shell-pgid* (sb-posix:getpid))
 (defvar *foreground-job-pgid* nil)
 
-(defstruct (job-listing
-            (:constructor %allocate-job-listing (id status command))
-            (:copier nil))
-  (id 0 :read-only t)
-  (status "" :read-only t)
-  (command "" :read-only t))
+(define-value-struct job-listing
+    ((id 0)
+     (status "")
+     (command ""))
+  :constructor %allocate-job-listing)
 
 (defun make-job-listing (id status command)
   (unless (and (integerp id) (plusp id))

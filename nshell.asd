@@ -2,20 +2,22 @@
   :version "0.4.0"
   :author "nshell contributors"
   :license "MIT"
-  :homepage "https://github.com/takeokunn/nshell"
-  :source-control (:git "https://github.com/takeokunn/nshell.git")
+  :homepage "https://github.com/nerima-lisp/nshell"
+  :source-control (:git "https://github.com/nerima-lisp/nshell.git")
   :description "Modern interactive shell in Common Lisp"
   :depends-on ("cl-prolog"
                "cl-parser-kit"
                "cl-dataflow"
                "cl-boundary-kit"
                "cl-cli"
-               "cl-tty-kit")
+               "cl-tty-kit"
+               "cl-process-kit")
   :pathname "src"
   :serial t
   :components
   ((:file "package")
    (:file "util/struct-macros")
+   (:file "util/strings")
    (:file "domain/events/base-event")
    (:file "domain/signals/signal")
    (:file "domain/input/key-event")
@@ -32,12 +34,14 @@
    (:file "domain/parsing/control-flow")
    (:file "domain/parsing/control-flow-sequence")
    (:file "domain/parsing/parser-data")
+   (:file "domain/parsing/parser-separator-data")
    (:file "domain/parsing/parser-assembly")
    (:file "domain/parsing/parser-here-doc")
    (:file "domain/parsing/parser-reduction")
    (:file "domain/parsing/parser")
     (:file "domain/environment/env")
      (:file "domain/expansion/expand")
+     (:file "domain/expansion/brace")
      (:file "domain/expansion/parameter-data")
      (:file "domain/expansion/parameter-selection")
      (:file "domain/expansion/parameter-braced")
@@ -182,6 +186,7 @@
    (:file "support/completion")
                (:file "support/prompt")
                (:file "support/history")
+               (:file "support/matchers")
    (:file "unit/test-domain-events")
    (:file "unit/test-signals")
    (:file "unit/test-execution-domain")
@@ -197,6 +202,7 @@
    (:file "unit/test-expansion")
    (:file "unit/test-expansion-parameter")
    (:file "unit/test-expansion-arithmetic-glob")
+   (:file "unit/test-mutation")
    (:file "unit/test-expansion-abbreviation")
    (:file "unit/test-completion-rules")
    (:file "unit/test-completion-rule-prover-boundaries")

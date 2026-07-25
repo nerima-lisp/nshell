@@ -11,7 +11,7 @@
     # loadable ASDF source under share/common-lisp/source, and a `cl-weave`
     # CLI, both of which the suites and dev shell consume.
     cl-weave = {
-      url = "github:nerima-lisp/cl-weave";
+      url = "github:nerima-lisp/cl-weave/v0.10.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # The nerima-lisp toolkit family nshell integrates against.  We only need
@@ -39,10 +39,21 @@
       url = "github:nerima-lisp/cl-tty-kit";
       flake = false;
     };
+    # cl-process-kit consolidates timeout-guarded process launch; it sits on
+    # cl-boundary-kit (clock/sleeper) and cl-log-kit (structured logging).
+    cl-log-kit = {
+      url = "github:nerima-lisp/cl-log-kit";
+      flake = false;
+    };
+    cl-process-kit = {
+      url = "github:nerima-lisp/cl-process-kit";
+      flake = false;
+    };
   };
 
   outputs = { self, nixpkgs, cl-prolog, cl-weave
-            , cl-parser-kit, cl-dataflow, cl-boundary-kit, cl-cli, cl-tty-kit }:
+            , cl-parser-kit, cl-dataflow, cl-boundary-kit, cl-cli, cl-tty-kit
+            , cl-log-kit, cl-process-kit }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -110,8 +121,22 @@
             src = cl-tty-kit;
             systems = [ "cl-tty-kit" ];
           };
+          clLogKit = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-log-kit";
+            version = "0.1.0";
+            src = cl-log-kit;
+            systems = [ "cl-log-kit" ];
+          };
+          clProcessKit = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-process-kit";
+            version = "0.1.0";
+            src = cl-process-kit;
+            systems = [ "cl-process-kit" ];
+            lispLibs = [ clBoundaryKit clLogKit ];
+          };
           nshellLibs = [
             clProlog clParserKit clDataflow clBoundaryKit clCli clTtyKit
+            clProcessKit
           ];
         in
         {
@@ -147,7 +172,7 @@
             '';
             meta = with pkgs.lib; {
               description = "Modern, fish-inspired interactive shell written in Common Lisp";
-              homepage = "https://github.com/takeokunn/nshell";
+              homepage = "https://github.com/nerima-lisp/nshell";
               license = licenses.mit;
               platforms = systems;
               mainProgram = "nshell";

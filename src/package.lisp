@@ -11,11 +11,12 @@
 ;; No layer restrictions apply: every layer may use this package's macros.
 (defpackage #:nshell.util
   (:use #:cl)
-  (:export #:define-value-struct))
+  (:export #:define-value-struct #:string-prefix-p))
 
 ;; -- Domain packages (pure, no side effects) ----------------
 (defpackage #:nshell.domain.events
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:domain-event-type #:domain-event-timestamp
            #:make-generic-domain-event
            #:make-command-entered-event #:make-command-parsed-event
@@ -29,17 +30,20 @@
 
 (defpackage #:nshell.domain.signals
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-signal #:signal-name #:signal-number #:signal-p #:signal=
            #:+sigint+ #:+sigterm+ #:+sigcont+ #:+sigchld+))
 
 (defpackage #:nshell.domain.input
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:key-event #:key-event-p #:make-key-event
            #:key-event-type #:key-event-char #:key-event-number
            #:key-event-data))
 
 (defpackage #:nshell.domain.abbreviation
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:abbreviation-boundary-p
            #:abbreviation-target-before-cursor
            #:abbreviation-command-position-p
@@ -51,6 +55,7 @@
 
 (defpackage #:nshell.domain.execution
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-command #:command-name #:command-args
             #:make-pipeline #:pipeline-p #:pipeline-commands
             #:make-pipeline-plan #:pipeline-plan-p #:pipeline-plan-stage-count
@@ -126,6 +131,7 @@
 
 (defpackage #:nshell.domain.environment
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:environment-p #:make-environment
            #:make-default-environment #:inject-os-environment
            #:env-get #:env-get-values #:env-set #:env-set-values
@@ -137,6 +143,7 @@
 
 (defpackage #:nshell.domain.expansion
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:import-from #:nshell.domain.environment #:env-get)
   ;; cl-parser-kit powers the $((...)) arithmetic tokenizer + Pratt parser.
   (:import-from #:cl-parser-kit
@@ -161,7 +168,7 @@
 
   (defpackage #:nshell.domain.completion
   (:use #:cl)
-  (:import-from #:nshell.util #:define-value-struct)
+  (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:make-candidate #:candidate-text #:candidate-kind
             #:candidate-description #:candidate-score
             #:make-empty-knowledge-base #:kb-add-command #:kb-add-command-from-help
@@ -207,7 +214,7 @@
            #:history-entry-texts
            #:command-history-p #:make-command-history
            #:history-add #:history-search #:history-entry-line-prefix-suffix #:history-all
-           #:history-merge #:history-dedup #:history-clear #:history-delete
+           #:history-merge #:history-clear #:history-delete
            #:history-empty-p #:history-size #:history-capacity
            #:command-line-last-argument #:history-last-argument-at
            #:history-previous #:history-next #:history-reset-navigation))
@@ -245,6 +252,7 @@
 ;; -- Application packages -----------------------------------
 (defpackage #:nshell.application
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
             #:make-event-dispatcher #:publish-event
             #:subscribe #:unsubscribe #:drain-events
@@ -279,6 +287,7 @@
 ;; -- Infrastructure packages --------------------------------
 (defpackage #:nshell.infrastructure.acl
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
            #:spawn-pipeline #:spawn-pipeline-async #:wait-job
             #:spawn-async
@@ -295,7 +304,7 @@
             #:reap-children #:get-terminal-size
             #:*external-command-timeout*
             #:run-external #:run-external-capture #:process-exit-status-code
-            #:with-git-process-fns #:clear-git-status-cache
+            #:with-git-runner #:clear-git-status-cache
             #:get-git-status))
 
 (defpackage #:nshell.infrastructure.terminal

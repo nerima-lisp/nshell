@@ -141,4 +141,23 @@
       (expect "--short" :to-equal (nshell.domain.history:history-last-argument-at history 0))
       (expect "older" :to-equal (nshell.domain.history:history-last-argument-at history 1))
       (expect (nshell.domain.history:history-last-argument-at history 2) :to-be-null)
-      (expect (nshell.domain.history:history-last-argument-at history -1) :to-be-null))))
+      (expect (nshell.domain.history:history-last-argument-at history -1) :to-be-null)))
+
+  (it "pbt-history-consecutive-duplicate-keeps-size"
+    "Adding the same command twice in a row leaves the size as after one add."
+    (check-property (:trials 50)
+        ((cmd (gen-shell-command) #'shrink-shell-word))
+      (let ((history (nshell.domain.history:make-command-history)))
+        (nshell.domain.history:history-add history cmd)
+        (let ((size-after-one (nshell.domain.history:history-size history)))
+          (nshell.domain.history:history-add history cmd)
+          (= size-after-one (nshell.domain.history:history-size history))))))
+
+  (it "pbt-history-size-never-exceeds-capacity"
+    "Size never exceeds max-entries, however many commands are added."
+    (check-property (:trials 30)
+        ((n (gen-in-range 1 20) #'shrink-integer))
+      (let ((history (nshell.domain.history:make-command-history :max-entries 5)))
+        (dotimes (i n)
+          (nshell.domain.history:history-add history (format nil "cmd~d" i)))
+        (<= (nshell.domain.history:history-size history) 5)))))

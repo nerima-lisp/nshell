@@ -22,20 +22,16 @@
   (values (vi-input-transition-state transition)
           (vi-input-transition-output transition)))
 
-(defstruct (vi-visual-selection
-             (:constructor %make-vi-visual-selection (start end cursor))
-             (:conc-name vi-visual-selection-))
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t)
-  (cursor 0 :type fixnum :read-only t))
+(define-value-struct vi-visual-selection
+    ((start 0 :type fixnum)
+     (end 0 :type fixnum)
+     (cursor 0 :type fixnum)))
 
-(defstruct (vi-operator-edit
-             (:constructor %make-vi-operator-edit (start end cursor end-mode))
-             (:conc-name vi-operator-edit-))
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t)
-  (cursor 0 :type fixnum :read-only t)
-  (end-mode :vi-command :type (member :vi-command :insert) :read-only t))
+(define-value-struct vi-operator-edit
+    ((start 0 :type fixnum)
+     (end 0 :type fixnum)
+     (cursor 0 :type fixnum)
+     (end-mode :vi-command :type (member :vi-command :insert))))
 
 (defun %vi-visual-range (state)
   (let* ((buffer (input-state-buffer state))
@@ -51,11 +47,9 @@
       (%vi-visual-range state)
     (%make-vi-visual-selection start end start)))
 
-(defstruct (vi-visual-yank-edit
-             (:constructor %make-vi-visual-yank-edit (cursor selected))
-             (:conc-name vi-visual-yank-edit-))
-  (cursor 0 :type fixnum :read-only t)
-  (selected "" :type string :read-only t))
+(define-value-struct vi-visual-yank-edit
+    ((cursor 0 :type fixnum)
+     (selected "" :type string)))
 
 (defun vi-visual-yank-edit-for-range (state start end cursor)
   (let* ((buffer (input-state-buffer state))
@@ -64,11 +58,9 @@
          (cursor (max 0 (min cursor (length buffer)))))
     (%make-vi-visual-yank-edit cursor (subseq buffer start end))))
 
-(defstruct (vi-visual-anchor-swap-edit
-             (:constructor %make-vi-visual-anchor-swap-edit (cursor anchor))
-             (:conc-name vi-visual-anchor-swap-edit-))
-  (cursor 0 :type fixnum :read-only t)
-  (anchor 0 :type fixnum :read-only t))
+(define-value-struct vi-visual-anchor-swap-edit
+    ((cursor 0 :type fixnum)
+     (anchor 0 :type fixnum)))
 
 (defun vi-visual-anchor-swap-edit-for-state (state)
   (%make-vi-visual-anchor-swap-edit

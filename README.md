@@ -2,7 +2,7 @@
 
 **A modern, fish-inspired interactive shell written in Common Lisp.**
 
-[![CI](https://github.com/takeokunn/nshell/actions/workflows/ci.yml/badge.svg)](https://github.com/takeokunn/nshell/actions/workflows/ci.yml)
+[![CI](https://github.com/nerima-lisp/nshell/actions/workflows/ci.yml/badge.svg)](https://github.com/nerima-lisp/nshell/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Built with Nix](https://img.shields.io/badge/built%20with-nix-5277C3.svg?logo=nixos&logoColor=white)](https://nixos.org)
 
@@ -49,13 +49,13 @@ With [Nix](https://nixos.org/download) (flakes enabled), run nshell without
 installing anything:
 
 ```sh
-nix run github:takeokunn/nshell
+nix run github:nerima-lisp/nshell
 ```
 
 Or build a binary into your profile:
 
 ```sh
-nix profile install github:takeokunn/nshell
+nix profile install github:nerima-lisp/nshell
 nshell
 man nshell   # the manual page is installed alongside the binary
 ```
@@ -93,7 +93,7 @@ nshell builds with [SBCL](http://www.sbcl.org/) and ASDF. The supported and
 tested path is Nix:
 
 ```sh
-git clone https://github.com/takeokunn/nshell
+git clone https://github.com/nerima-lisp/nshell
 cd nshell
 nix build            # produces ./result/bin/nshell
 nix flake check --print-build-logs
@@ -167,13 +167,13 @@ layer where it fits the domain-driven design:
 
 ## Testing
 
-nshell runs entirely on [cl-weave](https://github.com/takeokunn/cl-weave), with
+nshell runs entirely on [cl-weave](https://github.com/nerima-lisp/cl-weave), with
 two complementary suites exposed through Nix checks:
 
 - **`nshell/test`** — the primary regression suite (~1,290 cases,
   `describe`/`it`/`expect`).
 - **`nshell/weave`** — a focused suite that exercises the completion engine's
-  [cl-prolog](https://github.com/takeokunn/cl-prolog) knowledge base with
+  [cl-prolog](https://github.com/nerima-lisp/cl-prolog) knowledge base with
   property-based tests, fixtures, benchmarks, and direct Prolog queries
   (`findall`, negation-as-failure, foreign predicates) plus the
   `cl-prolog/weave` query bridge.

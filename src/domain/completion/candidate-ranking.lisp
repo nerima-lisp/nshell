@@ -7,15 +7,11 @@
 (defun %candidate-description-present-p (candidate)
   (plusp (length (candidate-description candidate))))
 
-(defun %case-sensitive-prefix-p (prefix text)
-  (and (<= (length prefix) (length text))
-       (string= prefix text :end2 (length prefix))))
-
 (defun %exact-match-rank-bonus (prefix text)
   (if (string-equal prefix text) +%exact-match-rank-bonus+ 0))
 
 (defun %case-sensitive-prefix-rank-bonus (prefix text)
-  (if (%case-sensitive-prefix-p prefix text)
+  (if (string-prefix-p prefix text)
       +%case-sensitive-prefix-rank-bonus+
       0))
 

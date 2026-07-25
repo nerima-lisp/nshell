@@ -15,28 +15,21 @@
       (format nil "~2,'0d:~2,'0d" hour min)))
   "Function returning the right-prompt time text, or NIL to omit it.")
 
-(defstruct (prompt-model
-            (:constructor %allocate-prompt-model)
-            (:conc-name %prompt-model-)
-            (:copier nil)
-            (:predicate %prompt-model-p))
-  "Pure data model for rendering a shell prompt."
-  (hostname "localhost" :type string :read-only t)
-  (cwd "/" :type string :read-only t)
-  (directory nil :type (or null string) :read-only t)
-  (exit-code 0 :type (or null integer) :read-only t)
-  (duration-ms nil :type (or null integer) :read-only t)
-  (segments nil :type list :read-only t)
-  (right-segments nil :type list :read-only t))
+(define-value-struct prompt-model
+    ((hostname "localhost" :type string)
+     (cwd "/" :type string)
+     (directory nil :type (or null string))
+     (exit-code 0 :type (or null integer))
+     (duration-ms nil :type (or null integer))
+     (segments nil :type list :copy :list)
+     (right-segments nil :type list :copy :list))
+  :documentation "Pure data model for rendering a shell prompt."
+  :keyword-constructor t)
 
-(defstruct (prompt-segment
-            (:constructor %allocate-prompt-segment)
-            (:conc-name %prompt-segment-)
-            (:copier nil)
-            (:predicate %prompt-segment-p))
-  "A segment of the prompt (left or right)."
-  (text "" :type string :read-only t)
-  (kind :literal :type keyword :read-only t))
+(define-value-struct prompt-segment
+    ((text "" :type string)
+     (kind :literal :type keyword))
+  :documentation "A segment of the prompt (left or right).")
 
 (defun %ensure-string (value field-name)
   (unless (stringp value)
@@ -71,7 +64,7 @@
                                duration-ms
                                segments
                                right-segments)
-  (%allocate-prompt-model
+  (%make-prompt-model
    :hostname (%ensure-string hostname "HOSTNAME")
    :cwd (%ensure-string cwd "CWD")
    :directory (%ensure-optional-string directory "DIRECTORY")
@@ -80,37 +73,9 @@
    :segments (copy-list (%ensure-list segments "SEGMENTS"))
    :right-segments (copy-list (%ensure-list right-segments "RIGHT-SEGMENTS"))))
 
-(defun prompt-model-hostname (pm)
-  (%prompt-model-hostname pm))
-
-(defun prompt-model-cwd (pm)
-  (%prompt-model-cwd pm))
-
-(defun prompt-model-directory (pm)
-  (%prompt-model-directory pm))
-
-(defun prompt-model-exit-code (pm)
-  (%prompt-model-exit-code pm))
-
-(defun prompt-model-duration-ms (pm)
-  (%prompt-model-duration-ms pm))
-
-(defun prompt-model-segments (pm)
-  (copy-list (%prompt-model-segments pm)))
-
-(defun prompt-model-right-segments (pm)
-  (copy-list (%prompt-model-right-segments pm)))
-
 (defun make-prompt-segment (text kind)
-  (%allocate-prompt-segment
-   :text (%ensure-string text "TEXT")
-   :kind (%ensure-keyword kind "KIND")))
-
-(defun prompt-segment-text (segment)
-  (%prompt-segment-text segment))
-
-(defun prompt-segment-kind (segment)
-  (%prompt-segment-kind segment))
+  (%make-prompt-segment (%ensure-string text "TEXT")
+                        (%ensure-keyword kind "KIND")))
 
 (defun %prompt-directory (pm)
   (or (prompt-model-directory pm)

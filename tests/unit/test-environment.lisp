@@ -133,4 +133,35 @@
     "The default environment contains core shell variables."
     (let ((env (nshell.domain.environment:make-default-environment)))
       (dolist (name '("HOME" "PATH" "USER"))
-        (expect (stringp (nshell.domain.environment:env-get env name)) :to-be-truthy)))))
+        (expect (stringp (nshell.domain.environment:env-get env name)) :to-be-truthy))))
+
+  (property "pbt-env-set-then-get-round-trips"
+      "env-get returns exactly the scalar value env-set stored."
+      ((name (gen-shell-variable-name :min-length 1 :max-length 10) #'shrink-shell-word)
+       (value (gen-shell-word :min-length 1 :max-length 12) #'shrink-shell-word))
+    (string= value
+             (nshell.domain.environment:env-get
+              (nshell.domain.environment:env-set
+               (nshell.domain.environment:make-environment) name value nil)
+              name)))
+
+  (property "pbt-env-unset-removes-the-binding"
+      "After env-unset the name is no longer defined."
+      ((name (gen-shell-variable-name :min-length 1 :max-length 10) #'shrink-shell-word)
+       (value (gen-shell-word :min-length 1 :max-length 12) #'shrink-shell-word))
+    (not (nshell.domain.environment:env-defined-p
+          (nshell.domain.environment:env-unset
+           (nshell.domain.environment:env-set
+            (nshell.domain.environment:make-environment) name value nil)
+           name)
+          name)))
+
+  (it "pbt-env-set-exported-marks-exported"
+    "env-set with exported=t makes the binding report as exported."
+    (check-property (:trials 50)
+        ((name (gen-shell-variable-name :min-length 1 :max-length 10) #'shrink-shell-word)
+         (value (gen-shell-word :min-length 1 :max-length 12) #'shrink-shell-word))
+      (nshell.domain.environment:env-exported-p
+       (nshell.domain.environment:env-set
+        (nshell.domain.environment:make-environment) name value t)
+       name))))

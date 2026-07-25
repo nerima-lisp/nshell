@@ -52,10 +52,9 @@
             (when (and (integerp restore-pgid) (plusp restore-pgid))
               (ignore-errors (set-foreground-pgroup restore-pgid))))))))
 
-(defstruct (child-status
-            (:constructor %make-child-status (pid status)))
-  (pid 0 :type integer :read-only t)
-  (status 0 :type integer :read-only t))
+(define-value-struct child-status
+    ((pid 0 :type integer)
+     (status 0 :type integer)))
 
 (defun reap-children ()
   "Reap all changed child processes without blocking. Returns CHILD-STATUS values."

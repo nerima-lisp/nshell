@@ -4,7 +4,7 @@
   (it "case-sensitive-prefix-p-matches-exact-case-leading-substring"
     "case-sensitive-prefix-p returns true only when prefix matches the start of text exactly."
     (flet ((pre (prefix text)
-             (nshell.domain.completion::%case-sensitive-prefix-p prefix text)))
+             (nshell.util:string-prefix-p prefix text)))
       (expect (pre "" "anything") :to-be-truthy)
       (expect (pre "check" "checkout") :to-be-truthy)
       (expect (pre "git" "git") :to-be-truthy)
@@ -35,7 +35,6 @@
     (multiple-value-bind (copy-symbol copy-status)
         (find-symbol "COPY-%COMPLETION-CANDIDATE" '#:nshell.domain.completion)
       (expect (fboundp 'nshell.domain.completion::%make-completion-candidate) :to-be-truthy)
-      (expect (fboundp 'nshell.domain.completion::%allocate-completion-candidate) :to-be-truthy)
       (expect (or (null copy-status)
               (not (fboundp copy-symbol))) :to-be-truthy))
     (expect (lambda () (nshell.domain.completion:make-candidate 42)) :to-throw 'type-error)
@@ -141,7 +140,7 @@
 
   (it "pbt-command-completion-ranks-exact-match-first"
     (check-property (:trials 50)
-        ((suffix (gen-command-prefix :min-length 1 :max-length 8) nil))
+        ((suffix (gen-command-prefix :min-length 1 :max-length 8) #'shrink-shell-word))
       (let* ((command (concatenate 'string "zz-nshell-" suffix))
              (longer (concatenate 'string command "-extra"))
              (kb (nshell.domain.completion:make-empty-knowledge-base)))
@@ -155,7 +154,7 @@
 
   (it "pbt-command-completion-ranks-case-sensitive-prefix-first"
     (check-property (:trials 50)
-        ((suffix (gen-command-prefix :min-length 1 :max-length 8) nil))
+        ((suffix (gen-command-prefix :min-length 1 :max-length 8) #'shrink-shell-word))
       (let* ((prefix (concatenate 'string "zzcase-" suffix))
              (typed-case (concatenate 'string prefix "-typed"))
              (folded-case (concatenate 'string (string-upcase prefix) "-folded"))
@@ -169,11 +168,11 @@
 
   (it "pbt-completion-ranking-prefers-higher-score"
     (check-property (:trials 50)
-        ((prefix (gen-command-prefix :min-length 1 :max-length 4) nil)
+        ((prefix (gen-command-prefix :min-length 1 :max-length 4) #'shrink-shell-word)
          (low-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
          (high-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
-         (base-score (gen-in-range 0 100) nil)
-         (score-delta (gen-in-range 1 100) nil))
+         (base-score (gen-in-range 0 100) #'shrink-integer)
+         (score-delta (gen-in-range 1 100) #'shrink-integer))
       (let* ((low-text (concatenate 'string prefix "-z-" low-tail))
              (high-text (concatenate 'string prefix "-a-" high-tail))
              (low (nshell.domain.completion:make-candidate low-text :score base-score))
@@ -183,12 +182,31 @@
         (and (string= high-text (nshell.domain.completion:candidate-text (first ranked)))
              (string= low-text (nshell.domain.completion:candidate-text (second ranked)))))))
 
+  (it "pbt-make-candidate-round-trips-text-and-score"
+    "make-candidate preserves the text and score it is given."
+    (check-property (:trials 50)
+        ((text (gen-shell-word :min-length 1 :max-length 12) #'shrink-shell-word)
+         (score (gen-in-range -1000 1000) #'shrink-integer))
+      (let ((candidate (nshell.domain.completion:make-candidate text :score score)))
+        (and (string= text (nshell.domain.completion:candidate-text candidate))
+             (= score (nshell.domain.completion:candidate-score candidate))))))
+
+  (it "pbt-completion-rank-score-prefers-exact-over-prefix-extension"
+    "An exact match outscores a longer candidate that only carries the query as a prefix."
+    (check-property (:trials 50)
+        ((prefix (gen-command-prefix :min-length 2 :max-length 6) #'shrink-shell-word))
+      (> (nshell.domain.completion::%completion-rank-score
+          prefix (nshell.domain.completion:make-candidate prefix))
+         (nshell.domain.completion::%completion-rank-score
+          prefix (nshell.domain.completion:make-candidate
+                  (concatenate 'string prefix "x"))))))
+
   (it "pbt-completion-ranking-breaks-score-ties-lexically"
     (check-property (:trials 50)
-        ((prefix (gen-command-prefix :min-length 1 :max-length 4) nil)
+        ((prefix (gen-command-prefix :min-length 1 :max-length 4) #'shrink-shell-word)
          (early-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
          (late-tail (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
-         (score (gen-in-range 0 100) nil))
+         (score (gen-in-range 0 100) #'shrink-integer))
       (let* ((early-text (concatenate 'string prefix "-a-" early-tail))
              (late-text (concatenate 'string prefix "-z-" late-tail))
              (early (nshell.domain.completion:make-candidate early-text :score score))
@@ -200,8 +218,8 @@
   (it "pbt-completion-merge-keeps-higher-scored-duplicate"
     (check-property (:trials 50)
         ((text (gen-shell-word :min-length 1 :max-length 10) #'shrink-shell-word)
-         (low-score (gen-in-range 0 50) nil)
-         (score-delta (gen-in-range 1 50) nil)
+         (low-score (gen-in-range 0 50) #'shrink-integer)
+         (score-delta (gen-in-range 1 50) #'shrink-integer)
          (description (gen-prompt-text :min-length 1 :max-length 16) #'shrink-prompt-text))
       (let* ((expected-score (+ low-score score-delta))
              (low (nshell.domain.completion:make-candidate text
@@ -219,7 +237,7 @@
   (it "pbt-completion-merge-keeps-described-duplicate-on-score-tie"
     (check-property (:trials 50)
         ((text (gen-shell-word :min-length 1 :max-length 10) #'shrink-shell-word)
-         (score (gen-in-range 0 100) nil)
+         (score (gen-in-range 0 100) #'shrink-integer)
          (description (gen-prompt-text :min-length 1 :max-length 16) #'shrink-prompt-text))
       (let* ((plain (nshell.domain.completion:make-candidate text
                                                              :description ""
@@ -304,10 +322,10 @@
 
   (it "pbt-argument-completion-is-shell-token-aware"
     (check-property (:trials 50)
-        ((suffix (gen-command-prefix :min-length 1 :max-length 8) nil)
+        ((suffix (gen-command-prefix :min-length 1 :max-length 8) #'shrink-shell-word)
          (left (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
          (right (gen-shell-word :min-length 1 :max-length 8) #'shrink-shell-word)
-         (stem (gen-command-prefix :min-length 1 :max-length 4) nil))
+         (stem (gen-command-prefix :min-length 1 :max-length 4) #'shrink-shell-word))
       (let* ((command (concatenate 'string "zz-nshell-" suffix))
              (prefix (concatenate 'string "--" stem))
              (flag (concatenate 'string prefix "-flag"))

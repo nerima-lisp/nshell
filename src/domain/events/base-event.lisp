@@ -1,12 +1,10 @@
 (in-package #:nshell.domain.events)
 
-(defstruct (%domain-event
-            (:constructor %allocate-domain-event (type timestamp))
-            (:predicate nil)
-            (:copier nil)
-            (:conc-name domain-event-))
-  (type nil :type keyword :read-only t)
-  (timestamp (get-universal-time) :type integer :read-only t))
+(define-value-struct %domain-event
+    ((type nil :type keyword)
+     (timestamp (get-universal-time) :type integer))
+  :constructor %allocate-domain-event
+  :predicate nil)
 
 (defun %make-domain-event-with-invariants (type &optional (timestamp (get-universal-time)))
   (check-type type keyword)

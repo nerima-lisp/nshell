@@ -1,33 +1,32 @@
 (in-package #:nshell.application)
 
+(defun %command-path-missing-message (spec name)
+  "The 'not found' line a command-path builtin (which / command -v / type) prints
+for NAME, built from SPEC's :MISSING-PREFIX and :MISSING-FORMAT."
+  (format nil "~a: ~a~%"
+          (getf spec :missing-prefix)
+          (format nil (getf spec :missing-format) name)))
+
+(defun %emit-command-path (out context spec name)
+  "Write NAME's resolution to OUT using SPEC's per-kind formats; return T when
+NAME resolved to a builtin or an executable, NIL when it was not found."
+  (multiple-value-bind (kind text) (resolve-command-path context name)
+    (case kind
+      (:builtin (format out (getf spec :builtin-format) name) t)
+      (:path    (format out (getf spec :path-format) name text) t)
+      (otherwise (write-string (%command-path-missing-message spec name) out) nil))))
+
 (defun %builtin-command-path (context args command)
   (let ((spec (%command-path-spec command)))
-    (if args
+    (if (null args)
+        (%builtin-usage command (getf spec :usage))
         (let ((exit-code 0))
-          (labels ((emit-name (out name)
-                     (multiple-value-bind (kind text)
-                         (resolve-command-path context name)
-                       (case kind
-                         (:builtin
-                          (format out (getf spec :builtin-format) name)
-                          t)
-                         (:path
-                          (format out (getf spec :path-format) name text)
-                          t)
-                         (otherwise
-                          (write-string
-                           (format nil "~a: ~a~%"
-                                   (getf spec :missing-prefix)
-                                   (format nil (getf spec :missing-format) name))
-                           out)
-                          nil)))))
-            (values
-             (with-output-to-string (out)
-               (dolist (name args)
-                 (unless (emit-name out name)
-                   (setf exit-code 1))))
-             exit-code)))
-        (%builtin-usage command (getf spec :usage)))))
+          (values
+           (with-output-to-string (out)
+             (dolist (name args)
+               (unless (%emit-command-path out context spec name)
+                 (setf exit-code 1))))
+           exit-code)))))
 
 (defun %builtin-type-mode (options)
   (cond

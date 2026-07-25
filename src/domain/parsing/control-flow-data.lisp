@@ -15,11 +15,9 @@
     ("switch" . %group-control-flow-switch)
     ("begin" . %group-control-flow-begin)))
 
-(defstruct (control-flow-frame
-            (:constructor %make-control-flow-frame (keyword else-seen))
-            (:copier nil))
-  (keyword nil :type string :read-only t)
-  (else-seen nil :type boolean :read-only t))
+(define-value-struct control-flow-frame
+    ((keyword nil :type string)
+     (else-seen nil :type boolean)))
 
 (defun control-flow-keyword-p (value)
   (and (stringp value)

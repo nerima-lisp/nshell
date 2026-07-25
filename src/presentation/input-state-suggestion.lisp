@@ -39,16 +39,31 @@
                (+ position 2)
                (1+ position))))))))
 
+(defun %suggestion-scan-fd-digits (suggestion position end)
+  "Return the index just past the run of file-descriptor digits that begins at
+POSITION (POSITION itself when none follow)."
+  (loop for index from position below end
+        while (digit-char-p (char suggestion index))
+        finally (return index)))
+
+(defun %suggestion-redirection-target-end (suggestion operator-end end)
+  "Return the end of an `&'-style redirection target -- the fd digits in a form
+like \"2>&1\", or a bare \"-\" -- or OPERATOR-END when no such target follows the
+ampersand at OPERATOR-END."
+  (let ((target-position (1+ operator-end)))
+    (if (and (< target-position end)
+             (or (digit-char-p (char suggestion target-position))
+                 (char= (char suggestion target-position) #\-)))
+        (%suggestion-scan-fd-digits suggestion (1+ target-position) end)
+        operator-end)))
+
 (defun suggestion-compact-redirection-end (suggestion position)
   "Return the end of a compact redirection starting at POSITION, or NIL.
 
 This keeps autosuggestion word acceptance from splitting shell forms such as
 \"2>&1\" and \">out.txt\" into lexer-sized pieces."
   (let* ((end (length suggestion))
-         (operator-position position))
-    (loop while (and (< operator-position end)
-                     (digit-char-p (char suggestion operator-position)))
-          do (incf operator-position))
+         (operator-position (%suggestion-scan-fd-digits suggestion position end)))
     (when (or (= operator-position position)
               (and (< operator-position end)
                    (member (char suggestion operator-position)
@@ -60,17 +75,7 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
           (cond
             ((and (< operator-end end)
                   (char= (char suggestion operator-end) #\&))
-             (let ((target-position (1+ operator-end)))
-               (if (and (< target-position end)
-                        (or (digit-char-p (char suggestion target-position))
-                            (char= (char suggestion target-position) #\-)))
-                   (let ((target-end (1+ target-position)))
-                     (loop while (and (< target-end end)
-                                      (digit-char-p
-                                       (char suggestion target-end)))
-                           do (incf target-end))
-                     target-end)
-                   operator-end)))
+             (%suggestion-redirection-target-end suggestion operator-end end))
             ((and (< operator-end end)
                   (not (nshell.domain.parsing:shell-token-separator-p
                         (char suggestion operator-end))))

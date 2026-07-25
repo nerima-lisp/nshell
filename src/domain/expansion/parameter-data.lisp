@@ -14,30 +14,25 @@ body; NIL at top level.")
              (parameter-expansion-error-name condition)
              (parameter-expansion-error-message condition)))))
 
-(defstruct (list-selection-spec
-            (:constructor %make-list-selection-spec (kind start-index end-index)))
-  (kind :index :type keyword :read-only t)
-  (start-index nil :read-only t)
-  (end-index nil :read-only t))
+(define-value-struct list-selection-spec
+    ((kind :index :type keyword)
+     (start-index nil)
+     (end-index nil)))
 
-(defstruct (variable-reference-syntax
-            (:constructor %make-variable-reference-syntax
-                (name name-end bracket-spec bracket-next bracket-status)))
-  (name "" :type string :read-only t)
-  (name-end 0 :type fixnum :read-only t)
-  (bracket-spec nil :read-only t)
-  (bracket-next nil :read-only t)
-  (bracket-status nil :read-only t))
+(define-value-struct variable-reference-syntax
+    ((name "" :type string)
+     (name-end 0 :type fixnum)
+     (bracket-spec nil)
+     (bracket-next nil)
+     (bracket-status nil)))
 
-(defstruct (parameter-binding
-            (:constructor %make-parameter-binding (name raw set-p value)))
-  (name "" :type string :read-only t)
-  (raw nil :read-only t)
-  (set-p nil :read-only t)
-  (value "" :type string :read-only t))
+(define-value-struct parameter-binding
+    ((name "" :type string)
+     (raw nil)
+     (set-p nil)
+     (value "" :type string)))
 
-(defstruct (parameter-operator
-            (:constructor %make-parameter-operator (op word-text colon-p)))
-  (op nil :read-only t)
-  (word-text "" :type string :read-only t)
-  (colon-p nil :read-only t))
+(define-value-struct parameter-operator
+    ((op nil)
+     (word-text "" :type string)
+     (colon-p nil)))

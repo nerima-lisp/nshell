@@ -1,12 +1,12 @@
 (in-package #:nshell.domain.signals)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (os-signal (:constructor %allocate-signal (name number))
-                        (:copier nil)
-                        (:predicate signal-p))
-    "A POSIX signal as a domain value object."
-    (name nil :type keyword :read-only t)
-    (number 1 :type (integer 1 64) :read-only t)))
+  (define-value-struct os-signal
+      ((name nil :type keyword)
+       (number 1 :type (integer 1 64)))
+    :documentation "A POSIX signal as a domain value object."
+    :constructor %allocate-signal
+    :predicate signal-p))
 
 (defun %make-signal (name number)
   (check-type name keyword)

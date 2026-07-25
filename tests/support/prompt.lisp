@@ -1,9 +1,5 @@
 (in-package #:nshell/test)
 
-(defstruct fake-git-process
-  output
-  exit-code)
-
 (defun current-display-cwd ()
   "Return the prompt cwd display used by the presentation renderer."
   (let ((cwd (namestring (uiop:getcwd)))

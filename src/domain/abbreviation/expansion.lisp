@@ -1,12 +1,11 @@
 ;;; Shell abbreviation engine
 (in-package #:nshell.domain.abbreviation)
 
-(defstruct (abbreviation
-            (:constructor %allocate-abbreviation (expansion position))
-            (:copier nil))
-  "Abbreviation expansion metadata."
-  (expansion "" :type string :read-only t)
-  (position :anywhere :type (member :anywhere :command) :read-only t))
+(define-value-struct abbreviation
+    ((expansion "" :type string)
+     (position :anywhere :type (member :anywhere :command)))
+  :documentation "Abbreviation expansion metadata."
+  :constructor %allocate-abbreviation)
 
 (defun make-abbreviation (&key (expansion "") (position :anywhere))
   "Create validated abbreviation expansion metadata."
@@ -14,11 +13,10 @@
   (check-type position (member :anywhere :command))
   (%allocate-abbreviation (copy-seq expansion) position))
 
-(defstruct (abbreviation-token-range
-            (:constructor %make-abbreviation-token-range (start end)))
-  "Token boundary used by the abbreviation scanner."
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t))
+(define-value-struct abbreviation-token-range
+    ((start 0 :type fixnum)
+     (end 0 :type fixnum))
+  :documentation "Token boundary used by the abbreviation scanner.")
 
 (defun abbreviation-boundary-p (ch)
   (member ch '(#\Space #\Tab #\Newline #\| #\; #\& #\< #\>) :test #'char=))

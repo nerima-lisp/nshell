@@ -51,6 +51,20 @@
     (assert-event-types
      ((nshell.domain.events:make-history-searched-event) :history-searched)))
 
+  (it "pipeline-process-and-remaining-events-have-correct-types"
+    "The remaining pipeline/process/lifecycle event constructors produce correct types."
+    (assert-event-types
+     ((nshell.domain.events:make-pipeline-started-event :pipe 1) :pipeline-started)
+     ((nshell.domain.events:make-process-created-event 1 100) :process-created)
+     ((nshell.domain.events:make-process-exited-event 1 0) :process-exited)
+     ((nshell.domain.events:make-pipeline-completed-event 1 0) :pipeline-completed)
+     ((nshell.domain.events:make-job-continued-event 1) :job-continued)
+     ((nshell.domain.events:make-signal-caught-event :sigint) :signal-caught)
+     ((nshell.domain.events:make-command-appended-to-history-event "entry")
+      :command-appended-to-history)
+     ((nshell.domain.events:make-completion-triggered-event "pre")
+      :completion-triggered)))
+
   (it "event-timestamp-is-monotonic"
     "Event timestamps are set at creation time"
     (let* ((t1 (get-universal-time))

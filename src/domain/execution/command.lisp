@@ -1,11 +1,10 @@
 (in-package #:nshell.domain.execution)
 
-(defstruct (command (:constructor %allocate-command (name-str args-list))
-                    (:predicate %command-p)
-                    (:copier nil)
-                    (:conc-name command-))
-  (name-str "" :type string :read-only t)
-  (args-list nil :type list :read-only t))
+(define-value-struct command
+    ((name-str "" :type string)
+     (args-list nil :type list))
+  :constructor %allocate-command
+  :predicate %command-p)
 
 (defun %command-string-value (value)
   (copy-seq value))

@@ -103,20 +103,26 @@ it and treats a negative WIDTH as 0."
   (with-output-to-string (stream)
     (%write-colored-segments stream theme segments)))
 
+(defun %emit-right-prompt (theme visible-right-segments padding)
+  "Draw VISIBLE-RIGHT-SEGMENTS PADDING columns to the right of the cursor and
+restore the cursor, so the left prompt's position is left unchanged. This is the
+terminal-effect half of the right prompt; the layout math lives in the caller."
+  (nshell.infrastructure.terminal:ansi-save-cursor)
+  (format t "~C[~dC~a"
+          #\Esc
+          padding
+          (%colored-segments-string theme visible-right-segments))
+  (nshell.infrastructure.terminal:ansi-restore-cursor))
+
 (defun %write-right-prompt (theme left-segments right-segments terminal-width)
   (let* ((left-width (%segments-visible-width left-segments))
          (available (- terminal-width left-width 2))
          (visible-right-segments (%truncate-segments right-segments available)))
     (when visible-right-segments
-      (let* ((right-width (%segments-visible-width visible-right-segments))
-             (padding (- terminal-width left-width right-width)))
+      (let ((padding (- terminal-width left-width
+                        (%segments-visible-width visible-right-segments))))
         (when (> padding 0)
-          (nshell.infrastructure.terminal:ansi-save-cursor)
-          (format t "~C[~dC~a"
-                  #\Esc
-                  padding
-                  (%colored-segments-string theme visible-right-segments))
-          (nshell.infrastructure.terminal:ansi-restore-cursor))))))
+          (%emit-right-prompt theme visible-right-segments padding))))))
 
 (defun render-prompt (config last-exit &key (last-command-duration-ms nil)
                                       (terminal-width (%prompt-terminal-width)))

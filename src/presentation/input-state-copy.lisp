@@ -1,25 +1,10 @@
-; Input state copy-with-overrides: initargs assembler and public copy-input-state-with API.
+; Input state copy-with-overrides: the public COPY-INPUT-STATE-WITH API.
+;
+; COPY-INPUT-STATE-WITH resolves each overridable field against STATE (see
+; input-state-copy-plist) and rebuilds a fresh input-state.  The per-group
+; builders return MAKE-INPUT-STATE initarg plists, which are appended to the
+; buffer/cursor initargs and applied in one call.
 (in-package #:nshell.presentation)
-
-(defstruct (%input-state-copy-spec
-            (:constructor %make-input-state-copy-spec
-                (&key buffer cursor-pos completion transient session))
-            (:conc-name %input-state-copy-spec-))
-  buffer
-  cursor-pos
-  completion
-  transient
-  session)
-
-(defun %copy-input-state-initargs (spec)
-  (append (list :buffer (%input-state-copy-spec-buffer spec)
-                :cursor-pos (%input-state-copy-spec-cursor-pos spec))
-            (%copy-input-state-completion-initargs
-             (%input-state-copy-spec-completion spec))
-            (%copy-input-state-transient-initargs
-             (%input-state-copy-spec-transient spec))
-            (%copy-input-state-session-initargs
-             (%input-state-copy-spec-session spec))))
 
 (defun copy-input-state-with (state &key buffer cursor-pos
                                       (completion-index nil
@@ -55,63 +40,34 @@
                                       (redo-stack nil redo-stack-supplied-p))
   (let* ((new-buffer (or buffer (input-state-buffer state)))
          (new-cursor (clamp-cursor (or cursor-pos (input-state-cursor-pos state))
-                                   new-buffer))
-         (completion-values
-           (%copy-input-state-completion-values
-            state
-            completion-index-supplied-p
-            completion-index
-            completion-base-supplied-p
-            completion-base-buffer
-            completion-base-cursor-supplied-p
-            completion-base-cursor
-            last-candidates-supplied-p
-            last-candidates
-            suggestion-supplied-p
-            suggestion))
-         (transient-values
-           (%copy-input-state-transient-values
-            state
-            new-buffer
-            mode
-            vi-count-supplied-p
-            vi-count
-            vi-visual-anchor-supplied-p
-            vi-visual-anchor
-            abbreviation-expander
-            kill-ring
-            last-yank-start-supplied-p
-            last-yank-start
-            last-yank-end-supplied-p
-            last-yank-end
-            last-yank-index-supplied-p
-            last-yank-index
-            last-argument-start-supplied-p
-            last-argument-start
-            last-argument-end-supplied-p
-            last-argument-end
-            last-argument-index-supplied-p
-            last-argument-index))
-         (session-values
-           (%copy-input-state-session-values
-            state
-            search-query
-            search-original-buffer
-            search-original-cursor
-            search-index-supplied-p
-            search-index
-            undo-stack-supplied-p
-            undo-stack
-            redo-stack-supplied-p
-            redo-stack)))
+                                   new-buffer)))
     (apply #'make-input-state
-           (%copy-input-state-initargs
-            (%make-input-state-copy-spec
-             :buffer new-buffer
-             :cursor-pos new-cursor
-             :completion completion-values
-             :transient transient-values
-             :session session-values)))))
+           (append
+            (list :buffer new-buffer :cursor-pos new-cursor)
+            (%copy-input-state-completion-initargs
+             state
+             completion-index-supplied-p completion-index
+             completion-base-supplied-p completion-base-buffer
+             completion-base-cursor-supplied-p completion-base-cursor
+             last-candidates-supplied-p last-candidates
+             suggestion-supplied-p suggestion)
+            (%copy-input-state-transient-initargs
+             state new-buffer mode
+             vi-count-supplied-p vi-count
+             vi-visual-anchor-supplied-p vi-visual-anchor
+             abbreviation-expander kill-ring
+             last-yank-start-supplied-p last-yank-start
+             last-yank-end-supplied-p last-yank-end
+             last-yank-index-supplied-p last-yank-index
+             last-argument-start-supplied-p last-argument-start
+             last-argument-end-supplied-p last-argument-end
+             last-argument-index-supplied-p last-argument-index)
+            (%copy-input-state-session-initargs
+             state
+             search-query search-original-buffer search-original-cursor
+             search-index-supplied-p search-index
+             undo-stack-supplied-p undo-stack
+             redo-stack-supplied-p redo-stack)))))
 
 (defun normalize-input-state (state)
   (copy-input-state-with

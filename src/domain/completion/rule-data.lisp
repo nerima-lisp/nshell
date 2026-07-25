@@ -1,15 +1,15 @@
 ; Prolog-style logic engine: facts, rules, unification, and proof search.
 (in-package #:nshell.domain.completion)
 
-(defstruct (fact (:constructor %allocate-fact (predicate args))
-                 (:copier nil))
-  (predicate nil :type symbol :read-only t)
-  (args '() :type list :read-only t))
+(define-value-struct fact
+    ((predicate nil :type symbol)
+     (args '() :type list))
+  :constructor %allocate-fact)
 
-(defstruct (rule (:constructor %allocate-rule (head body))
-                 (:copier nil))
-  (head '() :type list :read-only t)
-  (body '() :type list :read-only t))
+(define-value-struct rule
+    ((head '() :type list)
+     (body '() :type list))
+  :constructor %allocate-rule)
 
 (defstruct (rule-knowledge-base (:constructor %make-rule-knowledge-base (&key (facts nil) (rules nil))))
   (facts nil :type list)

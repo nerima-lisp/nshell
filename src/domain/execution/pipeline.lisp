@@ -1,30 +1,27 @@
 (in-package #:nshell.domain.execution)
 
-(defstruct (pipeline (:constructor %allocate-pipeline (commands-list))
-                     (:copier nil)
-                     (:conc-name pipeline-))
-  (commands-list nil :type list :read-only t))
+(define-value-struct pipeline
+    ((commands-list nil :type list))
+  :constructor %allocate-pipeline)
 
-(defstruct (pipe-config (:constructor %allocate-pipe-config (&key stdin stdout index last-p))
-                        (:predicate %pipe-config-p)
-                        (:copier nil)
-                        (:conc-name pipe-config-))
-  (stdin nil :type (or null keyword) :read-only t)
-  (stdout nil :type (or null keyword) :read-only t)
-  (index 0 :type integer :read-only t)
-  (last-p nil :type boolean :read-only t))
+(define-value-struct pipe-config
+    ((stdin nil :type (or null keyword))
+     (stdout nil :type (or null keyword))
+     (index 0 :type integer)
+     (last-p nil :type boolean))
+  :constructor %allocate-pipe-config
+  :keyword-constructor t
+  :predicate %pipe-config-p)
 
-(defstruct (pipeline-stage (:constructor %allocate-pipeline-stage (stage-command pipe-config))
-                           (:predicate %pipeline-stage-p)
-                           (:copier nil)
-                           (:conc-name pipeline-stage-))
-  (stage-command nil :read-only t)
-  (pipe-config nil :type pipe-config :read-only t))
+(define-value-struct pipeline-stage
+    ((stage-command nil)
+     (pipe-config nil :type pipe-config))
+  :constructor %allocate-pipeline-stage
+  :predicate %pipeline-stage-p)
 
-(defstruct (pipeline-plan (:constructor %allocate-pipeline-plan (stages))
-                          (:copier nil)
-                          (:conc-name pipeline-plan-))
-  (stages nil :type list :read-only t))
+(define-value-struct pipeline-plan
+    ((stages nil :type list))
+  :constructor %allocate-pipeline-plan)
 
 (defun %pipeline-command-list (commands)
   (copy-list commands))

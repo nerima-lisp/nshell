@@ -60,13 +60,11 @@
   (command-history-max-entries history))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (history-word
-              (:constructor %allocate-history-word (start end))
-              (:conc-name %history-word-)
-              (:predicate nil)
-              (:copier nil))
-    (start 0 :type (integer 0 *) :read-only t)
-    (end 0 :type (integer 0 *) :read-only t)))
+  (define-value-struct history-word
+      ((start 0 :type (integer 0 *))
+       (end 0 :type (integer 0 *)))
+    :constructor %allocate-history-word
+    :predicate nil))
 
 (defun %make-history-word (start end)
   (check-type start (integer 0 *))
@@ -74,12 +72,6 @@
   (assert (<= start end) (start end)
           "History word start must not exceed end.")
   (%allocate-history-word start end))
-
-(defun history-word-start (word)
-  (%history-word-start word))
-
-(defun history-word-end (word)
-  (%history-word-end word))
 
 (defstruct (%history-token-window
             (:constructor %make-history-token-window (current next))

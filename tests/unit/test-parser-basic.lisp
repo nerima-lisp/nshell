@@ -68,8 +68,8 @@
     "AST value objects expose factories while hiding raw allocation and copy APIs."
     (expect (fboundp 'nshell.domain.parsing::copy-command-arg) :to-be-falsy)
     (expect (fboundp 'nshell.domain.parsing::copy-case-clause) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.parsing::%allocate-command-arg) :to-be-truthy)
-    (expect (fboundp 'nshell.domain.parsing::%allocate-case-clause) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.parsing::%make-command-arg) :to-be-truthy)
+    (expect (fboundp 'nshell.domain.parsing::%make-case-clause) :to-be-truthy)
     (expect (lambda () (nshell.domain.parsing:make-command-arg 42)) :to-throw 'error)
     (expect (lambda () (nshell.domain.parsing:make-command-arg "value" :invalid)) :to-throw 'error)
     (expect (lambda () (nshell.domain.parsing:make-case-clause 42 '())) :to-throw 'error)

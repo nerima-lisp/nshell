@@ -11,6 +11,15 @@
         (+ 128 code)
         (or code 0))))
 
+(defun %process-result-shell-exit (result)
+  "Map a cl-process-kit PROCESS-RESULT to a shell exit status: the process's own
+exit code, or 128+signal when it was terminated by a signal."
+  (let ((code (process-kit:process-result-exit-code result))
+        (signal (process-kit:process-result-signal result)))
+    (cond (code code)
+          (signal (+ 128 signal))
+          (t 0))))
+
 (defun %copy-process-output (input output)
   (let ((buffer (make-string 4096)))
     (loop for count = (read-sequence buffer input)
@@ -130,58 +139,60 @@
                       :search nil
                       :environment environment))
 
+(defun %resolve-input-redirect (redirects register)
+  "Return the standard-input stream REDIRECTS ask for, calling REGISTER on any
+stream opened here so the caller can close it afterwards. With no input
+redirection the process inherits *STANDARD-INPUT*."
+  (multiple-value-bind (kind target)
+      (nshell.domain.parsing:redirect-input-spec redirects)
+    (flet ((track (stream) (funcall register stream) stream))
+      (case kind
+        (:<   (track (open target :direction :input :if-does-not-exist :error)))
+        (:<<< (track (%here-string-stream target)))
+        (:<<  (track (%here-document-stream target)))
+        (t    *standard-input*)))))
+
+(defun %resolve-output-redirect (redirects register)
+  "Return the standard-output stream REDIRECTS ask for, or T to inherit this
+process's own stdout, calling REGISTER on any stream opened here."
+  (multiple-value-bind (target mode)
+      (nshell.domain.parsing:redirect-output-spec redirects)
+    (if target
+        (let ((stream (open target :direction :output
+                                   :if-exists mode :if-does-not-exist :create)))
+          (funcall register stream)
+          stream)
+        t)))
+
+(defun %spawn-in-own-process-group (resolved-cmd args environment input output)
+  "Spawn RESOLVED-CMD wired to INPUT/OUTPUT and isolate it in its own process
+group. Returns the process, or NIL when the spawn fails."
+  (let ((proc (%spawn-external-command resolved-cmd args environment
+                                       :input input :output output)))
+    (when proc
+      (let ((pid (sb-ext:process-pid proc)))
+        (when (plusp pid)
+          (handler-case (set-process-group pid pid) (error ()))))
+      proc)))
+
 (defun spawn-async (cmd args &key redirects)
   "Spawn CMD with ARGS asynchronously. Returns the SBCL process object, or NIL on error."
   (let ((redirect-streams nil))
-    (unwind-protect
-         (handler-case
-             (multiple-value-bind (input-kind input-target)
-                 (nshell.domain.parsing:redirect-input-spec redirects)
-               (let* ((input (cond
-                               ((eq input-kind :<)
-                                (let ((stream (open input-target
-                                                    :direction :input
-                                                    :if-does-not-exist :error)))
-                                  (push stream redirect-streams)
-                                  stream))
-                               ((eq input-kind :<<<)
-                                (let ((stream (%here-string-stream input-target)))
-                                  (push stream redirect-streams)
-                                  stream))
-                               ((eq input-kind :<<)
-                                (let ((stream (%here-document-stream input-target)))
-                                  (push stream redirect-streams)
-                                  stream))
-                               (t *standard-input*)))
-                      (output
-                        (multiple-value-bind (output-target output-mode)
-                            (nshell.domain.parsing:redirect-output-spec redirects)
-                          (if output-target
-                              (let ((stream (open output-target
-                                                  :direction :output
-                                                  :if-exists output-mode
-                                                  :if-does-not-exist :create)))
-                                (push stream redirect-streams)
-                                stream)
-                              t))))
+    (flet ((register (stream) (push stream redirect-streams)))
+      (unwind-protect
+           (handler-case
+               (let ((input (%resolve-input-redirect redirects #'register))
+                     (output (%resolve-output-redirect redirects #'register)))
                  (multiple-value-bind (resolved-cmd environment)
                      (%prepare-external-command cmd)
                    (when resolved-cmd
-                     (let ((proc (%spawn-external-command
-                                  resolved-cmd args environment
-                                  :input input
-                                  :output output)))
-                       (when proc
-                         (let ((pid (sb-ext:process-pid proc)))
-                           (when (plusp pid)
-                             (handler-case (set-process-group pid pid)
-                               (error ()))))
-                         proc))))))
-           (error (err)
-             (format *error-output* "nshell: ~a: ~a~%" cmd err)
-             nil))
-      (dolist (stream redirect-streams)
-        (ignore-errors (close stream))))))
+                     (%spawn-in-own-process-group resolved-cmd args environment
+                                                  input output))))
+             (error (err)
+               (format *error-output* "nshell: ~a: ~a~%" cmd err)
+               nil))
+        (dolist (stream redirect-streams)
+          (ignore-errors (close stream)))))))
 
 (defun run-external (cmd args)
   "Execute CMD with ARGS synchronously, printing output. Returns exit code."
@@ -219,32 +230,44 @@
       1)))
 
 (defun run-external-capture (cmd args)
-  "Execute CMD with ARGS synchronously. Returns captured output and exit code."
+  "Execute CMD with ARGS synchronously, capturing stdout for command
+substitution. Returns the captured output and a shell exit code.
+
+Delegates the timeout-guarded launch to cl-process-kit's RUN, which captures
+output, enforces *EXTERNAL-COMMAND-TIMEOUT* by escalating SIGTERM to SIGKILL
+across the child's whole process group, and reports a timeout instead of
+signalling. Command resolution and the shell's stderr/exit conventions stay
+here: stderr merges into the captured value unless a redirection is active, in
+which case it is replayed to *ERROR-OUTPUT*.
+
+Standard input is forwarded to the child only while *REDIRECTED-STDIN* is bound,
+i.e. when the current stdin is a finite, EOF-bearing stream (a here-doc,
+here-string, or `< file`). An unredirected *STANDARD-INPUT* is the interactive
+terminal, which never yields EOF; feeding it would leave RUN's stdin pump
+blocked forever, so the child is given an empty stdin instead -- matching a real
+shell, where `$(echo hi)` does not consume the terminal."
   (handler-case
       (multiple-value-bind (resolved-cmd environment)
           (%prepare-external-command cmd)
         (unless resolved-cmd
           (return-from run-external-capture
             (values (%external-command-not-found-message cmd) 127)))
-        (let ((proc (%spawn-external-command resolved-cmd args environment
-                                             :input *standard-input*
-                                             :output :stream)))
-          (if proc
-              (let ((buffer (make-string-output-stream)))
-                (multiple-value-bind (exit timeout-p)
-                    (%wait-process-with-output
-                     proc
-                     buffer
-                     *external-command-timeout*
-                     (lambda ()
-                       124))
-                  (values (if (= exit 124)
-                              (if timeout-p
-                                  (%external-command-timeout-message
-                                   cmd *external-command-timeout*)
-                                  (get-output-stream-string buffer))
-                              (get-output-stream-string buffer))
-                          exit)))
-              (values "" 1))))
+        (let* ((separate-stderr-p (and *redirected-stderr* t))
+               (forward-stdin-p (and *redirected-stdin* t))
+               (result (process-kit:run
+                        resolved-cmd args
+                        :input (and forward-stdin-p *standard-input*)
+                        :environment environment
+                        :error (if separate-stderr-p :capture :output)
+                        :timeout *external-command-timeout*
+                        :on-timeout :return)))
+          (when separate-stderr-p
+            (write-string (process-kit:process-result-stderr result) *error-output*))
+          (if (process-kit:process-result-timed-out-p result)
+              (values (%external-command-timeout-message
+                       cmd *external-command-timeout*)
+                      124)
+              (values (process-kit:process-result-stdout result)
+                      (%process-result-shell-exit result)))))
     (error (err)
       (values (format nil "nshell: ~a: ~a~%" cmd err) 1))))

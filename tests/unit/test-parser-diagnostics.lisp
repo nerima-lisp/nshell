@@ -198,32 +198,20 @@
       (expect 12 :to-equal (nshell.domain.parsing:parse-diagnostic-end diagnostic))
       (expect (nshell.domain.parsing:parse-diagnostic-token diagnostic) :to-be-null)))
 
-  (it "parse-leading-operator-diagnostic"
-    (let ((line "| grep foo"))
-      (with-first-parsed-diagnostic (diagnostic result line)
-        (assert-parsed-diagnostic result diagnostic
-                                  :present t
-                                  :kind :missing-command
-                                  :span-start 0
-                                  :span-end 1))))
-
-  (it "parse-leading-redirect-diagnostic"
-    (let ((line "> out.txt"))
-      (with-first-parsed-diagnostic (diagnostic result line)
-        (assert-parsed-diagnostic result diagnostic
-                                  :present t
-                                  :kind :missing-command
-                                  :span-start 0
-                                  :span-end 1))))
-
-  (it "parse-trailing-redirect-diagnostic"
-    (let ((line "echo >"))
-      (with-first-parsed-diagnostic (diagnostic result line)
-        (assert-parsed-diagnostic result diagnostic
-                                  :present t
-                                  :kind :missing-redirection-target
-                                  :span-start 5
-                                  :span-end 6))))
+  ;; Each row parses LINE and expects the first structural diagnostic to be KIND
+  ;; spanning [START, END): a leading operator/redirect has no command, a
+  ;; trailing redirect has no target.
+  (it-each (("| grep foo"  :missing-command             0 1)
+            ("> out.txt"   :missing-command             0 1)
+            ("echo >"      :missing-redirection-target  5 6))
+      "flags ~S with a ~S diagnostic"
+      (line kind start end)
+    (with-first-parsed-diagnostic (diagnostic result line)
+      (assert-parsed-diagnostic result diagnostic
+                                :present t
+                                :kind kind
+                                :span-start start
+                                :span-end end)))
 
   (it "missing-redirect-target-policy-projects-token-diagnostic"
     "Missing redirect target diagnostics should preserve redirect token position."

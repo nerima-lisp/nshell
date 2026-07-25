@@ -51,16 +51,18 @@
                        (%copy-ast-list separators)
                        span))
 
-(defstruct (sequence-node-command-separator
-            (:constructor %make-sequence-node-command-separator (command separator)))
-  (command nil :read-only t)
-  (separator nil :read-only t))
+(define-value-struct sequence-node-command-separator
+    ((command nil)
+     (separator nil)))
 
 (defun sequence-node-command-separators (node)
-  "Return SEQUENCE-NODE-COMMAND-SEPARATOR values for NODE in command order."
-  (let ((separators (copy-list (sequence-node-separators node))))
-    (loop for command in (sequence-node-commands node)
-          collect (%make-sequence-node-command-separator command (pop separators)))))
+  "Return SEQUENCE-NODE-COMMAND-SEPARATOR values for NODE in command order,
+pairing each command with the separator that follows it (NIL after the last).
+Expressed as a pure zip -- no mutable running list -- since MAPCAR stops at the
+shorter argument and the command list is one longer than the separators."
+  (mapcar #'%make-sequence-node-command-separator
+          (sequence-node-commands node)
+          (append (sequence-node-separators node) '(nil))))
 
 (defstruct (if-node (:include ast-node)
                     (:constructor %make-if-node
@@ -96,27 +98,15 @@
 (defun make-while-node (condition body &optional span)
   (%make-while-node condition (%copy-ast-list body) span))
 
-(defstruct (case-clause
-            (:constructor %allocate-case-clause)
-            (:copier nil)
-            (:predicate %case-clause-p)
-            (:conc-name %case-clause-))
-  (pattern "*" :type string :read-only t)
-  (body nil :type list :read-only t))
-
-(defun case-clause-p (value)
-  (%case-clause-p value))
+(define-value-struct case-clause
+    ((pattern "*" :type string)
+     (body nil :type list :copy %copy-ast-list))
+  :keyword-constructor t)
 
 (defun make-case-clause (pattern body)
-  (%allocate-case-clause
+  (%make-case-clause
    :pattern (%ensure-ast-string pattern "CASE-CLAUSE pattern")
    :body (%copy-ast-list body)))
-
-(defun case-clause-pattern (clause)
-  (%case-clause-pattern clause))
-
-(defun case-clause-body (clause)
-  (%copy-ast-list (%case-clause-body clause)))
 
 (defstruct (case-node (:include ast-node)
                       (:constructor %make-case-node (value clauses &optional span)))
@@ -153,27 +143,15 @@
 
 
 ;; -- Arg utilities ------------------------------------------
-(defstruct (command-arg
-            (:constructor %allocate-command-arg)
-            (:copier nil)
-            (:predicate %command-arg-p)
-            (:conc-name %command-arg-))
-  (value "" :type string :read-only t)
-  (quote-style nil :type (member nil :single :double) :read-only t))
-
-(defun command-arg-p (value)
-  (%command-arg-p value))
+(define-value-struct command-arg
+    ((value "" :type string)
+     (quote-style nil :type (member nil :single :double)))
+  :keyword-constructor t)
 
 (defun make-command-arg (value &optional quote-style)
-  (%allocate-command-arg
+  (%make-command-arg
    :value (%ensure-ast-string value "COMMAND-ARG value")
    :quote-style (%validated-command-arg-quote-style value quote-style)))
-
-(defun command-arg-value (arg)
-  (%command-arg-value arg))
-
-(defun command-arg-quote-style (arg)
-  (%command-arg-quote-style arg))
 
 (defun %command-arg (arg)
   (etypecase arg

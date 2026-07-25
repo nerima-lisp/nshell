@@ -12,7 +12,7 @@ whether a backport is appropriate.
 Please **do not** open a public issue for security vulnerabilities.
 
 Instead, report privately using GitHub's
-[private vulnerability reporting](https://github.com/takeokunn/nshell/security/advisories/new)
+[private vulnerability reporting](https://github.com/nerima-lisp/nshell/security/advisories/new)
 ("Report a vulnerability" under the repository's *Security* tab).
 
 Please include:

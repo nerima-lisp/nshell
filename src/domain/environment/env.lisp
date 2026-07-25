@@ -30,15 +30,13 @@ The scalar string view is derived from VALUES on demand."
   "Return the scalar string view of VAR."
   (format nil "~{~a~^ ~}" (%env-var-values var)))
 
-(defstruct (env-binding
-            (:constructor %allocate-env-binding (name values exported-p))
-            (:conc-name %env-binding-)
-            (:predicate nil)
-            (:copier nil))
-  "Read-only projection of an environment variable."
-  (name "" :type string :read-only t)
-  (values nil :type list :read-only t)
-  (exported-p nil :type boolean :read-only t))
+(define-value-struct env-binding
+    ((name "" :type string)
+     (values nil :type list :copy :list)
+     (exported-p nil :type boolean))
+  :documentation "Read-only projection of an environment variable."
+  :constructor %allocate-env-binding
+  :predicate nil)
 
 (defun %make-env-binding-with-invariants (name values exported-p)
   "Create a detached read-only binding projection."
@@ -47,28 +45,15 @@ The scalar string view is derived from VALUES on demand."
                          (%copy-env-value-list values)
                          (not (null exported-p))))
 
-(defun env-binding-name (binding)
-  "Return BINDING's variable name."
-  (%env-binding-name binding))
-
-(defun env-binding-values (binding)
-  "Return BINDING's structured values."
-  (copy-list (%env-binding-values binding)))
-
 (defun env-binding-value (binding)
   "Return BINDING's scalar string value."
   (format nil "~{~a~^ ~}" (%env-binding-values binding)))
 
-(defun env-binding-exported-p (binding)
-  "Return true when BINDING is exported."
-  (%env-binding-exported-p binding))
-
-(defstruct (env-entry
-            (:constructor %allocate-env-entry (name value))
-            (:copier nil))
-  "Read-only projection of an exported environment variable."
-  (name "" :type string :read-only t)
-  (value "" :type string :read-only t))
+(define-value-struct env-entry
+    ((name "" :type string)
+     (value "" :type string))
+  :documentation "Read-only projection of an exported environment variable."
+  :constructor %allocate-env-entry)
 
 (defun %make-env-entry-with-invariants (name value)
   "Create a read-only exported environment entry projection."

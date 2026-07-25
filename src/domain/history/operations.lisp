@@ -56,12 +56,6 @@
   "Return current number of entries in HISTORY."
   (length (command-history-entries history)))
 
-(defun history-dedup (history)
-  "Remove duplicate entries from HISTORY, keeping the most recent entries."
-  (%history-replace-entries history
-                            (%history-unique-entries
-                             (command-history-entries history))))
-
 (defun history-merge (history entries)
   "Merge ENTRIES into HISTORY, preserving newest-first de-duplicated order."
   (let ((source-entries (if (command-history-p entries)

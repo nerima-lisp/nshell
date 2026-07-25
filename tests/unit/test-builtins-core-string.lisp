@@ -206,7 +206,7 @@
   (it "string-prefix-p-tests-leading-substring"
     "string-prefix-p returns true only when prefix is a leading substring of string."
     (flet ((pre (prefix string)
-             (nshell.application::%string-prefix-p prefix string)))
+             (nshell.util:string-prefix-p prefix string)))
       (expect (pre "" "abc") :to-be-truthy)
       (expect (pre "a" "abc") :to-be-truthy)
       (expect (pre "abc" "abc") :to-be-truthy)

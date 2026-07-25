@@ -80,10 +80,6 @@
                        :min-length min-length
                        :max-length max-length))
 
-(defun gen-logic-atom (&key (min-length 1) (max-length 12))
-  "Return a generator for simple unification atoms."
-  (gen-shell-word :min-length min-length :max-length max-length))
-
 (defun gen-shell-command (&key (min-words 1) (max-words 4) (max-word-length 12))
   "Return a generator for simple valid shell command strings."
   (%pbt-joined-string (gen-shell-word :max-length max-word-length)
@@ -119,13 +115,6 @@ autosuggest blank-input semantics."
                        :min-length min-length
                        :max-length max-length))
 
-(defun gen-shell-pipeline (&key (min-commands 1) (max-commands 4))
-  "Return a generator for pipe-separated valid shell command strings."
-  (%pbt-joined-string (gen-shell-command)
-                      " | "
-                      :min-items min-commands
-                      :max-items max-commands))
-
 (defun gen-prompt-text (&key (min-length 0) (max-length 24) (cjk-probability 0.0))
   "Return a generator for prompt text, optionally mixing in CJK wide chars."
   (let ((length-generator (gen-in-range min-length max-length))
@@ -158,6 +147,15 @@ autosuggest blank-input semantics."
         (list (subseq text 0 (max 1 (floor (length text) 2)))
               (subseq text 0 1))
         :test #'string=))))
+
+(defun shrink-integer (n)
+  "Return integers strictly closer to zero than N -- zero, the halfway point,
+and one step toward zero -- so a failing numeric property shrinks its
+counterexample greedily toward the simplest magnitude."
+  (let ((candidates (list 0 (truncate n 2))))
+    (cond ((plusp n) (push (1- n) candidates))
+          ((minusp n) (push (1+ n) candidates)))
+    (remove-duplicates (remove n candidates) :test #'eql)))
 
 (defun gen-terminal-width (&key (min 0) (max 80))
   "Return a generator for terminal widths used by prompt truncation tests."
@@ -249,11 +247,19 @@ counterexample. No external shrinking library is used."
         (list ,@(%pbt-binding-shrinkers bindings))
         ,property))))
 
-(defmacro for-all-property ((&key (trials '*pbt-default-trials*)) bindings &body body)
-  "Run BODY as a property test for TRIALS generated examples."
-  `(check-property (:trials ,trials)
-       ,bindings
-     ,@body))
+(defmacro property (name bindings-or-doc &body body)
+  "Register a property-based test NAME asserting BODY holds over 50 generated
+example sets. This is the systematic shorthand for the recurring
+`(it NAME [DOC] (check-property (:trials 50) BINDINGS BODY))` shape, so an
+invariant network reads as a list of laws rather than repeated scaffolding.
+Call as (PROPERTY NAME BINDINGS . BODY) or, with a law description,
+(PROPERTY NAME DOC BINDINGS . BODY). BINDINGS take the same
+(VAR GENERATOR &optional SHRINKER) form CHECK-PROPERTY accepts."
+  (if (stringp bindings-or-doc)
+      (destructuring-bind (bindings &rest real-body) body
+        `(it ,name ,bindings-or-doc
+           (check-property (:trials 50) ,bindings ,@real-body)))
+      `(it ,name (check-property (:trials 50) ,bindings-or-doc ,@body))))
 
 (defmacro with-event-capture ((events dispatcher &rest types) projection &body body)
   "Subscribe to TYPES on DISPATCHER and collect PROJECTION values into EVENTS."

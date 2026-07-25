@@ -37,4 +37,20 @@
     (expect (nshell.domain.parsing:shell-command-separator-token-p
               (nshell.domain.parsing:make-token :redirect ">")) :to-be-falsy)
     (expect (nshell.domain.parsing:shell-command-separator-token-p
-              (nshell.domain.parsing:make-token :word "git")) :to-be-falsy)))
+              (nshell.domain.parsing:make-token :word "git")) :to-be-falsy))
+
+  (it "pbt-parse-command-line-is-deterministic"
+    "Parsing the same input twice yields the same diagnostics."
+    (check-property (:trials 50)
+        ((cmd (gen-shell-command) #'shrink-shell-word))
+      (equal (nshell.domain.parsing:parse-error-messages
+              (nshell.domain.parsing:parse-command-line cmd))
+             (nshell.domain.parsing:parse-error-messages
+              (nshell.domain.parsing:parse-command-line cmd)))))
+
+  (it "pbt-parse-simple-word-command-has-no-errors"
+    "A space-separated word command parses without diagnostics."
+    (check-property (:trials 50)
+        ((cmd (gen-shell-command) #'shrink-shell-word))
+      (null (nshell.domain.parsing:parse-errors
+             (nshell.domain.parsing:parse-command-line cmd))))))

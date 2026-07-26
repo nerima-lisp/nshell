@@ -1,31 +1,14 @@
-;;; nshell test runner
-;;; Aggregates and runs all test suites
+;;; Tests for src/main.lisp: the command-line surface of the nshell binary.
 
 (in-package #:nshell/test)
 
-(defun in-hermetic-sandbox-p ()
-  "True in hermetic Nix builds, not in impure nix develop shells.
-Real OS process and PTY integration tests are skipped only when the surrounding
-environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
-  (and (uiop:getenv "NIX_BUILD_TOP")
-       (not (string= (or (uiop:getenv "IN_NIX_SHELL") "")
-                     "impure"))))
+(defparameter +usage-synopsis-line+
+  "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
+  "The synopsis %PRINT-USAGE must emit verbatim.
 
-(defmacro skip-in-sandbox (reason &body body)
-  "Run BODY only when not in a hermetic sandbox; otherwise skip with REASON."
-  `(if (in-hermetic-sandbox-p)
-       (skip (format nil "~a (skipped in hermetic sandbox)" ,reason))
-       (progn ,@body)))
-
-(defmacro skip-when-pty-round-trip-unreliable (reason &body body)
-  "Run BODY only where raw PTY master/slave round-trip I/O is reliable.
-
-Reading bytes straight back through a PTY depends on the terminal line
-discipline, which differs across platforms and is not honored by hosted CI
-runners, so skip both the hermetic sandbox and CI."
-  `(if (or (in-hermetic-sandbox-p) (uiop:getenv "CI"))
-       (skip (format nil "~a (skipped in sandbox/CI)" ,reason))
-       (progn ,@body)))
+Held as a constant because the literal is longer than the 100-column line
+limit, and a string literal cannot be broken across source lines without
+changing its value.")
 
 (describe "nshell-tests"
   (it "smoke-test"
@@ -68,15 +51,7 @@ runners, so skip both the hermetic sandbox and CI."
                    (nshell::%print-usage stream)))
           (version (with-output-to-string (stream)
                      (nshell::%print-version stream))))
-      (expect (search "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]" usage) :to-be-truthy)
+      (expect (search +usage-synopsis-line+ usage) :to-be-truthy)
       (expect (search "stdin is a terminal" usage) :to-be-truthy)
       (expect (search "With -c/--command" usage) :to-be-truthy)
       (expect (search "nshell v" version) :to-be-truthy))))
-
-(defun run-tests ()
-  "Run all nshell tests through cl-weave.
-
-Runs single-threaded: many suites share process-global state (mock command
-tables, abbreviation/alias/history registries, dynamic completion hooks), so
-concurrent execution would race.  This mirrors how the FiveAM suite ran."
-  (run-all :reporter :spec :max-workers 1))

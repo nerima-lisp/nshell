@@ -183,7 +183,7 @@
   :components
   ((:file "package")
    (:file "support/assertions")
-   (:file "test-runner")
+   (:file "helpers-runner")
                (:file "support/pbt")
                (:file "support/pbt-shell")
                (:file "support/input-state")
@@ -302,7 +302,10 @@
    (:file "e2e/test-history")
    (:file "e2e/test-signals")
    (:file "e2e/test-job-control")
-   (:file "perf/test-startup"))
+   (:file "perf/test-startup")
+   ;; Appended rather than inserted next to helpers-runner: :serial t makes the
+   ;; order load order, and every existing entry must keep its position.
+   (:file "main-test"))
    :perform (asdf:test-op (o s)
               (declare (ignore o s))
               (unless (uiop:symbol-call :nshell/test '#:run-tests)

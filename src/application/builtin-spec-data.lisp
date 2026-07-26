@@ -141,7 +141,12 @@
     ("--index" :index-p t)))
 
 (defparameter +builtin-history-usage-clauses+
-  '("history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]"))
+  ;; One clause, assembled rather than written as a literal inside a quoted
+  ;; list: it is longer than 100 columns and a string cannot be split across
+  ;; source lines.
+  (list (concatenate 'string
+                     "history [search [--prefix|--contains|--exact|--case-sensitive] query"
+                     " | delete command | clear | size]")))
 
 (defparameter +history-search-option-specs+
   '(("--prefix" :mode :prefix)

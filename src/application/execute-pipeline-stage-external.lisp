@@ -104,15 +104,17 @@
       (handler-case
           (unwind-protect
                (let* ((stdout-buffer (make-string-output-stream))
+                      ;; Asked once and reused: 2>&1 decides both whether a
+                      ;; separate stderr buffer exists and what :error is.
+                      (merge-stderr-p
+                        (%external-process-redirect-plan-merge-stderr-p
+                         redirect-plan))
                       (stderr-buffer
-                        (unless (%external-process-redirect-plan-merge-stderr-p
-                                 redirect-plan)
-                          (make-string-output-stream)))
+                        (unless merge-stderr-p (make-string-output-stream)))
                       (process (sb-ext:run-program command args
                                                    :input stdin
                                                    :output :stream
-                                                   :error (if (%external-process-redirect-plan-merge-stderr-p
-                                                               redirect-plan)
+                                                   :error (if merge-stderr-p
                                                               :output
                                                               :stream)
                                                    :wait nil

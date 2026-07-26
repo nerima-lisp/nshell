@@ -33,7 +33,8 @@
          :synopsis "disown [job-id]"
          :description "remove job from job list")
    (list :command "set"
-         :synopsis "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name..."
+         :synopsis
+         "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name..."
          :description "manage variables"
          :flags '("-x" "--export" "-e" "--erase" "-q" "--query"))
    (list :command "export"
@@ -44,12 +45,17 @@
          :description "manage aliases"
          :flags '("-e" "-q"))
    (list :command "abbr"
-         :synopsis "abbr [-a [-p command|anywhere] name expansion...] [-e name...] [-q name...] [-l] [-s]"
+         :synopsis
+         "abbr [-a [-p command|anywhere] name expansion...] [-e name...] [-q name...] [-l] [-s]"
          :description "manage abbreviations"
          :flags '("-a" "--add" "-p" "--position" "command" "anywhere"
                   "-e" "--erase" "-q" "--query" "-l" "--list" "-s" "--show"))
    (list :command "complete"
-         :synopsis "complete -c command [-f flag ...] [-l option ...] [-s option ...] [-a arguments] [-d description] [-e]"
+         ;; Assembled: longer than 100 columns, and a string literal cannot be
+         ;; split across source lines without changing its value.
+         :synopsis (concatenate 'string
+                                "complete -c command [-f flag ...] [-l option ...]"
+                                " [-s option ...] [-a arguments] [-d description] [-e]")
          :description "define completions"
          :flags '("-c" "--command" "-f" "--flag" "-l" "--long-option"
                   "-s" "--short-option" "-a" "--arguments" "-d" "--description"
@@ -71,7 +77,12 @@
          :synopsis "[ expression ]"
          :description "evaluate conditional")
    (list :command "string"
-         :synopsis "string collect|length|lower|upper|join|split|replace|match|repeat|sub|trim ...; string replace|match|repeat|sub|trim ..."
+         ;; Assembled: longer than 100 columns, and a string literal cannot be
+         ;; split across source lines without changing its value.
+         :synopsis (concatenate 'string
+                                "string collect|length|lower|upper|join|split"
+                                "|replace|match|repeat|sub|trim ...;"
+                                " string replace|match|repeat|sub|trim ...")
          :description "manipulate strings"
          :flags '("collect" "length" "lower" "upper" "join" "split" "replace"
                   "match" "repeat" "sub" "trim" "-a" "--all" "-q" "--quiet"
@@ -93,7 +104,12 @@
          :description "manage functions"
          :flags '("-e" "-q"))
    (list :command "history"
-         :synopsis "history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]"
+         ;; Assembled: longer than 100 columns, and a string literal cannot be
+         ;; split across source lines without changing its value.
+         :synopsis (concatenate 'string
+                                "history [search"
+                                " [--prefix|--contains|--exact|--case-sensitive] query"
+                                " | delete command | clear | size]")
          :description "show and manage command history"
          :flags '("search" "delete" "clear" "size" "--prefix" "--contains" "--exact"
                   "--case-sensitive"))

@@ -163,7 +163,10 @@
                                        quote-style))
         (progn
           (setf (tokenizer-state-incomplete state) t)
-          (%tokenizer-state-push-token state :error (coerce (nreverse chars) 'string) start (tokenizer-state-pos state))))))
+          (%tokenizer-state-push-token state :error
+                                       (coerce (nreverse chars) 'string)
+                                       start
+                                       (tokenizer-state-pos state))))))
 
 (defun %tokenizer-read-single-quoted (state)
   (%tokenizer-read-delimited state #\' :quote-style :single))

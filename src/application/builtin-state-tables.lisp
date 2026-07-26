@@ -136,7 +136,9 @@
      (format out "~a~%" key))))
 
 (defun %abbr-usage ()
-  (%builtin-usage "abbr" "abbr [-a [-p command|anywhere] name expansion...] [-e name...] [-q name...] [-l] [-s]"))
+  (%builtin-usage
+   "abbr"
+   "abbr [-a [-p command|anywhere] name expansion...] [-e name...] [-q name...] [-l] [-s]"))
 
 (defun %abbr-parse-position (value)
   (cdr (assoc value +abbr-position-specs+ :test #'string=)))

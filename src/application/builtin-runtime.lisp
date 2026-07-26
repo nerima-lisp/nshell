@@ -38,7 +38,9 @@
                    ,on-unknown)
                   (t ,on-operand)))))
 
-  (defmacro %with-required-argument ((return-target remaining builtin option requirement status) &body body)
+  (defmacro %with-required-argument ((return-target remaining builtin option
+                                      requirement status)
+                                     &body body)
     `(if (rest ,remaining)
          (progn ,@body)
          (return-from ,return-target

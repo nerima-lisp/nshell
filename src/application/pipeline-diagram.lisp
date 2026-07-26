@@ -130,7 +130,9 @@ visualizes its pipeline structure without executing anything."
          (tokens (if mermaid (rest args) args))
          (command-string (format nil "~{~A~^ ~}" tokens)))
     (if (zerop (length (string-trim '(#\Space #\Tab) command-string)))
-        (values (format nil "pipeline-graph: usage: pipeline-graph [--mermaid] CMD [| CMD ...]~%") 2)
+        (values (format nil
+                        "pipeline-graph: usage: pipeline-graph [--mermaid] CMD [| CMD ...]~%")
+                2)
         (let ((plan (%command-line->pipeline-plan command-string)))
           (if plan
               (values (format nil "~A~%"

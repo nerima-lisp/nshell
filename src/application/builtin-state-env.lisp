@@ -20,7 +20,9 @@
     (values nil (min missing 255))))
 
 (defun %set-usage ()
-  (%builtin-usage "set" "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name..."))
+  (%builtin-usage
+   "set"
+   "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name..."))
 
 (defun %set-export-option-p (arg)
   (%builtin-option-p arg '("-x" "--export")))

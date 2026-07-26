@@ -125,7 +125,8 @@
                               &key (default-output :stream))
   (let ((previous-redirect-streams redirect-streams)
         (started nil))
-    (multiple-value-bind (input output error-output input-pipe-stream output-pipe-stream redirect-streams)
+    (multiple-value-bind (input output error-output
+                          input-pipe-stream output-pipe-stream redirect-streams)
         (%pipeline-stage-streams stage-redirects prev-pipe next-pipe redirect-streams
                                  :default-output default-output)
       (let* ((cmd (nshell.domain.parsing:command-node-command cmd-node))

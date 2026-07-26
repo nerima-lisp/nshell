@@ -71,7 +71,9 @@
 (defun %join-fields (fields)
   (format nil "~{~a~^ ~}" fields))
 
-(defmacro %with-variable-reference-dispatch ((reference fields next indexed-form unindexed-form) &body body)
+(defmacro %with-variable-reference-dispatch ((reference fields next
+                                              indexed-form unindexed-form)
+                                             &body body)
   (let ((reference-value (gensym "REFERENCE-")))
     `(let ((,reference-value ,reference))
        (unless (%variable-reference-unbalanced-p ,reference-value)

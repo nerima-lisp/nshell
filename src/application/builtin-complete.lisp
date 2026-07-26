@@ -102,7 +102,8 @@
                                                option
                                                (getf spec :requirement))))
            (finalize (state)
-             (multiple-value-bind (command flags long-options short-options arguments description erase)
+             (multiple-value-bind (command flags long-options short-options
+                                   arguments description erase)
                  (%complete-state->values state)
                (values command
                        (nreverse flags)
@@ -168,7 +169,11 @@
       ((null command)
        (%builtin-usage
         "complete"
-        "complete -c command [-f flag ...] [-l option ...] [-s option ...] [-a arguments] [-d description] [-e]"))
+        ;; Assembled rather than written as one literal: the synopsis is longer
+        ;; than 100 columns and a string cannot be split across source lines.
+        (concatenate 'string
+                     "complete -c command [-f flag ...] [-l option ...]"
+                     " [-s option ...] [-a arguments] [-d description] [-e]")))
       (erase
        (nshell.domain.completion:kb-remove-command
         (shell-context-knowledge-base context)

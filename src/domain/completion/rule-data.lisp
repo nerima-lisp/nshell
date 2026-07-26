@@ -11,7 +11,9 @@
      (body '() :type list))
   :constructor %allocate-rule)
 
-(defstruct (rule-knowledge-base (:constructor %make-rule-knowledge-base (&key (facts nil) (rules nil))))
+(defstruct (rule-knowledge-base
+            (:constructor %make-rule-knowledge-base
+                (&key (facts nil) (rules nil))))
   (facts nil :type list)
   (rules nil :type list))
 
@@ -37,7 +39,8 @@
              :body (rest spec)))
 
 (defgeneric predicate-true-p (predicate args bindings)
-  (:documentation "Return true when PREDICATE with walked ARGS is true in the current environment."))
+  (:documentation
+   "Return true when PREDICATE with walked ARGS is true in the current environment."))
 
 (defmethod predicate-true-p ((predicate symbol) args bindings)
   (declare (ignore predicate args bindings))

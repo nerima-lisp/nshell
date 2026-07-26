@@ -4,17 +4,30 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
 ;; -- Main package ------------------------------------------
 (defpackage #:nshell
+  (:documentation
+   "Entry point: parses argv and hands control to the presentation layer's REPL.
+Holds no shell logic of its own; it only chooses between interactive, -c, and
+script startup.")
   (:use #:cl)
   (:export #:main))
 
 ;; -- Foundational, dependency-free utility package -----------
 ;; No layer restrictions apply: every layer may use this package's macros.
 (defpackage #:nshell.util
+  (:documentation
+   "Layer-free primitives shared by every layer: the DEFINE-VALUE-STRUCT macro
+that gives the domain its immutable value types, plus small string predicates.
+Depends on nothing but CL, which is why no layer rule applies to it.")
   (:use #:cl)
   (:export #:define-value-struct #:string-prefix-p))
 
 ;; -- Domain packages (pure, no side effects) ----------------
 (defpackage #:nshell.domain.events
+  (:documentation
+   "Domain: the vocabulary of things that happen in a shell session -- a command
+was entered, a process exited, a job stopped -- as immutable event values.
+Publishing and subscribing belong to the application layer's dispatcher; this
+package only says what an event is.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:domain-event-type #:domain-event-timestamp
@@ -29,12 +42,22 @@
            #:make-completion-triggered-event))
 
 (defpackage #:nshell.domain.signals
+  (:documentation
+   "Domain: POSIX signals as domain values, with SIGINT, SIGTERM, SIGCONT, and
+SIGCHLD named rather than numbered. Lets job control reason about signals
+without any layer above it having to reach for sb-posix; the number mapping is
+applied in nshell.infrastructure.acl.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-signal #:signal-name #:signal-number #:signal-p #:signal=
            #:+sigint+ #:+sigterm+ #:+sigcont+ #:+sigchld+))
 
 (defpackage #:nshell.domain.input
+  (:documentation
+   "Domain: the key-event value type -- one keystroke, already classified into a
+character, a named key, or a mouse or paste event. It is the seam between the
+terminal byte decoder in infrastructure and the line editor in presentation, so
+neither side has to know the other's representation.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:key-event #:key-event-p #:make-key-event
@@ -42,6 +65,11 @@
            #:key-event-data))
 
 (defpackage #:nshell.domain.abbreviation
+  (:documentation
+   "Domain: fish-style abbreviations -- deciding whether the word before the
+cursor is an abbreviation, whether it sits in command position, and what text it
+expands to. Purely a function of the buffer and the abbreviation table; the
+editing of the buffer is presentation's concern.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:abbreviation-boundary-p
@@ -54,25 +82,47 @@
            #:expand-abbreviation))
 
 (defpackage #:nshell.domain.execution
+  (:documentation
+   "Domain: commands, pipelines, pipeline plans, and jobs as values, together
+with the job state machine that says which transitions between running,
+stopped, and completed are legal. Creates no processes -- it describes what is
+to be run and what state a run is in, and nshell.application drives it.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
-  (:export #:make-command #:command-name #:command-args
-            #:make-pipeline #:pipeline-p #:pipeline-commands
-            #:make-pipeline-plan #:pipeline-plan-p #:pipeline-plan-stage-count
-            #:pipeline-plan-commands #:pipeline-plan-stage-piped-input-p
-            #:pipeline-plan-stage-piped-output-p
-            #:make-job #:job-id #:job-state
-            #:job-state-valid-p #:job-state-transition #:job-register-background-processes
-            #:job-record-runtime-metadata
-            #:job-set-background-visible #:job-record-terminal-exit-code
-            #:valid-process-group-id-p #:job-control-pgid #:job-command-display-string
-            #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p #:job-known-pids #:job-last-pid #:job-pgid #:job-exit-code #:make-job-monitor #:monitor-find-job
-            #:job-pids #:job-command-line #:job-background-p))
+  (:export
+   ;; A single command
+   #:make-command #:command-name #:command-args #:command-to-list
+   ;; A pipeline of commands
+   #:make-pipeline #:pipeline-p #:pipeline-commands
+   #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p
+   ;; The plan derived from a pipeline: which stage reads or writes a pipe
+   #:make-pipeline-plan #:pipeline-plan-p #:pipeline-plan-stage-count
+   #:pipeline-plan-commands #:pipeline-plan-stage-piped-input-p
+   #:pipeline-plan-stage-piped-output-p
+   ;; A job and what it is made of
+   #:make-job #:job-id #:job-state #:job-pids #:job-known-pids #:job-last-pid
+   #:job-pgid #:job-exit-code #:job-command-line #:job-command-display-string
+   #:job-background-p
+   ;; The job state machine
+   #:job-state-valid-p #:job-state-transition
+   #:job-running-p #:job-stopped-p #:job-completed-p
+   ;; Recording what a run did
+   #:job-register-background-processes #:job-record-runtime-metadata
+   #:job-set-background-visible #:job-record-terminal-exit-code
+   ;; Process groups
+   #:valid-process-group-id-p #:job-control-pgid
+   ;; Monitor lookup (the monitor itself lives in nshell.domain.job-control)
+   #:make-job-monitor #:monitor-find-job))
 
-  (defpackage #:nshell.domain.parsing
-    (:use #:cl)
-    (:import-from #:nshell.util #:define-value-struct)
-    (:export #:tokenize #:shell-assignment-word-p #:parse-command-line
+(defpackage #:nshell.domain.parsing
+  (:documentation
+   "Domain: the shell grammar. Tokenizes a line, builds the AST, splits
+redirections out of commands, and recognises the if/for/while/case/begin
+control-flow forms, reporting incomplete input so the reader can ask for a
+continuation line. A pure string-to-AST function with no filesystem access.")
+  (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
+  (:export #:tokenize #:shell-assignment-word-p #:parse-command-line
            #:shell-input-blank-p
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
@@ -130,6 +180,11 @@
            #:parse-diagnostic-token))
 
 (defpackage #:nshell.domain.environment
+  (:documentation
+   "Domain: the shell variable environment as a value -- scalar and list
+bindings, their export flags, and the operations that produce a new environment
+from an old one. Importing the real process environment is an injection point
+filled by infrastructure, so the domain never reads getenv itself.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:environment-p #:make-environment
@@ -142,6 +197,11 @@
            #:env-entry-name #:env-entry-value #:env-list))
 
 (defpackage #:nshell.domain.expansion
+  (:documentation
+   "Domain: word expansion -- tilde, parameter, arithmetic, brace, and glob --
+applied according to each word's quoting style. Globbing needs the filesystem,
+so it reaches it through the *GLOB-*-FN* hooks rather than calling DIRECTORY:
+that is what keeps expansion testable without a disk.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:import-from #:nshell.domain.environment #:env-get)
@@ -166,7 +226,12 @@
            #:parameter-expansion-error #:parameter-expansion-error-name
            #:parameter-expansion-error-message))
 
-  (defpackage #:nshell.domain.completion
+(defpackage #:nshell.domain.completion
+  (:documentation
+   "Domain: the completion engine. Reads the cursor context out of a command
+line, consults a knowledge base of commands, subcommands, and flags, and answers
+with ranked candidates. The interesting half is the cl-prolog rulebase: the
+exported predicates below are goals callers may query directly.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:make-candidate #:candidate-text #:candidate-kind
@@ -208,6 +273,10 @@
             #:*file-completion-subdirectories-fn*))
 
 (defpackage #:nshell.domain.history
+  (:documentation
+   "Domain: command history as a bounded value -- append, search, merge, delete,
+and the cursor used to walk it with the arrow keys. Says nothing about where
+history is stored; nshell.infrastructure.persistence owns the file.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-history-entry #:entry-text #:entry-timestamp #:entry-exit-code
@@ -220,6 +289,11 @@
            #:history-previous #:history-next #:history-reset-navigation))
 
 (defpackage #:nshell.domain.job-control
+  (:documentation
+   "Domain: the job monitor -- which jobs exist, what number each was given, and
+how suspending, foregrounding, and backgrounding move them between states. The
+process-group calls those moves imply are made in infrastructure; here they are
+transitions on a value.")
   (:use #:cl)
   (:export #:job-monitor-p #:make-job-monitor
             #:monitor-empty-p #:monitor-next-job-id
@@ -231,6 +305,10 @@
             #:complete-job))
 
 (defpackage #:nshell.domain.configuration
+  (:documentation
+   "Domain: user configuration and colour themes as values, including the
+defaults used when the config file is absent. Parsing and writing the file is
+nshell.infrastructure.persistence's job.")
   (:use #:cl)
   (:export #:make-theme #:theme-color #:theme-name #:theme-set-color
            #:theme-p #:config-p
@@ -238,6 +316,11 @@
            #:default-theme #:default-config))
 
 (defpackage #:nshell.domain.prompting
+  (:documentation
+   "Domain: the prompt as a model -- hostname, directory, last exit code,
+duration -- and the rules that turn it into left and right segment lists. Git
+status and the clock arrive through the *GIT-STATUS-RESOLVER* and
+*PROMPT-TIME-RESOLVER* hooks so that rendering a prompt stays deterministic.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-prompt-model #:prompt-model-hostname #:prompt-model-cwd
@@ -251,6 +334,12 @@
 
 ;; -- Application packages -----------------------------------
 (defpackage #:nshell.application
+  (:documentation
+   "Application: the use cases. Owns the shell context -- the one mutable object
+holding history, environment, aliases, functions, and the job monitor -- and
+drives the domain over infrastructure through the function tables stored in it.
+Executing a pipeline, running a builtin, and fg/bg/jobs/disown live here; this
+is the only layer permitted to know both the domain and the ports.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
@@ -286,6 +375,12 @@
 
 ;; -- Infrastructure packages --------------------------------
 (defpackage #:nshell.infrastructure.acl
+  (:documentation
+   "Infrastructure: the anti-corruption layer over the operating system. Every
+sb-posix call the shell makes -- fork and exec, pipes, redirection, process
+groups, waitpid, PTYs, signal handlers -- is behind this one package, plus the
+git subprocess the prompt needs. Its exports are the ports the application layer
+stores in the shell context, which is what makes the layers above it mockable.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
@@ -294,7 +389,8 @@
             #:kill-process #:os-signal->domain
             #:redirect-output #:redirect-error #:redirect-output-and-error
             #:redirect-error-to-output
-            #:redirect-input #:redirect-input-document #:redirect-input-string #:restore-redirects #:domain-signal->os
+            #:redirect-input #:redirect-input-document #:redirect-input-string
+            #:restore-redirects #:domain-signal->os
             #:install-signal-handlers
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
@@ -308,6 +404,12 @@
             #:get-git-status))
 
 (defpackage #:nshell.infrastructure.terminal
+  (:documentation
+   "Infrastructure: the terminal device. Puts the tty into raw mode and restores
+it, emits the ANSI sequences for cursor, colour, alternate screen, bracketed
+paste, and SGR mouse, and decodes incoming bytes -- including escape sequences --
+into the key events defined by nshell.domain.input, which it re-exports so the
+line editor has a single place to import them from.")
   (:use #:cl)
   (:import-from #:nshell.domain.input
                 #:key-event #:key-event-p #:make-key-event
@@ -327,6 +429,11 @@
             #:key-event-data))
 
 (defpackage #:nshell.infrastructure.persistence
+  (:documentation
+   "Infrastructure: state that outlives a session. Locates, reads, and appends
+to the history file and loads and saves the config file, converting between
+those on-disk formats and the domain values in nshell.domain.history and
+nshell.domain.configuration.")
   (:use #:cl)
   (:export #:*history-file-path-override*
            #:load-history-file #:append-history-entry
@@ -335,6 +442,12 @@
 
 ;; -- Presentation packages ----------------------------------
 (defpackage #:nshell.presentation
+  (:documentation
+   "Presentation: everything the user sees and types at. Holds the line editor's
+input state and the reducer that advances it one key event at a time -- emacs
+and vi bindings, kill ring, undo, incremental history search, completion cycling
+-- plus syntax highlighting, autosuggestion, prompt drawing, and the REPL itself
+in its interactive, batch, and script forms.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:input-state #:input-state-p #:make-input-state

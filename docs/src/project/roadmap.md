@@ -26,4 +26,4 @@ flag and value completion.
 ## Released changes
 
 See the
-[CHANGELOG](https://github.com/nerima-lisp/nshell/blob/main/CHANGELOG.md).
+[GitHub Releases](https://github.com/nerima-lisp/nshell/releases).

@@ -27,8 +27,8 @@ inputs.nshell = {
 };
 ```
 
-Prebuilt tarballs for `x86_64-linux` and `aarch64-darwin`, each with a SHA-256
-checksum, are attached to every
+A prebuilt tarball for `x86_64-linux`, with a SHA-256
+checksum, is attached to every
 [GitHub release](https://github.com/nerima-lisp/nshell/releases).
 
 ## First commands

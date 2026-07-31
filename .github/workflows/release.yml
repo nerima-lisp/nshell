@@ -61,23 +61,18 @@ jobs:
         run: nix flake check --print-build-logs
 
   release:
-    name: build and publish ${{ matrix.target }}
+    # One tarball, for the one platform `systems` declares. The matrix that used
+    # to sit here carried a macos-14 (aarch64-darwin) leg; the 2026-08-01
+    # revision reduced `systems` to x86_64-linux alone, so `nix build` on macOS
+    # would now fail on a missing attribute. A one-element matrix is deleted
+    # rather than left in place — it signals an intent to add a platform, and
+    # there is none. See PACKAGE_STANDARD.md "CI の粒度".
+    name: build and publish x86_64-linux
     needs: verify
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: write # Create the GitHub Release and upload its assets.
-    strategy:
-      fail-fast: false
-      # One tarball per platform the flake declares in `systems`. macos-13
-      # (x86_64-darwin) was dropped when that platform left `systems`
-      # (ADR-0078); `nix build` there would now fail on a missing attribute.
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-linux
-          - os: macos-14
-            target: aarch64-darwin
     env:
       RELEASE_REF: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
@@ -98,46 +93,45 @@ jobs:
         run: |
           echo 'echo nshell-ci-ok' | ./result/bin/nshell | grep -q nshell-ci-ok
 
-      # Extracts this version's CHANGELOG section as the release body. Requires
-      # the Keep a Changelog heading format `## [X.Y.Z] - YYYY-MM-DD`. Every
-      # matrix leg produces the same file, so whichever uploads first sets the
-      # body and the rest are idempotent.
-      - name: Extract release notes
-        run: |
-          set -euo pipefail
-          version="${RELEASE_REF#v}"
-          awk -v v="$version" '
-            $0 ~ "^## \\[" v "\\]" { found = 1; next }
-            found && /^## / { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-          if [[ ! -s release-notes.md ]]; then
-            echo "::error::CHANGELOG.md has no section for [$version]" >&2
-            exit 1
-          fi
-
       - name: Package tarball + checksum
         run: |
           set -euo pipefail
-          name="nshell-${RELEASE_REF}-${{ matrix.target }}"
+          name="nshell-${RELEASE_REF}-x86_64-linux"
           mkdir -p "dist/${name}"
           cp result/bin/nshell "dist/${name}/"
           cp README.md LICENSE man/nshell.1 "dist/${name}/"
           tar -czf "dist/${name}.tar.gz" -C dist "${name}"
           ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
 
+      # Creates the release as an empty draft, with the tarball and checksum
+      # attached. This workflow does not produce a release body at all.
+      #
+      # As of the 2026-08-01 revision the GitHub Release description is the only
+      # canonical changelog in this org; there is no CHANGELOG.md to read from.
+      # See RELEASE_STANDARD.md. After this job goes green the maintainer fills
+      # the body in and publishes:
+      #
+      #   gh release edit "$RELEASE_REF" --notes-file <file> --draft=false
+      #
+      # `draft: true` is load-bearing. Publishing straight away would make "the
+      # maintainer forgot the notes" a user-visible state. A draft appears
+      # neither under "Latest release" nor in the default output of
+      # `gh release list`, so an unfinished release never reaches downstream.
+      #
+      # `generate_release_notes` is deliberately left off. Generated notes are a
+      # list of commit titles and PR numbers, and RELEASE_STANDARD.md requires
+      # the notes to be selected by "does a user of this package have to change
+      # their own code" — a judgement no generator can make.
+      #
       # Every `uses:` in this org references a 40-character SHA, never a mutable
       # tag. Re-resolve before bumping, and do not copy a SHA you have not
       # resolved yourself:
       #   gh api repos/softprops/action-gh-release/git/ref/tags/v2 --jq .object.sha
-      - name: Upload to GitHub Release
+      - name: Create draft release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ env.RELEASE_REF }}
-          body_path: release-notes.md
-          # Appends the auto-generated commit/PR list beneath the CHANGELOG
-          # section, so the curated notes lead and the raw log stays available.
-          generate_release_notes: true
+          draft: true
           files: |
             dist/*.tar.gz
             dist/*.sha256

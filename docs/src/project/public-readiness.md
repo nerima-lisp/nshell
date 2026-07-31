@@ -19,7 +19,7 @@ and scripting subset.
 | History and suggestions | Persistent history, reverse search, prefix autosuggestions, safe handling of multiline entries | history, autosuggest, and E2E editing tests | Ready locally |
 | Completion | Context-aware command/path/flag completion, candidate menu, deterministic cycling and cancellation | completion domain tests, REPL completion rendering tests, common external command metadata, help-text metadata loader with selective runtime enrichment, README/man page claims | Improved locally; broader command discovery/cache policy and subcommand coverage remain future work |
 | Shell language | Practical interactive scripting: functions, control flow, command substitution, expansions, heredocs, here-strings, redirection, pipelines | parser, expansion, source, pipeline, and smoke tests, structured unquoted list-variable expansion | Improved locally; broader expansion parity audit still required |
-| Process control | Foreground/background jobs, `jobs`/`fg`/`bg`/`disown`, Ctrl-C foreground recovery, PTY smoke coverage, foreground external commands (editors, SSH) run to completion under a real terminal instead of being killed by the command-substitution safety timeout | job-control tests, PTY integration tests, non-sandboxed E2E gate, `docs/timeout-audit.md` (real-PTY regression test) | Needs release evidence across Linux, x86_64-darwin, and aarch64-darwin |
+| Process control | Foreground/background jobs, `jobs`/`fg`/`bg`/`disown`, Ctrl-C foreground recovery, PTY smoke coverage, foreground external commands (editors, SSH) run to completion under a real terminal instead of being killed by the command-substitution safety timeout | job-control tests, PTY integration tests, non-sandboxed E2E gate, `docs/timeout-audit.md` (real-PTY regression test) | Needs release evidence on `x86_64-linux` |
 | Reliability | Hermetic build/test gate plus non-sandboxed OS-interactive gate for PTY, terminal, process, signal, and job-control behavior | `nix flake check --print-build-logs`; dev-shell E2E/integration command in README and CONTRIBUTING; `docs/coverage-analysis.md`'s full state-2 sweep (every line in `src/` accounted for) | Ready locally; CI evidence required across supported platforms |
 | Distribution | Reproducible Nix build, installed man page, release binary smoke, checksummed artifacts | flake build, man page, CI/release workflows, release checklist | Needs nixpkgs/Homebrew/prebuilt binary publication |
 | Security and operations | Private vulnerability reporting, explicit security scope, no accidental secret exposure through history/completion/diagnostics | the org security policy and [contribution guidelines](contributing.md) | Ready for 0.x scope |
@@ -28,13 +28,15 @@ and scripting subset.
 
 Before a public release can claim world-level interactive-shell quality:
 
-1. `nix flake check --print-build-logs` passes on Linux, x86_64-darwin, and aarch64-darwin CI.
+1. `nix flake check --print-build-logs` passes on `x86_64-linux` CI — the only
+   platform `flake.nix` declares.
 2. The non-sandboxed integration suite passes for PTY, subprocess, terminal,
    signal, and job-control coverage.
-3. A release binary is built on Linux, x86_64-darwin, and aarch64-darwin, starts successfully, and ships
-   with `README.md`, `LICENSE`, and the `nshell(1)` man page.
-4. User-visible behavior changes are represented in README, man page,
-   CHANGELOG, and completion metadata when applicable.
+3. A release binary is built on `x86_64-linux` — the only platform `flake.nix`
+   declares — starts successfully, and ships with `README.md`, `LICENSE`, and
+   the `nshell(1)` man page.
+4. User-visible behavior changes are represented in README, man page, the
+   GitHub Release notes, and completion metadata when applicable.
 5. Open roadmap gaps remain explicit instead of being implied as complete.
 
 ## Current Public Gaps

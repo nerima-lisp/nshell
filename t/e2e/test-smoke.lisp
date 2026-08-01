@@ -212,12 +212,12 @@ terminal without waiting out the real (30s) default."
       (expect "echo" :to-equal (nshell.domain.parsing:command-node-command ast))
       (expect '("hello" "world") :to-equal (nshell.domain.parsing:command-node-arg-values ast))))
   (it "e2e-full-repl-cycle"
-    (let* ((history (nshell.domain.history:make-command-history))
+    (let* ((history (history-kit:make-history))
            (line "pwd"))
       (with-parsed-command-line (result line)
         (expect (nshell.domain.parsing:parse-complete-p result) :to-be-truthy))
-      (nshell.domain.history:history-add history line)
-      (expect 1 :to-equal (nshell.domain.history:history-size history))))
+      (history-kit:history-add history line)
+      (expect 1 :to-equal (history-kit:history-count history))))
 
   (it "e2e-main-help-exits-cleanly"
     "The entry point prints usage text and exits successfully for --help."

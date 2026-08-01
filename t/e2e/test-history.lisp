@@ -1,18 +1,18 @@
 (in-package #:nshell/test)
 (describe "e2e-history-tests"
   (it "e2e-history-persists-across-sessions"
-    (let ((h (nshell.domain.history:make-command-history :max-entries 10)))
-      (nshell.domain.history:history-add h "cmd1")
-      (nshell.domain.history:history-add h "cmd2")
-      (expect 2 :to-equal (nshell.domain.history:history-size h))
-      (let ((results (nshell.domain.history:history-search h "cmd" :mode :prefix)))
+    (let ((h (history-kit:make-history :capacity 10)))
+      (history-kit:history-add h "cmd1")
+      (history-kit:history-add h "cmd2")
+      (expect 2 :to-equal (history-kit:history-count h))
+      (let ((results (history-kit:history-search h "cmd" :mode :prefix)))
         (expect 2 :to-equal (length results)))))
 
   (it "e2e-history-reverse-search-selects-and-executes-match"
-    (let ((history (nshell.domain.history:make-command-history :max-entries 10))
+    (let ((history (history-kit:make-history :capacity 10))
           (state (input-state)))
-      (nshell.domain.history:history-add history "docker ps")
-      (nshell.domain.history:history-add history "git status --short")
+      (history-kit:history-add history "docker ps")
+      (history-kit:history-add history "git status --short")
       (multiple-value-bind (search-state start-output)
           (nshell.presentation:reduce-input-state
            state
@@ -25,7 +25,7 @@
                        history
                        (nshell.presentation:input-state-search-query state)
                        :contains))
-             (texts (nshell.domain.history:history-entry-texts entries)))
+             (texts (history-kit:history-entry-texts entries)))
         (setf state
               (nshell.presentation:apply-history-search-results-to-input-state
                state texts)))
@@ -58,10 +58,10 @@
                       nshell.presentation::*input-state*)))))
 
   (it "e2e-history-reverse-search-accepts-match-for-editing"
-    (let ((history (nshell.domain.history:make-command-history :max-entries 10))
+    (let ((history (history-kit:make-history :capacity 10))
           (state (input-state :buffer "git" :cursor-pos 3)))
-      (nshell.domain.history:history-add history "docker ps")
-      (nshell.domain.history:history-add history "git status --short")
+      (history-kit:history-add history "docker ps")
+      (history-kit:history-add history "git status --short")
       (multiple-value-bind (search-state start-output)
           (nshell.presentation:reduce-input-state
            state
@@ -74,7 +74,7 @@
                        history
                        (nshell.presentation:input-state-search-query state)
                        :contains))
-             (texts (nshell.domain.history:history-entry-texts entries)))
+             (texts (history-kit:history-entry-texts entries)))
         (setf state
               (nshell.presentation:apply-history-search-results-to-input-state
                state texts)))

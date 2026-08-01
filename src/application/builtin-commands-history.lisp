@@ -8,7 +8,7 @@
   (when entries
     (with-output-to-string (out)
       (dolist (entry entries)
-        (format out "~a~%" (nshell.domain.history:entry-text entry))))))
+        (format out "~a~%" (history-kit:history-entry-text entry))))))
 
 (defun %history-search-options (args)
   (labels ((parse (remaining mode case-sensitive)
@@ -25,7 +25,7 @@
 
 (defun %history-list (history)
   (values (%history-format-entries
-           (reverse (nshell.domain.history:history-all history)))
+           (reverse (history-kit:history-entries history)))
           0))
 
 (defun %history-search (history args)
@@ -34,7 +34,7 @@
     (if query-parts
         (values
       (%history-format-entries
-          (nshell.domain.history:history-search
+          (history-kit:history-search
             history (%string-join query-parts " ")
             :mode mode
             :case-sensitive case-sensitive
@@ -44,19 +44,19 @@
 
 (defun %history-delete (history args)
   (if args
-      (let ((deleted (nshell.domain.history:history-delete
+      (let ((deleted (history-kit:history-delete
                       history (%string-join args " "))))
         (values (format nil "~d~%" deleted) 0))
       (values (%history-usage) 1)))
 
 (defun %history-clear (history args)
   (declare (ignore args))
-  (nshell.domain.history:history-clear history)
+  (history-kit:history-clear history)
   (values nil 0))
 
 (defun %history-size (history args)
   (declare (ignore args))
-  (values (format nil "~d~%" (nshell.domain.history:history-size history)) 0))
+  (values (format nil "~d~%" (history-kit:history-count history)) 0))
 
 (defun %builtin-history (context args)
   (let ((history (shell-context-history context)))

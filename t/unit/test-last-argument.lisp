@@ -1,53 +1,6 @@
 (in-package #:nshell/test)
 
-(describe "history-domain-tests"
-  (it "history-add-and-retrieve"
-    "Commands added to history can be retrieved."
-    (let ((history (history-with-lines "ls -la" "git status")))
-      (expect 2 :to-equal (nshell.domain.history:history-size history))
-      (expect (nshell.domain.history:history-empty-p history) :to-be-falsy)))
-
-  (it "history-empty"
-    "New history is empty."
-    (let ((history (nshell.domain.history:make-command-history)))
-      (expect (nshell.domain.history:history-empty-p history) :to-be-truthy)
-      (expect 0 :to-equal (nshell.domain.history:history-size history))))
-
-  (it "history-dedup"
-    "Adding same command twice keeps only most recent."
-    (let ((history (history-with-lines "ls" "ls")))
-      (expect 1 :to-equal (nshell.domain.history:history-size history))))
-
-  (it "history-max-entries"
-    "History respects max-entries limit."
-    (let ((history (nshell.domain.history:make-command-history :max-entries 3)))
-      (dolist (line '("cmd1" "cmd2" "cmd3" "cmd4"))
-        (nshell.domain.history:history-add history line))
-      (expect 3 :to-equal (nshell.domain.history:history-size history))
-      (expect '("cmd4" "cmd3" "cmd2") :to-equal (nshell.domain.history:history-entry-texts
-                  (nshell.domain.history:history-all history)))))
-
-  (it "history-merge"
-    "History merge keeps newest-first order and deduplicates by text."
-    (let ((history (history-with-lines "local" "shared"))
-          (incoming (history-with-lines "shared" "remote")))
-      (nshell.domain.history:history-merge
-       history
-       (nshell.domain.history:history-all incoming))
-      (expect 3 :to-equal (nshell.domain.history:history-size history))
-      (expect '("remote" "shared" "local") :to-equal (nshell.domain.history:history-entry-texts
-                  (nshell.domain.history:history-all history)))))
-
-  (it "history-delete-and-clear"
-    "History entries can be deleted exactly and cleared."
-    (let ((history (history-with-lines "git status" "git commit")))
-      (expect 1 :to-equal (nshell.domain.history:history-delete history "git status"))
-      (expect 1 :to-equal (nshell.domain.history:history-size history))
-      (expect '("git commit") :to-equal (nshell.domain.history:history-entry-texts
-                  (nshell.domain.history:history-all history)))
-      (nshell.domain.history:history-clear history)
-      (expect (nshell.domain.history:history-empty-p history) :to-be-truthy)))
-
+(describe "last-argument-domain-tests"
   (it "history-command-line-last-argument-extracts-final-argument"
     "The last-argument helper ignores the command word and keeps source quoting."
     (expect "--short" :to-equal (nshell.domain.history:command-line-last-argument
@@ -141,23 +94,4 @@
       (expect "--short" :to-equal (nshell.domain.history:history-last-argument-at history 0))
       (expect "older" :to-equal (nshell.domain.history:history-last-argument-at history 1))
       (expect (nshell.domain.history:history-last-argument-at history 2) :to-be-null)
-      (expect (nshell.domain.history:history-last-argument-at history -1) :to-be-null)))
-
-  (it "pbt-history-consecutive-duplicate-keeps-size"
-    "Adding the same command twice in a row leaves the size as after one add."
-    (check-property (:trials 50)
-        ((cmd (gen-shell-command) #'shrink-shell-word))
-      (let ((history (nshell.domain.history:make-command-history)))
-        (nshell.domain.history:history-add history cmd)
-        (let ((size-after-one (nshell.domain.history:history-size history)))
-          (nshell.domain.history:history-add history cmd)
-          (= size-after-one (nshell.domain.history:history-size history))))))
-
-  (it "pbt-history-size-never-exceeds-capacity"
-    "Size never exceeds max-entries, however many commands are added."
-    (check-property (:trials 30)
-        ((n (gen-in-range 1 20) #'shrink-integer))
-      (let ((history (nshell.domain.history:make-command-history :max-entries 5)))
-        (dotimes (i n)
-          (nshell.domain.history:history-add history (format nil "cmd~d" i)))
-        (<= (nshell.domain.history:history-size history) 5)))))
+      (expect (nshell.domain.history:history-last-argument-at history -1) :to-be-null))))

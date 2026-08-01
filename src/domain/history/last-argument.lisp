@@ -1,63 +1,9 @@
+;;; The `!$`/Alt-. last-argument feature: extracting the final insertable
+;;; argument from a recorded history line. This is shell-specific (it walks
+;;; the tokenizer's AST to skip command words, redirect targets, and leading
+;;; assignments), unlike generic recall/search/navigation, which are the
+;;; responsibility of the history-kit library.
 (in-package #:nshell.domain.history)
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (command-history
-              (:constructor %allocate-command-history (&key (max-entries 10000)))
-              (:conc-name %command-history-)
-              (:predicate %command-history-p)
-              (:copier nil))
-    "In-memory command history plus transient navigation state."
-    (entries nil :type list)
-    (max-entries 10000 :type (integer 0 *) :read-only t)
-    (navigate-index -1 :type integer)
-    (navigate-prefix nil :type (or null string))
-    (navigate-origin nil :type (or null string))))
-
-(defun %make-command-history (&key (max-entries 10000))
-  (check-type max-entries (integer 0 *))
-  (%allocate-command-history :max-entries max-entries))
-
-(defun make-command-history (&key (max-entries 10000))
-  (%make-command-history :max-entries max-entries))
-
-(defun command-history-p (object)
-  "Return true when OBJECT is a command history aggregate."
-  (%command-history-p object))
-
-(defun command-history-entries (history)
-  (%command-history-entries history))
-
-(defun (setf command-history-entries) (entries history)
-  (check-type entries list)
-  (setf (%command-history-entries history) entries))
-
-(defun command-history-max-entries (history)
-  (%command-history-max-entries history))
-
-(defun command-history-navigate-index (history)
-  (%command-history-navigate-index history))
-
-(defun (setf command-history-navigate-index) (index history)
-  (check-type index integer)
-  (setf (%command-history-navigate-index history) index))
-
-(defun command-history-navigate-prefix (history)
-  (%command-history-navigate-prefix history))
-
-(defun (setf command-history-navigate-prefix) (prefix history)
-  (check-type prefix (or null string))
-  (setf (%command-history-navigate-prefix history) prefix))
-
-(defun command-history-navigate-origin (history)
-  (%command-history-navigate-origin history))
-
-(defun (setf command-history-navigate-origin) (origin history)
-  (check-type origin (or null string))
-  (setf (%command-history-navigate-origin history) origin))
-
-(defun history-capacity (history)
-  "Return the maximum number of entries retained by HISTORY."
-  (command-history-max-entries history))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (define-value-struct history-word
@@ -157,49 +103,6 @@ word-like tokens are merged before command/argument classification."
       (%history-logical-word-cursor-consume-current cursor)
       word)))
 
-(defun %history-clear-navigation (history)
-  "Clear transient navigation state."
-  (setf (command-history-navigate-index history) -1
-        (command-history-navigate-prefix history) nil
-        (command-history-navigate-origin history) nil)
-  history)
-
-(defun %history-text-case-sensitive-p (text)
-  (some #'upper-case-p text))
-
-(defun %history-text-prefix-p (text prefix &key case-sensitive)
-  (let ((prefix-length (length prefix)))
-    (and (<= prefix-length (length text))
-         (if case-sensitive
-             (string= text prefix :end1 prefix-length)
-             (string-equal text prefix :end1 prefix-length)))))
-
-(defun %history-text-equal-p (text query &key case-sensitive)
-  (if case-sensitive
-      (string= text query)
-      (string-equal text query)))
-
-(defun %history-text-contains-p (text query &key case-sensitive)
-  (if case-sensitive
-      (search query text)
-      (search query text :test #'char-equal)))
-
-(defun %history-line-prefix-p (text query &key case-sensitive)
-  (let ((query-length (length query)))
-    (loop with line-start = 0
-          for newline = (position #\Newline text :start line-start)
-          for line-end = (or newline (length text))
-          thereis (and (<= (+ line-start query-length) line-end)
-                       (if case-sensitive
-                           (string= text query
-                                    :start1 line-start
-                                    :end1 (+ line-start query-length))
-                           (string-equal text query
-                                         :start1 line-start
-                                         :end1 (+ line-start query-length))))
-          while newline
-          do (setf line-start (1+ newline)))))
-
 (defun %history-last-argument-reset-for-separator (state)
   (setf (%history-last-argument-scan-state-last-argument state) nil
         (%history-last-argument-scan-state-skip-redirect-target state) nil
@@ -280,9 +183,10 @@ pipelines and command lists, the result is scoped to the final command segment."
 (defun history-last-argument-at (history index)
   "Return INDEX-th most recent insertable last argument in HISTORY, or NIL."
   (when (and (integerp index) (not (minusp index)))
-    (do ((entries (command-history-entries history) (rest entries)))
+    (do ((entries (history-kit:history-entries history) (rest entries)))
         ((endp entries) nil)
-      (let ((argument (command-line-last-argument (entry-text (first entries)))))
+      (let ((argument (command-line-last-argument
+                        (history-kit:history-entry-text (first entries)))))
         (when argument
           (if (zerop index)
               (return argument)

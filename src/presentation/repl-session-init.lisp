@@ -6,7 +6,7 @@
         *running* t
         *last-exit-code* 0
         *last-command-duration-ms* nil
-        *history* (nshell.domain.history:make-command-history)
+        *history* (history-kit:make-history)
         *config* (nshell.domain.configuration:default-config)
         *kb* (nshell.domain.completion:make-empty-knowledge-base)
         *input-state* (make-repl-input-state)
@@ -22,5 +22,5 @@
   (install-expansion-filesystem)
   (configure-completion-filesystem)
   (dolist (entry (reverse (nshell.infrastructure.persistence:load-history-file)))
-    (nshell.domain.history:history-add *history* entry))
+    (history-kit:history-add *history* entry))
   (seed-repl-completion-knowledge-base *kb*))

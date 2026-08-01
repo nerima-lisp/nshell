@@ -1,19 +1,36 @@
+;;; This form comes FIRST, before any defsystem. ASDF binds *package* to
+;;; ASDF-USER only for a file it loads itself; read any other way — a REPL
+;;; `load`, an editor evaluating the buffer, flake.nix parsing :version — the
+;;; file is read in whatever package happens to be current, and an unqualified
+;;; `defsystem` then fails to read at all. Saying it makes the file
+;;; self-contained. See PACKAGE_STANDARD.md "asd の書き方".
+(in-package #:asdf-user)
+
+;;; Metadata keys follow the org's canonical order:
+;;;   :description :long-description :author :maintainer :license :version
+;;;   :homepage :bug-tracker :source-control :depends-on :pathname :serial
+;;;   :components :in-order-to
+;;; so a diff between two sibling repositories shows what actually differs and
+;;; a missing key is visible by position.
 (asdf:defsystem "nshell"
-  :version "0.4.0"
+  :description "Modern interactive shell in Common Lisp"
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
+  ;; Single source of truth for the version. flake.nix reads this form
+  ;; line-by-line, and release.yml refuses a tag that disagrees with it.
+  :version "0.4.0"
   :homepage "https://github.com/nerima-lisp/nshell"
   :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
   :source-control (:git "https://github.com/nerima-lisp/nshell.git")
-  :description "Modern interactive shell in Common Lisp"
   :depends-on ("cl-prolog"
                "cl-parser-kit"
                "cl-dataflow"
                "cl-boundary-kit"
                "cl-cli"
                "cl-tty-kit"
-               "cl-process-kit")
+               "cl-process-kit"
+               "cl-history-kit")
   :pathname "src"
   :serial t
   :components
@@ -63,11 +80,7 @@
    (:file "domain/completion/knowledge-base-candidates")
    (:file "domain/completion/candidate-ranking")
    (:file "domain/completion/engine")
-   (:file "domain/history/entry")
-   (:file "domain/history/history")
-   (:file "domain/history/navigation")
-   (:file "domain/history/search")
-   (:file "domain/history/operations")
+   (:file "domain/history/last-argument")
    (:file "domain/job-control/monitor")
    (:file "domain/configuration/theme")
    (:file "domain/configuration/config")
@@ -197,12 +210,7 @@
    (:file "unit/test-domain-events")
    (:file "unit/test-signals")
    (:file "unit/test-execution-domain")
-   (:file "unit/test-history-domain")
-   (:file "unit/test-history-entries")
-   (:file "unit/test-history-operations")
-   (:file "unit/test-history-search")
-   (:file "unit/test-history-navigation")
-   (:file "unit/test-history-properties")
+   (:file "unit/test-last-argument")
    (:file "unit/test-configuration")
    (:file "unit/test-tokenizer")
    (:file "unit/test-environment")

@@ -23,15 +23,15 @@
 
   (it "history-suggestion-prefers-successful-match-over-newer-failure"
     "Autosuggestion should not prefer a recent failed typo over an older success."
-    (let ((history (nshell.domain.history:make-command-history)))
-      (nshell.domain.history:history-add history "git status" 0)
-      (nshell.domain.history:history-add history "git stahs" 1)
+    (let ((history (history-kit:make-history)))
+      (history-kit:history-add history "git status" :exit-code 0)
+      (history-kit:history-add history "git stahs" :exit-code 1)
       (expect "tus" :to-equal (nshell.application:history-suggestion history "git sta"))))
 
   (it "history-suggestion-falls-back-to-failed-match"
     "Failed entries remain suggestible when no non-failing match exists."
-    (let ((history (nshell.domain.history:make-command-history)))
-      (nshell.domain.history:history-add history "git stahs" 1)
+    (let ((history (history-kit:make-history)))
+      (history-kit:history-add history "git stahs" :exit-code 1)
       (expect "hs" :to-equal (nshell.application:history-suggestion history "git sta"))))
 
   (it "history-suggestion-uses-continuation-line-prefix"
@@ -76,7 +76,7 @@ git status")
             (expect 2 :to-equal (length results))
             (let ((matching 0))
               (dolist (entry results)
-                (when (search "status" (nshell.domain.history:entry-text entry))
+                (when (search "status" (history-kit:history-entry-text entry))
                   (incf matching)))
               (expect 2 :to-equal matching)))
           (expect (nshell.application:drain-events dispatcher) :to-be-null)
@@ -96,33 +96,33 @@ git status"
             (expect '("git push"
                          "echo setup
 git status"
-                         "printf 'not a prefix git'") :to-equal (nshell.domain.history:history-entry-texts results)))
+                         "printf 'not a prefix git'") :to-equal (history-kit:history-entry-texts results)))
           (expect (nshell.application:drain-events dispatcher) :to-be-null)
           (expect '(:history-searched) :to-equal (nreverse events))))))
 
   (it "interactive-history-search-handles-large-gapped-history"
     "Interactive reverse search keeps ranking with many nonmatching entries."
-    (let ((history (nshell.domain.history:make-command-history :max-entries 7000)))
-      (nshell.domain.history:history-add history "echo setup
+    (let ((history (history-kit:make-history :capacity 7000)))
+      (history-kit:history-add history "echo setup
 git old")
       (loop for index below 1500
-            do (nshell.domain.history:history-add
+            do (history-kit:history-add
                 history
                 (format nil "make target-~d" index)))
-      (nshell.domain.history:history-add history "printf GIT middle")
+      (history-kit:history-add history "printf GIT middle")
       (loop for index below 1500
-            do (nshell.domain.history:history-add
+            do (history-kit:history-add
                 history
                 (format nil "cargo test-~d" index)))
-      (nshell.domain.history:history-add history "git newest")
+      (history-kit:history-add history "git newest")
       (loop for index below 1500
-            do (nshell.domain.history:history-add
+            do (history-kit:history-add
                 history
                 (format nil "echo unrelated-~d" index)))
       (expect '("git newest"
                    "echo setup
 git old"
-                   "printf GIT middle") :to-equal (nshell.domain.history:history-entry-texts
+                   "printf GIT middle") :to-equal (history-kit:history-entry-texts
                   (nshell.application:interactive-history-search-use-case
                    history
                    "git")))))

@@ -274,19 +274,15 @@ exported predicates below are goals callers may query directly.")
 
 (defpackage #:nshell.domain.history
   (:documentation
-   "Domain: command history as a bounded value -- append, search, merge, delete,
-and the cursor used to walk it with the arrow keys. Says nothing about where
-history is stored; nshell.infrastructure.persistence owns the file.")
+   "Domain: the `!$`/Alt-. last-argument feature -- extracting the final
+insertable argument from a recorded history line by walking the tokenizer's
+AST to skip command words, redirect targets, and leading assignments.
+Generic history storage, search, and recall navigation are the
+nerima-lisp `history-kit` library's responsibility, used directly
+(qualified as `history-kit:...`) rather than wrapped here.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
-  (:export #:make-history-entry #:entry-text #:entry-timestamp #:entry-exit-code
-           #:history-entry-texts
-           #:command-history-p #:make-command-history
-           #:history-add #:history-search #:history-entry-line-prefix-suffix #:history-all
-           #:history-merge #:history-clear #:history-delete
-           #:history-empty-p #:history-size #:history-capacity
-           #:command-line-last-argument #:history-last-argument-at
-           #:history-previous #:history-next #:history-reset-navigation))
+  (:export #:command-line-last-argument #:history-last-argument-at))
 
 (defpackage #:nshell.domain.job-control
   (:documentation
@@ -431,9 +427,10 @@ line editor has a single place to import them from.")
 (defpackage #:nshell.infrastructure.persistence
   (:documentation
    "Infrastructure: state that outlives a session. Locates, reads, and appends
-to the history file and loads and saves the config file, converting between
-those on-disk formats and the domain values in nshell.domain.history and
-nshell.domain.configuration.")
+to the history file as plain text lines (the caller wraps them into
+history-kit entries) and loads and saves the config file, converting
+between that on-disk format and nshell.domain.configuration's domain
+values.")
   (:use #:cl)
   (:export #:*history-file-path-override*
            #:load-history-file #:append-history-entry

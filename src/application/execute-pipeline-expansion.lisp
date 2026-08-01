@@ -31,7 +31,7 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
     (when dispatcher
       (publish-event dispatcher
                      (nshell.domain.events:make-command-entered-event line)))
-    (nshell.domain.history:history-add history line)
+    (history-kit:history-add history line)
     (when dispatcher
       (publish-event dispatcher
                      (nshell.domain.events:make-command-appended-to-history-event line)))

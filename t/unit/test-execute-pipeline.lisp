@@ -25,24 +25,24 @@
 (describe "execute-pipeline-service-tests"
   (it "execute-command-line-adds-complete-commands-to-history"
     "A complete command line returns an AST/result pair and records history."
-    (let ((history (nshell.domain.history:make-command-history))
+    (let ((history (history-kit:make-history))
           (dispatcher (nshell.application:make-event-dispatcher)))
       (multiple-value-bind (ast result)
           (nshell.application:execute-command-line "echo hello" history dispatcher)
         (expect (nshell.domain.parsing:parse-complete-p result) :to-be-truthy)
         (expect (nshell.domain.parsing:command-node-p ast) :to-be-truthy)
-        (expect 1 :to-equal (nshell.domain.history:history-size history))
-        (expect "echo hello" :to-equal (nshell.domain.history:entry-text
-                      (first (nshell.domain.history:history-all history)))))))
+        (expect 1 :to-equal (history-kit:history-count history))
+        (expect "echo hello" :to-equal (history-kit:history-entry-text
+                      (first (history-kit:history-entries history)))))))
 
   (it "execute-command-line-does-not-record-incomplete-input"
     "Incomplete input returns no AST/result values and leaves history unchanged."
-    (let ((history (nshell.domain.history:make-command-history)))
+    (let ((history (history-kit:make-history)))
       (multiple-value-bind (ast result)
           (nshell.application:execute-command-line "echo 'unterminated" history nil)
         (expect ast :to-be-null)
         (expect result :to-be-null)
-        (expect 0 :to-equal (nshell.domain.history:history-size history)))))
+        (expect 0 :to-equal (history-kit:history-count history)))))
 
   (it "execute-pipeline-use-case-runs-command-and-publishes-events"
     "The execute-pipeline use case returns the exit status and emits lifecycle events."

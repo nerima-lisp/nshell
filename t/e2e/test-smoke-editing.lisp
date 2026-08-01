@@ -207,13 +207,13 @@
         (expect '("second") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))))
 
   (it "e2e-multiline-quoted-command-cycle"
-    (let* ((history (nshell.domain.history:make-command-history))
+    (let* ((history (history-kit:make-history))
            (line (format nil "echo \"hello~%world\"")))
       (with-complete-command-line (result ast line)
         (expect (nshell.domain.parsing:command-node-p ast) :to-be-truthy)
         (expect (list (format nil "hello~%world")) :to-equal (nshell.domain.parsing:command-node-arg-values ast)))
-      (nshell.domain.history:history-add history line)
-      (expect 1 :to-equal (nshell.domain.history:history-size history))))
+      (history-kit:history-add history line)
+      (expect 1 :to-equal (history-kit:history-count history))))
 
   (it "e2e-newline-sequence-executes-both-commands"
     (with-complete-command-line (result ast (format nil "echo one~%echo two"))

@@ -110,8 +110,8 @@
 (defun %execute-complete-command (ast text)
   (with-reset-rendered-prompt-state-and-prompt-cont
     (format t "~%")
-    (nshell.domain.history:history-add *history* text)
-    (nshell.domain.history:history-reset-navigation *history*)
+    (history-kit:history-add *history* text)
+    (history-kit:history-reset-navigation *history*)
     (nshell.infrastructure.persistence:append-history-entry text)
     (sync-exported-environment)
     ;; Time the command through the clock boundary (real clock == monotonic
@@ -188,7 +188,7 @@
 
 (define-output-event-handler %process-suggest-update-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (nshell.domain.history:history-reset-navigation *history*)
+    (history-kit:history-reset-navigation *history*)
     (refresh-current-input-state-suggestion))
 
 (define-output-event-handler %process-history-search-output-event
@@ -196,13 +196,13 @@
     (let* ((query (input-state-search-query *input-state*))
            (entries (nshell.application:interactive-history-search-use-case
                      *history* query))
-           (texts (nshell.domain.history:history-entry-texts entries)))
+           (texts (history-kit:history-entry-texts entries)))
       (setf *input-state*
             (apply-history-search-results-to-input-state *input-state* texts))))
 
 (define-output-event-handler %process-history-prev-output-event
     with-cleared-rendered-completions-and-prompt-cont
-  (let ((entry (nshell.domain.history:history-previous
+  (let ((entry (history-kit:history-previous
                  *history*
                  (input-state-buffer *input-state*))))
     (when entry
@@ -212,7 +212,7 @@
 
 (define-output-event-handler %process-history-next-output-event
     with-cleared-rendered-completions-and-prompt-cont
-  (let ((entry (nshell.domain.history:history-next *history*)))
+  (let ((entry (history-kit:history-next *history*)))
     (when entry
       (setf *input-state*
             (make-repl-input-state :buffer entry :cursor-pos (length entry)))

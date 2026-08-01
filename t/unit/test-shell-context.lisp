@@ -15,7 +15,7 @@
                                         :raw-mode (lambda () t)
                                         :restore-mode (lambda () t)))))
       (expect (nshell.application:shell-context-p context) :to-be-truthy)
-      (expect (nshell.domain.history:command-history-p
+      (expect (history-kit:history-p
            (nshell.application:shell-context-history context)) :to-be-truthy)
       (expect (nshell.domain.configuration:config-p
            (nshell.application:shell-context-config context)) :to-be-truthy)

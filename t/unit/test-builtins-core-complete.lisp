@@ -104,11 +104,11 @@
     "history builtin exposes fish-style in-memory history management."
     (let* ((context (make-test-builtins-context))
            (history (nshell.application:shell-context-history context)))
-      (nshell.domain.history:history-add history "Git status")
-      (nshell.domain.history:history-add history "git status")
-      (nshell.domain.history:history-add history "docker ps")
-      (nshell.domain.history:history-add history "git commit")
-      (nshell.domain.history:history-add history "git status --short")
+      (history-kit:history-add history "Git status")
+      (history-kit:history-add history "git status")
+      (history-kit:history-add history "docker ps")
+      (history-kit:history-add history "git commit")
+      (history-kit:history-add history "git status --short")
       (assert-builtin-cases (context "history")
         (nil :code 0 :output (format nil "Git status~%git status~%docker ps~%git commit~%git status --short~%"))
         ('("search" "git") :code 0 :output (format nil "git status --short~%git commit~%git status~%Git status~%"))
@@ -124,4 +124,4 @@
         ('("clear") :code 0 :output-null t)
         ('("bogus") :code 1
          :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]~%")))
-      (expect 0 :to-equal (nshell.domain.history:history-size history)))))
+      (expect 0 :to-equal (history-kit:history-count history)))))

@@ -20,6 +20,7 @@ from `src/`; `cl-parser-kit` is `:import-from`, so its symbols appear unqualifie
 | `cl-cli` | argument-vector parsing for `main` | 13 refs |
 | `cl-tty-kit` | terminal control / raw-mode / rendering | 17 refs |
 | `cl-process-kit` | timeout-guarded external process launch (`run`) | `infrastructure/acl/syscall-process.lisp` (6 refs) |
+| `cl-history-kit` | command-history store, search, and recall navigation cursor | used directly (qualified `history-kit:...`) throughout `application/` and `presentation/`; nshell keeps only the tokenizer-coupled `!$`/Alt-. last-argument extraction in `domain/history/last-argument.lisp` |
 | `cl-weave` | the entire test framework (both suites) | `nshell/test`, `nshell/weave` |
 | `cl-prolog/weave` | cl-prolog-query coverage of the completion engine | `nshell/weave` |
 
@@ -42,13 +43,13 @@ No declared dependency is unused, so there is no dead dependency to drop.
 
 ## Conclusion
 
-The applicable nerima-lisp surface is fully adopted: 7 runtime systems + 2 test
+The applicable nerima-lisp surface is fully adopted: 8 runtime systems + 2 test
 systems, all directly (no wrapper adapter layer), all in active use. The
 un-adopted remainder is compiler infrastructure (`cl-cc*`), a peer application
 (`cl-tmux`), a format library for a format nshell never handles (`cl-json-kit`),
 or a build-time tool (`paredit-cli`). Re-run the usage half of this audit with:
 
 ```
-grep -rhoE '\b(cl-prolog|cl-dataflow|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit)::?[a-z]' src/ \
+grep -rhoE '\b(cl-prolog|cl-dataflow|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit)::?[a-z]' src/ \
   | sed -E 's/:.*$//' | sort | uniq -c | sort -rn
 ```

@@ -9,15 +9,15 @@
 (defun %interactive-history-search-matches (history query)
   (when (%interactive-history-query-valid-p query)
     (let ((prefix-matches
-            (nshell.domain.history:history-search history query :mode :line-prefix))
+            (history-kit:history-search history query :mode :line-prefix))
           (contains-matches
-            (nshell.domain.history:history-search history query :mode :contains))
+            (history-kit:history-search history query :mode :contains))
           (seen (make-hash-table :test #'equal))
           (unique-contains nil))
       (dolist (entry prefix-matches)
-        (setf (gethash (nshell.domain.history:entry-text entry) seen) t))
+        (setf (gethash (history-kit:history-entry-text entry) seen) t))
       (dolist (entry contains-matches)
-        (let ((text (nshell.domain.history:entry-text entry)))
+        (let ((text (history-kit:history-entry-text entry)))
           (unless (gethash text seen)
             (setf (gethash text seen) t)
             (push entry unique-contains))))
@@ -25,7 +25,7 @@
 
 (defun %interactive-history-best-entry (matches)
   (or (find-if (lambda (entry)
-                 (let ((exit-code (nshell.domain.history:entry-exit-code entry)))
+                 (let ((exit-code (history-kit:history-entry-exit-code entry)))
                    (or (null exit-code)
                        (zerop exit-code))))
                matches)
@@ -36,11 +36,11 @@
     (when dispatcher
       (publish-event dispatcher
                      (nshell.domain.events:make-completion-triggered-event input)))
-    (let ((matches (nshell.domain.history:history-search history input :mode :line-prefix)))
+    (let ((matches (history-kit:history-search history input :mode :line-prefix)))
       (when matches
         (let* ((best (%interactive-history-best-entry matches))
                (suffix
-                 (nshell.domain.history:history-entry-line-prefix-suffix
+                 (history-kit:history-entry-line-suffix
                   best
                   input
                   :case-sensitive (some #'upper-case-p input))))
@@ -48,7 +48,7 @@
             suffix))))))
 
 (defun search-history-use-case (history query mode &optional dispatcher)
-  (let ((matches (nshell.domain.history:history-search history query :mode mode)))
+  (let ((matches (history-kit:history-search history query :mode mode)))
     (when dispatcher
       (publish-event dispatcher
                      (nshell.domain.events:make-history-searched-event)))

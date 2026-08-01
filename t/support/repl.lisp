@@ -10,7 +10,7 @@
 (defmacro with-repl-test-state (&body body)
   `(let ((nshell.presentation::*running* t)
          (nshell.presentation::*last-exit-code* 0)
-         (nshell.presentation::*history* (nshell.domain.history:make-command-history))
+         (nshell.presentation::*history* (history-kit:make-history))
          (nshell.presentation::*config* (nshell.domain.configuration:default-config))
          (nshell.presentation::*kb* (nshell.domain.completion:make-empty-knowledge-base))
          (nshell.presentation::*input-state* nil)

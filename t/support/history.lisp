@@ -1,9 +1,9 @@
 (in-package #:nshell/test)
 
 (defun history-with-lines (&rest lines)
-  (let ((history (nshell.domain.history:make-command-history :max-entries 100)))
+  (let ((history (history-kit:make-history :capacity 100)))
     (dolist (line lines history)
-      (nshell.domain.history:history-add history line))))
+      (history-kit:history-add history line))))
 
 (defmacro with-history ((name &rest lines) &body body)
   `(let ((,name (history-with-lines ,@lines)))

@@ -57,9 +57,9 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%here-doc-delimiter-scan` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): reversed-delimiters |
 | `%here-doc-line` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): text, next-position |
 | `%here-doc-target-body-cursor` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): body, remaining-bodies |
-| `%history-last-argument-scan-state` | `domain/history/history.lisp` | mutable — writable slot(s): last-argument, skip-redirect-target, seen-command-word |
-| `%history-logical-word-cursor` | `domain/history/history.lisp` | mutable — writable slot(s): remaining |
-| `%history-token-window` | `domain/history/history.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
+| `%history-last-argument-scan-state` | `domain/history/last-argument.lisp` | mutable — writable slot(s): last-argument, skip-redirect-target, seen-command-word |
+| `%history-logical-word-cursor` | `domain/history/last-argument.lisp` | mutable — writable slot(s): remaining |
+| `%history-token-window` | `domain/history/last-argument.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%input-edit-snapshot` | `presentation/input-state-undo.lisp` | mutable — writable slot(s): buffer, cursor-pos |
 | `%input-session-clear` | `presentation/input-state-helpers.lisp` | mutable — writable slot(s): kind, overrides |
 | `%kb-command-entry` | `domain/completion/knowledge-base.lisp` | mutable — writable slot(s): description, subcommands, flags, option-values, exclusive-options |
@@ -112,7 +112,6 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `begin-end-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `brace-expansion-frame` | `domain/expansion/brace.lisp` | mutable — writable slot(s): input |
 | `case-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
-| `command-history` | `domain/history/history.lisp` | mutable — writable slot(s): entries, navigate-index, navigate-prefix, navigate-origin |
 | `command-list-redirect-split-result` | `domain/parsing/ast-redirect-split.lisp` | mutable — writable slot(s): clean-commands |
 | `command-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `command-redirect-split-result` | `domain/parsing/ast-redirect-split.lisp` | mutable — writable slot(s): clean-command |
@@ -125,7 +124,6 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `event-dispatcher` | `application/event-dispatcher.lisp` | mutable — writable slot(s): subscribers, queue |
 | `for-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `here-doc-target-replacer` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): bodies, target-pending-p |
-| `history-entry` | `domain/history/entry.lisp` | mutable — writable slot(s): text |
 | `if-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `incomplete-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `input-state` | `presentation/input-state-core.lisp` | mutable — writable slot(s): cursor-pos, completion-index, completion-base-buffer, completion-base-cursor, last-candidates, suggestion, mode, vi-count, vi-visual-anchor, abbreviation-expander, kill-ring, last-yank-start, last-yank-end, last-yank-index, last-argument-start, last-argument-end, last-argument-index, search-query, search-original-buffer, search-original-cursor, search-index, undo-stack, redo-stack, buffer |
@@ -147,6 +145,11 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `while-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `whitespace-field-scanner` | `domain/expansion/fields.lisp` | mutable — writable slot(s): boundaries, start |
 
-**Total: 139 raw defstructs.** mutable: 95; capsule: 28; include-hierarchy: 13; accessor/type mismatch: 1; encapsulation: 1; helper-collision: 1
+**Total: 137 raw defstructs.** mutable: 93; capsule: 28; include-hierarchy: 13; accessor/type mismatch: 1; encapsulation: 1; helper-collision: 1
+
+`command-history` and `history-entry` (both formerly `domain/history/`) are gone from this
+count: generic history storage is now `history-kit:history`/`history-kit:history-entry`,
+defined and audited in the `cl-history-kit` library itself, not in this tree. Only the
+tokenizer-coupled last-argument structs above remain nshell's own.
 
 Unexplained (needs review): **none** — every remaining defstruct has a concrete non-applicability reason.

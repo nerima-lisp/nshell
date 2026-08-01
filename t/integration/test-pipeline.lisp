@@ -28,13 +28,13 @@
       (expect 2 :to-equal (length (nshell.domain.parsing:pipeline-node-commands ast)))))
 
   (it "history-search-and-persistence"
-    (let ((h (nshell.domain.history:make-command-history :max-entries 100)))
-      (nshell.domain.history:history-add h "git status")
-      (nshell.domain.history:history-add h "git push origin main")
-      (nshell.domain.history:history-add h "ls -la")
-      (let ((results (nshell.domain.history:history-search h "git" :mode :prefix)))
+    (let ((h (history-kit:make-history :capacity 100)))
+      (history-kit:history-add h "git status")
+      (history-kit:history-add h "git push origin main")
+      (history-kit:history-add h "ls -la")
+      (let ((results (history-kit:history-search h "git" :mode :prefix)))
         (expect 2 :to-equal (length results)))
-      (let ((results (nshell.domain.history:history-search h "ls" :mode :prefix)))
+      (let ((results (history-kit:history-search h "ls" :mode :prefix)))
         (expect 1 :to-equal (length results)))))
 
   (it "completion-knowledge-base-integration"

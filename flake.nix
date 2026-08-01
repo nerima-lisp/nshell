@@ -67,6 +67,13 @@
       url = "github:nerima-lisp/cl-process-kit/v1.0.0";
       flake = false;
     };
+    # cl-history-kit backs the command-history store, search, and recall
+    # navigation cursor; nshell itself keeps only the tokenizer-coupled
+    # `!$`/Alt-. last-argument extraction on top of it.
+    cl-history-kit = {
+      url = "github:nerima-lisp/cl-history-kit/v1.0.0";
+      flake = false;
+    };
 
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
@@ -87,18 +94,21 @@
       cl-tty-kit,
       cl-log-kit,
       cl-process-kit,
+      cl-history-kit,
       treefmt-nix,
       ...
     }:
     let
-      # Only platforms that something actually verifies. x86_64-linux is what
-      # CI runs; aarch64-darwin is the development machine, so it is checked
-      # every time `nix flake check` is run by hand. aarch64-linux and
-      # x86_64-darwin are deliberately absent: nothing exercises them, and
-      # declaring them would advertise support no run ever confirms.
+      # x86_64-linux and nothing else. Only what a gate verifies is declared,
+      # and the only gate is CI. aarch64-darwin was declared until the
+      # 2026-08-01 revision on the strength of `nix flake check` being run by
+      # hand on the development machine; running something by hand is not a
+      # gate, so the promise was withdrawn. aarch64-linux and x86_64-darwin
+      # were already absent for the same reason. Development happens on Linux,
+      # and every output -- packages, checks, apps AND devShells -- comes from
+      # this one list. See PACKAGE_STANDARD.md "systems".
       systems = [
         "x86_64-linux"
-        "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
 
@@ -165,6 +175,7 @@
         cl-tty-kit
         cl-log-kit
         cl-process-kit
+        cl-history-kit
       ];
       depRegistry = nixpkgs.lib.concatMapStrings (dep: "${dep}//:") depSources;
 
@@ -224,6 +235,12 @@
               clLogKit
             ];
           };
+          clHistoryKit = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-history-kit";
+            version = asdVersionOf "${cl-history-kit}/cl-history-kit.asd";
+            src = cl-history-kit;
+            systems = [ "cl-history-kit" ];
+          };
         in
         [
           clProlog
@@ -233,6 +250,7 @@
           clCli
           clTtyKit
           clProcessKit
+          clHistoryKit
         ];
 
       # treefmt drives `nix fmt` and the `checks.<system>.formatting` gate.

@@ -152,7 +152,7 @@ EXPORTED controls whether the variable appears in ENV-LIST."
           (env-set result
                    "PWD"
                    (handler-case
-                       (namestring (uiop:getcwd))
+                       (namestring (host-kit:getcwd))
                      (error () (env-get result "PWD")))
                    t))
     result))

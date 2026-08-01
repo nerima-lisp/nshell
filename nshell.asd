@@ -30,7 +30,8 @@
                "cl-cli"
                "cl-tty-kit"
                "cl-process-kit"
-               "cl-history-kit")
+               "cl-history-kit"
+               "cl-host-kit")
   :pathname "src"
   :serial t
   :components
@@ -314,9 +315,18 @@
    ;; Appended rather than inserted next to helpers-runner: :serial t makes the
    ;; order load order, and every existing entry must keep its position.
    (:file "main-test"))
+   ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is
+   ;; read by the plain CL reader before :depends-on is ever consulted, so any
+   ;; PKG:SYMBOL token here must resolve against a package already in the image.
+   ;; UIOP happens to be safe because ASDF ships it; CL-HOST-KIT is not loaded
+   ;; at read time no matter what this system depends on, so a HOST-KIT: prefix
+   ;; would be a read-time PACKAGE-DOES-NOT-EXIST error that takes the whole
+   ;; file -- including the "nshell" system above -- down with it.
+   ;; FIND-SYMBOL/FIND-PACKAGE/FUNCALL are CL, always present, and are what
+   ;; SYMBOL-CALL boils down to anyway.
    :perform (asdf:test-op (o s)
               (declare (ignore o s))
-              (unless (uiop:symbol-call :nshell/test '#:run-tests)
+              (unless (funcall (find-symbol "RUN-TESTS" (find-package "NSHELL/TEST")))
                 (error "cl-weave tests failed"))))
 
 (asdf:defsystem "nshell/weave"
@@ -342,7 +352,10 @@ primary suite in nshell/test."
    (:file "weave/completion-properties")
    (:file "weave/logic-crosscheck")
    (:file "weave/entry"))
+  ;; See the "nshell/test" :perform above for why this is FIND-SYMBOL rather
+  ;; than any PKG:SYMBOL-CALL form.
   :perform (asdf:test-op (o s)
              (declare (ignore o s))
-             (unless (uiop:symbol-call :nshell/weave '#:run :reporter :spec)
+             (unless (funcall (find-symbol "RUN" (find-package "NSHELL/WEAVE"))
+                              :reporter :spec)
                (error "cl-weave suite failed"))))

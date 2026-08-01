@@ -17,7 +17,7 @@
                        (nshell.domain.environment:make-default-environment)))
   (%reset-repl-state-tables)
   (setf *vi-mode-enabled*
-        (let ((flag (uiop:getenv "NSHELL_VI_MODE")))
+        (let ((flag (host-kit:getenv "NSHELL_VI_MODE")))
           (and flag (not (member flag '("" "0" "false" "no") :test #'string-equal)))))
   (install-expansion-filesystem)
   (configure-completion-filesystem)

@@ -27,8 +27,8 @@
 
 (defun %complete-argument-values (arguments)
   (remove-if (lambda (value) (string= value ""))
-             (uiop:split-string arguments
-                                :separator (list #\Space #\Tab #\Newline))))
+             (host-kit:split-string arguments
+                                    :separator (list #\Space #\Tab #\Newline))))
 
 (defun %complete-apply-option-value (spec state value)
   (ecase (getf spec :kind)

@@ -23,16 +23,16 @@
 
 (defun configure-completion-filesystem ()
   (setf nshell.domain.completion:*path-command-directory-files-fn*
-        (lambda (dir) (uiop:directory-files dir)))
+        (lambda (dir) (host-kit:directory-files dir)))
   (setf nshell.domain.completion:*path-command-executable-p-fn*
         #'executable-path-p)
   (setf nshell.domain.completion:*file-completion-directory-files-fn*
-        (lambda (dir) (uiop:directory-files dir)))
+        (lambda (dir) (host-kit:directory-files dir)))
   (setf nshell.domain.completion:*file-completion-subdirectories-fn*
-        (lambda (dir) (uiop:subdirectories dir))))
+        (lambda (dir) (host-kit:subdirectories dir))))
 
 (defun install-expansion-filesystem ()
   (setf nshell.domain.expansion:*glob-directory-files-fn*
-        (lambda (dir) (uiop:directory-files dir)))
+        (lambda (dir) (host-kit:directory-files dir)))
   (setf nshell.domain.expansion:*glob-subdirectories-fn*
-        (lambda (dir) (uiop:subdirectories dir))))
+        (lambda (dir) (host-kit:subdirectories dir))))

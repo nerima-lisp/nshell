@@ -1,16 +1,16 @@
 (in-package #:nshell.presentation)
 
 (defparameter +repl-filesystem-fns+
-  (list :cwd #'uiop:getcwd
-        :list-dir (lambda (dir) (uiop:directory-files dir))
-        :chdir #'uiop:chdir
+  (list :cwd #'host-kit:getcwd
+        :list-dir (lambda (dir) (host-kit:directory-files dir))
+        :chdir #'host-kit:chdir
         :stat #'probe-file
         :file-exists-p (lambda (path)
                          (let ((pathname (probe-file path)))
                            (and pathname
-                                (not (uiop:directory-pathname-p pathname)))))
+                                (not (host-kit:directory-pathname-p pathname)))))
         :directory-exists-p (lambda (path)
-                              (not (null (uiop:directory-exists-p path))))))
+                              (not (null (host-kit:directory-exists-p path))))))
 
 (defparameter +repl-process-fns+
   (list :run-external

@@ -74,6 +74,15 @@
       url = "github:nerima-lisp/cl-history-kit/v1.0.0";
       flake = false;
     };
+    # cl-host-kit replaces uiop for this repository's host operations
+    # (environment variables, working directory, pathname predicates, directory
+    # listings, string splitting) as of the 2026-08-01 org migration. It is
+    # SBCL-only and depends on nothing but the sb-posix contrib, so it needs no
+    # `lispLibs` of its own below.
+    cl-host-kit = {
+      url = "github:nerima-lisp/cl-host-kit/v0.2.1";
+      flake = false;
+    };
 
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
@@ -95,6 +104,7 @@
       cl-log-kit,
       cl-process-kit,
       cl-history-kit,
+      cl-host-kit,
       treefmt-nix,
       ...
     }:
@@ -176,6 +186,7 @@
         cl-log-kit
         cl-process-kit
         cl-history-kit
+        cl-host-kit
       ];
       depRegistry = nixpkgs.lib.concatMapStrings (dep: "${dep}//:") depSources;
 
@@ -241,6 +252,12 @@
             src = cl-history-kit;
             systems = [ "cl-history-kit" ];
           };
+          clHostKit = pkgs.sbcl.buildASDFSystem {
+            pname = "cl-host-kit";
+            version = asdVersionOf "${cl-host-kit}/cl-host-kit.asd";
+            src = cl-host-kit;
+            systems = [ "cl-host-kit" ];
+          };
         in
         [
           clProlog
@@ -251,6 +268,7 @@
           clTtyKit
           clProcessKit
           clHistoryKit
+          clHostKit
         ];
 
       # treefmt drives `nix fmt` and the `checks.<system>.formatting` gate.

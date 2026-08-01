@@ -24,10 +24,10 @@
               "./"))
         (pathname-directory-string pattern))))
 
-;; Dynamic variable for filesystem operations (DDD: domain should not call uiop directly)
+;; Dynamic variable for filesystem operations (DDD: domain should not call the host directly)
 (defvar *glob-directory-files-fn* nil
   "Function to list files in a directory.
-   Set to (lambda (dir) (uiop:directory-files dir)) by infrastructure.
+   Set to (lambda (dir) (host-kit:directory-files dir)) by infrastructure.
    If NIL, glob expansion always returns the pattern unchanged.")
 
 (defvar *glob-subdirectories-fn* nil

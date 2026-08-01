@@ -27,7 +27,7 @@ classifier (control/combining -> 0, wide/emoji -> 2, otherwise 1)."
 
 (defun %display-cwd (cwd)
   "Return CWD with a home-directory prefix shortened to ~ when appropriate."
-  (let ((home (uiop:getenv "HOME")))
+  (let ((home (host-kit:getenv "HOME")))
     (if (and home (%home-prefix-p home cwd))
         (concatenate 'string "~" (subseq cwd (length home)))
         cwd)))

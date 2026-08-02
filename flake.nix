@@ -35,7 +35,7 @@
 
     # cl-weave is the testing framework behind both suites.
     cl-weave = {
-      url = "github:nerima-lisp/cl-weave/v1.1.4";
+      url = "github:nerima-lisp/cl-weave/v1.2.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -61,11 +61,11 @@
       flake = false;
     };
     cl-cli = {
-      url = "github:nerima-lisp/cl-cli/v1.2.0";
+      url = "github:nerima-lisp/cl-cli/v1.3.0";
       flake = false;
     };
     cl-tty-kit = {
-      url = "github:nerima-lisp/cl-tty-kit/v1.2.0";
+      url = "github:nerima-lisp/cl-tty-kit/v1.3.0";
       flake = false;
     };
     # cl-process-kit consolidates timeout-guarded process launch; it sits on
@@ -91,7 +91,7 @@
     # SBCL-only and depends on nothing but the sb-posix contrib, so it needs no
     # `lispDependencies` of its own below.
     cl-host-kit = {
-      url = "github:nerima-lisp/cl-host-kit/v0.2.5";
+      url = "github:nerima-lisp/cl-host-kit/v0.3.0";
       flake = false;
     };
 

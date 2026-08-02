@@ -122,16 +122,17 @@
     let
       lib = nixpkgs.lib;
 
-      # x86_64-linux and nothing else. Only what a gate verifies is declared,
-      # and the only gate is CI. aarch64-darwin was declared until the
-      # 2026-08-01 revision on the strength of `nix flake check` being run by
-      # hand on the development machine; running something by hand is not a
-      # gate, so the promise was withdrawn. aarch64-linux and x86_64-darwin
-      # were already absent for the same reason. Development happens on Linux,
-      # and every output -- packages, checks, apps AND devShells -- comes from
-      # this one list. See PACKAGE_STANDARD.md "systems".
+      # x86_64-linux is what CI gates; aarch64-darwin is the development
+      # machine. Every per-system output -- packages, checks, apps AND devShells
+      # -- comes from this one list, so leaving aarch64-darwin out takes `nix
+      # build` and `nix develop` off the development machine as well. That trade
+      # was made on 2026-08-01 and reverted on 2026-08-02; aarch64-darwin carries
+      # no CI gate, which PACKAGE_STANDARD.md's "systems" section accepts
+      # explicitly. aarch64-linux and x86_64-darwin are nobody's verification and
+      # are not declared.
       systems = [
         "x86_64-linux"
+        "aarch64-darwin"
       ];
 
       meta = {

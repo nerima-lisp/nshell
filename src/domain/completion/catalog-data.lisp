@@ -35,15 +35,20 @@
   option-values
   exclusive-options)
 
+(defmacro %catalog-entry-projection-plist (entry &rest properties)
+  "Expand to a spliceable (LIST :PROPERTY1 value1 ...) plist, one pair per
+symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
+(DEFINE-CATALOG-ENTRY-ACCESSOR above) on ENTRY for each value."
+  `(list ,@(loop for property in properties
+                 for keyword = (intern (string property) :keyword)
+                 for accessor = (intern (concatenate 'string "%CATALOG-" (string property)))
+                 append `(,keyword (,accessor ,entry)))))
+
 (defun %catalog-entry-command-projection (entry)
-  (%make-catalog-command-projection
-   :command (%catalog-command entry)
-   :description (%catalog-description entry)
-   :synopsis (%catalog-synopsis entry)
-   :subcommands (%catalog-subcommands entry)
-   :flags (%catalog-flags entry)
-   :option-values (%catalog-option-values entry)
-   :exclusive-options (%catalog-exclusive-options entry)))
+  (apply #'%make-catalog-command-projection
+         (%catalog-entry-projection-plist entry
+           command description synopsis subcommands flags
+           option-values exclusive-options)))
 
 (defun %catalog-command-projections (catalog)
   (mapcar #'%catalog-entry-command-projection catalog))

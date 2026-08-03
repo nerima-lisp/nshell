@@ -19,4 +19,37 @@
       (expect (search (format nil "~C[?1000h~C[?1006h" #\Esc #\Esc) output) :to-be-truthy)
       (expect (search (format nil "~C[?1006l~C[?1000l" #\Esc #\Esc) output) :to-be-truthy)
       (expect (search (format nil "~C[?1049h" #\Esc) output) :to-be-truthy)
-      (expect (search (format nil "~C[?1049l" #\Esc) output) :to-be-truthy))))
+      (expect (search (format nil "~C[?1049l" #\Esc) output) :to-be-truthy)))
+
+  (it "terminal-ansi-cursor-motion-is-byte-identical-to-the-hand-rolled-form"
+    "The cursor helpers emit exactly the sequences the presentation tier used to
+build with (format t \"~~C[~~dA\" #\\Esc n) and friends. These are spelled out as
+literals rather than delegated to cl-tty-kit so the test would still catch a
+byte change if the kit's emitters ever moved."
+    (flet ((emitted (thunk) (with-output-to-string (stream) (funcall thunk stream))))
+      (expect (format nil "~C[2A" #\Esc)
+              :to-equal (emitted (lambda (s)
+                                   (nshell.infrastructure.terminal:ansi-cursor-up 2 s))))
+      (expect (format nil "~C[3B" #\Esc)
+              :to-equal (emitted (lambda (s)
+                                   (nshell.infrastructure.terminal:ansi-cursor-down 3 s))))
+      (expect (format nil "~C[12C" #\Esc)
+              :to-equal (emitted (lambda (s)
+                                   (nshell.infrastructure.terminal:ansi-cursor-forward 12 s))))
+      (expect (format nil "~C[7D" #\Esc)
+              :to-equal (emitted (lambda (s)
+                                   (nshell.infrastructure.terminal:ansi-cursor-back 7 s))))
+      (expect (format nil "~C[4G" #\Esc)
+              :to-equal (emitted (lambda (s)
+                                   (nshell.infrastructure.terminal:ansi-cursor-column 4 s))))))
+
+  (it "terminal-ansi-sgr-helpers-are-byte-identical-to-the-hand-rolled-form"
+    "The style helpers emit exactly the SGR sequences the presentation tier used
+to write inline."
+    (flet ((emitted (thunk) (with-output-to-string (stream) (funcall thunk stream))))
+      (expect (format nil "~C[2m" #\Esc)
+              :to-equal (emitted #'nshell.infrastructure.terminal:ansi-dim))
+      (expect (format nil "~C[7m" #\Esc)
+              :to-equal (emitted #'nshell.infrastructure.terminal:ansi-reverse))
+      (expect (format nil "~C[0m" #\Esc)
+              :to-equal (emitted #'nshell.infrastructure.terminal:ansi-reset-style)))))

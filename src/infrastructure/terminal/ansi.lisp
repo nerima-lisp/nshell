@@ -29,6 +29,28 @@
   (write-string (cl-tty-kit:ansi-enter-alternate-screen) stream))
 (defun ansi-disable-alternate-screen (&optional (stream *standard-output*))
   (write-string (cl-tty-kit:ansi-exit-alternate-screen) stream))
+;;; Cursor motion and SGR styling. These exist so the presentation tier stops
+;;; hand-writing "~C[~dA" and friends: the vocabulary belongs to this layer, and
+;;; routing through it keeps cl-tty-kit named in one file rather than in a dozen
+;;; rendering functions. Each is byte-identical to the sequence its call sites
+;;; used to build by hand.
+(defun ansi-cursor-up (count &optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-cursor-up count) stream))
+(defun ansi-cursor-down (count &optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-cursor-down count) stream))
+(defun ansi-cursor-forward (count &optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-cursor-forward count) stream))
+(defun ansi-cursor-back (count &optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-cursor-back count) stream))
+(defun ansi-cursor-column (column &optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-cursor-column column) stream))
+(defun ansi-dim (&optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-dim) stream))
+(defun ansi-reverse (&optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-reverse) stream))
+(defun ansi-reset-style (&optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-reset-style) stream))
+
 (defun ansi-color-code (color)
   (let ((map '(("00FF00" . 2) ("00AFFF" . 4) ("FF0000" . 1) ("FFFF00" . 3)
                ("FFA500" . 3) ("555555" . 8) ("737373" . 8) ("FFFFFF" . 7))))

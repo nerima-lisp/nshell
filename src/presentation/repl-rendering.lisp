@@ -29,7 +29,7 @@
                                 *prompt-rendered-cursor-row*))))
         (format t "~C" #\Return)
         (when (plusp rows-below)
-          (format t "~C[~dB" #\Esc rows-below))
+          (nshell.infrastructure.terminal:ansi-cursor-down rows-below))
         (nshell.infrastructure.terminal:ansi-clear-line)
         (loop repeat (1- *prompt-rendered-lines*)
               do
@@ -63,9 +63,14 @@
                           (format nil " history: ~a" search-query))))
     (render-edit-buffer text theme)
     (when (and suggestion (> (length suggestion) 0))
-      (format t "~C[2m~a~C[0m" #\Esc suggestion #\Esc))
+      (nshell.infrastructure.terminal:ansi-dim)
+      (format t "~a" suggestion)
+      (nshell.infrastructure.terminal:ansi-reset-style))
     (when search-suffix
-      (format t " ~C[2mhistory: ~a~C[0m" #\Esc search-query #\Esc))
+      (format t " ")
+      (nshell.infrastructure.terminal:ansi-dim)
+      (format t "history: ~a" search-query)
+      (nshell.infrastructure.terminal:ansi-reset-style))
     (%move-cursor-to-rendered-position text
                                        (input-state-cursor-pos *input-state*)
                                        prompt-width

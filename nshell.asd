@@ -180,6 +180,48 @@
 	   (:file "presentation/repl-batch")
 	   (:file "presentation/repl")
 	   (:file "main"))
+  ;; The three build keys and the :perform below are exempt from the metadata
+  ;; order above -- PACKAGE_STANDARD.md names cl-weave's identical trio and
+  ;; cl-tty-kit's :perform as "はどこに書いても構いません" -- and they sit here,
+  ;; together, because they are one statement: how this system becomes a
+  ;; binary. They are also the ONLY statement of it, so `nix build` and a plain
+  ;; `(asdf:operate 'asdf:program-op "nshell")` in a REPL produce the same
+  ;; executable; flake.nix no longer repeats the entry point in a hand-written
+  ;; save-lisp-and-die of its own.
+  :build-operation "program-op"
+  :build-pathname "nshell"
+  :entry-point "nshell:main"
+  ;; Why this method exists at all: ASDF's own `perform ((o image-op) (c
+  ;; system))` calls `uiop:dump-image` and never passes :compression, and SBCL
+  ;; offers no global that would add it, so a system that wants a compressed
+  ;; core must dump it itself. nshell has shipped a compressed image since
+  ;; before this file declared an entry point (flake.nix dumped it by hand);
+  ;; performing the dump here is what let that Nix code be replaced by
+  ;; cl-nix-forge's mkExecutable, which drives program-op and documents
+  ;; :compression as the one thing it cannot express.
+  ;;
+  ;; ASDF:OUTPUT-FILE rather than a literal "nshell": it resolves
+  ;; :build-pathname through whatever output translations are configured, so
+  ;; the image lands exactly where the default method would have put it --
+  ;; which is the path mkExecutable then goes looking for.
+  ;;
+  ;; The toplevel function is read back out of :entry-point above instead of
+  ;; being named a second time, so the two cannot drift apart; this is the
+  ;; same idiom cl-nix-forge's own Darwin delivery path uses. UIOP and
+  ;; ASDF/SYSTEM are safe to name at read time for the reason spelled out at
+  ;; the nshell/test :perform below: ASDF ships both, so they are in the image
+  ;; before this file is read. `#'nshell:main` would NOT be -- it is a
+  ;; read-time error, which is why the entry point is a string.
+  :perform (asdf:program-op (o c)
+             (sb-ext:save-lisp-and-die
+              (asdf:output-file o c)
+              :executable t
+              :compression t
+              ;; Stop the SBCL C runtime from intercepting --version/--help and
+              ;; other runtime flags before nshell:main runs.
+              :save-runtime-options t
+              :toplevel (uiop:ensure-function
+                         (asdf/system:component-entry-point c))))
   :in-order-to ((test-op (test-op "nshell/test"))))
 
 (asdf:defsystem "nshell/test"

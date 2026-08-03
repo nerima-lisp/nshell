@@ -16,9 +16,22 @@
 
 ;; REPL Entry
 (defun run-repl ()
+  "Run the interactive REPL and return the process exit code.
+INSTALL-INTERACTIVE-TERMINAL is called from INSIDE the UNWIND-PROTECT on
+purpose. It changes the process group, the signal handlers, the terminal mode
+and the ANSI modes in that order, so a failure part-way through still leaves
+state to undo; installing outside the cleanup would skip the undo entirely and
+hand the user's next shell a terminal with SGR mouse reporting still on."
   (initialize-repl-state)
-  (install-interactive-terminal)
   (unwind-protect
-      (trampoline (lambda () (render-prompt-cont)))
+      (if (install-interactive-terminal)
+          (progn
+            (trampoline (lambda () (render-prompt-cont)))
+            0)
+          ;; Raw mode is a precondition for the line editor and could not be
+          ;; entered; INSTALL-INTERACTIVE-TERMINAL has already said so on
+          ;; stderr. Running the editor against a cooked terminal anyway is the
+          ;; one outcome worth avoiding, so end the session instead.
+          1)
     (restore-interactive-terminal)
     (format t "Goodbye!~%")))

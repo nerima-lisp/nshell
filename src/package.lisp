@@ -394,6 +394,7 @@ stores in the shell context, which is what makes the layers above it mockable.")
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
             #:child-status #:child-status-p #:child-status-pid #:child-status-status
             #:reap-children #:get-terminal-size
+            #:terminal-size-unavailable #:terminal-size-unavailable-fd
             #:*external-command-timeout*
             #:run-external #:run-external-capture #:process-exit-status-code
             #:with-git-runner #:clear-git-status-cache
@@ -412,8 +413,15 @@ line editor has a single place to import them from.")
                 #:key-event-type #:key-event-char #:key-event-number
                 #:key-event-data)
   (:export #:enable-raw-mode #:restore-terminal-mode
+            #:terminal-mode-operation-failed
+            #:terminal-mode-operation-failed-operation
+            #:terminal-mode-operation-failed-fd
+            #:terminal-mode-operation-failed-reason
             #:ansi-clear-screen #:ansi-clear-line #:ansi-move-cursor
             #:ansi-color-code
+            #:ansi-cursor-up #:ansi-cursor-down
+            #:ansi-cursor-forward #:ansi-cursor-back #:ansi-cursor-column
+            #:ansi-dim #:ansi-reverse #:ansi-reset-style
             #:ansi-save-cursor #:ansi-restore-cursor
             #:ansi-hide-cursor #:ansi-show-cursor
             #:ansi-enable-bracketed-paste #:ansi-disable-bracketed-paste

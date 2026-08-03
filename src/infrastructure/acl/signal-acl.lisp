@@ -71,6 +71,14 @@
   "Forward SIGTSTP to the foreground process group, or suspend the shell."
   (declare (ignore signal info context))
   (unless (%signal-foreground-process-group sb-unix:sigtstp)
+    ;; Swallowed deliberately, and -- unlike the REPL's cleanup path, which
+    ;; reports -- silently. This runs asynchronously on top of whatever the
+    ;; shell was doing, so writing a diagnostic could re-enter a stream this
+    ;; same thread already holds, and a condition escaping a handler unwinds
+    ;; arbitrary interrupted code. Both are worse than the failure itself:
+    ;; stopping with the terminal still raw is recoverable, because the parent
+    ;; shell reinstates its own settings and shell-sigcont-handler re-enables
+    ;; raw mode on resume.
     (ignore-errors (nshell.infrastructure.terminal:restore-terminal-mode))
     (sb-sys:enable-interrupt sb-unix:sigtstp :default)
     (sb-posix:kill (sb-posix:getpid) sb-unix:sigtstp)))
@@ -88,6 +96,13 @@
 (defun shell-sigcont-handler (signal info context)
   "Re-enable raw mode and reclaim the terminal after continuing."
   (declare (ignore signal info context))
+  ;; Same async-context reasoning as shell-sigtstp-handler: no reporting and no
+  ;; propagation out of a signal handler. This is therefore the one raw-mode
+  ;; failure nshell cannot make visible, and it is a known gap rather than an
+  ;; oversight -- the session entry point (install-interactive-terminal in
+  ;; presentation/repl-session.lisp) is where an unusable terminal is caught and
+  ;; reported. Making a failed resume visible needs a flag the main loop reads,
+  ;; not a report from in here.
   (ignore-errors (nshell.infrastructure.terminal:enable-raw-mode))
   (ignore-errors (set-foreground-pgroup (sb-posix:getpid))))
 

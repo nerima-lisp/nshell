@@ -64,7 +64,10 @@ display-width-aware padding so wide glyphs are accounted for correctly."
                 do (let ((cell (%pad-to-visible-width item column-width)))
                      (if (and (integerp selected-index)
                               (= index selected-index))
-                         (format t "~C[7m~a~C[0m" #\Esc cell #\Esc)
+                         (progn
+                           (nshell.infrastructure.terminal:ansi-reverse)
+                           (format t "~a" cell)
+                           (nshell.infrastructure.terminal:ansi-reset-style))
                          (format t "~a" cell)))
                    (when (or (= (mod (1+ index) columns) 0)
                              (= index (1- limit)))

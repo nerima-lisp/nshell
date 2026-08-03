@@ -46,18 +46,23 @@
 (defun %catalog-entry-command (entry)
   (%catalog-entry-property-value entry :command))
 
+(defmacro %catalog-source-entry-properties (entry &rest properties)
+  "Expand to a spliceable (LIST :PROPERTY1 value1 ...) plist, one pair per
+symbol in PROPERTIES, pulling each out of ENTRY via
+%CATALOG-SOURCE-ENTRY-PROPERTY-VALUE under the matching keyword."
+  `(list ,@(loop for property in properties
+                 for keyword = (intern (string property) :keyword)
+                 append `(,keyword (%catalog-source-entry-property-value ,entry ,keyword)))))
+
 (defun %build-command-catalog-entry (entry)
   (let ((command (%catalog-source-entry-command entry)))
     (unless (stringp command)
       (error "Command catalog entry requires a string :command: ~S" entry))
-    (%make-catalog-command-entry
-     :command command
-     :synopsis (%catalog-source-entry-property-value entry :synopsis)
-     :description (%catalog-source-entry-property-value entry :description)
-     :subcommands (%catalog-source-entry-property-value entry :subcommands)
-     :flags (%catalog-source-entry-property-value entry :flags)
-     :option-values (%catalog-source-entry-property-value entry :option-values)
-     :exclusive-options (%catalog-source-entry-property-value entry :exclusive-options))))
+    (apply #'%make-catalog-command-entry
+           :command command
+           (%catalog-source-entry-properties entry
+             synopsis description subcommands flags
+             option-values exclusive-options))))
 
 (defun %command-catalog (entries)
   (mapcar #'%build-command-catalog-entry entries))

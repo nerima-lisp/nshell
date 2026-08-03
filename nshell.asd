@@ -123,6 +123,7 @@
    (:file "infrastructure/acl/syscall-redirection")
    (:file "infrastructure/acl/syscall-job-control")
    (:file "infrastructure/acl/syscall-process")
+   (:file "infrastructure/acl/syscall-pipeline-streams")
    (:file "infrastructure/acl/syscall-pipeline")
    (:file "infrastructure/acl/syscall-terminal")
    (:file "infrastructure/acl/git")

@@ -13,6 +13,8 @@ stderr is not redirected (the default merge-into-stdout behavior is then kept)."
   (make-string-input-stream (or value "")))
 
 (defun redirect-output (filename mode)
+  "Redirect *STANDARD-OUTPUT* to FILENAME until RESTORE-REDIRECTS runs.
+MODE is a CL :IF-EXISTS value -- :SUPERSEDE for shell `>`, :APPEND for `>>`."
   (let ((stream (open filename
                       :direction :output
                       :if-exists mode
@@ -21,6 +23,8 @@ stderr is not redirected (the default merge-into-stdout behavior is then kept)."
           *standard-output* stream)))
 
 (defun redirect-error (filename mode)
+  "Redirect *ERROR-OUTPUT* to FILENAME until RESTORE-REDIRECTS runs.
+MODE is a CL :IF-EXISTS value -- :SUPERSEDE for shell `2>`, :APPEND for `2>>`."
   (let ((stream (open filename
                       :direction :output
                       :if-exists mode
@@ -29,6 +33,8 @@ stderr is not redirected (the default merge-into-stdout behavior is then kept)."
           *error-output* stream)))
 
 (defun redirect-output-and-error (filename mode)
+  "Redirect both *STANDARD-OUTPUT* and *ERROR-OUTPUT* to the same open stream
+on FILENAME, for shell `&>`/`&>>`. MODE is a CL :IF-EXISTS value."
   (let ((stream (open filename
                       :direction :output
                       :if-exists mode
@@ -39,23 +45,43 @@ stderr is not redirected (the default merge-into-stdout behavior is then kept)."
           *error-output* stream)))
 
 (defun redirect-error-to-output ()
+  "Alias *ERROR-OUTPUT* to the current *STANDARD-OUTPUT*, for shell `2>&1`.
+Unlike the file-based redirects above, this opens no stream of its own --
+RESTORE-REDIRECTS's EQ check against the current *STANDARD-OUTPUT* is what
+keeps it from double-closing a stream this function never owned."
   (setf *redirected-stderr* *error-output*
         *error-output* *standard-output*))
 
 (defun redirect-input (filename)
+  "Redirect *STANDARD-INPUT* to read from FILENAME until RESTORE-REDIRECTS
+runs, for shell `<`. Signals if FILENAME does not exist."
   (let ((stream (open filename :direction :input :if-does-not-exist :error)))
     (setf *redirected-stdin* *standard-input*
           *standard-input* stream)))
 
 (defun redirect-input-string (value)
+  "Redirect *STANDARD-INPUT* to VALUE plus a trailing newline, for a shell
+here-string (`<<<`). Compare REDIRECT-INPUT-DOCUMENT, which uses VALUE as-is."
   (setf *redirected-stdin* *standard-input*
         *standard-input* (%here-string-stream value)))
 
 (defun redirect-input-document (value)
+  "Redirect *STANDARD-INPUT* to VALUE (or \"\" if NIL) verbatim, for a shell
+here-document (`<<`/`<<-`) whose body the parser has already assembled.
+Compare REDIRECT-INPUT-STRING, which appends a trailing newline."
   (setf *redirected-stdin* *standard-input*
         *standard-input* (%here-document-stream value)))
 
 (defun restore-redirects ()
+  "Undo every active redirect-* above, closing each stream this session
+opened and restoring the *STANDARD-OUTPUT*/*ERROR-OUTPUT*/*STANDARD-INPUT*
+they replaced. Only closes a stream when the matching *REDIRECTED-*
+special is non-NIL, so a stream never touched by a redirect-* call (the
+common case for at least one of the three) is left alone. The stderr
+branch additionally skips closing when stderr is EQ to the current stdout
+-- the state REDIRECT-ERROR-TO-OUTPUT or REDIRECT-OUTPUT-AND-ERROR leaves
+behind -- so a stream already closed via the stdout branch (or never
+independently opened at all) is not closed a second time."
   (let ((current-stdout *standard-output*)
         (current-stderr *error-output*)
         (current-stdin *standard-input*))

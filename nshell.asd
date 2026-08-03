@@ -82,6 +82,8 @@
    (:file "domain/completion/rule-data")
    (:file "domain/completion/context")
    (:file "domain/completion/filesystem")
+   (:file "domain/completion/filesystem-path-command")
+   (:file "domain/completion/filesystem-file-completion")
    (:file "domain/completion/knowledge-base-candidates")
    (:file "domain/completion/candidate-ranking")
    (:file "domain/completion/engine")

@@ -42,3 +42,25 @@ earlier paredit-driven passes (`Remove unused virtual screen module`, `Remove 8
 more dead functions found via paredit's unused-definitions scan`). This scan is
 the negative result that confirms the tree is clean; re-run the command above and
 expect the same 18 structurally-explained false positives.
+
+## 2026-08-03 addendum: a real dead-code case this scan cannot see
+
+`paredit inspect unused-definitions` only flags whole *definitions*
+(`defun`/`defmacro`/`defstruct` names) as candidates. It has no notion of a
+partially-dead `defstruct`: three of `shell-context`'s slots
+(`git-fns`, `history-fns`, `signal-fns`) were fully plumbed through the
+struct, its `%allocate-shell-context` constructor, and
+`make-shell-context`'s keyword arguments, yet every one of the three real
+`make-shell-context` call sites left them at their default and no reader
+accessor was ever called anywhere in `src/` or `t/` — unlike the sibling
+slots `filesystem-fns`/`process-fns`/`redirect-fns`/`terminal-fns`, which
+the composition root and their respective consumers do wire up. Because
+`shell-context` (the definition, and every one of its slot accessors) *is*
+used, the tool correctly does not flag it; the deadness was at the
+slot level, findable only by manually cross-checking every accessor name
+and every construction call site. Removed in `c93d142`; verified against a
+full `nshell/test` run (1327/1327) both before identifying the slots as
+dead and after removing them. `paredit inspect unused-definitions`'s
+methodology above should still be the first pass for whole-definition dead
+code; this case is the reason a manual accessor/slot sweep is worth doing
+periodically on top of it, not a gap in the tool's own correctness.

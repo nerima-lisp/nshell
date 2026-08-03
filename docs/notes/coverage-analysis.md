@@ -117,7 +117,19 @@ precise evidence for the original conclusion, not a new caveat to it: the
 2721-line sweep — the full state-2 set, not a sample — accounts for every
 line without exception.
 
-## How to reproduce
+## 2026-08-03 re-run: 87.1% expression, consistent with the structural-ceiling conclusion
+
+Re-ran `scripts/coverage.lisp` against the current tree (after the terminal
+raw-mode hardening and `shell-context` dead-slot removal above): **22841/26231
+expression forms in `src/`, 87.1%** — up from the 86.5% this note opened with,
+consistent with (not contradicting) the conclusion above: coverage moves when
+reachable branches are added or exercised (here, the new
+`terminal-mode-operation-failed` condition path and its tests) and is
+otherwise flat regardless of how much dead weight is removed, because the
+denominator is dominated by the four structural categories listed above, not
+by untested reachable logic. `catalog-static.lisp` is unchanged at 0/438 for
+the reason given above (load-time-once data, not logic). No new genuinely-
+uncovered *executable* line was found in this pass.
 
 `NSHELL_COVERAGE_DIR=/tmp/cov sbcl --script scripts/coverage.lisp`, then read
 `/tmp/cov/cover-index.html`. To distinguish real gaps from comment noise,

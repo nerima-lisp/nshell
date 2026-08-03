@@ -349,8 +349,7 @@ is the only layer permitted to know both the domain and the ports.")
             #:shell-context-function-table #:shell-context-function-source-table
             #:shell-context-filesystem-fns
             #:shell-context-process-fns #:shell-context-terminal-fns
-            #:shell-context-signal-fns #:shell-context-redirect-fns
-            #:shell-context-history-fns #:shell-context-git-fns
+            #:shell-context-redirect-fns
             #:shell-context-execution-strategy #:shell-context-running
             #:shell-context-last-exit-code #:shell-context-input-state
             #:shell-context-job-processes #:shell-context-terminal-rows

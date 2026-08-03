@@ -10,8 +10,7 @@
                 (&key history config knowledge-base environment dispatcher
                       job-monitor alias-table abbreviation-table function-table
                       function-source-table filesystem-fns process-fns terminal-fns
-                      signal-fns redirect-fns history-fns git-fns
-                      execution-strategy running last-exit-code input-state
+                      redirect-fns execution-strategy running last-exit-code input-state
                       process-registry terminal-rows terminal-cols))
             (:copier nil))
   "Dependency container for one nshell session."
@@ -28,10 +27,7 @@
   (filesystem-fns nil :type list)
   (process-fns nil :type list)
   (terminal-fns nil :type list)
-  (signal-fns nil :type list)
   (redirect-fns nil :type list)
-  (history-fns nil :type list)
-  (git-fns nil :type list)
   (execution-strategy :cps :type (member :cps :os-pipes))
   (running nil :type boolean)
   (last-exit-code 0 :type integer)
@@ -62,10 +58,7 @@
                              filesystem-fns
                              process-fns
                              terminal-fns
-                             signal-fns
                              redirect-fns
-                             history-fns
-                             git-fns
                              (execution-strategy :cps)
                              (running nil)
                              (last-exit-code 0)
@@ -93,10 +86,7 @@
    :filesystem-fns (%shell-context-adapter-list filesystem-fns)
    :process-fns (%shell-context-adapter-list process-fns)
    :terminal-fns (%shell-context-adapter-list terminal-fns)
-   :signal-fns (%shell-context-adapter-list signal-fns)
    :redirect-fns (%shell-context-adapter-list redirect-fns)
-   :history-fns (%shell-context-adapter-list history-fns)
-   :git-fns (%shell-context-adapter-list git-fns)
    :execution-strategy execution-strategy
    :running running
    :last-exit-code last-exit-code

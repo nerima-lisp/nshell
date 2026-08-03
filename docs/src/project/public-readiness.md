@@ -39,6 +39,29 @@ Before a public release can claim world-level interactive-shell quality:
    GitHub Release notes, and completion metadata when applicable.
 5. Open roadmap gaps remain explicit instead of being implied as complete.
 
+## 2026-08-03 local verification pass
+
+What is actually checkable on a plain `aarch64-darwin` development machine
+(not CI), run directly rather than assumed:
+
+- `nix build .#checks.aarch64-darwin.docs` and
+  `nix build .#checks.aarch64-darwin.formatting` both exit 0 -- the mkdocs
+  `--strict` build and the treefmt gate (316 files traversed) pass on this
+  platform.
+- `nix build .#checks.aarch64-darwin.{build,default,smoke-test}` and
+  `nix flake check` do **not** run here: see
+  [[nix-build-darwin-gap]] (`cl-prolog` ships no darwin package at the
+  pinned tag), the same gap this repository's own `docs/notes/`
+  acknowledges. This is a platform gap in the check runner, not a defect in
+  `flake.nix` -- `x86_64-linux` is what `flake.nix`'s own comments name as
+  the platform CI gates.
+- The equivalent SBCL-level verification -- what `checks.default` runs
+  under the hood -- was run directly instead, repeatedly across this
+  session's commits: `nshell/test` at 1327/1327 passing against a
+  from-scratch fasl cache (ruling out a warm-cache-masked load-order bug),
+  most recently after this session's `flake.lock` dependency bumps and
+  `package.lisp` file split.
+
 ## Current Public Gaps
 
 - Broader help-text-driven command discovery and cache policy remain future

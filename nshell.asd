@@ -130,6 +130,7 @@
    (:file "infrastructure/acl/syscall-terminal")
    (:file "infrastructure/acl/git")
    (:file "infrastructure/acl/pty")
+   (:file "infrastructure/acl/pty-spawn")
    (:file "infrastructure/acl/signal-acl")
    (:file "infrastructure/persistence/file-history")
    (:file "infrastructure/persistence/file-config")

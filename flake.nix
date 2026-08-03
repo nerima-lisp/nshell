@@ -15,7 +15,7 @@
     # branch: a bare `github:nerima-lisp/cl-nix-forge` follows that
     # repository's default branch and would change this build without warning.
     cl-nix-forge = {
-      url = "github:nerima-lisp/cl-nix-forge/v0.4.0";
+      url = "github:nerima-lisp/cl-nix-forge/v0.4.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -29,7 +29,7 @@
     # each would drag in its own nixpkgs, inflating flake.lock and rebuilding
     # the same derivations.
     cl-prolog = {
-      url = "github:nerima-lisp/cl-prolog/v1.3.0";
+      url = "github:nerima-lisp/cl-prolog/v1.4.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -47,17 +47,15 @@
     # second nixpkgs to flake.lock at all. It also works uniformly for a
     # checkout that ships no flake.nix.
     cl-parser-kit = {
-      url = "github:nerima-lisp/cl-parser-kit/v1.0.3";
+      url = "github:nerima-lisp/cl-parser-kit/v1.1.0";
       flake = false;
     };
     cl-dataflow = {
       url = "github:nerima-lisp/cl-dataflow/v1.1.1";
       flake = false;
     };
-    # v0.6.0, not v1.0.0: cl-boundary-kit's .asd already says 1.0.0 but that
-    # tag does not exist yet. Pin what is published, not what is intended.
     cl-boundary-kit = {
-      url = "github:nerima-lisp/cl-boundary-kit/v2.0.1";
+      url = "github:nerima-lisp/cl-boundary-kit/v2.1.0";
       flake = false;
     };
     cl-cli = {
@@ -71,11 +69,11 @@
     # cl-process-kit consolidates timeout-guarded process launch; it sits on
     # cl-boundary-kit (clock/sleeper) and cl-log-kit (structured logging).
     cl-log-kit = {
-      url = "github:nerima-lisp/cl-log-kit/v2.0.1";
+      url = "github:nerima-lisp/cl-log-kit/v2.1.0";
       flake = false;
     };
     cl-process-kit = {
-      url = "github:nerima-lisp/cl-process-kit/v3.1.0";
+      url = "github:nerima-lisp/cl-process-kit/v3.2.0";
       flake = false;
     };
     # cl-history-kit backs the command-history store, search, and recall

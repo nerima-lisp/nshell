@@ -36,6 +36,10 @@
   :serial t
   :components
   ((:file "package")
+   (:file "package-domain")
+   (:file "package-application")
+   (:file "package-infrastructure")
+   (:file "package-presentation")
    (:file "util/struct-macros")
    (:file "util/strings")
    (:file "domain/events/base-event")

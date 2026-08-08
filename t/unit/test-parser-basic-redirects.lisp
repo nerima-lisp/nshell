@@ -111,6 +111,8 @@
     "Redirect kind facts should own input/output/stderr/append classification."
     (let ((input-facts (nshell.domain.parsing::%redirect-kind-facts :<))
           (input-spec (nshell.domain.parsing::%redirect-kind-fact-spec :<))
+          (tabbed-input-facts (nshell.domain.parsing::%redirect-kind-facts :<<-))
+          (tabbed-input-spec (nshell.domain.parsing::%redirect-kind-fact-spec :<<-))
           (stderr-append-facts (nshell.domain.parsing::%redirect-kind-facts :2>>))
           (all-output-append-facts (nshell.domain.parsing::%redirect-kind-facts :&>>)))
       (expect (every #'nshell.domain.parsing::%redirect-kind-fact-spec-p
@@ -125,6 +127,18 @@
       (expect (nshell.domain.parsing::%redirect-kind-facts-input-p input-facts) :to-be-truthy)
       (expect (nshell.domain.parsing::%redirect-kind-facts-output-p input-facts) :to-be-falsy)
       (expect (nshell.domain.parsing::%redirect-kind-facts-stderr-p input-facts) :to-be-falsy)
+      (expect (nshell.domain.parsing::%redirect-kind-fact-spec-p tabbed-input-spec) :to-be-truthy)
+      (expect :<<- :to-be (nshell.domain.parsing::%redirect-kind-fact-spec-kind
+                    tabbed-input-spec))
+      (expect (nshell.domain.parsing::%redirect-kind-fact-spec-input-p
+               tabbed-input-spec) :to-be-truthy)
+      (expect (nshell.domain.parsing::%redirect-kind-facts-p tabbed-input-facts) :to-be-truthy)
+      (expect (nshell.domain.parsing::%redirect-kind-facts-input-p
+               tabbed-input-facts) :to-be-truthy)
+      (expect (nshell.domain.parsing::%redirect-kind-facts-output-p
+               tabbed-input-facts) :to-be-falsy)
+      (expect (nshell.domain.parsing::%redirect-kind-facts-stderr-p
+               tabbed-input-facts) :to-be-falsy)
       (expect (nshell.domain.parsing::%redirect-kind-facts-stderr-p
            stderr-append-facts) :to-be-truthy)
       (expect (nshell.domain.parsing::%redirect-kind-facts-append-p
@@ -366,21 +380,23 @@
                    (:2>&1 . nil)
                    (:>> . "append.txt")) :to-equal entries)))
 
-  (it "split-command-node-redirects-preserves-dangling-operator"
-    "Split command-node redirects preserve dangling operator state explicitly."
-    (let* ((command (nshell.domain.parsing:make-command-node "echo" nil))
+  (it "split-command-node-redirects-preserves-here-doc-order"
+    "Split command-node redirects preserve the original left-to-right redirect order."
+    (let* ((command
+             (nshell.domain.parsing:make-command-node
+              "echo"
+              '("hello" "<<" "EOF" "<<-" "TAB" "2>&1")))
            (result
-             (nshell.domain.parsing:split-command-node-redirects command)))
-      (expect (nshell.domain.parsing:command-redirect-split-result-p result) :to-be-truthy)
-      (expect (nshell.domain.parsing:command-node-command command) :to-equal (nshell.domain.parsing:command-node-command
-                    (nshell.domain.parsing:command-redirect-split-result-clean-command
-                     result)))
-      (expect (nshell.domain.parsing:command-node-arg-values command) :to-equal (nshell.domain.parsing:command-node-arg-values
+             (nshell.domain.parsing:split-command-node-redirects command))
+           (redirects
+             (nshell.domain.parsing:command-redirect-split-result-redirects
+              result)))
+      (expect '("hello") :to-equal (nshell.domain.parsing:command-node-arg-values
                   (nshell.domain.parsing:command-redirect-split-result-clean-command
                    result)))
-      (expect (nshell.domain.parsing:command-redirect-split-result-redirects
-                 result) :to-be-null)
-      ))
+      (expect '((:<< . "EOF")
+                   (:<<- . "TAB")
+                   (:2>&1 . nil)) :to-equal redirects)))
 
   (it "split-command-node-redirects-preserves-left-to-right-order"
     "Split command-node redirects preserve the original left-to-right redirect order."

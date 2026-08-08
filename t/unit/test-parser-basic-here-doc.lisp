@@ -53,8 +53,7 @@
       (expect (fboundp 'nshell.domain.parsing::copy-%here-doc-body) :to-be-falsy)
       (expect (format nil "one~%") :to-equal (nshell.domain.parsing::%here-doc-body-body body))
       (expect 8 :to-equal (nshell.domain.parsing::%here-doc-body-next-position body))
-      (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body) :to-be-falsy)))
-
+      (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body) :to-be-falsy))
   (it "parser-here-doc-body-strips-leading-tabs-for-tabbed-delimiter"
     "Tabbed here-document bodies normalize leading tabs before delimiter matching."
     (let ((body (nshell.domain.parsing::%consume-here-doc-body
@@ -134,7 +133,6 @@
                  result) :to-be-null)
       (expect (member (format nil "hello~%") token-values :test #'string=) :to-be-truthy)
       (expect (member "echo" token-values :test #'string=) :to-be-truthy)))
-
   (it "parser-here-doc-tabbed-tokenization-strips-leading-tabs"
     "Tab-stripping here-document tokenization removes tabs from body and delimiter lines."
     (let* ((input (format nil "cat <<- EOF~%~cinline-doc~%~cEOF~%echo done"

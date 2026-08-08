@@ -125,7 +125,6 @@
       (expect "inline-doc" :to-equal (nshell.domain.environment:env-get
                     (nshell.application:shell-context-environment context)
                     "captured"))))
-
   (it "source-pipeline-tabbed-here-document-feeds-builtin-stdin"
     "source strips leading tabs from here-document bodies before executing the command."
     (with-builtins-source (output code context

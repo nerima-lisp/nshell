@@ -53,6 +53,7 @@ MODE is a CL :IF-EXISTS value -- :SUPERSEDE for shell `>`, :APPEND for `>>`."
                       :direction :output
                       :if-exists mode
                       :if-does-not-exist :create)))
+    (%remember-redirected-stdout)
     (setf *redirected-stdout-owned* stream
           *standard-output* stream)))
 
@@ -63,6 +64,7 @@ MODE is a CL :IF-EXISTS value -- :SUPERSEDE for shell `2>`, :APPEND for `2>>`."
                       :direction :output
                       :if-exists mode
                       :if-does-not-exist :create)))
+    (%remember-redirected-stderr)
     (setf *redirected-stderr-owned* stream
           *error-output* stream)))
 
@@ -73,6 +75,8 @@ on FILENAME, for shell `&>`/`&>>`. MODE is a CL :IF-EXISTS value."
                       :direction :output
                       :if-exists mode
                       :if-does-not-exist :create)))
+    (%remember-redirected-stdout)
+    (%remember-redirected-stderr)
     (setf *redirected-stdout-owned* stream
           *redirected-stderr-owned* stream
           *standard-output* stream
@@ -97,6 +101,7 @@ keeps it from double-closing a stream this function never owned."
   "Redirect *STANDARD-INPUT* to read from FILENAME until RESTORE-REDIRECTS
 runs, for shell `<`. Signals if FILENAME does not exist."
   (let ((stream (open filename :direction :input :if-does-not-exist :error)))
+    (%remember-redirected-stdin)
     (setf *redirected-stdin-owned* stream
           *standard-input* stream)))
 

@@ -18,7 +18,11 @@
         (output-materialized-p nil)
         (output-pipe-stream nil)
         (output-redirected-p nil)
-        (error-output t))
+        ;; Keep the child connected to the caller's dynamic stderr stream.
+        ;; Passing T would bypass bindings such as capture-standard-output's
+        ;; *ERROR-OUTPUT* and make descriptor duplication appear to work only
+        ;; on the terminal.
+        (error-output *error-output*))
     (labels ((current-output ()
                (unless output-materialized-p
                  (setf output
@@ -70,7 +74,8 @@
               redirect-streams))))
 
 (defun %pipeline-stage-streams (stage-redirects prev-pipe next-pipe redirect-streams
-                                &key (default-output :stream))
+                                &key (default-input t)
+                                  (default-output :stream))
   (let ((input-pipe-stream nil)
         (output-pipe-stream nil))
     (multiple-value-bind (input-kind input-target)
@@ -86,7 +91,7 @@
                       (let ((stream (%here-string-stream input-target)))
                         (push stream redirect-streams)
                         stream))
-                     ((eq input-kind :<<)
+                     ((member input-kind '(:<< :<<-) :test #'eq)
                       (let ((stream (%here-document-stream input-target)))
                         (push stream redirect-streams)
                         stream))
@@ -99,7 +104,7 @@
                                                        :buffering :line))
                           (setf (first prev-pipe) nil)
                           input-pipe-stream)))
-                     (t t))))
+                     (t default-input))))
         (multiple-value-bind (output error-output resolved-output-pipe-stream redirect-streams)
             (%pipeline-output-streams stage-redirects next-pipe redirect-streams
                                       :default-output default-output)

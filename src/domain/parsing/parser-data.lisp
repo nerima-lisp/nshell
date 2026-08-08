@@ -349,17 +349,13 @@
     (otherwise state)))
 
 (defun redirects-require-shell-wrapper-p (redirects)
+  "Return true when REDIRECTS contain descriptor duplication.
+
+Descriptor duplication must be applied to the child's actual file descriptors;
+sharing the parent-side Lisp streams cannot reproduce source-ordered `n>&m`
+semantics.  The shell wrapper performs that operation before `exec`."
   (some (lambda (entry)
-          (and (eq (car entry) :fd-dup)
-               (let ((target (cdr entry)))
-                 (not (and (redirect-fd-dup-target-p target)
-                           (eq (redirect-fd-dup-target-operator target) :output)
-                           (integerp (redirect-fd-dup-target-source target))
-                           (integerp (redirect-fd-dup-target-target target))
-                           (or (and (= (redirect-fd-dup-target-source target) 1)
-                                    (= (redirect-fd-dup-target-target target) 2))
-                               (and (= (redirect-fd-dup-target-source target) 2)
-                                    (= (redirect-fd-dup-target-target target) 1))))))))
+          (eq (car entry) :fd-dup))
         redirects))
 
 (defun %shell-quote (value)

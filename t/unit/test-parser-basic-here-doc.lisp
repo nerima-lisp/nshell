@@ -188,4 +188,4 @@
       (expect (fboundp 'nshell.domain.parsing::copy-%here-doc-target-body-cursor) :to-be-falsy)
       (expect "first" :to-equal (nshell.domain.parsing::%here-doc-target-body-cursor-body cursor))
       (expect '("second") :to-equal (nshell.domain.parsing::%here-doc-target-body-cursor-remaining-bodies
-                  cursor)))))
+                  cursor))))))

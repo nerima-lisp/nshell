@@ -160,6 +160,12 @@
        candidates))
     (%filesystem-candidate-set-candidates candidates)))
 
+(defun %path-like-completion-prefix-p (prefix)
+  "Return true when PREFIX syntactically denotes a filesystem path."
+  (or (position-if #'%path-separator-p prefix)
+      (and (plusp (length prefix))
+           (find (char prefix 0) '(#\. #\~) :test #'char=))))
+
 (defun completion-filesystem-mode (context)
   "Return the filesystem completion mode implied by CONTEXT."
   (cond
@@ -167,6 +173,9 @@
     ((completion-context-command-position-p context) nil)
     ((string= (completion-context-command context) "cd") :directories)
     ((member (completion-context-command context) '("source" ".") :test #'string=)
+     :files-and-directories)
+    ((%path-like-completion-prefix-p
+      (completion-context-argument-prefix context))
      :files-and-directories)
     (t nil)))
 

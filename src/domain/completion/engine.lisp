@@ -40,7 +40,8 @@
             (unless present-p
               (setf (gethash completion descriptions) description))))))))
 
-(defun %candidates-from-rule-solutions (solutions variable kind &key (prefix "") descriptions)
+(defun %candidates-from-rule-solutions
+    (solutions variable kind &key (prefix "") descriptions description-fn)
   (sort (%merge-candidates
          (loop for solution in solutions
                for value = (%rule-solution-value variable solution)
@@ -48,7 +49,9 @@
                  collect (make-candidate value
                                          :kind kind
                                          :description
-                                         (or (and (hash-table-p descriptions)
+                                         (or (and (functionp description-fn)
+                                                  (funcall description-fn value))
+                                             (and (hash-table-p descriptions)
                                                   (gethash value descriptions))
                                              ""))))
         #'string<

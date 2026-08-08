@@ -33,8 +33,14 @@
 
 (defun %first-command-path-candidate (command path executable-p
                                       &key (empty-directory ""))
-  (first (command-path-candidates command path executable-p
-                                  :empty-directory empty-directory)))
+  (if (%command-prefix-has-directory-p command)
+      (when (funcall executable-p command)
+        command)
+      (loop for directory in (%split-path (or path ""))
+            for candidate = (%join-directory-command
+                             directory command :empty-directory empty-directory)
+            when (funcall executable-p candidate)
+              do (return candidate))))
 
 (defun %entry-command-name (entry)
   (let ((name (if (pathnamep entry)

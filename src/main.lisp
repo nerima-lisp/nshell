@@ -88,14 +88,7 @@
       :line (cl-cli:option-value invocation :command)
       :script-args (cl-cli:positional-value invocation :command-args)))
     (t
-     ;; No flags and no -c: interactive when stdin is a tty, batch otherwise.
-     ;; RUN-REPL's own exit code: 0 for a session that ran, non-zero when the
-     ;; terminal could not be put into the mode the line editor needs.
-     (if (tty-p)
-         (progn
-           (%print-version)
-           (nshell.presentation:run-repl))
-         (nshell.presentation:run-repl-batch)))))
+     (%run-default-invocation))))
 
 (defparameter *main-exit-function*
   (lambda (&key unix-status)

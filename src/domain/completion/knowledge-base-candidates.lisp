@@ -19,7 +19,8 @@
 
 (defun knowledge-base-command-candidates (kb prefix)
   (loop for name in (kb-registered-commands kb)
-        when (%starts-with-p prefix name)
+        when (and (not (position #\Space name))
+                  (%starts-with-p prefix name))
           collect (%command-entry-candidate name (kb-command-description kb name))))
 
 (defun %unique-kb-argument-names (kb command)
@@ -116,6 +117,17 @@
         (%argument-word-sequence-words-before-latest sequence)
         words)))
 
+(defun %resolved-kb-command (knowledge-base command argument-words prefix)
+  "Resolve the longest registered command path before the current word."
+  (let ((resolved command))
+    (dolist (word (%argument-words-without-value-prefix argument-words prefix)
+                  resolved)
+      (let ((candidate (format nil "~a ~a" resolved word)))
+        (if (and (not (%starts-with-p "-" word))
+                 (kb-command-present-p knowledge-base candidate))
+            (setf resolved candidate)
+            (return resolved))))))
+
 (defun %previous-option-for-value-prefix (argument-words prefix)
   (%argument-word-sequence-latest
    (%argument-word-sequence-from-words
@@ -169,10 +181,13 @@
          collect (%argument-name-candidate name))))
 
 (defun knowledge-base-argument-candidates (kb command prefix &key argument-words)
-  (when (kb-command-present-p kb command)
-    (or (%attached-kb-option-value-candidates kb command prefix)
-        (%separate-kb-option-value-candidates
-         kb
-         command
-         (%parse-separate-option-value-prefix argument-words prefix))
-        (%kb-argument-name-candidates kb command prefix argument-words))))
+  (let ((resolved-command
+          (%resolved-kb-command kb command argument-words prefix)))
+    (when (kb-command-present-p kb resolved-command)
+      (or (%attached-kb-option-value-candidates kb resolved-command prefix)
+          (%separate-kb-option-value-candidates
+           kb
+           resolved-command
+           (%parse-separate-option-value-prefix argument-words prefix))
+          (%kb-argument-name-candidates
+           kb resolved-command prefix argument-words)))))

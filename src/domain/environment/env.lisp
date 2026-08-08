@@ -158,23 +158,18 @@ Pure domain function - callers should provide OS values via inject-os-environmen
 (defun inject-os-environment (env)
   "Inject OS environment values into ENV. Used by infrastructure layer.
    Returns a new environment with OS values overwriting defaults."
-  (let ((result env))
-    #+sbcl
-    (dolist (entry (sb-ext:posix-environ))
-      (setf result (%inject-os-environment-entry result entry)))
-    #-sbcl
-    (dolist (name '("HOME" "PATH" "USER" "SHELL" "TERM"))
-      (let ((value (host-kit:getenv name)))
-        (when value
-          (setf result (env-set result name value t)))))
-    (setf result
-          (env-set result
-                   "PWD"
-                   (handler-case
-                       (namestring (host-kit:getcwd))
-                     (error () (env-get result "PWD")))
-                   t))
-    result))
+  #+sbcl
+  (%inject-os-environment-entries env (sb-ext:posix-environ) #'host-kit:getcwd)
+  #-sbcl
+  (%inject-os-environment-entries
+    env
+    (remove nil
+            (mapcar (lambda (name)
+                      (let ((value (host-kit:getenv name)))
+                        (when value
+                          (format nil "~a=~a" name value))))
+                    '("HOME" "PATH" "USER" "SHELL" "TERM")))
+    #'host-kit:getcwd))
 
 (defun env-unset (env name)
   "Return ENV without NAME."

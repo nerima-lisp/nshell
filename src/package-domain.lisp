@@ -109,8 +109,9 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
            #:+redirect-specs+ #:+redirect-fd-dup-specs+
+           #:make-redirect-fd-dup-target
            #:redirect-fd-dup-target-p #:redirect-fd-dup-target-source
-           #:redirect-fd-dup-target-target
+           #:redirect-fd-dup-target-target #:redirect-fd-dup-target-operator
            #:redirect-input-kind-p #:redirect-output-kind-p #:redirect-stderr-kind-p
            #:redirect-append-kind-p #:map-redirect-entries #:redirect-input-spec
            #:redirect-input-file-target #:redirect-output-spec
@@ -257,7 +258,8 @@ exported predicates below are goals callers may query directly.")
             #:completion-context-redirection-target-p
             #:completion-filesystem-fns
             #:command-path-candidates
-            #:*path-command-directory-files-fn* #:*path-command-executable-p-fn*
+             #:*path-command-directory-map-fn*
+             #:*path-command-directory-files-fn* #:*path-command-executable-p-fn*
             #:*file-completion-directory-files-fn*
             #:*file-completion-subdirectories-fn*))
 

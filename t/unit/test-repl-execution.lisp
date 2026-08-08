@@ -37,7 +37,7 @@
             (expect "echo edited"
                     :to-equal
                     (nshell.presentation::input-state-buffer
-                     nshell.presentation::*input-state*))))))
+                         nshell.presentation::*input-state*)))))))
 
   (it "repl-for-loop-expands-in-values"
     "Interactive for loops expand variables in the in list before assignment."

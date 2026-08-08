@@ -35,7 +35,8 @@
         (ignore-errors (set-process-group pid pgid)))))
   pgid)
 
-(defun %run-pipeline-command (cmd args input output error-output environment resolved-cmd)
+(defun %run-pipeline-command (cmd args input output error-output environment resolved-cmd
+                              &key preserve-fds)
   (if resolved-cmd
       (sb-ext:run-program resolved-cmd args
         :input input
@@ -43,22 +44,25 @@
         :error error-output
         :wait nil
         :search nil
-        :environment environment)
+        :environment environment
+        :preserve-fds preserve-fds)
       (progn
         (format *error-output*
                 "~a"
                 (%external-command-not-found-message cmd))
         nil)))
 
-(defun %run-synchronous-pipeline (procs pgid pipes)
+(defun %run-synchronous-pipeline (procs pgid pipes pipefail-p)
   (flet ((finish-pipeline ()
            (%wait-pipeline-with-output
             procs
+            *external-command-timeout*
             (lambda ()
               (format *error-output*
                       "nshell: pipeline timed out after ~a seconds~%"
                       *external-command-timeout*)
-              124))))
+              124)
+            pipefail-p)))
     (%close-pipeline-fds pipes)
     (if pgid
         (%with-foreground-process-group pgid (function finish-pipeline))
@@ -104,7 +108,14 @@
                  (values
                   (progn
                     (%close-unused-next-pipe-writer next-pipe output-pipe-stream)
-                    (%run-pipeline-command cmd args input output error-output environment resolved-cmd))
+                    (%run-pipeline-command cmd
+                                           effective-args
+                                           input
+                                           output
+                                           error-output
+                                           environment
+                                           effective-cmd
+                                           :preserve-fds preserve-fds))
                   redirect-streams)
                (setf started t))
           (unless started
@@ -252,7 +263,10 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                 pipes
                 redirects
                 redirect-streams
-                :default-output :stream
+                :default-input default-input
+                :default-output default-output
+                :preserve-fds preserve-fds
+                :after-spawn after-spawn
                 :error-sentinel 127
                 :pgid-assign-fn (function %assign-sync-pipeline-process-group))
              (setf redirect-streams updated-streams)
@@ -260,7 +274,7 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                  (progn
                    (%abort-pipeline procs pipes)
                    spawn-error-code)
-                 (%run-synchronous-pipeline procs pgid pipes)))
+                 (%run-synchronous-pipeline procs pgid pipes pipefail-p)))
         (%close-pipeline-redirect-streams redirect-streams)
         (%close-pipeline-fds pipes)))))
 
@@ -280,7 +294,10 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                 pipes
                 redirects
                 redirect-streams
-                :default-output t
+                :default-input default-input
+                :default-output default-output
+                :preserve-fds preserve-fds
+                :after-spawn after-spawn
                 :error-sentinel t
                 :pgid-assign-fn (function %assign-async-pipeline-process-group))
              (declare (ignore pgid))

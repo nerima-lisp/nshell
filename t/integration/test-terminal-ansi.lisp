@@ -72,4 +72,4 @@ to write inline."
                      stream))))
       (expect (format nil "~C]52;c;Y2Fmw6k=~C" #\Esc #\Bell)
               :to-equal
-              output))))
+              output)))

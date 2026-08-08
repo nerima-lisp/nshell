@@ -31,7 +31,7 @@ Verified empirically, not just by inspection: `interactive-stream-p` returns
 `NIL` under a plain pipe — confirmed by direct `sbcl --eval` runs before
 writing the fix. A new end-to-end test,
 `e2e-main-interactive-pty-foreground-command-ignores-external-command-timeout`
-(`tests/e2e/test-smoke.lisp`), spawns real `nshell` under a real PTY with
+(`t/e2e/test-smoke.lisp`), spawns real `nshell` under a real PTY with
 `*external-command-timeout*` overridden to `0.5`, runs `sleep 2; echo
 pty-outlived-timeout`, and asserts the echo occurs and no timeout message
 appears — a command that would be killed twenty times over under the old
@@ -78,13 +78,13 @@ whatever process group nshell itself already occupied, which is what real
 `exec` does. Adding either would be a regression, not a fix. Left
 unchanged; recorded here so a future audit does not re-flag it.
 
-## Not a live risk today: `pty.lisp`
+## Not a live risk today: `pty.lisp` and `pty-spawn.lisp`
 
 `pty-read`/`pty-write` are raw blocking syscalls with no timeout, and
 `%wait-for-pty-child-ready` could block forever if a forked child never
 signals readiness. `pty-spawn` currently has zero call sites in `src/`
 outside its own file and `package.lisp`'s export list — it exists for the
-PTY-based e2e test harness (`tests/e2e/test-smoke.lisp`'s
+PTY-based e2e test harness (`t/e2e/test-smoke.lisp`'s
 `e2e-main-interactive-pty-*` tests), not any live shell code path. Not a
 present risk; would need a bound before being wired into a real interactive
 feature.

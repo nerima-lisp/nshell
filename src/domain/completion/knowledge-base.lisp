@@ -1,33 +1,30 @@
 (in-package #:nshell.domain.completion)
-(defstruct (knowledge-base
-            (:constructor %make-knowledge-base ())
-            (:conc-name %knowledge-base-))
-  (commands (make-hash-table :test #'equal) :type hash-table))
 
-(defstruct (%kb-command-entry
-            (:constructor %make-kb-command-entry
-                (&key subcommands flags option-values exclusive-options
-                      description))
-            (:conc-name %kb-command-entry-))
-  (subcommands nil :type list)
-  (flags nil :type list)
-  (option-values nil :type list)
-  (exclusive-options nil :type list)
-  description)
+;;; Command completion data lives in a CL-PROLOG rulebase: KB-ADD-COMMAND and
+;;; friends assert COMMAND-REGISTERED/SUBCOMMAND-OF/HAS-FLAG/OPTION-VALUE/
+;;; EXCLUSIVE-GROUP/DESCRIBES facts, and three small rules derive COMPLETES
+;;; from them so COMPLETE (engine.lisp) answers command, subcommand, and flag
+;;; candidates the same way the static catalog's rule-knowledge-base does.
+
+;;; KNOWLEDGE-BASE is a RULE-KNOWLEDGE-BASE subtype so %COMPLETION-CANDIDATES
+;;; (engine.lisp) can TYPECASE it ahead of the plain RULE-KNOWLEDGE-BASE that
+;;; *BUILT-IN-RULE-KNOWLEDGE-BASE* uses -- both are CL-PROLOG rulebases under
+;;; the hood, but they answer completion queries through different rule sets.
+(defstruct (knowledge-base (:include rule-knowledge-base)))
 
 (defun make-empty-knowledge-base ()
-  (%make-knowledge-base))
+  (let ((kb (make-knowledge-base)))
+    (assert-rule! kb (make-rule :head '(completes ?cmd ?cmd)
+                                :body '((command-registered ?cmd))))
+    (assert-rule! kb (make-rule :head '(completes ?cmd ?name)
+                                :body '((subcommand-of ?cmd ?name))))
+    (assert-rule! kb (make-rule :head '(completes ?cmd ?flag)
+                                :body '((has-flag ?cmd ?flag))))
+    kb))
 
-(defun %map-kb-commands (kb function)
-  (dolist (cmd-name (sort (loop for key being the hash-keys of (%knowledge-base-commands kb)
-                                collect key)
-                          #'string<))
-    (funcall function cmd-name (gethash cmd-name (%knowledge-base-commands kb)))))
-
-(defun %ensure-kb-command-entry (kb cmd-name)
-  (or (gethash cmd-name (%knowledge-base-commands kb))
-      (setf (gethash cmd-name (%knowledge-base-commands kb))
-            (%make-kb-command-entry))))
+(defun %kb-solution-values (kb goal variable)
+  (mapcar (lambda (solution) (cl-prolog:solution-binding variable solution))
+          (prove-all kb goal)))
 
 (defun %unique-string-values (values)
   (let ((seen nil)
@@ -50,37 +47,11 @@
 (defun %valid-kb-option-value-spec-p (spec)
   (stringp (%kb-option-value-spec-option spec)))
 
-(defun %kb-option-value-spec-for-option-p (spec opt-name)
-  (and (%valid-kb-option-value-spec-p spec)
-       (string= opt-name (%kb-option-value-spec-option spec))))
-
 (defun %make-kb-option-value-spec (opt-name values)
   (cons opt-name values))
 
-(defun %merge-kb-option-values (option-values opt-name values)
-  (let ((merged-values nil)
-        (other-specs nil))
-    (dolist (spec option-values)
-      (if (%kb-option-value-spec-for-option-p spec opt-name)
-          (setf merged-values
-                (append merged-values (%kb-option-value-spec-values spec)))
-          (push spec other-specs)))
-    (cons (%make-kb-option-value-spec
-           opt-name
-           (%unique-string-values
-            (append merged-values values)))
-          (nreverse other-specs))))
-
 (defun %merge-string-values (existing incoming)
   (%unique-string-values (append existing incoming)))
-
-(defun %merge-kb-option-value-specs (existing incoming)
-  (let ((merged existing))
-    (dolist (spec incoming merged)
-      (when (%valid-kb-option-value-spec-p spec)
-        (setf merged (%merge-kb-option-values merged
-                                              (%kb-option-value-spec-option spec)
-                                              (%kb-option-value-spec-values spec)))))))
 
 (defun %normalize-kb-exclusive-option-groups (groups)
   (let ((normalized nil))
@@ -89,88 +60,89 @@
         (when (rest options)
           (push options normalized))))))
 
-(defun %merge-kb-exclusive-option-groups (existing incoming)
-  (let ((seen nil)
-        (merged nil))
-    (dolist (group (append existing
-                           (%normalize-kb-exclusive-option-groups incoming))
-             (nreverse merged))
-      (when (and (consp group)
-                 (not (member group seen :test #'equal)))
-        (push group seen)
-        (push group merged)))))
-
-(defun %kb-command-entry (kb cmd-name)
-  (and kb (gethash cmd-name (%knowledge-base-commands kb))))
-
 (defun kb-command-present-p (kb cmd-name)
-  (not (null (%kb-command-entry kb cmd-name))))
+  (and (prove-all kb (list 'command-registered cmd-name)) t))
 
-(defmacro %define-kb-command-accessor (name accessor)
-  `(defun ,name (kb cmd-name)
-     (let ((entry (%kb-command-entry kb cmd-name)))
-       (and entry
-            (,accessor entry)))))
+(defun kb-command-subcommands (kb cmd-name)
+  (%unique-string-values
+   (%kb-solution-values kb (list 'subcommand-of cmd-name '?name) '?name)))
 
-(%define-kb-command-accessor kb-command-subcommands
-  %kb-command-entry-subcommands)
-(%define-kb-command-accessor kb-command-flags
-  %kb-command-entry-flags)
-(%define-kb-command-accessor kb-command-option-values
-  %kb-command-entry-option-values)
-(%define-kb-command-accessor kb-command-exclusive-options
-  %kb-command-entry-exclusive-options)
-(%define-kb-command-accessor kb-command-description
-  %kb-command-entry-description)
+(defun kb-command-flags (kb cmd-name)
+  (%unique-string-values
+   (%kb-solution-values kb (list 'has-flag cmd-name '?flag) '?flag)))
 
-(defun %merge-kb-command-entry-facts
-    (entry &key subcommands flags option-values exclusive-options description)
-  (setf (%kb-command-entry-subcommands entry)
-        (%merge-string-values (%kb-command-entry-subcommands entry)
-                                 subcommands)
-        (%kb-command-entry-flags entry)
-        (%merge-string-values (%kb-command-entry-flags entry) flags)
-        (%kb-command-entry-option-values entry)
-        (%merge-kb-option-value-specs (%kb-command-entry-option-values entry)
-                                      option-values)
-        (%kb-command-entry-exclusive-options entry)
-        (%merge-kb-exclusive-option-groups
-         (%kb-command-entry-exclusive-options entry)
-         exclusive-options)
-        (%kb-command-entry-description entry)
-        (or description (%kb-command-entry-description entry)))
-  entry)
+(defun kb-command-option-values (kb cmd-name)
+  (let ((values-by-option (make-hash-table :test #'equal))
+        (options nil))
+    (dolist (solution (prove-all kb (list 'option-value cmd-name '?option '?value)))
+      (let ((option (cl-prolog:solution-binding '?option solution))
+            (value (cl-prolog:solution-binding '?value solution)))
+        (unless (nth-value 1 (gethash option values-by-option))
+          (push option options))
+        (push value (gethash option values-by-option))))
+    (sort (mapcar (lambda (option)
+                    (%make-kb-option-value-spec
+                     option
+                     (%unique-string-values (nreverse (gethash option values-by-option)))))
+                  options)
+          #'string< :key #'%kb-option-value-spec-option)))
 
-(defun %add-kb-command-entry-option (entry opt-name values)
-  (%merge-kb-command-entry-facts
-   entry
-   :flags (list opt-name)
-   :option-values (when values
-                    (list (%make-kb-option-value-spec opt-name values)))))
+(defun kb-command-exclusive-options (kb cmd-name)
+  (remove-duplicates
+   (%kb-solution-values kb (list 'exclusive-group cmd-name '?members) '?members)
+   :test #'equal :from-end t))
 
-(defun %merge-kb-command-facts
-    (entry &key subcommands flags option-values exclusive-options description)
-  (%merge-kb-command-entry-facts
-   entry
-   :subcommands subcommands
-   :flags flags
-   :option-values option-values
-   :exclusive-options exclusive-options
-   :description description))
+(defun kb-command-description (kb cmd-name)
+  (first (%kb-solution-values kb (list 'describes cmd-name '?description) '?description)))
+
+(defun kb-registered-commands (kb)
+  (sort (%unique-string-values (%kb-solution-values kb '(command-registered ?cmd) '?cmd))
+        #'string<))
+
+(defun %retract-command-facts! (kb cmd-name)
+  (setf (rule-knowledge-base-facts kb)
+        (remove-if (lambda (fact)
+                     (and (member (fact-predicate fact)
+                                  '(command-registered subcommand-of has-flag
+                                    option-value exclusive-group describes))
+                          (equal (first (fact-args fact)) cmd-name)))
+                   (rule-knowledge-base-facts kb)))
+  (%invalidate-rule-knowledge-base! kb))
+
+(defun %set-command-description! (kb cmd-name description)
+  (setf (rule-knowledge-base-facts kb)
+        (remove-if (lambda (fact)
+                     (and (eq (fact-predicate fact) 'describes)
+                          (equal (first (fact-args fact)) cmd-name)))
+                   (rule-knowledge-base-facts kb)))
+  (%invalidate-rule-knowledge-base! kb)
+  (assert-fact! kb (make-fact :predicate 'describes :args (list cmd-name description))))
 
 (defun kb-add-command
     (kb cmd-name &key subcommands flags option-values exclusive-options description)
-  (let ((entry (%ensure-kb-command-entry kb cmd-name)))
-    (%merge-kb-command-facts entry
-                             :subcommands subcommands
-                             :flags flags
-                             :option-values option-values
-                             :exclusive-options exclusive-options
-                             :description description)))
+  (assert-fact! kb (make-fact :predicate 'command-registered :args (list cmd-name)))
+  (dolist (name (remove-if-not #'stringp subcommands))
+    (assert-fact! kb (make-fact :predicate 'subcommand-of :args (list cmd-name name))))
+  (dolist (flag (remove-if-not #'stringp flags))
+    (assert-fact! kb (make-fact :predicate 'has-flag :args (list cmd-name flag))))
+  (dolist (spec option-values)
+    (when (%valid-kb-option-value-spec-p spec)
+      (let ((option (%kb-option-value-spec-option spec)))
+        (dolist (value (%kb-option-value-spec-values spec))
+          (when (stringp value)
+            (assert-fact! kb (make-fact :predicate 'option-value
+                                        :args (list cmd-name option value))))))))
+  (dolist (group (%normalize-kb-exclusive-option-groups exclusive-options))
+    (assert-fact! kb (make-fact :predicate 'exclusive-group :args (list cmd-name group))))
+  (when description
+    (%set-command-description! kb cmd-name description))
+  kb)
 
 (defun kb-add-option (kb cmd-name opt-name &key values)
-  (let ((entry (%ensure-kb-command-entry kb cmd-name)))
-    (%add-kb-command-entry-option entry opt-name values)))
+  (kb-add-command kb cmd-name
+                  :flags (list opt-name)
+                  :option-values (when values
+                                   (list (%make-kb-option-value-spec opt-name values)))))
 
 (defun kb-remove-command (kb cmd-name)
-  (remhash cmd-name (%knowledge-base-commands kb)))
+  (%retract-command-facts! kb cmd-name))

@@ -90,7 +90,7 @@
       (format result "~a" (theme-color->ansi theme (highlight-span-role span)))
       (write-string (subseq input (highlight-span-start span)
                             (highlight-span-end span)) result)
-      (format result "~C[0m" #\Esc)
+      (nshell.infrastructure.terminal:ansi-reset-style result)
       (setf pos (highlight-span-end span)))
     ;; Output remaining text
     (when (< pos (length input))

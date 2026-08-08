@@ -17,9 +17,10 @@ Pushing a `v*.*.*` tag runs `release.yml`, which:
 1. Verifies the tag matches `nshell.asd`'s `:version`, and stops before
    building anything if it does not.
 2. Runs `nix flake check --print-build-logs` against the tagged tree.
-3. Builds the binary for `x86_64-linux` — the only platform `flake.nix`
-   declares — confirms it starts, and packages a tarball plus a SHA-256
-   checksum.
+3. Builds the binary for the `x86_64-linux` release target, confirms it
+   starts, and packages a tarball plus a SHA-256 checksum. `aarch64-darwin` is
+   also declared by `flake.nix` for development and platform-specific local
+   checks, but is not a published binary target in this workflow.
 4. Creates the GitHub Release as an empty **draft** with those files attached.
    It writes no release body: since the 2026-08-01 org revision the Release
    description is the only canonical history and there is no `CHANGELOG.md`.
@@ -28,9 +29,10 @@ Pushing a `v*.*.*` tag runs `release.yml`, which:
 
 Verify the public artefacts from a clean checkout:
 
-- `nix flake check --print-build-logs` passes on Linux. macOS is no longer a
-  supported platform: `flake.nix` declares `x86_64-linux` alone, so `nix
-  develop` and `nix build` have no attribute to resolve there.
+- `nix flake check --print-build-logs` passes on Linux. On macOS, use the
+  declared `aarch64-darwin` development environment and run the checks that
+  are available for the pinned dependency set; some build checks may be
+  unavailable when an upstream package has no Darwin build.
 - The non-sandboxed integration suite passes for PTY, subprocess, terminal,
   signal, and job-control coverage:
 

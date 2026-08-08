@@ -42,6 +42,37 @@
   (let ((anchor (input-state-copy-override-resolve override current-value)))
     (and anchor (clamp-cursor anchor buffer))))
 
+(defmacro %input-state-copy-args (state &rest names)
+  "Expand to a spliceable MAKE-INPUT-STATE initarg (LIST :NAME1 value1 ...), one
+pair per symbol in NAMES, for the standard supplied-p/override copy pattern
+shared by most INPUT-STATE slots: NAME's new value if supplied and accepted,
+else STATE's current value. Each NAME must be bound in the caller's
+lambda-list together with a NAME-SUPPLIED-P flag; STATE must evaluate to the
+source INPUT-STATE. Fields needing a clamp (vi-visual-anchor), an acceptp
+predicate, an unconditional override (mode), or an optional-value override
+with no supplied-p (kill-ring) keep their own explicit form instead -- this
+macro only ever emits the one shape all its callers share verbatim."
+  `(list ,@(loop for name in names
+                 for name-string = (string name)
+                 for supplied-p = (intern (concatenate 'string name-string "-SUPPLIED-P"))
+                 for accessor = (intern (concatenate 'string "INPUT-STATE-" name-string))
+                 for keyword = (intern name-string :keyword)
+                 append `(,keyword (input-state-copy-override-resolve
+                                     (input-state-copy-override-for ,supplied-p ,name)
+                                     (,accessor ,state))))))
+
+(defmacro %input-state-copy-supplied-args (state &rest names)
+  "Expand to a spliceable MAKE-INPUT-STATE initarg (LIST :NAME1 value1 ...), one
+pair per symbol in NAMES, for the plain supplied-p-or-current pattern (no
+override machinery: NAME's new value verbatim if supplied, else STATE's
+current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
+  `(list ,@(loop for name in names
+                 for name-string = (string name)
+                 for supplied-p = (intern (concatenate 'string name-string "-SUPPLIED-P"))
+                 for accessor = (intern (concatenate 'string "INPUT-STATE-" name-string))
+                 for keyword = (intern name-string :keyword)
+                 append `(,keyword (if ,supplied-p ,name (,accessor ,state))))))
+
 (defun %copy-input-state-completion-initargs (state
                                               completion-index-supplied-p
                                               completion-index
@@ -56,36 +87,26 @@
   ;; A fresh completion session (index -1) drops any carried base position.
   (let ((reset-base-p (and completion-index-supplied-p
                            (= completion-index -1))))
-    (list
-     :completion-index (if completion-index-supplied-p
-                           completion-index
-                           (input-state-completion-index state))
-     :completion-base-buffer (if reset-base-p
-                                 nil
-                                 (input-state-copy-override-resolve
-                                  (input-state-copy-override-for
-                                   completion-base-supplied-p
-                                   completion-base-buffer)
-                                  (input-state-completion-base-buffer state)
-                                  :acceptp #'stringp))
-     :completion-base-cursor (if reset-base-p
-                                 nil
-                                 (input-state-copy-override-resolve
-                                  (input-state-copy-override-for
-                                   completion-base-cursor-supplied-p
-                                   completion-base-cursor)
-                                  (input-state-completion-base-cursor state)
-                                  :acceptp #'integerp))
-     :last-candidates (input-state-copy-override-resolve
-                       (input-state-copy-override-for
-                        last-candidates-supplied-p
-                        last-candidates)
-                       (input-state-last-candidates state))
-     :suggestion (input-state-copy-override-resolve
-                  (input-state-copy-override-for
-                   suggestion-supplied-p
-                   suggestion)
-                  (input-state-suggestion state)))))
+    (append
+     (%input-state-copy-supplied-args state completion-index)
+     (list
+      :completion-base-buffer (if reset-base-p
+                                  nil
+                                  (input-state-copy-override-resolve
+                                   (input-state-copy-override-for
+                                    completion-base-supplied-p
+                                    completion-base-buffer)
+                                   (input-state-completion-base-buffer state)
+                                   :acceptp #'stringp))
+      :completion-base-cursor (if reset-base-p
+                                  nil
+                                  (input-state-copy-override-resolve
+                                   (input-state-copy-override-for
+                                    completion-base-cursor-supplied-p
+                                    completion-base-cursor)
+                                   (input-state-completion-base-cursor state)
+                                   :acceptp #'integerp)))
+     (%input-state-copy-args state last-candidates suggestion))))
 
 (defun %copy-input-state-transient-initargs (state
                                              buffer
@@ -108,54 +129,24 @@
                                              last-argument-end
                                              last-argument-index-supplied-p
                                              last-argument-index)
-  (list
-   :mode (or mode (input-state-mode state))
-   :vi-count (input-state-copy-override-resolve
-              (input-state-copy-override-for
-               vi-count-supplied-p
-               vi-count)
-              (input-state-vi-count state))
-   :vi-visual-anchor (input-state-copy-anchor-override-resolve
-                      (input-state-copy-override-for
-                       vi-visual-anchor-supplied-p
-                       vi-visual-anchor)
-                      (input-state-vi-visual-anchor state)
-                      buffer)
-   :abbreviation-expander (or abbreviation-expander
-                              (input-state-abbreviation-expander state))
-   :kill-ring (input-state-copy-override-resolve
-               (input-state-copy-optional-value-override kill-ring)
-               (input-state-kill-ring state))
-   :last-yank-start (input-state-copy-override-resolve
-                     (input-state-copy-override-for
-                      last-yank-start-supplied-p
-                      last-yank-start)
-                     (input-state-last-yank-start state))
-   :last-yank-end (input-state-copy-override-resolve
-                   (input-state-copy-override-for
-                    last-yank-end-supplied-p
-                    last-yank-end)
-                   (input-state-last-yank-end state))
-   :last-yank-index (input-state-copy-override-resolve
-                     (input-state-copy-override-for
-                      last-yank-index-supplied-p
-                      last-yank-index)
-                     (input-state-last-yank-index state))
-   :last-argument-start (input-state-copy-override-resolve
-                         (input-state-copy-override-for
-                          last-argument-start-supplied-p
-                          last-argument-start)
-                         (input-state-last-argument-start state))
-   :last-argument-end (input-state-copy-override-resolve
+  (append
+   (list
+    :mode (or mode (input-state-mode state))
+    :vi-visual-anchor (input-state-copy-anchor-override-resolve
                        (input-state-copy-override-for
-                        last-argument-end-supplied-p
-                        last-argument-end)
-                       (input-state-last-argument-end state))
-   :last-argument-index (input-state-copy-override-resolve
-                         (input-state-copy-override-for
-                          last-argument-index-supplied-p
-                          last-argument-index)
-                         (input-state-last-argument-index state))))
+                        vi-visual-anchor-supplied-p
+                        vi-visual-anchor)
+                       (input-state-vi-visual-anchor state)
+                       buffer)
+    :abbreviation-expander (or abbreviation-expander
+                               (input-state-abbreviation-expander state))
+    :kill-ring (input-state-copy-override-resolve
+                (input-state-copy-optional-value-override kill-ring)
+                (input-state-kill-ring state)))
+   (%input-state-copy-args state
+     vi-count
+     last-yank-start last-yank-end last-yank-index
+     last-argument-start last-argument-end last-argument-index)))
 
 (defun %copy-input-state-session-initargs (state
                                            search-query
@@ -167,26 +158,19 @@
                                            undo-stack
                                            redo-stack-supplied-p
                                            redo-stack)
-  (list
-   :search-query (input-state-copy-override-resolve
-                  (input-state-copy-optional-value-override search-query)
-                  (input-state-search-query state)
-                  :clear-value "")
-   :search-original-buffer (input-state-copy-override-resolve
-                            (input-state-copy-optional-value-override
-                             search-original-buffer)
-                            (input-state-search-original-buffer state)
-                            :clear-value "")
-   :search-original-cursor (input-state-copy-override-resolve
-                            (input-state-copy-optional-value-override
-                             search-original-cursor)
-                            (input-state-search-original-cursor state))
-   :search-index (if search-index-supplied-p
-                     search-index
-                     (input-state-search-index state))
-   :undo-stack (if undo-stack-supplied-p
-                   undo-stack
-                   (input-state-undo-stack state))
-   :redo-stack (if redo-stack-supplied-p
-                   redo-stack
-                   (input-state-redo-stack state))))
+  (append
+   (list
+    :search-query (input-state-copy-override-resolve
+                   (input-state-copy-optional-value-override search-query)
+                   (input-state-search-query state)
+                   :clear-value "")
+    :search-original-buffer (input-state-copy-override-resolve
+                             (input-state-copy-optional-value-override
+                              search-original-buffer)
+                             (input-state-search-original-buffer state)
+                             :clear-value "")
+    :search-original-cursor (input-state-copy-override-resolve
+                             (input-state-copy-optional-value-override
+                              search-original-cursor)
+                             (input-state-search-original-cursor state)))
+   (%input-state-copy-supplied-args state search-index undo-stack redo-stack)))

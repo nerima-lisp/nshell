@@ -2,69 +2,29 @@
 
 (defparameter +option-value-candidate-description+ "option value")
 
-(defun %candidate-entry-slot (entry kb-accessor catalog-accessor)
-  (if (%kb-command-entry-p entry)
-      (funcall kb-accessor entry)
-      (funcall catalog-accessor entry)))
-
 (defun %sorted-candidates-by-text (candidates)
   (sort candidates #'string< :key #'candidate-text))
 
-(defun %candidate-entry-command-name (entry)
-  (%catalog-command-entry-command entry))
-
-(defun %candidate-entry-description (entry)
-  (or (%candidate-entry-slot entry
-                             #'%kb-command-entry-description
-                             #'%catalog-command-entry-description)
-      ""))
-
-(defun %candidate-entry-flag-specs (entry)
-  (%candidate-entry-slot entry
-                         #'%kb-command-entry-flags
-                         #'%catalog-command-entry-flags))
-
-(defun %candidate-entry-subcommand-specs (entry)
-  (%candidate-entry-slot entry
-                         #'%kb-command-entry-subcommands
-                         #'%catalog-command-entry-subcommands))
-
-(defun %candidate-entry-exclusive-option-groups (entry)
-  (%candidate-entry-slot entry
-                         #'%kb-command-entry-exclusive-options
-                         #'%catalog-command-entry-exclusive-options))
-
-(defun %command-entry-candidate (name entry)
+(defun %command-entry-candidate (name description)
   (make-candidate name
                   :kind :command
-                  :description (%candidate-entry-description entry)))
+                  :description (or description "")))
 
 (defun builtin-command-candidates (prefix)
   (%sorted-candidates-by-text
    (loop for entry in +builtin-command-catalog+
-         for name = (%candidate-entry-command-name entry)
+         for name = (%catalog-command-entry-command entry)
          when (%starts-with-p prefix name)
-           collect (%command-entry-candidate name entry))))
+           collect (%command-entry-candidate name (%catalog-command-entry-description entry)))))
 
 (defun knowledge-base-command-candidates (kb prefix)
-  (let ((results '()))
-    (%map-kb-commands
-     kb
-     (lambda (name entry)
-       (when (%starts-with-p prefix name)
-         (push (%command-entry-candidate name entry) results))))
-    (nreverse results)))
+  (loop for name in (kb-registered-commands kb)
+        when (%starts-with-p prefix name)
+          collect (%command-entry-candidate name (kb-command-description kb name))))
 
-(defun %unique-entry-argument-names (entry)
-  (let ((seen (make-hash-table :test #'equal))
-        (names '()))
-    (dolist (source (list (%candidate-entry-flag-specs entry)
-                          (%candidate-entry-subcommand-specs entry)))
-      (dolist (name source)
-        (when (and (stringp name) (not (gethash name seen)))
-          (setf (gethash name seen) t)
-          (push name names))))
-    (nreverse names)))
+(defun %unique-kb-argument-names (kb command)
+  (%unique-string-values
+   (append (kb-command-flags kb command) (kb-command-subcommands kb command))))
 
 (defstruct (%attached-option-value-prefix
             (:constructor %make-attached-option-value-prefix (option value-prefix))
@@ -85,28 +45,18 @@
        (subseq prefix 0 separator-position)
        (subseq prefix (1+ separator-position))))))
 
-(defun %entry-option-value-specs (entry)
-  (if (%kb-command-entry-p entry)
-      (%kb-command-entry-option-values entry)
-      (%catalog-command-entry-option-values entry)))
-
-(defun %entry-option-value-spec-option (spec)
-  (%kb-option-value-spec-option spec))
-
-(defun %entry-option-value-spec-values (spec)
-  (%kb-option-value-spec-values spec))
-
-(defun %entry-option-value-spec-for-option-p (spec option)
-  (%kb-option-value-spec-for-option-p spec option))
-
-(defun %entry-option-values (entry option)
+(defun %kb-option-values (kb command option)
   (%unique-string-values
-   (loop for spec in (%entry-option-value-specs entry)
-         when (%entry-option-value-spec-for-option-p spec option)
-           append (%entry-option-value-spec-values spec))))
+   (loop for spec in (kb-command-option-values kb command)
+         when (%kb-option-value-spec-for-option-p spec option)
+           append (%kb-option-value-spec-values spec))))
 
-(defun %matching-entry-option-values (entry option value-prefix)
-  (loop for value in (%entry-option-values entry option)
+(defun %kb-option-value-spec-for-option-p (spec opt-name)
+  (and (%valid-kb-option-value-spec-p spec)
+       (string= opt-name (%kb-option-value-spec-option spec))))
+
+(defun %matching-kb-option-values (kb command option value-prefix)
+  (loop for value in (%kb-option-values kb command option)
         when (and (stringp value)
                   (%starts-with-p value-prefix value))
           collect value))
@@ -144,14 +94,14 @@
    (loop for value in values
          collect (%option-value-candidate (funcall text-function value)))))
 
-(defun %attached-option-value-candidates (entry prefix)
+(defun %attached-kb-option-value-candidates (kb command prefix)
   (let ((attached-prefix (%parse-attached-option-value-prefix prefix)))
     (when attached-prefix
       (let ((option (%attached-option-value-prefix-option attached-prefix))
             (value-prefix
               (%attached-option-value-prefix-value-prefix attached-prefix)))
         (%option-value-candidates
-         (%matching-entry-option-values entry option value-prefix)
+         (%matching-kb-option-values kb command option value-prefix)
          :text-function (lambda (value)
                           (%attached-option-value-candidate-text
                            option
@@ -176,14 +126,15 @@
     (when option
       (%make-separate-option-value-prefix option prefix))))
 
-(defun %separate-option-value-candidates (entry separate-prefix)
+(defun %separate-kb-option-value-candidates (kb command separate-prefix)
   (when (and separate-prefix
              (not (%starts-with-p "-"
                                   (%separate-option-value-prefix-value-prefix
                                    separate-prefix))))
     (%option-value-candidates
-     (%matching-entry-option-values
-      entry
+     (%matching-kb-option-values
+      kb
+      command
       (%separate-option-value-prefix-option separate-prefix)
       (%separate-option-value-prefix-value-prefix separate-prefix)))))
 
@@ -193,7 +144,7 @@
            (%starts-with-p option token)
            (char= (char token (length option)) #\=))))
 
-(defun %exclusive-option-blocked-p (entry option argument-words)
+(defun %kb-exclusive-option-blocked-p (kb command option argument-words)
   (some (lambda (group)
           (and (member option group :test #'string=)
                (some (lambda (selected-option)
@@ -201,33 +152,27 @@
                                (%option-token-matches-p selected-option word))
                              argument-words))
                      group)))
-        (%candidate-entry-exclusive-option-groups entry)))
+        (kb-command-exclusive-options kb command)))
 
-(defun %available-entry-argument-names (entry prefix argument-words)
-  (loop for name in (%unique-entry-argument-names entry)
+(defun %available-kb-argument-names (kb command prefix argument-words)
+  (loop for name in (%unique-kb-argument-names kb command)
         when (and (%starts-with-p prefix name)
-                  (not (%exclusive-option-blocked-p
-                        entry
-                        name
-                        argument-words)))
+                  (not (%kb-exclusive-option-blocked-p kb command name argument-words)))
           collect name))
 
 (defun %argument-name-candidate (name)
   (make-candidate name :kind :option :description ""))
 
-(defun %entry-argument-name-candidates (entry prefix argument-words)
+(defun %kb-argument-name-candidates (kb command prefix argument-words)
   (%sorted-candidates-by-text
-   (loop for name in (%available-entry-argument-names
-                      entry
-                      prefix
-                      argument-words)
+   (loop for name in (%available-kb-argument-names kb command prefix argument-words)
          collect (%argument-name-candidate name))))
 
 (defun knowledge-base-argument-candidates (kb command prefix &key argument-words)
-  (let ((entry (%kb-command-entry kb command)))
-    (when entry
-      (or (%attached-option-value-candidates entry prefix)
-          (%separate-option-value-candidates
-           entry
-           (%parse-separate-option-value-prefix argument-words prefix))
-          (%entry-argument-name-candidates entry prefix argument-words)))))
+  (when (kb-command-present-p kb command)
+    (or (%attached-kb-option-value-candidates kb command prefix)
+        (%separate-kb-option-value-candidates
+         kb
+         command
+         (%parse-separate-option-value-prefix argument-words prefix))
+        (%kb-argument-name-candidates kb command prefix argument-words))))

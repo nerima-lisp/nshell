@@ -15,7 +15,13 @@
             (:constructor %make-rule-knowledge-base
                 (&key (facts nil) (rules nil))))
   (facts nil :type list)
-  (rules nil :type list))
+  (rules nil :type list)
+  ;; Compiling FACTS/RULES into a CL-PROLOG:RULEBASE is O(count) -- cheap once,
+  ;; but COMPLETION-RULEBASE used to pay it on every PROVE call.  A knowledge
+  ;; base backing live completion accumulates hundreds of catalog facts and is
+  ;; queried on every keystroke, so ASSERT-FACT!/ASSERT-RULE! invalidate this
+  ;; cache instead of leaving every caller to rebuild from scratch.
+  (%rulebase-cache nil))
 
 (defparameter *max-proof-depth* 32
   "Maximum rule-expansion depth for completion proof search.")
@@ -38,23 +44,21 @@
   (make-rule :head (first spec)
              :body (rest spec)))
 
-(defgeneric predicate-true-p (predicate args bindings)
-  (:documentation
-   "Return true when PREDICATE with walked ARGS is true in the current environment."))
-
-(defmethod predicate-true-p ((predicate symbol) args bindings)
-  (declare (ignore predicate args bindings))
-  nil)
-
 (defun make-empty-rule-knowledge-base ()
   (%make-rule-knowledge-base))
 
 (defun assert-fact! (kb fact)
   (push fact (rule-knowledge-base-facts kb))
+  (setf (rule-knowledge-base-%rulebase-cache kb) nil)
   kb)
 
 (defun assert-rule! (kb rule)
   (push rule (rule-knowledge-base-rules kb))
+  (setf (rule-knowledge-base-%rulebase-cache kb) nil)
+  kb)
+
+(defun %invalidate-rule-knowledge-base! (kb)
+  (setf (rule-knowledge-base-%rulebase-cache kb) nil)
   kb)
 
 (defun %make-prolog-fact (fact)
@@ -72,33 +76,13 @@ negation-as-failure, ...) over nshell's completion knowledge, not just the
 depth-bounded PROVE search used on the interactive path.  Facts and rules are
 inserted in definition order (the KB accumulates them reversed via PUSH) so
 solution order stays stable for callers that depend on it."
-  (let ((rulebase (cl-prolog:make-rulebase)))
-    (dolist (fact (reverse (rule-knowledge-base-facts kb)) rulebase)
-      (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-fact fact)))
-    (dolist (rule (reverse (rule-knowledge-base-rules kb)) rulebase)
-      (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-rule rule)))))
-
-(defun %ground-term-p (term)
-  "True when TERM contains no unbound logic (?-prefixed) variables."
-  (cond
-    ((cl-prolog:logic-var-p term) nil)
-    ((consp term) (and (%ground-term-p (car term)) (%ground-term-p (cdr term))))
-    (t t)))
-
-(defun %built-in-solution (goal)
-  "Return a list containing one empty solution when GOAL is a ground term
-satisfied directly by a PREDICATE-TRUE-P extension, else NIL.
-
-This only covers a fully-instantiated top-level goal: PREDICATE-TRUE-P is a
-boolean check over concrete arguments, not a generator of bindings, so it
-cannot itself resolve a goal containing unbound query variables. A goal
-appearing as a sub-goal inside a rule body is walked through the partial
-bindings accumulated by clause resolution before reaching here, so this
-still applies once earlier body goals have grounded it."
-  (when (and (consp goal)
-             (%ground-term-p goal)
-             (predicate-true-p (first goal) (rest goal) '()))
-    (list '())))
+  (or (rule-knowledge-base-%rulebase-cache kb)
+      (setf (rule-knowledge-base-%rulebase-cache kb)
+            (let ((rulebase (cl-prolog:make-rulebase)))
+              (dolist (fact (reverse (rule-knowledge-base-facts kb)) rulebase)
+                (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-fact fact)))
+              (dolist (rule (reverse (rule-knowledge-base-rules kb)) rulebase)
+                (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-rule rule)))))))
 
 (defun prove (kb goal &optional (bindings '()) (max-depth *max-proof-depth*))
   (declare (ignore bindings))
@@ -106,13 +90,12 @@ still applies once earlier body goals have grounded it."
   ;; goal naming an undefined predicate, resource_error/PROLOG-DEPTH-LIMIT-
   ;; EXCEEDED past MAX-DEPTH, and so on) and unwinds QUERY-PROLOG's whole
   ;; search, discarding solutions already found on other branches. Standard
-  ;; ISO behavior for a real Prolog program, but the completion engine's
-  ;; rule bodies routinely reference predicates that only PREDICATE-TRUE-P
-  ;; resolves (never a cl-prolog clause or foreign predicate), and searches
-  ;; are deliberately depth-bounded for an interactive tool — both are
-  ;; "this path found nothing," not a program error. Collect via MAP-
-  ;; PROLOG-SOLUTIONS and treat any such runtime error as exactly that,
-  ;; keeping whatever solutions were already found on other branches.
+  ;; ISO behavior for a real Prolog program, but completion rule sets evolve
+  ;; incrementally and searches are deliberately depth-bounded for an
+  ;; interactive tool — both are "this path found nothing," not a program
+  ;; error. Collect via MAP-PROLOG-SOLUTIONS and treat any such runtime
+  ;; error as exactly that, keeping whatever solutions were already found on
+  ;; other branches.
   (let ((rulebase (completion-rulebase kb))
         (solutions '()))
     (handler-case
@@ -120,7 +103,7 @@ still applies once earlier body goals have grounded it."
          (lambda (solution) (push solution solutions))
          rulebase (copy-tree goal) :max-depth max-depth)
       (cl-prolog:prolog-runtime-error () nil))
-    (append (nreverse solutions) (%built-in-solution goal))))
+    (nreverse solutions)))
 
 (defun prove-all (kb goal &key (max-depth *max-proof-depth*))
   (prove kb goal '() max-depth))

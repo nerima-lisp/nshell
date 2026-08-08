@@ -6,19 +6,58 @@
 
 ;;; Command tests
 (describe "execution-domain-tests"
-  (it "command-value-boundary-is-public-api-only"
-    "Command exposes constructor and projections, not raw structure internals."
-    (expect (execution-domain-external-symbol-p "MAKE-COMMAND") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "COMMAND-NAME") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "COMMAND-ARGS") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "COMMAND-TO-LIST") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "COMMAND-NAME-STR") :to-be-falsy)
-    (expect (execution-domain-external-symbol-p "COMMAND-ARGS-LIST") :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::%make-command) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::copy-command) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::command-p) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::%allocate-command) :to-be-truthy)
-    (expect (fboundp 'nshell.domain.execution::%make-command-with-invariants) :to-be-truthy))
+  ;; Every value type's public-boundary check enumerates the same four
+  ;; things: which projections/constructors are exported, which raw
+  ;; accessors are deliberately not, and which of the internal
+  ;; %ALLOCATE-*/%MAKE-*-WITH-INVARIANTS/copy/predicate helpers exist under
+  ;; which visibility. Only the symbol lists differ per type.
+  (it-each (("command"
+             ("MAKE-COMMAND" "COMMAND-NAME" "COMMAND-ARGS" "COMMAND-TO-LIST")
+             ("COMMAND-NAME-STR" "COMMAND-ARGS-LIST")
+             (nshell.domain.execution::%make-command
+              nshell.domain.execution::copy-command
+              nshell.domain.execution::command-p)
+             (nshell.domain.execution::%allocate-command
+              nshell.domain.execution::%make-command-with-invariants))
+            ("pipeline"
+             ("MAKE-PIPELINE" "PIPELINE-P" "PIPELINE-COMMANDS" "PIPELINE-LENGTH"
+              "PIPELINE-EMPTY-P" "PIPELINE-SINGLE-COMMAND-P")
+             ("PIPELINE-COMMANDS-LIST")
+             (nshell.domain.execution::%make-pipeline
+              nshell.domain.execution::copy-pipeline)
+             (nshell.domain.execution::%allocate-pipeline
+              nshell.domain.execution::%make-pipeline-with-invariants))
+            ("pipeline-plan"
+             ("MAKE-PIPELINE-PLAN" "PIPELINE-PLAN-P" "PIPELINE-PLAN-STAGE-COUNT"
+              "PIPELINE-PLAN-COMMANDS" "PIPELINE-PLAN-STAGE-PIPED-INPUT-P"
+              "PIPELINE-PLAN-STAGE-PIPED-OUTPUT-P")
+             ("PIPELINE-PLAN-STAGES" "PIPELINE-STAGE-STAGE-COMMAND"
+              "PIPELINE-STAGE-PIPE-CONFIG" "PIPE-CONFIG-STDIN" "PIPE-CONFIG-STDOUT")
+             (nshell.domain.execution::%make-pipeline-plan
+              nshell.domain.execution::%make-pipe-config
+              nshell.domain.execution::%make-pipeline-stage
+              nshell.domain.execution::copy-pipeline-plan
+              nshell.domain.execution::copy-pipe-config
+              nshell.domain.execution::copy-pipeline-stage
+              nshell.domain.execution::pipe-config-p
+              nshell.domain.execution::pipeline-stage-p)
+             (nshell.domain.execution::%allocate-pipeline-plan
+              nshell.domain.execution::%allocate-pipe-config
+              nshell.domain.execution::%allocate-pipeline-stage
+              nshell.domain.execution::%make-pipeline-plan-with-invariants
+              nshell.domain.execution::%make-pipe-config-with-invariants
+              nshell.domain.execution::%make-pipeline-stage-with-invariants)))
+      "~A-value-boundary-is-public-api-only"
+      (type-label external-symbols internal-symbols falsy-fbound truthy-fbound)
+    (declare (ignore type-label))
+    (dolist (name external-symbols)
+      (expect (execution-domain-external-symbol-p name) :to-be-truthy))
+    (dolist (name internal-symbols)
+      (expect (execution-domain-external-symbol-p name) :to-be-falsy))
+    (dolist (fn falsy-fbound)
+      (expect (fboundp fn) :to-be-falsy))
+    (dolist (fn truthy-fbound)
+      (expect (fboundp fn) :to-be-truthy)))
 
   (it "command-creation"
     "Command can be created with name and optional args"
@@ -58,48 +97,6 @@
       (expect '("echo" "hello" "world") :to-equal (nshell.domain.execution:command-to-list cmd))))
 
   ;;; Pipeline tests
-  (it "pipeline-value-boundary-is-public-api-only"
-    "Pipeline exposes construction and projections without raw allocation helpers."
-    (expect (execution-domain-external-symbol-p "MAKE-PIPELINE") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-P") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-COMMANDS") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-LENGTH") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-EMPTY-P") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-SINGLE-COMMAND-P") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-COMMANDS-LIST") :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::%make-pipeline) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::copy-pipeline) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::%allocate-pipeline) :to-be-truthy)
-    (expect (fboundp 'nshell.domain.execution::%make-pipeline-with-invariants) :to-be-truthy))
-
-  (it "pipeline-plan-value-boundary-is-public-api-only"
-    "Pipeline plans expose behavior queries, not stage/config allocation details."
-    (expect (execution-domain-external-symbol-p "MAKE-PIPELINE-PLAN") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-PLAN-P") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-PLAN-STAGE-COUNT") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-PLAN-COMMANDS") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-PLAN-STAGE-PIPED-INPUT-P") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-PLAN-STAGE-PIPED-OUTPUT-P") :to-be-truthy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-PLAN-STAGES") :to-be-falsy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-STAGE-STAGE-COMMAND") :to-be-falsy)
-    (expect (execution-domain-external-symbol-p "PIPELINE-STAGE-PIPE-CONFIG") :to-be-falsy)
-    (expect (execution-domain-external-symbol-p "PIPE-CONFIG-STDIN") :to-be-falsy)
-    (expect (execution-domain-external-symbol-p "PIPE-CONFIG-STDOUT") :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::%make-pipeline-plan) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::%make-pipe-config) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::%make-pipeline-stage) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::copy-pipeline-plan) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::copy-pipe-config) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::copy-pipeline-stage) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::pipe-config-p) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::pipeline-stage-p) :to-be-falsy)
-    (expect (fboundp 'nshell.domain.execution::%allocate-pipeline-plan) :to-be-truthy)
-    (expect (fboundp 'nshell.domain.execution::%allocate-pipe-config) :to-be-truthy)
-    (expect (fboundp 'nshell.domain.execution::%allocate-pipeline-stage) :to-be-truthy)
-    (expect (fboundp 'nshell.domain.execution::%make-pipeline-plan-with-invariants) :to-be-truthy)
-    (expect (fboundp 'nshell.domain.execution::%make-pipe-config-with-invariants) :to-be-truthy)
-    (expect (fboundp 'nshell.domain.execution::%make-pipeline-stage-with-invariants) :to-be-truthy))
-
   (it "pipeline-creation"
     "Pipeline can be created with multiple commands"
     (let* ((cmd1 (nshell.domain.execution:make-command "ls"))

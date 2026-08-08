@@ -5,7 +5,7 @@ are captured by a `defmacro`, and where they deliberately are not.
 
 ## Already macro-driven
 
-Beyond `define-value-struct` (`docs/value-struct-audit.md`), 26 other
+Beyond `define-value-struct` (`docs/notes/value-struct-audit.md`), 26 other
 `defmacro` forms exist in `src/`, several purpose-built for exactly the
 boilerplate categories this goal targets:
 
@@ -24,7 +24,7 @@ boilerplate categories this goal targets:
   hand-written per-command code.
 - **Value structs.** 37 value structs generate their
   accessor/predicate/constructor boilerplate from `define-value-struct`
-  instead of by hand (`docs/value-struct-audit.md`).
+  instead of by hand (`docs/notes/value-struct-audit.md`).
 - No repeated `defclass` boilerplate exists (`grep -rn "defclass" src/` is
   empty) and `define-condition` appears exactly once — nothing to
   consolidate there.
@@ -36,7 +36,7 @@ boilerplate categories this goal targets:
 `ignore-errors` 47 times elsewhere for the identical shape — not a new
 pattern to invent, just consistency to restore. Converted each individually
 via `paredit edit replace` (diff preview, write, `paredit inspect check`)
-across `application/builtin-runtime.lisp`, `domain/completion/filesystem.lisp`,
+across `application/builtin-runtime.lisp`, `domain/completion/filesystem-file-completion.lisp`, `domain/completion/filesystem-path-command.lisp`,
 `domain/expansion/expand.lisp`, `infrastructure/acl/{syscall-job-control,
 syscall-pipeline,syscall-process}.lisp`, `infrastructure/persistence/
 file-history.lisp`, `infrastructure/terminal/{input-core,raw-mode}.lisp`, and
@@ -73,7 +73,7 @@ per-site with a full test run, not applied as a blind find/replace.
   would need a small spec DSL for a ~4-5 line-per-site saving across 7
   sites — the "three similar-but-different lines" trap this project's own
   `docs/cps-audit.md` warns against. Left as raw `defstruct`s, consistent
-  with `docs/value-struct-audit.md`'s stated reason (`define-value-struct`
+  with `docs/notes/value-struct-audit.md`'s stated reason (`define-value-struct`
   assumes no inheritance).
 
 ## Conclusion

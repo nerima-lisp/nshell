@@ -145,7 +145,7 @@ EXPORTED controls whether the variable appears in ENV-LIST."
       (setf result (%inject-os-environment-entry result entry)))
     #-sbcl
     (dolist (name '("HOME" "PATH" "USER" "SHELL" "TERM"))
-      (let ((value (uiop:getenv name)))
+      (let ((value (host-kit:getenv name)))
         (when value
           (setf result (env-set result name value t)))))
     (setf result

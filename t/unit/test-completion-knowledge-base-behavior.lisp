@@ -215,16 +215,14 @@
        :option-values '(("--mode" "fast"))
        :exclusive-options '(("--json" "--yaml"))
        :description "catalog")
-      (let ((entry (nshell.domain.completion::%kb-command-entry kb "tool")))
-        (nshell.domain.completion:kb-add-command
-         kb "tool"
-         :subcommands '("test" "run")
-         :flags '("--mode" "--verbose")
-         :option-values '(("--mode" "safe" "fast")
-                          ("--format" "json"))
-         :exclusive-options '(("--json" "--yaml")
-                              ("--compact" "--pretty")))
-        (expect entry :to-be (nshell.domain.completion::%kb-command-entry kb "tool")))
+      (nshell.domain.completion:kb-add-command
+       kb "tool"
+       :subcommands '("test" "run")
+       :flags '("--mode" "--verbose")
+       :option-values '(("--mode" "safe" "fast")
+                        ("--format" "json"))
+       :exclusive-options '(("--json" "--yaml")
+                            ("--compact" "--pretty")))
       (expect '("run" "test") :to-equal (nshell.domain.completion:kb-command-subcommands kb "tool"))
       (expect '("--mode" "--verbose") :to-equal (nshell.domain.completion:kb-command-flags kb "tool"))
       (expect '(("--format" "json")
@@ -250,10 +248,8 @@
        kb "tool"
        :flags '("--mode")
        :option-values '(("--mode" "fast")))
-      (let ((entry (nshell.domain.completion::%kb-command-entry kb "tool")))
-        (nshell.domain.completion:kb-add-option
-         kb "tool" "--mode" :values '("safe" "fast"))
-        (expect entry :to-be (nshell.domain.completion::%kb-command-entry kb "tool")))
+      (nshell.domain.completion:kb-add-option
+       kb "tool" "--mode" :values '("safe" "fast"))
       (expect '("--mode") :to-equal (nshell.domain.completion:kb-command-flags kb "tool"))
       (expect '(("--mode" "fast" "safe")) :to-equal (nshell.domain.completion:kb-command-option-values
                   kb "tool"))))
@@ -278,20 +274,10 @@
        :description "parsed help")
       (expect '("run" "test") :to-equal (nshell.domain.completion:kb-command-subcommands kb "tool"))
       (expect '("--format" "--verbose" "--mode") :to-equal (nshell.domain.completion:kb-command-flags kb "tool"))
-      (expect '(("--mode" "fast" "safe")
-                   ("--format" "json" "yaml")) :to-equal (nshell.domain.completion:kb-command-option-values kb "tool"))
+      (expect '(("--format" "json" "yaml")
+                   ("--mode" "fast" "safe")) :to-equal (nshell.domain.completion:kb-command-option-values kb "tool"))
       (expect "parsed help" :to-equal (nshell.domain.completion:kb-command-description
                     kb "tool"))))
-
-  (it "knowledge-base-command-entries-are-private-aggregate-values"
-    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (nshell.domain.completion:kb-add-command kb "tool")
-      (let ((entry (nshell.domain.completion::%kb-command-entry kb "tool")))
-        (assert-symbol-boundaries
-            :present (nshell.domain.completion::%make-kb-command-entry)
-            :absent (nshell.domain.completion::make-kb-command-entry))
-        (expect (nshell.domain.completion::%kb-command-entry-p entry) :to-be-truthy)
-        (expect (listp entry) :to-be-falsy))))
 
   (it "knowledge-base-query-api-does-not-expose-entry-plist"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

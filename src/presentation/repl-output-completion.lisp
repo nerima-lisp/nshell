@@ -12,7 +12,7 @@
                           (- (1- *prompt-rendered-lines*)
                              *prompt-rendered-cursor-row*))))
            (when (plusp rows)
-             (format t "~C[~dB" #\Esc rows)))
+             (nshell.infrastructure.terminal:ansi-cursor-down rows)))
          (render-completions candidates :selected-index selected-index))
     (nshell.infrastructure.terminal:ansi-restore-cursor)))
 
@@ -27,7 +27,7 @@
                           *completion-rendered-lines*
                           1)))
              (when (plusp rows)
-               (format t "~C[~dB" #\Esc rows)))
+               (nshell.infrastructure.terminal:ansi-cursor-down rows)))
             (format t "~C" #\Return)
             (nshell.infrastructure.terminal:ansi-clear-line)
             (loop repeat *completion-rendered-lines*

@@ -35,15 +35,20 @@
   option-values
   exclusive-options)
 
+(defmacro %catalog-entry-projection-plist (entry &rest properties)
+  "Expand to a spliceable (LIST :PROPERTY1 value1 ...) plist, one pair per
+symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
+(DEFINE-CATALOG-ENTRY-ACCESSOR above) on ENTRY for each value."
+  `(list ,@(loop for property in properties
+                 for keyword = (intern (string property) :keyword)
+                 for accessor = (intern (concatenate 'string "%CATALOG-" (string property)))
+                 append `(,keyword (,accessor ,entry)))))
+
 (defun %catalog-entry-command-projection (entry)
-  (%make-catalog-command-projection
-   :command (%catalog-command entry)
-   :description (%catalog-description entry)
-   :synopsis (%catalog-synopsis entry)
-   :subcommands (%catalog-subcommands entry)
-   :flags (%catalog-flags entry)
-   :option-values (%catalog-option-values entry)
-   :exclusive-options (%catalog-exclusive-options entry)))
+  (apply #'%make-catalog-command-projection
+         (%catalog-entry-projection-plist entry
+           command description synopsis subcommands flags
+           option-values exclusive-options)))
 
 (defun %catalog-command-projections (catalog)
   (mapcar #'%catalog-entry-command-projection catalog))
@@ -62,6 +67,25 @@
     (mapcar (lambda (flag)
               (list 'has-flag command flag))
             (%catalog-command-projection-flags projection))))
+
+(defun %catalog-option-value-facts (projection)
+  (let ((command (%catalog-command-projection-command projection)))
+    (loop for spec in (%catalog-command-projection-option-values projection)
+          for option = (first spec)
+          append (loop for value in (rest spec)
+                       collect (list 'option-value command option value)))))
+
+(defun %catalog-normalized-exclusive-group (group)
+  (let ((members (remove-duplicates group :test #'string= :from-end t)))
+    (when (rest members)
+      members)))
+
+(defun %catalog-exclusive-option-facts (projection)
+  (let ((command (%catalog-command-projection-command projection)))
+    (loop for group in (%catalog-command-projection-exclusive-options projection)
+          for normalized = (%catalog-normalized-exclusive-group group)
+          when normalized
+            collect (list 'exclusive-group command normalized))))
 
 (defun %catalog-subcommand-completion-facts (projection)
   (let ((command (%catalog-command-projection-command projection)))
@@ -86,7 +110,9 @@
   (append (%catalog-command-rule-facts projection)
           (%catalog-subcommand-completion-facts projection)
           (%catalog-subcommand-description-facts projection)
-          (%catalog-flag-facts projection)))
+          (%catalog-flag-facts projection)
+          (%catalog-option-value-facts projection)
+          (%catalog-exclusive-option-facts projection)))
 
 (defun %catalog-help-entry (projection)
   (list :command (%catalog-command-projection-command projection)
@@ -116,6 +142,14 @@
   (mapcan #'%catalog-flag-facts
           (%catalog-command-projections +builtin-command-catalog+)))
 
+(defun %builtin-command-option-value-facts ()
+  (mapcan #'%catalog-option-value-facts
+          (%catalog-command-projections +builtin-command-catalog+)))
+
+(defun %builtin-command-exclusive-option-facts ()
+  (mapcan #'%catalog-exclusive-option-facts
+          (%catalog-command-projections +builtin-command-catalog+)))
+
 (defun %external-command-rule-facts ()
   (mapcan #'%catalog-command-with-subcommand-rule-facts
           (%catalog-command-projections +external-command-catalog+)))
@@ -142,6 +176,8 @@
    (mapcan #'%catalog-command-rule-facts
            (%catalog-command-projections +builtin-command-catalog+))
    (%builtin-command-flag-facts)
+   (%builtin-command-option-value-facts)
+   (%builtin-command-exclusive-option-facts)
    (%external-command-rule-facts)
    '((describes "--help" "show command help"))))
 

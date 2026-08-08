@@ -48,8 +48,8 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%cursor-move-request` | `presentation/input-state-buffer.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%external-process-redirect-plan` | `application/execute-pipeline-stage-external.lisp` | mutable — writable slot(s): stdout-target, merge-stderr-p, stdout-mode, stderr-target, stderr-mode |
 | `%fd-redirect-token-text` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
-| `%file-completion-prefix-projection` | `domain/completion/filesystem.lisp` | mutable — writable slot(s): directory-prefix |
-| `%file-completion-query` | `domain/completion/filesystem.lisp` | mutable — writable slot(s): directory-prefix |
+| `%file-completion-prefix-projection` | `domain/completion/filesystem-file-completion.lisp` | mutable — writable slot(s): directory-prefix |
+| `%file-completion-query` | `domain/completion/filesystem-file-completion.lisp` | mutable — writable slot(s): directory-prefix |
 | `%filesystem-candidate-set` | `domain/completion/filesystem.lisp` | mutable — writable slot(s): candidates |
 | `%here-doc-body` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): body, next-position |
 | `%here-doc-consumption` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): bodies, next-position |
@@ -66,7 +66,7 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%mixed-sequence-build-state` | `domain/parsing/parser-assembly.lisp` | mutable — writable slot(s): sequence-commands, sequence-separators, pipe-group |
 | `%parse-result-facts` | `domain/parsing/parse-result.lisp` | mutable — writable slot(s): ast |
 | `%parsed-command-line-case-clause` | `domain/parsing/parse-result.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
-| `%path-command-query` | `domain/completion/filesystem.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
+| `%path-command-query` | `domain/completion/filesystem-path-command.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%redirect-entry` | `domain/parsing/parser-data.lisp` | mutable — writable slot(s): kind, target |
 | `%redirect-facts` | `domain/parsing/parser-data.lisp` | mutable — writable slot(s): text, kind, fd-dup-p |
 | `%redirect-kind-fact-spec` | `domain/parsing/parser-data.lisp` | mutable — writable slot(s): kind, input-p, output-p, stderr-p, append-p |
@@ -137,7 +137,7 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `redirect-output-destinations` | `domain/parsing/parser-data.lisp` | mutable — writable slot(s): stdout-target, stdout-mode, stderr-target, stderr-mode |
 | `rule-knowledge-base` | `domain/completion/rule-data.lisp` | mutable — writable slot(s): facts, rules |
 | `sequence-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
-| `shell-context` | `application/shell-context.lisp` | mutable — writable slot(s): history, config, knowledge-base, environment, dispatcher, job-monitor, alias-table, abbreviation-table, function-table, function-source-table, filesystem-fns, process-fns, terminal-fns, signal-fns, redirect-fns, history-fns, git-fns, execution-strategy, running, last-exit-code, input-state, process-registry, terminal-rows, terminal-cols |
+| `shell-context` | `application/shell-context.lisp` | mutable — writable slot(s): history, config, knowledge-base, environment, dispatcher, job-monitor, alias-table, abbreviation-table, function-table, function-source-table, filesystem-fns, process-fns, terminal-fns, redirect-fns, execution-strategy, running, last-exit-code, input-state, process-registry, terminal-rows, terminal-cols |
 | `theme` | `domain/configuration/theme.lisp` | encapsulation — the mutable `colors` hash-table is exposed only via `theme-color`/`theme-set-color`; the macro would leak a `theme-colors` reader |
 | `token` | `domain/parsing/tokenizer-data.lisp` | mutable — writable slot(s): quote-style |
 | `tokenizer-state` | `domain/parsing/tokenizer-data.lisp` | mutable — writable slot(s): input, len, cursor-pos, pos, tokens, incomplete |

@@ -20,7 +20,7 @@ and scripting subset.
 | Completion | Context-aware command/path/flag completion, candidate menu, deterministic cycling and cancellation | completion domain tests, REPL completion rendering tests, common external command metadata, help-text metadata loader with selective runtime enrichment, README/man page claims | Improved locally; broader command discovery/cache policy and subcommand coverage remain future work |
 | Shell language | Practical interactive scripting: functions, control flow, command substitution, expansions, heredocs, here-strings, redirection, pipelines | parser, expansion, source, pipeline, and smoke tests, structured unquoted list-variable expansion | Improved locally; broader expansion parity audit still required |
 | Process control | Foreground/background jobs, `jobs`/`fg`/`bg`/`disown`, Ctrl-C foreground recovery, PTY smoke coverage, foreground external commands (editors, SSH) run to completion under a real terminal instead of being killed by the command-substitution safety timeout | job-control tests, PTY integration tests, non-sandboxed E2E gate, `docs/timeout-audit.md` (real-PTY regression test) | Needs release evidence on `x86_64-linux` |
-| Reliability | Hermetic build/test gate plus non-sandboxed OS-interactive gate for PTY, terminal, process, signal, and job-control behavior | `nix flake check --print-build-logs`; dev-shell E2E/integration command in README and CONTRIBUTING; `docs/coverage-analysis.md`'s full state-2 sweep (every line in `src/` accounted for) | Ready locally; CI evidence required across supported platforms |
+| Reliability | Hermetic build/test gate plus non-sandboxed OS-interactive gate for PTY, terminal, process, signal, and job-control behavior | `nix flake check --print-build-logs`; dev-shell E2E/integration command in README and CONTRIBUTING; the reproducible coverage procedure in `docs/notes/coverage-analysis.md` | Ready locally; CI evidence required across supported platforms |
 | Distribution | Reproducible Nix build, installed man page, release binary smoke, checksummed artifacts | flake build, man page, CI/release workflows, release checklist | Needs nixpkgs/Homebrew/prebuilt binary publication |
 | Security and operations | Private vulnerability reporting, explicit security scope, no accidental secret exposure through history/completion/diagnostics | the org security policy and [contribution guidelines](contributing.md) | Ready for 0.x scope |
 
@@ -28,16 +28,37 @@ and scripting subset.
 
 Before a public release can claim world-level interactive-shell quality:
 
-1. `nix flake check --print-build-logs` passes on `x86_64-linux` CI — the only
-   platform `flake.nix` declares.
+1. `nix flake check --print-build-logs` passes on the CI release target
+   `x86_64-linux`. `flake.nix` also declares `aarch64-darwin` for the
+   development environment and platform-specific local checks.
 2. The non-sandboxed integration suite passes for PTY, subprocess, terminal,
    signal, and job-control coverage.
-3. A release binary is built on `x86_64-linux` — the only platform `flake.nix`
-   declares — starts successfully, and ships with `README.md`, `LICENSE`, and
-   the `nshell(1)` man page.
+3. A release binary is built on the `x86_64-linux` release target, starts
+   successfully, and ships with `README.md`, `LICENSE`, and the `nshell(1)`
+   man page.
 4. User-visible behavior changes are represented in README, man page, the
    GitHub Release notes, and completion metadata when applicable.
 5. Open roadmap gaps remain explicit instead of being implied as complete.
+
+## Local Verification
+
+What is actually checkable on a plain `aarch64-darwin` development machine
+(not CI), run directly rather than assumed:
+
+- `nix build .#checks.aarch64-darwin.docs` and
+  `nix build .#checks.aarch64-darwin.formatting` both exit 0 -- the mkdocs
+  `--strict` build and the treefmt gate (316 files traversed) pass on this
+  platform.
+- `nix build .#checks.aarch64-darwin.{build,default,smoke-test}` may not run
+  here: see
+  [[nix-build-darwin-gap]] (`cl-prolog` ships no darwin package at the
+  pinned tag), the same gap this repository's own `docs/notes/`
+  acknowledges. This is a package availability gap in the check runner, not
+  a reason to describe `aarch64-darwin` as unsupported.
+- The equivalent SBCL-level verification -- what `checks.default` runs
+  under the hood -- should be run directly when a platform check is blocked;
+  record the exact `nshell/test` and `nshell/weave` totals in the verification
+  report rather than treating a successful load as a coverage result.
 
 ## Current Public Gaps
 

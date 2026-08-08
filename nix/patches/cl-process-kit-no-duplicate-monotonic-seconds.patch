@@ -1,0 +1,10 @@
+--- a/src/fd-readiness.lisp
++++ b/src/fd-readiness.lisp
+@@ -69,6 +69,0 @@
+-(defun %monotonic-seconds ()
+-  "Current INTERNAL-REAL-TIME as an exact rational number of seconds. Rational
+-rather than float so that repeatedly subtracting an elapsed interval from a
+-deadline across EINTR retries cannot accumulate rounding error."
+-  (/ (get-internal-real-time) internal-time-units-per-second))
+-
+ (defun %timeval-parts (seconds)

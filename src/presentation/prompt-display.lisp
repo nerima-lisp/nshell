@@ -94,10 +94,10 @@ it and treats a negative WIDTH as 0."
   (dolist (seg segments)
     (let ((text (nshell.domain.prompting:prompt-segment-text seg))
           (kind (nshell.domain.prompting:prompt-segment-kind seg)))
-      (format stream "~a~a~C[0m"
+      (format stream "~a~a"
               (theme-color->ansi theme (segment-kind->role kind))
-              text
-              #\Esc))))
+              text)
+      (nshell.infrastructure.terminal:ansi-reset-style stream))))
 
 (defun %colored-segments-string (theme segments)
   (with-output-to-string (stream)
@@ -108,10 +108,8 @@ it and treats a negative WIDTH as 0."
 restore the cursor, so the left prompt's position is left unchanged. This is the
 terminal-effect half of the right prompt; the layout math lives in the caller."
   (nshell.infrastructure.terminal:ansi-save-cursor)
-  (format t "~C[~dC~a"
-          #\Esc
-          padding
-          (%colored-segments-string theme visible-right-segments))
+  (nshell.infrastructure.terminal:ansi-cursor-forward padding)
+  (format t "~a" (%colored-segments-string theme visible-right-segments))
   (nshell.infrastructure.terminal:ansi-restore-cursor))
 
 (defun %write-right-prompt (theme left-segments right-segments terminal-width)

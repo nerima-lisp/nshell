@@ -41,12 +41,13 @@
   (sort (%merge-candidates
          (loop for solution in solutions
                for value = (%rule-solution-value variable solution)
-               for description = (and description-fn
-                                      (funcall description-fn value))
                when (and (stringp value) (%starts-with-p prefix value))
                  collect (make-candidate value
                                          :kind kind
-                                         :description (or description ""))))
+                                         :description
+                                         (or (and description-fn
+                                                  (funcall description-fn value))
+                                             ""))))
         #'string<
          :key #'candidate-text))
 

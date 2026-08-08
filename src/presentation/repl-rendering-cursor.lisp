@@ -95,8 +95,9 @@
     (let ((rows-up (- final-row target-row)))
       (cond
         ((plusp rows-up)
-         (format t "~C[~dA~C[~dG" #\Esc rows-up #\Esc (1+ target-column)))
+         (nshell.infrastructure.terminal:ansi-cursor-up rows-up)
+         (nshell.infrastructure.terminal:ansi-cursor-column (1+ target-column)))
         (t
          (let ((columns (- final-column target-column)))
            (when (plusp columns)
-             (format t "~C[~dD" #\Esc columns))))))))
+             (nshell.infrastructure.terminal:ansi-cursor-back columns))))))))

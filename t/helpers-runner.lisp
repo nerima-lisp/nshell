@@ -37,4 +37,4 @@ runners, so skip both the hermetic sandbox and CI."
 Runs single-threaded: many suites share process-global state (mock command
 tables, abbreviation/alias/history registries, dynamic completion hooks), so
 concurrent execution would race.  This mirrors how the FiveAM suite ran."
-  (run-all :reporter :spec :max-workers 1))
+  (run-all :reporter :spec :max-workers 1 :pass-with-no-tests nil))

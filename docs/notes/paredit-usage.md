@@ -12,9 +12,9 @@ docstring).
 
 | command | what it drove |
 |---|---|
-| `inspect unused-definitions src/**/*.lisp tests/**/*.lisp` | the dead-code audit (`docs/dead-code-audit.md`): 179 candidates → 18 bulk-removable, each then verified a false positive. Scanning src+tests together is what collapsed the 239 src-only candidates. |
+| `inspect unused-definitions src/**/*.lisp t/**/*.lisp` | the dead-code audit (`docs/dead-code-audit.md`): 179 candidates → 18 bulk-removable, each then verified a false positive. Scanning src+t together is what collapsed the 239 src-only candidates. |
 | `inspect duplicates src/**/*.lisp` | found the four byte-identical prefix helpers later consolidated into `nshell.util:string-prefix-p`, and confirmed the top clone shapes were idiomatic `let` bindings that must *not* be macro-ified. |
-| `inspect duplicates tests/unit/*.lisp` | located the same-shape `it`-block clusters that became `it-each` tables (tokenizer word/redirect/command-sub/process-sub, parser diagnostics). |
+| `inspect duplicates t/unit/*.lisp` | located the same-shape `it`-block clusters that became `it-each` tables (tokenizer word/redirect/command-sub/process-sub, parser diagnostics). |
 
 ## Structural rewrites (`paredit refactor …`)
 

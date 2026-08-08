@@ -1,9 +1,14 @@
-# Coverage analysis: what the 86.5% figure actually measures
+# Coverage analysis: measured source coverage and the 100% target
 
-`sbcl` `sb-cover` reports **86.5% expression / 81.6% branch** coverage over
-`src/` after `scripts/coverage.lisp`. This note explains, with mechanically
-extracted evidence, why that figure is a floor rather than a gap in the
-*executable* logic, and where the genuinely-reachable gaps were closed.
+On 2026-08-06, `NSHELL_COVERAGE_DIR=/tmp/nshell-coverage-production-refactor-20260806-1 NSHELL_COVERAGE_MIN=85.0 NSHELL_COVERAGE_TARGET=100.0 nix develop --command sbcl --script scripts/coverage.lisp` passed the full `nshell/test` suite with **1326 passed** and measured **22763/26229 = 86.79% expression coverage** over `src/`.
+
+The script now writes `coverage-summary.json`, reports both the enforced
+minimum and the aspirational target, and exits non-zero when tests fail, the
+report is missing, or source expression coverage falls below the minimum. The
+production gate is currently 85%; the run reached `minimum-passed=true` but
+`target-reached=false`. Therefore this repository does **not** claim literal
+100% sb-cover coverage. The remainder is analyzed below instead of being
+silently rounded away.
 
 ## Genuinely-reachable gaps that were closed
 
@@ -68,9 +73,9 @@ can execute under a headless SBCL on macOS:
    (427 forms) is built once at load; sb-cover's proclamation does not attribute
    that construction, so it reports 0% regardless of tests.
 4. **The interactive layer** — `presentation/` (REPL, line editor, rendering)
-   and `infrastructure/{terminal,acl/pty,acl/syscall}` are exercised only by the
-   PTY/subprocess e2e suite, which runs on the Nix/Linux CI, not on this
-   darwin checkout (the 26 `e2e-main-*` failures here are that same gap).
+   and `infrastructure/{terminal,acl/pty,acl/syscall}` require the PTY/subprocess
+   paths for complete execution. The current direct run passed those tests in
+   this checkout; platform-specific PTY behavior remains a separate CI concern.
 
 ## Systematic re-sweep: every `state-2` ("Not executed") line in `src/`, classified
 
@@ -98,7 +103,7 @@ left over in neither:
    `domain/environment/env.lisp` — that requires every slot value explicitly.
    SBCL only evaluates a slot's default-value form (`(name "" :type string
    ...)`'s `""`) when the *standard*, all-keyword constructor is called with
-   that slot omitted; since nothing in `src/` or `tests/` ever calls that
+   that slot omitted; since nothing in `src/` or `t/` ever calls that
    standard constructor (the codebase's own convention, confirmed by
    `docs/value-struct-audit.md`), those default forms are compiled but never
    reached by any call path, tested or not. Verified directly: `env-var`'s
@@ -117,7 +122,19 @@ precise evidence for the original conclusion, not a new caveat to it: the
 2721-line sweep — the full state-2 set, not a sample — accounts for every
 line without exception.
 
-## How to reproduce
+## 2026-08-03 re-run: 87.1% expression, consistent with the structural-ceiling conclusion
+
+Re-ran `scripts/coverage.lisp` against the current tree (after the terminal
+raw-mode hardening and `shell-context` dead-slot removal above): **22841/26231
+expression forms in `src/`, 87.1%** — up from the 86.5% this note opened with,
+consistent with (not contradicting) the conclusion above: coverage moves when
+reachable branches are added or exercised (here, the new
+`terminal-mode-operation-failed` condition path and its tests) and is
+otherwise flat regardless of how much dead weight is removed, because the
+denominator is dominated by the four structural categories listed above, not
+by untested reachable logic. `catalog-static.lisp` is unchanged at 0/438 for
+the reason given above (load-time-once data, not logic). No new genuinely-
+uncovered *executable* line was found in this pass.
 
 `NSHELL_COVERAGE_DIR=/tmp/cov sbcl --script scripts/coverage.lisp`, then read
 `/tmp/cov/cover-index.html`. To distinguish real gaps from comment noise,

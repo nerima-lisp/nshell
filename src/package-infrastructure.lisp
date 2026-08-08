@@ -70,6 +70,7 @@ line editor has a single place to import them from.")
             #:ansi-enable-sgr-mouse #:ansi-disable-sgr-mouse
             #:ansi-enable-alternate-screen #:ansi-disable-alternate-screen
             #:ansi-request-cursor-position
+            #:ansi-copy-to-clipboard
             #:copy-to-clipboard
             #:read-key-event
             #:query-cursor-position

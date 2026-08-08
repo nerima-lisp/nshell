@@ -53,3 +53,23 @@ to write inline."
               :to-equal (emitted #'nshell.infrastructure.terminal:ansi-reverse))
       (expect (format nil "~C[0m" #\Esc)
               :to-equal (emitted #'nshell.infrastructure.terminal:ansi-reset-style)))))
+
+  (it "terminal-ansi-emits-exact-osc52-clipboard-sequence"
+    "The clipboard helper emits OSC 52 with a base64 payload and BEL terminator."
+    (let ((output (with-output-to-string (stream)
+                    (nshell.infrastructure.terminal:ansi-copy-to-clipboard
+                     "Hello, nshell!"
+                     stream))))
+      (expect (format nil "~C]52;c;SGVsbG8sIG5zaGVsbCE=~C" #\Esc #\Bell)
+              :to-equal
+              output)))
+
+  (it "terminal-ansi-osc52-encodes-utf8-before-base64"
+    "Non-ASCII clipboard text is encoded as UTF-8 before base64."
+    (let ((output (with-output-to-string (stream)
+                    (nshell.infrastructure.terminal:ansi-copy-to-clipboard
+                     "café"
+                     stream))))
+      (expect (format nil "~C]52;c;Y2Fmw6k=~C" #\Esc #\Bell)
+              :to-equal
+              output))))

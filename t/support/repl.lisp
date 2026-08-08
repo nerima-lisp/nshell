@@ -1,7 +1,7 @@
 (in-package #:nshell/test)
 
 (defun current-sbcl-executable ()
-  (or (uiop:getenv "SBCL")
+  (or (host-kit:getenv "SBCL")
       #+sbcl (when sb-ext:*runtime-pathname*
                (namestring sb-ext:*runtime-pathname*))
       #-sbcl nil
@@ -17,6 +17,12 @@
          (nshell.presentation::*completion-rendered-lines* 0)
          (nshell.presentation::*prompt-rendered-lines* 0)
          (nshell.presentation::*prompt-rendered-cursor-row* 0)
+         (nshell.presentation::*prompt-rendered-terminal-width* 80)
+         (nshell.presentation::*prompt-rendered-prompt-width* 0)
+         (nshell.presentation::*prompt-rendered-origin-row* 1)
+         (nshell.presentation::*prompt-rendered-origin-column* 1)
+         (nshell.presentation::*prompt-rendered-origin-known-p* t)
+         (nshell.presentation::*interactive-terminal-installed-p* nil)
          (nshell.presentation::*environment* (nshell.domain.environment:make-environment)))
      (nshell.presentation::with-fresh-repl-state-tables
        ,@body)))
@@ -118,7 +124,7 @@
                  (merge-pathnames
                   (make-pathname :name (format nil "~a~d" ,prefix (get-internal-real-time))
                                  :type "txt")
-                  (uiop:temporary-directory)))))
+                  (host-kit:temporary-directory)))))
      (unwind-protect
           (progn ,@body)
        (ignore-errors
@@ -129,11 +135,11 @@
   "Wait for PATH to exist and contain EXPECTED."
   (loop repeat attempts
         when (and (probe-file path)
-                  (string= expected (uiop:read-file-string path)))
+                  (string= expected (host-kit:read-file-string path)))
         do (return t)
         do (sleep delay)
         finally (return (and (probe-file path)
-                             (string= expected (uiop:read-file-string path))))))
+                             (string= expected (host-kit:read-file-string path))))))
 
 (defun call-repl-builtin (command args)
   (let ((builtin-p nil)

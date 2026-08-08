@@ -30,7 +30,9 @@
           (compute-suggestion *history*
                               text
                               :knowledge-base *kb*
-                              :path completion-path))))
+                              :path completion-path
+                              :alias-table *aliases*
+                              :function-table *functions*))))
 
 (defun %history-last-argument-state (state argument start end index)
   (copy-input-state-clearing-completion
@@ -110,19 +112,23 @@
 (defun %execute-complete-command (ast text)
   (with-reset-rendered-prompt-state-and-prompt-cont
     (format t "~%")
-    (history-kit:history-add *history* text)
-    (history-kit:history-reset-navigation *history*)
-    (nshell.infrastructure.persistence:append-history-entry text)
     (sync-exported-environment)
     ;; Time the command through the clock boundary (real clock == monotonic
     ;; get-internal-real-time), so a fake clock makes duration deterministic.
-    (let ((start-time (boundary-monotonic)))
+    (let ((start-time (boundary-monotonic))
+          (exit-code nil))
       (unwind-protect
-           (setf *last-exit-code* (or (execute-ast ast) 0))
-        (setf *last-command-duration-ms*
-              (%elapsed-command-duration-ms
-               start-time
-               (boundary-monotonic)))))
+           (setf exit-code (or (execute-ast ast) 0))
+        (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
+          (setf *last-exit-code* recorded-exit-code
+                *last-command-duration-ms*
+                (%elapsed-command-duration-ms
+                 start-time
+                 (boundary-monotonic)))
+          (history-kit:history-add *history* text
+                                   :exit-code recorded-exit-code)
+          (history-kit:history-reset-navigation *history*)
+          (nshell.infrastructure.persistence:append-history-entry text))))
     (setf *input-state* (make-repl-input-state))))
 
 (defun %execute-parse-error (result)
@@ -152,39 +158,48 @@
   (handler-case
       (if (string= text "")
           (%execute-empty-input)
-          (nshell.domain.parsing:with-parsed-command-line-case (result ast text)
-              (:complete
-               (%execute-complete-command ast text))
-            (:error
-             (%execute-parse-error result))
-            (:incomplete
-             (%execute-incomplete-command result))))
+          (multiple-value-bind (expanded-text expansion-error)
+              (nshell.domain.history:history-expand-line *history* text)
+            (if expansion-error
+                (with-reset-rendered-prompt-state-and-prompt-cont
+                 (format t "~%nshell: ~a~%" expansion-error)
+                 (setf *last-exit-code* 2
+                       *last-command-duration-ms* nil
+                       *input-state* (make-repl-input-state)))
+                (nshell.domain.parsing:with-parsed-command-line-case
+                 (result ast expanded-text)
+                 (:complete
+                  (%execute-complete-command ast expanded-text))
+                 (:error
+                  (%execute-parse-error result))
+                 (:incomplete
+                  (%execute-incomplete-command result))))))
     (error (condition)
-      (with-reset-rendered-prompt-state-and-prompt-cont
-        (format t "~%nshell error: ~a~%" condition)
-        (setf *last-exit-code* 1
-              *last-command-duration-ms* nil
-              *input-state* (make-repl-input-state))))))
+           (with-reset-rendered-prompt-state-and-prompt-cont
+            (format t "~%nshell error: ~a~%" condition)
+            (setf *last-exit-code* 1
+                  *last-command-duration-ms* nil
+                  *input-state* (make-repl-input-state))))))
 
-(defun %process-execute-output-event ()
-  (clear-rendered-completions)
-  (%execute-command-line (input-state-buffer *input-state*)))
+  (defun %process-execute-output-event ()
+    (clear-rendered-completions)
+    (%execute-command-line (input-state-buffer *input-state*)))
 
-(define-output-event-handler %process-complete-output-event
-    with-cleared-rendered-completions-and-prompt-cont
-    (if (%completion-session-valid-p *input-state*)
-        (let ((candidates (input-state-last-candidates *input-state*))
-              (selected-index (input-state-completion-index *input-state*)))
-          (setf *completion-rendered-lines*
-                (%render-completions-below-prompt
-                 candidates
-                 :selected-index selected-index)))
-        (multiple-value-bind (refreshed-state candidates)
-            (%refresh-completion-session-state *input-state*)
-          (setf *input-state* refreshed-state)
-          (when candidates
-            (setf *completion-rendered-lines*
-                  (%render-completions-below-prompt candidates))))))
+  (define-output-event-handler %process-complete-output-event
+                               with-cleared-rendered-completions-and-prompt-cont
+                               (if (%completion-session-valid-p *input-state*)
+                                   (let ((candidates (input-state-last-candidates *input-state*))
+                                         (selected-index (input-state-completion-index *input-state*)))
+                                     (setf *completion-rendered-lines*
+                                           (%render-completions-below-prompt
+                                            candidates
+                                            :selected-index selected-index)))
+                                   (multiple-value-bind (refreshed-state candidates)
+                                       (%refresh-completion-session-state *input-state*)
+                                     (setf *input-state* refreshed-state)
+                                     (when candidates
+                                       (setf *completion-rendered-lines*
+                                             (%render-completions-below-prompt candidates))))))
 
 (define-output-event-handler %process-suggest-update-output-event
     with-cleared-rendered-completions-and-prompt-cont
@@ -218,24 +233,132 @@
             (make-repl-input-state :buffer entry :cursor-pos (length entry)))
       (refresh-current-input-state-suggestion))))
 
-(define-output-event-handler %process-clear-screen-output-event
-    with-reset-rendered-prompt-state-and-prompt-cont
-    (nshell.infrastructure.terminal:ansi-clear-screen)
-    (nshell.infrastructure.terminal:ansi-move-cursor 1 1)
-    (reset-rendered-completion-state))
+  (define-output-event-handler %process-clear-screen-output-event
+                               with-reset-rendered-prompt-state-and-prompt-cont
+                               (nshell.infrastructure.terminal:ansi-clear-screen)
+                               (nshell.infrastructure.terminal:ansi-move-cursor 1 1)
+                               (reset-rendered-completion-state))
 
-(define-output-event-handler %process-insert-last-argument-output-event
-    with-cleared-rendered-completions-and-prompt-cont
-    (when (eq (insert-history-last-argument) :suggest-update)
-      (refresh-current-input-state-suggestion)))
+  (define-output-event-handler %process-insert-last-argument-output-event
+                               with-cleared-rendered-completions-and-prompt-cont
+                               (when (eq (insert-history-last-argument) :suggest-update)
+                                 (refresh-current-input-state-suggestion)))
 
-(define-output-event-handler %process-redraw-output-event
-    with-cleared-rendered-completions-and-prompt-cont)
+  (defun %split-editor-command (command)
+    (let ((tokens '())
+          (current (make-string-output-stream))
+          (quoted-p nil)
+          (escaped-p nil)
+          (token-started-p nil))
+      (labels ((finish-token ()
+                             (when token-started-p
+                               (push (get-output-stream-string current) tokens)
+                               (setf current (make-string-output-stream)
+                                     token-started-p nil))))
+        (loop for character across command
+              do (cond
+                  (escaped-p
+                   (write-char character current)
+                   (setf escaped-p nil
+                         token-started-p t))
+                  ((char= character #\\)
+                   (setf escaped-p t
+                         token-started-p t))
+                  ((and quoted-p (char= character quoted-p))
+                   (setf quoted-p nil
+                         token-started-p t))
+                  ((and (not quoted-p)
+                        (or (char= character #\') (char= character #\")))
+                   (setf quoted-p character
+                         token-started-p t))
+                  ((and (not quoted-p)
+                        (or (char= character #\Space)
+                            (char= character #\Tab)
+                            (char= character #\Newline)))
+                   (finish-token))
+                  (t
+                   (write-char character current)
+                   (setf token-started-p t))))
+        (when escaped-p
+          (write-char #\\ current))
+        (finish-token)
+        (nreverse tokens))))
 
-(define-output-event-handler %process-quit-output-event
-    progn
-    (setf *running* nil)
-    nil)
+  (defun %editor-command-argv ()
+    (let* ((environment (ensure-environment))
+           (command (or (loop for name in '("NSHELL_EDITOR" "VISUAL" "EDITOR")
+                              for value =
+                              (nshell.domain.environment:env-get environment name)
+                              when (and value (plusp (length value)))
+                              return value)
+                        "vi"))
+           (argv (%split-editor-command command)))
+      (if (and argv (plusp (length (first argv))))
+          argv
+          '("vi"))))
 
-(define-output-event-handler %process-default-output-event
-    with-cleared-rendered-completions-and-prompt-cont)
+  (defun %write-editor-buffer (path text)
+    (with-open-file (stream path :direction :output :if-exists :supersede
+                            :if-does-not-exist :create)
+      (write-string text stream)
+      (terpri stream)))
+
+  (defun %read-editor-buffer (path)
+    (let ((text (host-kit:read-file-string path)))
+      (if (and (plusp (length text))
+               (char= (char text (1- (length text))) #\Newline))
+          (subseq text 0 (1- (length text)))
+          text)))
+
+  (defun %run-external-editor (argv path)
+    (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
+    (nshell.infrastructure.terminal:ansi-disable-bracketed-paste)
+    (nshell.infrastructure.terminal:restore-terminal-mode)
+    (unwind-protect
+     (progn
+       (finish-output)
+       (sync-exported-environment)
+       (nshell.infrastructure.acl:run-external-exec
+        (first argv) (append (rest argv) (list path))))
+     (ignore-errors (nshell.infrastructure.terminal:enable-raw-mode))
+     (ignore-errors (nshell.infrastructure.terminal:ansi-enable-bracketed-paste))
+     (ignore-errors (nshell.infrastructure.terminal:ansi-enable-sgr-mouse))))
+
+  (define-output-event-handler %process-edit-command-output-event
+                             with-cleared-rendered-completions-and-prompt-cont
+                             (host-kit:with-temporary-file (stream path :suffix ".txt")
+                               (close stream)
+                               (format t "~%")
+                               (%write-editor-buffer path (input-state-buffer *input-state*))
+                               (handler-case
+                                   (let ((status (%run-external-editor (%editor-command-argv) path)))
+                                     (if (and (eql status 0) (probe-file path))
+                                         (let ((text (%read-editor-buffer path)))
+                                           (setf *input-state*
+                                                 (make-repl-input-state
+                                                  :buffer text :cursor-pos (length text)))
+                                           (refresh-current-input-state-suggestion))
+                                         (format t "nshell: editor exited with status ~a~%" status)))
+                                 (error (condition)
+                                        (format t "nshell: editor failed: ~a~%" condition)))))
+
+  (define-output-event-handler %process-redraw-output-event
+                               with-cleared-rendered-completions-and-prompt-cont)
+
+  (define-output-event-handler %process-copy-output-event
+                               with-cleared-rendered-completions-and-prompt-cont
+                               (let ((selection (and *input-state*
+                                                     (kill-ring-first-selection *input-state*))))
+                                 (when selection
+                                   (let ((text (kill-ring-selection-text selection)))
+                                     (when (plusp (length text))
+                                       (nshell.infrastructure.terminal:copy-to-clipboard
+                                        text))))))
+
+  (define-output-event-handler %process-quit-output-event
+                               progn
+                               (setf *running* nil)
+                               nil)
+
+  (define-output-event-handler %process-default-output-event
+                               with-cleared-rendered-completions-and-prompt-cont)

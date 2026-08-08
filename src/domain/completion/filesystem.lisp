@@ -1,17 +1,14 @@
 (in-package #:nshell.domain.completion)
 
 (defun %path-separator-p (char)
-  (or (char= char #\/)
-      #+windows (char= char #\\)
-      #-windows nil))
+  (or (char= char #\/) #+windows (char= char #\\) #-windows nil))
 
 (defgeneric completion-filesystem-fns (source)
   (:documentation "Return filesystem adapter functions used by completion."))
 
 (defstruct (%filesystem-candidate-set
-            (:constructor %make-filesystem-candidate-set (seen candidates))
-            (:conc-name %filesystem-candidate-set-))
-  (seen (make-hash-table :test #'equal) :read-only t)
+    (:constructor %make-filesystem-candidate-set (seen candidates))
+    (:conc-name %filesystem-candidate-set-)) (seen (make-hash-table :test #'equal) :read-only t)
   (candidates nil :type list))
 
 (defun %make-empty-filesystem-candidate-set ()
@@ -23,6 +20,5 @@
           (seen (%filesystem-candidate-set-seen set)))
       (unless (gethash text seen)
         (setf (gethash text seen) t
-              (%filesystem-candidate-set-candidates set)
-              (cons candidate (%filesystem-candidate-set-candidates set))))))
+              (%filesystem-candidate-set-candidates set) (cons candidate (%filesystem-candidate-set-candidates set))))))
   set)

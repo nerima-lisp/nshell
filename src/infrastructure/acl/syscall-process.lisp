@@ -53,21 +53,39 @@ exit code, or 128+signal when it was terminated by a signal."
 
 (defun %wait-process-exit-with-timeout (proc timeout-seconds)
   (let ((deadline (+ (get-internal-real-time)
-                     (round (* timeout-seconds internal-time-units-per-second)))))
+                     (round (* timeout-seconds internal-time-units-per-second))))
+        (sleep-seconds 0.0001))
     (loop while (and (sb-ext:process-alive-p proc)
                      (< (get-internal-real-time) deadline))
-          do (sleep 0.01))
+          for remaining-seconds = (/ (- deadline (get-internal-real-time))
+                                     (float internal-time-units-per-second))
+          do (sleep (min sleep-seconds (max 0 remaining-seconds)))
+             (setf sleep-seconds (min 0.01 (* 2 sleep-seconds))))
     (unless (sb-ext:process-alive-p proc)
       (ignore-errors (sb-ext:process-wait proc))
       t)))
 
 (defun %terminate-process (proc)
-  (when (and proc (sb-ext:process-alive-p proc))
-    (ignore-errors (sb-ext:process-kill proc 15)))
-  (when (and proc (not (%wait-process-exit-with-timeout proc 0.5)))
-    (when (sb-ext:process-alive-p proc)
-      (ignore-errors (sb-ext:process-kill proc 9)))
-    (ignore-errors (sb-ext:process-wait proc))))
+  (when proc
+    (let* ((pid (sb-ext:process-pid proc))
+           ;; SETPGID can lose a race with a child that has already execed. Never
+           ;; signal a process group until its identity is verified: otherwise a
+           ;; negative PID can target nshells own group and terminate its host.
+           (actual-pgid (and (integerp pid)
+                             (plusp pid)
+                             (ignore-errors (sb-posix:getpgid pid))))
+           (owns-process-group-p (and (integerp actual-pgid)
+                                      (plusp actual-pgid)
+                                      (= pid actual-pgid))))
+      (flet ((terminate (signal)
+               (if owns-process-group-p
+                   (ignore-errors (%send-process-group-signal pid signal))
+                   (when (sb-ext:process-alive-p proc)
+                     (ignore-errors (sb-ext:process-kill proc signal))))))
+        (terminate sb-unix:sigterm)
+        (%wait-process-exit-with-timeout proc 0.5)
+        (terminate sb-unix:sigkill)
+        (ignore-errors (sb-ext:process-wait proc))))))
 
 (defun %wait-process-with-copiers (proc copiers timeout-seconds success-fn timeout-fn)
   (unwind-protect
@@ -109,19 +127,17 @@ exit code, or 128+signal when it was terminated by a signal."
             return (subseq entry (length prefix)))))
 
 (defun %executable-file-p (path)
-  (and (probe-file path)
-       (ignore-errors
-        (not (zerop (logand (sb-posix:stat-mode (sb-posix:stat path))
-                            #o111))))))
+  (ignore-errors
+   (not (zerop (logand (sb-posix:stat-mode (sb-posix:stat path))
+                       #o111)))))
 
 (defun %resolve-external-command (command &optional (environment (%get-environment)))
-  (first
-   (nshell.domain.completion:command-path-candidates
-    command
-    (or (%environment-value "PATH" environment)
-        "/bin:/usr/bin")
-    #'%executable-file-p
-    :empty-directory ".")))
+  (nshell.domain.completion::%first-command-path-candidate
+   command
+   (or (%environment-value "PATH" environment)
+       "/bin:/usr/bin")
+   #'%executable-file-p
+   :empty-directory "."))
 
 (defun %prepare-external-command (command &optional (environment (%get-environment)))
   (values (%resolve-external-command command environment)
@@ -130,14 +146,7 @@ exit code, or 128+signal when it was terminated by a signal."
 (defun %report-external-command-not-found (command)
   (format *error-output* "~a" (%external-command-not-found-message command)))
 
-(defun %spawn-external-command (resolved-cmd args environment &key input output)
-  (sb-ext:run-program resolved-cmd args
-                      :input input
-                      :output output
-                      :error (if *redirected-stderr* *error-output* :output)
-                      :wait nil
-                      :search nil
-                      :environment environment))
+(defun %spawn-external-command (resolved-cmd args environment &key input output (error nil error-supplied-p)) (sb-ext:run-program resolved-cmd args :input input :output output :error (if error-supplied-p error (if *redirected-stderr* *error-output* :output)) :wait nil :search nil :environment environment))
 
 (defun %resolve-input-redirect (redirects register)
   "Return the standard-input stream REDIRECTS ask for, calling REGISTER on any
@@ -149,7 +158,7 @@ redirection the process inherits *STANDARD-INPUT*."
       (case kind
         (:<   (track (open target :direction :input :if-does-not-exist :error)))
         (:<<< (track (%here-string-stream target)))
-        (:<<  (track (%here-document-stream target)))
+        ((:<< :<<-) (track (%here-document-stream target)))
         (t    *standard-input*)))))
 
 (defun %resolve-output-redirect (redirects register)
@@ -164,11 +173,13 @@ process's own stdout, calling REGISTER on any stream opened here."
           stream)
         t)))
 
-(defun %spawn-in-own-process-group (resolved-cmd args environment input output)
-  "Spawn RESOLVED-CMD wired to INPUT/OUTPUT and isolate it in its own process
-group. Returns the process, or NIL when the spawn fails."
-  (let ((proc (%spawn-external-command resolved-cmd args environment
-                                       :input input :output output)))
+(defun %spawn-in-own-process-group (resolved-cmd args environment input output &key (error nil error-supplied-p))
+  "Spawn RESOLVED-CMD wired to INPUT/OUTPUT and isolate it in its own process group. Returns the process, or NIL when the spawn fails."
+  (let ((proc (if error-supplied-p
+                  (%spawn-external-command resolved-cmd args environment
+                                           :input input :output output :error error)
+                  (%spawn-external-command resolved-cmd args environment
+                                           :input input :output output))))
     (when proc
       (let ((pid (sb-ext:process-pid proc)))
         (when (plusp pid)
@@ -206,7 +217,45 @@ file` typed at an interactive prompt too."
   (and (not (interactive-stream-p *standard-output*))
        *external-command-timeout*))
 
-(defun run-external (cmd args)
+(defun run-external-exec (cmd args)
+  "Execute CMD with ARGS for the exec builtin.
+
+Standard streams pass through directly and noninteractive execution uses the
+normal foreground timeout policy."
+  (handler-case
+      (multiple-value-bind (resolved-cmd environment)
+          (%prepare-external-command cmd)
+        (unless resolved-cmd
+          (%report-external-command-not-found cmd)
+          (return-from run-external-exec 127))
+        (let ((proc (%spawn-in-own-process-group
+                     resolved-cmd args environment
+                     *standard-input* *standard-output*
+                     :error *error-output*)))
+          (if proc
+              (let* ((pid (sb-ext:process-pid proc))
+                     (pgid (and (integerp pid) (plusp pid) pid))
+                     (timeout (%foreground-external-command-timeout)))
+                (flet ((finish-process ()
+                         (if (or (null timeout)
+                                 (%wait-process-exit-with-timeout proc timeout))
+                             (progn
+                               (sb-ext:process-wait proc)
+                               (process-exit-status-code proc))
+                             (progn
+                               (%terminate-process proc)
+                               (format *error-output* "~a"
+                                       (%external-command-timeout-message cmd timeout))
+                               124))))
+                  (if pgid
+                      (%with-foreground-process-group pgid (function finish-process))
+                      (finish-process))))
+              1)))
+    (error (err)
+      (format *error-output* "exec: ~a: ~a~%" cmd err)
+      1)))
+
+ (defun run-external (cmd args)
   "Execute CMD with ARGS synchronously, printing output. Returns exit code."
   (handler-case
       (multiple-value-bind (resolved-cmd environment)
@@ -225,17 +274,13 @@ file` typed at an interactive prompt too."
                   (%assign-process-group pid pgid))
                 (flet ((finish-process ()
                          (%wait-process-with-output
-                          proc
-                          *standard-output*
-                          timeout
+                          proc *standard-output* timeout
                           (lambda ()
-                            (format *error-output*
-                                    "~a"
-                                    (%external-command-timeout-message
-                                     cmd timeout))
+                            (format *error-output* "~a"
+                                    (%external-command-timeout-message cmd timeout))
                             124))))
                   (if pgid
-                      (%with-foreground-process-group pgid #'finish-process)
+                      (%with-foreground-process-group pgid (function finish-process))
                       (finish-process))))
               1)))
     (error (err)

@@ -5,13 +5,13 @@
 With [Nix](https://nixos.org/download) (flakes enabled):
 
 ```sh
-nix run github:nerima-lisp/nshell
+nix run github:nerima-lisp/nshell/v0.4.0
 ```
 
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell
+nix profile install github:nerima-lisp/nshell/v0.4.0
 nshell
 man nshell   # the manual page is installed alongside the binary
 ```

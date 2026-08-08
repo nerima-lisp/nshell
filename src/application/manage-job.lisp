@@ -154,16 +154,26 @@
          (pending-pids (copy-list known-pids))
          (last-pid (nshell.domain.execution:job-last-pid job))
          (last-stage-status nil)
-         (latest-status nil))
+         (latest-status nil)
+         (statuses nil))
     (labels ((record-completion (pid status-code)
                (when status-code
                  (setf latest-status status-code)
+                 (when pid
+                   (push (cons pid status-code) statuses))
                  (when (and last-pid pid (= pid last-pid))
                    (setf last-stage-status status-code)))
                (when (and pid pending-pids)
                  (setf pending-pids (remove pid pending-pids :test #'=))))
              (finish-job ()
-               (let ((status-code (or last-stage-status latest-status)))
+               (let ((status-code
+                       (if (nshell.domain.execution:job-pipefail-p job)
+                           (or (loop for pid in known-pids
+                                     for entry = (assoc pid statuses :test #'=)
+                                     when (and entry (not (zerop (cdr entry))))
+                                     return (cdr entry))
+                               0)
+                           (or last-stage-status latest-status))))
                  (nshell.domain.job-control:complete-job
                   job-monitor job-id status-code))))
       (loop

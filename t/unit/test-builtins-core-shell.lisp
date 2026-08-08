@@ -78,6 +78,19 @@
         (expect (nshell.domain.environment:env-get env "NSHELL_TEST_LOCAL") :to-be-null)
         (expect (nshell.domain.environment:env-get env "NSHELL_TEST_EMPTY") :to-be-null))))
 
+  (it "set-toggles-pipefail"
+    "set -o/+o pipefail toggles the pipeline policy in the current context."
+    (with-builtins-context (context)
+      (expect (nshell.application:shell-context-pipefail-p context) :to-be-falsy)
+      (assert-builtin-call (context "set" '("-o" "pipefail"))
+        :code 0
+        :output-null t)
+      (expect (nshell.application:shell-context-pipefail-p context) :to-be-truthy)
+      (assert-builtin-call (context "set" '("+o" "pipefail"))
+        :code 0
+        :output-null t)
+      (expect (nshell.application:shell-context-pipefail-p context) :to-be-falsy)))
+
   (it "alias-adds-lists-queries-and-erases-expansions"
     "alias stores fish-style multi-token command expansions in the current context."
     (with-builtins-context (context)

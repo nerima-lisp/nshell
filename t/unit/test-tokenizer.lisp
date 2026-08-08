@@ -148,19 +148,21 @@ letting word-reading stop on an unconsumed terminator."
                 (nshell.domain.parsing::%tokenizer-pipe-route-token-type route)
                 (nshell.domain.parsing::%tokenizer-pipe-route-value route)))))
       (expect '(:or "||") :to-equal (route-facts "|| echo"))
-      (expect '(:pipe "|") :to-equal (route-facts "| grep"))))
+      (expect '(:pipe "|") :to-equal (route-facts "| grep"))
+      (expect '(:pipe "|&") :to-equal (route-facts "|& cat"))))
 
   (it "tokenizer-redirect-route-projects-operator-policy"
     "Redirect handling should project redirect token facts before mutation."
     (flet ((right-route-value (input)
-             (let* ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input))
-                    (route
-                      (nshell.domain.parsing::%tokenizer-right-redirect-route-for
-                       state)))
-               (expect (nshell.domain.parsing::%tokenizer-right-redirect-route-p
-                    route) :to-be-truthy)
-               (nshell.domain.parsing::%tokenizer-right-redirect-route-value
-                route)))
+           (let* ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input))
+                  (route
+                    (nshell.domain.parsing::%tokenizer-right-angle-route-for
+                     state)))
+             (expect (nshell.domain.parsing::%tokenizer-right-angle-route-p
+                      route) :to-be-truthy)
+             (list
+              (nshell.domain.parsing::%tokenizer-right-angle-route-kind route)
+              (nshell.domain.parsing::%tokenizer-right-angle-route-value route))))
            (left-route-facts (input)
              (let* ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input))
                     (route
@@ -170,12 +172,14 @@ letting word-reading stop on an unconsumed terminator."
                (list
                 (nshell.domain.parsing::%tokenizer-left-angle-route-kind route)
                 (nshell.domain.parsing::%tokenizer-left-angle-route-value route)))))
-      (expect ">" :to-equal (right-route-value "> out"))
-      (expect ">>" :to-equal (right-route-value ">> log"))
+      (expect '(:redirect ">") :to-equal (right-route-value "> out"))
+      (expect '(:redirect ">>") :to-equal (right-route-value ">> log"))
       (expect '(:redirect "<") :to-equal (left-route-facts "< in"))
       (expect '(:redirect "<<") :to-equal (left-route-facts "<< EOF"))
+      (expect '(:redirect "<<-") :to-equal (left-route-facts "<<- EOF"))
       (expect '(:redirect "<<<") :to-equal (left-route-facts "<<< value"))
-      (expect '(:process-substitution nil) :to-equal (left-route-facts "<(echo ok)"))))
+      (expect '(:process-substitution nil) :to-equal (left-route-facts "<(echo ok)"))
+      (expect '(:process-substitution nil) :to-equal (right-route-value ">(echo ok)"))))
 
   (it "tokenizer-token-extent-projects-normalized-token-boundaries"
     "Token extent projection should own value normalization and end-position facts."
@@ -240,6 +244,7 @@ letting word-reading stop on an unconsumed terminator."
             (">"              1 0 ">")
             ("cat <<< hello"  3 1 "<<<")
             ("cat << EOF"     3 1 "<<")
+            ("cat <<- EOF"    3 1 "<<-")
             ("echo err 2>&1"  3 2 "2>&1"))
       "tokenizes ~S with a :redirect ~S"
       (input length position value)
@@ -301,13 +306,11 @@ letting word-reading stop on an unconsumed terminator."
     (flet ((scan-action (input &optional (pos 0))
              (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input input)))
                (setf (nshell.domain.parsing::tokenizer-state-pos state) pos)
-               (let ((action
-                       (nshell.domain.parsing::%tokenizer-word-scan-action-for
-                        state
-                        (nshell.domain.parsing::%tokenizer-state-peek state))))
-                 (expect (nshell.domain.parsing::%tokenizer-word-scan-action-p action) :to-be-truthy)
-                 (list (nshell.domain.parsing::%tokenizer-word-scan-action-kind action)
-                       (nshell.domain.parsing::%tokenizer-word-scan-action-end action))))))
+               (multiple-value-bind (kind end)
+                   (nshell.domain.parsing::%tokenizer-word-scan-action-for
+                    state
+                    (nshell.domain.parsing::%tokenizer-state-peek state))
+                 (list kind end)))))
       (expect '(:dollar-substitution 6) :to-equal (scan-action "$(echo)"))
       (expect '(:fish-substitution 5) :to-equal (scan-action "(echo)"))
       (expect '(:boundary nil) :to-equal (scan-action "()"))
@@ -341,10 +344,13 @@ letting word-reading stop on an unconsumed terminator."
       (expect '(9 10) :to-equal (boundary-facts "<(echo ok)"))
       (expect '(nil 9) :to-equal (boundary-facts "<(echo ok"))))
 
-  ;; A balanced process substitution `<(...)` is likewise a single :word token.
+  ;; Both process substitution directions are a single :word token.
   (it-each (("cat <(echo ok)"        "<(echo ok)")
             ("cat <(printf \"(\")"   "<(printf \"(\")")
-            ("cat <(outer (inner))"  "<(outer (inner))"))
+            ("cat <(outer (inner))"  "<(outer (inner))")
+            ("cat >(echo ok)"        ">(echo ok)")
+            ("cat >(printf \"(\")"   ">(printf \"(\")")
+            ("cat >(outer (inner))"  ">(outer (inner))"))
       "keeps a balanced process substitution attached as one word: ~S -> ~S"
       (input expected)
     (with-tokenized-input (tokens cursor incomplete) input
@@ -361,6 +367,16 @@ letting word-reading stop on an unconsumed terminator."
       (expect 2 :to-equal (length tokens))
       (expect :error :to-be (nshell.domain.parsing:token-type (second tokens)))
       (expect "<(echo ok" :to-equal (nshell.domain.parsing:token-value (second tokens)))
+      (expect 4 :to-equal (nshell.domain.parsing:token-start (second tokens)))
+      (expect 13 :to-equal (nshell.domain.parsing:token-end (second tokens)))))
+
+  (it "unbalanced-output-process-substitution-is-incomplete-error-token"
+    (with-tokenized-input (tokens cursor incomplete) "cat >(echo ok"
+      (declare (ignore cursor))
+      (expect (null incomplete) :to-be-falsy)
+      (expect 2 :to-equal (length tokens))
+      (expect :error :to-be (nshell.domain.parsing:token-type (second tokens)))
+      (expect ">(echo ok" :to-equal (nshell.domain.parsing:token-value (second tokens)))
       (expect 4 :to-equal (nshell.domain.parsing:token-start (second tokens)))
       (expect 13 :to-equal (nshell.domain.parsing:token-end (second tokens)))))
 

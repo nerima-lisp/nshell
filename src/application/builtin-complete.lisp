@@ -92,15 +92,18 @@
           (%complete-parse-state-description state)
           (%complete-parse-state-erase state)))
 
+(defun %complete-parse-error (message)
+  (values nil nil nil nil nil nil nil message))
+
 (defun %parse-complete-args (args)
   (labels ((unknown-option (option)
-             (values nil nil nil nil nil nil nil
-                     (format nil "complete: unknown option ~a" option)))
+             (%complete-parse-error
+              (format nil "complete: unknown option ~a" option)))
            (missing-argument (option spec)
-             (values nil nil nil nil nil nil nil
-                     (%required-argument-error "complete"
-                                               option
-                                               (getf spec :requirement))))
+             (%complete-parse-error
+              (%required-argument-error "complete"
+                                        option
+                                        (getf spec :requirement))))
            (finalize (state)
              (multiple-value-bind (command flags long-options short-options
                                    arguments description erase)

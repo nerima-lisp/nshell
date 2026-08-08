@@ -52,6 +52,7 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
     (let ((pty nil))
       (unwind-protect
            (progn
@@ -70,7 +71,7 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (skip-in-sandbox "requires /bin/cat"
+    (skip-when-pty-unavailable "requires /bin/cat"
     (let ((pty nil))
       (unwind-protect
            (progn
@@ -89,7 +90,7 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (skip-in-sandbox "requires external stty/sleep"
+    (skip-when-pty-unavailable "requires external stty/sleep"
     (let ((pty nil))
       (unwind-protect
            (progn
@@ -107,6 +108,7 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
     (let ((pty nil))
       (unwind-protect
            (progn
@@ -135,14 +137,14 @@
                    when (member (second status) '(:exited :signaled :no-child))
                      do (return)
                    do (sleep 0.05)))
-        (pty-test-close-process pty))))
+        (pty-test-close-process pty)))))
 
   (it "pty-spawn-delivers-terminal-generated-sigint"
     "PTY-SPAWN delivers master-written ETX as SIGINT to the foreground process group."
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (skip-in-sandbox "requires /bin/sh"
+    (skip-when-pty-unavailable "requires /bin/sh"
     (let ((pty nil))
       (unwind-protect
            (progn
@@ -173,7 +175,7 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (skip-in-sandbox "requires /bin/sh"
+    (skip-when-pty-unavailable "requires /bin/sh"
     (let ((pty nil))
       (unwind-protect
            (progn
@@ -197,3 +199,4 @@
                (expect (null status) :to-be-falsy)
                (expect (second status) :to-be :stopped)))
         (pty-test-close-process pty))))))
+)

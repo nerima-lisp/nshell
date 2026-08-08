@@ -40,7 +40,7 @@ jobs:
       - uses: ./.github/actions/nix-setup
         with:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
       # Runs the SBCL test suite (checks.default), the cl-weave completion
       # suite (checks.weave), the treefmt formatting gate (checks.formatting),
@@ -63,9 +63,17 @@ jobs:
     # processes — get genuine coverage on a runner where those facilities
     # exist. The sandbox has no controlling terminal, so there is nothing for
     # those tests to attach to.
-    name: integration tests (full OS environment)
-    runs-on: ubuntu-latest
+    name: integration tests (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-linux
+          - os: macos-14
+            target: aarch64-darwin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -74,16 +82,10 @@ jobs:
       - uses: ./.github/actions/nix-setup
         with:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
       - name: Run full test suite in a dev shell (non-sandboxed)
-        run: |
-          nix develop --command sbcl --non-interactive \
-            --eval '(require :asdf)' \
-            --eval '(setf asdf:*compile-file-warnings-behaviour* :warn)' \
-            --eval '(setf asdf:*compile-file-failure-behaviour* :warn)' \
-            --eval '(push (truename "./") asdf:*central-registry*)' \
-            --eval '(let ((ok (handler-case (asdf:test-system :nshell/test) (error (e) (format t "FATAL: ~a~%" e) nil)))) (unless ok (sb-ext:quit :unix-status 1)))'
+        run: nix develop --command sbcl --script run-tests.lisp
 
   binary:
     # NOT movable into `checks.*`: this confirms the dumped SBCL executable
@@ -107,11 +109,10 @@ jobs:
       - uses: ./.github/actions/nix-setup
         with:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
-      - name: Build nshell binary
-        run: nix build --print-build-logs
+      - name: Build release bundle
+        run: nix build .#releaseBundle --print-build-logs
 
-      - name: Verify binary starts
-        run: |
-          echo 'echo nshell-ci-ok' | ./result/bin/nshell | grep -q nshell-ci-ok
+      - name: Verify release bundle
+        run: perl scripts/verify-release-bundle.pl result

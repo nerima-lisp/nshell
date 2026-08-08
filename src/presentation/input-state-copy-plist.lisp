@@ -115,6 +115,10 @@ current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
                                              vi-count
                                              vi-visual-anchor-supplied-p
                                              vi-visual-anchor
+                                             mouse-selection-anchor-supplied-p
+                                             mouse-selection-anchor
+                                             mouse-selection-end-supplied-p
+                                             mouse-selection-end
                                              abbreviation-expander
                                              kill-ring
                                              last-yank-start-supplied-p

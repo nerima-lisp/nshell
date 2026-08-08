@@ -21,12 +21,32 @@
         :code 0
         :output (format nil "/tmp/~%"))))
 
-  (it "cd-with-no-args-succeeds"
-    "cd with no arguments calls :chdir with nil (skips the call) and exits 0."
+  (it "cd-with-no-args-uses-home"
+    "cd with no arguments resolves HOME from the shell context environment."
+    (with-builtins-context-environment
+        (context (make-test-builtins-context)
+                 ("HOME" "/home/test"))
+      (let* ((original-fns (nshell.application:shell-context-filesystem-fns context))
+             (seen-path nil))
+        (setf (nshell.application:shell-context-filesystem-fns context)
+              (list* :chdir (lambda (path)
+                              (setf seen-path path))
+                     original-fns))
+        (assert-builtin-call (context "cd" nil)
+          :code 0
+          :output-null t)
+        (expect "/home/test" :to-equal seen-path))))
+
+  (it "cd-with-no-args-fails-without-home"
+    "cd with no arguments reports a clear error when HOME is unset."
     (with-builtins-context (context)
+      (setf (nshell.application:shell-context-environment context)
+            (nshell.domain.environment:env-unset
+             (nshell.application:shell-context-environment context)
+             "HOME"))
       (assert-builtin-call (context "cd" nil)
-        :code 0
-        :output-null t)))
+        :code 1
+        :contains '("cd:" "HOME is not set"))))
 
   (it "cd-with-valid-path-succeeds"
     "cd with a path arg delegates to :chdir and exits 0 on success."

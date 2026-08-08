@@ -11,9 +11,19 @@
   (or (char= ch #\Space)
       (char= ch #\Tab)))
 
+(defun %tokenizer-fd-redirect-source-length (state)
+  (loop with length = 0
+        for ch = (%tokenizer-state-peek state length)
+        while (and ch (digit-char-p ch))
+        do (incf length)
+        finally (return length)))
+
 (defun %tokenizer-fd-redirect-start-p (state ch)
   (and (digit-char-p ch)
-       (member (%tokenizer-state-peek state 1) '(#\> #\<) :test #'eql)))
+       (let ((source-length (%tokenizer-fd-redirect-source-length state)))
+         (member (%tokenizer-state-peek state source-length)
+                 '(#\> #\<)
+                 :test #'eql))))
 
 (defstruct (%fd-redirect-token-text
             (:constructor %make-fd-redirect-token-text (value advance-count)))
@@ -23,10 +33,11 @@
 (defun %fd-redirect-token-text (fd op next after-next)
   (let ((base (coerce (list fd op) 'string)))
     (cond
-      ((and (char= op #\>)
+      ((and (member op '(#\> #\<))
             (eql next #\&)
             after-next
-            (digit-char-p after-next))
+            (or (digit-char-p after-next)
+                (char= after-next #\-)))
        (%make-fd-redirect-token-text
         (concatenate 'string base "&" (string after-next))
         2))
@@ -96,18 +107,36 @@
      (%tokenizer-ampersand-route-value route))))
 
 (defun %tokenizer-read-fd-redirect (state)
-  "Read a file-descriptor-prefixed redirect such as 2>, 2>>, 1>, or 2>&1.
-The current character is a single digit immediately followed by > or <."
+  "Read a file-descriptor-prefixed redirect such as 2>, 2>>, 1>, or 2>&1."
   (let* ((start (tokenizer-state-pos state))
-          (fd (%tokenizer-state-take state))
-          (op (%tokenizer-state-take state))
-          (text (%fd-redirect-token-text fd op
-                                         (%tokenizer-state-peek state)
-                                         (%tokenizer-state-peek state 1))))
-    (%tokenizer-state-advance state
-                              (%fd-redirect-token-text-advance-count text))
+         (source-length (%tokenizer-fd-redirect-source-length state)))
+    (%tokenizer-state-advance state source-length)
+    (let ((op (%tokenizer-state-peek state)))
+      (%tokenizer-state-advance state)
+      (cond
+        ((and (char= op #\>) (eql (%tokenizer-state-peek state) #\>))
+         (%tokenizer-state-advance state))
+        ((and (member op '(#\> #\<))
+              (eql (%tokenizer-state-peek state) #\&))
+         (%tokenizer-state-advance state)
+         (loop while (and (%tokenizer-state-peek state)
+                          (or (digit-char-p (%tokenizer-state-peek state))
+                              (char= (%tokenizer-state-peek state) #\-)))
+               do (%tokenizer-state-advance state)))
+        ((and (char= op #\<)
+              (eql (%tokenizer-state-peek state) #\<))
+         (%tokenizer-state-advance state)
+         (cond
+           ((char= (%tokenizer-state-peek state) #\-)
+            (%tokenizer-state-advance state))
+           ((eql (%tokenizer-state-peek state) #\<)
+            (%tokenizer-state-advance state))))
+        (t
+         nil)))
     (%tokenizer-state-push-token state :redirect
-                                  (%fd-redirect-token-text-value text)
+                                  (subseq (tokenizer-state-input state)
+                                          start
+                                          (tokenizer-state-pos state))
                                   start
                                   (tokenizer-state-pos state))))
 
@@ -117,9 +146,13 @@ The current character is a single digit immediately followed by > or <."
   (value "|" :type string :read-only t))
 
 (defun %tokenizer-pipe-route-for (state)
-  (if (eql (%tokenizer-state-peek state 1) #\|)
-      (%make-tokenizer-pipe-route :or "||")
-      (%make-tokenizer-pipe-route :pipe "|")))
+  (cond
+    ((eql (%tokenizer-state-peek state 1) #\|)
+     (%make-tokenizer-pipe-route :or "||"))
+    ((eql (%tokenizer-state-peek state 1) #\&)
+     (%make-tokenizer-pipe-route :pipe "|&"))
+    (t
+     (%make-tokenizer-pipe-route :pipe "|"))))
 
 (defun %tokenizer-handle-pipe (state)
   (let ((route (%tokenizer-pipe-route-for state)))
@@ -128,22 +161,11 @@ The current character is a single digit immediately followed by > or <."
      (%tokenizer-pipe-route-token-type route)
      (%tokenizer-pipe-route-value route))))
 
-(defstruct (%tokenizer-right-redirect-route
-            (:constructor %make-tokenizer-right-redirect-route (value)))
-  (value ">" :type string :read-only t))
+(defstruct (%tokenizer-right-angle-route (:constructor %make-tokenizer-right-angle-route (kind value))) (kind :redirect :type keyword :read-only t) (value ">" :type (or null string) :read-only t))
 
-(defun %tokenizer-right-redirect-route-for (state)
-  (%make-tokenizer-right-redirect-route
-   (if (eql (%tokenizer-state-peek state 1) #\>)
-       ">>"
-       ">")))
+(defun %tokenizer-right-angle-route-for (state) (cond ((eql (%tokenizer-state-peek state 1) #\() (%make-tokenizer-right-angle-route :process-substitution nil)) ((eql (%tokenizer-state-peek state 1) #\>) (%make-tokenizer-right-angle-route :redirect ">>")) (t (%make-tokenizer-right-angle-route :redirect ">"))))
 
-(defun %tokenizer-handle-redirect (state)
-  (let ((route (%tokenizer-right-redirect-route-for state)))
-    (%tokenizer-state-emit-token
-     state
-     :redirect
-     (%tokenizer-right-redirect-route-value route))))
+(defun %tokenizer-handle-right-angle (state) (let ((route (%tokenizer-right-angle-route-for state))) (case (%tokenizer-right-angle-route-kind route) (:process-substitution (%tokenizer-read-balanced-process-substitution state)) (t (%tokenizer-state-emit-token state :redirect (%tokenizer-right-angle-route-value route))))))
 
 (defstruct (%tokenizer-left-angle-route
             (:constructor %make-tokenizer-left-angle-route (kind value)))
@@ -154,6 +176,9 @@ The current character is a single digit immediately followed by > or <."
   (cond
     ((eql (%tokenizer-state-peek state 1) #\()
      (%make-tokenizer-left-angle-route :process-substitution nil))
+    ((and (eql (%tokenizer-state-peek state 1) #\<)
+          (eql (%tokenizer-state-peek state 2) #\-))
+     (%make-tokenizer-left-angle-route :redirect "<<-"))
     ((and (eql (%tokenizer-state-peek state 1) #\<)
           (eql (%tokenizer-state-peek state 2) #\<))
      (%make-tokenizer-left-angle-route :redirect "<<<"))
@@ -214,7 +239,7 @@ The current character is a single digit immediately followed by > or <."
   (case ch
     (#\& (%tokenizer-handle-ampersand state))
     (#\| (%tokenizer-handle-pipe state))
-    (#\> (%tokenizer-handle-redirect state))
+    (#\> (%tokenizer-handle-right-angle state))
     (#\< (%tokenizer-handle-left-angle state))
     (#\; (%tokenizer-state-emit-token state :semicolon ";"))
     (#\( (%tokenizer-handle-left-paren state))

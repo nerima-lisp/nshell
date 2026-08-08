@@ -10,6 +10,7 @@
 ;;;; because we inherit the existing configuration.
 
 (require :asdf)
+(asdf:load-system :cl-host-kit)
 
 (load
  (merge-pathnames
@@ -19,19 +20,23 @@
 (nshell-configure-writable-asdf-output)
 
 (let* ((root (truename #P"./"))
-       (parent (uiop:pathname-parent-directory-pathname root)))
+       (parent (host-kit:parent-directory-pathname root)))
   (asdf:initialize-source-registry
-   `(:source-registry
-     (:directory ,root)
-     (:tree ,parent)
-     :inherit-configuration))
+   (if (host-kit:getenv "CL_SOURCE_REGISTRY")
+       `(:source-registry
+         (:directory ,root)
+         :inherit-configuration)
+       `(:source-registry
+         (:directory ,root)
+         (:tree ,parent)
+         :inherit-configuration)))
   (setf asdf:*compile-file-warnings-behaviour* :warn
         asdf:*compile-file-failure-behaviour* :warn)
   (let ((passed-p
           (handler-case
               (progn
                 (asdf:load-system :nshell/weave :force t)
-                (uiop:symbol-call :nshell/weave '#:run :reporter :spec))
+                (funcall (find-symbol "RUN" "NSHELL/WEAVE") :reporter :spec))
             (error (condition)
               (format *error-output* "~&nshell/weave failed: ~A~%" condition)
               nil))))

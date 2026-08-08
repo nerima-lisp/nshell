@@ -13,6 +13,24 @@
     "Installing signal handlers should complete without killing the shell."
     (expect t :to-be (nshell.infrastructure.acl:install-signal-handlers)))
 
+  (it "sigwinch-notification-is-consumed-once"
+    "Terminal resize notifications are delivered to the main loop once."
+    (let ((nshell.infrastructure.acl::*terminal-resized* nil))
+      (nshell.infrastructure.acl::shell-sigwinch-handler nil nil nil)
+      (expect t :to-be
+              (nshell.infrastructure.acl:consume-terminal-resize-p))
+      (expect nil :to-be
+              (nshell.infrastructure.acl:consume-terminal-resize-p))))
+
+  (it "sigchld-notification-is-consumed-once"
+    "Child-process notifications are acknowledged once outside the signal handler."
+    (let ((nshell.infrastructure.acl::*children-changed* nil))
+      (nshell.infrastructure.acl::shell-sigchld-handler nil nil nil)
+      (expect t :to-be
+              (nshell.infrastructure.acl:consume-children-changed-p))
+      (expect nil :to-be
+              (nshell.infrastructure.acl:consume-children-changed-p))))
+
   (it "sigint-handler-forwards-to-tracked-foreground-pgid"
     "SIGINT forwarding targets the tracked foreground process group."
     (let ((calls nil)

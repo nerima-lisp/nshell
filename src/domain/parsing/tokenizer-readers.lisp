@@ -62,42 +62,34 @@
     (setf (tokenizer-state-pos state) (1+ end))
     chars))
 
-(defstruct (%tokenizer-word-scan-action
-            (:constructor %make-tokenizer-word-scan-action (kind end)))
-  (kind :character :type keyword :read-only t)
-  (end nil :read-only t))
-
 (defun %tokenizer-word-scan-action-for (state ch)
   (let* ((dollar-end (%tokenizer-word-dollar-substitution-end state ch))
          (fish-end (and (not dollar-end)
                         (%tokenizer-word-fish-substitution-end state ch))))
     (cond (dollar-end
-           (%make-tokenizer-word-scan-action :dollar-substitution dollar-end))
-           (fish-end
-           (%make-tokenizer-word-scan-action :fish-substitution fish-end))
-           ((%shell-word-boundary-p ch)
-           (%make-tokenizer-word-scan-action :boundary nil))
-           ((char= ch #\\)
-           (%make-tokenizer-word-scan-action :escape nil))
-           (t
-           (%make-tokenizer-word-scan-action :character nil)))))
+           (values :dollar-substitution dollar-end))
+          (fish-end
+           (values :fish-substitution fish-end))
+          ((%shell-word-boundary-p ch)
+           (values :boundary nil))
+          ((char= ch #\\)
+           (values :escape nil))
+          (t
+           (values :character nil)))))
 
 (defun %tokenizer-read-word (state)
   (let ((start (tokenizer-state-pos state))
-        (chars '()))
+        (chars (quote ())))
     (loop while (< (tokenizer-state-pos state) (tokenizer-state-len state))
           for ch = (%tokenizer-state-peek state)
-          do (let ((action (%tokenizer-word-scan-action-for state ch)))
-               (case (%tokenizer-word-scan-action-kind action)
+          do (multiple-value-bind (kind end)
+                 (%tokenizer-word-scan-action-for state ch)
+               (case kind
                  (:dollar-substitution
                   (push (%tokenizer-state-take state) chars)
-                  (setf chars (%tokenizer-append-balanced-substitution
-                               state chars
-                               (%tokenizer-word-scan-action-end action))))
+                  (setf chars (%tokenizer-append-balanced-substitution state chars end)))
                  (:fish-substitution
-                  (setf chars (%tokenizer-append-balanced-substitution
-                               state chars
-                               (%tokenizer-word-scan-action-end action))))
+                  (setf chars (%tokenizer-append-balanced-substitution state chars end)))
                  (:boundary
                   (return))
                  (:escape
@@ -111,7 +103,7 @@
                           (setf (tokenizer-state-incomplete state) t)
                           (when chars
                             (%tokenizer-state-push-token state :word
-                                                         (coerce (nreverse chars) 'string)
+                                                         (coerce (nreverse chars) (quote string))
                                                          start
                                                          escape-start))
                           (%tokenizer-state-push-token state :error "\\" escape-start
@@ -122,7 +114,7 @@
                   (%tokenizer-state-advance state)))))
     (when chars
       (%tokenizer-state-push-token state :word
-                                   (coerce (nreverse chars) 'string)
+                                   (coerce (nreverse chars) (quote string))
                                    start
                                    (tokenizer-state-pos state)))))
 

@@ -82,6 +82,7 @@ to be run and what state a run is in, and nshell.application drives it.")
    #:pipeline-plan-stage-piped-output-p
    ;; A job and what it is made of
    #:make-job #:job-id #:job-state #:job-pids #:job-known-pids #:job-last-pid
+   #:job-pipefail-p
    #:job-pgid #:job-exit-code #:job-command-line #:job-command-display-string
    #:job-background-p
    ;; The job state machine
@@ -108,6 +109,8 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
            #:+redirect-specs+ #:+redirect-fd-dup-specs+
+           #:redirect-fd-dup-target-p #:redirect-fd-dup-target-source
+           #:redirect-fd-dup-target-target
            #:redirect-input-kind-p #:redirect-output-kind-p #:redirect-stderr-kind-p
            #:redirect-append-kind-p #:map-redirect-entries #:redirect-input-spec
            #:redirect-input-file-target #:redirect-output-spec
@@ -116,8 +119,12 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:redirect-output-destinations-p
            #:redirect-output-destinations-stdout-target
            #:redirect-output-destinations-stdout-mode
+           #:redirect-output-destinations-stdout-endpoint
            #:redirect-output-destinations-stderr-target
            #:redirect-output-destinations-stderr-mode
+           #:redirect-output-destinations-stderr-endpoint
+           #:redirects-require-shell-wrapper-p
+           #:shell-redirect-script
            #:tokenization-result-p
            #:tokenization-result-tokens
            #:tokenization-result-cursor-token
@@ -139,7 +146,7 @@ continuation line. A pure string-to-AST function with no filesystem access.")
                 #:ast-node->command-line
                 #:command-arg #:command-arg-p #:make-command-arg
                 #:command-arg-value #:command-arg-quote-style
-                #:arg-value #:arg-quote-style
+                #:arg-value #:arg-quote-style #:arg-here-doc-literal-p
                 #:sequence-node-command-separator
                 #:sequence-node-command-separator-p
                 #:sequence-node-command-separator-command
@@ -224,7 +231,7 @@ exported predicates below are goals callers may query directly.")
             #:kb-command-option-values #:kb-command-exclusive-options
             #:kb-command-description
             #:make-fact #:make-rule #:fact-p #:rule-p
-            #:assert-fact! #:assert-rule! #:prove #:prove-all #:predicate-true-p
+            #:assert-fact! #:assert-rule! #:prove #:prove-all
             #:completion-rulebase
             ;; Completion logic predicates: the public vocabulary of the
             ;; cl-prolog rulebase produced by COMPLETION-RULEBASE.  Exporting
@@ -238,6 +245,7 @@ exported predicates below are goals callers may query directly.")
             #:builtin-help-entries
             #:builtin-completion-command-specs
             #:external-completion-command-specs
+            #:external-subcommand-completion-command-specs
             #:builtin-rule-facts
             #:builtin-rule-rules
             #:rule-complete
@@ -255,15 +263,16 @@ exported predicates below are goals callers may query directly.")
 
 (defpackage #:nshell.domain.history
   (:documentation
-   "Domain: the `!$`/Alt-. last-argument feature -- extracting the final
-insertable argument from a recorded history line by walking the tokenizer's
-AST to skip command words, redirect targets, and leading assignments.
-Generic history storage, search, and recall navigation are the
-nerima-lisp `history-kit` library's responsibility, used directly
+   "Domain: interactive history expansion and the `!$`/Alt-. last-argument
+feature. The shell-specific expansion syntax and tokenizer-coupled argument
+extraction live here; generic history storage, search, and recall navigation
+are the nerima-lisp `history-kit` library's responsibility, used directly
 (qualified as `history-kit:...`) rather than wrapped here.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
-  (:export #:command-line-last-argument #:history-last-argument-at))
+  (:export #:command-line-last-argument
+           #:history-last-argument-at
+           #:history-expand-line))
 
 (defpackage #:nshell.domain.job-control
   (:documentation

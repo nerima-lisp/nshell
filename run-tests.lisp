@@ -15,14 +15,19 @@
 ;;;; is inherited rather than replaced.
 
 (require :asdf)
+(asdf:load-system :cl-host-kit)
 
 (let* ((root (truename #P"./"))
-       (parent (uiop:pathname-parent-directory-pathname root)))
+       (parent (host-kit:parent-directory-pathname root)))
   (asdf:initialize-source-registry
-   `(:source-registry
-     (:directory ,root)
-     (:tree ,parent)
-     :inherit-configuration))
+ (if (host-kit:getenv "CL_SOURCE_REGISTRY")
+     `(:source-registry
+       (:directory ,root)
+       :inherit-configuration)
+     `(:source-registry
+       (:directory ,root)
+       (:tree ,parent)
+       :inherit-configuration)))
   ;; Warn rather than abort on compile-file warnings: the suite's own failures
   ;; are the signal this script reports, and a style warning in a dependency
   ;; should not masquerade as a test failure.
@@ -32,7 +37,7 @@
           (handler-case
               (progn
                 (asdf:load-system "nshell/test")
-                (uiop:symbol-call :nshell/test '#:run-tests))
+                (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST")))
             (error (condition)
               (format *error-output* "~&nshell/test failed: ~A~%" condition)
               nil))))

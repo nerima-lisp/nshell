@@ -1,15 +1,17 @@
 ; Prolog-style logic engine: facts, rules, unification, and proof search.
 (in-package #:nshell.domain.completion)
 
-(define-value-struct fact
-    ((predicate nil :type symbol)
-     (args '() :type list))
-  :constructor %allocate-fact)
+(define-value-struct
+  fact
+  ((predicate nil :type symbol) (args '() :type list))
+  :constructor
+  %allocate-fact)
 
-(define-value-struct rule
-    ((head '() :type list)
-     (body '() :type list))
-  :constructor %allocate-rule)
+(define-value-struct
+  rule
+  ((head '() :type list) (body '() :type list))
+  :constructor
+  %allocate-rule)
 
 (defstruct (rule-knowledge-base
             (:constructor %make-rule-knowledge-base
@@ -37,12 +39,10 @@
   (%allocate-rule (copy-list head) (copy-list body)))
 
 (defun %make-fact-from-spec (spec)
-  (make-fact :predicate (first spec)
-             :args (rest spec)))
+  (make-fact :predicate (first spec) :args (rest spec)))
 
 (defun %make-rule-from-spec (spec)
-  (make-rule :head (first spec)
-             :body (rest spec)))
+  (make-rule :head (first spec) :body (rest spec)))
 
 (defun make-empty-rule-knowledge-base ()
   (%make-rule-knowledge-base))
@@ -65,7 +65,9 @@
   (cl-prolog:make-clause (list* (fact-predicate fact) (fact-args fact))))
 
 (defun %make-prolog-rule (rule)
-  (cl-prolog:make-clause (copy-tree (rule-head rule)) (copy-tree (rule-body rule))))
+  (cl-prolog:make-clause
+    (copy-tree (rule-head rule))
+    (copy-tree (rule-body rule))))
 
 (defun completion-rulebase (kb)
   "Compile the completion KB into a first-class CL-PROLOG:RULEBASE.
@@ -83,6 +85,17 @@ solution order stays stable for callers that depend on it."
                 (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-fact fact)))
               (dolist (rule (reverse (rule-knowledge-base-rules kb)) rulebase)
                 (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-rule rule)))))))
+
+(defun %prove-rulebase (rulebase goal &optional (bindings '()) (max-depth *max-proof-depth*))
+    (declare (ignore bindings))
+    ;; Completion treats undefined predicates and depth limits as an empty path.
+    (let ((solutions '()))
+      (handler-case
+          (cl-prolog:map-prolog-solutions
+           (lambda (solution) (push solution solutions))
+           rulebase (copy-tree goal) :max-depth max-depth)
+        (cl-prolog:prolog-runtime-error () nil))
+      (nreverse solutions)))
 
 (defun prove (kb goal &optional (bindings '()) (max-depth *max-proof-depth*))
   (declare (ignore bindings))
@@ -108,9 +121,8 @@ solution order stays stable for callers that depend on it."
 (defun prove-all (kb goal &key (max-depth *max-proof-depth*))
   (prove kb goal '() max-depth))
 
-(defparameter *built-in-rule-knowledge-base*
-  (%make-rule-knowledge-base
-   :facts (mapcar #'%make-fact-from-spec
-                  (builtin-rule-facts))
-   :rules (mapcar #'%make-rule-from-spec
-                  (builtin-rule-rules))))
+(defparameter *built-in-rule-knowledge-base* (%make-rule-knowledge-base
+    :facts
+    (mapcar #'%make-fact-from-spec (builtin-rule-facts))
+    :rules
+    (mapcar #'%make-rule-from-spec (builtin-rule-rules))))

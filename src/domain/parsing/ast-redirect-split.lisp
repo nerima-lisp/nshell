@@ -71,7 +71,7 @@
         (%command-redirect-split-state-push-redirect
          state
          (%redirect-facts-kind redirect-facts)
-         nil)
+         (%redirect-facts-fd-dup-target redirect-facts))
         (%command-redirect-arg-cursor-after-current cursor)))
       ((and redirect-facts
             (%command-redirect-arg-cursor-remaining-args cursor))

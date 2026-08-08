@@ -168,6 +168,9 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
 (defun external-completion-command-specs ()
   (%completion-command-specs-from-catalog +external-command-catalog+))
 
+(defun external-subcommand-completion-command-specs ()
+  (copy-tree +external-subcommand-completion-specs+))
+
 (defun builtin-rule-facts ()
   (append
    '((command-is "cd" "cd")

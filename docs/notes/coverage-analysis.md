@@ -10,48 +10,39 @@ production gate is currently 85%; the run reached `minimum-passed=true` but
 100% sb-cover coverage. The remainder is analyzed below instead of being
 silently rounded away.
 
-## Genuinely-reachable gaps that were closed
+Running `scripts/coverage.lisp` with SBCL `sb-cover` over `src/` measured
+**86.9% expression coverage** and **82.2% branch coverage**. Those are the
+only coverage figures this project should claim until the report is regenerated
+after a later change.
 
-Targeting **un-executed branches** (not re-testing already-covered code) moves
-the number. This cycle:
+The report is useful for locating executable branches such as `main` command
+dispatch and process cleanup. It is not a release criterion that can be made
+100% by adding tests alone: its source-level denominator also includes static
+catalog data, declarations, macro-expansion forms, custom-constructor
+`defstruct` defaults, and code supplied by Nix dependencies.
 
-- `arithmetic.lisp`: 62.2% → 67.6% by exercising the previously-untested `>=`,
-  `<=`, `!=` comparison operators and the unary `+` (`:pos`) prefix.
-- Domain events: a test now constructs every event type, so no constructor
-  branch is unexecuted.
+## What the suite verifies
 
-Property-based tests, by contrast, raise *confidence* (more inputs through the
-same branches) but do **not** move coverage — they exercise code the
-example-based tests already cover.
+- Unit and integration tests cover parser, completion, environment, process,
+  timeout, and command-dispatch behaviour.
+- The Linux/Nix flake check also runs the weave suite, formatting, benchmark
+  artifact integrity, package build, and a packaged-binary smoke test.
+- PTY/terminal-specific behaviour requires an appropriate PTY-capable runner;
+  a headless local macOS run is not evidence of that layer's complete coverage.
 
-## Why the remainder is not reachable executable logic
+## Coverage policy
 
-Extracting sb-cover's `state-0` (un-executed) spans and discarding comment lines
-shows the "uncovered expressions" in the low-percentage domain files are **not
-untested logic**. A whole-tree sweep — every nshell source file, each file's
-`state-0` spans stripped of comment lines and of bare macro-wrapper tokens
-(`(progn`, `(eval-when …`, lone parens) — finds the reachable executable code is
-**fully covered**:
+Do not call the project "100% covered" based on a filtered HTML report. Treat
+the raw `sb-cover` expression and branch values as the published baseline, and
+use targeted tests for every newly introduced executable branch. If a release
+gate needs a numeric threshold, define a reproducible metric that excludes
+non-executable generated/static forms before enforcing it in CI.
 
-| file | reported expr | uncovered *code* lines (non-comment, non-wrapper) |
-|---|---|---|
-| `domain/completion/engine.lisp` | 47.8% | 0 (a bare `(progn )`) |
-| `domain/parsing/parser-data.lisp` | 66.8% | 0 |
-| `infrastructure/acl/git.lisp` | 65.7% | 0 |
-| `application/manage-job.lisp` | 70.7% | 0 (an `eval-when` wrapper) |
-| `infrastructure/acl/signal-acl.lisp` | 67.5% | 0 (an `eval-when` wrapper) |
-| `domain/expansion/arithmetic.lisp` | 67.6% | 0 |
-| `application/builtins.lisp` | — | 0 (an `eval-when` wrapper) |
-| … every other non-interactive file | — | 0 |
+## Reproduce
 
-**Total real uncovered executable lines across all non-interactive files: 0.**
-The low per-file percentages are produced entirely by sb-cover counting
-comments, docstrings, and macro-expansion wrappers in the denominator. There is
-no reachable untested branch to cover — "aim for 100%" is met for the reachable
-executable code; the reported ~86% cannot reach 100% because its denominator is
-not executable code. Reproduce the sweep by extracting each file report's
-`state-0` spans, dropping `;`-comment lines and the wrapper tokens above, and
-summing what remains.
+```sh
+NSHELL_COVERAGE_DIR=/tmp/cov nix develop 'path:.' --command sbcl --script scripts/coverage.lisp
+```
 
 The earlier spot check that first surfaced this — all zero as well:
 

@@ -16,6 +16,7 @@ from `src/`; `cl-parser-kit` is `:import-from`, so its symbols appear unqualifie
 | `cl-prolog` | completion knowledge base — facts/rules, `map-prolog-solutions` | `domain/completion/rule-data.lisp` (8 refs) |
 | `cl-parser-kit` | `$((…))` arithmetic tokenizer + Pratt parser | `:import-from` in `package.lisp`; `domain/expansion/arithmetic.lisp` |
 | `cl-dataflow` | reactive dataflow wiring | 12 refs |
+| `cl-host-kit` | host environment, pathname, and process boundaries | `presentation/repl-environment.lisp`, `infrastructure/terminal/ansi.lisp`, `application/builtin-runtime.lisp` |
 | `cl-boundary-kit` | clock/sleeper boundaries (also under cl-process-kit) | 14 refs |
 | `cl-cli` | argument-vector parsing for `main` | 13 refs |
 | `cl-tty-kit` | terminal control / raw-mode / rendering | 17 refs |
@@ -31,6 +32,7 @@ No declared dependency is unused, so there is no dead dependency to drop.
 | package | why not direct |
 |---|---|
 | `cl-log-kit` | Pulled in transitively by `cl-process-kit` for *its* structured logging. nshell itself performs no logging (a shell's diagnostics go to the user's stderr, not a structured log sink), so it is deliberately absent from nshell's own `:depends-on`. Adopting it directly would mean inventing a logging concern the shell does not have. |
+| `cl-date-kit` | Pulled in transitively by `cl-concurrent-kit`; nshell consumes concurrency primitives, not date formatting or parsing. |
 
 ## Non-applicable org repositories
 

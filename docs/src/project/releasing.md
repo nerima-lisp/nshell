@@ -4,11 +4,17 @@ nshell ships a binary as well as a source release, so its release checklist is
 longer than the org default: a green test suite does not prove that the dumped
 SBCL image starts on a user's machine.
 
+The default Nix package and portable bundle use an uncompressed saved image.
+This deliberately trades artifact size for lower warm-filesystem CLI startup
+latency; compressed images are not a supported release variant.
+
 ## The invariant
 
-The `:version` form in `nshell.asd` is the single source of truth. `flake.nix`
-reads it, and `release.yml` refuses to publish a tag that disagrees with it.
-Bump the `.asd` and nothing else.
+The top-level `:version` form in `nshell.asd` is the release version source of
+truth. Secondary systems repeat that version as ASDF metadata. `flake.nix`
+reads it, and `release.yml` refuses to publish unless every `:version` form in
+the file agrees with the tag. Bump every version in the `.asd` and nothing
+else.
 
 ## What CI enforces on a tag push
 
@@ -37,10 +43,7 @@ Verify the public artefacts from a clean checkout:
   signal, and job-control coverage:
 
   ```sh
-  nix develop --command sbcl --non-interactive \
-    --eval '(require :asdf)' \
-    --eval '(push (truename "./") asdf:*central-registry*)' \
-    --eval '(asdf:test-system :nshell/test)'
+  nix develop --command sbcl --script run-tests.lisp
   ```
 
 - `nix build --print-build-logs` produces `./result/bin/nshell`.

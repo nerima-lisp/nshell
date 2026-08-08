@@ -21,6 +21,20 @@
               (%make-rendered-position (1+ row) (- char-width terminal-width))
               (%make-rendered-position row (+ column char-width)))))))
 
+(defun %rendered-character-start-position (position char terminal-width)
+  "Return the cell at which CHAR is rendered from POSITION."
+  (if (char= char #\Newline)
+      position
+      (let ((row (rendered-position-row position))
+            (column (rendered-position-column position))
+            (char-width (%char-visible-width char)))
+        (when (and terminal-width
+                   (plusp terminal-width)
+                   (> (+ column char-width) terminal-width))
+          (setf row (1+ row)
+                column 0))
+        (%make-rendered-position row column))))
+
 (defun %advance-rendered-string (position text terminal-width)
   (loop with current = position
         for char across (or text "")
@@ -57,6 +71,47 @@
           do (setf current
                    (%advance-rendered-character current char terminal-width))
           finally (return current))))
+
+(defun %rendered-buffer-index-at-position (text row column prompt-width
+                                           &key terminal-width
+                                             (origin-row 1)
+                                             (origin-column 1))
+  "Map a 1-based terminal cell to a buffer index.
+
+The prompt origin and rendered cursor geometry are kept in the presentation
+layer, so this function remains deterministic and does not perform terminal
+I/O. NIL means that the cell belongs to the prompt, continuation prompt, or
+lies outside the rendered buffer."
+  (when (and (integerp row)
+             (integerp column)
+             (integerp origin-row)
+             (integerp origin-column)
+             (>= row origin-row)
+             (>= column origin-column))
+    (let ((target-row (- row origin-row))
+          (target-column (- column origin-column)))
+      (loop with current = (%initial-rendered-position prompt-width terminal-width)
+            for index below (length (or text ""))
+            for char = (char text index)
+            for start = (%rendered-character-start-position current char terminal-width)
+            do (cond
+                 ((char= char #\Newline)
+                  (when (and (= target-row (rendered-position-row start))
+                             (>= target-column (rendered-position-column start)))
+                    (return index)))
+                 (t
+                  (let ((width (max 1 (%char-visible-width char))))
+                    (when (and (= target-row (rendered-position-row start))
+                               (>= target-column (rendered-position-column start))
+                               (< target-column
+                                  (+ (rendered-position-column start) width)))
+                      (return index)))))
+                (setf current
+                      (%advance-rendered-character current char terminal-width))
+            finally
+               (when (and (= target-row (rendered-position-row current))
+                          (>= target-column (rendered-position-column current)))
+                 (return (length (or text ""))))))))
 
 (defun %cursor-tail-visible-width (text cursor prompt-width suggestion
                                    &optional search-suffix terminal-width)

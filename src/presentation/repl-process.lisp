@@ -9,6 +9,8 @@
   "Function used to read the shell-compatible exit code from a completed background process.")
 
 (defun reap-background-jobs ()
+  ;; The registry scan remains authoritative; this only acknowledges signal delivery.
+  (nshell.infrastructure.acl:consume-children-changed-p)
   (let ((completed-jobs nil))
     (maphash (lambda (jid entry)
                (let ((procs (cond

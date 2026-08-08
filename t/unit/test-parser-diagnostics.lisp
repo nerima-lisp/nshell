@@ -283,6 +283,7 @@
               (nshell.domain.parsing:make-token :error value 7 12))))
       (let ((trailing-escape (policy-for "\\"))
             (process-substitution (policy-for "<(echo ok"))
+            (output-process-substitution (policy-for ">(echo ok"))
             (quote (policy-for "'hello")))
         (expect :trailing-escape :to-be (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind
                  trailing-escape))
@@ -292,6 +293,10 @@
                  process-substitution))
         (expect "Unterminated process substitution" :to-equal (nshell.domain.parsing::%token-reduction-diagnostic-policy-message
                     process-substitution))
+        (expect :unterminated-process-substitution :to-be (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind
+                 output-process-substitution))
+        (expect "Unterminated process substitution" :to-equal (nshell.domain.parsing::%token-reduction-diagnostic-policy-message
+                    output-process-substitution))
         (expect :unterminated-quote :to-be (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind
                  quote))
         (expect "Unterminated quoted string" :to-equal (nshell.domain.parsing::%token-reduction-diagnostic-policy-message
@@ -299,6 +304,16 @@
 
   (it "parse-unbalanced-process-substitution-is-incomplete"
     (let ((line "cat <(echo ok"))
+      (with-first-parsed-diagnostic (diagnostic result line)
+        (assert-parsed-diagnostic result diagnostic
+                                  :present t
+                                  :incomplete t
+                                  :kind :unterminated-process-substitution
+                                  :span-start 4
+                                  :span-end 13))))
+
+  (it "parse-unbalanced-output-process-substitution-is-incomplete"
+    (let ((line "cat >(echo ok"))
       (with-first-parsed-diagnostic (diagnostic result line)
         (assert-parsed-diagnostic result diagnostic
                                   :present t

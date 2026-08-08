@@ -363,6 +363,15 @@
                    (nshell.domain.completion:complete kb "rg --colo"))
                   :test #'string=) :to-be-truthy)))
 
+  (it "repl-completion-seeds-expanded-external-subcommand-metadata"
+    "Curated nested command metadata should be available without executing help."
+    (with-seeded-completion-knowledge-base (kb)
+      (assert-completion-texts-cases kb
+        (:input "git diff --stage" :expected ("--staged"))
+        (:input "docker compose u" :expected ("up"))
+        (:input "docker compose up --d" :expected ("--detach"))
+        (:input "kubectl apply --dr" :expected ("--dry-run")))))
+
   (it "type-command-flags-follow-the-catalog"
     "The type command should expose every catalogued flag through REPL completion."
     (let* ((type-entry (find "type"

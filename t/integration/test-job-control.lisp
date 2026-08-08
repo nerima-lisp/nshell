@@ -42,3 +42,17 @@
       (let ((pid (sb-ext:process-pid proc)))
         (expect (integerp pid) :to-be-truthy)
         (expect (sb-ext:process-alive-p proc) :to-be-falsy)))))
+
+  (it "wait-job-flags-request-wcontinued-when-available"
+    (let* ((wcontinued-symbol (find-symbol "WCONTINUED" "SB-POSIX"))
+           (wcontinued (and wcontinued-symbol
+                            (boundp wcontinued-symbol)
+                            (symbol-value wcontinued-symbol))))
+      (expect (logior sb-posix:wnohang
+                      sb-posix:wuntraced
+                      (or wcontinued 0))
+              :to-equal
+              (nshell.infrastructure.acl::%waitpid-flags
+               :nohang t
+               :untraced t
+               :continued t))))

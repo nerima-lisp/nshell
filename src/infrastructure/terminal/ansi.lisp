@@ -38,6 +38,9 @@
 (%define-ansi-forwarder ansi-enable-alternate-screen () (cl-tty-kit:ansi-enter-alternate-screen) :with-stream t)
 (%define-ansi-forwarder ansi-disable-alternate-screen () (cl-tty-kit:ansi-exit-alternate-screen) :with-stream t)
 
+(defun ansi-request-cursor-position (&optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-request-cursor-position) stream))
+
 ;;; Cursor motion and SGR styling. These exist so the presentation tier stops
 ;;; hand-writing "~C[~dA" and friends: the vocabulary belongs to this layer, and
 ;;; routing through it keeps cl-tty-kit named in one file rather than in a dozen

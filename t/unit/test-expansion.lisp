@@ -4,6 +4,7 @@
   (let ((env (nshell.domain.environment:make-environment)))
     (setf env (nshell.domain.environment:env-set env "FOO" "bar" nil))
     (setf env (nshell.domain.environment:env-set env "HOME" "/tmp/nshell-home" nil))
+    (setf env (nshell.domain.environment:env-set env "USER" "nshell-user" nil))
     env))
 
 (defmacro %assert-expansion-cases ((predicate builder) &body cases)
@@ -76,7 +77,18 @@ Each case is (EXPECTED INPUT &rest ARGS)."
 
   (it "tilde-expansion"
     "A leading tilde expands to HOME."
-    (expect "/tmp/nshell-home/src" :to-equal (nshell.domain.expansion:expand-tilde "~/src" (test-expansion-env))))
+    (expect "/tmp/nshell-home/src"
+            :to-equal
+            (nshell.domain.expansion:expand-tilde "~/src" (test-expansion-env))))
+  (it "tilde-expands-current-user-from-environment"
+    "A named tilde expands only for the current USER using HOME."
+    (let ((env (test-expansion-env)))
+      (expect "/tmp/nshell-home/src"
+              :to-equal
+              (nshell.domain.expansion:expand-tilde "~nshell-user/src" env))
+      (expect "~other-user/src"
+              :to-equal
+              (nshell.domain.expansion:expand-tilde "~other-user/src" env))))
 
   (it "double-quoted-expands-variables"
     "Double-quoted contents expand $VAR but stay a single field."

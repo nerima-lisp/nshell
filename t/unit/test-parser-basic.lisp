@@ -8,6 +8,13 @@
     (with-complete-ast (ast "echo $(echo hi)")
       (expect '("$(echo hi)") :to-equal (nshell.domain.parsing:command-node-arg-values ast))))
 
+  (it "parse-keeps-both-process-substitution-directions-as-arguments"
+    "Input and output process substitutions remain attached as command arguments."
+    (with-complete-ast (ast "cat <(printf hi) >(cat)")
+      (expect '("<(printf hi)" ">(cat)")
+              :to-equal
+              (nshell.domain.parsing:command-node-arg-values ast))))
+
   (it "parse-records-quote-style-per-argument"
     "Single and double quotes are distinguished so expansion can treat them differently."
     (with-complete-ast (ast "echo plain \"$FOO\" '*'")
@@ -40,6 +47,17 @@
     (with-complete-ast (ast "ls | grep foo")
       (expect (nshell.domain.parsing:pipeline-node-p ast) :to-be-truthy)
       (expect 2 :to-equal (length (nshell.domain.parsing:pipeline-node-commands ast)))))
+
+  (it "parse-pipe-and-merges-stderr-into-left-stage"
+    "Pipe-and-stderr should reuse the ordinary pipeline AST and redirect the left stage."
+    (with-complete-ast (ast "printf out |& cat")
+      (let ((commands (nshell.domain.parsing:pipeline-node-commands ast)))
+        (expect '("out" "2>&1") :to-equal
+                (mapcar #'nshell.domain.parsing:command-arg-value
+                        (nshell.domain.parsing:command-node-args (first commands))))
+        (expect "cat" :to-equal
+                (nshell.domain.parsing:command-node-command
+                 (second commands))))))
 
   (it "ast-node-command-line-renders-command-and-pipeline"
     "AST command-line rendering should match the background job display text."

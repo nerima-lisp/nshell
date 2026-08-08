@@ -281,8 +281,65 @@
     "command-path-candidates returns matching executable candidates in PATH order."
     (flet ((executable-p (path)
              (member path '("/bin/git" "/usr/bin/git") :test #'string=)))
-      (expect '("/bin/git" "/usr/bin/git") :to-equal (nshell.domain.completion:command-path-candidates
-                  "git" "/bin:/usr/bin" #'executable-p))))
+      (expect '("/bin/git" "/usr/bin/git") :to-equal
+              (nshell.domain.completion:command-path-candidates
+               "git" "/bin:/usr/bin" #'executable-p))))
+
+(it "first-command-path-candidate-stops-at-first-executable"
+    "The first-candidate lookup does not inspect later PATH entries."
+    (let ((calls nil))
+      (flet ((executable-p (path)
+               (push path calls)
+               (string= path "/two/git")))
+        (expect "/two/git" :to-equal
+                (nshell.domain.completion::%first-command-path-candidate
+                 "git" "/one:/two:/three" #'executable-p))
+        (expect '("/one/git" "/two/git") :to-equal (nreverse calls)))))
+
+(it "first-command-path-candidate-checks-each-path-entry-on-miss"
+    "A missing command checks every PATH entry exactly once."
+    (let ((calls nil))
+      (flet ((executable-p (path)
+               (push path calls)
+               nil))
+        (expect (nshell.domain.completion::%first-command-path-candidate
+                 "git" "/one:/two:/three" #'executable-p) :to-be-null)
+        (expect '("/one/git" "/two/git" "/three/git")
+                :to-equal (nreverse calls)))))
+
+(it "first-command-path-candidate-preserves-path-projection-rules"
+    "Empty PATH elements and qualified commands preserve existing semantics."
+    (let ((calls nil))
+      (flet ((executable-p (path)
+               (push path calls)
+               (member path '("./git" "./bin/git") :test #'string=)))
+        (expect "./git" :to-equal
+                (nshell.domain.completion::%first-command-path-candidate
+                 "git" "" #'executable-p :empty-directory "."))
+        (expect '("./git") :to-equal (nreverse calls))
+        (setf calls nil)
+        (expect "./bin/git" :to-equal
+                (nshell.domain.completion::%first-command-path-candidate
+                 "./bin/git" "/one:/two" #'executable-p))
+        (expect '("./bin/git") :to-equal (nreverse calls)))))
+
+(it "executable-file-p-handles-file-modes-and-missing-paths"
+    "Executable lookup accepts executable files and rejects other paths."
+    (let ((path (format nil "/tmp/nshell-executable-test-~d" (get-universal-time))))
+      (unwind-protect
+           (progn
+             (with-open-file (stream path :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+               (write-line "test" stream))
+             (sb-posix:chmod path #o600)
+             (expect (nshell.infrastructure.acl::%executable-file-p path) :to-be-null)
+             (sb-posix:chmod path #o700)
+             (expect (nshell.infrastructure.acl::%executable-file-p path) :to-be-truthy))
+        (when (probe-file path) (delete-file path)))
+      (expect (nshell.infrastructure.acl::%executable-file-p
+               (concatenate 'string path "-missing")) :to-be-null)))
+
 
   (it "command-path-candidates-honors-directory-command"
     "command-path-candidates checks directory-qualified commands directly."
@@ -318,7 +375,7 @@
                       "%PATH-COMMAND-DIRECTORY-PATHNAME"
                       "%LIST-PATH-COMMAND-DIRECTORY"
                       "%PATH-COMMAND-ENTRY-CANDIDATE"
-                      "%ADD-PATH-COMMAND-DIRECTORY-CANDIDATES"
+                      "%PATH-COMMAND-CANDIDATES-FROM-ENTRIES"
                       "%COMMAND-CANDIDATES-FROM-PATH"))
         (expect (fboundp (find-symbol name '#:nshell.domain.completion)) :to-be-truthy))
       (dolist (name '("PATH-SEPARATOR-P"
@@ -330,7 +387,7 @@
                       "PATH-COMMAND-DIRECTORY-PATHNAME"
                       "LIST-PATH-COMMAND-DIRECTORY"
                       "PATH-COMMAND-ENTRY-CANDIDATE"
-                      "ADD-PATH-COMMAND-DIRECTORY-CANDIDATES"
+                      "PATH-COMMAND-CANDIDATES-FROM-ENTRIES"
                       "COMMAND-CANDIDATES-FROM-PATH"))
         (expect (defined-symbol-p name) :to-be-falsy))))
 

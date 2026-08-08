@@ -13,13 +13,22 @@ stores in the shell context, which is what makes the layers above it mockable.")
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
            #:spawn-pipeline #:spawn-pipeline-async #:wait-job
+           #:spawn-process-substitution
+           #:process-substitution-resource-p
+           #:process-substitution-resource-path
+           #:process-substitution-resource-fd
+           #:release-process-substitution-fd
+           #:wait-process-substitution
+           #:close-process-substitution
             #:spawn-async
             #:kill-process #:os-signal->domain
             #:redirect-output #:redirect-error #:redirect-output-and-error
+            #:redirect-output-to-error
             #:redirect-error-to-output
             #:redirect-input #:redirect-input-document #:redirect-input-string
-            #:restore-redirects #:domain-signal->os
-            #:install-signal-handlers
+           #:restore-redirects #:domain-signal->os
+            #:install-signal-handlers #:consume-children-changed-p
+            #:consume-terminal-resize-p
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
@@ -28,7 +37,8 @@ stores in the shell context, which is what makes the layers above it mockable.")
             #:reap-children #:get-terminal-size
             #:terminal-size-unavailable #:terminal-size-unavailable-fd
             #:*external-command-timeout*
-            #:run-external #:run-external-capture #:process-exit-status-code
+            #:run-external #:run-external-capture #:run-external-exec
+            #:process-exit-status-code
             #:with-git-runner #:clear-git-status-cache
             #:get-git-status))
 
@@ -59,7 +69,10 @@ line editor has a single place to import them from.")
             #:ansi-enable-bracketed-paste #:ansi-disable-bracketed-paste
             #:ansi-enable-sgr-mouse #:ansi-disable-sgr-mouse
             #:ansi-enable-alternate-screen #:ansi-disable-alternate-screen
+            #:ansi-request-cursor-position
+            #:copy-to-clipboard
             #:read-key-event
+            #:query-cursor-position
             #:key-event #:key-event-p #:make-key-event
             #:key-event-type #:key-event-char #:key-event-number
             #:key-event-data))

@@ -35,10 +35,7 @@ Iterate with the smallest relevant suite, then run the full gate before review.
 The non-sandboxed integration run, for changes the Nix sandbox cannot exercise:
 
 ```sh
-nix develop -c sbcl --non-interactive \
-  --eval '(require :asdf)' \
-  --eval '(push (truename "./") asdf:*central-registry*)' \
-  --eval '(asdf:test-system :nshell/test)'
+nix develop --command sbcl --script run-tests.lisp
 ```
 
 Tests live in `t/` and must be hermetic: no dependence on the ambient working

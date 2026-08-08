@@ -10,7 +10,7 @@
                 (&key history config knowledge-base environment dispatcher
                       job-monitor alias-table abbreviation-table function-table
                       function-source-table filesystem-fns process-fns terminal-fns
-                      redirect-fns execution-strategy running last-exit-code input-state
+                      redirect-fns execution-strategy pipefail-p running last-exit-code input-state
                       process-registry terminal-rows terminal-cols))
             (:copier nil))
   "Dependency container for one nshell session."
@@ -29,6 +29,7 @@
   (terminal-fns nil :type list)
   (redirect-fns nil :type list)
   (execution-strategy :cps :type (member :cps :os-pipes))
+  (pipefail-p nil :type boolean)
   (running nil :type boolean)
   (last-exit-code 0 :type integer)
   (input-state nil)
@@ -60,6 +61,7 @@
                              terminal-fns
                              redirect-fns
                              (execution-strategy :cps)
+                             (pipefail-p nil)
                              (running nil)
                              (last-exit-code 0)
                              input-state
@@ -68,6 +70,7 @@
                              (terminal-cols 80))
   "Build the application shell context through the composition boundary."
   (check-type execution-strategy (member :cps :os-pipes))
+  (check-type pipefail-p boolean)
   (check-type running boolean)
   (check-type last-exit-code integer)
   (check-type terminal-rows (integer 1 *))
@@ -88,6 +91,7 @@
    :terminal-fns (%shell-context-adapter-list terminal-fns)
    :redirect-fns (%shell-context-adapter-list redirect-fns)
    :execution-strategy execution-strategy
+   :pipefail-p pipefail-p
    :running running
    :last-exit-code last-exit-code
    :input-state input-state

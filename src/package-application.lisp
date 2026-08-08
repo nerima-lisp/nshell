@@ -23,11 +23,13 @@ is the only layer permitted to know both the domain and the ports.")
             #:shell-context-filesystem-fns
             #:shell-context-process-fns #:shell-context-terminal-fns
             #:shell-context-redirect-fns
-            #:shell-context-execution-strategy #:shell-context-running
+            #:shell-context-execution-strategy #:shell-context-pipefail-p
+            #:shell-context-running
             #:shell-context-last-exit-code #:shell-context-input-state
             #:shell-context-job-processes #:shell-context-terminal-rows
             #:shell-context-terminal-cols
             #:lookup-builtin
+            #:resolve-command-path
             #:collect-source-lines #:source-lines
             #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
             #:execute-command-node-in-context

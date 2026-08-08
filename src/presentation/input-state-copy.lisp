@@ -20,6 +20,10 @@
                                        (vi-count nil vi-count-supplied-p)
                                        (vi-visual-anchor nil
                                                          vi-visual-anchor-supplied-p)
+                                       (mouse-selection-anchor nil
+                                                               mouse-selection-anchor-supplied-p)
+                                       (mouse-selection-end nil
+                                                            mouse-selection-end-supplied-p)
                                        abbreviation-expander kill-ring
                                       (last-yank-start nil
                                                        last-yank-start-supplied-p)
@@ -55,6 +59,8 @@
              state new-buffer mode
              vi-count-supplied-p vi-count
              vi-visual-anchor-supplied-p vi-visual-anchor
+             mouse-selection-anchor-supplied-p mouse-selection-anchor
+             mouse-selection-end-supplied-p mouse-selection-end
              abbreviation-expander kill-ring
              last-yank-start-supplied-p last-yank-start
              last-yank-end-supplied-p last-yank-end

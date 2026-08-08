@@ -65,18 +65,40 @@
         (finish-pipeline))))
 
 (defun %spawn-pipeline-stage (cmd-node stage-redirects prev-pipe next-pipe redirect-streams
-                              &key (default-output :stream))
-  (let ((previous-redirect-streams redirect-streams)
-        (started nil))
+                              &key (default-input t)
+                                (default-output :stream)
+                                preserve-fds)
+  (let* ((wrapper-p
+           (nshell.domain.parsing:redirects-require-shell-wrapper-p
+            stage-redirects))
+         ;; Keep pipe topology in the parent, but let the child wrapper apply
+         ;; explicit redirects in source order when arbitrary descriptors are used.
+         (stream-redirects (if wrapper-p nil stage-redirects))
+         (previous-redirect-streams redirect-streams)
+         (started nil))
     (multiple-value-bind (input output error-output
                           input-pipe-stream output-pipe-stream redirect-streams)
-        (%pipeline-stage-streams stage-redirects prev-pipe next-pipe redirect-streams
+        (%pipeline-stage-streams stream-redirects prev-pipe next-pipe redirect-streams
+                                 :default-input default-input
                                  :default-output default-output)
       (let* ((cmd (nshell.domain.parsing:command-node-command cmd-node))
              (args (mapcar #'nshell.domain.parsing:arg-value
                            (nshell.domain.parsing:command-node-args cmd-node)))
              (environment (%get-environment))
-             (resolved-cmd (%resolve-external-command cmd environment)))
+             (resolved-cmd (%resolve-external-command cmd environment))
+             (wrapper-cmd (and wrapper-p
+                               resolved-cmd
+                               (%resolve-external-command "sh" environment)))
+             (effective-cmd (if wrapper-p wrapper-cmd resolved-cmd))
+             (effective-args
+               (if wrapper-p
+                   (list* "-c"
+                          (nshell.domain.parsing:shell-redirect-script
+                           stage-redirects)
+                          "nshell-fd-wrapper"
+                          resolved-cmd
+                          args)
+                   args)))
         (unwind-protect
              (multiple-value-prog1
                  (values
@@ -92,14 +114,20 @@
           (when output-pipe-stream
             (ignore-errors (close output-pipe-stream))))))))
 
-(defun %wait-pipeline-processes (procs)
-  (let ((last-proc (car procs))
-        (exit 0))
+(defun %pipeline-exit-status (statuses pipefail-p)
+  (if pipefail-p
+      (or (find-if (lambda (status) (not (zerop status))) statuses)
+          0)
+      (or (car (last statuses)) 0)))
+
+(defun %wait-pipeline-processes (procs &optional (pipefail-p nil))
+  (let ((statuses nil))
     (dolist (proc procs)
       (sb-ext:process-wait proc)
-      (when (eq proc last-proc)
-        (setf exit (process-exit-status-code proc))))
-    exit))
+      ;; PROCS is stored with the last stage at the head. PUSH restores
+      ;; source order, which is the order pipefail must inspect.
+      (push (process-exit-status-code proc) statuses))
+    (%pipeline-exit-status statuses pipefail-p)))
 
 (defun %close-pipeline-fds (pipes)
   (dolist (pipe pipes)
@@ -113,14 +141,28 @@
         (setf (second pipe) nil)))))
 
 (defun %terminate-pipeline-processes (procs)
-  (dolist (proc procs)
-    (when (and proc (sb-ext:process-alive-p proc))
-      (ignore-errors (sb-ext:process-kill proc 15))))
-  (dolist (proc procs)
-    (when (and proc (not (%wait-process-exit-with-timeout proc 0.5)))
-      (when (sb-ext:process-alive-p proc)
-        (ignore-errors (sb-ext:process-kill proc 9)))
-      (ignore-errors (sb-ext:process-wait proc)))))
+  (when procs
+    (let* ((first-proc (car (last procs)))
+           (pgid (sb-ext:process-pid first-proc))
+           ;; A failed SETPGID leaves a pipeline in the callers process group.
+           ;; Only signal a group after verifying that its leader is the child.
+           (actual-pgid (and (integerp pgid)
+                             (plusp pgid)
+                             (ignore-errors (sb-posix:getpgid pgid))))
+           (owns-process-group-p (and (integerp actual-pgid)
+                                      (plusp actual-pgid)
+                                      (= pgid actual-pgid))))
+      (flet ((terminate (signal)
+               (if owns-process-group-p
+                   (ignore-errors (%send-process-group-signal pgid signal))
+                   (dolist (proc procs)
+                     (when (sb-ext:process-alive-p proc)
+                       (ignore-errors (sb-ext:process-kill proc signal)))))))
+        (terminate sb-unix:sigterm)
+        (%wait-pipeline-exit-with-timeout procs 0.5)
+        (terminate sb-unix:sigkill)
+        (dolist (proc procs)
+          (ignore-errors (sb-ext:process-wait proc)))))))
 
 (defun %wait-pipeline-exit-with-timeout (procs timeout-seconds)
   (let ((deadline (+ (get-internal-real-time)
@@ -130,13 +172,13 @@
           do (sleep 0.01))
     (not (some #'sb-ext:process-alive-p procs))))
 
-(defun %wait-pipeline-with-output (procs timeout-fn)
+(defun %wait-pipeline-with-output (procs timeout-seconds timeout-fn pipefail-p)
   (let ((copier (%start-process-output-copier (car procs) *standard-output*)))
     (unwind-protect
-         (if (or (null *external-command-timeout*)
-                 (%wait-pipeline-exit-with-timeout procs *external-command-timeout*))
+         (if (or (null timeout-seconds)
+                 (%wait-pipeline-exit-with-timeout procs timeout-seconds))
              (progn
-               (prog1 (%wait-pipeline-processes procs)
+               (prog1 (%wait-pipeline-processes procs pipefail-p)
                  (%join-process-output-copiers (list copier))))
              (progn
                (%terminate-pipeline-processes procs)
@@ -145,7 +187,8 @@
       (%join-process-output-copiers (list copier)))))
 
 (defun %pipeline-spawn-loop (commands pipes redirects redirect-streams
-                             &key default-output pgid-assign-fn error-sentinel)
+                             &key (default-input t) default-output preserve-fds
+                               after-spawn pgid-assign-fn error-sentinel)
   "Iterate over COMMANDS, spawning each as a pipeline stage connected via PIPES.
 Returns (values procs pgid redirect-streams error-p) where ERROR-P is the
 value of ERROR-SENTINEL when a spawn fails, or NIL on success.
@@ -174,7 +217,9 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                                            prev-pipe
                                            next-pipe
                                            redirect-streams
-                                           :default-output default-output)
+                                           :default-input default-input
+                                           :default-output default-output
+                                           :preserve-fds preserve-fds)
                    (setf redirect-streams updated-streams)
                    (if proc
                        (progn
@@ -186,9 +231,16 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                  (format *error-output* "nshell: ~a: ~a~%"
                          (nshell.domain.parsing:command-node-command cmd-node)
                          err))))
+    (when (and (null error-p) after-spawn)
+      (ignore-errors (funcall after-spawn)))
     (values procs pgid redirect-streams error-p)))
 
-(defun spawn-pipeline (commands &key redirects)
+(defun spawn-pipeline (commands &key redirects
+                                  (default-input t)
+                                  (default-output :stream)
+                                  preserve-fds
+                                  (pipefail-p nil)
+                                  after-spawn)
   "Execute COMMANDS connected by OS-level pipes and return the last exit code."
   (multiple-value-bind (redirects pipes)
       (%prepare-pipeline commands redirects)
@@ -212,7 +264,11 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
         (%close-pipeline-redirect-streams redirect-streams)
         (%close-pipeline-fds pipes)))))
 
-(defun spawn-pipeline-async (commands &key redirects)
+(defun spawn-pipeline-async (commands &key redirects
+                                        (default-input t)
+                                        (default-output t)
+                                        preserve-fds
+                                        after-spawn)
   "Execute COMMANDS connected by OS-level pipes asynchronously."
   (multiple-value-bind (redirects pipes)
       (%prepare-pipeline commands redirects)

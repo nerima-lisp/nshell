@@ -1,6 +1,44 @@
 (in-package #:nshell/test)
 
 (describe "repl-tests"
+  (it "repl-execute-expands-history-designator-before-parsing"
+    "Interactive execution expands history references before parsing and persistence."
+    (let ((persisted nil))
+      (with-repl-test-state
+        (history-kit:history-add
+         nshell.presentation::*history*
+         "echo from-history")
+        (with-repl-input-state (:buffer "!!" :cursor-pos 2)
+          (with-temporary-function
+              ('nshell.infrastructure.persistence:append-history-entry
+               (lambda (text)
+                 (setf persisted text)))
+            (capture-process-output-event :execute))))
+      (expect "echo from-history" :to-equal persisted)))
+
+  (it "repl-edit-command-replaces-input-from-external-editor"
+    "The external editor event writes the current buffer and installs the edited text."
+    (with-repl-test-state
+      (with-repl-input-state (:buffer "echo before" :cursor-pos 11)
+        (with-temporary-function
+            ('nshell.presentation::%editor-command-argv
+             (lambda () '("fake-editor")))
+          (with-temporary-function
+              ('nshell.infrastructure.acl:run-external-exec
+               (lambda (command args)
+                 (declare (ignore command))
+                 (let ((path (car (last args))))
+                   (with-open-file (stream path
+                                           :direction :output
+                                           :if-exists :supersede)
+                     (write-line "echo edited" stream)))
+                 0))
+            (capture-process-output-event :edit-command)
+            (expect "echo edited"
+                    :to-equal
+                    (nshell.presentation::input-state-buffer
+                     nshell.presentation::*input-state*))))))
+
   (it "repl-for-loop-expands-in-values"
     "Interactive for loops expand variables in the in list before assignment."
     (with-repl-test-state
@@ -32,6 +70,30 @@
       (expect (integerp nshell.presentation::*last-command-duration-ms*) :to-be-truthy)
       (expect nshell.presentation::*last-command-duration-ms* :to-be-greater-than-or-equal 0)
       (expect 0 :to-equal nshell.presentation::*last-exit-code*)))
+
+  (it "repl-execute-output-event-records-command-exit-code-in-history"
+    "Interactive history entries retain the command exit status after execution."
+    (with-repl-test-state
+      (with-repl-input-state (:buffer "echo failed" :cursor-pos 11)
+        (with-temporary-function
+            ('nshell.infrastructure.persistence:append-history-entry
+             (lambda (text)
+               (declare (ignore text))))
+          (with-temporary-function
+              ('nshell.presentation::execute-ast
+               (lambda (ignored-ast)
+                 (declare (ignore ignored-ast))
+                 7))
+            (capture-process-output-event :execute)
+            (let ((entry (first
+                          (history-kit:history-entries
+                           nshell.presentation::*history*))))
+              (expect "echo failed"
+                      :to-equal
+                      (history-kit:history-entry-text entry))
+              (expect 7
+                      :to-equal
+                      (history-kit:history-entry-exit-code entry))))))))
 
   (it "repl-command-duration-allows-sub-millisecond-execution"
     "Sub-millisecond commands should be recorded as a non-negative integer duration."
@@ -157,4 +219,5 @@
         (multiple-value-bind (output code)
             (call-repl-execute-ast ast)
           (expect 0 :to-equal code)
-          (expect "" :to-equal output))))))
+          (expect "" :to-equal output)))))
+)

@@ -87,8 +87,26 @@
                            nshell.domain.completion::*built-in-rule-knowledge-base*
                            prefix)))
           (assert-completion-texts-include candidates text)
-          (expect description :to-equal (nshell.domain.completion:candidate-description
+                        (expect description :to-equal (nshell.domain.completion:candidate-description
                         (completion-candidate-by-text text candidates)))))))
+
+  (it "command-completion-includes-runtime-aliases-and-functions"
+    (let ((aliases (make-hash-table :test #'equal))
+          (functions (make-hash-table :test #'equal)))
+      (setf (gethash "ll" aliases) "ls -l"
+            (gethash "local-tool" functions) "() { echo ok; }")
+      (let ((candidates
+              (nshell.domain.completion:complete
+               (nshell.domain.completion:make-empty-knowledge-base)
+               "l"
+               :alias-table aliases
+               :function-table functions)))
+        (assert-completion-candidate "ll" candidates
+                                     :kind :command
+                                     :description "alias")
+        (assert-completion-candidate "local-tool" candidates
+                                     :kind :command
+                                     :description "function"))))
 
   (it "rule-completion-candidates-carry-descriptions"
     (let* ((candidates (nshell.domain.completion:rule-complete
@@ -180,19 +198,19 @@
         (:input "zz-helped --color=a" :expected ("--color=always" "--color=auto"))
         (:input "zz-helped --color n" :expected ("never")))))
 
-  (it "repl-completion-warms-command-help-and-reuses-the-cache"
-    (let ((help-text (format nil "Usage: zz-helped [OPTIONS]~%~
+  (it "repl-completion-warms-catalogued-command-help-and-reuses-the-cache"
+    (let ((help-text (format nil "Usage: cargo [OPTIONS]~%~
                                  Options:~%~
                                  -h, --help            Show help~%~
                                  -o, --output FILE     Write output~%~
                                  --color=WHEN      Color mode (always|auto|never)~%")))
       (with-repl-completion-help-fetcher (fetch-count help-text)
-        (with-repl-completion-refresh (state candidates "zz-helped -")
+        (with-repl-completion-refresh (state candidates "cargo -")
           (declare (ignore state))
           (expect 1 :to-equal fetch-count)
           (assert-completion-candidate "--help" candidates :kind :option)
           (assert-completion-candidate "-o" candidates :kind :option))
-        (with-repl-completion-refresh (state candidates "zz-helped --color a")
+        (with-repl-completion-refresh (state candidates "cargo --color a")
           (declare (ignore state))
           (expect 1 :to-equal fetch-count)
           (assert-completion-texts-include candidates "always" "auto")))))
@@ -209,14 +227,48 @@
           (assert-completion-candidate "--dry-run" candidates :kind :option)))))
 
   (it "repl-completion-caches-missing-command-help-lookups"
+    (let ((catalog (make-hash-table :test #'equal)))
+      (setf (gethash "zz-missing" catalog) t)
+      (let ((nshell.presentation::*completion-help-catalog-command-cache* catalog))
+        (with-repl-completion-help-fetcher
+            (fetch-count "zz-missing: command completed without help metadata" :exit-code 1)
+          (with-repl-completion-refresh (state candidates "zz-missing --")
+            (declare (ignore state candidates))
+            (expect 1 :to-equal fetch-count))
+          (with-repl-completion-refresh (state candidates "zz-missing --")
+            (declare (ignore state candidates))
+            (expect 1 :to-equal fetch-count))))))
+
+  (it "repl-completion-does-not-fetch-help-for-uncatalogued-commands"
     (with-repl-completion-help-fetcher
-        (fetch-count "zz-missing: command completed without help metadata" :exit-code 1)
-      (with-repl-completion-refresh (state candidates "zz-missing --")
+        (fetch-count "Usage: should-not-run")
+      (with-repl-completion-refresh (state candidates "zz-uncatalogued --")
         (declare (ignore state candidates))
-        (expect 1 :to-equal fetch-count))
-      (with-repl-completion-refresh (state candidates "zz-missing --")
+        (expect 0 :to-equal fetch-count))))
+
+  (it "repl-completion-rejects-oversized-help-output-before-parsing"
+    (with-repl-test-state
+      (let ((nshell.presentation::*completion-help-max-output-chars* 16)
+            (help-text (format nil "Usage: zz-large~%~a"
+                               (make-string 32 :initial-element #\x))))
+        (expect :missing :to-equal
+          (nshell.presentation::%completion-help-cache-help-text
+           "zz-large" help-text 0))
+        (expect nil :to-be
+          (nshell.domain.completion:kb-command-present-p
+           nshell.presentation::*kb* "zz-large")))))
+
+  (it "repl-completion-does-not-fetch-help-for-unavailable-commands"
+    (with-repl-completion-help-fetcher
+        (fetch-count "Usage: should-not-run"
+         :command-available-p
+         (function
+           (lambda (command)
+             (declare (ignore command))
+             nil)))
+      (with-repl-completion-refresh (state candidates "zz-unavailable --")
         (declare (ignore state candidates))
-        (expect 1 :to-equal fetch-count))))
+        (expect 0 :to-equal fetch-count))))
 
   (it "repl-completion-hides-common-external-mutually-exclusive-options"
     (with-seeded-completion-knowledge-base (kb)
@@ -349,6 +401,33 @@
         (expect '("sandbox/" "src/") :to-equal texts)
         (expect (every (lambda (kind) (eq kind :directory)) kinds) :to-be-truthy))))
 
+  (it "complete-path-like-command-arguments-from-filesystem"
+    (with-file-completion-adapters
+        ((lambda (dir)
+           (declare (ignore dir))
+           (list #p".env" #p"~config" #p"main.lisp"))
+         (lambda (dir)
+           (declare (ignore dir))
+           (list #p"module/")))
+      (let ((slash-texts
+              (completion-texts
+               (nshell.domain.completion:complete
+                nshell.domain.completion::*built-in-rule-knowledge-base*
+                "echo src/m")))
+            (dot-texts
+              (completion-texts
+               (nshell.domain.completion:complete
+                nshell.domain.completion::*built-in-rule-knowledge-base*
+                "echo .e")))
+            (tilde-texts
+              (completion-texts
+               (nshell.domain.completion:complete
+                nshell.domain.completion::*built-in-rule-knowledge-base*
+                "echo ~c"))))
+        (expect '("src/module/" "src/main.lisp") :to-equal slash-texts)
+        (expect '(".env") :to-equal dot-texts)
+        (expect '("~config") :to-equal tilde-texts))))
+
   (it "complete-source-targets-from-filesystem"
     (with-file-completion-adapters
         ((lambda (dir)
@@ -389,4 +468,30 @@
     (let ((candidates (nshell.domain.completion:rule-complete
                        nshell.domain.completion::*built-in-rule-knowledge-base*
                        "git add my\\ file st")))
-      (assert-completion-texts-include candidates "status"))))
+      (assert-completion-texts-include candidates "status")))
+
+  (it "rule-completion-preserves-descriptions-for-multiple-candidates"
+    (let ((kb (make-empty-rule-kb)))
+      (dolist (command (quote ("git" "gitk")))
+        (nshell.domain.completion:assert-fact!
+          kb
+          (nshell.domain.completion:make-fact
+            :predicate (quote nshell.domain.completion:completes)
+            :args (list command ""))))
+      (nshell.domain.completion:assert-fact!
+        kb
+        (nshell.domain.completion:make-fact
+          :predicate (quote nshell.domain.completion:describes)
+          :args (quote ("git" "version control"))))
+      (nshell.domain.completion:assert-fact!
+        kb
+        (nshell.domain.completion:make-fact
+          :predicate (quote nshell.domain.completion:describes)
+          :args (quote ("gitk" "graphical history browser"))))
+      (let ((candidates (nshell.domain.completion:rule-complete kb "git")))
+        (expect (quote ("git" "gitk")) :to-equal (completion-texts candidates))
+        (expect "version control" :to-equal
+          (nshell.domain.completion:candidate-description (first candidates)))
+        (expect "graphical history browser" :to-equal
+          (nshell.domain.completion:candidate-description (second candidates))))))
+)

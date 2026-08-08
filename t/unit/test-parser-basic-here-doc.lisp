@@ -16,6 +16,22 @@
       (expect `("cat" "<<<" "inline" "<<" ,(format nil "body~%") ">" "out") :to-equal (mapcar #'nshell.domain.parsing:token-value updated))
       (expect :single :to-be (nshell.domain.parsing::token-quote-style (fifth updated)))))
 
+  (it "parser-command-node-marks-quoted-here-document-targets"
+    "Quoted here-document delimiters retain a literal-body marker in the AST."
+    (let* ((quoted (nshell.domain.parsing:make-command-node
+                    "cat"
+                    (list (nshell.domain.parsing:make-command-arg "<<")
+                          (nshell.domain.parsing:make-command-arg "EOF" :double))))
+           (plain (nshell.domain.parsing:make-command-node
+                   "cat"
+                   (list (nshell.domain.parsing:make-command-arg "<<")
+                         (nshell.domain.parsing:make-command-arg "EOF"))))
+           (quoted-target (second (nshell.domain.parsing:command-node-args quoted)))
+           (plain-target (second (nshell.domain.parsing:command-node-args plain))))
+      (expect t :to-be (nshell.domain.parsing:arg-here-doc-literal-p quoted-target))
+      (expect :double :to-be (nshell.domain.parsing:arg-quote-style quoted-target))
+      (expect nil :to-be (nshell.domain.parsing:arg-here-doc-literal-p plain-target))))
+
   (it "parser-here-doc-line-projects-text-position-and-newline"
     "Here-doc line scanning returns one explicit line value."
     (let ((line (nshell.domain.parsing::%read-here-doc-line
@@ -38,6 +54,20 @@
       (expect (format nil "one~%") :to-equal (nshell.domain.parsing::%here-doc-body-body body))
       (expect 8 :to-equal (nshell.domain.parsing::%here-doc-body-next-position body))
       (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body) :to-be-falsy)))
+
+  (it "parser-here-doc-body-strips-leading-tabs-for-tabbed-delimiter"
+    "Tabbed here-document bodies normalize leading tabs before delimiter matching."
+    (let ((body (nshell.domain.parsing::%consume-here-doc-body
+                 (format nil "~c~cbody~%~cEOF~%tail"
+                         #\Tab #\Tab #\Tab)
+                 0
+                 "EOF"
+                 t)))
+      (expect (format nil "body~%")
+              :to-equal (nshell.domain.parsing::%here-doc-body-body body))
+      (expect 12 :to-equal (nshell.domain.parsing::%here-doc-body-next-position body))
+      (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body)
+              :to-be-falsy)))
 
   (it "parser-here-doc-delimiter-scan-projects-left-to-right-delimiters"
     "Here-doc delimiter scanning owns accumulation order."
@@ -104,6 +134,21 @@
                  result) :to-be-null)
       (expect (member (format nil "hello~%") token-values :test #'string=) :to-be-truthy)
       (expect (member "echo" token-values :test #'string=) :to-be-truthy)))
+
+  (it "parser-here-doc-tabbed-tokenization-strips-leading-tabs"
+    "Tab-stripping here-document tokenization removes tabs from body and delimiter lines."
+    (let* ((input (format nil "cat <<- EOF~%~cinline-doc~%~cEOF~%echo done"
+                          #\Tab #\Tab))
+           (result (nshell.domain.parsing::%tokenize-here-doc-aware input nil))
+           (tokens (nshell.domain.parsing:tokenization-result-tokens result))
+           (token-values (mapcar #'nshell.domain.parsing:token-value tokens)))
+      (expect (member (format nil "inline-doc~%") token-values :test #'string=)
+              :to-be-truthy)
+      (expect (member "echo" token-values :test #'string=) :to-be-truthy)
+      (expect (member (format nil "~cinline-doc~%" #\Tab)
+                      token-values
+                      :test #'string=)
+              :to-be-falsy)))
 
   (it "parser-here-doc-target-replacer-consumes-bodies-after-redirects"
     "The target replacer owns pending-target and body consumption state."

@@ -162,12 +162,12 @@
     "A star glob expands to matching files."
     ;; Inject filesystem adapters for DDD purity
     (setf nshell.domain.expansion:*glob-directory-files-fn*
-          (lambda (dir) (uiop:directory-files dir)))
+          (lambda (dir) (host-kit:directory-files dir)))
     (setf nshell.domain.expansion:*glob-subdirectories-fn*
-          (lambda (dir) (uiop:subdirectories dir)))
+          (lambda (dir) (host-kit:subdirectories dir)))
     (unwind-protect
          (let* ((root (merge-pathnames (format nil "nshell-glob-~a/" (gensym))
-                                       (uiop:temporary-directory)))
+                                       (host-kit:temporary-directory)))
                 (pattern (namestring (merge-pathnames "*.txt" root)))
                 (expected (namestring (merge-pathnames "alpha.txt" root))))
            (ensure-directories-exist root)
@@ -181,8 +181,8 @@
       (setf nshell.domain.expansion:*glob-directory-files-fn* nil)
       (setf nshell.domain.expansion:*glob-subdirectories-fn* nil)
       (handler-case
-          (let ((root (probe-file (merge-pathnames "nshell-glob-*/" (uiop:temporary-directory)))))
-            (when root (uiop:delete-directory-tree root :validate t)))
+          (let ((root (probe-file (merge-pathnames "nshell-glob-*/" (host-kit:temporary-directory)))))
+            (when root (host-kit:delete-directory-tree root :validate t)))
         (error ()))))
 
   (it "expand-glob-uses-immediate-directory-scope"

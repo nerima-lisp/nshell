@@ -64,11 +64,26 @@ What is actually checkable on a plain `aarch64-darwin` development machine
 
 ## Current Public Gaps
 
-- Broader help-text-driven command discovery and cache policy remain future
-  work, especially for subcommand coverage and non-curated external tools.
+- Broader help-text-driven command discovery remains future work, especially for
+  subcommand coverage and non-curated external tools.
 - Complete the remaining expansion-semantics audit beyond structured unquoted
-  list-variable and compound list expansion.
+  list-variable and compound list expansion, including general `n>&m`
+  file-descriptor duplication and other unimplemented edge cases.
+- Validate mouse selection and host clipboard behavior on every supported
+  terminal/platform; the editor now maps SGR coordinates through captured
+  prompt geometry and falls back to OSC 52 when host clipboard integration is
+  unavailable.
 - Collect release evidence on every CI-supported platform, not only a local
   development machine.
 - Publish at least one low-friction installation path beyond `nix run`, such as
   nixpkgs, Homebrew, or prebuilt release binaries.
+- Obtain native x86_64-linux CI evidence for the implemented bundle derivation:
+  build it, validate it, and smoke-test it after tar extraction. Darwin has
+  already passed the equivalent checks; published v0.4.0 artifacts remain
+  non-portable.
+- Verify the global all-target publication gate, checksums, and GitHub artifact
+  attestations in CI before describing release provenance as operational.
+- Validate the process-isolated benchmark scenarios in CI and collect equivalent
+  fixtures beyond the implemented minimal noninteractive literal-print case.
+- Collect privileged cold-cache, interactive, completion, and end-to-end
+  tail-latency evidence before making any broad "world-fastest" performance claim.

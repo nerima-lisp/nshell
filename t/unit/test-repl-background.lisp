@@ -67,7 +67,7 @@
                 (expect "printf %s bg" :to-equal (nshell.domain.execution:job-command-display-string
                               job)))
               (expect (probe-file output) :to-be-truthy)
-              (expect "bg" :to-equal (uiop:read-file-string output)))))))
+              (expect "bg" :to-equal (host-kit:read-file-string output)))))))
 
   (it "repl-background-pipeline-registers-processes-and-applies-redirections"
     "Background pipelines should spawn every stage and keep their redirects."
@@ -98,7 +98,7 @@
                 (expect "printf %s bg-pipe | cat" :to-equal (nshell.domain.execution:job-command-display-string
                               job)))
               (expect (probe-file output) :to-be-truthy)
-              (expect "bg-pipe" :to-equal (uiop:read-file-string output)))))))
+              (expect "bg-pipe" :to-equal (host-kit:read-file-string output)))))))
 
   (it "reap-background-jobs-removes-only-completed-processes"
     "Reaping should update completed jobs and leave live ones alone."

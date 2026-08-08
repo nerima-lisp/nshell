@@ -62,6 +62,10 @@ to enter normal mode, which supports motions (\fBh l 0 ^ $ w b e\fR), insert
 entries (\fBi a I A\fR), edits (\fBx D C s\fR), counts, operators
 (\fBdd cc dw cw\fR), char-wise visual selection (\fBv\fR), and \fBj\fR/\fBk\fR
 for history.
+.PP
+Press \fBM\-e\fR (\fBAlt\-E\fR) to open the current line in the external editor
+selected by \fBNSHELL_EDITOR\fR, \fBVISUAL\fR, or \fBEDITOR\fR, falling back to
+\fBvi\fR; the edited line is returned to the prompt without being executed.
 .SH EXPANSIONS
 .B nshell
 performs, in order, brace expansion (\fB{a,b}\fR, \fB{1..5}\fR), tilde
@@ -80,6 +84,15 @@ literal. File-descriptor redirections \fB2> 2>> 2>&1 &> &>>\fR and the usual
 \fB> >> <\fR are supported, along with here-documents \fB<<\fR and here-strings
 \fB<<<\fR. Pipelines (\fB|\fR), logical operators (\fB&& ||\fR), sequencing
 (\fB;\fR), and background execution (\fB&\fR) are supported.
+.SH HISTORY EXPANSION
+Interactive input supports history designators \fB!!\fR (the previous command),
+\fB!$\fR (the previous command's last argument), \fB!-\fIN\fR (the command
+\fIN\fR entries back), \fB!?\fItext\fB?\fR (the most recent command containing
+\fItext\fR), and \fB!\fIprefix\fR (the most recent command beginning with
+\fIprefix\fR). An unresolved designator reports an error instead of being
+parsed or stored. Exclamation marks in single quotes or preceded by a
+backslash remain literal.
+
 .SH CONTROL FLOW
 Fish-style control flow is available: \fBif\fR, \fBfor\fR, \fBwhile\fR,
 \fBswitch\fR, \fBbegin\fR/\fBend\fR, and user-defined \fBfunction\fRs. A

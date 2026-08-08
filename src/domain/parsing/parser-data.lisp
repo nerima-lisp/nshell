@@ -7,10 +7,15 @@
 
 (defparameter +redirect-specs+
   (list
+   (%make-redirect-spec-entry "0<" :<)
+   (%make-redirect-spec-entry "0<<" :<<)
+   (%make-redirect-spec-entry "0<<-" :<<-)
+   (%make-redirect-spec-entry "0<<<" :<<<)
    (%make-redirect-spec-entry ">" :>)
    (%make-redirect-spec-entry ">>" :>>)
    (%make-redirect-spec-entry "<" :<)
    (%make-redirect-spec-entry "<<" :<<)
+   (%make-redirect-spec-entry "<<-" :<<-)
    (%make-redirect-spec-entry "<<<" :<<<)
    (%make-redirect-spec-entry "1>" :>)
    (%make-redirect-spec-entry "1>>" :>>)
@@ -24,12 +29,20 @@
   '(:2>&1)
   "Redirect specs that duplicate a descriptor and so take no file target.")
 
+(defstruct (redirect-fd-dup-target
+            (:constructor make-redirect-fd-dup-target
+                (source target &optional (operator :output))))
+  source
+  target
+  operator)
+
 (defstruct (%redirect-facts
             (:constructor %make-redirect-facts
-                (text kind fd-dup-p)))
+                (text kind fd-dup-p &optional fd-dup-target)))
   text
   kind
-  fd-dup-p)
+  fd-dup-p
+  fd-dup-target)
 
 (defstruct (%redirect-target-policy
             (:constructor %make-redirect-target-policy
@@ -62,16 +75,20 @@
 
 (defstruct (%redirect-output-destination-state
             (:constructor %make-redirect-output-destination-state
-                (stdout-target stdout-mode stderr-target stderr-mode)))
+                (stdout-target stdout-mode stderr-target stderr-mode
+                 &optional (stdout-endpoint :stdout) (stderr-endpoint :stderr))))
   stdout-target
   stdout-mode
   stderr-target
-  stderr-mode)
+  stderr-mode
+  stdout-endpoint
+  stderr-endpoint)
 
 (defparameter +redirect-kind-fact-specs+
   (list
    (%make-redirect-kind-fact-spec :< t nil nil nil)
    (%make-redirect-kind-fact-spec :<< t nil nil nil)
+   (%make-redirect-kind-fact-spec :<<- t nil nil nil)
    (%make-redirect-kind-fact-spec :<<< t nil nil nil)
    (%make-redirect-kind-fact-spec :> nil t nil nil)
    (%make-redirect-kind-fact-spec :>> nil t nil t)
@@ -79,7 +96,8 @@
    (%make-redirect-kind-fact-spec :2>> nil nil t t)
    (%make-redirect-kind-fact-spec :2>&1 nil nil t nil)
    (%make-redirect-kind-fact-spec :&> nil t t nil)
-   (%make-redirect-kind-fact-spec :&>> nil t t t)))
+   (%make-redirect-kind-fact-spec :&>> nil t t t)
+   (%make-redirect-kind-fact-spec :fd-dup nil nil nil nil)))
 
 (defun %redirect-spec-entry (text)
   (and text
@@ -97,15 +115,40 @@
         when entry
           collect entry))
 
+(defun %redirect-dynamic-fd-dup-target (text)
+  (labels ((parse-target (separator-text operator)
+             (let ((separator (and text (search separator-text text))))
+               (when (and separator
+                          (> separator 0)
+                          (< (+ separator (length separator-text))
+                             (length text)))
+                 (let ((source-text (subseq text 0 separator))
+                       (target-text
+                         (subseq text (+ separator (length separator-text)))))
+                   (when (and (every #'digit-char-p source-text)
+                              (or (string= target-text "-")
+                                  (every #'digit-char-p target-text)))
+                     (make-redirect-fd-dup-target
+                      (parse-integer source-text)
+                      (if (string= target-text "-")
+                          :close
+                          (parse-integer target-text))
+                      operator)))))))
+    (or (parse-target ">&" :output)
+        (parse-target "<&" :input))))
+
 (defun %redirect-facts (text)
   (let ((entry (%redirect-spec-entry text)))
-    (when entry
-      (let ((kind (%redirect-spec-entry-kind entry)))
-        (%make-redirect-facts
-         (%redirect-spec-entry-text entry)
-         kind
-         (not (null (member kind +redirect-fd-dup-specs+
-                            :test #'eq))))))))
+    (if entry
+        (let ((kind (%redirect-spec-entry-kind entry)))
+          (%make-redirect-facts
+           (%redirect-spec-entry-text entry)
+           kind
+           (not (null (member kind +redirect-fd-dup-specs+
+                              :test #'eq)))))
+        (let ((dynamic-target (%redirect-dynamic-fd-dup-target text)))
+          (when dynamic-target
+            (%make-redirect-facts text :fd-dup t dynamic-target))))))
 
 (defun %redirect-target-policy-from-facts (facts)
   (when facts
@@ -216,47 +259,185 @@
   (not (null (%last-redirect-entry-matching redirects #'redirect-output-kind-p))))
 
 (defun %empty-redirect-output-destination-state ()
-  (%make-redirect-output-destination-state nil :supersede nil :supersede))
+  (%make-redirect-output-destination-state nil :supersede nil :supersede
+                                           :stdout :stderr))
 
 (defstruct (redirect-output-destinations
             (:constructor %make-redirect-output-destinations
-                (stdout-target stdout-mode stderr-target stderr-mode)))
+                (stdout-target stdout-mode stderr-target stderr-mode
+                 &optional (stdout-endpoint :stdout) (stderr-endpoint :stderr))))
   stdout-target
   stdout-mode
   stderr-target
-  stderr-mode)
+  stderr-mode
+  stdout-endpoint
+  stderr-endpoint)
 
 (defun %redirect-output-destinations-from-state (state)
   (%make-redirect-output-destinations
    (%redirect-output-destination-state-stdout-target state)
    (%redirect-output-destination-state-stdout-mode state)
    (%redirect-output-destination-state-stderr-target state)
-   (%redirect-output-destination-state-stderr-mode state)))
+   (%redirect-output-destination-state-stderr-mode state)
+   (%redirect-output-destination-state-stdout-endpoint state)
+   (%redirect-output-destination-state-stderr-endpoint state)))
+
+(defun %redirect-file-endpoint (target mode)
+  (cons target mode))
 
 (defun %redirect-output-destination-state-apply-entry (state kind target)
   (case kind
     ((:> :>>)
-     (%make-redirect-output-destination-state
-      target
-      (%redirect-mode kind)
-      (%redirect-output-destination-state-stderr-target state)
-      (%redirect-output-destination-state-stderr-mode state)))
+     (let ((endpoint (%redirect-file-endpoint target (%redirect-mode kind))))
+       (%make-redirect-output-destination-state
+        target
+        (%redirect-mode kind)
+        (%redirect-output-destination-state-stderr-target state)
+        (%redirect-output-destination-state-stderr-mode state)
+        endpoint
+        (%redirect-output-destination-state-stderr-endpoint state))))
     ((:&> :&>>)
-     (let ((mode (%redirect-mode kind)))
-       (%make-redirect-output-destination-state target mode target mode)))
+     (let* ((mode (%redirect-mode kind))
+            (endpoint (%redirect-file-endpoint target mode)))
+       (%make-redirect-output-destination-state target mode target mode
+                                                endpoint endpoint)))
     ((:2> :2>>)
-     (%make-redirect-output-destination-state
-      (%redirect-output-destination-state-stdout-target state)
-      (%redirect-output-destination-state-stdout-mode state)
-      target
-      (%redirect-mode kind)))
+     (let ((endpoint (%redirect-file-endpoint target (%redirect-mode kind))))
+       (%make-redirect-output-destination-state
+        (%redirect-output-destination-state-stdout-target state)
+        (%redirect-output-destination-state-stdout-mode state)
+        target
+        (%redirect-mode kind)
+        (%redirect-output-destination-state-stdout-endpoint state)
+        endpoint)))
     (:2>&1
      (%make-redirect-output-destination-state
       (%redirect-output-destination-state-stdout-target state)
       (%redirect-output-destination-state-stdout-mode state)
       (%redirect-output-destination-state-stdout-target state)
-      (%redirect-output-destination-state-stdout-mode state)))
+      (%redirect-output-destination-state-stdout-mode state)
+      (%redirect-output-destination-state-stdout-endpoint state)
+      (%redirect-output-destination-state-stdout-endpoint state)))
+    (:fd-dup
+     (let ((source (redirect-fd-dup-target-source target))
+           (destination (redirect-fd-dup-target-target target))
+           (operator (redirect-fd-dup-target-operator target)))
+       (cond
+         ((and (eq operator :output)
+               (integerp destination)
+               (= source 1)
+               (= destination 2))
+          (%make-redirect-output-destination-state
+           (%redirect-output-destination-state-stderr-target state)
+           (%redirect-output-destination-state-stderr-mode state)
+           (%redirect-output-destination-state-stderr-target state)
+           (%redirect-output-destination-state-stderr-mode state)
+           (%redirect-output-destination-state-stderr-endpoint state)
+           (%redirect-output-destination-state-stderr-endpoint state)))
+         ((and (eq operator :output)
+               (integerp destination)
+               (= source 2)
+               (= destination 1))
+          (%make-redirect-output-destination-state
+           (%redirect-output-destination-state-stdout-target state)
+           (%redirect-output-destination-state-stdout-mode state)
+           (%redirect-output-destination-state-stdout-target state)
+           (%redirect-output-destination-state-stdout-mode state)
+           (%redirect-output-destination-state-stdout-endpoint state)
+           (%redirect-output-destination-state-stdout-endpoint state)))
+         (t state))))
     (otherwise state)))
+
+(defun redirects-require-shell-wrapper-p (redirects)
+  (some (lambda (entry)
+          (and (eq (car entry) :fd-dup)
+               (let ((target (cdr entry)))
+                 (not (and (redirect-fd-dup-target-p target)
+                           (eq (redirect-fd-dup-target-operator target) :output)
+                           (integerp (redirect-fd-dup-target-source target))
+                           (integerp (redirect-fd-dup-target-target target))
+                           (or (and (= (redirect-fd-dup-target-source target) 1)
+                                    (= (redirect-fd-dup-target-target target) 2))
+                               (and (= (redirect-fd-dup-target-source target) 2)
+                                    (= (redirect-fd-dup-target-target target) 1))))))))
+        redirects))
+
+(defun %shell-quote (value)
+  (with-output-to-string (stream)
+    (write-char #\' stream)
+    (loop for character across (princ-to-string value)
+          do (if (char= character #\')
+                 (write-string "'\\''" stream)
+                 (write-char character stream)))
+    (write-char #\' stream)))
+
+(defun %shell-heredoc-delimiter (body index)
+  (let ((delimiter (format nil "NSHELL_HEREDOC_~d" index)))
+    (loop while (and body (search delimiter body :test #'char=))
+          do (incf index)
+             (setf delimiter (format nil "NSHELL_HEREDOC_~d" index)))
+    delimiter))
+
+(defun shell-redirect-script (redirects)
+  "Render REDIRECTS as source-ordered shell redirections for a child wrapper."
+  (with-output-to-string (stream)
+    (write-string "exec \"$@\"" stream)
+    (let ((heredocs '())
+          (index 0))
+      (dolist (entry redirects)
+        (let ((kind (car entry))
+              (target (cdr entry)))
+          (case kind
+            ((:> :>> :2> :2>> :<)
+             (format stream " ~a~a"
+                     (case kind
+                       (:> ">") (:>> ">>") (:2> "2>")
+                       (:2>> "2>>") (:< "<"))
+                     (%shell-quote target)))
+            (:&>
+             (format stream " >~a 2>&1" (%shell-quote target)))
+            (:&>>
+             (format stream " >>~a 2>&1" (%shell-quote target)))
+            (:2>&1
+             (write-string " 2>&1" stream))
+            (:<<<
+             (let* ((body (format nil "~a~%" (or target "")))
+                    (delimiter (%shell-heredoc-delimiter body index)))
+               (incf index)
+               (push (cons delimiter body) heredocs)
+               (format stream " <<~a" (%shell-quote delimiter))))
+            ((:<< :<<-)
+             (let ((delimiter (%shell-heredoc-delimiter target index)))
+               (incf index)
+               (push (cons delimiter target) heredocs)
+               (format stream " ~a~a"
+                       (if (eq kind :<<-) "<<-" "<<")
+                       (%shell-quote delimiter))))
+            (:fd-dup
+             (let* ((dup-target target)
+                    (operator
+                      (if (eq (redirect-fd-dup-target-operator dup-target)
+                              :input)
+                          "<&"
+                          ">&"))
+                    (source (redirect-fd-dup-target-source dup-target))
+                    (destination (redirect-fd-dup-target-target dup-target)))
+               (format stream " ~d~a~a"
+                       source operator
+                       (if (eq destination :close)
+                           "-"
+                           destination))))
+            (otherwise
+             (error "Unsupported shell redirect kind ~s" kind)))))
+      (write-char #\Newline stream)
+      (dolist (heredoc (nreverse heredocs))
+        (let ((body (cdr heredoc)))
+          (when body
+            (write-string body stream)
+            (unless (and (> (length body) 0)
+                         (char= (char body (1- (length body))) #\Newline))
+              (write-char #\Newline stream))))
+        (format stream "~a~%" (car heredoc))))))
 
 (defun %redirect-output-destination-state-apply-redirect-entry (state entry)
   (%redirect-output-destination-state-apply-entry

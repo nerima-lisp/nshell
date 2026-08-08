@@ -5,12 +5,18 @@
   "Reset the global shell state for a non-interactive (batch or script) run."
   (setf *running* t
         *last-exit-code* 0
+        *pipefail* nil
         *last-command-duration-ms* nil
+        *prompt-rendered-terminal-width* 80
+        *prompt-rendered-prompt-width* 0
+        *prompt-rendered-origin-row* 1
+        *prompt-rendered-origin-column* 1
+        *prompt-rendered-origin-known-p* t
+        *interactive-terminal-installed-p* nil
         *environment* (nshell.domain.environment:inject-os-environment
                        (nshell.domain.environment:make-default-environment)))
   (%reset-repl-state-tables)
-  (install-expansion-filesystem)
-  (configure-completion-filesystem))
+  (install-expansion-filesystem))
 
 (defun %run-batch-source-lines (lines)
   (handler-case

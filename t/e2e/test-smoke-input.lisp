@@ -1,6 +1,40 @@
 (in-package #:nshell/test)
 
 (describe "e2e-tests"
+  (it "e2e-seeded-completion-applies-hierarchical-subcommand-flag"
+    (with-seeded-completion-knowledge-base (kb)
+      (let* ((candidates
+               (nshell.domain.completion:complete kb "git status --p"))
+             (texts (completion-texts candidates))
+             (state (input-state
+                     :buffer "git status --p"
+                     :cursor-pos (length "git status --p")
+                     :last-candidates texts)))
+        (expect '("--porcelain") :to-equal texts)
+        (multiple-value-bind (next-state output)
+            (reduce-once state :tab)
+          (is-input-state next-state
+                          :buffer "git status --porcelain"
+                          :cursor-pos (length "git status --porcelain"))
+          (expect :complete :to-be output)))))
+
+  (it "e2e-seeded-completion-applies-nested-subcommand-flag"
+    (with-seeded-completion-knowledge-base (kb)
+      (let* ((candidates
+               (nshell.domain.completion:complete kb "docker compose up --d"))
+             (texts (completion-texts candidates))
+             (state (input-state
+                     :buffer "docker compose up --d"
+                     :cursor-pos (length "docker compose up --d")
+                     :last-candidates texts)))
+        (expect '("--detach") :to-equal texts)
+        (multiple-value-bind (next-state output)
+            (reduce-once state :tab)
+          (is-input-state next-state
+                          :buffer "docker compose up --detach"
+                          :cursor-pos (length "docker compose up --detach"))
+          (expect :complete :to-be output)))))
+
   (it "e2e-abbreviation-expands-on-enter-before-execution"
     (with-repl-test-state
       (setf (gethash "say" nshell.presentation::*abbreviations*) "echo hello")
@@ -200,4 +234,3 @@
                       :completion-base-cursor nil
                       :last-candidates nil
                       :suggestion nil))))
-

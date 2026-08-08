@@ -10,6 +10,7 @@
     (exit-code-int nil :type (or null integer))
     (pids-list nil :type list)
     (command-line-str "" :type string)
+    (pipefail-p nil :type boolean)
     (background-visible-p nil :type boolean)))
 
 (defun %job-string-value (value)
@@ -134,11 +135,12 @@
     (%set-job-command-line job command-line))
   job)
 
-(defun job-register-background-processes (job pids command-line)
+(defun job-register-background-processes (job pids command-line &key (pipefail-p nil))
   (job-record-runtime-metadata job
                                :pids pids
                                :pgid (or (first pids) 0)
                                :command-line command-line)
+  (setf (job-pipefail-p job) (not (null pipefail-p)))
   (%set-job-background-p job t)
   (job-state-transition job :running))
 

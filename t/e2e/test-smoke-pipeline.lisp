@@ -14,7 +14,7 @@
     (with-repl-test-state
       (let* ((root (merge-pathnames (format nil "nshell-pipeline-redir-~d/"
                                             (random 1000000))
-                                    (uiop:temporary-directory)))
+                                    (host-kit:temporary-directory)))
              (input (merge-pathnames "input.txt" root))
              (output (merge-pathnames "output.txt" root))
              (content "pipeline redirection"))
@@ -41,7 +41,7 @@
                        (expect content :to-equal actual))))))
           (handler-case
               (when (probe-file root)
-                (uiop:delete-directory-tree root :validate t))
+                (host-kit:delete-directory-tree root :validate t))
             (error ()))))))
 
   (it "e2e-syntax-error-stops-before-execution"

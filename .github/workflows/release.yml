@@ -14,25 +14,48 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   # Gate the release once, before any binary is built. Splitting this out of
   # the matrix means the org invariants are checked a single time rather than
-  # once per target, and a mismatch fails before spending three SBCL image
-  # builds on a release that must not be published.
+  # once per target, and a mismatch fails before spending two native builds on
+  # a release that must not be published.
   verify:
     name: Verify the tagged tree
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      commit-sha: ${{ steps.release-ref.outputs.commit-sha }}
     env:
       RELEASE_REF: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          ref: refs/tags/${{ github.event.inputs.tag || github.ref_name }}
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Resolve release tag
+        id: release-ref
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_REF" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Release tag must be strict SemVer vMAJOR.MINOR.PATCH: $RELEASE_REF" >&2
+            exit 1
+          fi
+          tag_ref="refs/tags/$RELEASE_REF"
+          git show-ref --verify --quiet "$tag_ref" || {
+            echo "::error::Release tag does not exist: $RELEASE_REF" >&2
+            exit 1
+          }
+          commit_sha="$(git rev-parse "$tag_ref^{commit}")"
+          if [[ "$(git rev-parse HEAD)" != "$commit_sha" ]]; then
+            echo "::error::Checked-out commit does not match $RELEASE_REF" >&2
+            exit 1
+          fi
+          echo "commit-sha=$commit_sha" >> "$GITHUB_OUTPUT"
 
       # Enforces the org invariant "git tag == .asd :version" at the only point
       # where it can still be corrected cheaply. Without this gate the two drift
@@ -43,13 +66,18 @@ jobs:
           PACKAGE: nshell
         run: |
           set -euo pipefail
-          asd_version="$(sed -n 's/^[[:space:]]*:version "\([^"]*\)".*/\1/p' "$PACKAGE.asd" | head -n1)"
           tag_version="${RELEASE_REF#v}"
-          echo "asd=$asd_version tag=$tag_version"
-          if [[ "$asd_version" != "$tag_version" ]]; then
-            echo "::error::Tag $RELEASE_REF does not match $PACKAGE.asd version $asd_version" >&2
+          mapfile -t asd_versions < <(perl -ne 'print "$1\n" if /^\s*:version "([^"]*)"/' "$PACKAGE.asd")
+          if [[ "${#asd_versions[@]}" -eq 0 ]]; then
+            echo "::error::Could not read :version from $PACKAGE.asd" >&2
             exit 1
           fi
+          for asd_version in "${asd_versions[@]}"; do
+            if [[ "$asd_version" != "$tag_version" ]]; then
+              echo "::error::Tag $RELEASE_REF does not match $PACKAGE.asd version $asd_version" >&2
+              exit 1
+            fi
+          done
 
       - uses: ./.github/actions/nix-setup
         with:
@@ -78,7 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          ref: ${{ needs.verify.outputs.commit-sha }}
           persist-credentials: false
 
       - uses: ./.github/actions/nix-setup
@@ -86,21 +114,31 @@ jobs:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Build release binary
-        run: nix build --print-build-logs
+      - name: Check flake on native platform
+        run: nix flake check --print-build-logs
 
-      - name: Verify release binary starts
-        run: |
-          echo 'echo nshell-ci-ok' | ./result/bin/nshell | grep -q nshell-ci-ok
+      - name: Build release bundle
+        run: nix build .#releaseBundle --print-build-logs
 
       - name: Package tarball + checksum
         run: |
           set -euo pipefail
           name="nshell-${RELEASE_REF}-x86_64-linux"
           mkdir -p "dist/${name}"
-          cp result/bin/nshell "dist/${name}/"
-          cp README.md LICENSE man/nshell.1 "dist/${name}/"
-          tar -czf "dist/${name}.tar.gz" -C dist "${name}"
+          cp -R result/. "dist/${name}/"
+          package() {
+            output="$1"
+            # The positional parameters are expanded by the inner bash.
+            # shellcheck disable=SC2016
+            nix shell --inputs-from . nixpkgs#gnutar nixpkgs#gzip --command bash -euo pipefail -c '
+              tar --sort=name --mtime="@0" --owner=0 --group=0 --numeric-owner \
+                -cf - -C dist "$1" | gzip -n > "$2"
+            ' bash "${name}" "$output"
+          }
+          package "dist/${name}.tar.gz"
+          package "dist/${name}.repro.tar.gz"
+          cmp "dist/${name}.tar.gz" "dist/${name}.repro.tar.gz"
+          rm "dist/${name}.repro.tar.gz"
           ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
 
       # Creates the release as an empty draft, with the tarball and checksum

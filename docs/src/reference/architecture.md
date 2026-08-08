@@ -14,6 +14,29 @@ src/
                      highlighting, autosuggestions, completion UI.
 ```
 
+`src/<DDD>` is the composition route for the existing shell runtime. New
+capabilities are vertical features under `packages/`, with the same DDD layer
+names kept together inside each feature:
+
+```
+packages/
+├── core/<name>/src/<DDD>/       Shared domain and architecture primitives.
+└── feature/<name>/src/<DDD>/    A feature's domain, use cases, adapters, and UI.
+```
+
+The command-line feature is the first slice in this layout. Its pure option
+policy, application contract, `cl-cli` adapter, and help presentation live in
+`packages/feature/command-line/src/`. `src/main.lisp` remains a small
+composition root: its established internal entry points delegate to the
+feature boundary, so existing startup and test callers do not need to know
+where the slice is stored. ASDF loads the package modules before the legacy
+`src/<DDD>` components, preserving the dependency direction while making the
+vertical boundary explicit.
+
+Tests follow the same observable boundaries: `t/unit/` checks feature policy
+and contracts, `t/integration/` checks the source topology, and `t/e2e/`
+checks that the `src/main` route exposes the feature's user-facing behavior.
+
 The REPL is structured as a **continuation-passing / trampoline loop**: each
 keystroke runs a pure reducer over an immutable `input-state`, and rendering is
 derived from that state. This keeps the interactive core deterministic and

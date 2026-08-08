@@ -12,7 +12,7 @@
 
 (defun %flag-argument-p (argument)
   "Return T when ARGUMENT looks like an option flag (starts with a dash)."
-  (and (stringp argument) (plusp (length argument)) (char= (char argument 0) #\-)))
+  (nshell.feature.command-line:flag-argument-p argument))
 
 ;;; The flag-led surface (`--help`/`-h`, `--version`/`-V`, `-c COMMAND [ARGS…]`,
 ;;; no-args) is parsed by cl-cli.  We keep nshell's own help/version text and
@@ -22,46 +22,13 @@
 ;;; flag-like ones — becomes a literal argument for $argv.
 (defun %build-cli-app ()
   "Build the cl-cli application spec describing nshell's command line."
-  (cl-cli:make-app
-   :name "nshell"
-   :summary "fish-inspired shell in Common Lisp"
-   :auto-help nil
-   :global-options
-   (list
-    (cl-cli:make-option :key :show-help :name "help" :short #\h :kind :flag
-                        :description "Show usage and exit.")
-    (cl-cli:make-option :key :show-version :name "version" :short #\V :kind :flag
-                        :description "Show version and exit.")
-    (cl-cli:make-option :key :command :name "command" :short #\c :kind :value
-                        :stop-parsing-p t
-                        :description
-                        "Execute COMMAND once in batch mode; ARGS become $argv."))
-   :positionals
-   ;; Only reached via the `-c` stop-parsing tail; a leading SCRIPT is handled
-   ;; before parsing (see MAIN) to preserve its arguments verbatim.
-   (list (cl-cli:make-positional :key :command-args :rest-p t))))
+  (nshell.feature.command-line:build-cli-app))
 
 (defun %print-usage (&optional (stream *standard-output*))
-  (format
-    stream
-    "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]~%")
-  (format stream "~%")
-  (format stream "Without arguments, nshell starts an interactive shell when~%")
-  (format
-    stream
-    "stdin is a terminal and reads batch input from stdin otherwise.~%")
-  (format
-    stream
-    "With -c/--command, nshell executes COMMAND once in batch mode (ARGS are $argv).~%")
-  (format
-    stream
-    "With a SCRIPT file argument, nshell runs the script (ARGS are $argv).~%"))
+  (nshell.feature.command-line:print-usage stream))
 
 (defun %print-version (&optional (stream *standard-output*))
-  (format
-    stream
-    "nshell v0.4.0 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
-    (lisp-implementation-version)))
+  (nshell.feature.command-line:print-version stream))
 
 (defun %fatal-error (error)
   (format *error-output* "Fatal error: ~a~%" error)

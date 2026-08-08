@@ -36,10 +36,24 @@
   :serial t
   :components
   ((:file "package")
+   (:module "core-kernel"
+    :pathname "../packages/core/kernel/src"
+    :serial t
+    :components ((:file "package")
+                 (:file "domain/feature-registry")))
    (:file "package-domain")
    (:file "package-application")
    (:file "package-infrastructure")
    (:file "package-presentation")
+   (:module "feature-command-line"
+    :pathname "../packages/feature/command-line/src"
+    :serial t
+    :components ((:file "package")
+                 (:file "feature")
+                 (:file "domain/options")
+                 (:file "application/contract")
+                 (:file "infrastructure/cl-cli-adapter")
+                 (:file "presentation/help")))
    (:file "util/struct-macros")
    (:file "util/strings")
    (:file "domain/events/base-event")
@@ -260,6 +274,7 @@
                (:file "support/prompt")
                (:file "support/history")
                (:file "support/matchers")
+   (:file "unit/test-package-by-feature")
    (:file "unit/test-domain-events")
    (:file "unit/test-signals")
    (:file "unit/test-execution-domain")
@@ -357,6 +372,7 @@
    (:file "integration/test-terminal-ansi")
    (:file "integration/test-file-config")
    (:file "integration/test-file-history")
+   (:file "integration/test-package-topology")
    (:file "e2e/test-smoke")
    (:file "e2e/test-smoke-script")
    (:file "e2e/test-smoke-input")
@@ -365,6 +381,7 @@
    (:file "e2e/test-history")
    (:file "e2e/test-signals")
    (:file "e2e/test-job-control")
+   (:file "e2e/test-package-route")
    (:file "perf/test-startup")
    ;; Appended rather than inserted next to helpers-runner: :serial t makes the
    ;; order load order, and every existing entry must keep its position.

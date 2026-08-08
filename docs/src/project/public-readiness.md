@@ -17,8 +17,8 @@ and scripting subset.
 | --- | --- | --- | --- |
 | Interactive editor | Live syntax feedback, Emacs bindings, optional vi mode, multiline editing, undo/yank, predictable rendering | README highlights, man page key bindings, input-state and rendering tests | Ready locally |
 | History and suggestions | Persistent history, reverse search, prefix autosuggestions, safe handling of multiline entries | history, autosuggest, and E2E editing tests | Ready locally |
-| Completion | Context-aware command/path/flag completion, candidate menu, deterministic cycling and cancellation | completion domain tests, REPL completion rendering tests, common external command metadata, help-text metadata loader with selective runtime enrichment, README/man page claims | Improved locally; broader command discovery/cache policy and subcommand coverage remain future work |
-| Shell language | Practical interactive scripting: functions, control flow, command substitution, expansions, heredocs, here-strings, redirection, pipelines | parser, expansion, source, pipeline, and smoke tests, structured unquoted list-variable expansion | Improved locally; broader expansion parity audit still required |
+| Completion | Context-aware command/path/flag completion, candidate menu, deterministic cycling and cancellation | completion domain tests, REPL completion rendering tests, path-like argument completion, hierarchical command resolution, common external command metadata, help-text metadata loader with selective runtime enrichment, README/man page claims | Improved locally; broader command discovery/cache policy and subcommand coverage remain future work |
+| Shell language | Practical interactive scripting: functions, control flow, command substitution, expansions, heredocs, here-strings, redirection, pipelines | parser, expansion, source, pipeline, process-substitution, descriptor-duplication, tab-stripping-heredoc, and smoke tests, structured unquoted list-variable expansion | Improved locally; broader expansion parity audit still required |
 | Process control | Foreground/background jobs, `jobs`/`fg`/`bg`/`disown`, Ctrl-C foreground recovery, PTY smoke coverage, foreground external commands (editors, SSH) run to completion under a real terminal instead of being killed by the command-substitution safety timeout | job-control tests, PTY integration tests, non-sandboxed E2E gate, `docs/timeout-audit.md` (real-PTY regression test) | Needs release evidence on `x86_64-linux` |
 | Reliability | Hermetic build/test gate plus non-sandboxed OS-interactive gate for PTY, terminal, process, signal, and job-control behavior | `nix flake check --print-build-logs`; dev-shell E2E/integration command in README and CONTRIBUTING; `docs/coverage-analysis.md`'s full state-2 sweep (every line in `src/` accounted for) | Ready locally; CI evidence required across supported platforms |
 | Distribution | Reproducible Nix build, installed man page, release binary smoke, checksummed artifacts | flake build, man page, CI/release workflows, release checklist | Needs nixpkgs/Homebrew/prebuilt binary publication |
@@ -39,7 +39,7 @@ Before a public release can claim world-level interactive-shell quality:
    GitHub Release notes, and completion metadata when applicable.
 5. Open roadmap gaps remain explicit instead of being implied as complete.
 
-## 2026-08-03 local verification pass
+## Local verification
 
 What is actually checkable on a plain `aarch64-darwin` development machine
 (not CI), run directly rather than assumed:
@@ -56,19 +56,20 @@ What is actually checkable on a plain `aarch64-darwin` development machine
   `flake.nix` -- `x86_64-linux` is what `flake.nix`'s own comments name as
   the platform CI gates.
 - The equivalent SBCL-level verification -- what `checks.default` runs
-  under the hood -- was run directly instead, repeatedly across this
-  session's commits: `nshell/test` at 1327/1327 passing against a
-  from-scratch fasl cache (ruling out a warm-cache-masked load-order bug),
-  most recently after this session's `flake.lock` dependency bumps and
-  `package.lisp` file split.
+  under the hood -- is available through `nix run .#test`. The integrated
+  tree passes the complete `nshell/test` suite locally.
+- The integrated suite also covers the user-visible behavior added across the
+  current work units: OSC 52 clipboard output, tab-stripping `<<-` heredocs,
+  process substitution, ordered descriptor duplication, path-like argument
+  completion, hierarchical command completion, and SGR mouse selection.
 
 ## Current Public Gaps
 
 - Broader help-text-driven command discovery remains future work, especially for
   subcommand coverage and non-curated external tools.
 - Complete the remaining expansion-semantics audit beyond structured unquoted
-  list-variable and compound list expansion, including general `n>&m`
-  file-descriptor duplication and other unimplemented edge cases.
+  list-variable and compound list expansion, plus other unimplemented edge
+  cases.
 - Validate mouse selection and host clipboard behavior on every supported
   terminal/platform; the editor now maps SGR coordinates through captured
   prompt geometry and falls back to OSC 52 when host clipboard integration is

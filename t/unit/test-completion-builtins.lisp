@@ -108,6 +108,77 @@
                                      :kind :command
                                      :description "function"))))
 
+  (it "complete-includes-runtime-alias-and-function-candidates"
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
+          (alias-table (make-hash-table :test #'equal))
+          (function-table (make-hash-table :test #'equal)))
+      (setf (gethash "zz-runtime-zeta" alias-table) t
+            (gethash "zz-runtime-alpha" function-table) t)
+      (expect '("zz-runtime-alpha" "zz-runtime-zeta")
+              :to-equal
+              (completion-texts
+               (nshell.domain.completion:complete
+                kb
+                "zz-runtime-"
+                :alias-table alias-table
+                :function-table function-table)))))
+
+  (it "complete-filters-runtime-command-candidates-by-prefix"
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
+          (alias-table (make-hash-table :test #'equal))
+          (function-table (make-hash-table :test #'equal)))
+      (setf (gethash "zz-runtime-alpha" alias-table) t
+            (gethash "zz-other-function" function-table) t)
+      (expect '("zz-runtime-alpha")
+              :to-equal
+              (completion-texts
+               (nshell.domain.completion:complete
+                kb
+                "zz-runtime-a"
+                :alias-table alias-table
+                :function-table function-table)))))
+
+  (it "complete-ignores-empty-runtime-command-tables"
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
+          (empty-table (make-hash-table :test #'equal)))
+      (expect (nshell.domain.completion:complete
+               kb
+               "zz-runtime-"
+               :alias-table nil
+               :function-table empty-table)
+              :to-be-null)))
+
+  (it "complete-deduplicates-runtime-command-candidates"
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
+          (alias-table (make-hash-table :test #'equal))
+          (function-table (make-hash-table :test #'equal)))
+      (setf (gethash "zz-runtime-shared" alias-table) t
+            (gethash "zz-runtime-shared" function-table) t
+            (gethash "echo" alias-table) t
+            (gethash "echo" function-table) t)
+      (let ((runtime-candidates
+              (nshell.domain.completion:complete
+               kb
+               "zz-runtime-s"
+               :alias-table alias-table
+               :function-table function-table))
+            (catalog-candidates
+              (nshell.domain.completion:complete
+               kb
+               "echo"
+               :alias-table alias-table
+               :function-table function-table)))
+        (expect '("zz-runtime-shared")
+                :to-equal
+                (completion-texts runtime-candidates))
+        (expect '("echo")
+                :to-equal
+                (completion-texts catalog-candidates))
+        (expect "print arguments"
+                :to-equal
+                (nshell.domain.completion:candidate-description
+                 (first catalog-candidates))))))
+
   (it "rule-completion-candidates-carry-descriptions"
     (let* ((candidates (nshell.domain.completion:rule-complete
                         nshell.domain.completion::*built-in-rule-knowledge-base*

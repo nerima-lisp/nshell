@@ -207,6 +207,28 @@
         (expect 1 :to-equal (length solutions))
         (expect "ls" :to-equal (solution-binding '?command (first solutions))))))
   (it
+    "rule-completion-projects-solution-values-through-candidates"
+    (let ((kb (make-empty-rule-kb)))
+      (nshell.domain.completion:assert-fact!
+       kb
+       (nshell.domain.completion:make-fact
+        :predicate 'nshell.domain.completion::completes
+        :args '("git" "status")))
+      (nshell.domain.completion:assert-fact!
+       kb
+       (nshell.domain.completion:make-fact
+        :predicate 'nshell.domain.completion::describes
+        :args '("git" "version control")))
+      (let ((candidates (nshell.domain.completion:rule-complete kb "gi")))
+        (expect 1 :to-equal (length candidates))
+        (expect "git"
+                :to-equal
+                (nshell.domain.completion:candidate-text (first candidates)))
+        (expect "version control"
+                :to-equal
+                (nshell.domain.completion:candidate-description
+                 (first candidates))))))
+  (it
     "rule-solution-projections-are-internal-boundaries"
     (assert-package-function-boundaries
       :package

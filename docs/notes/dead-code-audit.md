@@ -1,14 +1,14 @@
 # Dead-code audit
 
 A whole-tree `paredit inspect unused-definitions` scan over `src/` **and**
-`tests/` together (so cross-references from tests count), and the verification
+`t/` together (so cross-references from tests count), and the verification
 that every remaining flag is a false positive rather than removable code.
 
 ## Method
 
 ```
 paredit inspect unused-definitions --output json \
-  src/**/*.lisp src/*.lisp tests/**/*.lisp tests/*.lisp
+  src/**/*.lisp src/*.lisp t/**/*.lisp t/*.lisp
 ```
 
 Scanning src *with* tests matters: scanning `src/` alone reports 239 candidates
@@ -24,7 +24,7 @@ test suite). With tests included the count falls to 179, of which paredit marks
 | `run-tests` | function | `nshell.asd:299`, `scripts/coverage.lisp:43` | invoked via `(uiop:symbol-call :nshell/test '#:run-tests)` — a string, invisible to static call graphs |
 | `%inject-os-environment-entry` | function | `domain/environment/env.lisp:145` | called inside a `dolist`/`setf` the resolver doesn't trace |
 | `string->octets`, `pty-test-*`, `%e2e-pty-*`, `%terminate-pty-process` | function | the PTY test bodies | called inside cl-weave `it`/`describe` macro expansions (paredit's `unknown-macro` category) |
-| `open-pty-darwin`, `open-pty-linux`, `%pty-fork-exec`, `pty-spawn`, `with-pty`, `skip-when-pty-round-trip-unreliable` | function/macro | `infrastructure/acl/pty.lisp` + PTY tests | platform dispatch under `#+darwin`/`#+linux` reader conditionals and macro-wrapped call sites |
+| `open-pty-darwin`, `open-pty-linux`, `%pty-fork-exec`, `pty-spawn`, `with-pty`, `skip-when-pty-round-trip-unreliable` | function/macro | `infrastructure/acl/pty.lisp` + `infrastructure/acl/pty-spawn.lisp` + PTY tests | platform dispatch under `#+darwin`/`#+linux` reader conditionals and macro-wrapped call sites |
 
 The other 161 candidates split into `struct` (103) and `unknown-macro` (58):
 

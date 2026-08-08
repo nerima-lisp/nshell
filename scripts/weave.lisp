@@ -11,6 +11,13 @@
 
 (require :asdf)
 
+(load
+ (merge-pathnames
+  #P"asdf-runtime.lisp"
+  (uiop:pathname-directory-pathname
+   (or *load-truename* *load-pathname*))))
+(nshell-configure-writable-asdf-output)
+
 (let* ((root (truename #P"./"))
        (parent (uiop:pathname-parent-directory-pathname root)))
   (asdf:initialize-source-registry

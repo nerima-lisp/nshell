@@ -32,12 +32,7 @@
       (expect 1 :to-equal (length solutions))
       (expect (first solutions) :to-be-null)))
 
-  ;; Expected failure: a PREDICATE-TRUE-P extension used as a *sub-goal* inside
-  ;; a rule body is not resolved by cl-prolog (the engine unwinds on an
-  ;; undefined predicate; see the PROVE docstring), so no solution is found.
-  ;; This documents that boundary; registering builtins as cl-prolog foreign
-  ;; predicates would be needed to make it participate. Also failed under FiveAM.
-  (it-fails "builtin-predicate-participates-in-rule-body"
+  (it "builtin-predicate-participates-in-rule-body"
     (let ((kb (make-empty-rule-kb)))
       (nshell.domain.completion:assert-fact!
        kb
@@ -52,12 +47,12 @@
         (expect 1 :to-equal (length solutions))
         (expect "git" :to-equal (solution-binding '?cmd (first solutions))))))
 
-  (it "builtin-predicate-solutions-are-combined-with-facts"
+  (it "builtin-predicate-is-authoritative-over-a-colliding-fact"
     (let ((kb (make-empty-rule-kb)))
       (nshell.domain.completion:assert-fact!
        kb
        (nshell.domain.completion:make-fact :predicate 'test-builtin-true :args '()))
-      (expect 2 :to-equal (length (nshell.domain.completion:prove-all kb '(test-builtin-true))))))
+      (expect 1 :to-equal (length (nshell.domain.completion:prove-all kb '(test-builtin-true))))))
 
   (it "occurs-check-prevents-infinite-loops"
     (let ((kb (make-empty-rule-kb)))
@@ -131,4 +126,26 @@
               (nshell.domain.completion:prove-all kb '(two-step "git" ?target)
                                                   :max-depth 4)))
         (expect 1 :to-equal (length solutions))
-        (expect "--amend" :to-equal (solution-binding '?target (first solutions)))))))
+        (expect "--amend" :to-equal (solution-binding '?target (first solutions))))))
+  (it "rule-completion-defers-filtered-descriptions"
+    "Prefix filtering must precede description evaluation."
+    (let* ((variable (find-symbol "?COMPLETION"
+                                  "NSHELL.DOMAIN.COMPLETION"))
+           (description-calls 0)
+           (candidates
+             (nshell.domain.completion::%candidates-from-rule-solutions
+              (list (list (cons variable "git-status"))
+                    (list (cons variable "ls"))
+                    (list (cons variable 42)))
+              variable
+              :option
+              :prefix "git-"
+              :description-fn
+              (lambda (value)
+                (incf description-calls)
+                (format nil "~a description" value)))))
+      (expect 1 :to-equal description-calls)
+      (expect (list "git-status") :to-equal (completion-texts candidates))
+      (expect "git-status description"
+              :to-equal
+              (nshell.domain.completion:candidate-description (first candidates))))))

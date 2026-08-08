@@ -68,6 +68,25 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
               (list 'has-flag command flag))
             (%catalog-command-projection-flags projection))))
 
+(defun %catalog-option-value-facts (projection)
+  (let ((command (%catalog-command-projection-command projection)))
+    (loop for spec in (%catalog-command-projection-option-values projection)
+          for option = (first spec)
+          append (loop for value in (rest spec)
+                       collect (list 'option-value command option value)))))
+
+(defun %catalog-normalized-exclusive-group (group)
+  (let ((members (remove-duplicates group :test #'string= :from-end t)))
+    (when (rest members)
+      members)))
+
+(defun %catalog-exclusive-option-facts (projection)
+  (let ((command (%catalog-command-projection-command projection)))
+    (loop for group in (%catalog-command-projection-exclusive-options projection)
+          for normalized = (%catalog-normalized-exclusive-group group)
+          when normalized
+            collect (list 'exclusive-group command normalized))))
+
 (defun %catalog-subcommand-completion-facts (projection)
   (let ((command (%catalog-command-projection-command projection)))
     (mapcar (lambda (subcommand)
@@ -91,7 +110,9 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
   (append (%catalog-command-rule-facts projection)
           (%catalog-subcommand-completion-facts projection)
           (%catalog-subcommand-description-facts projection)
-          (%catalog-flag-facts projection)))
+          (%catalog-flag-facts projection)
+          (%catalog-option-value-facts projection)
+          (%catalog-exclusive-option-facts projection)))
 
 (defun %catalog-help-entry (projection)
   (list :command (%catalog-command-projection-command projection)
@@ -121,6 +142,14 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
   (mapcan #'%catalog-flag-facts
           (%catalog-command-projections +builtin-command-catalog+)))
 
+(defun %builtin-command-option-value-facts ()
+  (mapcan #'%catalog-option-value-facts
+          (%catalog-command-projections +builtin-command-catalog+)))
+
+(defun %builtin-command-exclusive-option-facts ()
+  (mapcan #'%catalog-exclusive-option-facts
+          (%catalog-command-projections +builtin-command-catalog+)))
+
 (defun %external-command-rule-facts ()
   (mapcan #'%catalog-command-with-subcommand-rule-facts
           (%catalog-command-projections +external-command-catalog+)))
@@ -147,6 +176,8 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
    (mapcan #'%catalog-command-rule-facts
            (%catalog-command-projections +builtin-command-catalog+))
    (%builtin-command-flag-facts)
+   (%builtin-command-option-value-facts)
+   (%builtin-command-exclusive-option-facts)
    (%external-command-rule-facts)
    '((describes "--help" "show command help"))))
 

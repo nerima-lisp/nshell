@@ -15,7 +15,7 @@
     # branch: a bare `github:nerima-lisp/cl-nix-forge` follows that
     # repository's default branch and would change this build without warning.
     cl-nix-forge = {
-      url = "github:nerima-lisp/cl-nix-forge/v0.4.1";
+      url = "github:nerima-lisp/cl-nix-forge/v0.5.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -29,13 +29,13 @@
     # each would drag in its own nixpkgs, inflating flake.lock and rebuilding
     # the same derivations.
     cl-prolog = {
-      url = "github:nerima-lisp/cl-prolog/v1.4.0";
+      url = "github:nerima-lisp/cl-prolog/v1.4.3";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     # cl-weave is the testing framework behind both suites.
     cl-weave = {
-      url = "github:nerima-lisp/cl-weave/v1.2.0";
+      url = "github:nerima-lisp/cl-weave/v1.3.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -47,7 +47,7 @@
     # second nixpkgs to flake.lock at all. It also works uniformly for a
     # checkout that ships no flake.nix.
     cl-parser-kit = {
-      url = "github:nerima-lisp/cl-parser-kit/v1.1.0";
+      url = "github:nerima-lisp/cl-parser-kit/v1.1.1";
       flake = false;
     };
     cl-dataflow = {
@@ -55,7 +55,7 @@
       flake = false;
     };
     cl-boundary-kit = {
-      url = "github:nerima-lisp/cl-boundary-kit/v2.1.0";
+      url = "github:nerima-lisp/cl-boundary-kit/v2.3.0";
       flake = false;
     };
     cl-cli = {
@@ -63,13 +63,13 @@
       flake = false;
     };
     cl-tty-kit = {
-      url = "github:nerima-lisp/cl-tty-kit/v1.3.0";
+      url = "github:nerima-lisp/cl-tty-kit/v1.5.0";
       flake = false;
     };
     # cl-process-kit consolidates timeout-guarded process launch; it sits on
     # cl-boundary-kit (clock/sleeper) and cl-log-kit (structured logging).
     cl-log-kit = {
-      url = "github:nerima-lisp/cl-log-kit/v2.1.0";
+      url = "github:nerima-lisp/cl-log-kit/v2.2.0";
       flake = false;
     };
     cl-process-kit = {
@@ -80,7 +80,7 @@
     # navigation cursor; nshell itself keeps only the tokenizer-coupled
     # `!$`/Alt-. last-argument extraction on top of it.
     cl-history-kit = {
-      url = "github:nerima-lisp/cl-history-kit/v1.0.2";
+      url = "github:nerima-lisp/cl-history-kit/v1.0.4";
       flake = false;
     };
     # cl-host-kit replaces uiop for this repository's host operations
@@ -89,7 +89,19 @@
     # SBCL-only and depends on nothing but the sb-posix contrib, so it needs no
     # `lispDependencies` of its own below.
     cl-host-kit = {
-      url = "github:nerima-lisp/cl-host-kit/v0.3.0";
+      url = "github:nerima-lisp/cl-host-kit/v0.3.1";
+      flake = false;
+    };
+    cl-codec-kit = {
+      url = "github:nerima-lisp/cl-codec-kit/v0.5.0";
+      flake = false;
+    };
+    cl-concurrent-kit = {
+      url = "github:nerima-lisp/cl-concurrent-kit/v0.6.1";
+      flake = false;
+    };
+    cl-date-kit = {
+      url = "github:nerima-lisp/cl-date-kit/v1.0.0";
       flake = false;
     };
 
@@ -115,6 +127,9 @@
       cl-process-kit,
       cl-history-kit,
       cl-host-kit,
+      cl-codec-kit,
+      cl-concurrent-kit,
+      cl-date-kit,
       treefmt-nix,
     }:
     let
@@ -163,6 +178,7 @@
               name,
               source,
               dependencies ? [ ],
+              patches ? [ ],
             }:
             ctx.cl.lispDerivation {
               pname = name;
@@ -175,6 +191,7 @@
               src = source;
               lispSystem = name;
               lispDependencies = dependencies;
+              inherit patches;
             };
         in
         rec {
@@ -193,24 +210,57 @@
           clDataflow = sibling {
             name = "cl-dataflow";
             source = cl-dataflow;
-            dependencies = [ clProlog ];
+            dependencies = [
+              clProlog
+              clConcurrentKit
+            ];
           };
-          clLogKit = sibling {
-            name = "cl-log-kit";
-            source = cl-log-kit;
+          clDateKit = sibling {
+            name = "cl-date-kit";
+            source = cl-date-kit;
+          };
+          clHostKit = sibling {
+            name = "cl-host-kit";
+            source = cl-host-kit;
+          };
+          clCodecKit = sibling {
+            name = "cl-codec-kit";
+            source = cl-codec-kit;
           };
           clBoundaryKit = sibling {
             name = "cl-boundary-kit";
             source = cl-boundary-kit;
-            dependencies = [ clLogKit ];
+            dependencies = [ clHostKit ];
+          };
+          clConcurrentKit = sibling {
+            name = "cl-concurrent-kit";
+            source = cl-concurrent-kit;
+            dependencies = [
+              clBoundaryKit
+              clDateKit
+            ];
+          };
+          clLogKit = sibling {
+            name = "cl-log-kit";
+            source = cl-log-kit;
+            dependencies = [
+              clConcurrentKit
+              clDateKit
+              clHostKit
+            ];
           };
           clCli = sibling {
             name = "cl-cli";
             source = cl-cli;
+            dependencies = [ clHostKit ];
           };
           clTtyKit = sibling {
             name = "cl-tty-kit";
             source = cl-tty-kit;
+            dependencies = [
+              clCodecKit
+              clConcurrentKit
+            ];
           };
           clProcessKit = sibling {
             name = "cl-process-kit";
@@ -218,15 +268,16 @@
             dependencies = [
               clBoundaryKit
               clLogKit
+              clCodecKit
             ];
+            # v3.2.0 defines %monotonic-seconds in both parameters.lisp and
+            # fd-readiness.lisp. Upstream main is still identical; remove this
+            # patch when a release containing the upstream fix is available.
+            patches = [ ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch ];
           };
           clHistoryKit = sibling {
             name = "cl-history-kit";
             source = cl-history-kit;
-          };
-          clHostKit = sibling {
-            name = "cl-host-kit";
-            source = cl-host-kit;
           };
         };
 
@@ -285,6 +336,9 @@
           clProcessKit
           clHistoryKit
           clHostKit
+          clCodecKit
+          clConcurrentKit
+          clDateKit
         ];
 
       # cl-weave is a dependency of `nshell/test` and `nshell/weave` only (see
@@ -397,6 +451,17 @@
               drv = ctx.package;
               entryPoint = "scripts/weave.lisp";
               name = "nshell-weave-suite";
+              timeoutSeconds = 1800;
+            };
+
+            # Generate the sb-cover report and enforce the configured source
+            # expression minimum. The report also records the distance from
+            # the aspirational 100% target without making an unsupported
+            # claim that structural sb-cover forms are executable.
+            coverage = ctx.cl.mkScriptCheck {
+              drv = ctx.package;
+              entryPoint = "scripts/coverage.lisp";
+              name = "nshell-src-coverage";
               timeoutSeconds = 1800;
             };
 

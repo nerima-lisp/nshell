@@ -1,17 +1,34 @@
 (in-package #:nshell/test)
 
-(defmethod nshell.domain.completion:predicate-true-p
-    ((predicate (eql 'test-builtin-true)) args bindings)
-  (declare (ignore predicate args bindings))
-  t)
+(cl-prolog:define-foreign-predicate (test-builtin-true)
+    (rulebase environment depth emit)
+  (declare (ignore rulebase depth))
+  (funcall emit environment))
 
-(defmethod nshell.domain.completion:predicate-true-p
-    ((predicate (eql 'test-builtin-string=)) args bindings)
-  (declare (ignore predicate bindings))
-  (and (= 2 (length args))
-       (string= (first args) (second args))))
+(cl-prolog:define-foreign-predicate (test-builtin-string= a b)
+    (rulebase environment depth emit)
+  (declare (ignore rulebase depth))
+  (when (and (stringp a) (stringp b) (string= a b))
+    (funcall emit environment)))
 
 (describe "completion-rules-tests"
+  (it "foreign-predicate-resolves-as-top-level-goal"
+    (let ((kb (make-empty-rule-kb)))
+      (expect 1 :to-equal (length (nshell.domain.completion:prove-all kb '(test-builtin-true))))
+      (expect 1 :to-equal (length (nshell.domain.completion:prove-all kb '(test-builtin-string= "a" "a"))))
+      (expect 0 :to-equal (length (nshell.domain.completion:prove-all kb '(test-builtin-string= "a" "b"))))))
+
+  (it "foreign-predicate-resolves-as-rule-body-subgoal"
+    (let ((kb (make-empty-rule-kb)))
+      (nshell.domain.completion:assert-fact!
+       kb
+       (nshell.domain.completion:make-fact :predicate 'command-is :args '("cd" "cd")))
+      (nshell.domain.completion:assert-rule!
+       kb
+       (nshell.domain.completion:make-rule :head '(suggests-dir ?input)
+                                            :body '((command-is ?input "cd") (test-builtin-true))))
+      (expect 1 :to-equal (length (nshell.domain.completion:prove-all kb '(suggests-dir "cd"))))))
+
   (it "fact-only-resolution"
     (let ((kb (make-empty-rule-kb)))
       (nshell.domain.completion:assert-fact!

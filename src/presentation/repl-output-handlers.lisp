@@ -232,6 +232,15 @@
 (define-output-event-handler %process-redraw-output-event
     with-cleared-rendered-completions-and-prompt-cont)
 
+(define-output-event-handler %process-copy-output-event
+    with-cleared-rendered-completions-and-prompt-cont
+    (let ((selection (and *input-state*
+                          (kill-ring-first-selection *input-state*))))
+      (when selection
+        (let ((text (kill-ring-selection-text selection)))
+          (when (plusp (length text))
+            (nshell.infrastructure.terminal:ansi-copy-to-clipboard text))))))
+
 (define-output-event-handler %process-quit-output-event
     progn
     (setf *running* nil)

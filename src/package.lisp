@@ -413,6 +413,7 @@ line editor has a single place to import them from.")
                 #:key-event-data)
   (:export #:enable-raw-mode #:restore-terminal-mode
             #:ansi-clear-screen #:ansi-clear-line #:ansi-move-cursor
+            #:ansi-copy-to-clipboard
             #:ansi-color-code
             #:ansi-save-cursor #:ansi-restore-cursor
             #:ansi-hide-cursor #:ansi-show-cursor

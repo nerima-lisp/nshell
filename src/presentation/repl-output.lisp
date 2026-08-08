@@ -12,5 +12,6 @@
     (:history-next (%process-history-next-output-event))
     (:clear-screen (%process-clear-screen-output-event))
     (:insert-last-argument (%process-insert-last-argument-output-event))
+    (:copy (%process-copy-output-event))
     (:redraw (%process-redraw-output-event))
     (t (%process-default-output-event))))

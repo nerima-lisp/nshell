@@ -99,6 +99,33 @@
                                 '("posix=hi" "fish=bye" "dq=quoted")
                                 0))
 
+  (it "e2e-main-command-merges-stderr-with-pipe-and-ampersand"
+    "The public -c path supports |& by feeding the left stage's stderr downstream."
+    (%assert-nshell-main-result
+     '("-c" "sh -c 'printf out; printf err >&2' |& cat")
+     "outerr"
+     0))
+
+  (it "e2e-main-command-applies-pipefail"
+    "The public -c path returns an earlier non-zero pipeline status when pipefail is enabled."
+    (%assert-nshell-main-result
+     '("-c" "set -o pipefail; sh -c 'exit 7' | sh -c 'exit 0'")
+     nil
+     7))
+
+  (it "e2e-main-command-expands-process-substitution"
+    "The -c command path materializes input process substitutions."
+    (%assert-nshell-main-result '("-c" "cat <(/usr/bin/printf process-ok)")
+                                "process-ok"
+                                0))
+
+  (it "e2e-main-command-expands-output-process-substitution"
+    "The -c command path materializes output process substitutions."
+    (%assert-nshell-main-result
+     '("-c" "sh -c 'printf output-ok > \"$1\"' sh >(cat)")
+     "output-ok"
+     0))
+
   (it "e2e-main-command-expands-documented-core-forms"
     "The -c command path expands arithmetic, parameter, and brace forms documented for scripts."
     (%assert-nshell-main-result
@@ -124,7 +151,7 @@
     "The public batch path expands filesystem globs against existing files."
     (let* ((root-path (merge-pathnames
                        (format nil "nshell-glob-e2e-~D/" (get-internal-real-time))
-                       (uiop:temporary-directory)))
+                       (host-kit:temporary-directory)))
            (root (namestring root-path))
            (txt-a (merge-pathnames "alpha.txt" root-path))
            (txt-b (merge-pathnames "gamma.txt" root-path))
@@ -157,7 +184,7 @@
             (delete-file log-file)))
         (ignore-errors
           (when (probe-file root-path)
-            (uiop:delete-directory-tree root-path :validate t))))))
+            (host-kit:delete-directory-tree root-path :validate t))))))
 
   (it "e2e-main-command-applies-fd-redirections"
     "The -c command path applies fd redirections to external command stdout and stderr."
@@ -173,12 +200,51 @@
           (expect 0 :to-equal exit-code)
           (expect "" :to-equal stdout)
           (expect "" :to-equal stderr)
-          (let ((amp-content (uiop:read-file-string amp-target))
-                (merge-content (uiop:read-file-string merge-target)))
+          (let ((amp-content (host-kit:read-file-string amp-target))
+                (merge-content (host-kit:read-file-string merge-target)))
             (expect (search "out" amp-content) :to-be-truthy)
             (expect (search "err" amp-content) :to-be-truthy)
             (expect (search "merge-out" merge-content) :to-be-truthy)
             (expect (search "merge-err" merge-content) :to-be-truthy))))))
+
+  (it "e2e-main-command-preserves-dynamic-fd-dup-order"
+    "The public command path preserves left-to-right semantics for 1>&2 followed by stdout redirection."
+    (with-temporary-output-file (target :prefix "nshell-main-dynamic-fd-dup")
+      (multiple-value-bind (stdout stderr exit-code)
+          (%run-nshell-main
+           (list "-c"
+                 (format nil
+                         "sh -c 'echo out; echo err >&2' 1>&2 > ~A"
+                         target)))
+        (expect 0 :to-equal exit-code)
+        (expect "" :to-equal stdout)
+        (expect (search "err" stderr) :to-be-truthy)
+        (expect (search "out" stderr) :to-be-falsy)
+        (expect (format nil "out~%") :to-equal (host-kit:read-file-string target)))))
+
+  (it "e2e-main-command-preserves-arbitrary-fd-dup-order"
+    "The public command path keeps fd 3 on the original stdout while stdout is redirected later."
+    (with-temporary-output-file (target :prefix "nshell-main-arbitrary-fd-dup")
+      (multiple-value-bind (stdout stderr exit-code)
+          (%run-nshell-main
+           (list "-c"
+                 (format nil
+                         "sh -c 'printf out; printf fd3 >&3' 3>&1 1>~A"
+                         target)))
+        (expect 0 :to-equal exit-code)
+        (expect "fd3" :to-equal stdout)
+        (expect "" :to-equal stderr)
+        (expect "out" :to-equal (host-kit:read-file-string target)))))
+
+  (it "e2e-main-command-reports-internal-fd-redirect-errors"
+    "The public command path turns unsupported builtin fd redirects into a shell status."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main (list "-c" "echo builtin 3>&1"))
+      (expect "" :to-equal stdout)
+      (expect 1 :to-equal exit-code)
+      (expect (not (null (search "Unsupported file-descriptor duplication 3>&1"
+                                 stderr)))
+              :to-be-truthy)))
 
   (it "e2e-main-command-reports-signal-exit-status"
     "External commands killed by a signal report the shell-compatible 128+signal status."
@@ -219,6 +285,13 @@
     (%assert-nshell-main-result (list "-c" (format nil "cat << EOF~%hello~%EOF"))
                                 (format nil "hello~%")
                                 0))
+
+  (it "e2e-main-here-document-quoted-delimiter-keeps-body-literal"
+    "The public batch command path must not expand a quoted here-document body."
+    (%assert-nshell-main-result
+     (list "-c" (format nil "cat << \"EOF\"~%$HOME $(printf substituted)~%EOF"))
+     (format nil "$HOME $(printf substituted)~%")
+     0))
 
   (it "e2e-main-type-command-executes-cleanly"
     "The entry point executes type through the batch command path."

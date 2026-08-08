@@ -96,8 +96,11 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
        (commit-vi-visual-kill-selection
         state (vi-visual-selection-for-state state) :insert))
       ((#\y)
-       (commit-vi-visual-yank-selection
-        state (vi-visual-selection-for-state state)))
+       (multiple-value-bind (new-state commit-output)
+           (commit-vi-visual-yank-selection
+            state (vi-visual-selection-for-state state))
+         (declare (ignore commit-output))
+         (values new-state :copy)))
       ((#\i) (values (%vi-enter-insert (%vi-leave-visual state)) :redraw))
       ((#\a) (values (%vi-enter-insert (%vi-leave-visual state)
                                        (min len (1+ pos)))

@@ -2,8 +2,8 @@
 
 (defun current-display-cwd ()
   "Return the prompt cwd display used by the presentation renderer."
-  (let ((cwd (namestring (uiop:getcwd)))
-        (home (uiop:getenv "HOME")))
+  (let ((cwd (namestring (host-kit:getcwd)))
+        (home (host-kit:getenv "HOME")))
     (if (and home (nshell.presentation::%home-prefix-p home cwd))
         (concatenate 'string "~" (subseq cwd (length home)))
         cwd)))
@@ -12,7 +12,7 @@
   "Return the left prompt segments for the current test process context."
   (nshell.domain.prompting:render-prompt-model
    (nshell.domain.prompting:make-prompt-model
-    :hostname (or (uiop:hostname) "localhost")
+    :hostname (or (host-kit:hostname) "localhost")
     :cwd (current-display-cwd)
     :exit-code exit-code)))
 

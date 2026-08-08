@@ -39,6 +39,12 @@
                   :kind :command
                   :description (%candidate-entry-description entry)))
 
+(defun %simple-command-name-p (name)
+  (and (stringp name)
+       (not (find-if (lambda (character)
+                       (member character '(#\Space #\Tab #\Newline #\Return)))
+                     name))))
+
 (defun builtin-command-candidates (prefix)
   (%sorted-candidates-by-text
    (loop for entry in +builtin-command-catalog+
@@ -51,7 +57,8 @@
     (%map-kb-commands
      kb
      (lambda (name entry)
-       (when (%starts-with-p prefix name)
+       (when (and (%simple-command-name-p name)
+                  (%starts-with-p prefix name))
          (push (%command-entry-candidate name entry) results))))
     (nreverse results)))
 
@@ -223,8 +230,34 @@
                       argument-words)
          collect (%argument-name-candidate name))))
 
+(defun %command-path-candidates (command argument-words)
+  (loop with paths = (list command)
+        with path = command
+        for word in argument-words
+        while (not (%starts-with-p "-" word))
+        do (setf path (format nil "~A ~A" path word))
+           (push path paths)
+        finally (return (nreverse paths))))
+
+(defun %knowledge-base-argument-command (kb command argument-words prefix)
+  (let ((selected command))
+    (dolist (candidate (%command-path-candidates
+                        command
+                        (%argument-words-without-value-prefix
+                         argument-words
+                         prefix))
+                      selected)
+      (when (and (not (string= candidate command))
+                 (kb-command-present-p kb candidate))
+        (setf selected candidate)))))
+
 (defun knowledge-base-argument-candidates (kb command prefix &key argument-words)
-  (let ((entry (%kb-command-entry kb command)))
+  (let* ((argument-command (%knowledge-base-argument-command
+                            kb
+                            command
+                            argument-words
+                            prefix))
+         (entry (%kb-command-entry kb argument-command)))
     (when entry
       (or (%attached-option-value-candidates entry prefix)
           (%separate-option-value-candidates

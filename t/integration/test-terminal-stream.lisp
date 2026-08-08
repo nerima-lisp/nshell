@@ -112,6 +112,25 @@
       (expect :paste :to-be (nshell.infrastructure.terminal:key-event-type paste))
       (expect (list :protocol :bracketed :text normalized-paste) :to-equal (nshell.infrastructure.terminal:key-event-data paste))))
 
+  (it "terminal-stream-caps-bracketed-paste-retention"
+    "Bracketed paste input is consumed fully but retained text is bounded."
+    (let* ((limit 4096)
+           (paste-text (make-string (+ limit 128) :initial-element #\x))
+           (events (read-key-events-from-string
+                    (concatenate 'string
+                                 (esc-sequence "[200~")
+                                 paste-text
+                                 (esc-sequence "[201~")
+                                 "x")))
+           (paste (first events))
+           (next (second events)))
+      (expect 2 :to-equal (length events))
+      (expect limit :to-equal
+              (length (getf (nshell.infrastructure.terminal:key-event-data paste)
+                            :text)))
+      (expect :char :to-be (nshell.infrastructure.terminal:key-event-type next))
+      (expect #\x :to-equal (nshell.infrastructure.terminal:key-event-char next))))
+
   (it "terminal-stream-decodes-modified-arrows-and-sgr-mouse-reports"
     "Advanced terminal CSI variants are normalized before presentation handling."
     (let ((shift-right (single-key-event-from-string (esc-sequence "[1;2C")))
@@ -135,6 +154,37 @@
                     :event))
       (expect :wheel-up :to-be (getf (nshell.infrastructure.terminal:key-event-data mouse-wheel)
                     :event))))
+
+  (it "terminal-stream-queries-cursor-position"
+    "Cursor position reports are decoded to 1-based coordinates."
+    (let ((response (coerce (list #\Esc #\[ #\6 #\; #\1 #\1 #\R) 'string))
+          (captured-output nil)
+          (row nil)
+          (column nil))
+      (with-input-from-string (input response)
+        (let ((*standard-input* input))
+          (setf captured-output
+                (with-output-to-string (output)
+                  (let ((*standard-output* output))
+                    (multiple-value-setq (row column)
+                      (nshell.infrastructure.terminal:query-cursor-position
+                       :attempts 8 :sleep-seconds 0)))))))
+      (expect row :to-equal 6)
+      (expect column :to-equal 11)
+      (expect captured-output :to-equal (esc-sequence "[6n"))))
+
+  (it "terminal-stream-cursor-query-preserves-ordinary-input"
+    "A missing cursor response must not consume the next ordinary key."
+    (with-input-from-string (input "x")
+      (let ((*standard-input* input))
+        (with-output-to-string (output)
+          (let ((*standard-output* output))
+            (multiple-value-bind (row column)
+                (nshell.infrastructure.terminal:query-cursor-position
+                 :attempts 1 :sleep-seconds 0)
+              (expect row :to-equal nil)
+              (expect column :to-equal nil)
+              (expect (read-char *standard-input* nil nil) :to-equal #\x)))))))
 
   (it "terminal-stream-decodes-meta-editing-keys"
     "ESC-prefixed Meta editing chords normalize to presentation key events."

@@ -93,15 +93,25 @@
          (nshell.domain.completion:*file-completion-subdirectories-fn* ,subdirectories-fn))
      ,@body))
 
-(defmacro with-repl-completion-help-fetcher ((fetch-count-var help-text &key (exit-code 0))
-                                             &body body)
+(defmacro with-repl-completion-help-fetcher
+    ((fetch-count-var help-text
+      &key
+        (exit-code 0)
+        (command-available-p
+         '(function
+           (lambda (command)
+             (declare (ignore command))
+             t))))
+     &body body)
   `(let ((,fetch-count-var 0))
      (with-repl-test-state
        (let ((nshell.presentation::*completion-help-fetcher*
                (lambda (command)
                  (declare (ignore command))
                  (incf ,fetch-count-var)
-                 (values ,help-text ,exit-code))))
+                 (values ,help-text ,exit-code)))
+             (nshell.presentation::*completion-help-command-available-p*
+               ,command-available-p))
          ,@body))))
 
 (defmacro with-repl-completion-refresh ((state candidates input

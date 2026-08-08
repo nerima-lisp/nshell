@@ -187,12 +187,12 @@
 (defun test-source-path (prefix)
   (merge-pathnames
    (make-pathname :name prefix :type "lisp")
-   (uiop:temporary-directory)))
+   (host-kit:temporary-directory)))
 
 (defun test-source-root (prefix)
   (merge-pathnames
    (make-pathname :directory `(:relative ,prefix))
-   (uiop:temporary-directory)))
+   (host-kit:temporary-directory)))
 
 (defun write-test-lines (path lines)
   (with-open-file (stream path
@@ -221,5 +221,5 @@
      (ensure-directories-exist ,path)
      (unwind-protect
           (progn ,@body)
-       (when (uiop:directory-exists-p ,root)
-         (uiop:delete-directory-tree ,root :validate t)))))
+       (when (host-kit:directory-exists-p ,root)
+         (host-kit:delete-directory-tree ,root :validate t)))))

@@ -19,7 +19,8 @@ operator-pending states after pressing d or c in normal mode."
 (deftype output-event ()
   "Events emitted by `reduce-input-state' for an outer, effectful REPL loop."
   '(member :redraw :execute :complete :suggest-update :search-start :search-update
-    :history-prev :history-next :insert-last-argument :clear-screen :none :quit))
+    :history-prev :history-next :insert-last-argument :edit-command
+    :clear-screen :none :quit :copy))
 
 (defstruct (input-state (:constructor %make-input-state
                                       (&key (buffer "")
@@ -32,6 +33,8 @@ operator-pending states after pressing d or c in normal mode."
                                              (mode :insert)
                                              (vi-count nil)
                                              (vi-visual-anchor nil)
+                                             (mouse-selection-anchor nil)
+                                             (mouse-selection-end nil)
                                              (abbreviation-expander nil)
                                              (kill-ring nil)
                                             (last-yank-start nil)
@@ -74,6 +77,8 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
   (mode :insert :type input-mode)
   (vi-count nil :type (or null integer))
   (vi-visual-anchor nil :type (or null integer))
+  (mouse-selection-anchor nil :type (or null integer))
+  (mouse-selection-end nil :type (or null integer))
   (abbreviation-expander nil :type (or null function))
   (kill-ring nil :type list)
   (last-yank-start nil :type (or null integer))
@@ -99,6 +104,8 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
                               (mode :insert)
                               (vi-count nil)
                               (vi-visual-anchor nil)
+                              (mouse-selection-anchor nil)
+                              (mouse-selection-end nil)
                               (abbreviation-expander nil)
                               (kill-ring nil)
                               (last-yank-start nil)
@@ -124,6 +131,8 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
    :mode mode
    :vi-count vi-count
    :vi-visual-anchor vi-visual-anchor
+   :mouse-selection-anchor mouse-selection-anchor
+   :mouse-selection-end mouse-selection-end
    :abbreviation-expander abbreviation-expander
    :kill-ring kill-ring
    :last-yank-start last-yank-start

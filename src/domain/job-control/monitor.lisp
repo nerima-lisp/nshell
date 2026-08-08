@@ -38,11 +38,11 @@
   (let ((id (%allocate-monitor-id monitor)))
     (%store-monitor-job monitor id job)))
 
-(defun monitor-add-background-job (monitor pids command-line)
+(defun monitor-add-background-job (monitor pids command-line &key (pipefail-p nil))
   (when pids
     (let ((job (nshell.domain.execution:make-job 0 nil)))
       (nshell.domain.execution:job-register-background-processes
-       job pids command-line)
+       job pids command-line :pipefail-p pipefail-p)
       (monitor-add-job monitor job))))
 
 (defun %monitor-job (monitor job-id)

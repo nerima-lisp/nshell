@@ -38,7 +38,7 @@ Delegates to *GIT-RUNNER* when one is bound."
       (handler-case
           (let ((result (process-kit:run
                          "git"
-                         (list* "-C" (namestring (uiop:ensure-directory-pathname dir)) args)
+                         (list* "-C" (namestring (host-kit:ensure-directory-pathname dir)) args)
                          :search t
                          :error :capture
                          :timeout *git-command-timeout*
@@ -62,7 +62,7 @@ Delegates to *GIT-RUNNER* when one is bound."
 
 (defun get-git-status (dir)
   "Return values BRANCH and DIRTY-P for DIR, using a per-directory cache."
-  (let* ((key (namestring (uiop:ensure-directory-pathname dir)))
+  (let* ((key (namestring (host-kit:ensure-directory-pathname dir)))
          (cached (gethash key *git-status-cache*)))
     (if cached
         (values (first cached) (second cached))

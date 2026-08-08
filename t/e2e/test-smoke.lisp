@@ -35,7 +35,7 @@ merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
           (cons "nshell" arguments)))
 
 (defparameter +nshell-runtime-dependencies+
-  '(:cl-prolog :cl-parser-kit :cl-dataflow :cl-boundary-kit :cl-cli :cl-tty-kit
+  '(:cl-prolog :cl-parser-kit :cl-dataflow :cl-host-kit :cl-boundary-kit :cl-cli :cl-tty-kit
     :cl-process-kit
     ;; cl-log-kit is not an nshell dependency (see docs/nerima-lisp-package-audit.md)
     ;; but cl-boundary-kit and cl-process-kit both depend on it, and the
@@ -64,37 +64,18 @@ central registry, exactly as the parent process resolved them.")
                                  dependency-root)))))
 
 (defun %run-nshell-main (arguments &key input)
-  ; Use file-based I/O to avoid pipe fd exhaustion in hermetic build sandboxes.
-  ; The :output :string approach creates a stdout pipe whose read-fd can become
-  ; invalid (EBADF on select) when fd-stream finalizers race with pipe creation
-  ; after many source files are compiled. Writing to temp files is race-free.
-  (let ((root (asdf:system-source-directory :nshell))
-        (program (append (list (current-sbcl-executable)
-                               "--noinform")
-                         (%asdf-bootstrap-forms (namestring (asdf:system-source-directory :nshell)))
-                         (list "--eval" (%nshell-main-form arguments)))))
-    (uiop:with-temporary-file (:pathname stdout-file)
-      (uiop:with-temporary-file (:pathname stderr-file)
-        (flet ((run-main (&key input-stream)
-                 (nth-value 2
-                   (uiop:run-program
-                    program
-                    :directory root
-                    :input (or input-stream nil)
-                    :output stdout-file
-                    :error-output stderr-file
-                    :if-output-exists :supersede
-                    :if-error-output-exists :supersede
-                    :ignore-error-status t
-                    :timeout 120))))
-          (let ((exit-code
-                  (if input
-                      (with-input-from-string (input-stream input)
-                        (run-main :input-stream input-stream))
-                      (run-main))))
-            (values (uiop:read-file-string stdout-file)
-                    (uiop:read-file-string stderr-file)
-                    exit-code)))))))
+  (let* ((root (asdf:system-source-directory :nshell))
+         (program (append (list (current-sbcl-executable)
+                                "--noinform")
+                          (%asdf-bootstrap-forms (namestring root))
+                          (list "--eval" (%nshell-main-form arguments))))
+         (result (host-kit:run-program (first program) (rest program)
+                                       :directory root
+                                       :input input
+                                       :timeout 120)))
+    (values (host-kit:process-result-stdout result)
+            (host-kit:process-result-stderr result)
+            (host-kit:process-result-exit-code result))))
 
 (defun %assert-nshell-main-result (arguments expected-output expected-code
                                  &key expected-error input)
@@ -238,7 +219,7 @@ terminal without waiting out the real (30s) default."
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (skip-in-sandbox "launches real nshell under a PTY"
+    (skip-when-pty-unavailable "launches real nshell under a PTY"
       (let ((program (%absolute-sbcl-executable))
             (pty nil))
         (unless program
@@ -266,7 +247,7 @@ terminal without waiting out the real (30s) default."
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (skip-in-sandbox "launches real nshell under a PTY"
+    (skip-when-pty-unavailable "launches real nshell under a PTY"
       (let ((program (%absolute-sbcl-executable))
             (pty nil))
         (unless program
@@ -303,7 +284,7 @@ terminal without waiting out the real (30s) default."
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (skip-in-sandbox "launches real nshell under a PTY"
+    (skip-when-pty-unavailable "launches real nshell under a PTY"
       (let ((program (%absolute-sbcl-executable))
             (pty nil))
         (unless program
@@ -333,37 +314,34 @@ terminal without waiting out the real (30s) default."
                  (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))
           (%terminate-pty-process pty)))))
 
-  (it "e2e-main-interactive-pty-foreground-command-ignores-external-command-timeout"
-    "A foreground external command connected to a real interactive terminal
-must not be killed by *external-command-timeout*, even when the command
-outlives it -- only a human at the terminal (Ctrl-C) or the command itself
-should end it, exactly as in a real shell."
-    #-(or darwin linux)
-    (skip "PTY tests are only supported on Darwin and Linux")
-    #+(or darwin linux)
-    (skip-in-sandbox "launches real nshell under a PTY"
-      (let ((program (%absolute-sbcl-executable))
-            (pty nil))
-        (unless program
-          (skip "requires an absolute SBCL runtime path"))
-        (unwind-protect
-             (progn
-               (setf pty
-                     (nshell.infrastructure.acl:pty-spawn
-                      program
-                      (%nshell-main-pty-arguments-with-timeout 0.5)
-                      :rows 24
-                      :cols 100))
-               (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                 (expect (search "nshell v" (%e2e-pty-read-until fd "nshell v")) :to-be-truthy)
-                 (%e2e-pty-write-line fd "sh -c 'sleep 2; echo pty-outlived-timeout'")
-                 (let ((output (%e2e-pty-read-until fd "pty-outlived-timeout" :attempts 220)))
-                   (expect (search "pty-outlived-timeout" output) :to-be-truthy)
-                   (expect (search "timed out after" output) :to-be-falsy))
-                 (%e2e-pty-write-line fd "exit")
-                 (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
-                 (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))
-          (%terminate-pty-process pty)))))
+  (it "e2e-main-interactive-pty-foreground-pipeline-ignores-external-command-timeout"
+  "A foreground external pipeline connected to a real interactive terminal."
+  #-(or darwin linux)
+  (skip "PTY tests are only supported on Darwin and Linux")
+  #+(or darwin linux)
+  (skip-when-pty-unavailable "launches real nshell under a PTY"
+    (let ((program (%absolute-sbcl-executable))
+          (pty nil))
+      (unless program
+        (skip "requires an absolute SBCL runtime path"))
+      (unwind-protect
+           (progn
+             (setf pty
+                   (nshell.infrastructure.acl:pty-spawn
+                    program
+                    (%nshell-main-pty-arguments-with-timeout 0.5)
+                    :rows 24
+                    :cols 100))
+             (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
+               (expect (search "nshell v" (%e2e-pty-read-until fd "nshell v")) :to-be-truthy)
+               (%e2e-pty-write-line fd "sh -c 'sleep 2; echo pty-outlived-timeout' | cat")
+               (let ((output (%e2e-pty-read-until fd "pty-outlived-timeout" :attempts 220)))
+                 (expect (search "pty-outlived-timeout" output) :to-be-truthy)
+                 (expect (search "timed out after" output) :to-be-falsy))
+               (%e2e-pty-write-line fd "exit")
+               (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
+               (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))
+        (%terminate-pty-process pty)))))
 
   (it "e2e-main-invalid-args-report-usage"
     "The entry point rejects unsupported option flags with a usage message."

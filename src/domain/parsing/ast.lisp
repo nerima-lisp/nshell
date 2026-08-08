@@ -13,7 +13,23 @@
     (copy-list items)))
 
 (defun %copy-command-args (args)
-  (mapcar #'%command-arg (%copy-ast-list args)))
+  (loop with here-doc-target-p = nil
+        for original in (%copy-ast-list args)
+        for arg = (%command-arg original)
+        collect
+          (prog1
+              (if (and here-doc-target-p
+                       (command-arg-quote-style arg))
+                  (make-command-arg
+                   (command-arg-value arg)
+                   (command-arg-quote-style arg)
+                   t)
+                  arg)
+            (setf here-doc-target-p
+                  (and (null (command-arg-quote-style arg))
+                       (member (command-arg-value arg)
+                               '("<<" "<<-")
+                               :test #'string=))))))
 
 (defstruct (ast-node (:constructor %make-ast-node (type &optional span)))
   (type :unknown :type keyword :read-only t)
@@ -145,13 +161,15 @@ shorter argument and the command list is one longer than the separators."
 ;; -- Arg utilities ------------------------------------------
 (define-value-struct command-arg
     ((value "" :type string)
-     (quote-style nil :type (member nil :single :double)))
+     (quote-style nil :type (member nil :single :double))
+     (here-doc-literal-p nil :type boolean))
   :keyword-constructor t)
 
-(defun make-command-arg (value &optional quote-style)
+(defun make-command-arg (value &optional quote-style here-doc-literal-p)
   (%make-command-arg
    :value (%ensure-ast-string value "COMMAND-ARG value")
-   :quote-style (%validated-command-arg-quote-style value quote-style)))
+   :quote-style (%validated-command-arg-quote-style value quote-style)
+   :here-doc-literal-p (and here-doc-literal-p t)))
 
 (defun %command-arg (arg)
   (etypecase arg
@@ -172,6 +190,10 @@ shorter argument and the command list is one longer than the separators."
   (%validated-command-arg-quote-style
    arg
    (command-arg-quote-style (%command-arg arg))))
+
+(defun arg-here-doc-literal-p (arg)
+  "Return true when ARG is a quoted here-document target/body argument."
+  (command-arg-here-doc-literal-p (%command-arg arg)))
 
 (defun command-node-arg-values (node)
   "Return all typed args as plain strings."

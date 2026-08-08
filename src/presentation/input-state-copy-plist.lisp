@@ -94,6 +94,10 @@
                                              vi-count
                                              vi-visual-anchor-supplied-p
                                              vi-visual-anchor
+                                             mouse-selection-anchor-supplied-p
+                                             mouse-selection-anchor
+                                             mouse-selection-end-supplied-p
+                                             mouse-selection-end
                                              abbreviation-expander
                                              kill-ring
                                              last-yank-start-supplied-p
@@ -121,6 +125,20 @@
                        vi-visual-anchor)
                       (input-state-vi-visual-anchor state)
                       buffer)
+   :mouse-selection-anchor
+   (input-state-copy-anchor-override-resolve
+    (input-state-copy-override-for
+     mouse-selection-anchor-supplied-p
+     mouse-selection-anchor)
+    (input-state-mouse-selection-anchor state)
+    buffer)
+   :mouse-selection-end
+   (input-state-copy-anchor-override-resolve
+    (input-state-copy-override-for
+     mouse-selection-end-supplied-p
+     mouse-selection-end)
+    (input-state-mouse-selection-end state)
+    buffer)
    :abbreviation-expander (or abbreviation-expander
                               (input-state-abbreviation-expander state))
    :kill-ring (input-state-copy-override-resolve

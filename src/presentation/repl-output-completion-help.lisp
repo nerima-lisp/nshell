@@ -4,6 +4,9 @@
 (defparameter *completion-help-timeout* 3
   "Maximum seconds to wait for a dynamic completion help lookup.")
 
+(defparameter *completion-help-max-output-chars* (* 128 1024)
+  "Maximum help output size accepted by the completion parser.")
+
 (defun %fetch-completion-help (command)
   (let ((nshell.infrastructure.acl::*external-command-timeout*
           *completion-help-timeout*))
@@ -12,10 +15,21 @@
 (defparameter *completion-help-fetcher* #'%fetch-completion-help
   "Function of COMMAND used to fetch help text for dynamic completion.")
 
+(defparameter *completion-help-command-available-p*
+  #'%repl-external-command-available-p
+  "Predicate that permits dynamic help lookup for COMMAND.")
+
+(defun %completion-help-simple-command-p (command)
+  (and (stringp command)
+       (not (find-if (lambda (character)
+                       (member character '(#\Space #\Tab #\Newline #\Return)))
+                     command))))
+
 (defparameter *completion-help-catalog-command-cache*
   (let ((cache (make-hash-table :test #'equal)))
     (dolist (spec (nshell.domain.completion:external-completion-command-specs) cache)
-      (setf (gethash (first spec) cache) t)))
+      (when (%completion-help-simple-command-p (first spec))
+        (setf (gethash (first spec) cache) t))))
   "Set of catalogued external commands that should be enriched from help output.")
 
 (defun %completion-help-catalogued-command-p (command)
@@ -32,8 +46,8 @@
 (defun %completion-help-eligible-command-p (command)
   (and (stringp command)
        (plusp (length command))
-       (or (not (nshell.domain.completion:kb-command-present-p *kb* command))
-           (%completion-help-catalogued-command-p command))))
+       (%completion-help-catalogued-command-p command)
+       (funcall *completion-help-command-available-p* command)))
 
 (defun %completion-help-cache-primed-p (command)
   (nth-value 1 (gethash command *completion-help-cache*)))
@@ -41,8 +55,11 @@
 (defun %completion-help-mark-cache-state (command state)
   (setf (gethash command *completion-help-cache*) state))
 
-(defun %completion-help-cache-help-text (command output)
-  (if (%completion-help-text-p output)
+(defun %completion-help-cache-help-text (command output exit-code)
+  (if (and (eql exit-code 0)
+           (stringp output)
+           (<= (length output) *completion-help-max-output-chars*)
+           (%completion-help-text-p output))
       (progn
         (nshell.domain.completion:kb-add-command-from-help
          *kb* command output)
@@ -53,8 +70,7 @@
   (handler-case
       (multiple-value-bind (output exit-code)
           (funcall *completion-help-fetcher* command)
-        (declare (ignore exit-code))
-        (%completion-help-cache-help-text command output))
+        (%completion-help-cache-help-text command output exit-code))
     (error ()
       :missing)))
 
@@ -99,7 +115,10 @@
         (%warm-command-completion-help command))
       (let ((candidates (when (> (length text) 0)
                           (nshell.domain.completion:complete
-                           *kb* text :path completion-path))))
+                           *kb* text
+                           :path completion-path
+                           :alias-table *aliases*
+                           :function-table *functions*))))
         (if candidates
             (multiple-value-bind (extended-state extended-p)
                 (maybe-extend-completion-common-prefix state candidates)

@@ -28,8 +28,8 @@ clean, test-driven Common Lisp core and a reproducible Nix build.
   menu.
 - **Rich line editing** — Emacs keybindings, kill-ring and yank, multi-level
   undo/redo, multiline editing, and incremental history search (`Ctrl-R`).
-  Optional **vi key bindings** (`NSHELL_VI_MODE=1`): normal-mode motions,
-  counts, operators (`dd`, `cw`, …), visual selection, and insert/append.
+ Optional **vi key bindings** (`NSHELL_VI_MODE=1`): normal-mode motions,
+ counts, operators (`dd`, `cw`, …), visual selection, and insert/append.
 - **Configurable prompt** — hostname, working directory, git branch and dirty
   status, command duration, and exit code, with theming.
 - **Job control** — background jobs (`&`), `jobs`, `fg`, `bg`, `disown`.
@@ -37,6 +37,10 @@ clean, test-driven Common Lisp core and a reproducible Nix build.
   `&&` / `||`, and command sequencing.
 - **Control flow and functions** — `if`, `for`, `while`, `switch`,
   `begin`/`end`, and user-defined `function`s.
+- **History expansion** — `!!`, `!$`, `!-N`, `!?text?`, and `!prefix`, with
+  quoted and backslash-escaped exclamation marks kept literal.
+- **External editing** — `Alt-E` opens the current line with the configured
+  editor and returns the edited buffer to the prompt.
 - **Reproducible build** — a single statically-dumped SBCL image via Nix;
   `nix run` and you're in.
 

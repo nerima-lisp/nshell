@@ -10,10 +10,12 @@
   :depends-on ("cl-prolog"
                "cl-parser-kit"
                "cl-dataflow"
+               "cl-host-kit"
                "cl-boundary-kit"
                "cl-cli"
                "cl-tty-kit"
-               "cl-process-kit")
+               "cl-process-kit"
+               "cl-concurrent-kit")
   :pathname "src"
   :serial t
   :components
@@ -216,6 +218,7 @@
     (:file "unit/test-completion-rule-prover")
     (:file "unit/test-completion-builtins")
     (:file "unit/test-completion-knowledge-base")
+    (:file "unit/test-completion-path-reducer")
     (:file "unit/test-completion-knowledge-base-behavior")
     (:file "unit/test-completion-properties")
     (:file "unit/test-completion-context")
@@ -308,7 +311,7 @@
    (:file "main-test"))
    :perform (asdf:test-op (o s)
               (declare (ignore o s))
-              (unless (uiop:symbol-call :nshell/test '#:run-tests)
+              (unless (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))
                 (error "cl-weave tests failed"))))
 
 (asdf:defsystem "nshell/weave"
@@ -336,5 +339,17 @@ primary suite in nshell/test."
    (:file "weave/entry"))
   :perform (asdf:test-op (o s)
              (declare (ignore o s))
-             (unless (uiop:symbol-call :nshell/weave '#:run :reporter :spec)
+             (unless (funcall (find-symbol "RUN" "NSHELL/WEAVE") :reporter :spec)
                (error "cl-weave suite failed"))))
+(asdf:defsystem "nshell/benchmark"
+  :version "0.4.0"
+  :author "takeokunn <bararararatty@gmail.com>"
+  :maintainer "takeokunn <bararararatty@gmail.com>"
+  :license "MIT"
+  :description "Reproducible public completion API benchmarks for nshell."
+  :depends-on ("nshell")
+  :pathname "bench"
+  :serial t
+  :components ((:file "package")
+               (:file "completion")
+               (:file "process")))

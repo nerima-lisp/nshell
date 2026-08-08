@@ -11,7 +11,7 @@
                       job-monitor alias-table abbreviation-table function-table
                       function-source-table filesystem-fns process-fns terminal-fns
                       signal-fns redirect-fns history-fns git-fns
-                      execution-strategy running last-exit-code input-state
+                      execution-strategy pipefail-p running last-exit-code input-state
                       process-registry terminal-rows terminal-cols))
             (:copier nil))
   "Dependency container for one nshell session."
@@ -33,6 +33,7 @@
   (history-fns nil :type list)
   (git-fns nil :type list)
   (execution-strategy :cps :type (member :cps :os-pipes))
+  (pipefail-p nil :type boolean)
   (running nil :type boolean)
   (last-exit-code 0 :type integer)
   (input-state nil)
@@ -67,6 +68,7 @@
                              history-fns
                              git-fns
                              (execution-strategy :cps)
+                             (pipefail-p nil)
                              (running nil)
                              (last-exit-code 0)
                              input-state
@@ -75,6 +77,7 @@
                              (terminal-cols 80))
   "Build the application shell context through the composition boundary."
   (check-type execution-strategy (member :cps :os-pipes))
+  (check-type pipefail-p boolean)
   (check-type running boolean)
   (check-type last-exit-code integer)
   (check-type terminal-rows (integer 1 *))
@@ -98,6 +101,7 @@
    :history-fns (%shell-context-adapter-list history-fns)
    :git-fns (%shell-context-adapter-list git-fns)
    :execution-strategy execution-strategy
+   :pipefail-p pipefail-p
    :running running
    :last-exit-code last-exit-code
    :input-state input-state

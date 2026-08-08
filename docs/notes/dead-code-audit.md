@@ -21,7 +21,7 @@ test suite). With tests included the count falls to 179, of which paredit marks
 | flag | category | actually used at | why the scan misses it |
 |---|---|---|---|
 | `main` | function | dumped-executable entry point | not on any in-tree call path |
-| `run-tests` | function | `nshell.asd:299`, `scripts/coverage.lisp:43` | invoked via `(uiop:symbol-call :nshell/test '#:run-tests)` — a string, invisible to static call graphs |
+| `run-tests` | function | `nshell.asd:299`, `scripts/coverage.lisp:43` | invoked via `(funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))` — a string, invisible to static call graphs |
 | `%inject-os-environment-entry` | function | `domain/environment/env.lisp:145` | called inside a `dolist`/`setf` the resolver doesn't trace |
 | `string->octets`, `pty-test-*`, `%e2e-pty-*`, `%terminate-pty-process` | function | the PTY test bodies | called inside cl-weave `it`/`describe` macro expansions (paredit's `unknown-macro` category) |
 | `open-pty-darwin`, `open-pty-linux`, `%pty-fork-exec`, `pty-spawn`, `with-pty`, `skip-when-pty-round-trip-unreliable` | function/macro | `infrastructure/acl/pty.lisp` + PTY tests | platform dispatch under `#+darwin`/`#+linux` reader conditionals and macro-wrapped call sites |

@@ -25,7 +25,7 @@ working directory, monotonic clock, environment, and process execution."
    :filesystem (cl-boundary-kit:make-filesystem)
    :host-info (cl-boundary-kit:make-host-info)
    :working-dir (cl-boundary-kit:make-working-directory
-                 :get-fn #'uiop:getcwd :set-fn #'uiop:chdir)
+                 :get-fn #'host-kit:getcwd :set-fn #'host-kit:chdir)
    :clock (cl-boundary-kit:make-clock)
    :environment (cl-boundary-kit:make-environment)
    :process (cl-boundary-kit:make-process-boundary)))

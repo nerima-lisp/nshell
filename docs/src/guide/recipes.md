@@ -61,10 +61,7 @@ instead in CI's `integration` job. Run them locally when changing PTY,
 subprocess, terminal, or job-control behaviour:
 
 ```sh
-nix develop -c sbcl --non-interactive \
-  --eval '(require :asdf)' \
-  --eval '(push (truename "./") asdf:*central-registry*)' \
-  --eval '(asdf:test-system :nshell/test)'
+nix develop --command sbcl --script run-tests.lisp
 ```
 
 This covers the real-PTY interactive smoke tests, `Ctrl-C` recovery, and the

@@ -19,7 +19,8 @@
       (progn
         (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
         (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)
-        (finish-output))))
+        (finish-output)))
+  (setf *interactive-terminal-installed-p* t))
 
 (defun restore-interactive-terminal ()
   (ignore-errors
@@ -27,4 +28,5 @@
         (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
         (nshell.infrastructure.terminal:ansi-disable-bracketed-paste)
         (finish-output)))
-  (nshell.infrastructure.terminal:restore-terminal-mode))
+  (nshell.infrastructure.terminal:restore-terminal-mode)
+  (setf *interactive-terminal-installed-p* nil))

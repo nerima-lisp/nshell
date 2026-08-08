@@ -42,15 +42,17 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
 
 (defun %expand-source-arg (arg &optional environment)
   (let ((value (nshell.domain.parsing:arg-value arg)))
-    (nshell.domain.expansion:expand-by-quote-style
-     (nshell.domain.parsing:arg-quote-style arg)
-     (if environment
-         (nshell.domain.expansion:expand-all value environment)
-         (list value))
-     (list value)
-     (if environment
-         (list (nshell.domain.expansion:expand-double-quoted value environment))
-         (list value)))))
+    (if (nshell.domain.parsing:arg-here-doc-literal-p arg)
+        (list value)
+        (nshell.domain.expansion:expand-by-quote-style
+         (nshell.domain.parsing:arg-quote-style arg)
+         (if environment
+             (nshell.domain.expansion:expand-all value environment)
+             (list value))
+         (list value)
+         (if environment
+             (list (nshell.domain.expansion:expand-double-quoted value environment))
+             (list value))))))
 
 (defun %expand-unquoted-source-arg-in-context (context value environment)
   (multiple-value-bind (fields argv-reference-p)
@@ -177,11 +179,13 @@ Uses an iterative loop instead of tail-recursion to avoid stack depth limits."
 (defun %expand-source-arg-in-context (context arg)
   (let ((value (nshell.domain.parsing:arg-value arg))
         (environment (shell-context-environment context)))
-    (nshell.domain.expansion:expand-by-quote-style
-     (nshell.domain.parsing:arg-quote-style arg)
-     (%expand-unquoted-source-arg-in-context context value environment)
-     (list value)
-     (%expand-double-quoted-source-arg-in-context context value environment))))
+    (if (nshell.domain.parsing:arg-here-doc-literal-p arg)
+        (list value)
+        (nshell.domain.expansion:expand-by-quote-style
+         (nshell.domain.parsing:arg-quote-style arg)
+         (%expand-unquoted-source-arg-in-context context value environment)
+         (list value)
+         (%expand-double-quoted-source-arg-in-context context value environment)))))
 
 (defun %line-command-args (command-node &optional environment)
   (loop for arg in (nshell.domain.parsing:command-node-args command-node)

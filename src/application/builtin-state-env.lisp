@@ -22,7 +22,7 @@
 (defun %set-usage ()
   (%builtin-usage
    "set"
-   "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name..."))
+   "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name... | set [-o|+o] pipefail"))
 
 (defun %set-export-option-p (arg)
   (%builtin-option-p arg '("-x" "--export")))
@@ -66,6 +66,12 @@
       ((%set-query-option-p (first args))
        (with-set-name-argument "-q"
          (%query-set-variables context (rest args))))
+      ((and (member (first args) '("-o" "+o") :test #'string=)
+            (string= (second args) "pipefail")
+            (null (cddr args)))
+       (setf (shell-context-pipefail-p context)
+             (string= (first args) "-o"))
+       (values nil 0))
       ((%builtin-option-like-p (first args))
        (values (%set-usage) 1))
       (t

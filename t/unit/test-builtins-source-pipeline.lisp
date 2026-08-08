@@ -80,7 +80,7 @@
               (values (format nil "stdout-line~%") 7)))
           (multiple-value-bind (output code)
               (call-source-file context source)
-            (let ((contents (uiop:read-file-string target)))
+            (let ((contents (host-kit:read-file-string target)))
               (expect 7 :to-equal code)
               (expect "" :to-equal output)
               (expect (search "stdout-line" contents) :to-be-truthy)
@@ -98,7 +98,7 @@
               (values (format nil "stdout-line~%") 7)))
           (multiple-value-bind (output code)
               (call-source-file context source)
-            (let ((contents (uiop:read-file-string target)))
+            (let ((contents (host-kit:read-file-string target)))
               (expect 7 :to-equal code)
               (expect "" :to-equal output)
               (expect (search "stdout-line" contents) :to-be-truthy)
@@ -120,6 +120,18 @@
                                    '("read captured << EOF"
                                      "inline-doc"
                                      "EOF"))
+      (expect "" :to-equal output)
+      (expect 0 :to-equal code)
+      (expect "inline-doc" :to-equal (nshell.domain.environment:env-get
+                    (nshell.application:shell-context-environment context)
+                    "captured"))))
+
+  (it "source-pipeline-tabbed-here-document-feeds-builtin-stdin"
+    "source strips leading tabs from here-document bodies before executing the command."
+    (with-builtins-source (output code context
+                                   (list "read captured <<- EOF"
+                                         (format nil "~cinline-doc" #\Tab)
+                                         (format nil "~cEOF" #\Tab)))
       (expect "" :to-equal output)
       (expect 0 :to-equal code)
       (expect "inline-doc" :to-equal (nshell.domain.environment:env-get
@@ -179,7 +191,8 @@
       (setf (nshell.application:shell-context-execution-strategy context) :os-pipes)
       (with-temporary-function
           ('nshell.infrastructure.acl:spawn-pipeline
-           (lambda (commands &key redirects)
+           (lambda (commands &key redirects pipefail-p)
+             (declare (ignore pipefail-p))
              (setf called t
                    command-count (length commands)
                    captured-redirects redirects)

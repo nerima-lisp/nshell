@@ -33,4 +33,30 @@
              (expect config :to-equal (nshell.infrastructure.persistence:load-config)))
         (setf nshell.infrastructure.persistence::*config-file-path-override* nil)
         (when (probe-file test-path)
-          (delete-file test-path))))))
+          (delete-file test-path)))))
+
+  (it "interactive-startup-sources-config"
+    "Interactive initialization applies .nshellrc through the normal source boundary."
+    (let* ((config-path (format nil "/tmp/nshell-test-startup-config-~d.lisp"
+                                (random 1000000)))
+           (history-path (format nil "/tmp/nshell-test-startup-history-~d"
+                                 (random 1000000))))
+      (unwind-protect
+           (progn
+             (with-open-file (stream config-path
+                                      :direction :output
+                                      :if-exists :supersede
+                                      :if-does-not-exist :create)
+               (write-line "set -x NSHELL_CONFIG_LOADED yes" stream))
+             (setf nshell.infrastructure.persistence::*config-file-path-override*
+                   (pathname config-path)
+                   nshell.infrastructure.persistence::*history-file-path-override*
+                   (pathname history-path))
+             (nshell.presentation::initialize-repl-state)
+             (expect "yes" :to-equal (repl-test-env "NSHELL_CONFIG_LOADED")))
+        (setf nshell.infrastructure.persistence::*config-file-path-override* nil
+              nshell.infrastructure.persistence::*history-file-path-override* nil)
+        (when (probe-file config-path)
+          (delete-file config-path))
+        (when (probe-file history-path)
+          (delete-file history-path))))))

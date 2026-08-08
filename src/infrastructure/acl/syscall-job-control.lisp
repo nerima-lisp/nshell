@@ -86,18 +86,28 @@
     (t
      (values pid :unknown status))))
 
-(defun wait-job (pid &key nohang untraced continued)
-  "Wait for PID or process group PID and return (values child-pid state detail)."
-  (declare (ignore continued))
+(defun %waitpid-flags (&key nohang untraced continued)
   (let ((flags 0))
     (when nohang
       (setf flags (logior flags sb-posix:wnohang)))
     (when untraced
       (setf flags (logior flags sb-posix:wuntraced)))
-    (handler-case
-        (multiple-value-bind (child-pid status) (sb-posix:waitpid pid flags)
-          (%decode-wait-status child-pid status))
-      (sb-posix:syscall-error (condition)
-        (if (= (sb-posix:syscall-errno condition) sb-posix:echild)
-            (values nil :no-child nil)
-            (error condition))))))
+    (when continued
+      (let ((wcontinued-symbol (find-symbol "WCONTINUED" "SB-POSIX")))
+        (when (and wcontinued-symbol (boundp wcontinued-symbol))
+          (setf flags (logior flags (symbol-value wcontinued-symbol))))))
+    flags))
+
+(defun wait-job (pid &key nohang untraced continued)
+  "Wait for PID or process group PID and return (values child-pid state detail)."
+  (handler-case
+      (multiple-value-bind (child-pid status)
+          (sb-posix:waitpid pid (%waitpid-flags
+                                  :nohang nohang
+                                  :untraced untraced
+                                  :continued continued))
+        (%decode-wait-status child-pid status))
+    (sb-posix:syscall-error (condition)
+      (if (= (sb-posix:syscall-errno condition) sb-posix:echild)
+          (values nil :no-child nil)
+          (error condition)))))

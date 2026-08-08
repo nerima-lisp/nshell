@@ -101,6 +101,7 @@ to be run and what state a run is in, and nshell.application drives it.")
    #:pipeline-plan-stage-piped-output-p
    ;; A job and what it is made of
    #:make-job #:job-id #:job-state #:job-pids #:job-known-pids #:job-last-pid
+   #:job-pipefail-p
    #:job-pgid #:job-exit-code #:job-command-line #:job-command-display-string
    #:job-background-p
    ;; The job state machine
@@ -137,6 +138,14 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:redirect-output-destinations-stdout-mode
            #:redirect-output-destinations-stderr-target
            #:redirect-output-destinations-stderr-mode
+           #:redirect-output-destinations-stdout-endpoint
+           #:redirect-output-destinations-stderr-endpoint
+           #:redirect-fd-dup-target #:redirect-fd-dup-target-p
+           #:make-redirect-fd-dup-target
+           #:redirect-fd-dup-target-source #:redirect-fd-dup-target-target
+           #:redirect-fd-dup-target-operator
+           #:redirects-require-shell-wrapper-p
+           #:shell-redirect-script
            #:tokenization-result-p
            #:tokenization-result-tokens
            #:tokenization-result-cursor-token
@@ -158,7 +167,8 @@ continuation line. A pure string-to-AST function with no filesystem access.")
                 #:ast-node->command-line
                 #:command-arg #:command-arg-p #:make-command-arg
                 #:command-arg-value #:command-arg-quote-style
-                #:arg-value #:arg-quote-style
+                #:command-arg-here-doc-literal-p
+                #:arg-value #:arg-quote-style #:arg-here-doc-literal-p
                 #:sequence-node-command-separator
                 #:sequence-node-command-separator-p
                 #:sequence-node-command-separator-command
@@ -257,6 +267,7 @@ exported predicates below are goals callers may query directly.")
             #:builtin-help-entries
             #:builtin-completion-command-specs
             #:external-completion-command-specs
+            #:external-subcommand-completion-command-specs
             #:builtin-rule-facts
             #:builtin-rule-rules
             #:rule-complete
@@ -269,6 +280,7 @@ exported predicates below are goals callers may query directly.")
             #:completion-filesystem-fns
             #:command-path-candidates
             #:*path-command-directory-files-fn* #:*path-command-executable-p-fn*
+            #:*path-command-directory-map-fn*
             #:*file-completion-directory-files-fn*
             #:*file-completion-subdirectories-fn*))
 
@@ -286,6 +298,7 @@ history is stored; nshell.infrastructure.persistence owns the file.")
            #:history-merge #:history-clear #:history-delete
            #:history-empty-p #:history-size #:history-capacity
            #:command-line-last-argument #:history-last-argument-at
+           #:history-expand-line
            #:history-previous #:history-next #:history-reset-navigation))
 
 (defpackage #:nshell.domain.job-control
@@ -356,10 +369,11 @@ is the only layer permitted to know both the domain and the ports.")
             #:shell-context-signal-fns #:shell-context-redirect-fns
             #:shell-context-history-fns #:shell-context-git-fns
             #:shell-context-execution-strategy #:shell-context-running
-            #:shell-context-last-exit-code #:shell-context-input-state
+            #:shell-context-pipefail-p #:shell-context-last-exit-code
+            #:shell-context-input-state
             #:shell-context-job-processes #:shell-context-terminal-rows
             #:shell-context-terminal-cols
-            #:lookup-builtin
+            #:lookup-builtin #:resolve-command-path
             #:collect-source-lines #:source-lines
             #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
             #:execute-command-node-in-context
@@ -385,23 +399,32 @@ stores in the shell context, which is what makes the layers above it mockable.")
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
            #:spawn-pipeline #:spawn-pipeline-async #:wait-job
-            #:spawn-async
-            #:kill-process #:os-signal->domain
-            #:redirect-output #:redirect-error #:redirect-output-and-error
-            #:redirect-error-to-output
-            #:redirect-input #:redirect-input-document #:redirect-input-string
-            #:restore-redirects #:domain-signal->os
-            #:install-signal-handlers
-            #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
-            #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
-            #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
-            #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
-            #:child-status #:child-status-p #:child-status-pid #:child-status-status
-            #:reap-children #:get-terminal-size
-            #:*external-command-timeout*
-            #:run-external #:run-external-capture #:process-exit-status-code
-            #:with-git-runner #:clear-git-status-cache
-            #:get-git-status))
+           #:spawn-process-substitution
+           #:process-substitution-resource-p
+           #:process-substitution-resource-path
+           #:process-substitution-resource-fd
+           #:release-process-substitution-fd
+           #:wait-process-substitution
+           #:close-process-substitution
+           #:spawn-async
+           #:kill-process #:os-signal->domain
+           #:redirect-output #:redirect-error #:redirect-output-and-error
+           #:redirect-error-to-output #:redirect-output-to-error
+           #:redirect-input #:redirect-input-document #:redirect-input-string
+           #:restore-redirects #:domain-signal->os
+           #:consume-terminal-resize-p #:consume-children-changed-p
+           #:install-signal-handlers
+           #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
+           #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
+           #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
+           #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
+           #:child-status #:child-status-p #:child-status-pid #:child-status-status
+           #:reap-children #:get-terminal-size
+           #:*external-command-timeout*
+           #:run-external #:run-external-exec #:run-external-capture
+           #:process-exit-status-code
+           #:with-git-runner #:clear-git-status-cache
+           #:get-git-status))
 
 (defpackage #:nshell.infrastructure.terminal
   (:documentation
@@ -417,12 +440,14 @@ line editor has a single place to import them from.")
                 #:key-event-data)
   (:export #:enable-raw-mode #:restore-terminal-mode
             #:ansi-clear-screen #:ansi-clear-line #:ansi-move-cursor
-            #:ansi-color-code
+            #:ansi-request-cursor-position
+            #:ansi-color-code #:ansi-copy-to-clipboard #:copy-to-clipboard
             #:ansi-save-cursor #:ansi-restore-cursor
             #:ansi-hide-cursor #:ansi-show-cursor
             #:ansi-enable-bracketed-paste #:ansi-disable-bracketed-paste
             #:ansi-enable-sgr-mouse #:ansi-disable-sgr-mouse
             #:ansi-enable-alternate-screen #:ansi-disable-alternate-screen
+            #:query-cursor-position
             #:read-key-event
             #:key-event #:key-event-p #:make-key-event
             #:key-event-type #:key-event-char #:key-event-number

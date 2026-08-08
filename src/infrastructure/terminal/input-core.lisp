@@ -39,6 +39,7 @@
   (#\c . :alt-c)
   (#\f . :alt-f)
   (#\d . :alt-d)
+  (#\e . :alt-e)
   (#\l . :alt-l)
   (#\r . :alt-r)
   (#\. . :alt-dot)

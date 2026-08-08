@@ -44,7 +44,8 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
-    (nshell.infrastructure.acl:with-pty (master slave slave-name)
-      (expect (streamp master) :to-be-truthy)
-      (expect (streamp slave) :to-be-truthy)
-      (expect (stringp slave-name) :to-be-truthy))))
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (nshell.infrastructure.acl:with-pty (master slave slave-name)
+        (expect (streamp master) :to-be-truthy)
+        (expect (streamp slave) :to-be-truthy)
+        (expect (stringp slave-name) :to-be-truthy)))))

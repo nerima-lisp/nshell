@@ -102,14 +102,14 @@
       (fn (funcall fn path))
       ((%stat-path context path)
        (let ((pathname (probe-file path)))
-         (and pathname (not (uiop:directory-pathname-p pathname)))))
+         (and pathname (not (host-kit:directory-pathname-p pathname)))))
       (t nil))))
 
 (defun %path-directory-p (context path)
   (let ((fn (%optional-filesystem-fn context :directory-exists-p)))
     (cond
       (fn (funcall fn path))
-      (t (not (null (uiop:directory-exists-p path)))))))
+      (t (not (null (host-kit:directory-exists-p path)))))))
 
 (defun resolve-command-path (context command)
   "Return COMMAND's executable path from builtins or PATH, or NIL."

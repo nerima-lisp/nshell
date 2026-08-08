@@ -9,6 +9,8 @@
 (defun ansi-clear-screen () (write-string (cl-tty-kit:ansi-clear-screen 2)))
 (defun ansi-clear-line () (write-string (cl-tty-kit:ansi-clear-line 2)))
 (defun ansi-move-cursor (row col) (write-string (cl-tty-kit:ansi-move-cursor row col)))
+(defun ansi-request-cursor-position (&optional (stream *standard-output*))
+  (write-string (cl-tty-kit:ansi-request-cursor-position) stream))
 (defun ansi-save-cursor (&optional (stream *standard-output*))
   (write-string (cl-tty-kit:ansi-save-cursor) stream))
 (defun ansi-restore-cursor (&optional (stream *standard-output*))
@@ -29,6 +31,108 @@
   (write-string (cl-tty-kit:ansi-enter-alternate-screen) stream))
 (defun ansi-disable-alternate-screen (&optional (stream *standard-output*))
   (write-string (cl-tty-kit:ansi-exit-alternate-screen) stream))
+
+(defparameter +base64-alphabet+
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+
+(defun %utf-8-octets (text)
+  (let ((octets (make-array (* 4 (length text))
+                            :element-type '(unsigned-byte 8)))
+        (count 0))
+    (flet ((emit (octet)
+             (setf (aref octets count) octet)
+             (incf count)))
+      (loop for character across text
+            for code = (char-code character)
+            do (cond
+                 ((<= code #x7f)
+                  (emit code))
+                 ((<= code #x7ff)
+                  (emit (logior #xc0 (ash code -6)))
+                  (emit (logior #x80 (logand code #x3f))))
+                 ((or (<= code #xd7ff)
+                      (<= #xe000 code #xffff))
+                  (emit (logior #xe0 (ash code -12)))
+                  (emit (logior #x80 (logand (ash code -6) #x3f)))
+                  (emit (logior #x80 (logand code #x3f))))
+                 ((and (<= #x10000 code)
+                       (<= code #x10ffff))
+                  (emit (logior #xf0 (ash code -18)))
+                  (emit (logior #x80 (logand (ash code -12) #x3f)))
+                  (emit (logior #x80 (logand (ash code -6) #x3f)))
+                  (emit (logior #x80 (logand code #x3f))))
+                 (t
+                  (error "Cannot encode character U+~8,'0X as UTF-8."
+                         code)))))
+    (subseq octets 0 count)))
+
+(defun %base64-encode-octets (octets)
+  (with-output-to-string (output)
+    (loop for index from 0 below (length octets) by 3
+          for remaining = (- (length octets) index)
+          for first = (aref octets index)
+          for second = (if (> remaining 1)
+                           (aref octets (1+ index))
+                           0)
+          for third = (if (> remaining 2)
+                          (aref octets (+ index 2))
+                          0)
+          for triple = (logior (ash first 16)
+                               (ash second 8)
+                               third)
+          do (write-char (char +base64-alphabet+ (ldb (byte 6 18) triple))
+                         output)
+             (write-char (char +base64-alphabet+ (ldb (byte 6 12) triple))
+                         output)
+             (write-char (if (> remaining 1)
+                             (char +base64-alphabet+ (ldb (byte 6 6) triple))
+                             #\=)
+                        output)
+             (write-char (if (> remaining 2)
+                             (char +base64-alphabet+ (ldb (byte 6 0) triple))
+                             #\=)
+                        output))))
+
+(defun ansi-copy-to-clipboard (text &optional (stream *standard-output*))
+  (write-char #\Esc stream)
+  (write-string "]52;c;" stream)
+  (write-string (%base64-encode-octets (%utf-8-octets text)) stream)
+  (write-char #\Bell stream))
+
+(defparameter +host-clipboard-commands+
+  '(("pbcopy")
+    ("wl-copy")
+    ("xclip" "-selection" "clipboard")
+    ("xsel" "--clipboard" "--input")
+    ("clip.exe")))
+
+(defun %write-host-clipboard (text)
+  (loop for command in +host-clipboard-commands+
+        for program = (ignore-errors
+                        (host-kit:find-program (first command)))
+        when program
+          do (handler-case
+                 (let ((result (host-kit:run-program
+                                program
+                                (rest command)
+                                :input text
+                                :timeout 2d0)))
+                   (when (and (eql 0 (host-kit:process-result-exit-code result))
+                              (not (host-kit:process-result-timed-out-p result)))
+                     (return t)))
+               (error () nil))
+        finally (return nil)))
+
+(defvar *clipboard-host-writer* #'%write-host-clipboard)
+
+(defun copy-to-clipboard (text &optional (stream *standard-output*))
+  (if (and *clipboard-host-writer*
+           (funcall *clipboard-host-writer* text))
+      :host
+      (progn
+        (ansi-copy-to-clipboard text stream)
+        :osc52)))
+
 (defun ansi-color-code (color)
   (let ((map '(("00FF00" . 2) ("00AFFF" . 4) ("FF0000" . 1) ("FFFF00" . 3)
                ("FFA500" . 3) ("555555" . 8) ("737373" . 8) ("FFFFFF" . 7))))

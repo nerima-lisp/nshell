@@ -27,9 +27,14 @@
 
 (defun %builtin-cd (context args)
   (handler-case
-      (progn
-        (when args
-          (funcall (%filesystem-fn context :chdir) (first args)))
+      (let* ((environment (shell-context-environment context))
+             (directory
+               (or (first args)
+                   (and environment
+                        (nshell.domain.environment:env-get environment "HOME")))))
+        (unless directory
+          (error "HOME is not set"))
+        (funcall (%filesystem-fn context :chdir) directory)
         (values nil 0))
     (error (condition)
       (values (format nil "cd: ~a~%" condition) 1))))
@@ -56,23 +61,7 @@
             (%execute-command-by-name-in-context context command command-args)
           (values output (%invert-status-code code))))))
 
-(defun %builtin-exec (context args)
-  (declare (ignore context))
-  (if args
-      (progn
-        (sb-ext:quit :unix-status
-                     (handler-case
-                         (sb-ext:process-exit-code
-                          (sb-ext:run-program (first args) (rest args)
-                            :input *standard-input*
-                            :output *standard-output*
-                            :error *error-output*
-                            :wait t
-                            :search t))
-                       (error (e)
-                          (format *error-output* "exec: ~a: ~a~%" (first args) e)
-                         1))))
-      (%builtin-usage "exec" "exec command [args...]")))
+(defun %builtin-exec (context args) (declare (ignore context)) (if args (sb-ext:quit :unix-status (nshell.infrastructure.acl:run-external-exec (first args) (rest args))) (%builtin-usage "exec" "exec command [args...]")))
 
 (defun %contains-usage ()
   (%builtin-usage

@@ -143,6 +143,37 @@
       (expect (nshell.domain.history:history-last-argument-at history 2) :to-be-null)
       (expect (nshell.domain.history:history-last-argument-at history -1) :to-be-null)))
 
+  (it "history-expand-line-supports-common-designators"
+    "History expansion resolves recent, indexed, substring, and prefix references."
+    (let ((history (history-with-lines "echo first" "printf second")))
+      (dolist (case '(("!!" "printf second")
+                      ("!$" "second")
+                      ("!-2" "echo first")
+                      ("!?first?" "echo first")
+                      ("!echo" "echo first")))
+        (destructuring-bind (line expected) case
+          (multiple-value-bind (expanded error)
+              (nshell.domain.history:history-expand-line history line)
+            (expect expected :to-equal expanded)
+            (expect error :to-be-null))))
+      (multiple-value-bind (expanded error)
+          (nshell.domain.history:history-expand-line history "'!!'")
+        (expect "'!!'" :to-equal expanded)
+        (expect error :to-be-null))
+      (let ((escaped (format nil "~c!!" #\\)))
+        (multiple-value-bind (expanded error)
+            (nshell.domain.history:history-expand-line history escaped)
+          (expect escaped :to-equal expanded)
+          (expect error :to-be-null)))))
+
+  (it "history-expand-line-reports-unresolved-designators"
+    "Recognized history references fail explicitly when no matching entry exists."
+    (let ((history (history-with-lines "echo first")))
+      (multiple-value-bind (expanded error)
+          (nshell.domain.history:history-expand-line history "!missing")
+        (expect expanded :to-be-null)
+        (expect error :to-be-truthy))))
+
   (it "pbt-history-consecutive-duplicate-keeps-size"
     "Adding the same command twice in a row leaves the size as after one add."
     (check-property (:trials 50)

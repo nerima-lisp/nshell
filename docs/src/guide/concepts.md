@@ -40,12 +40,27 @@ search when the command is recent.
 `Ctrl-R` opens incremental reverse search for the cases where a prefix is not
 what you remember.
 
+## History expansion is explicit
+
+Interactive lines can refer to recent history with `!!`, `!$`, `!-N`,
+`!?text?`, and `!prefix`. Expansion happens before parsing, so a failed
+designator is reported without executing or recording the invalid line.
+Exclamation marks in single quotes and backslash-escaped exclamation marks
+remain literal.
+
 ## Abbreviations expand in place
 
 An abbreviation registered with `abbr` expands inline as you type, so what ends
 up in history is the expanded command. This differs from an alias, which stays
 unexpanded and hides what actually ran. Abbreviations keep muscle memory short
 while leaving history honest and greppable.
+
+## External editing preserves the prompt state
+
+`Alt-E` writes the current buffer to a private temporary file and opens it with
+the first non-empty value among `NSHELL_EDITOR`, `VISUAL`, and `EDITOR`, or
+`vi`. After a successful exit, the edited file replaces the current buffer;
+the command is not executed until the normal submit key is pressed.
 
 ## Layers, and what is allowed to do I/O
 

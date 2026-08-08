@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Interactive history expansion now supports `!!`, `!$`, `!-N`, `!?text?`, and
+  `!prefix`, while preserving quoted and backslash-escaped exclamation marks;
+  unresolved designators produce an explicit interactive error.
+- `Alt-E` now opens the current input in the configured external editor using
+  `NSHELL_EDITOR`, `VISUAL`, or `EDITOR`, with `vi` as the fallback. The editor
+  runs outside raw terminal mode and the edited buffer replaces the current
+  command without executing it automatically.
 - Vi-mode char-wise visual selection (`v`) with motion, yank, delete, change,
   and count-aware editing coverage.
 - Parameter expansion now covers substring slicing (`${VAR:offset[:length]}`)
@@ -20,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   completion logic predicates (`completes`, `describes`, `has-flag`,
   `command-is`, `suggests-dir`, `suggests-file`) are exported so the rulebase
   answers the full cl-prolog query API.
+- Added a JSON Lines completion benchmark with correctness oracles, raw batch
+  samples, tail-latency statistics, runtime metadata, allocation measurements,
+  and checksums, plus process-isolated startup and command-completion scenarios.
+  Process results report uncontrolled OS cache state and remain diagnostic and
+  non-ranking-eligible; they do not support a "world-fastest" claim.
 - Integrated the `nerima-lisp` Common Lisp toolkit family across the layers:
   - **cl-parser-kit** now backs `$((...))` arithmetic via a rule-based tokenizer
     and a Pratt (operator-precedence) parser that builds an AST evaluated
@@ -117,6 +129,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The default Nix package now uses the same uncompressed saved image as the
+  portable release bundle. This lowers measured warm-filesystem fresh-process
+  startup latency while intentionally increasing the installed binary size;
+  the compressed image is no longer a release package variant.
+- Completion now compiles one cl-prolog rulebase per request and reuses it for
+  every query in that request. Description facts are collected once into a
+  request-scoped index, eliminating the former per-candidate Prolog lookup;
+  prefix filtering and deduplication happen before candidate construction.
+- PATH command discovery now uses a bounded per-directory cache validated by a
+  short TTL and directory change stamp. Per-key single-flight loading prevents
+  concurrent duplicate scans, while generation checks prevent an in-flight scan
+  from repopulating the cache after invalidation.
+- Added portable release bundle derivations and validation that reject runtime
+  `/nix/store` references. The Darwin bundle has been built and validated,
+  including an `env -i` smoke test after tar extraction and `otool` dependency
+  inspection. The x86_64-linux implementation evaluates successfully, but its
+  native build and smoke evidence still depend on Linux CI. The existing v0.4.0
+  release artifacts remain non-portable and are not retroactively changed.
+- Clarified the supported release platforms, pinned installation examples, the
+  non-portable v0.4.0 artifact warning, and the checksum plus GitHub-attestation
+  procedure for future portable releases.
 - Bumped the `cl-weave` flake input from the explicit `v0.10.0` tag to
   `v1.0.0` (cl-weave's own stabilization release: SemVer adoption, a runner
   concurrency fix, timeout-inside-a-hook reporting, CLI `--seed` fixes, and
@@ -370,6 +403,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The flake now builds cl-prolog and cl-weave from their source inputs with
+  nshell's nixpkgs package set instead of reading upstream per-system package
+  attributes that are unavailable on aarch64-darwin. This restores Darwin flake
+  evaluation without changing the source revisions consumed by nshell.
 - `run-external` (every plain foreground external command typed at the
   prompt, e.g. `vim file.txt`) no longer applies
   `*external-command-timeout*` (30s default) when its output is connected to

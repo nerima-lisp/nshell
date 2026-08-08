@@ -124,6 +124,196 @@
           :history-next
           (:buffer "git" :cursor-pos 2))))
 
+  (it "input-state-sgr-mouse-wheel-up-requests-history-prev"
+    (let ((state (completion-session-state
+                  :buffer "git"
+                  :cursor-pos 2
+                  :completion-index 1
+                  :suggestion " status")))
+      (with-expected-input-state-reduction (new-state output)
+          state
+          (reduce-once state :mouse nil 64
+                       '(:protocol :sgr
+                         :button 0
+                         :button-code 64
+                         :column 10
+                         :row 5
+                         :event :wheel-up
+                         :modifiers nil))
+          :history-prev
+          (:buffer "git"
+           :cursor-pos 2
+           :completion-index 1
+           :suggestion " status"))))
+
+  (it "input-state-sgr-mouse-wheel-down-requests-history-next"
+    (let ((state (completion-session-state
+                  :buffer "git"
+                  :cursor-pos 2
+                  :completion-index 1
+                  :suggestion " status")))
+      (with-expected-input-state-reduction (new-state output)
+          state
+          (reduce-once state :mouse nil 65
+                       '(:protocol :sgr
+                         :button 1
+                         :button-code 65
+                         :column 10
+                         :row 5
+                         :event :wheel-down
+                         :modifiers nil))
+          :history-next
+          (:buffer "git"
+           :cursor-pos 2
+           :completion-index 1
+           :suggestion " status"))))
+
+  (it "input-state-sgr-mouse-click-and-drag-redraw-without-editing"
+    (let ((state (completion-session-state
+                  :buffer "git"
+                  :cursor-pos 2
+                  :completion-index 1
+                  :suggestion " status")))
+      (dolist (mouse-data
+               '((:protocol :sgr
+                  :button 0
+                  :button-code 0
+                  :column 10
+                  :row 5
+                  :event :press
+                  :modifiers nil)
+                 (:protocol :sgr
+                  :button 0
+                  :button-code 32
+                  :column 10
+                  :row 5
+                  :event :drag
+                  :modifiers nil)))
+        (with-expected-input-state-reduction (new-state output)
+            state
+            (reduce-once state :mouse nil (getf mouse-data :button-code)
+                         mouse-data)
+            :redraw
+            (:buffer "git"
+             :cursor-pos 2
+             :completion-index 1
+             :suggestion " status")))))
+
+  (it "input-state-sgr-mouse-selection-copies-forward-range"
+    "A left-button press, drag, and release should copy the selected buffer range."
+    (let ((state (input-state :buffer "abcdef" :cursor-pos 0)))
+      (multiple-value-bind (pressed press-output)
+          (reduce-once state :mouse nil 0
+                       '(:protocol :sgr
+                         :button 0
+                         :button-code 0
+                         :column 2
+                         :row 1
+                         :event :press
+                         :buffer-index 1
+                         :modifiers nil))
+        (expect :redraw :to-be press-output)
+        (expect 1 :to-equal
+                (nshell.presentation::input-state-mouse-selection-anchor
+                 pressed))
+        (multiple-value-bind (dragged drag-output)
+            (reduce-once pressed :mouse nil 32
+                         '(:protocol :sgr
+                           :button 0
+                           :button-code 32
+                           :column 5
+                           :row 1
+                           :event :drag
+                           :buffer-index 4
+                           :modifiers nil))
+          (expect :redraw :to-be drag-output)
+          (expect 4 :to-equal
+                  (nshell.presentation::input-state-mouse-selection-end
+                   dragged))
+          (multiple-value-bind (released release-output)
+              (reduce-once dragged :mouse nil 0
+                           '(:protocol :sgr
+                             :button 0
+                             :button-code 0
+                             :column 5
+                             :row 1
+                             :event :release
+                             :buffer-index 4
+                             :modifiers nil))
+            (expect :copy :to-be release-output)
+            (expect '("bcd") :to-equal
+                    (nshell.presentation:input-state-kill-ring released))
+            (expect (nshell.presentation::input-state-mouse-selection-anchor
+                     released)
+                    :to-be-null)
+            (expect (nshell.presentation::input-state-mouse-selection-end
+                     released)
+                    :to-be-null)))))))
+
+  (it "input-state-sgr-mouse-selection-supports-reverse-and-shift"
+    "Reverse drags should normalize their range and Shift should extend an anchor."
+    (let ((state (input-state :buffer "abcdef" :cursor-pos 0)))
+      (multiple-value-bind (pressed ignored)
+          (reduce-once state :mouse nil 0
+                       '(:protocol :sgr
+                         :button-code 0
+                         :event :press
+                         :buffer-index 4
+                         :modifiers nil))
+        (declare (ignore ignored))
+        (multiple-value-bind (dragged ignored)
+            (reduce-once pressed :mouse nil 32
+                         '(:protocol :sgr
+                           :button-code 32
+                           :event :drag
+                           :buffer-index 1
+                           :modifiers nil))
+          (declare (ignore ignored))
+          (multiple-value-bind (released output)
+              (reduce-once dragged :mouse nil 0
+                           '(:protocol :sgr
+                             :button-code 0
+                             :event :release
+                             :buffer-index 1
+                             :modifiers nil))
+            (expect :copy :to-be output)
+            (expect '("bcd") :to-equal
+                    (nshell.presentation:input-state-kill-ring released)))))
+    (let ((state (input-state :buffer "abcdef"
+                              :cursor-pos 0
+                              :mouse-selection-anchor 1
+                              :mouse-selection-end 2)))
+      (multiple-value-bind (extended output)
+          (reduce-once state :mouse nil 0
+                       '(:protocol :sgr
+                         :button-code 0
+                         :event :press
+                         :buffer-index 4
+                         :modifiers (:shift)))
+        (expect :redraw :to-be output)
+        (expect 1 :to-equal
+                (nshell.presentation::input-state-mouse-selection-anchor
+                 extended))
+        (expect 4 :to-equal
+                (nshell.presentation::input-state-mouse-selection-end
+                 extended)))))
+
+  (it "input-state-edit-clears-mouse-selection"
+    "Ordinary editing should clear a transient mouse selection before insertion."
+    (let ((state (input-state :buffer "abc"
+                              :cursor-pos 1
+                              :mouse-selection-anchor 0
+                              :mouse-selection-end 2)))
+      (multiple-value-bind (edited output)
+          (reduce-once state :char #\x)
+        (expect :suggest-update :to-be output)
+        (expect "axbc" :to-equal
+                (nshell.presentation:input-state-buffer edited))
+        (expect (nshell.presentation::input-state-mouse-selection-anchor edited)
+                :to-be-null)
+        (expect (nshell.presentation::input-state-mouse-selection-end edited)
+                :to-be-null))))
+
   (it "input-state-alt-dot-requests-last-history-argument"
     (let ((state (completion-session-state
                   :buffer "echo "
@@ -138,6 +328,15 @@
            :cursor-pos 5
            :completion-index 1
            :suggestion "tail"))))
+
+  (it "input-state-alt-e-requests-external-command-edit"
+    (let ((state (input-state :buffer "echo before" :cursor-pos 11)))
+      (with-expected-input-state-reduction (new-state output)
+          state
+          (reduce-once state :alt-e)
+          :edit-command
+          (:buffer "echo before"
+           :cursor-pos 11))))
 
   (it "input-state-enter-on-text-returns-execute"
     (let ((state (input-state :buffer "echo hi" :cursor-pos 7)))

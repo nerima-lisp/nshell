@@ -1,16 +1,16 @@
 (in-package #:nshell.presentation)
 
 (defparameter +repl-filesystem-fns+
-  (list :cwd #'uiop:getcwd
-        :list-dir (lambda (dir) (uiop:directory-files dir))
-        :chdir #'uiop:chdir
+  (list :cwd #'host-kit:getcwd
+        :list-dir (lambda (dir) (host-kit:directory-files dir))
+        :chdir #'host-kit:chdir
         :stat #'probe-file
         :file-exists-p (lambda (path)
                          (let ((pathname (probe-file path)))
                            (and pathname
-                                (not (uiop:directory-pathname-p pathname)))))
+                                (not (host-kit:directory-pathname-p pathname)))))
         :directory-exists-p (lambda (path)
-                              (not (null (uiop:directory-exists-p path))))))
+                              (not (null (host-kit:directory-exists-p path))))))
 
 (defparameter +repl-process-fns+
   (list :run-external
@@ -24,6 +24,7 @@
   (list :redirect-output #'nshell.infrastructure.acl:redirect-output
         :redirect-error #'nshell.infrastructure.acl:redirect-error
         :redirect-output-error #'nshell.infrastructure.acl:redirect-output-and-error
+        :redirect-output-to-error #'nshell.infrastructure.acl:redirect-output-to-error
         :redirect-error-to-output #'nshell.infrastructure.acl:redirect-error-to-output
         :redirect-input #'nshell.infrastructure.acl:redirect-input
         :redirect-input-document #'nshell.infrastructure.acl:redirect-input-document
@@ -47,9 +48,16 @@
    :redirect-fns +repl-redirect-fns+
    :terminal-fns nil
    :running *running*
+   :pipefail-p *pipefail*
    :last-exit-code *last-exit-code*
    :input-state *input-state*
    :process-registry *proc-registry*))
+
+(defun %repl-external-command-available-p (command)
+  (multiple-value-bind (kind path)
+      (nshell.application:resolve-command-path
+       (%make-repl-shell-context) command)
+    (and (eq kind :path) path)))
 
 (defun %sync-repl-shell-context (context code)
   (setf *environment* (nshell.application:shell-context-environment context)
@@ -58,6 +66,7 @@
         *functions* (nshell.application:shell-context-function-table context)
         *function-sources* (nshell.application:shell-context-function-source-table context)
         *running* (nshell.application:shell-context-running context)
+        *pipefail* (nshell.application:shell-context-pipefail-p context)
         *last-exit-code* code
         *input-state* (nshell.application:shell-context-input-state context))
   code)

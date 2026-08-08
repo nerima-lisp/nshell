@@ -2,7 +2,7 @@
 
 (defmacro with-os-environment-variable ((name value) &body body)
   `(let* ((var ,name)
-          (old (uiop:getenv var))
+          (old (host-kit:getenv var))
           (had-old old))
      (unwind-protect
           (progn
@@ -95,14 +95,38 @@
       (let ((error-output
               (with-output-to-string (*error-output*)
                 (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
-        (expect 127 :to-equal code)
-        (expect (format nil "nshell: NSHELL_MISSING_REQUIRED: required value~%") :to-equal error-output))))
+          (expect 127 :to-equal code)
+          (expect (format nil "nshell: NSHELL_MISSING_REQUIRED: required value~%") :to-equal error-output))))
+
+  (it "execute-command-node-in-context-reports-internal-fd-redirect-errors"
+    "Unsupported builtin fd redirects become a shell status instead of escaping the context boundary."
+    (let ((context (make-test-builtins-context))
+          (code nil)
+          (output nil)
+          (error-output nil))
+      (setf error-output
+            (with-output-to-string (*error-output*)
+              (setf output
+                    (with-output-to-string (*standard-output*)
+                      (setf code
+                            (nth-value
+                             1
+                             (nshell.application::execute-command-node-in-context
+                              context
+                              (nshell.domain.parsing:make-command-node
+                               "echo"
+                               '("builtin" "3>&1")))))))))
+      (expect 1 :to-equal code)
+      (expect "" :to-equal output)
+      (expect (search "Unsupported file-descriptor duplication 3>&1"
+                      error-output)
+              :to-be-truthy)))
 
   (it "execute-pipeline-use-case-applies-stage-redirections"
     "Pipeline execution through the application API preserves per-stage redirects."
     (let* ((root (merge-pathnames (format nil "nshell-app-pipeline-redir-~d/"
                                            (random 1000000))
-                                  (uiop:temporary-directory)))
+                                  (host-kit:temporary-directory)))
            (output (merge-pathnames "output.txt" root))
            (content "application pipeline redirection")
            (ast (nshell.domain.parsing:make-pipeline-node
@@ -122,7 +146,7 @@
                  (expect content :to-equal actual))))
           (handler-case
             (when (probe-file root)
-              (uiop:delete-directory-tree root :validate t))
+              (host-kit:delete-directory-tree root :validate t))
           (error ())))))
 
   (it "execute-pipeline-use-case-pipes-stdout-only-by-default"
@@ -166,7 +190,7 @@
                        (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
         (expect 0 :to-equal code)
         (expect (format nil "3~%") :to-equal output)
-        (expect "OUT" :to-equal (uiop:read-file-string target)))))
+        (expect "OUT" :to-equal (host-kit:read-file-string target)))))
 
   (it "execute-pipeline-use-case-preserves-redirect-order-file-before-dup"
     "Application pipeline execution preserves stdout redirect before 2>&1."
@@ -182,7 +206,7 @@
                        (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
         (expect 0 :to-equal code)
         (expect (format nil "0~%") :to-equal output)
-        (expect "OUTERR" :to-equal (uiop:read-file-string target)))))
+        (expect "OUTERR" :to-equal (host-kit:read-file-string target)))))
 
   (it "execute-pipeline-use-case-returns-127-for-missing-command"
     "A pipeline with an unresolvable command reports a non-zero spawn failure."

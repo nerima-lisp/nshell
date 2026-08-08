@@ -3,7 +3,8 @@
 
 (defun seed-repl-completion-knowledge-base (knowledge-base)
   (dolist (spec (append (nshell.domain.completion:builtin-completion-command-specs)
-                        (nshell.domain.completion:external-completion-command-specs))
+                        (nshell.domain.completion:external-completion-command-specs)
+                        (nshell.domain.completion:external-subcommand-completion-command-specs))
                 knowledge-base)
     (destructuring-bind (command &key subcommands flags option-values exclusive-options
                          description &allow-other-keys)

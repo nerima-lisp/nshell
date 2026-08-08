@@ -31,16 +31,13 @@
              (%elapsed-real-seconds
               (lambda ()
                 (setf exit-code
-                      (nth-value 2
-                        (uiop:run-program
-                         (append (list sbcl "--noinform")
-                                 (%asdf-bootstrap-forms (namestring root))
-                                 (list "--eval" "(asdf:load-system :nshell)"
-                                       "--eval" "(sb-ext:quit :unix-status 0)"))
-                         :directory root
-                         :output nil
-                         :error-output nil
-                         :ignore-error-status t
-                         :timeout 60)))))))
+                      (let* ((program (append (list sbcl "--noinform")
+                                              (%asdf-bootstrap-forms (namestring root))
+                                              (list "--eval" "(asdf:load-system :nshell)"
+                                                    "--eval" "(sb-ext:quit :unix-status 0)")))
+                             (result (host-kit:run-program (first program) (rest program)
+                                                           :directory root
+                                                           :timeout 60)))
+                        (host-kit:process-result-exit-code result)))))))
       (expect 0 :to-equal exit-code)
       (expect elapsed :to-be-less-than 20.0))))

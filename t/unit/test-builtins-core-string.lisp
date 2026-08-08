@@ -245,13 +245,7 @@
       (expect 1 :to-equal (eff "ab" nil 0))
       (expect 3 :to-equal (eff "ab" 3 5))))
 
-  (it "string-repeat-text-generates-repeated-string"
-    "string-repeat-text returns nil for zero count and truncates at max-length."
-    (flet ((rep (text count &optional max-length)
-             (nshell.application::%string-repeat-text text count max-length)))
-      (expect "abab" :to-equal (rep "ab" 2))
-      (expect "ababa" :to-equal (rep "ab" 3 5))
-      (expect (rep "ab" 0) :to-be-null)))
+  (it "string-repeat-text-generates-repeated-string" "string-repeat-text returns nil for zero count and bounds output at max-length." (flet ((rep (text count &optional max-length) (nshell.application::%string-repeat-text text count max-length))) (expect "abab" :to-equal (rep "ab" 2)) (expect "ababa" :to-equal (rep "ab" 3 5)) (expect "ababa" :to-equal (rep "ab" 1000000 5)) (expect (rep "ab" 0) :to-be-null)))
 
   (it "string-sub-normalize-indices-handle-negative-values"
     "string-sub-normalize-start/end convert negative fish-style indices to 1-based positions."
@@ -275,16 +269,19 @@
       (expect "" :to-equal (slc "abcde" 10))))
 
   (it "string-wildcard-match-p-handles-star-and-question-mark"
-    "string-wildcard-match-p supports * (any sequence) and ? (single char) wildcards."
-    (flet ((match (pat str &key ignore-case)
-             (nshell.application::%string-wildcard-match-p pat str :ignore-case ignore-case)))
-      (expect (match "*.txt" "readme.txt") :to-be-truthy)
-      (expect (match "*.txt" "readme.md") :to-be-falsy)
-      (expect (match "file?" "files") :to-be-truthy)
-      (expect (match "file?" "filess") :to-be-falsy)
-      (expect (match "a*b" "aXYZb") :to-be-truthy)
-      (expect (match "GIT*" "git-status" :ignore-case t) :to-be-truthy)
-      (expect (match "GIT*" "git-status" :ignore-case nil) :to-be-falsy)))
+  "string-wildcard-match-p supports * (any sequence) and ? (single char) wildcards."
+  (flet ((match (pat str &key ignore-case)
+           (nshell.application::%string-wildcard-match-p pat str :ignore-case ignore-case)))
+    (expect (match "*.txt" "readme.txt") :to-be-truthy)
+    (expect (match "*.txt" "readme.md") :to-be-falsy)
+    (expect (match "file?" "files") :to-be-truthy)
+    (expect (match "file?" "filess") :to-be-falsy)
+    (expect (match "a*b" "aXYZb") :to-be-truthy)
+    (expect (match "GIT*" "git-status" :ignore-case t) :to-be-truthy)
+    (expect (match "GIT*" "git-status" :ignore-case nil) :to-be-falsy)
+    (expect (match "*a*a*a*a*a*a*a*a*a*b"
+                   (make-string 32 :initial-element #\a))
+            :to-be-falsy)))
 
   (it "string-trim-trailing-newlines-strips-only-trailing-newlines"
     "string-trim-trailing-newlines removes only trailing newline characters."

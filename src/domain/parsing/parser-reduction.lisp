@@ -149,22 +149,7 @@
        (%token-reduction-missing-redirect-target-policy pending-redirect-token))
       (%token-reduction-state-clear-pending-redirect state))))
 
-(defun %token-reduction-error-policy-from-token (token)
-  (let ((value (token-value token)))
-    (cond
-      ((string= "\\" value)
-       (%make-token-reduction-diagnostic-policy
-        :trailing-escape
-        "Trailing escape requires continuation"))
-      ((and (>= (length value) 2)
-            (string= "<(" (subseq value 0 2)))
-       (%make-token-reduction-diagnostic-policy
-        :unterminated-process-substitution
-        "Unterminated process substitution"))
-      (t
-       (%make-token-reduction-diagnostic-policy
-        :unterminated-quote
-        "Unterminated quoted string")))))
+(defun %token-reduction-error-policy-from-token (token) (let ((value (token-value token))) (cond ((string= "\\" value) (%make-token-reduction-diagnostic-policy :trailing-escape "Trailing escape requires continuation")) ((and (>= (length value) 2) (or (string= "<(" (subseq value 0 2)) (string= ">(" (subseq value 0 2)))) (%make-token-reduction-diagnostic-policy :unterminated-process-substitution "Unterminated process substitution")) (t (%make-token-reduction-diagnostic-policy :unterminated-quote "Unterminated quoted string")))))
 
 (defun %token-reduction-command-entry-from-state (state)
   (list (%command-node-from-token-reduction-state state)
@@ -233,7 +218,16 @@
 (defun %token-reduction-separator (state tok)
   (let ((separator (%separator-from-token-type (token-type tok))))
     (if separator
-        (%record-token-reduction-separator state separator tok)
+        (progn
+          (when (and (eq (token-type tok) :pipe)
+                     (string= (token-value tok) "|&")
+                     (%token-reduction-state-current-cmd state))
+            ;; Normalize pipe-and-stderr into the existing redirect AST so
+            ;; execution and pipeline planning share the ordinary pipe path.
+            (%token-reduction-state-append-argument
+             state
+             (make-command-arg "2>&1")))
+          (%record-token-reduction-separator state separator tok))
         (%token-reduction-state-record-diagnostic
          state
          tok

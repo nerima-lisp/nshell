@@ -5,13 +5,13 @@
 With [Nix](https://nixos.org/download) (flakes enabled):
 
 ```sh
-nix run github:nerima-lisp/nshell
+nix run github:nerima-lisp/nshell/v0.4.0
 ```
 
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell
+nix profile install github:nerima-lisp/nshell/v0.4.0
 nshell
 man nshell   # the manual page is installed alongside the binary
 ```
@@ -27,9 +27,55 @@ inputs.nshell = {
 };
 ```
 
-Prebuilt tarballs for `x86_64-linux` and `aarch64-darwin`, each with a SHA-256
-checksum, are attached to every
-[GitHub release](https://github.com/nerima-lisp/nshell/releases).
+### Supported platforms
+
+| Platform | Support boundary |
+| --- | --- |
+| `x86_64-linux` | Supported target; release evidence must come from native Linux CI. |
+| `aarch64-darwin` | Supported target; release evidence must come from native macOS CI. |
+
+`aarch64-linux`, `x86_64-darwin`, other operating systems, and other CPU
+architectures are not currently supported release targets. Source builds may
+work elsewhere, but they are not covered by the project's release guarantees.
+
+!!! warning "The v0.4.0 tarballs are not portable"
+
+    The artifacts already attached to `v0.4.0` can retain Nix store runtime
+    dependencies. They are not portable binary distributions and are not being
+    replaced retroactively. No portable binary release has been published yet;
+    use the pinned Nix installation above.
+
+### Installing a future portable bundle
+
+Use this procedure only for a future release whose notes explicitly call its
+bundle portable. Replace `vX.Y.Z` and the target with values from that release:
+
+```sh
+TAG=vX.Y.Z
+TARGET=x86_64-linux             # or aarch64-darwin
+ARCHIVE="nshell-${TAG}-${TARGET}.tar.gz"
+
+gh release download "$TAG" --repo nerima-lisp/nshell \
+  --pattern "$ARCHIVE" --pattern "$ARCHIVE.sha256"
+shasum -a 256 -c "$ARCHIVE.sha256"
+gh attestation verify "$ARCHIVE" --repo nerima-lisp/nshell
+
+tar -xzf "$ARCHIVE"
+mkdir -p "$HOME/.local/opt/nshell-${TAG}" "$HOME/.local/bin"
+cp -R "nshell-${TAG}-${TARGET}/." "$HOME/.local/opt/nshell-${TAG}/"
+ln -sfn "$HOME/.local/opt/nshell-${TAG}/bin/nshell" \
+  "$HOME/.local/bin/nshell"
+```
+
+Keep the extracted bundle directory intact. The launcher supports this
+symlinked installation and resolves its runtime files from the bundle that
+contains the real executable.
+
+The checksum detects a corrupted download. `gh attestation verify` separately
+checks the GitHub artifact attestation and its repository identity; do not skip
+either check. The attestation command is expected to succeed only when that
+future release publishes provenance for the archive. Ensure
+`$HOME/.local/bin` is on `PATH`, then run `nshell --version`.
 
 ## First commands
 

@@ -13,6 +13,29 @@
         form))
 
 (describe "process-tests"
+  (it "run-external-exec-echo"
+  "Exec-mode external command preserves direct standard output and returns exit 0."
+  (let* ((exit nil)
+         (output
+           (capture-standard-output
+             (setf exit
+                   (nshell.infrastructure.acl:run-external-exec
+                    "echo" '("hello"))))))
+    (expect 0 :to-equal exit)
+    (expect (format nil "hello~%") :to-equal output)))
+  (it "run-external-exec-times-out-and-returns"
+    "Exec-mode external commands use the shared noninteractive timeout policy."
+    (let* ((nshell.infrastructure.acl:*external-command-timeout* 0.2)
+           (exit nil)
+           (error-output
+             (with-output-to-string (*error-output*)
+               (let ((*standard-output* (make-string-output-stream)))
+                 (setf exit
+                       (nshell.infrastructure.acl:run-external-exec
+                        (current-sbcl-executable)
+                        (%process-test-sbcl-argv "(sleep 5)")))))))
+      (expect 124 :to-equal exit)
+      (expect (search "timed out after" error-output) :to-be-truthy)))
   (it "run-external-echo"
     "External echo command executes and returns exit 0"
     (let ((exit (nshell.infrastructure.acl:run-external "echo" '("hello"))))
@@ -71,6 +94,44 @@
       (expect 124 :to-equal exit)
       (expect (search "timed out after" error-output) :to-be-truthy)))
 
+  (it "run-external-timeout-terminates-descendant-processes"
+    "Timeout cleanup should kill descendants that inherited stdout."
+    #+unix
+    (with-temporary-output-file (pid-file :prefix "nshell-timeout-child")
+      (let ((nshell.infrastructure.acl:*external-command-timeout* 0.3)
+            (child-pid nil)
+            (exit nil)
+            (started-at (get-internal-real-time)))
+        (unwind-protect
+             (progn
+               (with-output-to-string (*error-output*)
+                 (let ((*standard-output* (make-string-output-stream)))
+                   (setf exit
+                         (nshell.infrastructure.acl:run-external
+                          "/bin/sh"
+                          (list "-c"
+                                "trap \"\" TERM; sleep 0.05; sleep 30 & echo $! > \"$1\"; wait"
+                                "sh"
+                                (namestring pid-file))))))
+               (setf child-pid
+                     (parse-integer
+                      (string-trim '(#\Space #\Tab #\Newline #\Return)
+                                   (host-kit:read-file-string pid-file))))
+               (loop repeat 100
+                     while (ignore-errors (sb-posix:kill child-pid 0) t)
+                     do (sleep 0.01))
+               (expect 124 :to-equal exit)
+               (expect (/ (- (get-internal-real-time) started-at)
+                          internal-time-units-per-second)
+                       :to-be-less-than 2.0)
+               (expect (ignore-errors (sb-posix:kill child-pid 0) t)
+                       :to-be-null))
+          (when (and child-pid
+                     (ignore-errors (sb-posix:kill child-pid 0) t))
+            (ignore-errors (sb-posix:kill child-pid sb-unix:sigkill))))))
+    #-unix
+    (pass "Process-group cleanup is Unix-specific."))
+
   (it "run-external-capture-times-out-and-returns"
     "Captured synchronous execution should return a timeout message and exit 124."
     (let ((nshell.infrastructure.acl:*external-command-timeout* 0.2))
@@ -118,6 +179,20 @@
             (ignore-errors
               (sb-ext:process-kill proc 15)))))))
 
+  (it "spawn-async-here-document-redirects-standard-input"
+    "Asynchronous process spawning should route a here-document to stdin."
+    (let ((proc (nshell.infrastructure.acl:spawn-async
+                 (current-sbcl-executable)
+                 (%process-test-sbcl-argv
+                  "(sb-ext:exit :code (if (string= (read-line) \"inline-doc\") 0 7))")
+                 :redirects
+                 (list (cons :<<-
+                             (format nil "inline-doc~%"))))))
+      (expect proc :to-be-truthy)
+      (when proc
+        (sb-ext:process-wait proc)
+        (expect 0 :to-equal (sb-ext:process-exit-code proc)))))
+
   (it "spawn-pipeline-pipes-stdout-only-by-default"
     "Pipeline stages pipe stdout only unless stderr is explicitly merged."
     (let* ((writer (%process-test-sbcl-command-node
@@ -147,6 +222,52 @@
       (expect 0 :to-equal exit)
       (expect (format nil "6~%") :to-equal output)))
 
+  (it "spawn-pipeline-routes-stdout-to-stderr-with-dynamic-fd-dup"
+    "A dynamic 1>&2 redirect should leave downstream stdout empty and route both writes to stderr."
+    (let* ((writer (%process-test-sbcl-command-node
+                    "(progn (write-string \"OUT\") (write-string \"ERR\" *error-output*))"))
+           (counter (%process-test-sbcl-command-node
+                     "(let ((count 0)) (loop for ch = (read-char *standard-input* nil nil) while ch do (incf count)) (format t \"~d~%\" count))"))
+           (exit nil)
+           (error-output nil)
+           (output
+             (capture-standard-output
+               (setf error-output
+                     (with-output-to-string (*error-output*)
+                       (setf exit
+                             (nshell.infrastructure.acl:spawn-pipeline
+                              (list writer counter)
+                              :redirects
+                              (list
+                               (list
+                                (cons
+                                 :fd-dup
+                                 (nshell.domain.parsing:make-redirect-fd-dup-target
+                                  1
+                                  2)))
+                               nil))))))))
+      (expect 0 :to-equal exit)
+      (expect (format nil "0~%") :to-equal output)
+      (expect (search "OUT" error-output) :to-be-truthy)
+      (expect (search "ERR" error-output) :to-be-truthy)
+      (expect (search "OUT" output) :to-be-falsy)
+      (expect (search "ERR" output) :to-be-falsy)))
+
+  (it "spawn-pipeline-here-document-redirects-standard-input"
+    "Pipeline stages should receive a here-document on standard input."
+    (let* ((reader (%process-test-sbcl-command-node
+                    "(write-line (read-line))"))
+           (exit nil)
+           (output (capture-standard-output
+                     (setf exit
+                           (nshell.infrastructure.acl:spawn-pipeline
+                            (list reader)
+                            :redirects
+                            (list (list (cons :<<-
+                                              (format nil "inline-doc~%")))))))))
+      (expect 0 :to-equal exit)
+      (expect (format nil "inline-doc~%") :to-equal output)))
+
   (it "spawn-pipeline-times-out-and-returns"
     "Synchronous pipelines should time out and terminate started processes."
     (let* ((nshell.infrastructure.acl:*external-command-timeout* 0.2)
@@ -154,9 +275,10 @@
            (exit nil)
            (error-output
              (with-output-to-string (*error-output*)
-               (setf exit
-                     (nshell.infrastructure.acl:spawn-pipeline
-                      (list sleeper))))))
+               (let ((*standard-output* (make-string-output-stream)))
+                 (setf exit
+                       (nshell.infrastructure.acl:spawn-pipeline
+                        (list sleeper)))))))
       (expect 124 :to-equal exit)
       (expect (search "pipeline timed out" error-output) :to-be-truthy)))
 
@@ -177,7 +299,7 @@
                                                nil))))))
         (expect 0 :to-equal exit)
         (expect (format nil "3~%") :to-equal output)
-        (expect "OUT" :to-equal (uiop:read-file-string target)))))
+        (expect "OUT" :to-equal (host-kit:read-file-string target)))))
 
   (it "spawn-pipeline-stdout-redirect-before-dup-merges-stderr-into-file"
     "A stdout redirect before 2>&1 merges stderr into the redirected stdout file."
@@ -196,7 +318,96 @@
                                                nil))))))
         (expect 0 :to-equal exit)
         (expect (format nil "0~%") :to-equal output)
-        (expect "OUTERR" :to-equal (uiop:read-file-string target)))))
+        (expect "OUTERR" :to-equal (host-kit:read-file-string target)))))
+
+  (it "spawn-pipeline-preserves-arbitrary-fd-dup-order"
+    "A child wrapper keeps fd 3 on the original stdout when stdout is redirected later."
+    (with-temporary-output-file (target :prefix "nshell-pipeline-arbitrary-fd-dup")
+      (let* ((writer
+               (nshell.domain.parsing:make-command-node
+                "sh"
+                (list "-c" "printf out; printf fd3 >&3")))
+             (exit nil)
+             (output
+               (capture-standard-output
+                 (setf exit
+                       (nshell.infrastructure.acl:spawn-pipeline
+                        (list writer)
+                        :redirects
+                        (list
+                         (list
+                          (cons :fd-dup
+                                (nshell.domain.parsing:make-redirect-fd-dup-target
+                                 3
+                                 1))
+                          (cons :> target))))))))
+        (expect 0 :to-equal exit)
+        (expect "fd3" :to-equal output)
+        (expect "out" :to-equal (host-kit:read-file-string target)))))
+
+  (it "spawn-pipeline-duplicates-arbitrary-input-fd"
+    "A child wrapper duplicates stdin onto an arbitrary input descriptor."
+    (let* ((reader
+             (nshell.domain.parsing:make-command-node
+              "sh"
+              (list "-c"
+                    "IFS= read -r value <&3; printf '%s' \"$value\"")))
+           (exit nil)
+           (output nil))
+      (setf output
+            (capture-standard-output
+              (setf exit
+                    (nshell.infrastructure.acl:spawn-pipeline
+                     (list reader)
+                     :redirects
+                     (list
+                      (list
+                       (cons :<<< "from-fd")
+                       (cons :fd-dup
+                             (nshell.domain.parsing:make-redirect-fd-dup-target
+                              3
+                              0
+                              :input))))))))
+      (expect 0 :to-equal exit)
+      (expect "from-fd" :to-equal output)))
+
+  (it "spawn-pipeline-closes-arbitrary-fd"
+    "A child wrapper can close an arbitrary descriptor before command execution."
+    (let* ((writer
+             (nshell.domain.parsing:make-command-node
+              "sh"
+              (list "-c" "printf blocked >&3")))
+           (exit nil)
+           (output nil))
+      (setf output
+            (capture-standard-output
+              (setf exit
+                    (nshell.infrastructure.acl:spawn-pipeline
+                     (list writer)
+                     :redirects
+                     (list
+                      (list
+                       (cons :fd-dup
+                             (nshell.domain.parsing:make-redirect-fd-dup-target
+                              3
+                              :close))
+                       (cons :2> "/dev/null")))))))
+      (expect (and exit (not (zerop exit))) :to-be-truthy)
+      (expect "" :to-equal output)))
+
+  (it "spawn-pipeline-supports-pipefail"
+    "pipefail returns the first non-zero source-stage status while the default returns the last stage status."
+    (let* ((failed (%process-test-sbcl-command-node "(sb-ext:exit :code 7)"))
+           (succeeded (%process-test-sbcl-command-node "(sb-ext:exit :code 0)"))
+           (pipefail-status
+             (nshell.infrastructure.acl:spawn-pipeline
+              (list failed succeeded)
+              :pipefail-p t))
+           (last-stage-status
+             (nshell.infrastructure.acl:spawn-pipeline
+              (list failed succeeded))))
+      (expect 7 :to-equal pipefail-status)
+      (expect 0 :to-equal last-stage-status)))
 
   (it "spawn-pipeline-cleans-up-started-processes-after-spawn-failure"
     "A later stage spawn failure should not block on output from already-started stages."
@@ -224,4 +435,76 @@
            (elapsed (/ (- (get-internal-real-time) start)
                        internal-time-units-per-second)))
       (expect procs :to-be-null)
-      (expect elapsed :to-be-less-than 2.0))))
+      (expect elapsed :to-be-less-than 2.0)))
+
+  (it "spawn-process-substitution-preserves-fd-for-consumer"
+    "An input process substitution exposes a live inherited fd path to a consumer."
+    (let* ((producer (%process-test-sbcl-command-node
+                      "(write-string \"input-ok\")"))
+           (resource (nshell.infrastructure.acl:spawn-process-substitution
+                      :input
+                      (list producer)))
+           (path (nshell.infrastructure.acl:process-substitution-resource-path
+                  resource))
+           (output nil)
+           (exit nil))
+      (unwind-protect
+           (progn
+             (expect (or (search "/dev/fd/" path)
+                         (search "/proc/self/fd/" path))
+                     :to-be-truthy)
+             (setf output
+                   (capture-standard-output
+                     (setf exit
+                           (nshell.infrastructure.acl:spawn-pipeline
+                            (list (nshell.domain.parsing:make-command-node
+                                   "cat"
+                                   (list path)))
+                            :preserve-fds
+                            (list
+                             (nshell.infrastructure.acl:process-substitution-resource-fd
+                              resource))))))
+             (expect 0 :to-equal exit)
+             (expect "input-ok" :to-equal output)
+             (expect 0 :to-equal
+                     (nshell.infrastructure.acl:wait-process-substitution
+                      resource)))
+        (nshell.infrastructure.acl:close-process-substitution resource)))))
+
+  (it "spawn-output-process-substitution-preserves-fd-for-producer"
+    "An output process substitution exposes a live inherited fd path to a producer."
+    (with-temporary-output-file (output-path :prefix "nshell-process-substitution-output")
+      (let* ((consumer (%process-test-sbcl-command-node
+                        "(write-line (read-line))"))
+             (resource (nshell.infrastructure.acl:spawn-process-substitution
+                        :output
+                        (list consumer)
+                        :redirects
+                        (list (list (cons :> output-path)))))
+             (path (nshell.infrastructure.acl:process-substitution-resource-path
+                    resource))
+             (producer (%process-test-sbcl-command-node
+                        (format nil
+                                "(with-open-file (out ~S :direction :output :if-exists :overwrite) (write-string \"output-ok\" out))"
+                                path)))
+             (exit nil))
+        (unwind-protect
+             (progn
+               (expect (or (search "/dev/fd/" path)
+                           (search "/proc/self/fd/" path))
+                       :to-be-truthy)
+               (setf exit
+                     (nshell.infrastructure.acl:spawn-pipeline
+                      (list producer)
+                      :preserve-fds
+                      (list
+                       (nshell.infrastructure.acl:process-substitution-resource-fd
+                        resource))))
+               (nshell.infrastructure.acl:release-process-substitution-fd resource)
+               (expect 0 :to-equal exit)
+               (expect 0 :to-equal
+                       (nshell.infrastructure.acl:wait-process-substitution
+                        resource))
+               (expect (format nil "output-ok~%") :to-equal
+                       (host-kit:read-file-string output-path)))
+          (nshell.infrastructure.acl:close-process-substitution resource)))))

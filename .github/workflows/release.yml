@@ -14,25 +14,48 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   # Gate the release once, before any binary is built. Splitting this out of
   # the matrix means the org invariants are checked a single time rather than
-  # once per target, and a mismatch fails before spending three SBCL image
-  # builds on a release that must not be published.
+  # once per target, and a mismatch fails before spending two native builds on
+  # a release that must not be published.
   verify:
     name: Verify the tagged tree
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      commit-sha: ${{ steps.release-ref.outputs.commit-sha }}
     env:
       RELEASE_REF: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          ref: refs/tags/${{ github.event.inputs.tag || github.ref_name }}
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Resolve release tag
+        id: release-ref
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_REF" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Release tag must be strict SemVer vMAJOR.MINOR.PATCH: $RELEASE_REF" >&2
+            exit 1
+          fi
+          tag_ref="refs/tags/$RELEASE_REF"
+          git show-ref --verify --quiet "$tag_ref" || {
+            echo "::error::Release tag does not exist: $RELEASE_REF" >&2
+            exit 1
+          }
+          commit_sha="$(git rev-parse "$tag_ref^{commit}")"
+          if [[ "$(git rev-parse HEAD)" != "$commit_sha" ]]; then
+            echo "::error::Checked-out commit does not match $RELEASE_REF" >&2
+            exit 1
+          fi
+          echo "commit-sha=$commit_sha" >> "$GITHUB_OUTPUT"
 
       # Enforces the org invariant "git tag == .asd :version" at the only point
       # where it can still be corrected cheaply. Without this gate the two drift
@@ -43,30 +66,26 @@ jobs:
           PACKAGE: nshell
         run: |
           set -euo pipefail
-          asd_version="$(sed -n 's/^[[:space:]]*:version "\([^"]*\)".*/\1/p' "$PACKAGE.asd" | head -n1)"
           tag_version="${RELEASE_REF#v}"
-          echo "asd=$asd_version tag=$tag_version"
-          if [[ "$asd_version" != "$tag_version" ]]; then
-            echo "::error::Tag $RELEASE_REF does not match $PACKAGE.asd version $asd_version" >&2
+          mapfile -t asd_versions < <(perl -ne 'print "$1\n" if /^\s*:version "([^"]*)"/' "$PACKAGE.asd")
+          if [[ "${#asd_versions[@]}" -eq 0 ]]; then
+            echo "::error::Could not read :version from $PACKAGE.asd" >&2
             exit 1
           fi
+          for asd_version in "${asd_versions[@]}"; do
+            if [[ "$asd_version" != "$tag_version" ]]; then
+              echo "::error::Tag $RELEASE_REF does not match $PACKAGE.asd version $asd_version" >&2
+              exit 1
+            fi
+          done
 
-      - uses: ./.github/actions/nix-setup
-        with:
-          cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-      # Never publish a release that does not pass its own test suite.
-      - name: Check flake
-        run: nix flake check --print-build-logs
-
-  release:
-    name: build and publish ${{ matrix.target }}
+  build:
+    name: build and verify ${{ matrix.target }}
     needs: verify
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
-      contents: write # Create the GitHub Release and upload its assets.
+      contents: read
     strategy:
       fail-fast: false
       # One tarball per platform the flake declares in `systems`. macos-13
@@ -83,7 +102,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          ref: ${{ needs.verify.outputs.commit-sha }}
           persist-credentials: false
 
       - uses: ./.github/actions/nix-setup
@@ -91,52 +110,164 @@ jobs:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Build release binary
-        run: nix build --print-build-logs
+      - name: Check flake on native platform
+        run: nix flake check --print-build-logs
 
-      - name: Verify release binary starts
-        run: |
-          echo 'echo nshell-ci-ok' | ./result/bin/nshell | grep -q nshell-ci-ok
+      - name: Build release bundle
+        run: nix build .#releaseBundle --print-build-logs
 
-      # Extracts this version's CHANGELOG section as the release body. Requires
-      # the Keep a Changelog heading format `## [X.Y.Z] - YYYY-MM-DD`. Every
-      # matrix leg produces the same file, so whichever uploads first sets the
-      # body and the rest are idempotent.
-      - name: Extract release notes
-        run: |
-          set -euo pipefail
-          version="${RELEASE_REF#v}"
-          awk -v v="$version" '
-            $0 ~ "^## \\[" v "\\]" { found = 1; next }
-            found && /^## / { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-          if [[ ! -s release-notes.md ]]; then
-            echo "::error::CHANGELOG.md has no section for [$version]" >&2
-            exit 1
-          fi
+      - name: Verify release bundle
+        run: perl scripts/verify-release-bundle.pl result
 
       - name: Package tarball + checksum
         run: |
           set -euo pipefail
           name="nshell-${RELEASE_REF}-${{ matrix.target }}"
           mkdir -p "dist/${name}"
-          cp result/bin/nshell "dist/${name}/"
-          cp README.md LICENSE man/nshell.1 "dist/${name}/"
-          tar -czf "dist/${name}.tar.gz" -C dist "${name}"
+          cp -R result/. "dist/${name}/"
+          package() {
+            output="$1"
+            # The positional parameters are expanded by the inner bash.
+            # shellcheck disable=SC2016
+            nix shell --inputs-from . nixpkgs#gnutar nixpkgs#gzip --command bash -euo pipefail -c '
+              tar --sort=name --mtime="@0" --owner=0 --group=0 --numeric-owner \
+                -cf - -C dist "$1" | gzip -n > "$2"
+            ' bash "${name}" "$output"
+          }
+          package "dist/${name}.tar.gz"
+          package "dist/${name}.repro.tar.gz"
+          cmp "dist/${name}.tar.gz" "dist/${name}.repro.tar.gz"
+          rm "dist/${name}.repro.tar.gz"
           ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
 
-      # Every `uses:` in this org references a 40-character SHA, never a mutable
-      # tag. Re-resolve before bumping, and do not copy a SHA you have not
-      # resolved yourself:
-      #   gh api repos/softprops/action-gh-release/git/ref/tags/v2 --jq .object.sha
-      - name: Upload to GitHub Release
+      - name: Verify extracted tarball
+        run: |
+          set -euo pipefail
+          name="nshell-${RELEASE_REF}-${{ matrix.target }}"
+          mkdir extracted
+          tar -xzf "dist/${name}.tar.gz" -C extracted
+          perl scripts/verify-release-bundle.pl "extracted/${name}"
+
+      - name: Upload verified release artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+  attest:
+    name: attest release artifacts
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      RELEASE_REF: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Download all verified release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify downloaded release artifacts
+        run: |
+          set -euo pipefail
+          for target in x86_64-linux aarch64-darwin; do
+            archive="nshell-${RELEASE_REF}-${target}.tar.gz"
+            test -f "dist/$archive"
+            test -f "dist/$archive.sha256"
+            ( cd dist && shasum -a 256 -c "$archive.sha256" )
+          done
+          test "$(perl -e 'opendir my $dh, "dist" or die $!; @f = grep { -f "dist/$_" } readdir $dh; print scalar @f')" -eq 4
+
+      - name: Attest release tarballs
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: dist/*.tar.gz
+
+      - name: Verify release attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for archive in dist/*.tar.gz; do
+            gh attestation verify "$archive" --repo "$GITHUB_REPOSITORY"
+          done
+
+  release:
+    name: publish release
+    needs: [verify, build, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_REF: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.commit-sha }}
+          persist-credentials: false
+
+      - name: Download all verified release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify downloaded release artifacts
+        run: |
+          set -euo pipefail
+          for target in x86_64-linux aarch64-darwin; do
+            archive="nshell-${RELEASE_REF}-${target}.tar.gz"
+            test -f "dist/$archive"
+            test -f "dist/$archive.sha256"
+            ( cd dist && shasum -a 256 -c "$archive.sha256" )
+          done
+          test "$(perl -e 'opendir my $dh, "dist" or die $!; @f = grep { -f "dist/$_" } readdir $dh; print scalar @f')" -eq 4
+
+      - name: Extract release notes
+        run: |
+          set -euo pipefail
+          version="${RELEASE_REF#v}"
+          VERSION="$version" perl -ne '
+            if (/^## \[\Q$ENV{VERSION}\E\]/) { $found = 1; next }
+            exit if $found && /^## /;
+            print if $found;
+          ' CHANGELOG.md > release-notes.md
+          if [[ ! -s release-notes.md ]]; then
+            echo "::error::CHANGELOG.md has no section for [$version]" >&2
+            exit 1
+          fi
+
+      - name: Re-verify release tag before publication
+        env:
+          VERIFIED_SHA: ${{ needs.verify.outputs.commit-sha }}
+        run: |
+          set -euo pipefail
+          verification_ref="refs/release-verification/$RELEASE_REF"
+          git fetch --no-tags --force origin \
+            "refs/tags/$RELEASE_REF:$verification_ref"
+          current_sha="$(git rev-parse "$verification_ref^{commit}")"
+          if [[ "$current_sha" != "$VERIFIED_SHA" ]]; then
+            echo "::error::Release tag moved after verification" >&2
+            echo "::error::verified=$VERIFIED_SHA current=$current_sha" >&2
+            exit 1
+          fi
+
+      - name: Upload complete GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ env.RELEASE_REF }}
           body_path: release-notes.md
-          # Appends the auto-generated commit/PR list beneath the CHANGELOG
-          # section, so the curated notes lead and the raw log stays available.
           generate_release_notes: true
           files: |
             dist/*.tar.gz

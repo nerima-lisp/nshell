@@ -14,14 +14,16 @@
        (member (char input start) '(#\" #\') :test #'char=)
        (char= (char input start) (char input (1- end)))))
 
-(defun completion-suggestion (knowledge-base input &key path)
+(defun completion-suggestion (knowledge-base input &key path alias-table function-table)
   (when (and knowledge-base
              (not (nshell.domain.parsing:shell-input-blank-p input)))
     (ignore-errors
         (let* ((prefix (autosuggest-token-prefix input))
                (candidates (nshell.domain.completion:complete knowledge-base
                                                               input
-                                                              :path path))
+                                                              :path path
+                                                              :alias-table alias-table
+                                                              :function-table function-table))
                (text (if (or (null candidates)
                              (some (lambda (candidate)
                                      (member (nshell.domain.completion:candidate-kind candidate)
@@ -54,10 +56,14 @@
                   (unless (%autosuggest-closed-quoted-token-p input token-start token-end)
                     (subseq escaped-text (length escaped-prefix))))))))))
 
-(defun compute-suggestion (history input &key knowledge-base path)
+(defun compute-suggestion (history input &key knowledge-base path alias-table function-table)
   (unless (nshell.domain.parsing:shell-input-blank-p input)
     (or (nshell.application:history-suggestion history input)
-        (completion-suggestion knowledge-base input :path path))))
+        (completion-suggestion knowledge-base
+                               input
+                               :path path
+                               :alias-table alias-table
+                               :function-table function-table))))
 
 (defun accept-suggestion (input suggestion)
   (concatenate 'string input suggestion))

@@ -11,8 +11,8 @@
   "True in hermetic Nix builds, not in impure nix develop shells.
 Real OS process and PTY integration tests are skipped only when the surrounding
 environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
-  (and (uiop:getenv "NIX_BUILD_TOP")
-       (not (string= (or (uiop:getenv "IN_NIX_SHELL") "")
+  (and (host-kit:getenv "NIX_BUILD_TOP")
+       (not (string= (or (host-kit:getenv "IN_NIX_SHELL") "")
                      "impure"))))
 
 (defmacro skip-in-sandbox (reason &body body)
@@ -21,14 +21,44 @@ environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
        (skip (format nil "~a (skipped in hermetic sandbox)" ,reason))
        (progn ,@body)))
 
+(defparameter *pty-availability* :unknown
+  "Cached result of the process-local PTY availability probe.")
+
+(defun pty-available-p ()
+  "Return true when this process can open and close a PTY pair."
+  (case *pty-availability*
+    (:available t)
+    (:unavailable nil)
+    (otherwise
+     (setf *pty-availability*
+           (handler-case
+               (multiple-value-bind (master slave slave-name)
+                   (nshell.infrastructure.acl:open-pty)
+                 (declare (ignore slave-name))
+                 (unwind-protect
+                      :available
+                   (ignore-errors
+                     (nshell.infrastructure.acl:pty-close master slave))))
+             (error () :unavailable)))
+     (eq *pty-availability* :available))))
+
+(defmacro skip-when-pty-unavailable (reason &body body)
+  "Run BODY only when a usable PTY is available outside a hermetic sandbox."
+  `(if (or (in-hermetic-sandbox-p)
+           (not (pty-available-p)))
+       (skip (format nil "~a (skipped in sandbox/unavailable PTY)" ,reason))
+       (progn ,@body)))
+
 (defmacro skip-when-pty-round-trip-unreliable (reason &body body)
   "Run BODY only where raw PTY master/slave round-trip I/O is reliable.
 
 Reading bytes straight back through a PTY depends on the terminal line
 discipline, which differs across platforms and is not honored by hosted CI
-runners, so skip both the hermetic sandbox and CI."
-  `(if (or (in-hermetic-sandbox-p) (uiop:getenv "CI"))
-       (skip (format nil "~a (skipped in sandbox/CI)" ,reason))
+runners, so skip the hermetic sandbox, CI, and unavailable PTYs."
+  `(if (or (in-hermetic-sandbox-p)
+           (host-kit:getenv "CI")
+           (not (pty-available-p)))
+       (skip (format nil "~a (skipped in sandbox/CI/unavailable PTY)" ,reason))
        (progn ,@body)))
 
 (defun run-tests ()
@@ -37,4 +67,4 @@ runners, so skip both the hermetic sandbox and CI."
 Runs single-threaded: many suites share process-global state (mock command
 tables, abbreviation/alias/history registries, dynamic completion hooks), so
 concurrent execution would race.  This mirrors how the FiveAM suite ran."
-  (run-all :reporter :spec :max-workers 1))
+  (run-all :reporter :spec :max-workers 1 :pass-with-no-tests nil))

@@ -118,3 +118,68 @@
             "defgh"
             " history: git"
             :terminal-width 10)))))
+
+  (it "repl-mouse-coordinate-maps-rendered-buffer-cells"
+    "SGR coordinates should map through prompt wrapping and continuation prompts."
+    (expect 0 :to-equal
+            (nshell.presentation::%rendered-buffer-index-at-position
+             "abc" 1 5 4 :terminal-width 10))
+    (expect (null
+             (nshell.presentation::%rendered-buffer-index-at-position
+              "abc" 1 1 4 :terminal-width 10))
+            :to-be-truthy)
+    (expect 2 :to-equal
+            (nshell.presentation::%rendered-buffer-index-at-position
+             "abc" 2 1 2 :terminal-width 4))
+    (expect 2 :to-equal
+            (nshell.presentation::%rendered-buffer-index-at-position
+             (format nil "a~%b") 2 3 0 :terminal-width 10))
+    (expect (null
+             (nshell.presentation::%rendered-buffer-index-at-position
+              (format nil "a~%b") 2 2 0 :terminal-width 10))
+            :to-be-truthy)
+    (expect 0 :to-equal
+            (nshell.presentation::%rendered-buffer-index-at-position
+             "x" 5 10 0
+             :terminal-width 80
+             :origin-row 5
+             :origin-column 10)))
+
+  (it "repl-render-captures-terminal-origin-once"
+    "Interactive redraw should query the terminal origin only after state reset."
+    (with-repl-test-state
+      (let ((queries 0))
+        (let ((nshell.presentation::*interactive-terminal-installed-p* t)
+              (nshell.presentation::*prompt-rendered-origin-known-p* nil))
+          (with-temporary-function
+              ('nshell.infrastructure.terminal:query-cursor-position
+               (lambda (&rest args)
+                 (declare (ignore args))
+                 (incf queries)
+                 (values 5 10)))
+            (with-stable-repl-prompt (:text "PROMPT> ")
+              (with-fixed-terminal-size (24 80)
+                (with-repl-render-state (:buffer "abc" :cursor-pos 3)
+                  (capture-standard-output
+                    (nshell.presentation::render-prompt-cont))
+                  (expect 1 :to-equal queries)
+                  (expect 5 :to-equal nshell.presentation::*prompt-rendered-origin-row*)
+                  (expect 10 :to-equal nshell.presentation::*prompt-rendered-origin-column*)
+                  (capture-standard-output
+                    (nshell.presentation::render-prompt-cont))
+                  (expect 1 :to-equal queries)))))))))
+
+  (it "repl-render-edit-buffer-highlights-mouse-selection"
+    "A live mouse selection should be rendered with terminal reverse video."
+    (with-repl-test-state
+      (let ((output
+              (capture-standard-output
+                (nshell.presentation::render-edit-buffer
+                 "abcdef"
+                 (nshell.domain.configuration:config-theme
+                  nshell.presentation::*config*)
+                 :selection-start 1
+                 :selection-end 4))))
+        (expect (search (format nil "~C[7mbcd~C[27m" #\Esc #\Esc)
+                        output)
+                :to-be-truthy))))

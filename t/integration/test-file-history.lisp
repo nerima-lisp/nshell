@@ -19,6 +19,40 @@
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
         (when (probe-file test-path) (delete-file test-path)))))
 
+  (it "file-history-multiline-round-trip"
+    "Multiline command history survives persistence."
+    (let* ((test-path (format nil "/tmp/nshell-test-history-multiline-~d.lisp"
+                              (random 1000000)))
+           (command (format nil "for item in one two~%  echo $item~%done")))
+      (unwind-protect
+           (progn
+             (setf nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+             (when (probe-file test-path) (delete-file test-path))
+             (nshell.infrastructure.persistence:append-history-entry command)
+             (expect (list command) :to-equal
+                     (nshell.infrastructure.persistence:load-history-file)))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (when (probe-file test-path) (delete-file test-path)))))
+
+  (it "file-history-legacy-lines"
+    "Legacy one-line history records remain loadable."
+    (let ((test-path (format nil "/tmp/nshell-test-history-legacy-~d.lisp"
+                             (random 1000000))))
+      (unwind-protect
+           (progn
+             (setf nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+             (when (probe-file test-path) (delete-file test-path))
+             (with-open-file (stream test-path :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+               (format stream "legacy one~%legacy two~%"))
+             (expect '("legacy one" "legacy two") :to-equal
+                     (nshell.infrastructure.persistence:load-history-file)))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (when (probe-file test-path) (delete-file test-path)))))
+
   (it "file-history-missing-file"
     "Loading a missing history file returns NIL."
     (let* ((test-path (format nil "/tmp/nshell-test-history-missing-~d.lisp"

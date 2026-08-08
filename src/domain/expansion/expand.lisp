@@ -24,10 +24,10 @@
               "./"))
         (pathname-directory-string pattern))))
 
-;; Dynamic variable for filesystem operations (DDD: domain should not call uiop directly)
+;; Dynamic variable for filesystem operations (DDD: domain should not call host operations directly)
 (defvar *glob-directory-files-fn* nil
   "Function to list files in a directory.
-   Set to (lambda (dir) (uiop:directory-files dir)) by infrastructure.
+   Set to (lambda (dir) (host-kit:directory-files dir)) by infrastructure.
    If NIL, glob expansion always returns the pattern unchanged.")
 
 (defvar *glob-subdirectories-fn* nil
@@ -166,23 +166,28 @@ name."
   (or (position-if-not #'variable-name-char-p content)
       (length content)))
 
-(defun %tilde-user-home (input)
-  "Expand a ~USER prefix in INPUT to /home/USER, preserving any path that
-follows the first slash. Pure string layout, kept out of EXPAND-TILDE's dispatch."
-  (let ((slash (position #\/ input)))
-    (if slash
-        (concatenate 'string "/home/" (subseq input 1 slash) (subseq input slash))
-        (concatenate 'string "/home/" (subseq input 1)))))
+(defun %tilde-user-home (input env)
+  "Expand only a current-user ~NAME prefix using HOME from ENV.
+Unknown users and incomplete environment data remain literal."
+  (let* ((home (nshell.domain.environment:env-get env "HOME"))
+         (user (nshell.domain.environment:env-get env "USER"))
+         (slash (position #\/ input))
+         (name-end (or slash (length input)))
+         (name (subseq input 1 name-end)))
+    (if (and home user (string= user name))
+        (concatenate 'string home
+                     (if slash (subseq input slash) ""))
+        input)))
 
 (defun expand-tilde (input env)
-  "Expand leading ~ to HOME and ~USER to /home/USER."
+  "Expand leading ~ using HOME, or the current-user ~NAME using ENV."
   (cond
     ((string= input "~") (or (nshell.domain.environment:env-get env "HOME") "~"))
     ((string-prefix-p "~/" input)
      (concatenate 'string (or (nshell.domain.environment:env-get env "HOME") "~")
                   (subseq input 1)))
     ((and (> (length input) 1) (char= (char input 0) #\~))
-     (%tilde-user-home input))
+     (%tilde-user-home input env))
     (t input)))
 
 (defun expand-glob (pattern)

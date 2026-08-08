@@ -85,6 +85,16 @@
   (declare (ignore signal info context))
   (setf *terminal-resized* t))
 
+(defun consume-terminal-resize-p ()
+  "Return and clear the pending terminal resize notification."
+  (prog1 *terminal-resized*
+    (setf *terminal-resized* nil)))
+
+(defun consume-children-changed-p ()
+  "Return and clear the pending child-process notification."
+  (prog1 *children-changed*
+    (setf *children-changed* nil)))
+
 (defun shell-sigcont-handler (signal info context)
   "Re-enable raw mode and reclaim the terminal after continuing."
   (declare (ignore signal info context))

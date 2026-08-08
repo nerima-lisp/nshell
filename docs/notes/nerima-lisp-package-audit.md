@@ -16,10 +16,12 @@ from `src/`; `cl-parser-kit` is `:import-from`, so its symbols appear unqualifie
 | `cl-prolog` | completion knowledge base — facts/rules, `map-prolog-solutions` | `domain/completion/rule-data.lisp` (8 refs) |
 | `cl-parser-kit` | `$((…))` arithmetic tokenizer + Pratt parser | `:import-from` in `package.lisp`; `domain/expansion/arithmetic.lisp` |
 | `cl-dataflow` | reactive dataflow wiring | 12 refs |
+| `cl-host-kit` | host environment, pathname, and process boundaries | `presentation/repl-environment.lisp`, `infrastructure/terminal/ansi.lisp`, `application/builtin-runtime.lisp` |
 | `cl-boundary-kit` | clock/sleeper boundaries (also under cl-process-kit) | 14 refs |
 | `cl-cli` | argument-vector parsing for `main` | 13 refs |
 | `cl-tty-kit` | terminal control / raw-mode / rendering | 17 refs |
 | `cl-process-kit` | timeout-guarded external process launch (`run`) | `infrastructure/acl/syscall-process.lisp` (6 refs) |
+| `cl-concurrent-kit` | bounded asynchronous mapping and coordination | `infrastructure/acl/syscall.lisp` |
 | `cl-weave` | the entire test framework (both suites) | `nshell/test`, `nshell/weave` |
 | `cl-prolog/weave` | cl-prolog-query coverage of the completion engine | `nshell/weave` |
 
@@ -30,6 +32,7 @@ No declared dependency is unused, so there is no dead dependency to drop.
 | package | why not direct |
 |---|---|
 | `cl-log-kit` | Pulled in transitively by `cl-process-kit` for *its* structured logging. nshell itself performs no logging (a shell's diagnostics go to the user's stderr, not a structured log sink), so it is deliberately absent from nshell's own `:depends-on`. Adopting it directly would mean inventing a logging concern the shell does not have. |
+| `cl-date-kit` | Pulled in transitively by `cl-concurrent-kit`; nshell consumes concurrency primitives, not date formatting or parsing. |
 
 ## Non-applicable org repositories
 
@@ -42,13 +45,13 @@ No declared dependency is unused, so there is no dead dependency to drop.
 
 ## Conclusion
 
-The applicable nerima-lisp surface is fully adopted: 7 runtime systems + 2 test
+The applicable nerima-lisp surface is fully adopted: 9 runtime systems + 2 test
 systems, all directly (no wrapper adapter layer), all in active use. The
 un-adopted remainder is compiler infrastructure (`cl-cc*`), a peer application
 (`cl-tmux`), a format library for a format nshell never handles (`cl-json-kit`),
 or a build-time tool (`paredit-cli`). Re-run the usage half of this audit with:
 
 ```
-grep -rhoE '\b(cl-prolog|cl-dataflow|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit)::?[a-z]' src/ \
-  | sed -E 's/:.*$//' | sort | uniq -c | sort -rn
+rg -o '\b(cl-prolog|cl-dataflow|cl-boundary-kit|cl-cli|cl-tty-kit|cl-process-kit)::?[a-z]' src/ \
+  | perl -pe 's/:.*$//' | sort | uniq -c | sort -rn
 ```

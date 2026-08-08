@@ -12,7 +12,7 @@
 
 (defun %here-doc-redirect-token-p (token)
   (and (eq (token-type token) :redirect)
-       (string= (token-value token) "<<")))
+       (member (token-value token) '("<<" "<<-") :test #'string=)))
 
 (defstruct (%here-doc-delimiter-scan
             (:constructor %make-here-doc-delimiter-scan
@@ -31,7 +31,7 @@
 (defun %here-doc-delimiter-scan-result (scan)
   (nreverse (%here-doc-delimiter-scan-reversed-delimiters scan)))
 
-(defun %here-doc-delimiters (tokens)
+(defun %here-doc-delimiters (tokens &optional include-redirect-metadata-p)
   (let ((scan (%empty-here-doc-delimiter-scan)))
     (loop for (tok next) on tokens
           when (and (%here-doc-redirect-token-p tok)
@@ -39,7 +39,11 @@
                     (eq (token-type next) :word))
             do (setf scan
                      (%here-doc-delimiter-scan-add scan
-                                                   (token-value next))))
+                                                   (if include-redirect-metadata-p
+                                                       (cons (token-value next)
+                                                             (string= (token-value tok)
+                                                                      "<<-"))
+                                                       (token-value next)))))
     (%here-doc-delimiter-scan-result scan)))
 
 (defstruct (%here-doc-line
@@ -65,26 +69,35 @@
   next-position
   (missing-delimiter-p nil :type boolean :read-only t))
 
-(defun %consume-here-doc-body (input start delimiter)
-  (with-output-to-string (body)
-    (loop with pos = start
-          while (< pos (length input))
-          do (let ((line (%read-here-doc-line input pos)))
-               (when (string= (%here-doc-line-text line) delimiter)
-                 (return-from %consume-here-doc-body
-                   (%make-here-doc-body
-                    (get-output-stream-string body)
-                    (%here-doc-line-next-position line)
-                    nil)))
-               (write-string (%here-doc-line-text line) body)
-               (when (%here-doc-line-newline-p line)
-                 (write-char #\Newline body))
-               (setf pos (%here-doc-line-next-position line)))
-          finally (return-from %consume-here-doc-body
-                    (%make-here-doc-body
-                     (get-output-stream-string body)
-                     pos
-                     t)))))
+(defun %consume-here-doc-body (input start delimiter &optional strip-tabs-p)
+  (let* ((delimiter-text (if (consp delimiter) (car delimiter) delimiter))
+         (strip-leading-tabs-p
+           (or strip-tabs-p
+               (and (consp delimiter) (cdr delimiter)))))
+    (with-output-to-string (body)
+      (loop with pos = start
+            while (< pos (length input))
+            do (let* ((line (%read-here-doc-line input pos))
+                      (line-text (%here-doc-line-text line))
+                      (normalized-line-text
+                        (if strip-leading-tabs-p
+                            (string-left-trim '(#\Tab) line-text)
+                            line-text)))
+                 (when (string= normalized-line-text delimiter-text)
+                   (return-from %consume-here-doc-body
+                     (%make-here-doc-body
+                      (get-output-stream-string body)
+                      (%here-doc-line-next-position line)
+                      nil)))
+                 (write-string normalized-line-text body)
+                 (when (%here-doc-line-newline-p line)
+                   (write-char #\Newline body))
+                 (setf pos (%here-doc-line-next-position line)))
+            finally (return-from %consume-here-doc-body
+                      (%make-here-doc-body
+                       (get-output-stream-string body)
+                       pos
+                       t))))))
 
 (defstruct (%here-doc-consumption
             (:constructor %make-here-doc-consumption
@@ -265,7 +278,7 @@
            (tokenize first-line :cursor-pos cursor-pos))
          (first-line-tokens
            (tokenization-result-tokens first-line-result))
-         (delimiters (%here-doc-delimiters first-line-tokens)))
+         (delimiters (%here-doc-delimiters first-line-tokens t)))
     (if delimiters
         (%tokenize-here-doc-command-line
          input

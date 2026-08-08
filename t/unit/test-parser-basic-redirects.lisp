@@ -140,6 +140,18 @@
       (expect (nshell.domain.parsing::%redirect-kind-facts nil) :to-be-null)
       (expect (nshell.domain.parsing::%redirect-kind-facts :unknown) :to-be-null)))
 
+  (it "redirect-kind-facts-project-tabbed-here-document"
+    "The tab-stripping here-document operator is classified as input-only."
+    (let ((facts (nshell.domain.parsing::%redirect-kind-facts :<<-))
+          (spec (nshell.domain.parsing::%redirect-kind-fact-spec :<<-)))
+      (expect (nshell.domain.parsing::%redirect-kind-facts-p facts) :to-be-truthy)
+      (expect :<<- :to-be (nshell.domain.parsing::%redirect-kind-facts-kind facts))
+      (expect (nshell.domain.parsing::%redirect-kind-facts-input-p facts) :to-be-truthy)
+      (expect (nshell.domain.parsing::%redirect-kind-facts-output-p facts) :to-be-falsy)
+      (expect (nshell.domain.parsing::%redirect-kind-fact-spec-p spec) :to-be-truthy)
+      (expect :<<- :to-be (nshell.domain.parsing::%redirect-kind-fact-spec-kind spec))
+      (expect (nshell.domain.parsing::%redirect-kind-fact-spec-input-p spec) :to-be-truthy)))
+
   (it "redirect-execution-classification-projects-effective-specs"
     "Execution redirect classification belongs to parser-domain data."
     (let ((redirects '((:< . "in.txt")
@@ -221,6 +233,107 @@
       (expect :supersede :to-be (nshell.domain.parsing::%redirect-output-destination-state-stderr-mode
                changed-stdout-state))))
 
+  (it "redirect-dynamic-fd-dup-projects-target-and-folds-left-to-right"
+    "Dynamic fd duplication should preserve source/target data and shell redirect order."
+    (let* ((command
+             (nshell.domain.parsing:make-command-node
+              "echo"
+              '("1>&2")))
+           (result
+             (nshell.domain.parsing:split-command-node-redirects command))
+           (redirects
+             (nshell.domain.parsing:command-redirect-split-result-redirects
+              result))
+           (target (cdar redirects)))
+      (expect 1 :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-source target))
+      (expect 2 :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-target target))
+      (let ((destinations
+              (nshell.domain.parsing:redirect-output-destinations redirects)))
+        (expect (nshell.domain.parsing:redirect-output-destinations-stdout-target
+                 destinations)
+                :to-be-null)
+        (expect :stderr :to-be
+                (nshell.domain.parsing:redirect-output-destinations-stdout-endpoint
+                 destinations))
+        (expect :stderr :to-be
+                (nshell.domain.parsing:redirect-output-destinations-stderr-endpoint
+                 destinations))))
+    (let ((destinations
+            (nshell.domain.parsing:redirect-output-destinations
+             (list (cons :>
+                         "out.txt")
+                   (cons :fd-dup
+                         (nshell.domain.parsing:make-redirect-fd-dup-target
+                          1
+                          2))))))
+      (expect (nshell.domain.parsing:redirect-output-destinations-stdout-target
+               destinations)
+              :to-be-null)
+      (expect :stderr :to-be
+              (nshell.domain.parsing:redirect-output-destinations-stdout-endpoint
+               destinations))))
+
+  (it "redirect-dynamic-fd-dup-requires-shell-wrapper"
+    "Descriptor duplication outside stdout/stderr aliases is preserved for a child wrapper."
+    (let ((redirects
+            (list
+             (cons :fd-dup
+                   (nshell.domain.parsing:make-redirect-fd-dup-target
+                    3
+                    1)))))
+      (expect (nshell.domain.parsing:redirects-require-shell-wrapper-p redirects)
+              :to-be-truthy)
+      (let ((destinations
+              (nshell.domain.parsing:redirect-output-destinations redirects)))
+        (expect :stdout
+                :to-be
+                (nshell.domain.parsing:redirect-output-destinations-stdout-endpoint
+                 destinations))
+        (expect :stderr
+                :to-be
+                 (nshell.domain.parsing:redirect-output-destinations-stderr-endpoint
+                 destinations)))))
+
+  (it "redirect-dynamic-fd-dup-preserves-input-and-close"
+    "Dynamic fd duplication preserves input direction and explicit closes."
+    (let* ((command
+             (nshell.domain.parsing:make-command-node
+              "cat"
+              '("3<&0" "4>&-")))
+           (result
+             (nshell.domain.parsing:split-command-node-redirects command))
+           (redirects
+             (nshell.domain.parsing:command-redirect-split-result-redirects
+              result))
+           (input-target (cdr (first redirects)))
+           (close-target (cdr (second redirects)))
+           (script (nshell.domain.parsing:shell-redirect-script redirects)))
+      (expect 2 :to-be (length redirects))
+      (expect :input :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-operator input-target))
+      (expect 3 :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-source input-target))
+      (expect 0 :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-target input-target))
+      (expect :close :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-target close-target))
+      (expect (not (null
+                    (nshell.domain.parsing:redirects-require-shell-wrapper-p redirects)))
+              :to-be-truthy)
+      (expect (not (null (search "3<&0" script))) :to-be-truthy)
+      (expect (not (null (search "4>&-" script))) :to-be-truthy)))
+
+  (it "shell-redirect-script-lowers-here-string-portably"
+    "A child wrapper uses a POSIX here-document instead of a non-POSIX here-string."
+    (let ((script
+            (nshell.domain.parsing:shell-redirect-script
+             (list (cons :<<< "hello")))))
+      (expect (search "<<<" script) :to-be-falsy)
+      (expect (search "<<'NSHELL_HEREDOC_0'" script) :to-be-truthy)
+      (expect (search "hello" script) :to-be-truthy)))
+
   (it "redirect-output-destination-state-folds-raw-entries"
     "Destination resolution folds raw redirect entries through an explicit state boundary."
     (let ((state
@@ -285,6 +398,26 @@
                    result)))
       (expect '((:> . "out.txt")
                    (:2>&1 . nil)) :to-equal redirects)))
+
+  (it "split-command-node-redirects-consumes-tabbed-here-document"
+    "Split command-node redirect handling recognizes the tab-stripping here-document operator."
+    (let* ((command
+             (nshell.domain.parsing:make-command-node
+              "cat"
+              '("<<-" "EOF")))
+           (result
+             (nshell.domain.parsing:split-command-node-redirects command))
+           (redirects
+             (nshell.domain.parsing:command-redirect-split-result-redirects
+              result)))
+      (let ((clean-command
+              (nshell.domain.parsing:command-redirect-split-result-clean-command
+               result)))
+        (expect "cat" :to-equal
+                (nshell.domain.parsing:command-node-command clean-command))
+        (expect nil :to-equal
+                (nshell.domain.parsing:command-node-arg-values clean-command)))
+      (expect '((:<<- . "EOF")) :to-equal redirects)))
 
   (it "command-redirect-split-state-consumes-targeted-redirects"
     "Command redirect split state should consume redirect-target pairs from staged arguments."

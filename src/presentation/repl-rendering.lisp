@@ -1,26 +1,91 @@
 (in-package #:nshell.presentation)
 
-(defun render-edit-buffer (text theme)
+(defun %active-mouse-selection-range ()
+  (when *input-state*
+    (let ((anchor (input-state-mouse-selection-anchor *input-state*))
+          (end (input-state-mouse-selection-end *input-state*)))
+      (when (and (integerp anchor) (integerp end))
+        (list (min anchor end) (max anchor end))))))
+
+(defun %render-edit-buffer-line (line absolute-start theme selection-start selection-end)
+  (loop with local-start = 0
+        with line-length = (length line)
+        while (< local-start line-length)
+        do (let* ((absolute-index (+ absolute-start local-start))
+                  (selected-p (and (integerp selection-start)
+                                   (integerp selection-end)
+                                   (<= selection-start absolute-index)
+                                   (< absolute-index selection-end)))
+                  (local-end
+                    (or (loop for candidate from (1+ local-start) below line-length
+                              for candidate-selected-p =
+                                (and (integerp selection-start)
+                                     (integerp selection-end)
+                                     (<= selection-start
+                                         (+ absolute-start candidate))
+                                     (< (+ absolute-start candidate)
+                                        selection-end))
+                              when (not (eql selected-p candidate-selected-p))
+                                do (return candidate))
+                        line-length))
+                  (segment (subseq line local-start local-end)))
+             (if selected-p
+                 (format t "~C[7m~a~C[27m" #\Esc segment #\Esc)
+                 (handler-case
+                     (format t "~a"
+                             (highlight->ansi (highlight-line segment) segment theme))
+                   (error ()
+                     (format t "~a" segment))))
+             (setf local-start local-end))))
+
+(defun render-edit-buffer (text theme &key selection-start selection-end)
   (loop with start = 0
+        with absolute-start = 0
         with first-line = t
         with done = nil
         until done
         do (let ((newline-pos (position #\Newline text :start start)))
              (unless first-line
                (format t "~%> "))
-             (handler-case
-                 (let ((line (subseq text start (or newline-pos (length text)))))
-                   (format t "~a" (highlight->ansi (highlight-line line) line theme)))
-               (error ()
-                 (format t "~a" (subseq text start (or newline-pos (length text))))))
+             (let ((line (subseq text start (or newline-pos (length text)))))
+               (%render-edit-buffer-line line absolute-start theme
+                                         selection-start selection-end))
              (setf first-line nil)
              (if newline-pos
-                 (setf start (1+ newline-pos))
+                 (setf start (1+ newline-pos)
+                       absolute-start (1+ newline-pos))
                  (setf done t)))))
 
-(defun reset-rendered-prompt-state ()
+(defun %reset-rendered-prompt-geometry ()
   (setf *prompt-rendered-lines* 0
-        *prompt-rendered-cursor-row* 0))
+        *prompt-rendered-cursor-row* 0
+        *prompt-rendered-terminal-width* 80
+        *prompt-rendered-prompt-width* 0))
+
+(defun reset-rendered-prompt-state ()
+  (%reset-rendered-prompt-geometry)
+  (setf *prompt-rendered-origin-row* 1
+        *prompt-rendered-origin-column* 1
+        *prompt-rendered-origin-known-p* nil))
+
+(defun %ensure-rendered-prompt-origin ()
+  (unless *prompt-rendered-origin-known-p*
+    (when *interactive-terminal-installed-p*
+      (handler-case
+          (multiple-value-bind (row column)
+              (nshell.infrastructure.terminal:query-cursor-position)
+            (when (and (integerp row)
+                       (integerp column)
+                       (plusp row)
+                       (plusp column))
+              (setf *prompt-rendered-origin-row* row
+                    *prompt-rendered-origin-column* column))
+            (setf *prompt-rendered-origin-known-p* t))
+        (error () nil)))
+    (unless *prompt-rendered-origin-known-p*
+      (setf *prompt-rendered-origin-row* 1
+            *prompt-rendered-origin-column* 1
+            *prompt-rendered-origin-known-p* t))))
 
 (defun clear-rendered-prompt ()
   (if (> *prompt-rendered-lines* 0)
@@ -35,7 +100,7 @@
               do
           (format t "~C[A" #\Esc)
           (nshell.infrastructure.terminal:ansi-clear-line))
-        (reset-rendered-prompt-state))
+        (%reset-rendered-prompt-geometry))
       (progn
         (nshell.infrastructure.terminal:ansi-clear-line)
         (format t "~C" #\Return))))
@@ -45,6 +110,7 @@
     (return-from render-prompt-cont nil))
   (reap-background-jobs)
   (clear-rendered-prompt)
+  (%ensure-rendered-prompt-origin)
   (let* ((terminal-width
            (multiple-value-bind (rows cols)
                (handler-case (nshell.infrastructure.acl:get-terminal-size)
@@ -60,8 +126,11 @@
          (suggestion (input-state-suggestion *input-state*))
          (search-query (input-state-search-query *input-state*))
          (search-suffix (when (eq (input-state-mode *input-state*) :search)
-                          (format nil " history: ~a" search-query))))
-    (render-edit-buffer text theme)
+                          (format nil " history: ~a" search-query)))
+         (selection-range (%active-mouse-selection-range)))
+    (render-edit-buffer text theme
+                        :selection-start (first selection-range)
+                        :selection-end (second selection-range))
     (when (and suggestion (> (length suggestion) 0))
       (format t "~C[2m~a~C[0m" #\Esc suggestion #\Esc))
     (when search-suffix
@@ -83,6 +152,8 @@
                                          :search-suffix search-suffix
                                          :terminal-width terminal-width
                                          :prompt-width prompt-width)
-            *prompt-rendered-cursor-row* (rendered-position-row cursor-position)))
+            *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
+            *prompt-rendered-terminal-width* terminal-width
+            *prompt-rendered-prompt-width* prompt-width))
   (finish-output)
   (lambda () (read-key-cont))))

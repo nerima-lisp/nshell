@@ -11,6 +11,7 @@
    (%make-redirect-spec-entry ">>" :>>)
    (%make-redirect-spec-entry "<" :<)
    (%make-redirect-spec-entry "<<" :<<)
+   (%make-redirect-spec-entry "<<-" :<<-)
    (%make-redirect-spec-entry "<<<" :<<<)
    (%make-redirect-spec-entry "1>" :>)
    (%make-redirect-spec-entry "1>>" :>>)
@@ -72,6 +73,7 @@
   (list
    (%make-redirect-kind-fact-spec :< t nil nil nil)
    (%make-redirect-kind-fact-spec :<< t nil nil nil)
+   (%make-redirect-kind-fact-spec :<<- t nil nil nil)
    (%make-redirect-kind-fact-spec :<<< t nil nil nil)
    (%make-redirect-kind-fact-spec :> nil t nil nil)
    (%make-redirect-kind-fact-spec :>> nil t nil t)

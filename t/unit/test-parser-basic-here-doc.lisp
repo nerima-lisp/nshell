@@ -37,6 +37,15 @@
       (expect (fboundp 'nshell.domain.parsing::copy-%here-doc-body) :to-be-falsy)
       (expect (format nil "one~%") :to-equal (nshell.domain.parsing::%here-doc-body-body body))
       (expect 8 :to-equal (nshell.domain.parsing::%here-doc-body-next-position body))
+      (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body) :to-be-falsy))
+    (let ((body (nshell.domain.parsing::%consume-here-doc-body
+                 (format nil "~chello~%~cEOF~%tail" #\Tab #\Tab)
+                 0
+                 "EOF"
+                 t)))
+      (expect (nshell.domain.parsing::%here-doc-body-p body) :to-be-truthy)
+      (expect (format nil "hello~%") :to-equal (nshell.domain.parsing::%here-doc-body-body body))
+      (expect 12 :to-equal (nshell.domain.parsing::%here-doc-body-next-position body))
       (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body) :to-be-falsy)))
 
   (it "parser-here-doc-delimiter-scan-projects-left-to-right-delimiters"
@@ -104,6 +113,23 @@
                  result) :to-be-null)
       (expect (member (format nil "hello~%") token-values :test #'string=) :to-be-truthy)
       (expect (member "echo" token-values :test #'string=) :to-be-truthy)))
+  (it "parser-here-doc-tokenization-strips-leading-tabs-for-tab-form"
+    "Here-doc aware tokenization strips leading tabs for <<-."
+    (let* ((input (format nil "cat <<- EOF~%~chello~%~cEOF~%echo done"
+                          #\Tab
+                          #\Tab))
+           (result (nshell.domain.parsing::%tokenize-here-doc-aware input nil))
+           (token-values
+             (mapcar #'nshell.domain.parsing:token-value
+                     (nshell.domain.parsing:tokenization-result-tokens result))))
+      (expect (nshell.domain.parsing:tokenization-result-incomplete-p result)
+              :to-be-falsy)
+      (expect (member (format nil "hello~%") token-values :test #'string=)
+              :to-be-truthy)
+      (expect (member (format nil "~chello~%" #\Tab) token-values :test #'string=)
+              :to-be-falsy)
+      (expect (member "echo" token-values :test #'string=)
+              :to-be-truthy)))
 
   (it "parser-here-doc-target-replacer-consumes-bodies-after-redirects"
     "The target replacer owns pending-target and body consumption state."

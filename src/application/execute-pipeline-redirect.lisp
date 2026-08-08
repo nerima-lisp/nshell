@@ -3,7 +3,7 @@
 ;;; Pipeline redirect handling
 ;;; Functions for extracting, applying, and restoring I/O redirections.
 ;;; Redirect data is represented as an alist: ((kind . target) ...) where
-;;; kind is a keyword (:>, :>>, :&>, :2>, :2>&1, :<, :<<, :<<<) and
+;;; kind is a keyword (:>, :>>, :&>, :2>, :2>&1, :<, :<<, :<<-, :<<<) and
 ;;; target is the file path string (or NIL for fd-dup redirects).
 
 ;; -- Logic: redirect extraction from command node args ----------------
@@ -43,6 +43,8 @@ Redirect args (and their targets) are removed from the args list."
        (:<<<  (let ((fn (%redirect-fn context :redirect-input-string)))
                 (when fn (funcall fn target))))
        (:<<   (let ((fn (%redirect-fn context :redirect-input-document)))
+                (when fn (funcall fn target))))
+       (:<<-  (let ((fn (%redirect-fn context :redirect-input-document)))
                 (when fn (funcall fn target))))
        (t nil)))
    redirects))

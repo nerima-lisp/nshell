@@ -125,6 +125,17 @@
       (expect "inline-doc" :to-equal (nshell.domain.environment:env-get
                     (nshell.application:shell-context-environment context)
                     "captured"))))
+  (it "source-pipeline-tabbed-here-document-feeds-builtin-stdin"
+    "source strips leading tabs from here-document bodies before executing the command."
+    (with-builtins-source (output code context
+                                   (list "read captured <<- EOF"
+                                         (format nil "~cinline-doc" #\Tab)
+                                         (format nil "~cEOF" #\Tab)))
+      (expect "" :to-equal output)
+      (expect 0 :to-equal code)
+      (expect "inline-doc" :to-equal (nshell.domain.environment:env-get
+                    (nshell.application:shell-context-environment context)
+                    "captured"))))
 
   (it "source-pipeline-here-document-continues-after-delimiter"
     "source leaves commands after a here-document delimiter for normal execution."

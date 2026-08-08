@@ -174,6 +174,7 @@ letting word-reading stop on an unconsumed terminator."
       (expect ">>" :to-equal (right-route-value ">> log"))
       (expect '(:redirect "<") :to-equal (left-route-facts "< in"))
       (expect '(:redirect "<<") :to-equal (left-route-facts "<< EOF"))
+      (expect '(:redirect "<<-") :to-equal (left-route-facts "<<- EOF"))
       (expect '(:redirect "<<<") :to-equal (left-route-facts "<<< value"))
       (expect '(:process-substitution nil) :to-equal (left-route-facts "<(echo ok)"))))
 
@@ -238,8 +239,9 @@ letting word-reading stop on an unconsumed terminator."
   ;; whole input producing LENGTH tokens.
   (it-each (("echo >> log"    3 1 ">>")
             (">"              1 0 ">")
-            ("cat <<< hello"  3 1 "<<<")
             ("cat << EOF"     3 1 "<<")
+            ("cat <<- EOF"    3 1 "<<-")
+            ("cat <<< hello"  3 1 "<<<")
             ("echo err 2>&1"  3 2 "2>&1"))
       "tokenizes ~S with a :redirect ~S"
       (input length position value)

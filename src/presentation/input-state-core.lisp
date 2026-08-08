@@ -19,7 +19,8 @@ operator-pending states after pressing d or c in normal mode."
 (deftype output-event ()
   "Events emitted by `reduce-input-state' for an outer, effectful REPL loop."
   '(member :redraw :execute :complete :suggest-update :search-start :search-update
-    :history-prev :history-next :insert-last-argument :clear-screen :none :quit))
+    :history-prev :history-next :insert-last-argument :clear-screen :none :quit
+    :copy))
 
 (defstruct (input-state (:constructor %make-input-state
                                       (&key (buffer "")

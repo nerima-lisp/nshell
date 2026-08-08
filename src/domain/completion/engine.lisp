@@ -84,11 +84,26 @@
 (defun rule-complete (kb-rules partial-input)
   (%rule-complete-query kb-rules (completion-query-for partial-input)))
 
-(defun %knowledge-base-command-candidates (kb path command)
+(defun %runtime-command-candidates (prefix alias-table function-table)
+  (let ((names nil))
+    (dolist (table (list alias-table function-table))
+      (when (hash-table-p table)
+        (maphash (lambda (name value)
+                   (declare (ignore value))
+                   (when (and (stringp name)
+                              (%starts-with-p prefix name))
+                     (push name names)))
+                 table)))
+    (mapcar (lambda (name)
+              (make-candidate name :kind :command))
+            (sort (remove-duplicates names :test #'string=) #'string<))))
+
+(defun %knowledge-base-command-candidates (kb path command alias-table function-table)
   (%merge-candidates
    (knowledge-base-command-candidates kb command)
    (%command-candidates-from-path path command)
-   (builtin-command-candidates command)))
+   (builtin-command-candidates command)
+   (%runtime-command-candidates command alias-table function-table)))
 
 (defun %knowledge-base-argument-candidates (kb command arg-prefix argument-words)
   (knowledge-base-argument-candidates kb command arg-prefix
@@ -112,13 +127,13 @@
     (t
      (funcall argument-candidates-fn))))
 
-(defun %knowledge-base-candidates (kb query path)
+(defun %knowledge-base-candidates (kb query path alias-table function-table)
   (let ((command (completion-query-command query))
         (arg-prefix (completion-query-arg-prefix query)))
     (%query-candidates
      query
      (lambda ()
-       (%knowledge-base-command-candidates kb path command))
+       (%knowledge-base-command-candidates kb path command alias-table function-table))
      (lambda ()
        (%knowledge-base-argument-candidates
         kb
@@ -126,16 +141,28 @@
         arg-prefix
         (completion-query-argument-words query))))))
 
-(defun %rule-knowledge-base-candidates (kb query)
+(defun %rule-knowledge-base-candidates (kb query alias-table function-table)
   (labels ((rule-candidates ()
-             (%rule-complete-query kb query)))
-    (%query-candidates query #'rule-candidates #'rule-candidates)))
+             (%rule-complete-query kb query))
+           (command-candidates ()
+             (%merge-candidates
+              (rule-candidates)
+              (%runtime-command-candidates
+               (completion-query-command query)
+               alias-table
+               function-table))))
+    (%query-candidates query #'command-candidates #'rule-candidates)))
 
-(defun %fallback-candidates (query path)
+(defun %fallback-candidates (query path alias-table function-table)
   (%query-candidates query
                      (lambda ()
-                       (%command-candidates-from-path path
-                                                     (completion-query-command query)))
+                       (%merge-candidates
+                        (%command-candidates-from-path path
+                                                        (completion-query-command query))
+                        (%runtime-command-candidates
+                         (completion-query-command query)
+                         alias-table
+                         function-table)))
                      (lambda ()
                        nil)))
 
@@ -145,25 +172,25 @@
                             :kind :file
                             :description "file"))))
 
-(defun %completion-candidates (kb query path)
+(defun %completion-candidates (kb query path alias-table function-table)
   (cond
-    ((%completion-query-redirection-target-p query)
-     (%redirection-target-candidates query))
+   ((%completion-query-redirection-target-p query)
+    (%redirection-target-candidates query))
     (t
      (typecase kb
        (knowledge-base
-        (%knowledge-base-candidates kb query path))
+        (%knowledge-base-candidates kb query path alias-table function-table))
        (rule-knowledge-base
-        (%rule-knowledge-base-candidates kb query))
+        (%rule-knowledge-base-candidates kb query alias-table function-table))
        (t
-        (%fallback-candidates query path))))))
+        (%fallback-candidates query path alias-table function-table))))))
 
 (defun %completion-ranking-prefix (query)
   (if (%completion-query-command-position-p query)
       (completion-query-command query)
       (completion-query-arg-prefix query)))
 
-(defun complete (kb partial-input &key path)
+(defun complete (kb partial-input &key path alias-table function-table)
   (let ((query (completion-query-for partial-input)))
     (%rank-candidates (%completion-ranking-prefix query)
-                      (%completion-candidates kb query path))))
+                      (%completion-candidates kb query path alias-table function-table))))

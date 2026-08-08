@@ -179,7 +179,8 @@
     (with-vi-visual-state (cmd (input-state :buffer "abcdef" :cursor-pos 1) visual)
       (with-reduced-input-states visual (((counted) :char #\2)
                                          ((moved) :char #\l)
-                                         ((yanked) :char #\y))
+                                         ((yanked copy-output) :char #\y))
+        (expect :copy :to-be copy-output)
         (is-input-state yanked
                         :buffer "abcdef"
                         :cursor-pos 0

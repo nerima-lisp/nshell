@@ -1,6 +1,24 @@
 (in-package #:nshell/test)
 
 (describe "e2e-tests"
+  (it "e2e-seeded-completion-applies-hierarchical-subcommand-flag"
+    (with-seeded-completion-knowledge-base (kb)
+      (let ((candidates (nshell.domain.completion:complete kb "git status --p")))
+        (expect '("--porcelain") :to-equal (completion-texts candidates))
+        (let ((state (input-state
+                      :buffer "git status --p"
+                      :cursor-pos (length "git status --p")
+                      :completion-index -1
+                      :completion-base-buffer nil
+                      :completion-base-cursor nil
+                      :last-candidates (completion-texts candidates))))
+          (multiple-value-bind (completed output)
+              (reduce-once state :tab)
+            (expect :complete :to-be output)
+            (is-input-state completed
+                            :buffer "git status --porcelain"
+                            :cursor-pos (length "git status --porcelain"))))))))
+
   (it "e2e-abbreviation-expands-on-enter-before-execution"
     (with-repl-test-state
       (setf (gethash "say" nshell.presentation::*abbreviations*) "echo hello")
@@ -200,4 +218,3 @@
                       :completion-base-cursor nil
                       :last-candidates nil
                       :suggestion nil))))
-

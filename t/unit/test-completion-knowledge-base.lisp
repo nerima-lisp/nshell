@@ -7,26 +7,18 @@
   (it "knowledge-base-constructor-is-internal-boundary"
     (assert-package-function-boundaries
         :package "NSHELL.DOMAIN.COMPLETION"
-        :present (nshell.domain.completion::%make-knowledge-base
-                  nshell.domain.completion::%knowledge-base-commands)
-        :absent (nshell.domain.completion::make-knowledge-base
-                 nshell.domain.completion::knowledge-base-commands))
+        :present (nshell.domain.completion::make-knowledge-base)
+        :absent (nshell.domain.completion::%make-knowledge-base))
     (expect (nshell.domain.completion::knowledge-base-p
+         (nshell.domain.completion:make-empty-knowledge-base)) :to-be-truthy)
+    (expect (nshell.domain.completion::rule-knowledge-base-p
          (nshell.domain.completion:make-empty-knowledge-base)) :to-be-truthy))
 
-  (it "knowledge-base-command-storage-is-traversed-through-boundary"
-    (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
-          (commands nil))
+  (it "knowledge-base-command-registry-is-queried-through-public-accessors"
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "zeta")
       (nshell.domain.completion:kb-add-command kb "alpha")
-      (nshell.domain.completion::%map-kb-commands
-       kb
-       (lambda (name entry)
-         (push (cons name entry) commands)))
-      (setf commands (nreverse commands))
-      (expect '("alpha" "zeta") :to-equal (mapcar #'car commands))
-      (expect (every #'nshell.domain.completion::%kb-command-entry-p
-                 (mapcar #'cdr commands)) :to-be-truthy)))
+      (expect '("alpha" "zeta") :to-equal (nshell.domain.completion::kb-registered-commands kb))))
 
   (it "command-candidate-helpers-are-internal-boundaries"
     (assert-package-symbol-boundaries
@@ -83,28 +75,19 @@
                                  candidate))))
                  candidates) :to-be-truthy)))
 
-  (it "entry-candidate-projection-boundaries-name-command-entry-parts"
+  (it "builtin-command-candidates-project-catalog-entry-name-and-description"
     (let ((entry (%test-catalog-entry
                   :command "tool"
-                  :description "tool description"
-                  :flags '("--flag")
-                  :subcommands '("run")
-                  :exclusive-options '(("--json" "--yaml"))))
+                  :description "tool description"))
           (empty-description-entry (%test-catalog-entry
                                     :command "empty-description")))
-      (expect "tool" :to-equal (nshell.domain.completion::%candidate-entry-command-name
+      (expect "tool" :to-equal (nshell.domain.completion::%catalog-command-entry-command entry))
+      (expect "tool description" :to-equal (nshell.domain.completion::%catalog-command-entry-description
                     entry))
-      (expect "tool description" :to-equal (nshell.domain.completion::%candidate-entry-description
-                    entry))
-      (expect "" :to-equal (nshell.domain.completion::%candidate-entry-description
-                    empty-description-entry))
-      (expect '("--flag") :to-equal (nshell.domain.completion::%candidate-entry-flag-specs entry))
-      (expect '("run") :to-equal (nshell.domain.completion::%candidate-entry-subcommand-specs
-                  entry))
-      (expect '(("--json" "--yaml")) :to-equal (nshell.domain.completion::%candidate-entry-exclusive-option-groups
-                  entry))))
+      (expect nil :to-equal (nshell.domain.completion::%catalog-command-entry-description
+                    empty-description-entry))))
 
-  (it "entry-candidate-projection-reads-knowledge-base-entry-boundary"
+  (it "knowledge-base-command-accessors-read-back-added-facts"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command
        kb "tool"
@@ -113,87 +96,40 @@
        :option-values '(("--flag" "value"))
        :exclusive-options '(("--json" "--yaml"))
        :description "tool description")
-      (let ((entry (nshell.domain.completion::%kb-command-entry kb "tool")))
-        (expect "tool description" :to-equal (nshell.domain.completion::%candidate-entry-description
-                      entry))
-        (expect '("--flag") :to-equal (nshell.domain.completion::%candidate-entry-flag-specs
-                    entry))
-        (expect '("run") :to-equal (nshell.domain.completion::%candidate-entry-subcommand-specs
-                    entry))
-        (expect '(("--json" "--yaml")) :to-equal (nshell.domain.completion::%candidate-entry-exclusive-option-groups
-                    entry))
-        (expect '(("--flag" "value")) :to-equal (nshell.domain.completion::%entry-option-value-specs
-                    entry)))))
+      (expect "tool description" :to-equal (nshell.domain.completion:kb-command-description kb "tool"))
+      (expect '("--flag") :to-equal (nshell.domain.completion:kb-command-flags kb "tool"))
+      (expect '("run") :to-equal (nshell.domain.completion:kb-command-subcommands kb "tool"))
+      (expect '(("--json" "--yaml")) :to-equal (nshell.domain.completion:kb-command-exclusive-options
+                  kb "tool"))
+      (expect '(("--flag" "value")) :to-equal (nshell.domain.completion:kb-command-option-values
+                  kb "tool"))))
 
-  (it "candidate-entry-projection-helpers-are-internal-boundaries"
-    (assert-package-symbol-boundaries
-        :package "NSHELL.DOMAIN.COMPLETION"
-        :absent (nshell.domain.completion::candidate-entry-command-name
-                 nshell.domain.completion::candidate-entry-description
-                 nshell.domain.completion::candidate-entry-flag-specs
-                 nshell.domain.completion::candidate-entry-subcommand-specs
-                 nshell.domain.completion::candidate-entry-exclusive-option-groups))
-    (assert-package-function-boundaries
-        :package "NSHELL.DOMAIN.COMPLETION"
-        :present (nshell.domain.completion::%candidate-entry-command-name
-                  nshell.domain.completion::%candidate-entry-description
-                  nshell.domain.completion::%candidate-entry-flag-specs
-                  nshell.domain.completion::%candidate-entry-subcommand-specs
-                  nshell.domain.completion::%candidate-entry-exclusive-option-groups)))
-
-  (it "entry-option-values-projects-option-value-spec-boundary"
-    (let ((entry (%test-catalog-entry
-                  :command "tool"
-                  :option-values '(("--mode" "fast" "safe")
-                                   ("--format" "json")))))
-      (expect '(("--mode" "fast" "safe")
-                   ("--format" "json")) :to-equal (nshell.domain.completion::%entry-option-value-specs entry))
-      (expect "--mode" :to-equal (nshell.domain.completion::%entry-option-value-spec-option
-                    '("--mode" "fast")))
-      (expect '("fast") :to-equal (nshell.domain.completion::%entry-option-value-spec-values
-                  '("--mode" "fast")))
-      (expect (nshell.domain.completion::%entry-option-value-spec-for-option-p
-           '("--mode" "fast")
-           "--mode") :to-be-truthy)
-      (expect (nshell.domain.completion::%entry-option-value-spec-for-option-p
-                '("--format" "json")
-                "--mode") :to-be-falsy)
+  (it "kb-option-value-spec-helpers-name-domain-parts"
+    (let ((spec '("--mode" "fast" "safe")))
+      (expect "--mode" :to-equal (nshell.domain.completion::%kb-option-value-spec-option spec))
+      (expect '("fast" "safe") :to-equal (nshell.domain.completion::%kb-option-value-spec-values spec))
+      (expect (nshell.domain.completion::%valid-kb-option-value-spec-p spec) :to-be-truthy)
+      (expect (nshell.domain.completion::%kb-option-value-spec-for-option-p
+           spec "--mode") :to-be-truthy)
+      (expect (nshell.domain.completion::%kb-option-value-spec-for-option-p
+                spec "--other") :to-be-falsy)
       (expect (nshell.domain.completion::%valid-kb-option-value-spec-p
                 '(nil "ignored")) :to-be-falsy)
-      (expect '("fast" "safe") :to-equal (nshell.domain.completion::%entry-option-values entry "--mode"))
-      (expect (nshell.domain.completion::%entry-option-values
-                 entry
-                 "--missing") :to-be-null)))
+      (expect '("--mode" "safe") :to-equal (nshell.domain.completion::%make-kb-option-value-spec
+                  "--mode" '("safe")))))
 
-  (it "entry-option-value-spec-helpers-are-internal-boundaries"
+  (it "kb-option-value-spec-helpers-are-internal-boundaries"
     (assert-package-symbol-boundaries
         :package "NSHELL.DOMAIN.COMPLETION"
-        :absent (nshell.domain.completion::unique-string-values
-                 nshell.domain.completion::entry-option-value-specs
-                 nshell.domain.completion::entry-option-value-spec-option
-                 nshell.domain.completion::entry-option-value-spec-values
-                 nshell.domain.completion::entry-option-value-spec-for-option-p
-                 nshell.domain.completion::entry-option-values
-                 nshell.domain.completion::matching-entry-option-values
-                 nshell.domain.completion::option-value-candidate
-                 nshell.domain.completion::attached-option-value-candidate-text
-                 nshell.domain.completion::option-value-candidates
-                 nshell.domain.completion::attached-option-value-candidates
-                 nshell.domain.completion::separate-option-value-candidates))
+        :absent (nshell.domain.completion::make-kb-option-value-spec
+                 nshell.domain.completion::kb-option-value-spec-option
+                 nshell.domain.completion::kb-option-value-spec-values))
     (assert-package-function-boundaries
         :package "NSHELL.DOMAIN.COMPLETION"
-        :present (nshell.domain.completion::%unique-string-values
-                  nshell.domain.completion::%entry-option-value-specs
-                  nshell.domain.completion::%entry-option-value-spec-option
-                  nshell.domain.completion::%entry-option-value-spec-values
-                  nshell.domain.completion::%entry-option-value-spec-for-option-p
-                  nshell.domain.completion::%entry-option-values
-                  nshell.domain.completion::%matching-entry-option-values
-                  nshell.domain.completion::%option-value-candidate
-                  nshell.domain.completion::%attached-option-value-candidate-text
-                  nshell.domain.completion::%option-value-candidates
-                  nshell.domain.completion::%attached-option-value-candidates
-                  nshell.domain.completion::%separate-option-value-candidates)))
+        :present (nshell.domain.completion::%kb-option-value-spec-option
+                  nshell.domain.completion::%kb-option-value-spec-values
+                  nshell.domain.completion::%valid-kb-option-value-spec-p
+                  nshell.domain.completion::%kb-option-value-spec-for-option-p)))
 
   (it "parse-attached-option-value-prefix-captures-option-and-value-prefix"
     (let ((prefix (nshell.domain.completion::%parse-attached-option-value-prefix
@@ -272,7 +208,7 @@
   (it "argument-candidate-helpers-are-internal-boundaries"
     (assert-package-symbol-boundaries
         :package "NSHELL.DOMAIN.COMPLETION"
-        :absent (nshell.domain.completion::unique-entry-argument-names
+        :absent (nshell.domain.completion::unique-kb-argument-names
                  nshell.domain.completion::latest-argument-word
                  nshell.domain.completion::argument-words-before-latest
                  nshell.domain.completion::argument-word-sequence-from-words
@@ -280,47 +216,20 @@
                  nshell.domain.completion::argument-words-without-value-prefix
                  nshell.domain.completion::previous-option-for-value-prefix
                  nshell.domain.completion::option-token-matches-p
-                 nshell.domain.completion::exclusive-option-blocked-p
-                 nshell.domain.completion::available-entry-argument-names
+                 nshell.domain.completion::kb-exclusive-option-blocked-p
+                 nshell.domain.completion::available-kb-argument-names
                  nshell.domain.completion::argument-name-candidate
-                 nshell.domain.completion::entry-argument-name-candidates))
+                 nshell.domain.completion::kb-argument-name-candidates))
     (assert-package-function-boundaries
         :package "NSHELL.DOMAIN.COMPLETION"
-        :present (nshell.domain.completion::%unique-entry-argument-names
+        :present (nshell.domain.completion::%unique-kb-argument-names
                   nshell.domain.completion::%argument-word-sequence-from-words
                   nshell.domain.completion::%argument-word-sequence-latest
                   nshell.domain.completion::%argument-word-sequence-words-before-latest
                   nshell.domain.completion::%argument-words-without-value-prefix
                   nshell.domain.completion::%previous-option-for-value-prefix
                   nshell.domain.completion::%option-token-matches-p
-                  nshell.domain.completion::%exclusive-option-blocked-p
-                  nshell.domain.completion::%available-entry-argument-names
+                  nshell.domain.completion::%kb-exclusive-option-blocked-p
+                  nshell.domain.completion::%available-kb-argument-names
                   nshell.domain.completion::%argument-name-candidate
-                  nshell.domain.completion::%entry-argument-name-candidates)))
-
-  (it "kb-option-value-spec-helpers-name-domain-parts"
-    (let ((spec '("--mode" "fast" "safe")))
-      (expect "--mode" :to-equal (nshell.domain.completion::%kb-option-value-spec-option spec))
-      (expect '("fast" "safe") :to-equal (nshell.domain.completion::%kb-option-value-spec-values spec))
-      (expect (nshell.domain.completion::%valid-kb-option-value-spec-p spec) :to-be-truthy)
-      (expect (nshell.domain.completion::%kb-option-value-spec-for-option-p
-           spec "--mode") :to-be-truthy)
-      (expect (nshell.domain.completion::%kb-option-value-spec-for-option-p
-                spec "--other") :to-be-falsy)
-      (expect (nshell.domain.completion::%valid-kb-option-value-spec-p
-                '(nil "ignored")) :to-be-falsy)
-      (expect '("--mode" "safe") :to-equal (nshell.domain.completion::%make-kb-option-value-spec
-                  "--mode" '("safe")))))
-
-  (it "kb-option-value-spec-helpers-are-internal-boundaries"
-    (assert-package-symbol-boundaries
-        :package "NSHELL.DOMAIN.COMPLETION"
-        :absent (nshell.domain.completion::make-kb-option-value-spec
-                 nshell.domain.completion::kb-option-value-spec-option
-                 nshell.domain.completion::kb-option-value-spec-values))
-    (assert-package-function-boundaries
-        :package "NSHELL.DOMAIN.COMPLETION"
-        :present (nshell.domain.completion::%kb-option-value-spec-option
-                  nshell.domain.completion::%kb-option-value-spec-values
-                  nshell.domain.completion::%valid-kb-option-value-spec-p
-                  nshell.domain.completion::%kb-option-value-spec-for-option-p))))
+                  nshell.domain.completion::%kb-argument-name-candidates))))

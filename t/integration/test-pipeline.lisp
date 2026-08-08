@@ -42,6 +42,19 @@
       (nshell.domain.completion:kb-add-command kb "git" :subcommands '("status") :flags '("-m"))
       (expect (nshell.domain.completion:kb-command-present-p kb "git") :to-be-truthy)))
 
+  (it "hierarchical-completion-uses-subcommand-metadata"
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+      (nshell.domain.completion:kb-add-command
+       kb "git"
+       :subcommands '("status")
+       :flags '("--global"))
+      (nshell.domain.completion:kb-add-command
+       kb "git status"
+       :flags '("--branch" "--porcelain" "--short"))
+      (expect '("--branch" "--porcelain" "--short") :to-equal
+              (completion-texts
+               (nshell.domain.completion:complete kb "git status --")))))
+
   (it "path-command-completion-uses-directory-adapter-integration"
     (let* ((root (merge-pathnames (format nil "nshell-path-completion-~a/" (gensym))
                                   (uiop:temporary-directory)))

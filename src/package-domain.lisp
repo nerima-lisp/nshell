@@ -224,7 +224,7 @@ exported predicates below are goals callers may query directly.")
             #:kb-command-option-values #:kb-command-exclusive-options
             #:kb-command-description
             #:make-fact #:make-rule #:fact-p #:rule-p
-            #:assert-fact! #:assert-rule! #:prove #:prove-all #:predicate-true-p
+            #:assert-fact! #:assert-rule! #:prove #:prove-all
             #:completion-rulebase
             ;; Completion logic predicates: the public vocabulary of the
             ;; cl-prolog rulebase produced by COMPLETION-RULEBASE.  Exporting

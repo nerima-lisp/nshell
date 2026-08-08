@@ -114,7 +114,10 @@
                    (nshell.domain.completion::completes "zz" "run")
                    (nshell.domain.completion::completes "zz" "test")
                    (nshell.domain.completion::describes "test" "run tests")
-                   (nshell.domain.completion::has-flag "zz" "--mode")) :to-equal (nshell.domain.completion::%catalog-command-with-subcommand-rule-facts
+                   (nshell.domain.completion::has-flag "zz" "--mode")
+                   (nshell.domain.completion::option-value "zz" "--mode" "fast")
+                   (nshell.domain.completion::option-value "zz" "--mode" "safe")
+                   (nshell.domain.completion::exclusive-group "zz" ("--json" "--yaml"))) :to-equal (nshell.domain.completion::%catalog-command-with-subcommand-rule-facts
                   projection))))
 
   (it "catalog-derived-data-helpers-are-internal-boundaries"

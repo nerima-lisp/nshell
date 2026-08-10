@@ -63,7 +63,7 @@
       flake = false;
     };
     cl-tty-kit = {
-      url = "github:nerima-lisp/cl-tty-kit/v1.5.0";
+      url = "github:nerima-lisp/cl-tty-kit/v1.6.1";
       flake = false;
     };
     # cl-process-kit consolidates timeout-guarded process launch; it sits on
@@ -281,7 +281,8 @@
           };
         };
 
-      # The delivered binary plus nshell.1. `overrideAttrs` on the delivery,
+      # The delivered binary plus its human-readable release metadata.
+      # `overrideAttrs` on the delivery,
       # not a second derivation wrapping it: `mkExecutable` returns a
       # `runCommand`, so appending to its build command installs the man page
       # into that same output instead of leaving two copies of a 40MB
@@ -297,7 +298,24 @@
         ctx:
         ctx.executable.overrideAttrs (previous: {
           buildCommand = previous.buildCommand + ''
-            mkdir -p "$out/share/man/man1"
+            mkdir -p "$out/share/man/man1" "$out/LICENSES"
+            cp ${./README.md} "$out/README.md"
+            cp ${./LICENSE} "$out/LICENSE"
+            cp ${ctx.pkgs.sbcl}/share/doc/sbcl/COPYING "$out/LICENSES/SBCL-COPYING"
+            cp ${ctx.pkgs.zstd.src}/LICENSE "$out/LICENSES/ZSTD-LICENSE"
+            cp ${cl-prolog}/LICENSE "$out/LICENSES/CL-PROLOG-LICENSE"
+            cp ${cl-parser-kit}/LICENSE "$out/LICENSES/CL-PARSER-KIT-LICENSE"
+            cp ${cl-dataflow}/LICENSE "$out/LICENSES/CL-DATAFLOW-LICENSE"
+            cp ${cl-host-kit}/LICENSE "$out/LICENSES/CL-HOST-KIT-LICENSE"
+            cp ${cl-boundary-kit}/LICENSE "$out/LICENSES/CL-BOUNDARY-KIT-LICENSE"
+            cp ${cl-cli}/LICENSE "$out/LICENSES/CL-CLI-LICENSE"
+            cp ${cl-tty-kit}/LICENSE "$out/LICENSES/CL-TTY-KIT-LICENSE"
+            cp ${cl-log-kit}/LICENSE "$out/LICENSES/CL-LOG-KIT-LICENSE"
+            cp ${cl-process-kit}/LICENSE "$out/LICENSES/CL-PROCESS-KIT-LICENSE"
+            cp ${cl-history-kit}/LICENSE "$out/LICENSES/CL-HISTORY-KIT-LICENSE"
+            cp ${cl-codec-kit}/LICENSE "$out/LICENSES/CL-CODEC-KIT-LICENSE"
+            cp ${cl-date-kit}/LICENSE "$out/LICENSES/CL-DATE-KIT-LICENSE"
+            cp ${cl-concurrent-kit}/LICENSE "$out/LICENSES/CL-CONCURRENT-KIT-LICENSE"
             cp ${./man/nshell.1} "$out/share/man/man1/nshell.1"
           '';
         });
@@ -443,6 +461,12 @@
           bin = "${delivery}/bin/nshell";
         in
         {
+          # The release workflows use an explicit artifact name while the
+          # contributor-facing default package remains unchanged. This is an
+          # additive output, so it belongs in extraOutputs and reuses the
+          # exact delivery derivation and man-page installation.
+          packages.releaseBundle = delivery;
+
           checks = {
             # The focused cl-weave completion suite (nshell/weave), through the
             # same script a developer runs locally. `checks.default` covers

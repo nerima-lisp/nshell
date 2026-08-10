@@ -41,6 +41,12 @@ goals such as `(completes "git" ?c)` that unify against the same rulebase the
 completion engine itself queries at runtime, rather than re-implementing the
 same logic as assertions.
 
+The completion engine now applies the candidate prefix before requesting
+human-readable descriptions from the rulebase. This keeps the runtime query
+path data-first and avoids description work when a prefix has no matching
+solutions; `t/unit/test-completion-rule-prover-boundaries.lisp` locks that
+boundary down with a temporary description-query counter.
+
 ## Table-driven suites
 
 `it-each`/`describe-each` fold parametrically-identical cases into one

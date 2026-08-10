@@ -46,12 +46,17 @@ Verify the public artefacts from a clean checkout:
   nix develop --command sbcl --script run-tests.lisp
   ```
 
-- `nix build --print-build-logs` produces `./result/bin/nshell`.
+- `nix build .#releaseBundle --print-build-logs` produces the executable,
+  man page, README, and dependency license texts in `./result`.
+- `perl scripts/verify-release-bundle.pl result` checks the bundle's file
+  manifest, store-reference hygiene, platform library closure, and smoke
+  startup. Do not replace this with a check of the unbundled default package.
 - `./result/bin/nshell --version` reports the intended version.
 - `./result/bin/nshell --help` and `man ./man/nshell.1` match the documentation
   and shipped behaviour.
-- Release tarballs contain `nshell`, `README.md`, `LICENSE`, and the man page,
-  and each checksum verifies with `shasum -a 256 -c`.
+- Release tarballs contain `nshell`, `README.md`, `LICENSE`, the man page, and
+  the `LICENSES/` directory produced by `releaseBundle`; each checksum
+  verifies with `shasum -a 256 -c`.
 - Release notes are drafted. Read `git log <previous-tag>..HEAD` and select
   entries by "does a user of nshell have to change anything". After the
   workflow goes green, paste them in and publish the draft:

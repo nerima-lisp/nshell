@@ -26,19 +26,32 @@
 (defun %rule-solution-value (variable solution)
   (cdr (assoc variable solution)))
 
-(defun %completion-descriptions (rulebase)
+(defun %completion-descriptions (rulebase completions)
   (let ((descriptions (make-hash-table :test (function equal))))
-    (dolist (solution
-             (%prove-rulebase rulebase (quote (describes ?completion ?description)))
-             descriptions)
-      (let ((completion (%rule-solution-value (quote ?completion) solution))
-            (description (%rule-solution-value (quote ?description) solution)))
-        (when (and (stringp completion) (stringp description))
-          (multiple-value-bind (existing present-p)
-              (gethash completion descriptions)
-            (declare (ignore existing))
-            (unless present-p
-              (setf (gethash completion descriptions) description))))))))
+    (when completions
+      (dolist (solution
+               (%prove-rulebase
+                rulebase
+                (list
+                 (list (quote member) (quote ?completion) completions)
+                 (list (quote describes) (quote ?completion) (quote ?description))))
+               descriptions)
+        (let ((completion (%rule-solution-value (quote ?completion) solution))
+              (description (%rule-solution-value (quote ?description) solution)))
+          (when (and (stringp completion) (stringp description))
+            (multiple-value-bind (existing present-p)
+                (gethash completion descriptions)
+              (declare (ignore existing))
+              (unless present-p
+                (setf (gethash completion descriptions) description)))))))))
+
+(defun %matching-rule-solution-values (solutions variable prefix)
+  (remove-duplicates
+   (loop for solution in solutions
+         for value = (%rule-solution-value variable solution)
+         when (and (stringp value) (%starts-with-p prefix value))
+           collect value)
+   :test (function equal)))
 
 (defun %candidates-from-rule-solutions
     (solutions variable kind &key (prefix "") descriptions description-fn)
@@ -75,19 +88,36 @@
                     (query-all (list (quote suggests-file) command)))
                (list (make-candidate "" :kind :file :description "file")))
               (argument-position-p
-               (%candidates-from-rule-solutions
-                (query-all (list (quote completes) command (quote ?completion)))
-                (quote ?completion)
-                :option
-                :prefix arg-prefix
-                :descriptions (%completion-descriptions rulebase)))
+               (let* ((solutions
+                        (query-all
+                         (list (quote completes) command (quote ?completion))))
+                      (matching-values
+                        (%matching-rule-solution-values
+                         solutions
+                         (quote ?completion)
+                         arg-prefix)))
+                 (%candidates-from-rule-solutions
+                  solutions
+                  (quote ?completion)
+                  :option
+                  :prefix arg-prefix
+                  :descriptions
+                  (%completion-descriptions rulebase matching-values))))
               (t
-               (%candidates-from-rule-solutions
-                (query-all (quote (completes ?command ?completion)))
-                (quote ?command)
-                :command
-                :prefix command
-                :descriptions (%completion-descriptions rulebase)))))))))
+               (let* ((solutions
+                        (query-all (quote (completes ?command ?completion))))
+                      (matching-values
+                        (%matching-rule-solution-values
+                         solutions
+                         (quote ?command)
+                         command)))
+                 (%candidates-from-rule-solutions
+                  solutions
+                  (quote ?command)
+                  :command
+                  :prefix command
+                  :descriptions
+                  (%completion-descriptions rulebase matching-values))))))))))
 
 (defun rule-complete (kb-rules partial-input)
   (%rule-complete-query kb-rules (completion-query-for partial-input)))

@@ -82,6 +82,8 @@ nix run .#test       # run the test suite
 nix flake check      # full hermetic gate on x86_64-linux CI
 nix fmt              # format Nix sources (treefmt)
 nix build            # produces ./result/bin/nshell
+nix build .#releaseBundle
+perl scripts/verify-release-bundle.pl result
 ```
 
 Tests live in `t/` and run under

@@ -228,6 +228,62 @@
                 :to-equal
                 (nshell.domain.completion:candidate-description
                  (first candidates))))))
+  (it "rule-completion-does-not-query-descriptions-for-prefix-mismatches"
+    "Description queries receive only values that survive prefix filtering."
+    (let ((kb (make-empty-rule-kb))
+          (description-queries nil)
+          (original-prove-rulebase
+            (symbol-function 'nshell.domain.completion::%prove-rulebase)))
+      (nshell.domain.completion:assert-fact!
+       kb
+       (nshell.domain.completion:make-fact
+        :predicate 'nshell.domain.completion::completes
+        :args '("tool" "--match")))
+      (nshell.domain.completion:assert-fact!
+       kb
+       (nshell.domain.completion:make-fact
+        :predicate 'nshell.domain.completion::completes
+        :args '("tool" "--other")))
+      (nshell.domain.completion:assert-fact!
+       kb
+       (nshell.domain.completion:make-fact
+        :predicate 'nshell.domain.completion::describes
+        :args '("--match" "matching option")))
+      (nshell.domain.completion:assert-fact!
+       kb
+       (nshell.domain.completion:make-fact
+        :predicate 'nshell.domain.completion::describes
+        :args '("--other" "other option")))
+      (with-temporary-function
+          ('nshell.domain.completion::%prove-rulebase
+           (lambda (rulebase goal &optional bindings max-depth)
+             (let ((subgoals
+                     (if (and (consp goal) (consp (first goal)))
+                         goal
+                         (list goal))))
+               (when (some (lambda (subgoal)
+                             (and (consp subgoal)
+                                  (eq (first subgoal)
+                                      'nshell.domain.completion::describes)))
+                           subgoals)
+                 (push (copy-tree subgoals) description-queries)))
+             (funcall original-prove-rulebase rulebase goal bindings max-depth)))
+        (let ((candidates
+                (nshell.domain.completion:complete kb "tool --mat")))
+          (expect '("--match") :to-equal (completion-texts candidates))
+          (expect "matching option"
+                  :to-equal
+                  (nshell.domain.completion:candidate-description
+                   (first candidates)))
+          (expect 1 :to-equal (length description-queries))
+          (expect '("--match")
+                  :to-equal
+                  (third
+                   (find-if (lambda (goal)
+                              (and (consp goal)
+                                   (eq (first goal)
+                                       'nshell.domain.completion::member)))
+                            (first description-queries))))))))
   (it
     "rule-solution-projections-are-internal-boundaries"
     (assert-package-function-boundaries

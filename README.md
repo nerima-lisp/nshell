@@ -79,7 +79,7 @@ outside the tested support boundary.
 ```sh
 nix develop          # SBCL with CL_SOURCE_REGISTRY already set
 nix run .#test       # run the test suite
-nix flake check      # tests + formatting + docs, the same gate CI uses
+nix flake check      # full hermetic gate on x86_64-linux CI
 nix fmt              # format Nix sources (treefmt)
 nix build            # produces ./result/bin/nshell
 ```
@@ -91,61 +91,8 @@ sandbox and are covered by CI's separate `integration` job; run them locally
 with the command in
 [Recipes](https://nerima-lisp.github.io/nshell/guide/recipes/).
 
-### Performance evidence
-
-Generate the warm completion evidence and validate every JSONL record before
-using it in a report:
-
-```sh
-NSHELL_BENCH_MODE=warm NSHELL_BENCH_JSONL=completion.jsonl \
-  sbcl --script scripts/benchmark-completion.lisp
-perl scripts/verify-benchmark-jsonl.pl completion.jsonl
-```
-
-Process-launch evidence requires at least 100 samples and an explicit nshell
-binary. The workload does not make different shells semantically comparable:
-
-```sh
-NSHELL_BENCH_MODE=process NSHELL_BENCH_PROCESS_SAMPLES=100 \
-  NSHELL_BENCH_NSHELL_BIN="$PWD/result/bin/nshell" \
-  NSHELL_BENCH_JSONL=process.jsonl sbcl --script scripts/benchmark-completion.lisp
-perl scripts/verify-benchmark-jsonl.pl process.jsonl
-```
-
-For a repeated, process-isolated competitor run, resolve every executable from
-the flake's locked `nixpkgs` input and assign a stable run ID. The harness
-removes the caller's environment, uses a temporary home, records exact argv,
-raw samples, and failures, and accepts only executable paths under `/nix/store`:
-
-```sh
-nix build .#default
-BASH_STORE=$(nix eval --raw --inputs-from . nixpkgs#bash.outPath)
-ZSH_STORE=$(nix eval --raw --inputs-from . nixpkgs#zsh.outPath)
-NSHELL_COMPARE_RUN_ID=local-01 NSHELL_COMPARE_REPETITIONS=2 NSHELL_COMPARE_SAMPLES=100 \
-  NSHELL_BENCH_NSHELL_BIN="$(nix path-info .#default)/bin/nshell" \
-  NSHELL_BENCH_BASH_BIN="$BASH_STORE/bin/bash" \
-  NSHELL_BENCH_ZSH_BIN="$ZSH_STORE/bin/zsh" \
-  perl scripts/benchmark-competitors.pl
-perl scripts/verify-benchmark-jsonl.pl competitors.jsonl
-```
-
-The harness uses identical `-c 'echo nshell-bench-sentinel'` arguments. `echo`
-is implemented as a builtin by every candidate, avoiding an external-process
-launch on only one shell. The harness
-checks stdout, stderr, and exit status before and after measurement. It marks
-the run ranking-eligible only when at least two candidates complete every one
-of at least two repetitions; the verifier independently checks the complete
-run group. The cache classification is
-`fresh-process-warm-fs`: each sample is a fresh process, but the harness does
-not claim to flush filesystem or executable caches. A true cold-cache run
-requires a separately documented privileged host protocol and is not emitted
-by this harness. Eligibility therefore supports only this minimal noninteractive
-fixture and is not evidence about interactive use, completion, or cold startup.
-
-`nix flake check` runs the verifier self-test without a timing threshold, so CI
-rejects malformed evidence without turning host performance noise into a flaky
-gate. Failed or incomplete comparison groups remain ineligible. Even eligible
-fixture results do not by themselves establish a broad "world-fastest" claim.
+Benchmark commands and evidence boundaries are documented in
+[Performance evidence](https://nerima-lisp.github.io/nshell/guide/recipes/#performance-evidence).
 
 ## Contributing
 

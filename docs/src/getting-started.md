@@ -27,9 +27,11 @@ inputs.nshell = {
 };
 ```
 
-A prebuilt tarball for `x86_64-linux`, with a SHA-256
-checksum, is attached to every
-[GitHub release](https://github.com/nerima-lisp/nshell/releases).
+The release workflow currently publishes an `x86_64-linux` tarball and SHA-256
+checksum. Check the [GitHub releases](https://github.com/nerima-lisp/nshell/releases)
+page before downloading: the `v0.4.0` artifacts are not portable and may retain
+Nix store dependencies. For reproducible installation, use the pinned Nix
+commands above.
 
 ## First commands
 
@@ -59,7 +61,7 @@ runnable sample.
 ### Command line
 
 ```
-Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]
+Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]
 
 Without arguments, nshell starts an interactive shell when stdin is a terminal
 and reads batch input from stdin otherwise.
@@ -77,9 +79,14 @@ tested path is Nix:
 git clone https://github.com/nerima-lisp/nshell
 cd nshell
 nix build            # produces ./result/bin/nshell
-nix flake check      # tests + formatting + docs, the same gate CI uses
+nix flake check      # full hermetic gate on x86_64-linux CI
 nix develop          # dev shell with SBCL + cl-weave
 ```
+
+`flake.nix` declares `x86_64-linux` and `aarch64-darwin`. The full hermetic
+flake and release-binary gate runs on `x86_64-linux`; `aarch64-darwin` is the
+development and non-sandboxed integration target, and some build checks can be
+unavailable there when a pinned upstream package has no Darwin build.
 
 Inside `nix develop`, load the system into a REPL:
 

@@ -28,8 +28,8 @@ clean, test-driven Common Lisp core and a reproducible Nix build.
   menu.
 - **Rich line editing** — Emacs keybindings, kill-ring and yank, multi-level
   undo/redo, multiline editing, and incremental history search (`Ctrl-R`).
- Optional **vi key bindings** (`NSHELL_VI_MODE=1`): normal-mode motions,
- counts, operators (`dd`, `cw`, …), visual selection, and insert/append.
+- **Vi key bindings** (optional, `NSHELL_VI_MODE=1`) — normal-mode motions,
+  counts, operators (`dd`, `cw`, …), visual selection, and insert/append.
 - **Configurable prompt** — hostname, working directory, git branch and dirty
   status, command duration, and exit code, with theming.
 - **Job control** — background jobs (`&`), `jobs`, `fg`, `bg`, `disown`.

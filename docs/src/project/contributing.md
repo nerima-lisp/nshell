@@ -11,8 +11,9 @@ nshell follows a layered, domain-driven design (see
 [Architecture](../reference/architecture.md)). The layer rules are the ones a
 review will actually push back on:
 
-- **`domain/` performs no I/O.** New parsing, expansion, completion, or history
-  logic belongs here and must be unit-testable without a terminal.
+- **`domain/` performs no I/O.** Whether it lives under `src/` or a feature
+  package, new parsing, expansion, completion, or history logic belongs here and
+  must be unit-testable without a terminal.
 - **`infrastructure/` isolates all OS- and SBCL-specific code** — syscalls, PTY,
   signals, terminal handling, persistence. Guard implementation-specific code
   with `#+sbcl` where relevant.
@@ -20,13 +21,29 @@ review will actually push back on:
   management.
 - **`presentation/` is the REPL, line editor, and rendering.**
 
+## Follow the package-by-feature layout
+
+The established runtime remains under `src/<DDD>/`. New vertical capabilities
+belong under `packages/`:
+
+- `packages/core/<name>/src/<DDD>/` contains shared domain and architecture
+  primitives.
+- `packages/feature/<name>/src/<DDD>/` contains feature-specific domain, use
+  cases, adapters, and presentation.
+
+The command-line feature is the current example. Keep `src/main.lisp` as a small
+composition root and have it call the feature boundary; callers and tests should
+not reach into feature internals. Preserve inward layer dependencies, and keep
+unit, integration, and end-to-end tests at their observable boundaries when a
+slice changes.
+
 ## Choose the narrowest test that can fail
 
 Iterate with the smallest relevant suite, then run the full gate before review.
 
 | Change | Run |
 |---|---|
-| Anything | `nix flake check --print-build-logs` before review |
+| Anything | `nix flake check --print-build-logs` before review; the full gate runs on `x86_64-linux` CI |
 | Domain logic, builtins, parser, expansion | `nix run .#test` |
 | Completion engine or cl-prolog knowledge base | `sbcl --script scripts/weave.lisp` |
 | PTY, subprocess, terminal, signal, job control | the non-sandboxed run below |

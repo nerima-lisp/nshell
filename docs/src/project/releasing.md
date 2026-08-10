@@ -28,15 +28,15 @@ Pushing a `v*.*.*` tag runs `release.yml`, which:
    also declared by `flake.nix` for development and platform-specific local
    checks, but is not a published binary target in this workflow.
 4. Creates the GitHub Release as an empty **draft** with those files attached.
-   It writes no release body: since the 2026-08-01 org revision the Release
-   description is the only canonical history and there is no `CHANGELOG.md`.
+   It writes no release body: the GitHub Release description is the canonical
+   history and there is no `CHANGELOG.md`.
 
 ## Manual checklist before tagging
 
 Verify the public artefacts from a clean checkout:
 
-- `nix flake check --print-build-logs` passes on Linux. On macOS, use the
-  declared `aarch64-darwin` development environment and run the checks that
+- `nix flake check --print-build-logs` passes on `x86_64-linux`. On macOS, use
+  the declared `aarch64-darwin` development environment and run the checks that
   are available for the pinned dependency set; some build checks may be
   unavailable when an upstream package has no Darwin build.
 - The non-sandboxed integration suite passes for PTY, subprocess, terminal,

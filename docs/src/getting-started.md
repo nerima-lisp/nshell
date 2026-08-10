@@ -61,7 +61,7 @@ runnable sample.
 ### Command line
 
 ```
-Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]
+Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]
 
 Without arguments, nshell starts an interactive shell when stdin is a terminal
 and reads batch input from stdin otherwise.

@@ -59,4 +59,26 @@
         (when (probe-file config-path)
           (delete-file config-path))
         (when (probe-file history-path)
-          (delete-file history-path))))))
+          (delete-file history-path)))))
+  (it "interactive-config-reports-nonzero-status"
+    "A nonzero sourced config status is reported on standard error."
+    (with-temporary-functions
+        (((quote nshell.infrastructure.persistence:load-config)
+          (lambda () (list "ignored")))
+         ((quote nshell.presentation::%execute-with-repl-shell-context)
+          (lambda (thunk)
+            (declare (ignore thunk))
+            (values nil 7))))
+      (let ((message
+              (with-output-to-string (*error-output*)
+                (nshell.presentation::%load-interactive-config))))
+        (expect (format nil "nshell: .nshellrc exited with status 7~%") :to-equal message))))
+  (it "interactive-config-reports-loading-errors"
+    "An error while loading .nshellrc is reported on standard error."
+    (with-temporary-function
+        ((quote nshell.infrastructure.persistence:load-config)
+         (lambda () (error "broken config")))
+      (let ((message
+              (with-output-to-string (*error-output*)
+                (nshell.presentation::%load-interactive-config))))
+        (expect (format nil "nshell: .nshellrc: broken config~%") :to-equal message)))))

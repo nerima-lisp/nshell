@@ -5,12 +5,51 @@
   (unless (stringp value)
     (error "~A must be a string: ~S" field-name value))
   value)
+(defun %validated-command-quote-style (value style)
+  (case style
+    ((nil :single :double) style)
+    (t (error "Invalid quote style ~S in value ~S" style value))))
+(defun %copy-command-fragment-escaped-positions (positions)
+  (if positions
+      (progn
+        (unless (and (listp positions)
+                     (every (lambda (position)
+                             (and (integerp position)
+                                  (<= 0 position)))
+                            positions))
+          (error "Command fragment escaped positions must be non-negative integers: ~S"
+                 positions))
+        (copy-list positions))
+      nil))
+(define-value-struct command-fragment
+    ((value "" :type string)
+     (quote-style nil :type (member nil :single :double))
+     (escaped-positions nil :type list
+                        :copy %copy-command-fragment-escaped-positions))
+  :keyword-constructor t)
+(defun make-command-fragment (value &optional quote-style escaped-positions)
+  (%make-command-fragment
+   :value (%ensure-ast-string value "COMMAND-FRAGMENT value")
+   :quote-style (%validated-command-quote-style value quote-style)
+   :escaped-positions
+   (%copy-command-fragment-escaped-positions escaped-positions)))
+(defun %copy-command-fragments (fragments)
+  (if fragments
+      (progn
+        (unless (and (listp fragments)
+                     (every #'command-fragment-p fragments))
+          (error "Command fragments must be a list of command fragments: ~S"
+                 fragments))
+        (copy-list fragments))
+      nil))
 
 (defun %copy-ast-list (items)
-  (let ((items (or items '())))
-    (unless (listp items)
-      (error "AST list slot must be a list: ~S" items))
-    (copy-list items)))
+  (if items
+      (progn
+        (unless (listp items)
+          (error "AST list slot must be a list: ~S" items))
+        (copy-list items))
+      nil))
 
 (defun %copy-command-args (args)
   (loop with here-doc-target-p = nil
@@ -23,7 +62,8 @@
                   (make-command-arg
                    (command-arg-value arg)
                    (command-arg-quote-style arg)
-                   t)
+                   t
+                   (command-arg-fragments arg))
                   arg)
             (setf here-doc-target-p
                   (and (null (command-arg-quote-style arg))
@@ -37,16 +77,25 @@
 
 (defstruct (command-node (:include ast-node)
                          (:constructor %make-command-node
-                             (command args &optional span command-quote-style)))
+                             (command args &optional span command-quote-style
+                                      command-fragments)))
   (command "" :type string :read-only t)
   (command-quote-style nil :type (member nil :single :double) :read-only t)
-  (args nil :type list :read-only t))
+  (args nil :type list :read-only t)
+  (command-fragments nil :type list :read-only t))
 
-(defun make-command-node (command args &optional span command-quote-style)
-  (%make-command-node command
-                      (%copy-command-args args)
-                      span
-                      command-quote-style))
+(defun %command-node-fragment-quote-style (fragments) (let ((styles (remove-duplicates (mapcar #'command-fragment-quote-style fragments)))) (when (= (length styles) 1) (first styles))))
+(defun make-command-node (command args &optional span command-quote-style
+                                           command-fragments)
+  (let ((fragments
+          (%copy-command-fragments
+           (or command-fragments
+               (list (make-command-fragment command command-quote-style))))))
+    (%make-command-node command
+                        (%copy-command-args args)
+                        span
+                        (%command-node-fragment-quote-style fragments)
+                        fragments)))
 
 (defstruct (pipeline-node (:include ast-node)
                           (:constructor %make-pipeline-node (commands &optional span)))
@@ -162,14 +211,19 @@ shorter argument and the command list is one longer than the separators."
 (define-value-struct command-arg
     ((value "" :type string)
      (quote-style nil :type (member nil :single :double))
-     (here-doc-literal-p nil :type boolean))
+     (here-doc-literal-p nil :type boolean)
+     (fragments nil :type list :copy %copy-command-fragments))
   :keyword-constructor t)
 
-(defun make-command-arg (value &optional quote-style here-doc-literal-p)
+(defun make-command-arg (value &optional quote-style here-doc-literal-p
+                                      fragments)
   (%make-command-arg
    :value (%ensure-ast-string value "COMMAND-ARG value")
-   :quote-style (%validated-command-arg-quote-style value quote-style)
-   :here-doc-literal-p (and here-doc-literal-p t)))
+   :quote-style (%validated-command-quote-style value quote-style)
+   :here-doc-literal-p (and here-doc-literal-p t)
+   :fragments (%copy-command-fragments
+               (or fragments
+                   (list (make-command-fragment value quote-style))))))
 
 (defun %command-arg (arg)
   (etypecase arg

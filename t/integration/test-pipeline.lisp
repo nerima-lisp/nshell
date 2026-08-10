@@ -21,6 +21,41 @@
         (expect 0 :to-equal code)
         (expect (format nil "substituted~%") :to-equal output))))
 
+  (it "unquoted-here-document-expands-parameters-without-field-splitting"
+    "Unquoted here-document parameters expand while body whitespace remains intact."
+    (with-complete-ast (ast (format nil "cat << EOF~%status=$?~%EOF"))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (expect 0 :to-equal code)
+        (expect (format nil "status=0~%") :to-equal output))))
+
+  (it "unquoted-here-document-preserves-command-substitution-newlines"
+    "Command substitution output keeps internal newlines in an unquoted body."
+    (with-complete-ast
+        (ast (format nil "cat << EOF~%before $(printf 'left\\nright') after~%EOF"))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (expect 0 :to-equal code)
+        (expect (format nil "before left~%right after~%") :to-equal output))))
+
+  (it "unquoted-here-document-honors-backslash-escapes"
+    "Unquoted here-document backslash escapes suppress expansion and join lines."
+    (with-complete-ast
+        (ast (format nil "cat << EOF~%\\$HOME~%joined\\~%line~%EOF"))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (expect 0 :to-equal code)
+        (expect (format nil "$HOME~%joinedline~%") :to-equal output))))
+
+  (it "unquoted-here-document-does-not-expand-escaped-command-substitution"
+    "A backslash-escaped command substitution remains literal in an unquoted body."
+    (with-complete-ast
+        (ast (format nil "cat << EOF~%\\$(printf substituted)~%EOF"))
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast ast)
+        (expect 0 :to-equal code)
+        (expect (format nil "$(printf substituted)~%") :to-equal output))))
+
   (it "source-loads-real-file-and-registers-function"
     (with-builtins-context (context)
       (with-test-source-file (source nil :prefix "nshell-source-integration")

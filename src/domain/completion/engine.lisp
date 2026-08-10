@@ -99,12 +99,18 @@
     (builtin-command-candidates command)))
 
 (defun %knowledge-base-argument-candidates (kb command arg-prefix argument-words)
-  (knowledge-base-argument-candidates
+  (or
+   (let ((kind
+           (knowledge-base-option-value-kind
+            kb command argument-words arg-prefix)))
+     (when kind
+       (filesystem-candidates-for-value-kind kind arg-prefix)))
+   (knowledge-base-argument-candidates
     kb
     command
     arg-prefix
     :argument-words
-    argument-words))
+    argument-words)))
 
 (defun %completion-query-command-position-p (query)
   (completion-context-command-position-p (completion-query-context query)))

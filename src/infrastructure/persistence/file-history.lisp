@@ -15,7 +15,7 @@
   (or *history-file-path-override* (%default-history-file-path)))
 
 (defun %history-record-length (header)
-  "Return the framed length in HEADER, or NIL for a legacy record."
+  "Return the framed length in HEADER, or NIL when HEADER is not framed."
   (let ((prefix-length (length +history-record-prefix+)))
     (when (and (>= (length header) prefix-length)
                (string= +history-record-prefix+ header
@@ -42,7 +42,7 @@
                           (values text :entry)
                           (values nil :truncated)))
                     (values nil :truncated)))
-              (values header :entry))))))
+              (values nil :invalid))))))
 
 (defun %read-history-records (stream)
   (loop with entries = nil
@@ -50,6 +50,7 @@
              (case status
                (:eof (return (nreverse entries)))
                (:entry (push entry entries))
+               (:invalid (return (nreverse entries)))
                (:truncated (return (nreverse entries)))))))
 
 (defun %append-history-record (stream text)

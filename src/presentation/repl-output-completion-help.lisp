@@ -7,10 +7,40 @@
 (defparameter *completion-help-max-output-chars* (* 128 1024)
   "Maximum help output size accepted by the completion parser.")
 
-(defun %fetch-completion-help (command)
-  (let ((nshell.infrastructure.acl::*external-command-timeout*
-          *completion-help-timeout*))
-    (nshell.infrastructure.acl:run-external-capture command '("--help"))))
+(progn
+  (defun %completion-help-command-parts (command)
+    (when (and (stringp command)
+               (plusp (length command))
+               (not (find-if
+                     (lambda (character)
+                       (member character
+                               '(#\; #\| #\& #\< #\> #\` #\$ #\( #\)
+                                 #\' #\" #\\ #\Newline #\Return)))
+                     command)))
+      (let ((parts nil)
+            (start nil)
+            (length (length command)))
+        (labels ((flush (end)
+                   (when start
+                     (push (subseq command start end) parts)
+                     (setf start nil))))
+          (loop for index from 0 below length
+                for character = (char command index)
+                do (if (find character '(#\Space #\Tab))
+                       (flush index)
+                       (unless start
+                         (setf start index))))
+          (flush length))
+        (nreverse parts))))
+
+  (defun %fetch-completion-help (command)
+    (let ((parts (%completion-help-command-parts command)))
+      (when parts
+        (let ((nshell.infrastructure.acl::*external-command-timeout*
+                *completion-help-timeout*))
+          (nshell.infrastructure.acl:run-external-capture
+           (first parts)
+           (append (rest parts) '("--help"))))))))
 
 (defparameter *completion-help-fetcher* #'%fetch-completion-help
   "Function of COMMAND used to fetch help text for dynamic completion.")
@@ -20,10 +50,7 @@
   "Predicate that permits dynamic help lookup for COMMAND.")
 
 (defun %completion-help-simple-command-p (command)
-  (and (stringp command)
-       (not (find-if (lambda (character)
-                       (member character '(#\Space #\Tab #\Newline #\Return)))
-                     command))))
+  (not (null (%completion-help-command-parts command))))
 
 (defparameter *completion-help-catalog-command-cache*
   (let ((cache (make-hash-table :test #'equal)))
@@ -44,10 +71,9 @@
            (search "flags" output :test #'char-equal))))
 
 (defun %completion-help-eligible-command-p (command)
-  (and (stringp command)
-       (plusp (length command))
-       (%completion-help-catalogued-command-p command)
-       (funcall *completion-help-command-available-p* command)))
+  (let ((parts (%completion-help-command-parts command)))
+    (and parts
+         (funcall *completion-help-command-available-p* (first parts)))))
 
 (defun %completion-help-cache-primed-p (command)
   (nth-value 1 (gethash command *completion-help-cache*)))
@@ -74,13 +100,25 @@
     (error ()
       :missing)))
 
-(defun %warm-command-completion-help (command)
-  (when (%completion-help-eligible-command-p command)
-    (unless (%completion-help-cache-primed-p command)
-      (%completion-help-mark-cache-state command :loading)
-      (%completion-help-mark-cache-state
-       command
-       (%completion-help-fetch-cache-state command)))))
+(progn
+  (defun %warm-command-completion-help (command)
+    (when (%completion-help-eligible-command-p command)
+      (unless (%completion-help-cache-primed-p command)
+        (%completion-help-mark-cache-state command :loading)
+        (%completion-help-mark-cache-state
+         command
+         (%completion-help-fetch-cache-state command)))))
+  (defun %warm-command-completion-help-path
+      (knowledge-base command argument-words prefix)
+    (let ((resolved command))
+      (loop
+        (%warm-command-completion-help resolved)
+        (let ((next
+                (nshell.domain.completion:kb-resolve-command-path
+                 knowledge-base command argument-words prefix)))
+          (if (string= next resolved)
+              (return)
+              (setf resolved next)))))))
 
 (defun %completion-session-valid-p (state)
   (with-normalized-input-state (state state)
@@ -112,7 +150,11 @@
            (completion-path
              (nshell.domain.environment:env-get (ensure-environment) "PATH")))
       (unless command-position-p
-        (%warm-command-completion-help command))
+        (%warm-command-completion-help-path
+         *kb*
+         command
+         (nshell.domain.completion:completion-context-argument-words context)
+         (nshell.domain.completion:completion-context-argument-prefix context)))
       (let ((candidates (when (> (length text) 0)
                           (nshell.domain.completion:complete
                            *kb* text

@@ -297,4 +297,33 @@
     "The entry point executes type through the batch command path."
     (%assert-nshell-main-result '("-c" "type echo")
                                 "echo is a shell builtin"
-                                0)))
+                                0))
+
+  (it "e2e-main-command-resolves-builtin-function-and-path"
+    "The command builtin reports builtin, function, and external resolutions."
+    (%assert-nshell-main-result
+     '("-c"
+       "function greet; echo function-body; end; command -v echo; command -v greet; command -V greet; command -v /bin/echo; command greet")
+     '("echo" "greet" "greet is a function" "/bin/echo" "function-body")
+     0))
+
+  (it "e2e-main-eval-runs-in-the-current-context"
+    "The eval builtin parses one command string and keeps its environment changes."
+    (%assert-nshell-main-result
+     '("-c" "eval 'set EVAL_VALUE ready'; echo $EVAL_VALUE")
+     "ready"
+     0))
+
+  (it "e2e-main-eval-propagates-the-command-status"
+    "The eval builtin returns the status produced by its parsed command list."
+    (%assert-nshell-main-result
+     '("-c" "eval 'echo before-eval; false'")
+     "before-eval"
+     1))
+
+  (it "e2e-main-eval-updates-last-exit-status"
+    "The eval builtin exposes its command status through the current context."
+    (%assert-nshell-main-result
+     '("-c" "eval 'false'; echo eval-status=$?")
+     "eval-status=1"
+     0)))

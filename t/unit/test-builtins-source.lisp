@@ -54,6 +54,20 @@
       (expect 0 :to-equal code)
       (expect '("first" "second") :to-equal calls)))
 
+  (it "source-propagates-last-status-to-following-parameter-expansion"
+    "A failed command is visible through $? in the next source command."
+    (with-builtins-source-ok (output code context '("false" "echo $?"))
+        (format nil "1~%")
+      (expect 0 :to-equal (nshell.application:shell-context-last-exit-code context))))
+
+  (it "source-stops-after-exit-and-preserves-its-status"
+    "exit stops subsequent source lines and returns its explicit status."
+    (with-builtins-source (output code context '("exit 7" "echo after"))
+      (expect "" :to-equal output)
+      (expect 7 :to-equal code)
+      (expect 7 :to-equal (nshell.application:shell-context-last-exit-code context))
+      (expect (nshell.application:shell-context-running context) :to-be-falsy)))
+
   (it "source-sequence-amp-spawns-background-command-and-continues"
     "source runs the command before & asynchronously and continues with the next command."
     (let ((foreground-calls nil)
@@ -221,6 +235,22 @@
         (expect '("echo hi") :to-equal (gethash "foo"
                             (nshell.application:shell-context-function-table
                              context)))))))
+  (it "source-lines-stores-function-body-with-command-separators"
+    "function bodies retain command separators while source reader consumes definitions."
+    (let ((context (make-test-builtins-context)))
+      (multiple-value-bind (output code)
+          (nshell.application:source-lines
+           context
+           (list "function foo"
+                 "echo one; echo two"
+                 "end"))
+        (expect 0 :to-equal code)
+        (expect "" :to-equal output)
+        (expect (list "echo one; echo two")
+                :to-equal
+                (gethash "foo"
+                         (nshell.application:shell-context-function-table
+                          context))))))
 
   (it "source-lines-stores-nested-function-body"
     "function body depth handling is verified through the public source-lines use case."
@@ -246,3 +276,43 @@
           (nshell.application:source-lines context '("function foo"))
         (expect 2 :to-equal code)
         (expect (format nil "source: function foo missing end~%") :to-equal output)))))
+(describe "builtin-source-branch-tests"
+  (it "source-without-path-reports-usage"
+    (multiple-value-bind (output code)
+        (call-builtin (make-test-builtins-context) "source" nil)
+      (expect 1 :to-equal code)
+      (expect (search "source: usage: source file" output) :to-be-truthy)))
+  (it "source-lines-stops-after-invalid-source-form"
+    "source-lines reports a parse error from its public loop and does not execute later lines."
+    (let* ((calls nil)
+           (context (make-test-builtins-context
+                     :external-capture-runner
+                     (lambda (command args)
+                       (declare (ignore args))
+                       (push command calls)
+                       (values (format nil "~a~%" command) 0)))))
+      (multiple-value-bind (output code)
+          (nshell.application:source-lines context '("first" "end" "second"))
+        (expect 2 :to-equal code)
+        (expect (search "source: parse error:" output) :to-be-truthy)
+        (expect '("first") :to-equal (nreverse calls)))))
+  (it "source-missing-path-reports-open-error"
+    (let ((path "/definitely/not/a/nshell-source"))
+      (multiple-value-bind (output code)
+          (call-builtin (make-test-builtins-context) "source" (list path))
+        (expect 1 :to-equal code)
+        (expect (search (format nil "source: ~a:" path) output) :to-be-truthy))))
+  (it "source-line-branches-report-blank-error-and-incomplete"
+    (let ((context (make-test-builtins-context)))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-source-line context "   ")
+        (expect output :to-be-null)
+        (expect 0 :to-equal code))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-source-line context "end")
+        (expect 2 :to-equal code)
+        (expect (search "source: parse error:" output) :to-be-truthy))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-source-line context "if true")
+        (expect 2 :to-equal code)
+        (expect (search "source: parse error:" output) :to-be-truthy)))))

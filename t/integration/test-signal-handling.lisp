@@ -30,6 +30,13 @@
               (nshell.infrastructure.acl:consume-children-changed-p))
       (expect nil :to-be
               (nshell.infrastructure.acl:consume-children-changed-p))))
+  (it "sigint-notification-is-consumed-once"
+  "SIGINT notifications are delivered to the input loop once."
+  (let ((nshell.infrastructure.acl::*sigint-received* t))
+    (expect t :to-be
+            (nshell.infrastructure.acl:consume-sigint-received-p))
+    (expect nil :to-be
+            (nshell.infrastructure.acl:consume-sigint-received-p))))
 
   (it "sigint-handler-forwards-to-tracked-foreground-pgid"
     "SIGINT forwarding targets the tracked foreground process group."
@@ -140,4 +147,52 @@
     (let ((status (nshell.infrastructure.acl::%make-child-status 123 0)))
       (expect (nshell.infrastructure.acl:child-status-p status) :to-be-truthy)
       (expect 123 :to-equal (nshell.infrastructure.acl:child-status-pid status))
-      (expect 0 :to-equal (nshell.infrastructure.acl:child-status-status status)))))
+      (expect 0 :to-equal (nshell.infrastructure.acl:child-status-status status))))
+
+  (it "rejects-unsupported-signal-designators"
+    "The signal ACL rejects names that are neither OS numbers nor domain signals."
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%signal-number :not-a-signal))
+            :to-throw 'error))
+
+  (it "current-shell-pgid-falls-back-to-process-id"
+    "A missing shell process-group id falls back to the current process id."
+    (let ((nshell.infrastructure.acl::*shell-pgid* nil))
+      (expect (sb-posix:getpid)
+              :to-equal
+              (nshell.infrastructure.acl::%current-shell-pgid))))
+
+  (it "assign-process-group-validates-and-forwards-positive-identifiers"
+    "Valid process-group assignments use the syscall seam and invalid ids are ignored."
+    (let ((calls nil))
+      (with-temporary-function
+          ('nshell.infrastructure.acl:set-process-group
+           (lambda (pid pgid)
+             (push (list pid pgid) calls)))
+        (expect 4321 :to-equal
+                (nshell.infrastructure.acl::%assign-process-group 1234 4321))
+        (expect '((1234 4321)) :to-equal calls)
+        (expect (nshell.infrastructure.acl::%assign-process-group 0 4321)
+                :to-be-null)
+        (expect '((1234 4321)) :to-equal calls))))
+
+  (it "invalid-foreground-process-group-runs-thunk-without-terminal-access"
+    "An invalid process-group id leaves terminal state untouched while running the thunk."
+    (let ((called nil)
+          (nshell.infrastructure.acl::*foreground-pgid* 777))
+      (expect :done :to-be
+              (nshell.infrastructure.acl::%with-foreground-process-group
+               0
+               (lambda ()
+                 (setf called t)
+                 :done)))
+      (expect called :to-be-truthy)
+      (expect 777 :to-equal nshell.infrastructure.acl::*foreground-pgid*)))
+
+  (it "decodes-no-child-wait-status-as-running"
+    "A wait result with no child is represented as a running status."
+    (multiple-value-bind (pid state detail)
+        (nshell.infrastructure.acl::%decode-wait-status 0 0)
+      (expect 0 :to-equal pid)
+      (expect :running :to-be state)
+      (expect nil :to-be detail))))

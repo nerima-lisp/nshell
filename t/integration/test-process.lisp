@@ -286,7 +286,7 @@
     "2>&1 before a stdout redirect keeps stderr connected to the original pipeline stdout."
     (with-temporary-output-file (target :prefix "nshell-pipeline-dup-before-out")
       (let* ((writer (%process-test-sbcl-command-node
-                      "(progn (write-string \"OUT\") (write-string \"ERR\" *error-output*))"))
+                      "(progn (write-string \"OUT\") (finish-output) (write-string \"ERR\" *error-output*) (finish-output *error-output*))"))
              (counter (%process-test-sbcl-command-node
                        "(let ((count 0)) (loop for ch = (read-char *standard-input* nil nil) while ch do (incf count)) (format t \"~d~%\" count))"))
              (exit nil)
@@ -305,7 +305,7 @@
     "A stdout redirect before 2>&1 merges stderr into the redirected stdout file."
     (with-temporary-output-file (target :prefix "nshell-pipeline-out-before-dup")
       (let* ((writer (%process-test-sbcl-command-node
-                      "(progn (write-string \"OUT\") (write-string \"ERR\" *error-output*))"))
+                      "(progn (write-string \"OUT\") (finish-output) (write-string \"ERR\" *error-output*) (finish-output *error-output*))"))
              (counter (%process-test-sbcl-command-node
                        "(let ((count 0)) (loop for ch = (read-char *standard-input* nil nil) while ch do (incf count)) (format t \"~d~%\" count))"))
              (exit nil)
@@ -508,3 +508,10 @@
                (expect (format nil "output-ok~%") :to-equal
                        (host-kit:read-file-string output-path)))
           (nshell.infrastructure.acl:close-process-substitution resource)))))
+
+  (it "spawn-process-substitution-rejects-invalid-direction"
+    "Process substitution accepts only input and output directions."
+            (expect (lambda ()
+              (nshell.infrastructure.acl:spawn-process-substitution
+               :invalid nil))
+            :to-throw 'error))

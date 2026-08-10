@@ -351,3 +351,12 @@
   (it "format-parse-diagnostic-lines"
     (with-parsed-command-line (result "echo |")
       (expect '("nshell: syntax error: Expected command after '|' at column 6") :to-equal (nshell.presentation::format-parse-diagnostic-lines result)))))
+(describe "diagnostic-report-tests"
+  (it "reports-parse-diagnostics-to-the-selected-stream"
+    (with-parsed-command-line (result "echo |")
+      (let ((expected (first (nshell.presentation::format-parse-diagnostic-lines result)))
+            (stream (make-string-output-stream)))
+        (nshell.presentation::report-parse-diagnostics result stream)
+        (expect (format nil "~A~%" expected)
+                :to-equal
+                (get-output-stream-string stream))))))

@@ -154,7 +154,20 @@ tcsetattr left the terminal in an unknown state with no indication at all."
     "Restoring an fd that was never put into raw mode returns NIL and does not
 signal, so the shutdown path is safe on a non-interactive session."
     (expect (nshell.infrastructure.terminal:restore-terminal-mode 9999)
-            :to-be-falsy)))
+            :to-be-falsy))
+    (it "read-key-event-converts-an-interrupt-to-ctrl-c"
+    "An interrupt predicate takes precedence over queued terminal input."
+    (let ((*standard-input* (make-string-input-stream "x"))
+          (calls 0))
+      (let ((event
+              (nshell.infrastructure.terminal:read-key-event
+               :interrupt-predicate
+               (lambda ()
+                 (incf calls)
+                 t))))
+        (expect 1 :to-equal calls)
+        (expect :ctrl-c :to-be
+                (nshell.domain.input:key-event-type event))))))
 
 ;;; The condition above is only worth defining if something consumes it. These
 ;;; cover the consuming half: what the REPL's session lifecycle does with a
@@ -217,7 +230,10 @@ have already been changed, so an install that fails on its last step and is
 never undone leaves SGR mouse reporting on in the user's next shell."
     (let ((installed nil) (restored nil) (edited nil) (code nil))
       (with-temporary-functions
-          (('nshell.presentation::initialize-repl-state (lambda () nil))
+          (('nshell.presentation::initialize-repl-state
+            (lambda (&rest ignored)
+              (declare (ignore ignored))
+              nil))
            ('nshell.presentation::install-interactive-terminal
             (lambda () (setf installed t) nil))
            ('nshell.presentation::restore-interactive-terminal
@@ -236,7 +252,10 @@ never undone leaves SGR mouse reporting on in the user's next shell."
 on the way out, and the session reports success."
     (let ((restored nil) (edited nil) (code nil))
       (with-temporary-functions
-          (('nshell.presentation::initialize-repl-state (lambda () nil))
+          (('nshell.presentation::initialize-repl-state
+            (lambda (&rest ignored)
+              (declare (ignore ignored))
+              nil))
            ('nshell.presentation::install-interactive-terminal (lambda () t))
            ('nshell.presentation::restore-interactive-terminal
             (lambda () (setf restored t)))
@@ -247,6 +266,67 @@ on the way out, and the session reports success."
       (expect edited :to-be-truthy)
       (expect restored :to-be-truthy)
       (expect 0 :to-equal code))))
+;;; The condition above is only worth defining if something consumes it. These
+;;; cover the consuming half: what the REPL's session lifecycle does with a
+;;; terminal it cannot configure, in each of the two directions.
+
+(describe "terminal-lifecycle-seam-tests"
+  (it "installs-and-restores-terminal-through-boundary-calls"
+    (let ((calls nil)
+          (nshell.application:*shell-pgid* nil))
+      (with-temporary-functions
+          (('nshell.infrastructure.acl:set-process-group
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :set-process-group calls)))
+           ('nshell.infrastructure.acl:install-signal-handlers
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :install-signal-handlers calls)
+              t))
+           ('nshell.infrastructure.acl:set-foreground-pgroup
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :set-foreground-pgroup calls)))
+           ('nshell.infrastructure.terminal:enable-raw-mode
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :enable-raw-mode calls)
+              t))
+           ('nshell.infrastructure.terminal:restore-terminal-mode
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :restore-terminal-mode calls)
+              t))
+           ('nshell.infrastructure.terminal:ansi-enable-bracketed-paste
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :ansi-enable-bracketed-paste calls)))
+           ('nshell.infrastructure.terminal:ansi-enable-sgr-mouse
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :ansi-enable-sgr-mouse calls)))
+           ('nshell.infrastructure.terminal:ansi-disable-sgr-mouse
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :ansi-disable-sgr-mouse calls)))
+           ('nshell.infrastructure.terminal:ansi-disable-bracketed-paste
+            (lambda (&rest args)
+              (declare (ignore args))
+              (push :ansi-disable-bracketed-paste calls))))
+        (expect t :to-be
+                (nshell.presentation::install-interactive-terminal))
+        (nshell.presentation::restore-interactive-terminal))
+      (dolist (call '(:set-process-group
+                      :install-signal-handlers
+                      :set-foreground-pgroup
+                      :enable-raw-mode
+                      :restore-terminal-mode
+                      :ansi-enable-bracketed-paste
+                      :ansi-enable-sgr-mouse
+                      :ansi-disable-sgr-mouse
+                      :ansi-disable-bracketed-paste))
+        (expect (member call calls) :to-be-truthy)))))
 
 (describe "terminal-size-tests"
   (it "terminal-size-reports-rows-then-columns"

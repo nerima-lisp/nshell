@@ -106,6 +106,40 @@
         (expect nshell.application:*foreground-job-pgid* :to-be-null)
         (expect 0 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
         (expect '(1000 4321) :to-equal set-foreground-calls))))
+  (it "fg-publishes-continuation-to-dispatcher"
+    "FG emits a continuation event through the supplied dispatcher."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (dispatcher (nshell.application:make-event-dispatcher))
+           (job (make-test-job 0 "sleep" :args '("10") :pgid 4321))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (set-foreground-calls nil)
+           (nshell.application:*shell-pgid* 1000)
+           (nshell.application:*foreground-job-pgid* nil)
+           (nshell.infrastructure.acl::*foreground-pgid* 0))
+      (with-event-capture (continued dispatcher :job-continued)
+          (nshell.domain.events:domain-event-type event)
+        (with-temporary-functions
+            (('nshell.application::%continue-process-group
+              (lambda (pgid)
+                (expect 4321 :to-equal pgid)))
+             ('nshell.application::%wait-job-pgid
+              (lambda (waited-job waited-job-id waited-monitor)
+                (expect job :to-be waited-job)
+                (expect job-id :to-equal waited-job-id)
+                (expect monitor :to-be waited-monitor)
+                (expect 4321 :to-equal nshell.application:*foreground-job-pgid*)
+                (expect 4321 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
+                waited-job))
+             ('nshell.infrastructure.acl:get-foreground-pgroup
+              (lambda () 1000))
+             ('nshell.infrastructure.acl:set-foreground-pgroup
+              (lambda (pgid)
+                (push pgid set-foreground-calls))))
+          (expect job :to-be
+                  (nshell.application:fg job-id dispatcher nil nil monitor)))
+        (expect (nshell.application:drain-events dispatcher) :to-be-null)
+        (expect '(1000 4321) :to-equal set-foreground-calls)
+        (expect '(:job-continued) :to-equal (nreverse continued)))))
 
   (it "wait-job-pgid-waits-for-known-pipeline-pids"
     "Foreground wait reaps every known pipeline PID and uses the last stage status."
@@ -152,6 +186,45 @@
       (expect :stopped :to-be (nshell.domain.execution:job-state job))
       (expect (nshell.domain.execution:job-exit-code job) :to-be-null)))
 
+  (it "wait-job-pgid-completes-after-child-reaped"
+    "A no-child wait event completes a job whose children were already reaped."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "echo" :pgid 111 :pids '(111)))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job)))
+      (with-temporary-function
+          ('nshell.application::%wait-job-pgid-event
+           (lambda (pgid)
+             (expect 111 :to-equal pgid)
+             (nshell.application::%make-job-wait-event nil :no-child nil)))
+        (expect job :to-be
+                (nshell.application::%wait-job-pgid job job-id monitor)))
+      (expect :completed :to-be (nshell.domain.execution:job-state job))
+      (expect 0 :to-equal (nshell.domain.execution:job-exit-code job))))
+
+  (it "wait-job-pgid-uses-first-nonzero-pipefail-status"
+    "Pipefail returns the first nonzero status in pipeline order."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "producer" :pgid 111 :pids '(111 222)))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (events '((222 :exited 0)
+                     (111 :exited 7))))
+      (setf (nshell.domain.execution:job-pipefail-p job) t)
+      (with-temporary-function
+          ('nshell.application::%wait-job-pgid-event
+           (lambda (pgid)
+             (expect 111 :to-equal pgid)
+             (let ((event (pop events)))
+               (unless event
+                 (error "unexpected extra wait"))
+               (destructuring-bind (pid state status-code) event
+                 (nshell.application::%make-job-wait-event
+                  pid state status-code)))))
+        (expect job :to-be
+                (nshell.application::%wait-job-pgid job job-id monitor)))
+      (expect events :to-be-null)
+      (expect :completed :to-be (nshell.domain.execution:job-state job))
+      (expect 7 :to-equal (nshell.domain.execution:job-exit-code job))))
+
   (it "wait-job-event-shape-is-internal-boundary"
     "Foreground wait events are internal application values, not exported API."
     (dolist (name '("JOB-WAIT-EVENT" "%MAKE-JOB-WAIT-EVENT"
@@ -194,4 +267,118 @@
       (expect "Stopped" :to-equal (label :stopped))
       (expect "Done" :to-equal (label :completed))
       (expect "Done" :to-equal (label :done))
-      (expect "Created" :to-equal (label :created)))))
+      (expect "Created" :to-equal (label :created))))
+
+  (it "job-listing-construction-rejects-invalid-values"
+    "Job listing validation rejects invalid identifiers and display fields."
+    (expect (lambda ()
+              (nshell.application::make-job-listing 0 "Running" "echo"))
+            :to-throw 'error)
+    (expect (lambda ()
+              (nshell.application::make-job-listing -1 "Running" "echo"))
+            :to-throw 'error)
+    (expect (lambda ()
+              (nshell.application::make-job-listing 1 nil "echo"))
+            :to-throw 'error)
+    (expect (lambda ()
+              (nshell.application::make-job-listing 1 "Running" nil))
+            :to-throw 'error))
+
+  (it "bg-continues-a-nonzero-process-group"
+    "BG forwards continuation to a tracked process group before publishing state."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "sleep" :args '("10") :pgid 4321))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (continue-calls nil))
+      (with-temporary-function
+          ('nshell.application::%continue-process-group
+           (lambda (pgid)
+             (push pgid continue-calls)))
+        (expect job :to-be (nshell.application:bg job-id nil monitor)))
+      (expect '(4321) :to-equal continue-calls)
+      (expect :background :to-be (nshell.domain.execution:job-state job))))
+  (it "signal-job-updates-stop-and-continue-state"
+      "STOP and CONT signals keep monitor state aligned with successful delivery."
+      (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+             (job (make-test-job 0 "sleep" :pgid 4321))
+             (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+             (calls nil))
+        (nshell.domain.job-control:background-job monitor job-id)
+        (with-temporary-function
+         ((quote nshell.infrastructure.acl:kill-process)
+          (lambda (pid signal)
+            (push (list pid signal) calls)
+            0))
+         (expect job :to-be
+                 (nshell.application::signal-job job-id :sigstop monitor))
+         (expect :stopped :to-be
+                 (nshell.domain.execution:job-state job))
+         (expect (list (list -4321 :sigstop)) :to-equal calls)
+         (expect job :to-be
+                 (nshell.application::signal-job job-id :sigcont monitor))
+         (expect :background :to-be
+                 (nshell.domain.execution:job-state job))
+         (expect (list (list -4321 :sigcont)
+                       (list -4321 :sigstop))
+                 :to-equal calls))))
+
+  (it "status-label-falls-back-for-unknown-state"
+    "Unexpected internal job states remain visible as an explicit unknown label."
+    (let ((job (make-test-job 0 "x")))
+      (nshell.domain.execution::%set-job-state job :future)
+      (expect "Unknown" :to-equal (nshell.application::%status-label job))))
+  (it "classifies wait status observations without an OS wait"
+    "Wait-status policy is testable independently from the foreign wait call."
+    (flet ((classify (stopped-p exited-p signaled-p)
+             (nshell.application::%classify-job-wait-status
+              321
+              :raw-status
+              :stopped-p (lambda (status)
+                           (declare (ignore status))
+                           stopped-p)
+              :exited-p (lambda (status)
+                          (declare (ignore status))
+                          exited-p)
+              :exit-status (lambda (status)
+                             (declare (ignore status))
+                             7)
+              :signaled-p (lambda (status)
+                            (declare (ignore status))
+                            signaled-p)
+              :term-signal (lambda (status)
+                             (declare (ignore status))
+                             9))))
+      (let ((stopped (classify t nil nil))
+            (exited (classify nil t nil))
+            (signaled (classify nil nil t))
+            (unknown (classify nil nil nil)))
+        (expect 321 :to-equal
+                (nshell.application::job-wait-event-pid stopped))
+        (expect :stopped :to-be
+                (nshell.application::job-wait-event-state stopped))
+        (expect nil :to-equal
+                (nshell.application::job-wait-event-status-code stopped))
+        (expect :exited :to-be
+                (nshell.application::job-wait-event-state exited))
+        (expect 7 :to-equal
+                (nshell.application::job-wait-event-status-code exited))
+        (expect :signaled :to-be
+                (nshell.application::job-wait-event-state signaled))
+        (expect 137 :to-equal
+                (nshell.application::job-wait-event-status-code signaled))
+        (expect :unknown :to-be
+                (nshell.application::job-wait-event-state unknown)))))
+  (it "classifies wait errors without an OS wait"
+    "Known wait errors become application events while unknown errors remain unclassified."
+    (let* ((no-child
+             (nshell.application::%classify-job-wait-error sb-posix:echild))
+           (interrupted
+             (nshell.application::%classify-job-wait-error sb-posix:eintr))
+           (unknown-errno
+             (1+ (max sb-posix:echild sb-posix:eintr))))
+      (expect :no-child :to-be
+              (nshell.application::job-wait-event-state no-child))
+      (expect :interrupted :to-be
+              (nshell.application::job-wait-event-state interrupted))
+      (expect nil :to-equal
+              (nshell.application::%classify-job-wait-error unknown-errno)))))

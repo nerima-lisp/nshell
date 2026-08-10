@@ -64,7 +64,6 @@ deliberately-private predicates."
   (let* ((bare-name (let ((text (symbol-name name)))
                       (if (char= (char text 0) #\%) (subseq text 1) text)))
          (public-prefix (if accessor-prefix (symbol-name accessor-prefix) bare-name))
-         (slot-names (mapcar #'first slot-specs))
          (constructor-name (or constructor (intern (format nil "%MAKE-~A" bare-name))))
          (private-prefix (format nil "%~A" bare-name))
          (conc-name (intern (format nil "~A-" private-prefix)))

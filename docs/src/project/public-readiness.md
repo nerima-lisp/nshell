@@ -19,8 +19,8 @@ and scripting subset.
 | History and suggestions | Persistent history, reverse search, prefix autosuggestions, safe handling of multiline entries | history, autosuggest, and E2E editing tests | Ready locally |
 | Completion | Context-aware command/path/flag completion, candidate menu, deterministic cycling and cancellation | completion domain tests, REPL completion rendering tests, path-like argument completion, hierarchical command resolution, common external command metadata, help-text metadata loader with selective runtime enrichment, README/man page claims | Improved locally; broader command discovery/cache policy and subcommand coverage remain future work |
 | Shell language | Practical interactive scripting: functions, control flow, command substitution, expansions, heredocs, here-strings, redirection, pipelines | parser, expansion, source, pipeline, process-substitution, descriptor-duplication, tab-stripping-heredoc, and smoke tests, structured unquoted list-variable expansion | Improved locally; broader expansion parity audit still required |
-| Process control | Foreground/background jobs, `jobs`/`fg`/`bg`/`disown`, Ctrl-C foreground recovery, PTY smoke coverage, foreground external commands (editors, SSH) run to completion under a real terminal instead of being killed by the command-substitution safety timeout | job-control tests, PTY integration tests, non-sandboxed E2E gate, `docs/timeout-audit.md` (real-PTY regression test) | Needs release evidence on `x86_64-linux` |
-| Reliability | Hermetic build/test gate plus non-sandboxed OS-interactive gate for PTY, terminal, process, signal, and job-control behavior | `nix flake check --print-build-logs`; dev-shell E2E/integration command in README and CONTRIBUTING; `docs/coverage-analysis.md`'s full state-2 sweep (every line in `src/` accounted for) | Ready locally; CI evidence required across supported platforms |
+| Process control | Foreground/background jobs, `jobs`/`fg`/`bg`/`disown`, Ctrl-C foreground recovery, PTY smoke coverage, foreground external commands (editors, SSH) run to completion under a real terminal instead of being killed by the command-substitution safety timeout | job-control tests, PTY integration tests, non-sandboxed E2E gate, `docs/notes/timeout-audit.md` (real-PTY regression test) | Needs release evidence on the declared CI targets |
+| Reliability | Hermetic build/test gate plus non-sandboxed OS-interactive gate for PTY, terminal, process, signal, and job-control behavior | `nix flake check --print-build-logs`; dev-shell E2E/integration command in README and CONTRIBUTING; the current coverage command and its report | Ready locally; CI evidence required across supported platforms |
 | Distribution | Reproducible Nix build, installed man page, release binary smoke, checksummed artifacts | flake build, man page, CI/release workflows, release checklist | Needs nixpkgs/Homebrew/prebuilt binary publication |
 | Security and operations | Private vulnerability reporting, explicit security scope, no accidental secret exposure through history/completion/diagnostics | the org security policy and [contribution guidelines](contributing.md) | Ready for 0.x scope |
 
@@ -28,13 +28,11 @@ and scripting subset.
 
 Before a public release can claim world-level interactive-shell quality:
 
-1. `nix flake check --print-build-logs` passes on `x86_64-linux` CI — the only
-   platform `flake.nix` declares.
+1. `nix flake check --print-build-logs` passes on every declared CI target.
 2. The non-sandboxed integration suite passes for PTY, subprocess, terminal,
    signal, and job-control coverage.
-3. A release binary is built on `x86_64-linux` — the only platform `flake.nix`
-   declares — starts successfully, and ships with `README.md`, `LICENSE`, and
-   the `nshell(1)` man page.
+3. A release binary is built on each release target, starts successfully, and
+   ships with `README.md`, `LICENSE`, and the `nshell(1)` man page.
 4. User-visible behavior changes are represented in README, man page, the
    GitHub Release notes, and completion metadata when applicable.
 5. Open roadmap gaps remain explicit instead of being implied as complete.
@@ -46,15 +44,11 @@ What is actually checkable on a plain `aarch64-darwin` development machine
 
 - `nix build .#checks.aarch64-darwin.docs` and
   `nix build .#checks.aarch64-darwin.formatting` both exit 0 -- the mkdocs
-  `--strict` build and the treefmt gate (316 files traversed) pass on this
-  platform.
-- `nix build .#checks.aarch64-darwin.{build,default,smoke-test}` and
-  `nix flake check` do **not** run here: see
-  [[nix-build-darwin-gap]] (`cl-prolog` ships no darwin package at the
-  pinned tag), the same gap this repository's own `docs/notes/`
-  acknowledges. This is a platform gap in the check runner, not a defect in
-  `flake.nix` -- `x86_64-linux` is what `flake.nix`'s own comments name as
-  the platform CI gates.
+  `--strict` build and the treefmt gate pass on this platform.
+- The remaining native checks are not all available on this development
+  machine: see [[nix-build-darwin-gap]] and the platform matrix in
+  `flake.nix`. This is a check-runner/platform gap, not evidence that an
+  unrun target passed.
 - The equivalent SBCL-level verification -- what `checks.default` runs
   under the hood -- is available through `nix run .#test`. The integrated
   tree passes the complete `nshell/test` suite locally.
@@ -78,10 +72,9 @@ What is actually checkable on a plain `aarch64-darwin` development machine
   development machine.
 - Publish at least one low-friction installation path beyond `nix run`, such as
   nixpkgs, Homebrew, or prebuilt release binaries.
-- Obtain native x86_64-linux CI evidence for the implemented bundle derivation:
-  build it, validate it, and smoke-test it after tar extraction. Darwin has
-  already passed the equivalent checks; published v0.4.0 artifacts remain
-  non-portable.
+- Obtain native CI evidence for the implemented bundle derivation on each
+  declared release target: build it, validate it, and smoke-test it after tar
+  extraction. Published artifacts remain unverified until that evidence exists.
 - Verify the global all-target publication gate, checksums, and GitHub artifact
   attestations in CI before describing release provenance as operational.
 - Validate the process-isolated benchmark scenarios in CI and collect equivalent

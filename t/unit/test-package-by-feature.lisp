@@ -17,21 +17,11 @@
               (nshell.architecture:feature-layer-path :command-line
                                                       :presentation))))
 
-  (it "keeps command-line policy independent from the cl-cli adapter"
+  (it "keeps command-line policy independent from the parser implementation"
     (expect (nshell.feature.command-line:flag-argument-p "--help")
             :to-be-truthy)
     (expect (nshell.feature.command-line:flag-argument-p "script.nsh")
             :to-be-falsy)
-    (expect "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
+    (expect "Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
             :to-equal
-            (nshell.feature.command-line:usage-synopsis)))
-
-  (it "builds the same parser contract exposed by the composition root"
-    (let ((invocation
-            (cl-cli:parse-argv
-             (nshell.feature.command-line:build-cli-app)
-             '("nshell" "-c" "echo hello" "arg"))))
-      (expect "echo hello" :to-equal
-              (cl-cli:option-value invocation :command))
-      (expect '("arg") :to-equal
-              (cl-cli:positional-value invocation :command-args)))))
+            (nshell.feature.command-line:usage-synopsis))))

@@ -23,7 +23,7 @@
 (defstruct (%catalog-command-entry
             (:constructor %make-catalog-command-entry
                 (&key command synopsis description subcommands flags option-values
-                      exclusive-options))
+                      option-value-kinds exclusive-options))
             (:conc-name %catalog-command-entry-))
   command
   synopsis
@@ -31,6 +31,7 @@
   subcommands
   flags
   option-values
+  option-value-kinds
   exclusive-options)
 
 (defun %catalog-entry-property-value (entry property)
@@ -41,6 +42,7 @@
     (:subcommands (%catalog-command-entry-subcommands entry))
     (:flags (%catalog-command-entry-flags entry))
     (:option-values (%catalog-command-entry-option-values entry))
+    (:option-value-kinds (%catalog-command-entry-option-value-kinds entry))
     (:exclusive-options (%catalog-command-entry-exclusive-options entry))))
 
 (defun %catalog-entry-command (entry)
@@ -62,7 +64,7 @@ symbol in PROPERTIES, pulling each out of ENTRY via
            :command command
            (%catalog-source-entry-properties entry
              synopsis description subcommands flags
-             option-values exclusive-options))))
+             option-values option-value-kinds exclusive-options))))
 
 (defun %command-catalog (entries)
   (mapcar #'%build-command-catalog-entry entries))

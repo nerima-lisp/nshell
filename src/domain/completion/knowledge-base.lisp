@@ -47,6 +47,20 @@
 (defun %valid-kb-option-value-spec-p (spec)
   (stringp (%kb-option-value-spec-option spec)))
 
+(defun %kb-option-value-kind-spec-option (spec)
+  (and (consp spec)
+       (first spec)))
+
+(defun %kb-option-value-kind-spec-kind (spec)
+  (and (consp (rest spec))
+       (second spec)))
+
+(defun %valid-kb-option-value-kind-spec-p (spec)
+  (and (stringp (%kb-option-value-kind-spec-option spec))
+       (member (%kb-option-value-kind-spec-kind spec)
+               '(:file :directory)
+               :test #'eq)))
+
 (defun %make-kb-option-value-spec (opt-name values)
   (cons opt-name values))
 
@@ -87,6 +101,20 @@
                   options)
           #'string< :key #'%kb-option-value-spec-option)))
 
+(defun kb-command-option-value-kinds (kb cmd-name)
+  (sort
+   (remove-duplicates
+    (loop for solution in
+            (prove-all kb (list 'option-value-kind cmd-name '?option '?kind))
+          for option = (cl-prolog:solution-binding '?option solution)
+          for kind = (cl-prolog:solution-binding '?kind solution)
+          when (and (stringp option)
+                    (member kind '(:file :directory) :test #'eq))
+            collect (list option kind))
+    :test #'equal)
+   #'string<
+   :key #'first))
+
 (defun kb-command-exclusive-options (kb cmd-name)
   (remove-duplicates
    (%kb-solution-values kb (list 'exclusive-group cmd-name '?members) '?members)
@@ -104,7 +132,8 @@
         (remove-if (lambda (fact)
                      (and (member (fact-predicate fact)
                                   '(command-registered subcommand-of has-flag
-                                    option-value exclusive-group describes))
+                                    option-value option-value-kind
+                                    exclusive-group describes))
                           (equal (first (fact-args fact)) cmd-name)))
                    (rule-knowledge-base-facts kb)))
   (%invalidate-rule-knowledge-base! kb))
@@ -119,7 +148,8 @@
   (assert-fact! kb (make-fact :predicate 'describes :args (list cmd-name description))))
 
 (defun kb-add-command
-    (kb cmd-name &key subcommands flags option-values exclusive-options description)
+    (kb cmd-name &key subcommands flags option-values option-value-kinds
+             exclusive-options description)
   (assert-fact! kb (make-fact :predicate 'command-registered :args (list cmd-name)))
   (dolist (name (remove-if-not #'stringp subcommands))
     (assert-fact! kb (make-fact :predicate 'subcommand-of :args (list cmd-name name))))
@@ -132,6 +162,15 @@
           (when (stringp value)
             (assert-fact! kb (make-fact :predicate 'option-value
                                         :args (list cmd-name option value))))))))
+  (dolist (spec option-value-kinds)
+    (when (%valid-kb-option-value-kind-spec-p spec)
+      (assert-fact!
+       kb
+       (make-fact
+        :predicate 'option-value-kind
+        :args (list cmd-name
+                    (%kb-option-value-kind-spec-option spec)
+                    (%kb-option-value-kind-spec-kind spec))))))
   (dolist (group (%normalize-kb-exclusive-option-groups exclusive-options))
     (assert-fact! kb (make-fact :predicate 'exclusive-group :args (list cmd-name group))))
   (when description

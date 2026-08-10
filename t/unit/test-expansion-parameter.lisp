@@ -22,6 +22,20 @@
         ("fallback" "${MISSING:-fallback}")
         ("bar" "${MISSING:-$FOO}"))))
 
+  (it "last-exit-status-expands-from-the-shell-environment"
+    "$? expands the last command status and defaults to zero when unset."
+    (let ((env (nshell.domain.environment:make-environment)))
+      (expect "0" :to-equal (nshell.domain.expansion:expand-variables "$?" env))
+      (setf env (nshell.domain.environment:env-set env "?" "7" nil))
+      (expect "7" :to-equal (nshell.domain.expansion:expand-variables "$?" env))))
+
+  (it "background-process-id-expands-from-the-shell-environment"
+    "$! expands the most recently registered background process ID."
+    (let ((env (nshell.domain.environment:make-environment)))
+      (expect "" :to-equal (nshell.domain.expansion:expand-variables "$!" env))
+      (setf env (nshell.domain.environment:env-set env "!" "4321" nil))
+      (expect "4321" :to-equal (nshell.domain.expansion:expand-variables "$!" env))))
+
   (it "parameter-alternative-when-set"
     "${VAR:+word} yields the word only when the variable is set and non-empty."
     (let ((env (test-expansion-env)))
@@ -110,17 +124,15 @@
         ("fallback" "${MISSING:-fallback}")
         ("abcdef:abc" "${LONG:abc}"))))
 
-  (it "parameter-prefix-and-suffix-strip"
-    "${VAR#pat} / ## strip a prefix; ${VAR%pat} / %% strip a suffix (glob)."
-    (let ((env (test-expansion-env)))            ; FOO = bar
-      (%assert-expansion-cases-with-env (string=
-                                         #'nshell.domain.expansion:expand-variables
-                                         env)
-        ("ar" "${FOO#b}")
-        ("r" "${FOO##*a}")
-        ("ba" "${FOO%r}")
-        ("b" "${FOO%%a*}")
-        ("3" "${#FOO}"))))
+  (it "parameter-prefix-and-suffix-strip" "${VAR#pat} / ## strip a prefix; ${VAR%pat} / %% strip a suffix (glob)." (let ((env (test-expansion-env))) (%assert-expansion-cases-with-env (string= (function nshell.domain.expansion:expand-variables) env) ("ar" "${FOO#b}") ("r" "${FOO##*a}") ("ba" "${FOO%r}") ("b" "${FOO%%a*}") ("3" "${#FOO}") ) (expect "bar" :to-equal (nshell.domain.expansion::%param-strip-prefix "bar" "" env)) (expect "bar" :to-equal (nshell.domain.expansion::%param-strip-prefix "bar" "#" env)) (expect "bar" :to-equal (nshell.domain.expansion::%param-strip-suffix "bar" "" env)) (expect "bar" :to-equal (nshell.domain.expansion::%param-strip-suffix "bar" "%" env))))
+
+  (it "parameter-empty-prefix-and-suffix-patterns-preserve-value"
+    "An empty strip pattern leaves the expanded value unchanged."
+    (%assert-expansion-cases-with-env
+     (string= #'nshell.domain.expansion:expand-variables
+              (test-expansion-env))
+     ("bar" "${FOO#}")
+     ("bar" "${FOO%}")))
 
   (it "parameter-substitution-operator"
     "${VAR/pat/rep} replaces the first match; // replaces all (literal)."
@@ -293,9 +305,17 @@
   (it "list-range-fields-selects-ordered-sublist"
     "list-range-fields selects ascending or descending sub-lists by fish-style indices."
     (flet ((range (fields start end)
-             (nshell.domain.expansion::%list-range-fields fields start end)))
+             (nshell.domain.expansion::%list-range-fields fields start end))
+           (select (fields spec)
+             (nshell.domain.expansion::%list-spec-fields fields spec)))
       (expect '("a" "b") :to-equal (range '("a" "b" "c") 1 2))
       (expect '("c" "b") :to-equal (range '("a" "b" "c") -1 2))
+      (expect '("a" "b" "c") :to-equal (range '("a" "b" "c") 1 9))
+      (expect (range '("a" "b" "c") -16 2) :to-be-null)
+      (expect '("alpha" "gamma") :to-equal
+              (select '("alpha" "beta" "gamma") "1 3"))
+      (expect '("gamma" "beta") :to-equal
+              (select '("alpha" "beta" "gamma") "-1 2"))
       (expect (range '("a" "b") 0 2) :to-be-null)))
 
   (property "pbt-argv-normalized-index-maps-one-based-and-negative"

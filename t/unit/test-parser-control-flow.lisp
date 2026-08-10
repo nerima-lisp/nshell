@@ -46,6 +46,15 @@
                                   :kind :unexpected-control-flow)
         (expect (nshell.domain.parsing:parse-complete-p result) :to-be-falsy))))
 
+  (it "parse-case-with-body-outside-switch-is-an-error"
+    "A case clause with a body still reports the control-flow boundary error."
+    (with-parsed-command-line (result "case vanilla; echo plain")
+      (with-parsed-diagnostic-of-kind (diagnostic result "case vanilla; echo plain" :unexpected-control-flow)
+        (assert-parsed-diagnostic result diagnostic
+                                  :present t
+                                  :kind :unexpected-control-flow)
+        (expect (nshell.domain.parsing:parse-complete-p result) :to-be-falsy))))
+
   (it "control-flow-stack-transition-projects-frame-rules"
     "Control-flow diagnostics should share one typed frame transition boundary."
     (let ((if-command (nshell.domain.parsing:make-command-node "if" '("true")))
@@ -367,6 +376,16 @@
         (expect "echo" :to-equal (nshell.domain.parsing:command-node-command
                       (first (nshell.domain.parsing:case-clause-body
                               (second clauses))))))))
+
+  (it "parse-switch-without-explicit-case-uses-default-clause"
+    "A switch body without a case header becomes the default pattern clause."
+    (with-complete-command-line (result ast "switch; echo default; end")
+      (let ((clause (first (nshell.domain.parsing:case-node-clauses ast))))
+        (expect (nshell.domain.parsing:case-node-p ast) :to-be-truthy)
+        (expect "*" :to-equal (nshell.domain.parsing:case-clause-pattern clause))
+        (expect "echo" :to-equal
+                (nshell.domain.parsing:command-node-command
+                 (first (nshell.domain.parsing:case-clause-body clause)))))))
 
   (it "parse-else-if-becomes-nested-if-branch"
     (with-complete-ast (ast "if true; echo yes; else if false; echo no; end")

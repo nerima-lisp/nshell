@@ -13,7 +13,14 @@
    "With -c/--command, nshell executes COMMAND once in batch mode (ARGS are $argv).~%")
   (format
    stream
-   "With a SCRIPT file argument, nshell runs the script (ARGS are $argv).~%"))
+   "With a SCRIPT file argument, nshell runs the script (ARGS are $argv).~%")
+  (format stream "~%Options:~%")
+  (format stream "  -i, --interactive  Force the interactive line editor.~%")
+  (format stream "      --no-config    Do not load the interactive startup file.~%")
+  (format stream "      --config PATH  Load PATH instead of ~~/.nshellrc.~%")
+  (format stream "      --no-history   Do not read or write interactive history.~%")
+  (format stream "  -h, --help         Show usage and exit.~%")
+  (format stream "  -V, --version      Show version and exit.~%"))
 
 (defun print-version (&optional (stream *standard-output*))
   "Print nshell's version banner to STREAM."

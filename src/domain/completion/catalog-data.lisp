@@ -13,19 +13,20 @@
 (defmacro define-catalog-entry-accessor (name slot)
   `(defun ,name (entry)
      (,slot entry)))
-
 (define-catalog-entry-accessor %catalog-command %catalog-command-entry-command)
 (define-catalog-entry-accessor %catalog-description %catalog-command-entry-description)
 (define-catalog-entry-accessor %catalog-synopsis %catalog-command-entry-synopsis)
 (define-catalog-entry-accessor %catalog-subcommands %catalog-command-entry-subcommands)
 (define-catalog-entry-accessor %catalog-flags %catalog-command-entry-flags)
 (define-catalog-entry-accessor %catalog-option-values %catalog-command-entry-option-values)
+(define-catalog-entry-accessor %catalog-option-value-kinds
+  %catalog-command-entry-option-value-kinds)
 (define-catalog-entry-accessor %catalog-exclusive-options %catalog-command-entry-exclusive-options)
 
 (defstruct (%catalog-command-projection
             (:constructor %make-catalog-command-projection
                 (&key command description synopsis subcommands flags option-values
-                      exclusive-options))
+                      option-value-kinds exclusive-options))
             (:conc-name %catalog-command-projection-))
   command
   description
@@ -33,6 +34,7 @@
   subcommands
   flags
   option-values
+  option-value-kinds
   exclusive-options)
 
 (defmacro %catalog-entry-projection-plist (entry &rest properties)
@@ -48,7 +50,7 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
   (apply #'%make-catalog-command-projection
          (%catalog-entry-projection-plist entry
            command description synopsis subcommands flags
-           option-values exclusive-options)))
+           option-values option-value-kinds exclusive-options)))
 
 (defun %catalog-command-projections (catalog)
   (mapcar #'%catalog-entry-command-projection catalog))
@@ -74,6 +76,15 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
           for option = (first spec)
           append (loop for value in (rest spec)
                        collect (list 'option-value command option value)))))
+
+(defun %catalog-option-value-kind-facts (projection)
+  (let ((command (%catalog-command-projection-command projection)))
+    (loop for spec in (%catalog-command-projection-option-value-kinds projection)
+          for option = (first spec)
+          for kind = (second spec)
+          when (and (stringp option)
+                    (member kind '(:file :directory) :test #'eq))
+            collect (list 'option-value-kind command option kind))))
 
 (defun %catalog-normalized-exclusive-group (group)
   (let ((members (remove-duplicates group :test #'string= :from-end t)))
@@ -112,6 +123,7 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
           (%catalog-subcommand-description-facts projection)
           (%catalog-flag-facts projection)
           (%catalog-option-value-facts projection)
+          (%catalog-option-value-kind-facts projection)
           (%catalog-exclusive-option-facts projection)))
 
 (defun %catalog-help-entry (projection)
@@ -128,6 +140,9 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
             (list :flags (%catalog-command-projection-flags projection)))
           (when (%catalog-command-projection-option-values projection)
             (list :option-values (%catalog-command-projection-option-values projection)))
+          (when (%catalog-command-projection-option-value-kinds projection)
+            (list :option-value-kinds
+                  (%catalog-command-projection-option-value-kinds projection)))
           (when (%catalog-command-projection-exclusive-options projection)
             (list :exclusive-options
                   (%catalog-command-projection-exclusive-options projection)))
@@ -144,6 +159,10 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
 
 (defun %builtin-command-option-value-facts ()
   (mapcan #'%catalog-option-value-facts
+          (%catalog-command-projections +builtin-command-catalog+)))
+
+(defun %builtin-command-option-value-kind-facts ()
+  (mapcan #'%catalog-option-value-kind-facts
           (%catalog-command-projections +builtin-command-catalog+)))
 
 (defun %builtin-command-exclusive-option-facts ()
@@ -180,6 +199,7 @@ symbol in PROPERTIES, calling the matching %CATALOG-PROPERTY accessor
            (%catalog-command-projections +builtin-command-catalog+))
    (%builtin-command-flag-facts)
    (%builtin-command-option-value-facts)
+   (%builtin-command-option-value-kind-facts)
    (%builtin-command-exclusive-option-facts)
    (%external-command-rule-facts)
    '((describes "--help" "show command help"))))

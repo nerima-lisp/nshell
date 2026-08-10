@@ -138,7 +138,8 @@
       ;; PROCS is stored with the last stage at the head. PUSH restores
       ;; source order, which is the order pipefail must inspect.
       (push (process-exit-status-code proc) statuses))
-    (%pipeline-exit-status statuses pipefail-p)))
+    (values (%pipeline-exit-status statuses pipefail-p)
+            statuses)))
 
 (defun %close-pipeline-fds (pipes)
   (dolist (pipe pipes)
@@ -188,13 +189,14 @@
     (unwind-protect
          (if (or (null timeout-seconds)
                  (%wait-pipeline-exit-with-timeout procs timeout-seconds))
-             (progn
-               (prog1 (%wait-pipeline-processes procs pipefail-p)
-                 (%join-process-output-copiers (list copier))))
+             (multiple-value-prog1
+                 (%wait-pipeline-processes procs pipefail-p)
+               (%join-process-output-copiers (list copier)))
              (progn
                (%terminate-pipeline-processes procs)
                (%join-process-output-copiers (list copier))
-               (funcall timeout-fn)))
+               (let ((code (funcall timeout-fn)))
+                 (values code (list code)))))
       (%join-process-output-copiers (list copier)))))
 
 (defun %pipeline-spawn-loop (commands pipes redirects redirect-streams
@@ -252,7 +254,10 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
                                   preserve-fds
                                   (pipefail-p nil)
                                   after-spawn)
-  "Execute COMMANDS connected by OS-level pipes and return the last exit code."
+  "Execute COMMANDS connected by OS-level pipes and return status values.
+
+The first value is the pipeline exit code.  The second value is a list of
+per-stage exit codes in source order."
   (multiple-value-bind (redirects pipes)
       (%prepare-pipeline commands redirects)
     (let ((redirect-streams nil))
@@ -273,7 +278,7 @@ ERROR-SENTINEL  — value stored as the error indicator on failure (e.g. 127 for
              (if spawn-error-code
                  (progn
                    (%abort-pipeline procs pipes)
-                   spawn-error-code)
+                   (values spawn-error-code (list spawn-error-code)))
                  (%run-synchronous-pipeline procs pgid pipes pipefail-p)))
         (%close-pipeline-redirect-streams redirect-streams)
         (%close-pipeline-fds pipes)))))

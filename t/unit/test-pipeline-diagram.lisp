@@ -47,6 +47,16 @@
       (expect (search "\"0:a\"" output) :to-be-truthy)
       (expect (search "\"1:b\"" output) :to-be-truthy)
       (expect (search "\"2:c\"" output) :to-be-truthy)))
+  (it "pipeline-graph-builtin-rejects-non-pipeline-input"
+    "Non-pipeline parse outcomes return a diagnostic instead of a graph."
+    (expect (nshell.application::%command-line->pipeline-plan "") :to-be-null)
+    (expect (nshell.application::%command-line->pipeline-plan "echo |") :to-be-null)
+    (expect (nshell.application::%command-line->pipeline-plan "(") :to-be-null)
+    (expect (nshell.application::%command-line->pipeline-plan "echo && pwd") :to-be-null)
+    (multiple-value-bind (output code)
+        (nshell.application::%builtin-pipeline-graph nil (list "echo" "&&" "pwd"))
+      (expect 2 :to-equal code)
+      (expect (search "not a simple pipeline" output) :to-be-truthy)))
 
   (it "pipeline-graph-builtin-renders-mermaid"
     "The --mermaid flag switches the renderer to a Mermaid flowchart."

@@ -1,7 +1,7 @@
 (in-package #:nshell/test)
 
 (describe "package-by-feature composition route"
-  (it "routes the legacy src entry points to the feature presentation"
+  (it "routes the composition root to the feature presentation"
     (let ((feature-usage
             (with-output-to-string (stream)
               (nshell.feature.command-line:print-usage stream)))
@@ -17,14 +17,9 @@
       (expect feature-usage :to-equal root-usage)
       (expect feature-version :to-equal root-version)))
 
-  (it "keeps the feature parser reachable through src/main"
-    (let ((feature
-            (cl-cli:parse-argv
-             (nshell.feature.command-line:build-cli-app)
-             '("nshell" "--version")))
-          (root
-            (cl-cli:parse-argv
-             (nshell::%build-cli-app)
-             '("nshell" "--version"))))
-      (expect (cl-cli:option-value feature :show-version) :to-be-truthy)
-      (expect (cl-cli:option-value root :show-version) :to-be-truthy))))
+  (it "keeps the executable parser at the composition root"
+    (let ((invocation
+            (nth-value 0
+                       (nshell::%parse-cli-arguments '("--version")))))
+      (expect (cl-cli:option-value invocation :show-version)
+              :to-be-truthy))))

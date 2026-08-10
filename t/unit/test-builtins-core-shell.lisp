@@ -12,6 +12,49 @@
                     (nshell.application:shell-context-environment context)
                     "answer"))))
 
+  (it "read-supports-prompts-and-reports-invalid-input"
+    "read emits its prompt, rejects missing arguments, and returns one at EOF."
+    (with-builtins-context (context)
+      (let ((prompt-output
+              (with-output-to-string (stream)
+                (let ((*standard-output* stream))
+                  (with-input-from-string (*standard-input* (format nil "value~%"))
+                    (assert-builtin-call (context "read"
+                                                   '("-p" "answer: " "reply"))
+                      :code 0
+                      :output-null t))))))
+        (expect "answer: " :to-equal prompt-output))
+      (assert-builtin-call (context "read" nil)
+        :code 1
+        :contains '("read: usage:"))
+      (assert-builtin-call (context "read" '("-p"))
+        :code 2
+        :contains '("read: -p requires a prompt"))
+      (with-input-from-string (*standard-input* "")
+        (assert-builtin-call (context "read" '("eof"))
+          :code 1
+          :output-null t))))
+
+  (it "export-and-set-report-missing-or-unsupported-options"
+    "Builtin option errors retain their distinct usage and required-argument statuses."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "export" nil)
+        :code 1
+        :contains '("export: usage:"))
+      (assert-builtin-cases (context "set")
+        (("-e")
+         :code 2
+         :contains '("set: -e requires a name"))
+        (("-q")
+         :code 2
+         :contains '("set: -q requires a name"))
+        (("-x")
+         :code 1
+         :contains '("set: usage:"))
+        (("-o" "pipefail" "extra")
+         :code 1
+         :contains '("set: usage:")))))
+
   (it "export-marks-existing-variable-in-current-environment"
     "export marks an existing shell variable for process environments."
     (with-builtins-context (context)
@@ -28,6 +71,47 @@
                          :test #'string=)))
         (expect (nshell.domain.environment:env-entry-p entry) :to-be-truthy)
         (expect "visible" :to-equal (nshell.domain.environment:env-entry-value entry)))))
+
+  (it "export-accepts-assignments-and-multiple-names"
+    "export accepts NAME=value assignments and several names in one invocation."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "export"
+                                    '("NSHELL_EXPORT_ONE=one"
+                                      "NSHELL_EXPORT_TWO"
+                                      "NSHELL_EXPORT_THREE=three"))
+        :code 0
+        :output-null t)
+      (let ((environment (nshell.application:shell-context-environment context)))
+        (expect "one" :to-equal
+                (nshell.domain.environment:env-get environment "NSHELL_EXPORT_ONE"))
+        (expect "" :to-equal
+                (nshell.domain.environment:env-get environment "NSHELL_EXPORT_TWO"))
+        (expect "three" :to-equal
+                (nshell.domain.environment:env-get environment "NSHELL_EXPORT_THREE"))
+        (dolist (name '("NSHELL_EXPORT_ONE"
+                        "NSHELL_EXPORT_TWO"
+                        "NSHELL_EXPORT_THREE"))
+          (expect (nshell.domain.environment:env-exported-p environment name)
+                  :to-be-truthy)))))
+
+  (it "unset-removes-multiple-shell-variables"
+    "unset removes several variables and accepts the option terminator."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "set" '("NSHELL_UNSET_ONE" "one"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "set" '("NSHELL_UNSET_TWO" "two"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "unset"
+                                    '("--" "NSHELL_UNSET_ONE" "NSHELL_UNSET_TWO"))
+        :code 0
+        :output-null t)
+      (let ((environment (nshell.application:shell-context-environment context)))
+        (expect (nshell.domain.environment:env-defined-p environment "NSHELL_UNSET_ONE")
+                :to-be-falsy)
+        (expect (nshell.domain.environment:env-defined-p environment "NSHELL_UNSET_TWO")
+                :to-be-falsy))))
 
   (it "set-supports-fish-style-options-and-multiple-values"
     "set supports fish-style export, erase, query, listing, and multi-token values."
@@ -114,6 +198,26 @@
                             (nshell.application:shell-context-alias-table
                              context)))))
 
+  (it "alias-reports-invalid-empty-expansions"
+    "alias rejects an assignment whose name or expansion is empty."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "alias" '("ll="))
+        :code 1
+        :contains '("alias: usage: alias name expansion..."))))
+
+  (it "alias-queries-a-single-name-without-assignment"
+    "A single non-assignment argument queries one stored alias by name."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "alias" '("ll" "ls"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "alias" '("ll"))
+        :code 0
+        :output (format nil "alias ll=ls~%"))
+      (assert-builtin-call (context "alias" '("missing"))
+        :code 1
+        :output-empty t)))
+
   (it "source-expands-multi-token-aliases-from-context"
     "source execution expands aliases before dispatching commands."
     (with-builtins-context (context)
@@ -187,6 +291,20 @@
           (call-builtin context "abbr" '("-a" "-p"))
         (expect 2 :to-equal code)
         (expect (search "requires" output) :to-be-truthy))))
+
+  (it "abbr-reports-incomplete-add-arguments"
+    "abbr requires both a name and an expansion after -a."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "abbr" '("-a" "name"))
+        :code 2
+        :contains '("abbr: usage:"))))
+
+  (it "abbr-reports-unknown-options"
+    "abbr rejects options outside its supported fish-style command surface."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "abbr" '("--bogus"))
+        :code 1
+        :contains '("abbr: usage:"))))
 
   (it "function-erase-clears-stored-source-body"
     "function -e removes generated body and original source table entry together."

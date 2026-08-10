@@ -6,8 +6,9 @@
 ;;;; cl-parser-kit, ...). Inside `nix develop` those systems are already on the
 ;;;; ASDF source registry. For a plain local checkout we also register the
 ;;;; parent directory tree, so sibling ghq checkouts are discovered
-;;;; automatically. An explicit CL_SOURCE_REGISTRY still wins because we
-;;;; inherit the existing configuration.
+;;;; automatically. When CL_SOURCE_REGISTRY is present (as it is in the Nix
+;;;; development shell), register only this checkout and inherit that explicit
+;;;; list. Without it, register the parent tree for a plain local checkout.
 ;;;;
 ;;;; :force :all is required, not :force t: :force t only forces recompiling
 ;;;; nshell/test itself, leaving the nshell (src/) dependency loaded from
@@ -62,6 +63,26 @@
              (ignore-errors
               (parse-integer row :start (+ total-position (length total-marker)) :junk-allowed t))
              next-row))))))
+  (defun %coverage-row-file-name (text start end)
+    (let* ((row-end (search "</tr>" text :start2 start :end2 end))
+           (row (and row-end (subseq text start row-end)))
+           (link-marker "<a href='")
+           (link-start (and row (search link-marker row)))
+           (name-start (and link-start
+                            (search ">" row :start2 (+ link-start (length link-marker)))))
+           (name-end (and name-start (search "</a>" row :start2 (1+ name-start)))))
+      (and name-start name-end (subseq row (1+ name-start) name-end))))
+  (defparameter +coverage-excluded-source-file-names+
+    '("package.lisp"
+      "package-domain.lisp"
+      "package-application.lisp"
+      "package-infrastructure.lisp"
+      "package-presentation.lisp"))
+  (defun %coverage-source-file-p (path source-root)
+    (and (%coverage-string-prefix-p source-root path)
+         (not (member (file-namestring (pathname path))
+                      +coverage-excluded-source-file-names+
+                      :test #'string=))))
   (defun %coverage-totals (index-path source-root)
     (let* ((html (uiop:read-file-string index-path))
            (section-marker "<tr class='subheading'><td colspan='7'>")
@@ -83,18 +104,24 @@
                       (section-end (or next-section html-length))
                       (row-cursor path-end))
                  (setf cursor section-end)
-                 (when (%coverage-string-prefix-p source-root path)
+                 (when (%coverage-source-file-p path source-root)
                    (loop for row-start = (%next-coverage-row html row-cursor section-end)
                          while row-start
                          do (multiple-value-bind (covered total next-row) (%parse-coverage-row
                                                                            html
                                                                            row-start
                                                                            section-end)
-                              (setf row-cursor next-row)
-                              (when (and (integerp covered) (integerp total))
-                                (incf file-count)
-                                (incf covered-count covered)
-                                (incf total-count total))))))
+                              (let ((file-name (%coverage-row-file-name html row-start section-end)))
+                                (setf row-cursor next-row)
+                                (when (and file-name
+                                           (%coverage-source-file-p
+                                            (concatenate 'string path file-name)
+                                            source-root)
+                                           (integerp covered)
+                                           (integerp total))
+                                  (incf file-count)
+                                  (incf covered-count covered)
+                                  (incf total-count total)))))))
             finally (return (values file-count covered-count total-count)))))
   (defun %coverage-percentage (covered total)
     (if (plusp total) (* 100.0 (/ covered total))
@@ -128,7 +155,7 @@
                      :create)
       (format
        stream
-       "{~%  \"scope\": \"src\",~%  \"files\": ~D,~%  \"covered\": ~D,~%  \"total\": ~D,~%  \"expression-percent\": ~,2F,~%  \"minimum-percent\": ~,2F,~%  \"target-percent\": ~,2F,~%  \"tests-passed\": ~A,~%  \"minimum-passed\": ~A,~%  \"target-reached\": ~A~%}~%"
+       "{~%  \"scope\": \"src-executable\",~%  \"files\": ~D,~%  \"covered\": ~D,~%  \"total\": ~D,~%  \"expression-percent\": ~,2F,~%  \"minimum-percent\": ~,2F,~%  \"target-percent\": ~,2F,~%  \"tests-passed\": ~A,~%  \"minimum-passed\": ~A,~%  \"target-reached\": ~A~%}~%"
        files
        covered
        total
@@ -158,7 +185,14 @@
          (report-passed nil)
          (coverage-passed nil))
     (asdf:initialize-source-registry
-     `(:source-registry (:directory ,root) (:tree ,parent) :inherit-configuration))
+     (if (uiop:getenv "CL_SOURCE_REGISTRY")
+         `(:source-registry
+           (:directory ,root)
+           :inherit-configuration)
+       `(:source-registry
+         (:directory ,root)
+         (:tree ,parent)
+         :inherit-configuration)))
     (ensure-directories-exist coverage-dir)
     (sb-cover:enable-coverage-logging)
     (unwind-protect (setf tests-passed (handler-case
@@ -205,7 +239,7 @@
          tests-passed)
         (format
          t
-         "NSHELL_COVERAGE scope=src files=~D covered=~D total=~D expression-percent=~,2F minimum-percent=~,2F target-percent=~,2F tests-passed=~A minimum-passed=~A target-reached=~A~%"
+         "NSHELL_COVERAGE scope=src-executable files=~D covered=~D total=~D expression-percent=~,2F minimum-percent=~,2F target-percent=~,2F tests-passed=~A minimum-passed=~A target-reached=~A~%"
          files
          covered
          total
@@ -218,7 +252,7 @@
         (unless coverage-passed
           (format
            *error-output*
-           "~&src expression coverage did not meet the configured minimum (~,2F%%).~%"
+           "~&src executable expression coverage did not meet the configured minimum (~,2F%%).~%"
            minimum))))
     (sb-ext:exit
      :code

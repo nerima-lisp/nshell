@@ -198,6 +198,58 @@
              :cursor-pos 2
              :completion-index 1
              :suggestion " status")))))
+  (it "input-state-non-sgr-mouse-redraws" "Non-SGR mouse packets are ignored by the pure reducer." (let ((state (completion-session-state :buffer "git" :cursor-pos 2 :completion-index 1 :suggestion " status"))) (with-expected-input-state-reduction (new-state output) state (reduce-once state :mouse nil 0 (quote (:protocol :legacy :button 0 :button-code 0 :column 10 :row 5 :event :press :modifiers nil))) :redraw (:buffer "git" :cursor-pos 2 :completion-index 1 :suggestion " status"))))
+
+  (it "input-state-dispatches-delete-and-ignores-nil-char"
+    (let ((state (input-state :buffer "abc" :cursor-pos 1)))
+      (with-expected-input-state-reduction (new-state output)
+          state
+          (reduce-once state :char nil)
+          :none
+          (:buffer "abc" :cursor-pos 1))
+      (with-expected-input-state-reduction (new-state output)
+          state
+          (reduce-once state :delete)
+          :suggest-update
+          (:buffer "ac" :cursor-pos 1))))
+
+  (it "input-state-validates-sgr-mouse-button-and-index"
+    (let ((state (input-state :buffer "abc" :cursor-pos 0)))
+      (multiple-value-bind (pressed output)
+          (reduce-once state :mouse nil 0
+                       '(:protocol :sgr
+                         :button 0
+                         :event :press
+                         :buffer-index 1))
+        (expect :redraw :to-be output)
+        (expect 1 :to-equal
+                (nshell.presentation::input-state-mouse-selection-anchor
+                 pressed)))
+      (dolist (mouse-data
+               '((:protocol :sgr
+                  :button-code "invalid"
+                  :event :press
+                  :buffer-index 1)
+                 (:protocol :sgr
+                  :button-code 0
+                  :event :press
+                  :buffer-index -1)
+                 (:protocol :sgr
+                  :button-code 0
+                  :event :release
+                  :buffer-index 1)))
+        (multiple-value-bind (new-state output)
+            (reduce-once state :mouse nil 0 mouse-data)
+          (expect :redraw :to-be output)
+          (expect (nshell.presentation::input-state-mouse-selection-anchor
+                   state)
+                  :to-equal
+                  (nshell.presentation::input-state-mouse-selection-anchor
+                   new-state))
+          (expect (nshell.presentation::input-state-mouse-selection-end state)
+                  :to-equal
+                  (nshell.presentation::input-state-mouse-selection-end
+                   new-state))))))
 
   (it "input-state-sgr-mouse-selection-copies-forward-range"
     "A left-button press, drag, and release should copy the selected buffer range."

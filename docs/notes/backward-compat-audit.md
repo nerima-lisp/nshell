@@ -1,19 +1,22 @@
-# Backward-compatibility audit
+# Removed API and alias audit
 
-Every occurrence of "legacy", "deprecated", "backward-compat", "obsolete", or
-"old-style" in `src/` and `t/` (case-insensitive, whole-tree grep), classified.
+The current source tree keeps no compatibility aliases or dual behavior paths.
+The tests below make selected removals explicit, so a later redesign cannot
+silently regenerate the old public names.
 
-## Method
+## Reproduction
 
 ```
-grep -rniE "deprecated|legacy|backward.?compat|for compat|kept for|old-style|obsolete" src/ t/
+rg -n -i "deprecated|legacy|backward.?compat|for compat|kept for|old-style|obsolete" src t
 ```
 
-## Result: zero backward-compat code; eight regression guards against its return
+The command is expected to find only removal-oriented tests and no runtime
+compatibility path. Classify every hit before treating the result as clean.
 
-Every hit is in `t/`, and every one is a **negative assertion** — a test
-proving a legacy/unprefixed name does *not* exist, not code that keeps one
-working:
+## Removal guards
+
+The relevant hits are negative assertions — tests proving an unprefixed name
+does not exist, not code that keeps one working:
 
 | test | asserts |
 |---|---|
@@ -26,18 +29,9 @@ working:
 | `test-completion-context.lisp` (file-completion helpers) | no unprefixed legacy names are exported |
 | `test-repl-completion-data.lisp` (catalog-derived-data helpers) | no unprefixed legacy symbols remain in the package |
 
-The two `src/` hits for the word "removed" are unrelated to compatibility —
-both are docstrings describing ordinary data transformation ("redirect args
-... are removed from the args list" during parsing), not code kept around
-for callers of an old API.
-
 ## Conclusion
 
-There is no backward-compatibility shim, deprecated alias, or dual-path
-"old behavior vs. new behavior" branch anywhere in `src/`. The pattern this
-codebase uses instead — visible in every hit above — is to delete the old
-name outright when a value struct or helper is redesigned, and add a test
-that asserts its absence, so a future refactor cannot silently reintroduce
-it by accident (e.g. by letting `defstruct` regenerate an unprefixed
-`MAKE-`/`COPY-` pair nothing calls). "Backward-compat は撲滅してほしい,
-理想的なコードのみ残して" is met by construction, not by a one-time sweep.
+No compatibility shim or deprecated alias is present in the runtime source.
+When a value struct or helper is redesigned, the old name is deleted and the
+absence of the unprefixed constructor or copier is tested. This keeps the
+public surface intentionally current rather than preserving an obsolete API.

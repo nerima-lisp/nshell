@@ -32,7 +32,25 @@
 ")
       (assert-builtin-call (context "which" '("echo" "missing"))
         :code 1
-        :contains '("shell built-in command" "no missing in PATH"))))
+        :contains '("shell built-in command" "no missing in PATH"))
+      (assert-builtin-call (context "which" nil)
+        :code 1)
+      (assert-builtin-call (context "type" '("--help"))
+        :code 0)
+      (assert-builtin-call (context "type" '("--bogus"))
+        :code 2
+        :contains '("unknown option --bogus"))
+      (assert-builtin-call (context "type" nil)
+        :code 1)))
+  (it "function-builtin-stores-inline-body-without-end-marker"
+    "function accepts a body that does not carry the interactive end marker."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "function" (list "plain" "echo" "hello"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "type" (list "plain"))
+        :code 0
+        :contains (list "plain is a function" "echo hello"))))
 
   (it "builtin-registry-exposes-executable-builtins-at-load-time"
     "lookup-builtin returns the executable builtin handlers immediately after load."
@@ -51,6 +69,32 @@
       (setf (nshell.application:shell-context-running context) t)
       (assert-builtin-call (context "exit" nil) :code 0 :output-null t)
       (expect (nshell.application:shell-context-running context) :to-be-falsy)))
+
+  (it "exit-accepts-an-explicit-status-and-stores-it"
+    "exit CODE returns CODE modulo 256 and records the shell-visible status."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "exit" '("7")) :code 7 :output-null t)
+      (expect 7 :to-equal (nshell.application:shell-context-last-exit-code context))
+      (expect (nshell.application:shell-context-running context) :to-be-falsy)))
+
+  (it "exit-without-a-status-reuses-the-last-status"
+    "exit without an argument uses the status of the preceding command."
+    (with-builtins-context (context)
+      (setf (nshell.application:shell-context-last-exit-code context) 23)
+      (assert-builtin-call (context "exit" nil) :code 23 :output-null t)
+      (expect (nshell.application:shell-context-running context) :to-be-falsy)))
+
+  (it "exit-rejects-invalid-arguments-without-stopping"
+    "Invalid exit arguments report an error while leaving the interactive shell running."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "exit" '("not-a-number"))
+        :code 2
+        :output "exit: numeric argument required~%")
+      (expect (nshell.application:shell-context-running context) :to-be-truthy)
+      (assert-builtin-call (context "exit" '("1" "2"))
+        :code 1
+        :output "exit: too many arguments~%")
+      (expect (nshell.application:shell-context-running context) :to-be-truthy)))
 
   (it "type-colorizes-only-the-function-definition-branch"
     "type --color colors the function definition block without changing short output."
@@ -166,6 +210,14 @@ echo is /usr/bin/echo
       (assert-builtin-call (context "test" '("abc" "=" "def")) :code 1)
       (assert-builtin-call (context "test" '("-n" "abc")) :code 0)
       (assert-builtin-call (context "test" '("-z" "")) :code 0)
+      (assert-builtin-call (context "test" '("abc")) :code 0)
+      (assert-builtin-call (context "test" '("")) :code 1)
+      (assert-builtin-call (context "test" '("-n" "")) :code 1)
+      (assert-builtin-call (context "test" '("-z" "abc")) :code 1)
+      (assert-builtin-call (context "test" '("abc" "!=" "def")) :code 0)
+      (assert-builtin-call (context "test" '("abc" "!=" "abc")) :code 1)
+      (assert-builtin-call (context "test" nil) :code 1)
+      (assert-builtin-call (context "test" '("a" "b" "c" "d")) :code 1)
       (assert-builtin-call (context "[" '("abc" "=" "abc" "]")) :code 0)
       (assert-builtin-call (context "[" '("abc" "=" "abc")) :code 2)))
 
@@ -257,6 +309,43 @@ echo is /usr/bin/echo
         (assert-builtin-call (context "disown" (list (format nil "~d" job-id)))
           :code 1
           :output (format nil "disown: job [~d] not found~%" job-id)))))
+
+  (it "job-builtins-resolve-standard-job-specs"
+    "fg/bg/jobs accept numeric shorthand and standard current/previous job specs."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (first-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "first")))
+           (second-id (nshell.domain.job-control:monitor-add-job
+                       monitor (make-test-job 0 "second"))))
+      (assert-builtin-call (context "bg" (list "%1"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "bg" (list (format nil "~d" first-id)))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "bg" '("%%"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "bg" '("%-"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "fg" nil)
+        :code 0
+        :output-null t)
+      (multiple-value-bind (output code)
+          (call-builtin context "jobs" (list (format nil "%~d" first-id)))
+        (expect 0 :to-equal code)
+        (expect (search (format nil "[~d]" first-id) output) :to-be-truthy)
+        (expect (search (format nil "[~d]" second-id) output) :to-be-null))
+      (nshell.domain.job-control:complete-job monitor first-id)
+      (assert-builtin-call (context "bg" (list (format nil "%~d" first-id)))
+        :code 1
+        :output (format nil "bg: no such job: %~d~%" first-id))
+      (assert-builtin-call (context "bg" '("1junk"))
+        :code 1
+        :output (format nil "bg: no such job: 1junk~%"))))
+
   (it "type-option-p-recognizes-dash-prefixed-strings"
     "type-option-p returns true only for strings starting with a dash of length >= 2."
     (flet ((opt-p (s) (nshell.application::%type-option-p s)))
@@ -300,4 +389,40 @@ echo is /usr/bin/echo
       ;; collect happens before while guard: "" yields ("") and "\n" yields ("" "")
       (expect '("") :to-equal (lines ""))
       (expect '("" "") :to-equal (lines (format nil "~%")))
-      (expect '("a" "" "") :to-equal (lines (format nil "a~%~%"))))))
+      (expect '("a" "" "") :to-equal (lines (format nil "a~%~%")))))
+
+  (it "type-option-parser-rejects-invalid-and-conflicting-options"
+    "The type parser stops at --, rejects invalid flags, and rejects multiple modes."
+    (multiple-value-bind (options remaining parse-error code)
+        (nshell.application::%parse-type-options '("--" "literal"))
+      (expect options :to-be-truthy)
+      (expect '("literal") :to-equal remaining)
+      (expect parse-error :to-be-null)
+      (expect code :to-be-null))
+    (dolist (option '("--color=bogus" "--bogus"))
+      (multiple-value-bind (options remaining parse-error code)
+          (nshell.application::%parse-type-options (list option))
+        (declare (ignore options remaining))
+        (expect (search "unknown option" parse-error) :to-be-truthy)
+        (expect 2 :to-equal code)))
+    (multiple-value-bind (options remaining parse-error code)
+        (nshell.application::%parse-type-options '("-q" "-p"))
+      (declare (ignore options remaining))
+      (expect (search "type [OPTIONS]" parse-error) :to-be-truthy)
+      (expect 2 :to-equal code))
+    (multiple-value-bind (options remaining parse-error code)
+        (nshell.application::%parse-type-options '("--help" "echo"))
+      (expect (nshell.application::%type-options-help-p options) :to-be-truthy)
+      (expect '("echo") :to-equal remaining)
+      (expect parse-error :to-be-null)
+      (expect code :to-be-null)))
+
+  (it "type-path-option-resolves-an-external-command"
+    "type -p reports an external command path from the filesystem-backed PATH."
+    (let ((context (make-test-builtins-context
+                    :path "/bin"
+                    :files '("/bin/external")
+                    :dirs '("/bin"))))
+      (assert-builtin-call (context "type" '("-p" "external"))
+        :code 0
+        :output (format nil "/bin/external~%")))))

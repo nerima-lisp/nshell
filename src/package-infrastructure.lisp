@@ -27,7 +27,7 @@ stores in the shell context, which is what makes the layers above it mockable.")
             #:redirect-error-to-output
             #:redirect-input #:redirect-input-document #:redirect-input-string
            #:restore-redirects #:domain-signal->os
-            #:install-signal-handlers #:consume-children-changed-p
+            #:install-signal-handlers #:consume-children-changed-p #:consume-sigint-received-p
             #:consume-terminal-resize-p
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid

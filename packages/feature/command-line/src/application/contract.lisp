@@ -1,7 +1,7 @@
 (in-package #:nshell.feature.command-line)
 
 (defparameter +usage-synopsis+
-  "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
+  "Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
   "The stable synopsis shared by the CLI presentation and its tests.")
 
 (defun usage-synopsis ()

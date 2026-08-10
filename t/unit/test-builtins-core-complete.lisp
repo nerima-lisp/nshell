@@ -85,6 +85,20 @@
         (("--arguments") :code 2 :output (format nil "complete: --arguments requires arguments~%"))
         (("-d") :code 2 :output (format nil "complete: -d requires description~%"))
         (("--description") :code 2 :output (format nil "complete: --description requires description~%")))))
+  (it "complete-builtin-parses-option-terminator-and-rejects-unknown-options"
+    "complete stops option parsing at -- and reports unknown options before command finalization."
+    (with-builtins-context (context)
+      (assert-builtin-call
+       (context "complete" (list "-c" "deploy" "--" "ignored"))
+       :code 0 :output-null t)
+      (assert-builtin-call
+       (context "complete" (list "-c" "deploy" "--unknown"))
+       :code 2
+       :contains (list "complete: unknown option --unknown"))
+      (assert-builtin-call
+       (context "complete" (list "deploy"))
+       :code 1
+       :contains (list "complete: usage:"))))
 
   (it "function-builtin-stores-and-manages-inline-body"
     "function builtin stores inline fish-style bodies and exposes management operations."

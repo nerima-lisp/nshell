@@ -49,6 +49,51 @@
         (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
               original-get-terminal-size))))
 
+  (it "completion-rendering-falls-back-when-terminal-size-fails"
+    (let ((original-get-terminal-size
+            (symbol-function 'nshell.infrastructure.acl:get-terminal-size)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
+                   (lambda () (error "terminal size unavailable")))
+             (expect 1 :to-equal (nshell.presentation::completion-render-line-count
+                       '("fallback"))))
+        (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
+              original-get-terminal-size))))
+
+  (it "completion-rendering-uses-all-candidate-kind-icons"
+    (let* ((candidates (list
+                        (nshell.domain.completion:make-candidate
+                         "directory" :kind :directory)
+                        (nshell.domain.completion:make-candidate
+                         "--option" :kind :option)
+                        (nshell.domain.completion:make-candidate
+                         "VARIABLE" :kind :variable)
+                        (nshell.domain.completion:make-candidate
+                         "unknown" :kind :unknown)))
+           (output (capture-standard-output
+                     (nshell.presentation:render-completions
+                      candidates
+                      :terminal-width 80))))
+      (expect (search "/ directory" output) :to-be-truthy)
+      (expect (search "- --option" output) :to-be-truthy)
+      (expect (search "$  VARIABLE" output) :to-be-truthy)
+      (expect (search "· unknown" output) :to-be-truthy)))
+
+  (it "completion-rendering-reports-omitted-candidates"
+    (let* ((candidates (loop for index from 1 to 65
+                             collect (nshell.domain.completion:make-candidate
+                                      (format nil "candidate-~d" index)
+                                      :kind :file)))
+           (output (capture-standard-output
+                     (nshell.presentation:render-completions
+                      candidates
+                      :terminal-width 80))))
+      (expect (search "… and 1 more" output) :to-be-truthy)
+      (expect 14 :to-equal (nshell.presentation:render-completions
+                candidates
+                :terminal-width 80))))
+
   (it "completion-rendering-pads-wide-candidates-to-column-width"
     (let* ((candidates (list (nshell.domain.completion:make-candidate
                               "λ あ"

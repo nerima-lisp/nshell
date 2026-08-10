@@ -304,4 +304,29 @@ rebuilt state, so the completion, transient, and session groups each assemble.
       (expect (nshell.presentation::input-state-redo-stack recorded) :to-be-null)
       (expect ignored :to-be-null)
       (expect (fboundp 'nshell.presentation::make-undo-recording-transition) :to-be-falsy)
-      (expect (fboundp 'nshell.presentation::make-undo-recording-step) :to-be-falsy))))
+      (expect (fboundp 'nshell.presentation::make-undo-recording-step) :to-be-falsy)))
+  (it "input-state-defaults-are-stable"
+    "Calling the public constructor and copy operation without overrides supplies a usable empty editing state."
+    (let* ((state (nshell.presentation:make-input-state))
+           (copy (nshell.presentation::copy-input-state-with state)))
+      (expect "" :to-equal
+              (nshell.presentation:input-state-buffer state))
+      (expect 0 :to-equal
+              (nshell.presentation:input-state-cursor-pos state))
+      (expect -1 :to-equal
+              (nshell.presentation::input-state-completion-index state))
+      (expect :insert :to-be
+              (nshell.presentation:input-state-mode state))
+      (expect "" :to-equal
+              (nshell.presentation::input-state-search-query state))
+      (expect "" :to-equal
+              (nshell.presentation::input-state-search-original-buffer state))
+      (expect 0 :to-equal
+              (nshell.presentation::input-state-search-index state))
+      (expect (eq state copy) :to-be-falsy)
+      (expect "" :to-equal
+              (nshell.presentation:input-state-buffer copy))
+      (expect 0 :to-equal
+              (nshell.presentation:input-state-cursor-pos copy))
+      (expect :insert :to-be
+              (nshell.presentation:input-state-mode copy)))))

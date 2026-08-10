@@ -179,14 +179,26 @@
      :files-and-directories)
     (t nil)))
 
-(defun filesystem-candidates-for-mode (mode prefix)
-  "Return filesystem candidates for MODE and PREFIX."
-  (ecase mode
-    (:directories
-     (%file-candidates-from-directory prefix
-                                      :include-files nil
-                                      :include-directories t))
-    (:files-and-directories
-     (%file-candidates-from-directory prefix
-                                      :include-files t
-                                      :include-directories t))))
+(progn
+  (defun filesystem-candidates-for-mode (mode prefix)
+    "Return filesystem candidates for MODE and PREFIX."
+    (ecase mode
+      (:directories
+       (%file-candidates-from-directory prefix
+                                        :include-files nil
+                                        :include-directories t))
+      (:files-and-directories
+       (%file-candidates-from-directory prefix
+                                        :include-files t
+                                        :include-directories t))))
+  (defun filesystem-candidates-for-value-kind (kind prefix)
+    "Return filesystem candidates matching the value kind implied by an option."
+    (ecase kind
+      (:directory
+       (%file-candidates-from-directory prefix
+                                        :include-files nil
+                                        :include-directories t))
+      (:file
+       (%file-candidates-from-directory prefix
+                                        :include-files t
+                                        :include-directories t)))))

@@ -608,4 +608,45 @@
       ;; singleton ("--a") is dropped; ("--a" "--b") is kept
       (expect '(("--a" "--b")) :to-equal (norm '(("--a" "--b") ("--a"))))
       ;; duplicates within group: ("--c" "--d" "--c") → ("--c" "--d")
-      (expect '(("--c" "--d")) :to-equal (norm '(("--c" "--d" "--c")))))))
+      (expect '(("--c" "--d")) :to-equal (norm '(("--c" "--d" "--c"))))))
+  (it "completion-help-parsers-handle-boundaries"
+    "Completion help parsing should keep boundary behavior explicit and testable."
+    (let ((tabbed-line (format nil "run~c--details" #\Tab)))
+      (expect "run"
+              :to-equal
+              (nshell.domain.completion::%completion-help-subcommand-name
+               "run"))
+      (expect "run"
+              :to-equal
+              (nshell.domain.completion::%completion-help-subcommand-name
+               tabbed-line))
+      (expect (nshell.domain.completion::%completion-help-option-token-p "-v")
+              :to-be-truthy)
+      (expect (nshell.domain.completion::%completion-help-option-token-p "--")
+              :to-be-falsy)
+      (expect (nshell.domain.completion::%completion-help-option-token-p "-")
+              :to-be-falsy)
+      (expect (nshell.domain.completion::%completion-help-option-token-p "")
+              :to-be-falsy)
+      (expect (nshell.domain.completion::%completion-help-enum-value-p "json")
+              :to-be-truthy)
+      (expect (nshell.domain.completion::%completion-help-enum-value-p "")
+              :to-be-falsy)
+      (expect (nshell.domain.completion::%completion-help-enum-value-p " ")
+              :to-be-falsy)
+      (expect (nshell.domain.completion::%completion-help-subcommand-line-p "run execute")
+              :to-be-truthy)
+      (expect (nshell.domain.completion::%completion-help-subcommand-line-p "-x option")
+              :to-be-falsy)
+      (expect (nshell.domain.completion::%completion-help-subcommand-line-p "run")
+              :to-be-falsy)
+      (expect (list "json" "yaml")
+              :to-equal
+              (nshell.domain.completion::%completion-help-enum-values
+               "--format=(json|yaml)"))
+      (expect (nshell.domain.completion::%completion-help-enum-values
+               "--format=(json)")
+              :to-be-null)
+      (expect (nshell.domain.completion::%completion-help-enum-values
+               "--format=(")
+              :to-be-null))))

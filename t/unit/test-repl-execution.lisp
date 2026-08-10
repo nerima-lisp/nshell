@@ -15,6 +15,31 @@
                  (setf persisted text)))
             (capture-process-output-event :execute))))
       (expect "echo from-history" :to-equal persisted)))
+  (it "repl-editor-command-parser-preserves-quoted-and-escaped-arguments"
+    "The editor command parser should retain quoted and escaped argument boundaries."
+    (expect
+      (list "emacs" "-nw" "file name" "--flag=value" "path with spaces" "trailing\\")
+      :to-equal
+      (nshell.presentation::%split-editor-command
+       "emacs -nw \"file name\" \"--flag=value\" path\\ with\\ spaces trailing\\")))
+  (it "repl-editor-command-argv-observes-editor-precedence-and-fallback"
+    "The editor selection should honor environment precedence and recover from unusable values."
+    (with-repl-test-state
+      (repl-test-set-env "NSHELL_EDITOR" "")
+      (repl-test-set-env "VISUAL" "")
+      (repl-test-set-env "EDITOR" "nano")
+      (expect (list "nano") :to-equal (nshell.presentation::%editor-command-argv))
+      (repl-test-set-env "VISUAL" "vim -f")
+      (expect (list "vim" "-f") :to-equal (nshell.presentation::%editor-command-argv))
+      (repl-test-set-env "NSHELL_EDITOR" "emacs -nw")
+      (expect (list "emacs" "-nw") :to-equal (nshell.presentation::%editor-command-argv))
+      (repl-test-set-env "NSHELL_EDITOR" " ")
+      (expect (list "vi") :to-equal (nshell.presentation::%editor-command-argv)))
+    (with-repl-test-state
+      (repl-test-set-env "NSHELL_EDITOR" "")
+      (repl-test-set-env "VISUAL" "")
+      (repl-test-set-env "EDITOR" "")
+      (expect (list "vi") :to-equal (nshell.presentation::%editor-command-argv))))
 
   (it "repl-edit-command-replaces-input-from-external-editor"
     "The external editor event writes the current buffer and installs the edited text."
@@ -38,6 +63,37 @@
                     :to-equal
                     (nshell.presentation::input-state-buffer
                          nshell.presentation::*input-state*)))))))
+
+  (it "repl-edit-command-reports-editor-exit-status"
+    (with-repl-test-state
+      (with-repl-input-state (:buffer "echo before" :cursor-pos 11)
+        (with-temporary-function
+            ('nshell.presentation::%editor-command-argv
+             (lambda () '("fake-editor")))
+          (with-temporary-function
+              ('nshell.presentation::%run-external-editor
+               (lambda (argv path)
+                 (declare (ignore argv path))
+                 7))
+            (let ((output (capture-process-output-event :edit-command)))
+              (expect (search "nshell: editor exited with status 7" output)
+                      :to-be-truthy)))))))
+
+  (it "repl-edit-command-reports-editor-errors"
+    (with-repl-test-state
+      (with-repl-input-state (:buffer "echo before" :cursor-pos 11)
+        (with-temporary-function
+            ('nshell.presentation::%editor-command-argv
+             (lambda () '("fake-editor")))
+          (with-temporary-function
+              ('nshell.presentation::%run-external-editor
+               (lambda (argv path)
+                 (declare (ignore argv path))
+                 (error "forced editor failure")))
+            (let ((output (capture-process-output-event :edit-command)))
+              (expect (search "nshell: editor failed: forced editor failure"
+                              output)
+                      :to-be-truthy)))))))
 
   (it "repl-for-loop-expands-in-values"
     "Interactive for loops expand variables in the in list before assignment."
@@ -220,4 +276,134 @@
             (call-repl-execute-ast ast)
           (expect 0 :to-equal code)
           (expect "" :to-equal output)))))
+
+  (it "repl-output-execution-handles-empty-input"
+    "Executing an empty line clears command timing and resets the edit state."
+    (with-repl-test-state
+      (setf nshell.presentation::*last-command-duration-ms* 10)
+      (with-stable-repl-prompt ()
+        (with-fixed-terminal-size (24 80)
+          (with-repl-input-state (:buffer "" :cursor-pos 0)
+            (let ((output (capture-process-output-event :execute)))
+              (expect (search (format nil "~%") output) :to-be-truthy)
+              (expect 0 :to-equal nshell.presentation::*last-exit-code*)
+              (expect nshell.presentation::*last-command-duration-ms*
+                      :to-be-null)
+              (is-input-state nshell.presentation::*input-state*
+                              :buffer ""
+                              :cursor-pos 0)))))))
+
+  (it "repl-output-execution-reports-history-expansion-errors"
+    "History expansion failures should be rendered as command diagnostics."
+    (with-repl-test-state
+      (with-temporary-function
+          ('nshell.domain.history:history-expand-line
+           (lambda (&rest arguments)
+             (declare (ignore arguments))
+             (values nil "history failure")))
+        (with-stable-repl-prompt ()
+          (with-fixed-terminal-size (24 80)
+            (with-repl-input-state (:buffer "echo" :cursor-pos 4)
+              (let ((output (capture-process-output-event :execute)))
+                (expect (search "history failure" output) :to-be-truthy)
+                (expect 2 :to-equal nshell.presentation::*last-exit-code*)
+                (is-input-state nshell.presentation::*input-state*
+                                :buffer ""
+                                :cursor-pos 0))))))))
+
+  (it "repl-output-execution-reports-unexpected-errors"
+    "Unexpected execution errors should reset the edit state with status one."
+    (with-repl-test-state
+      (with-temporary-function
+          ('nshell.domain.history:history-expand-line
+           (lambda (&rest arguments)
+             (declare (ignore arguments))
+             (error "history exploded")))
+        (with-stable-repl-prompt ()
+          (with-fixed-terminal-size (24 80)
+            (with-repl-input-state (:buffer "echo" :cursor-pos 4)
+              (let ((output (capture-process-output-event :execute)))
+                (expect (search "history exploded" output) :to-be-truthy)
+                (expect 1 :to-equal nshell.presentation::*last-exit-code*)
+                (is-input-state nshell.presentation::*input-state*
+                                :buffer ""
+                                :cursor-pos 0))))))))
+
+  (it "repl-output-execution-reports-parse-errors"
+    "A parse error from the public execute event should reach the error stream."
+    (with-repl-test-state
+      (with-stable-repl-prompt ()
+        (with-fixed-terminal-size (24 80)
+          (with-repl-input-state (:buffer "case vanilla" :cursor-pos 12)
+            (let ((output
+                    (capture-standard-output
+                      (let ((*error-output* *standard-output*))
+                        (let ((continuation
+                                (nshell.presentation::process-output-event :execute)))
+                          (when continuation
+                            (funcall continuation)))))))
+              (expect (search "nshell: syntax error:" output) :to-be-truthy)
+              (expect 2 :to-equal nshell.presentation::*last-exit-code*)
+              (is-input-state nshell.presentation::*input-state*
+                              :buffer ""
+                              :cursor-pos 0)))))))
+
+  (it "repl-output-execution-keeps-incomplete-input-for-continuation"
+    "An incomplete command should remain editable after the execute event."
+    (with-repl-test-state
+      (with-stable-repl-prompt ()
+        (with-fixed-terminal-size (24 80)
+          (with-repl-input-state (:buffer "echo '" :cursor-pos 6)
+            (let ((output (capture-process-output-event :execute)))
+              (expect (search (format nil "~%") output) :to-be-truthy)
+              (expect 0 :to-equal nshell.presentation::*last-exit-code*)
+              (expect (format nil "echo '~%")
+                      :to-equal
+                      (nshell.presentation:input-state-buffer
+                       nshell.presentation::*input-state*))))))))
 )
+(describe "repl-shell-context-branch-tests"
+  (it "repl-external-command-availability-distinguishes-paths"
+    (with-repl-test-state
+      (expect "/bin/sh" :to-equal
+              (nshell.presentation::%repl-external-command-available-p "/bin/sh"))
+      (expect (nshell.presentation::%repl-external-command-available-p
+               "/definitely/not/a/nshell-command")
+              :to-be-falsy)))
+  (it "repl-shell-context-sync-writes-output-and-defaults-code"
+    (with-repl-test-state
+      (let ((output nil)
+            (code nil)
+            (printed nil))
+        (setf printed
+              (capture-standard-output
+                (multiple-value-setq (output code)
+                  (nshell.presentation::%execute-with-repl-shell-context
+                   (lambda (context)
+                     (setf (nshell.application:shell-context-pipefail-p context) t)
+                     (values "context-output" 7))))))
+        (expect "context-output" :to-equal output)
+        (expect 7 :to-equal code)
+        (expect "context-output" :to-equal printed)
+        (expect t :to-be nshell.presentation::*pipefail*)
+        (expect 7 :to-equal nshell.presentation::*last-exit-code*))
+      (let ((output nil)
+            (code nil)
+            (printed nil))
+        (setf printed
+              (capture-standard-output
+                (multiple-value-setq (output code)
+                  (nshell.presentation::%execute-with-repl-shell-context
+                   (lambda (context)
+                     (declare (ignore context))
+                     (values nil nil))))))
+        (expect output :to-be-null)
+        (expect 0 :to-equal code)
+        (expect "" :to-equal printed))))
+  (it "repl-execute-ast-rejects-unsupported-node"
+    "Unsupported AST values produce a diagnostic and a nonzero status."
+    (with-repl-test-state
+      (multiple-value-bind (output code)
+          (call-repl-execute-ast nil)
+        (expect (format nil "nshell: cannot execute~%") :to-equal output)
+        (expect 1 :to-equal code)))))

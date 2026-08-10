@@ -25,7 +25,7 @@ boilerplate categories this goal targets:
 - **Value structs.** 37 value structs generate their
   accessor/predicate/constructor boilerplate from `define-value-struct`
   instead of by hand (`docs/notes/value-struct-audit.md`).
-- No repeated `defclass` boilerplate exists (`grep -rn "defclass" src/` is
+- No repeated `defclass` boilerplate exists (`rg -n "defclass" src` is
   empty) and `define-condition` appears exactly once — nothing to
   consolidate there.
 

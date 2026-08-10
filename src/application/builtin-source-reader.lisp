@@ -249,7 +249,9 @@ which are skipped rather than parsed."
                   (setf remaining (%source-lines-step-result-remaining-lines step)
                         output (%source-lines-step-result-output-chunks step)
                         code (%source-lines-step-result-exit-code step))
-                  (when (%source-lines-step-result-stop-p step)
+                  (%record-last-exit-code context code)
+                  (when (or (%source-lines-step-result-stop-p step)
+                            (not (shell-context-running context)))
                     (return))))
                (t
                 (let ((step (%source-lines-handle-source-form
@@ -257,7 +259,9 @@ which are skipped rather than parsed."
                   (setf remaining (%source-lines-step-result-remaining-lines step)
                         output (%source-lines-step-result-output-chunks step)
                         code (%source-lines-step-result-exit-code step))
-                  (when (%source-lines-step-result-stop-p step)
+                  (%record-last-exit-code context code)
+                  (when (or (%source-lines-step-result-stop-p step)
+                            (not (shell-context-running context)))
                     (return))))))
     (values (apply #'concatenate 'string (nreverse output)) code)))
 

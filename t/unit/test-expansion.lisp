@@ -90,6 +90,35 @@ Each case is (EXPECTED INPUT &rest ARGS)."
               :to-equal
               (nshell.domain.expansion:expand-tilde "~other-user/src" env))))
 
+  (it "tilde-expansion-covers-home-and-user-boundaries"
+    "Bare and named current-user tildes use HOME, with a literal fallback when HOME is absent."
+    (let ((env (test-expansion-env))
+          (empty-env (nshell.domain.environment:make-environment)))
+      (expect "/tmp/nshell-home"
+              :to-equal
+              (nshell.domain.expansion:expand-tilde "~" env))
+      (expect "/tmp/nshell-home"
+              :to-equal
+              (nshell.domain.expansion:expand-tilde "~nshell-user" env))
+      (expect "~"
+              :to-equal
+              (nshell.domain.expansion:expand-tilde "~" empty-env))))
+
+  (it "pathname-directory-string-handles-path-kinds"
+    "Directory extraction preserves absolute, relative, and file-only paths."
+    (expect "/tmp/"
+            :to-equal
+            (nshell.domain.expansion::pathname-directory-string "/tmp/a.txt"))
+    (expect "tmp/"
+            :to-equal
+            (nshell.domain.expansion::pathname-directory-string "tmp/a.txt"))
+    (expect ""
+            :to-equal
+            (nshell.domain.expansion::pathname-directory-string "a.txt"))
+    (expect "/tmp/"
+            :to-equal
+            (nshell.domain.expansion::glob-root "/tmp/a.txt")))
+
   (it "double-quoted-expands-variables"
     "Double-quoted contents expand $VAR but stay a single field."
     (%assert-expansion-cases-with-env (string=

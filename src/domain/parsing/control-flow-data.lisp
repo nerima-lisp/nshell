@@ -58,7 +58,8 @@
       (make-command-node (arg-value arg)
                          (%control-flow-header-args-rest header-args)
                          nil
-                         (arg-quote-style arg)))))
+                         (arg-quote-style arg)
+                         (command-arg-fragments arg)))))
 
 (defun %else-if-header-p (header)
   (and (command-node-p header)

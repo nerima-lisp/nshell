@@ -77,9 +77,24 @@
           (t
            (values :character nil)))))
 
+(defun %tokenizer-state-push-word-token (state chars start end quote-style
+                                                  escaped-positions)
+  (let ((value (coerce (nreverse (copy-list chars)) (quote string))))
+    (%tokenizer-state-push-token
+     state
+     :word
+     value
+     start
+     end
+     quote-style
+     (list (make-command-fragment
+            value
+            quote-style
+            (nreverse (copy-list escaped-positions)))))))
 (defun %tokenizer-read-word (state)
   (let ((start (tokenizer-state-pos state))
-        (chars (quote ())))
+        (chars (quote ()))
+        (escaped-positions (quote ())))
     (loop while (< (tokenizer-state-pos state) (tokenizer-state-len state))
           for ch = (%tokenizer-state-peek state)
           do (multiple-value-bind (kind end)
@@ -97,26 +112,36 @@
                     (%tokenizer-state-advance state)
                     (if (< (tokenizer-state-pos state) (tokenizer-state-len state))
                         (progn
+                          (push (length chars) escaped-positions)
                           (push (%tokenizer-state-peek state) chars)
                           (%tokenizer-state-advance state))
                         (progn
                           (setf (tokenizer-state-incomplete state) t)
                           (when chars
-                            (%tokenizer-state-push-token state :word
-                                                         (coerce (nreverse chars) (quote string))
-                                                         start
-                                                         escape-start))
-                          (%tokenizer-state-push-token state :error "\\" escape-start
+                            (%tokenizer-state-push-word-token
+                             state
+                             chars
+                             start
+                             escape-start
+                             nil
+                             escaped-positions))
+                          (%tokenizer-state-push-token state
+                                                       :error
+                                                       (string (code-char 92))
+                                                       escape-start
                                                        (tokenizer-state-pos state))
                           (return)))))
                  (:character
                   (push ch chars)
                   (%tokenizer-state-advance state)))))
     (when chars
-      (%tokenizer-state-push-token state :word
-                                   (coerce (nreverse chars) (quote string))
-                                   start
-                                   (tokenizer-state-pos state)))))
+      (%tokenizer-state-push-word-token
+       state
+       chars
+       start
+       (tokenizer-state-pos state)
+       nil
+       escaped-positions))))
 
 (defun %tokenizer-double-quoted-escape-character-p (ch)
   (or (char= ch #\\)
@@ -127,7 +152,8 @@
 
 (defun %tokenizer-read-delimited (state delimiter &key escape-p quote-style)
   (let ((start (tokenizer-state-pos state))
-        (chars '()))
+        (chars '())
+        (escaped-positions '()))
     (%tokenizer-state-advance state)
     (loop while (< (tokenizer-state-pos state) (tokenizer-state-len state))
           for ch = (%tokenizer-state-peek state)
@@ -138,8 +164,9 @@
                 (%tokenizer-state-advance state)
                 (if (< (tokenizer-state-pos state) (tokenizer-state-len state))
                     (let ((escaped (%tokenizer-state-peek state)))
-                      (unless (%tokenizer-double-quoted-escape-character-p escaped)
-                        (push #\\ chars))
+                      (if (%tokenizer-double-quoted-escape-character-p escaped)
+                          (push (length chars) escaped-positions)
+                          (push #\\ chars))
                       (push escaped chars)
                       (%tokenizer-state-advance state))
                     (push #\\ chars)))
@@ -150,9 +177,13 @@
              (char= (%tokenizer-state-peek state) delimiter))
         (progn
           (%tokenizer-state-advance state)
-          (%tokenizer-state-push-token state :word (coerce (nreverse chars) 'string)
-                                       start (tokenizer-state-pos state)
-                                       quote-style))
+          (%tokenizer-state-push-word-token
+           state
+           chars
+           start
+           (tokenizer-state-pos state)
+           quote-style
+           escaped-positions))
         (progn
           (setf (tokenizer-state-incomplete state) t)
           (%tokenizer-state-push-token state :error

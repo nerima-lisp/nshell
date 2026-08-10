@@ -130,10 +130,12 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:tokenization-result-tokens
            #:tokenization-result-cursor-token
            #:tokenization-result-incomplete-p
-           #:token-type #:token-value #:token-start #:token-end #:make-token
+           #:token-type #:token-value #:token-start #:token-end #:token-quote-style
+           #:token-fragments #:make-token
            #:ast-node-type #:make-command-node #:make-pipeline-node
                 #:command-node-p #:pipeline-node-p #:sequence-node-p
-                #:command-node-command #:command-node-command-quote-style #:command-node-args
+                #:command-node-command #:command-node-command-quote-style
+                #:command-node-command-fragments #:command-node-args
                 #:sequence-node-commands #:pipeline-node-commands
                 #:sequence-node-separators
                 #:command-node-arg-values #:split-command-node-redirects
@@ -146,7 +148,10 @@ continuation line. A pure string-to-AST function with no filesystem access.")
                 #:command-list-redirect-split-result-redirects
                 #:ast-node->command-line
                 #:command-arg #:command-arg-p #:make-command-arg
-                #:command-arg-value #:command-arg-quote-style
+                #:command-arg-value #:command-arg-quote-style #:command-arg-fragments
+                #:command-fragment #:command-fragment-p #:make-command-fragment
+                #:command-fragment-value #:command-fragment-quote-style
+                #:command-fragment-escaped-positions
                 #:arg-value #:arg-quote-style #:arg-here-doc-literal-p
                 #:sequence-node-command-separator
                 #:sequence-node-command-separator-p
@@ -229,8 +234,10 @@ exported predicates below are goals callers may query directly.")
             #:kb-add-option
             #:kb-remove-command #:kb-command-present-p
             #:kb-command-subcommands #:kb-command-flags
-            #:kb-command-option-values #:kb-command-exclusive-options
+            #:kb-command-option-values #:kb-command-option-value-kinds
+            #:kb-command-exclusive-options
             #:kb-command-description
+            #:kb-resolve-command-path #:knowledge-base-option-value-kind
             #:make-fact #:make-rule #:fact-p #:rule-p
             #:assert-fact! #:assert-rule! #:prove #:prove-all
             #:completion-rulebase
@@ -257,6 +264,7 @@ exported predicates below are goals callers may query directly.")
             #:completion-context-command-position-p
             #:completion-context-redirection-target-p
             #:completion-filesystem-fns
+            #:filesystem-candidates-for-value-kind
             #:command-path-candidates
              #:*path-command-directory-map-fn*
              #:*path-command-directory-files-fn* #:*path-command-executable-p-fn*
@@ -288,6 +296,8 @@ transitions on a value.")
             #:monitor-add-job #:monitor-add-background-job
             #:monitor-update
             #:monitor-map-jobs #:monitor-find-job
+            #:monitor-current-job-id #:monitor-previous-job-id
+            #:monitor-resolve-job-spec
             #:monitor-remove-job
             #:suspend-job #:foreground-job #:background-job
             #:complete-job))

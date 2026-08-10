@@ -35,9 +35,9 @@
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
         (when (probe-file test-path) (delete-file test-path)))))
 
-  (it "file-history-legacy-lines"
-    "Legacy one-line history records remain loadable."
-    (let ((test-path (format nil "/tmp/nshell-test-history-legacy-~d.lisp"
+  (it "file-history-unframed-lines"
+    "Unframed history records are not loaded."
+    (let ((test-path (format nil "/tmp/nshell-test-history-unframed-~d.lisp"
                              (random 1000000))))
       (unwind-protect
            (progn
@@ -47,9 +47,8 @@
              (with-open-file (stream test-path :direction :output
                                      :if-exists :supersede
                                      :if-does-not-exist :create)
-               (format stream "legacy one~%legacy two~%"))
-             (expect '("legacy one" "legacy two") :to-equal
-                     (nshell.infrastructure.persistence:load-history-file)))
+               (format stream "unframed one~%unframed two~%"))
+             (expect (nshell.infrastructure.persistence:load-history-file) :to-be-null))
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
         (when (probe-file test-path) (delete-file test-path)))))
 

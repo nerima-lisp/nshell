@@ -2,6 +2,10 @@
 ;;; COMMAND-NODE's args into a typed COMMAND-REDIRECT-SPLIT-RESULT.
 (in-package #:nshell.domain.parsing)
 
+(declaim (notinline %redirect-facts-kind
+                    %redirect-facts-fd-dup-p
+                    %redirect-facts-fd-dup-target))
+
 (defstruct (command-redirect-split-result
             (:constructor %make-command-redirect-split-result
                 (clean-command redirects)))
@@ -92,7 +96,8 @@
     (command-node-command cmd-node)
     (nreverse (%command-redirect-split-state-clean state))
     (ast-node-span cmd-node)
-    (command-node-command-quote-style cmd-node))
+    (command-node-command-quote-style cmd-node)
+    (command-node-command-fragments cmd-node))
    (nreverse (%command-redirect-split-state-redirects state))))
 
 (defun split-command-node-redirects (cmd-node)

@@ -31,7 +31,8 @@
                "cl-cli"
                "cl-tty-kit"
                "cl-process-kit"
-               "cl-history-kit")
+               "cl-history-kit"
+               "cl-concurrent-kit")
   :pathname "src"
   :serial t
   :components
@@ -52,7 +53,6 @@
                  (:file "feature")
                  (:file "domain/options")
                  (:file "application/contract")
-                 (:file "infrastructure/cl-cli-adapter")
                  (:file "presentation/help")))
    (:file "util/struct-macros")
    (:file "util/strings")
@@ -72,6 +72,10 @@
    (:file "domain/parsing/control-flow")
    (:file "domain/parsing/control-flow-sequence")
    (:file "domain/parsing/parser-data")
+   (:file "domain/parsing/parser-redirect-data"
+          :pathname "../data/domain/parsing/parser-redirect-data")
+   (:file "domain/parsing/parser-separator-static-data"
+          :pathname "../data/domain/parsing/parser-separator-data")
    (:file "domain/parsing/parser-separator-data")
    (:file "domain/parsing/parser-assembly")
    (:file "domain/parsing/parser-here-doc")
@@ -85,11 +89,16 @@
      (:file "domain/expansion/parameter-braced")
      (:file "domain/expansion/parameter")
      (:file "domain/expansion/arithmetic")
+     (:file "domain/expansion/arithmetic-operator-data"
+            :pathname "../data/domain/expansion/arithmetic-operator-data")
      (:file "domain/expansion/fields")
      (:file "domain/abbreviation/expansion")
    (:file "domain/completion/candidate")
    (:file "domain/completion/catalog-build")
-   (:file "domain/completion/catalog-static")
+   (:file "domain/completion/catalog-command-data"
+          :pathname "../data/domain/completion/catalog-command-data")
+   (:file "domain/completion/catalog-display-data"
+          :pathname "../data/domain/completion/catalog-display-data")
    (:file "domain/completion/catalog-data")
    (:file "domain/completion/rule-data")
    (:file "domain/completion/knowledge-base")
@@ -117,7 +126,9 @@
 	   (:file "application/execute-pipeline-control")
    (:file "application/manage-job")
    (:file "application/pipeline-diagram")
-   (:file "application/builtin-spec-data")
+   (:file "application/builtin-spec-data"
+          :pathname "../data/application/builtin-spec-data")
+   (:file "application/builtin-spec")
    (:file "application/builtin-runtime")
    (:file "application/builtin-type-helpers")
    (:file "application/builtin-string-support")
@@ -155,7 +166,8 @@
    (:file "infrastructure/terminal/input-core")
    (:file "infrastructure/terminal/input-decode")
    (:file "infrastructure/terminal/input-read")
-   (:file "infrastructure/terminal/input")
+   (:file "presentation/input-state-static-data"
+          :pathname "../data/presentation/input-state-data")
    (:file "presentation/input-state-core")
    (:file "presentation/input-state-copy-plist")
    (:file "presentation/input-state-copy")
@@ -180,7 +192,8 @@
    (:file "presentation/prompt-display")
    (:file "presentation/completion-ui")
    (:file "presentation/autosuggest")
-   (:file "presentation/highlight-data")
+   (:file "presentation/highlight-data"
+          :pathname "../data/presentation/highlight-data")
    (:file "presentation/highlight")
 		   (:file "presentation/repl-state")
 		   (:file "presentation/repl-input-state")
@@ -188,10 +201,8 @@
 		   (:file "presentation/repl-environment")
 		   (:file "presentation/repl-session-init")
 		   (:file "presentation/repl-process")
-   (:file "presentation/repl-execution-status")
    (:file "presentation/repl-execution-context")
    (:file "presentation/repl-execution-command")
-	   (:file "presentation/repl-execution-background")
    (:file "presentation/repl-execution")
    (:file "presentation/repl-rendering-cursor")
    (:file "presentation/repl-rendering")
@@ -199,7 +210,8 @@
    (:file "presentation/repl-output-completion-help")
    (:file "presentation/repl-output-completion")
    (:file "presentation/repl-output-handlers")
-	   (:file "presentation/repl-output")
+   (:file "presentation/repl-output-event-handlers")
+   (:file "presentation/repl-output")
 	   (:file "presentation/repl-session")
 	   (:file "presentation/repl-batch")
 	   (:file "presentation/repl")

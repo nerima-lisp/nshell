@@ -125,28 +125,46 @@
       (ignore-errors
         (nshell.infrastructure.acl:set-foreground-pgroup (or previous *shell-pgid*))))))
 
+(defun %classify-job-wait-status (pid status
+                                    &key stopped-p exited-p exit-status
+                                      signaled-p term-signal)
+  (cond
+    ((funcall stopped-p status)
+     (%make-job-wait-event pid :stopped nil))
+    ((funcall exited-p status)
+     (%make-job-wait-event pid :exited (funcall exit-status status)))
+    ((funcall signaled-p status)
+     (%make-job-wait-event pid :signaled
+                           (+ 128 (funcall term-signal status))))
+    (t
+     (%make-job-wait-event pid :unknown nil))))
+
+(defun %classify-job-wait-error (errno)
+  (cond
+    ((= errno sb-posix:echild)
+     (%make-job-wait-event nil :no-child nil))
+    ((= errno sb-posix:eintr)
+     (%make-job-wait-event nil :interrupted nil))
+    (t nil)))
+
 (defun %wait-job-pgid-event (pgid)
   (handler-case
       (multiple-value-bind (pid status)
           (sb-posix:waitpid (- pgid) sb-posix:wuntraced)
-        (cond
-          ((sb-posix:wifstopped status)
-           (%make-job-wait-event pid :stopped nil))
-          ((sb-posix:wifexited status)
-           (%make-job-wait-event pid :exited (sb-posix:wexitstatus status)))
-          ((sb-posix:wifsignaled status)
-           (%make-job-wait-event pid :signaled (+ 128 (sb-posix:wtermsig status))))
-          (t
-           (%make-job-wait-event pid :unknown nil))))
+        (%classify-job-wait-status
+         pid status
+         :stopped-p #'sb-posix:wifstopped
+         :exited-p #'sb-posix:wifexited
+         :exit-status #'sb-posix:wexitstatus
+         :signaled-p #'sb-posix:wifsignaled
+         :term-signal #'sb-posix:wtermsig))
     (sb-posix:syscall-error (condition)
-      (let ((errno (sb-posix:syscall-errno condition)))
-        (cond
-          ((= errno sb-posix:echild)
-           (%make-job-wait-event nil :no-child nil))
-          ((= errno sb-posix:eintr)
-           (%make-job-wait-event nil :interrupted nil))
-          (t
-           (error condition)))))))
+      (let ((event
+              (%classify-job-wait-error
+               (sb-posix:syscall-errno condition))))
+        (if event
+            event
+            (error condition))))))
 
 (defun %wait-job-pgid (job job-id job-monitor)
   (let* ((pgid (nshell.domain.execution:job-control-pgid job))
@@ -194,3 +212,95 @@
 
 (defun %require-job (job-id &optional (job-monitor *job-monitor*))
   (nshell.domain.job-control:monitor-find-job job-monitor job-id))
+(defun signal-job (job-id signal &optional (job-monitor *job-monitor*))
+  "Send SIGNAL to JOB-ID and synchronize the monitor after a successful signal."
+  (labels ((stop-signal-p (candidate)
+                          (or (member candidate (list :sigstop :sigtstp))
+                              (and (integerp candidate)
+                                   (member candidate
+                                           (list sb-unix:sigstop sb-unix:sigtstp)))))
+           (continue-signal-p (candidate)
+                              (or (eq candidate :sigcont)
+                                  (and (integerp candidate)
+                                       (= candidate sb-unix:sigcont))))
+           (record-signal-state ()
+                                (let ((current-job
+                                       (nshell.domain.job-control:monitor-find-job
+                                        job-monitor job-id)))
+                                  (when (and current-job
+                                             (not (nshell.domain.execution:job-completed-p
+                                                   current-job)))
+                                    (cond
+                                     ((stop-signal-p signal)
+                                      (nshell.domain.job-control:suspend-job
+                                       job-monitor job-id nil))
+                                     ((and (continue-signal-p signal)
+                                           (nshell.domain.execution:job-stopped-p current-job))
+                                      (nshell.domain.job-control:background-job
+                                       job-monitor job-id)))))))
+    (let ((job (%require-job job-id job-monitor)))
+      (when job
+        (let ((pgid (nshell.domain.execution:job-control-pgid job))
+              (pids (nshell.domain.execution:job-known-pids job))
+              (signaled-p nil))
+          (if pgid
+              (progn
+                (nshell.infrastructure.acl:kill-process (- pgid) signal)
+                (setf signaled-p t))
+              (dolist (pid pids)
+                (nshell.infrastructure.acl:kill-process pid signal)
+                (setf signaled-p t)))
+          (when signaled-p
+            (record-signal-state))
+          job)))))
+(defun wait-for-job (job-id process-registry
+                       &optional (job-monitor *job-monitor*))
+  "Wait for JOB-ID using the registered SBCL process objects.
+
+The process registry is shared with the background reaper.  Waiting through
+the same process objects avoids a second waitpid consumer and preserves the
+exit status when the reaper has already completed the domain job."
+  (let ((job (%require-job job-id job-monitor)))
+    (cond
+      ((null job)
+       (values nil nil))
+      ((nshell.domain.execution:job-completed-p job)
+       (remhash job-id process-registry)
+       (values job
+               (or (nshell.domain.execution:job-exit-code job)
+                   0)))
+      (t
+       (let ((processes (%job-process-list (gethash job-id process-registry))))
+         (if (null processes)
+             (values nil nil)
+             (progn
+               (%wait-job-processes processes)
+               (let ((exit-code (%job-process-exit-code job processes)))
+                 (nshell.domain.job-control:complete-job
+                  job-monitor job-id exit-code)
+                 (remhash job-id process-registry)
+                 (values job exit-code)))))))))
+(defun %job-process-exit-code (job processes)
+  (let ((statuses
+          (mapcar
+           (lambda (process)
+             (nshell.infrastructure.acl:process-exit-status-code process))
+           (remove nil processes))))
+    (if (nshell.domain.execution:job-pipefail-p job)
+        (or (find-if (lambda (status)
+                       (not (zerop status)))
+                     statuses)
+            0)
+        (or (car (last statuses))
+            (nshell.domain.execution:job-exit-code job)
+            0))))
+(defun %wait-job-processes (processes)
+  (dolist (process processes)
+    (when process
+      (sb-ext:process-wait process)))
+  processes)
+(defun %job-process-list (entry)
+  (cond
+    ((null entry) nil)
+    ((listp entry) entry)
+    (t (list entry))))

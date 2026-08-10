@@ -398,3 +398,81 @@
                             :buffer "abcdef"
                             :cursor-pos 3
                             :vi-visual-anchor 3)))))
+
+  (it "vi-operator-motions-cover-word-back-line-start-and-unknown"
+    (let* ((state (input-state :buffer "one two three"
+                               :cursor-pos 8
+                               :mode :vi-command))
+           (backward (nshell.presentation::vi-operator-edit-for-motion
+                      state #\b :d))
+           (line-start (nshell.presentation::vi-operator-edit-for-motion
+                        state #\0 :d))
+           (dollar (nshell.presentation::vi-operator-edit-for-motion
+                    (nshell.presentation::copy-input-state-with state :cursor-pos 0)
+                    #\$ :d)))
+      (expect 4 :to-equal
+              (nshell.presentation::vi-operator-edit-start backward))
+      (expect 8 :to-equal
+              (nshell.presentation::vi-operator-edit-end backward))
+      (expect 0 :to-equal
+              (nshell.presentation::vi-operator-edit-start line-start))
+      (expect 8 :to-equal
+              (nshell.presentation::vi-operator-edit-end line-start))
+      (expect 0 :to-equal
+              (nshell.presentation::vi-operator-edit-cursor dollar))
+      (expect (nshell.presentation::vi-operator-edit-for-motion
+               state #\? :d)
+              :to-be-null)))
+
+  (it "vi-reducer-covers-visual-exit-eol-edit-and-unknown-events"
+    (let ((command-state (input-state :buffer "abc"
+                                      :cursor-pos 0
+                                      :mode :vi-command))
+          (visual-state (input-state :buffer "abc"
+                                     :cursor-pos 1
+                                     :mode :vi-visual
+                                     :vi-visual-anchor 0)))
+      (multiple-value-bind (state output)
+          (reduce-once command-state :char #\x)
+        (is-vi-command-state state :buffer "bc" :cursor-pos 0)
+        (expect :redraw :to-be output))
+      (multiple-value-bind (state output)
+          (reduce-once command-state :char #\?)
+        (is-vi-command-state state :buffer "abc" :cursor-pos 0)
+        (expect :none :to-be output))
+      (let ((eol-state (nshell.presentation::copy-input-state-with
+                        command-state :cursor-pos 3)))
+        (multiple-value-bind (state output)
+            (reduce-once eol-state :char #\x)
+          (is-vi-command-state state :buffer "abc" :cursor-pos 3)
+          (expect :none :to-be output)))
+      (multiple-value-bind (state output)
+          (reduce-once visual-state :char #\v)
+        (is-vi-command-state state :buffer "abc" :cursor-pos 1)
+        (expect :redraw :to-be output))
+      (multiple-value-bind (state output)
+          (reduce-once visual-state :char #\?)
+        (is-vi-visual-state state :buffer "abc" :cursor-pos 1
+                            :vi-visual-anchor 0)
+        (expect :none :to-be output))
+      (multiple-value-bind (state output)
+          (nshell.presentation::reduce-vi-input-state
+           command-state (input-key-event :char nil))
+        (is-vi-command-state state :buffer "abc" :cursor-pos 0)
+        (expect :none :to-be output))
+      (multiple-value-bind (state output)
+          (nshell.presentation::reduce-vi-input-state
+           command-state (input-key-event :unknown))
+        (is-vi-command-state state :buffer "abc" :cursor-pos 0)
+        (expect :none :to-be output))))
+
+  (it "vi-operator-unknown-motion-cancels-to-command-mode"
+    (let ((state (input-state :buffer "abc"
+                              :cursor-pos 1
+                              :mode :vi-d)))
+      (multiple-value-bind (new-state output)
+          (nshell.presentation::reduce-vi-input-state
+           state (input-key-event :char #\?))
+        (expect :vi-command :to-be
+                (nshell.presentation:input-state-mode new-state))
+        (expect :redraw :to-be output))))

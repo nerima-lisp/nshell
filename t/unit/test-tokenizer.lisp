@@ -240,19 +240,7 @@ letting word-reading stop on an unconsumed terminator."
   ;; Each row tokenizes INPUT and checks that the redirection operator lands at
   ;; token POSITION (zero-based) as a :redirect token with the given VALUE, the
   ;; whole input producing LENGTH tokens.
-  (it-each (("echo >> log"    3 1 ">>")
-            (">"              1 0 ">")
-            ("cat <<< hello"  3 1 "<<<")
-            ("cat << EOF"     3 1 "<<")
-            ("cat <<- EOF"    3 1 "<<-")
-            ("echo err 2>&1"  3 2 "2>&1"))
-      "tokenizes ~S with a :redirect ~S"
-      (input length position value)
-    (with-tokenized-input (tokens cursor incomplete) input
-      (declare (ignore cursor incomplete))
-      (expect length :to-equal (length tokens))
-      (expect :redirect :to-be (nshell.domain.parsing:token-type (nth position tokens)))
-      (expect value :to-equal (nshell.domain.parsing:token-value (nth position tokens)))))
+  (it-each (("echo >> log" 3 1 ">>") (">" 1 0 ">") ("cat <<< hello" 3 1 "<<<") ("cat << EOF" 3 1 "<<") ("cat <<- EOF" 3 1 "<<-") ("echo err 2>&1" 3 2 "2>&1") ("echo x 0<&1" 3 2 "0<&1") ("echo x 0<&-" 3 2 "0<&-")) "tokenizes ~S with a :redirect ~S" (input length position value) (with-tokenized-input (tokens cursor incomplete) input (declare (ignore cursor incomplete)) (expect length :to-equal (length tokens)) (expect :redirect :to-be (nshell.domain.parsing:token-type (nth position tokens))) (expect value :to-equal (nshell.domain.parsing:token-value (nth position tokens)))))
 
   (it "fd-redirect-token-text-projects-lookahead-policy"
     "FD redirect token text should be classified before tokenizer state mutation."

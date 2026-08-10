@@ -1,5 +1,11 @@
 (in-package #:nshell.application)
 
+(defvar *loop-control-signal* nil
+  "Pending BREAK or CONTINUE signal, represented as (KIND . COUNT).")
+
+(defvar *loop-control-depth* 0
+  "Number of active shell loops in the current dynamic execution context.")
+
 ;;; Control flow execution and AST dispatch.
 ;;; This file defines:
 ;;;   - %execute-command-substitution-fields: the bridge from argument expansion
@@ -11,9 +17,9 @@
 
 ;; -- Command substitution (back-edge from expansion into execution) ----------
 
-(defun %execute-command-substitution-fields (context command-string)
+(defun %execute-command-substitution-output (context command-string)
   "Execute COMMAND-STRING as a command substitution within CONTEXT.
-Returns a list of output fields (split on newlines), or NIL on error or timeout."
+Returns its trailing-newline-trimmed output, or NIL on error or timeout."
   (handler-case
       (nshell.domain.parsing:with-parsed-command-line-case (result ast command-string)
         (:complete
@@ -21,13 +27,18 @@ Returns a list of output fields (split on newlines), or NIL on error or timeout.
            (multiple-value-bind (output exit-code)
                (execute-ast-in-context context ast)
              (declare (ignore exit-code))
-             (%command-substitution-fields output))))
+             (%trim-command-substitution-output output))))
         (:error nil)
         (:incomplete nil))
     (sb-ext:timeout ()
       (format *error-output* "nshell: command substitution timed out: ~a~%"
               command-string)
       nil)))
+
+(defun %execute-command-substitution-fields (context command-string)
+  "Execute COMMAND-STRING and split its output into substitution fields."
+  (%command-substitution-fields
+   (%execute-command-substitution-output context command-string)))
 
 ;; -- Output accumulation helpers ---------------------------------------------
 
@@ -48,13 +59,53 @@ Builds the final output string by joining all pushed chunks in order."
          (push chunk ,output))
        (setf ,code ,code-value))))
 
+(defun %record-last-exit-code (context code)
+  "Record CODE for both the execution context and the shell-visible status.
+
+The question-mark and status bindings are kept non-exported so they participate
+in expansion without becoming part of the environment inherited by child
+processes."
+  (let ((code (or code 0)))
+    (setf (shell-context-last-exit-code context) code)
+    (let ((environment (shell-context-environment context)))
+      (when environment
+        (setf environment
+              (nshell.domain.environment:env-set
+               environment "?" (princ-to-string code) nil))
+        (setf environment
+              (nshell.domain.environment:env-set
+               environment "status" (princ-to-string code) nil))
+        (setf (shell-context-environment context) environment)))
+    code))
+
+(defun %consume-loop-control-signal ()
+  "Consume one loop level from the pending BREAK or CONTINUE signal.
+Returns :BREAK or :CONTINUE when this loop owns the signal, and :PROPAGATE
+when an enclosing loop must handle the remaining count."
+  (when *loop-control-signal*
+    (let ((kind (car *loop-control-signal*))
+          (count (cdr *loop-control-signal*)))
+      (if (= count 1)
+          (progn
+            (setf *loop-control-signal* nil)
+            kind)
+          (progn
+            (setf *loop-control-signal*
+                  (cons kind (1- count)))
+            :propagate)))))
+
 ;; -- Control flow node helpers -----------------------------------------------
 
 (defun %execute-condition-in-context (context condition)
   "Execute CONDITION AST and return (output code); code=1 when condition is NIL."
   (if condition
-      (execute-ast-in-context context condition)
-      (values nil 1)))
+      (multiple-value-bind (output code)
+          (execute-ast-in-context context condition)
+        (%record-last-exit-code context code)
+        (values output code))
+      (progn
+        (%record-last-exit-code context 1)
+        (values nil 1))))
 
 (defun %execute-ast-list-in-context (context nodes)
   "Execute each node in NODES sequentially, accumulating output and final code."
@@ -63,7 +114,11 @@ Builds the final output string by joining all pushed chunks in order."
       (%collect-execution-result
        (output code)
        (execute-ast-in-context context node)
-       (or exit-code 0)))))
+       (or exit-code 0))
+      (%record-last-exit-code context code)
+      (when (or *loop-control-signal*
+                (not (shell-context-running context)))
+        (return)))))
 
 ;; -- Control flow node handlers ----------------------------------------------
 
@@ -71,6 +126,9 @@ Builds the final output string by joining all pushed chunks in order."
   (multiple-value-bind (_out condition-code)
       (%execute-condition-in-context context (nshell.domain.parsing:if-node-condition ast))
     (declare (ignore _out))
+    (when *loop-control-signal*
+      (return-from %execute-if-node-in-context
+        (values nil condition-code)))
     (cond
       ((= 0 condition-code)
        (%execute-ast-list-in-context context (nshell.domain.parsing:if-node-then-branch ast)))
@@ -79,28 +137,51 @@ Builds the final output string by joining all pushed chunks in order."
       (t (values nil 0)))))
 
 (defun %execute-for-node-in-context (context ast)
-  (%with-output-code-accumulator (output code)
-    (dolist (value (loop for value-arg in (nshell.domain.parsing:for-node-in-values ast)
-                         append (%expand-source-arg-in-context context value-arg)))
-      (%update-shell-environment context
-                                 #'nshell.domain.environment:env-set
-                                 (nshell.domain.parsing:for-node-var-name ast)
-                                 value
-                                 nil)
-      (%collect-execution-result
-       (output code)
-       (%execute-ast-list-in-context context (nshell.domain.parsing:for-node-body ast))))))
+  (let ((*loop-control-depth* (1+ *loop-control-depth*)))
+    (%with-output-code-accumulator (output code)
+      (loop for value in (loop for value-arg in (nshell.domain.parsing:for-node-in-values ast)
+                               append (%expand-source-arg-in-context context value-arg))
+            do (block for-iteration
+                 (%update-shell-environment context
+                                            #'nshell.domain.environment:env-set
+                                            (nshell.domain.parsing:for-node-var-name ast)
+                                            value
+                                            nil)
+                 (%collect-execution-result
+                  (output code)
+                  (%execute-ast-list-in-context context (nshell.domain.parsing:for-node-body ast)))
+                 (%record-last-exit-code context code)
+                 (case (%consume-loop-control-signal)
+                   (:break (return))
+                   (:propagate (return))
+                   (:continue (return-from for-iteration nil)))
+                 (unless (shell-context-running context)
+                   (return)))))))
 
 (defun %execute-while-node-in-context (context ast)
-  (%with-output-code-accumulator (output code)
-    (loop
-      (multiple-value-bind (_out condition-code)
-          (%execute-condition-in-context context (nshell.domain.parsing:while-node-condition ast))
-        (declare (ignore _out))
-        (unless (= 0 condition-code) (return)))
-      (%collect-execution-result
-       (output code)
-       (%execute-ast-list-in-context context (nshell.domain.parsing:while-node-body ast))))))
+  (let ((*loop-control-depth* (1+ *loop-control-depth*)))
+    (%with-output-code-accumulator (output code)
+      (loop
+        (block while-iteration
+          (multiple-value-bind (_out condition-code)
+              (%execute-condition-in-context context
+                                              (nshell.domain.parsing:while-node-condition ast))
+            (declare (ignore _out))
+            (case (%consume-loop-control-signal)
+              (:break (return))
+              (:propagate (return))
+              (:continue (return-from while-iteration nil)))
+            (unless (= 0 condition-code) (return)))
+          (%collect-execution-result
+           (output code)
+           (%execute-ast-list-in-context context (nshell.domain.parsing:while-node-body ast)))
+          (%record-last-exit-code context code)
+          (case (%consume-loop-control-signal)
+            (:break (return))
+            (:propagate (return))
+            (:continue (return-from while-iteration nil)))
+          (unless (shell-context-running context)
+            (return)))))))
 
 (defun %execute-case-node-in-context (context ast)
   (let* ((raw-value (nshell.domain.parsing:case-node-value ast))
@@ -128,16 +209,22 @@ Builds the final output string by joining all pushed chunks in order."
         ;; :amp (&) spawns asynchronously and continues without blocking.
         ;; :and (&&) stops on failure; :or (||) stops on success.
         (if (eq :amp separator)
-            (%collect-execution-result
-             (output code)
-             (%spawn-background-node-in-context context command))
+            (progn
+              (%collect-execution-result
+               (output code)
+               (%spawn-background-node-in-context context command))
+              (%record-last-exit-code context code))
             (progn
               (%collect-execution-result
                (output code)
                (execute-ast-in-context context command))
+              (%record-last-exit-code context code)
               (when (or (and (eq :and separator) (/= code 0))
                         (and (eq :or separator)  (= code 0)))
-                (return))))))))
+                (return))))
+        (when (or *loop-control-signal*
+                  (not (shell-context-running context)))
+          (return))))))
 
 ;; -- Data: AST dispatch table (Prolog-style rules) ----------------------------
 ;;

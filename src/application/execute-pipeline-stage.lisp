@@ -1,5 +1,8 @@
 (in-package #:nshell.application)
 
+(declaim (notinline nshell.infrastructure.acl:process-substitution-resource-path
+                    nshell.infrastructure.acl:process-substitution-resource-fd))
+
 (declaim (special nshell.infrastructure.acl:*external-command-timeout*))
 
 ;;; Pipeline stage execution and command expansion.
@@ -53,34 +56,111 @@
   (mapcar #'nshell.infrastructure.acl:process-substitution-resource-fd
           resources))
 
-(defun %materialize-process-substitution-in-context (context value) (let* ((direction (%process-substitution-direction value)) (body (subseq value 2 (1- (length value)))) (parse-result (nshell.domain.parsing:parse-command-line body)) (ast (nshell.domain.parsing:parse-result-ast parse-result))) (unless (nshell.domain.parsing:parse-complete-p parse-result) (return-from %materialize-process-substitution-in-context (values nil nil (%process-substitution-error "the command is incomplete")))) (let ((commands (%process-substitution-inner-commands ast))) (unless (and commands (every (lambda (command) (nshell.domain.parsing:command-node-p command)) commands)) (return-from %materialize-process-substitution-in-context (values nil nil (%process-substitution-error "the command must be a command or pipeline")))) (multiple-value-bind (expanded-commands error nested-resources) (%expand-command-nodes-in-context context commands) (when nested-resources (%abort-process-substitution-resources nested-resources) (return-from %materialize-process-substitution-in-context (values nil nil (%process-substitution-error "nested process substitutions are not supported")))) (when error (return-from %materialize-process-substitution-in-context (values nil nil error))) (when (some (lambda (command) (%shell-internal-command-p context command)) expanded-commands) (return-from %materialize-process-substitution-in-context (values nil nil (%process-substitution-error "the command must be external")))) (let* ((redirect-split (%extract-pipeline-redirects expanded-commands)) (clean-commands (nshell.domain.parsing:command-list-redirect-split-result-clean-commands redirect-split)) (redirects (nshell.domain.parsing:command-list-redirect-split-result-redirects redirect-split))) (handler-case (let ((resource (nshell.infrastructure.acl:spawn-process-substitution direction clean-commands :redirects redirects))) (values (nshell.infrastructure.acl:process-substitution-resource-path resource) resource nil)) (error (condition) (values nil nil (%process-substitution-error (princ-to-string condition))))))))))
+(defun %materialize-process-substitution-in-context (context value)
+  (let* ((direction (%process-substitution-direction value))
+         (body (subseq value 2 (1- (length value))))
+         (parse-result (nshell.domain.parsing:parse-command-line body))
+         (ast (nshell.domain.parsing:parse-result-ast parse-result)))
+    (unless (nshell.domain.parsing:parse-complete-p parse-result)
+      (return-from
+       %materialize-process-substitution-in-context
+       (values nil nil (%process-substitution-error "the command is incomplete"))))
+    (let ((commands (%process-substitution-inner-commands ast)))
+      (unless (and
+               commands
+               (every
+                (lambda (command)
+                  (nshell.domain.parsing:command-node-p command))
+                commands))
+        (return-from
+         %materialize-process-substitution-in-context
+         (values
+          nil
+          nil
+          (%process-substitution-error "the command must be a command or pipeline"))))
+      (multiple-value-bind (expanded-commands error nested-resources) (%expand-command-nodes-in-context
+                                                                       context
+                                                                       commands)
+        (when nested-resources
+          (%abort-process-substitution-resources nested-resources)
+          (return-from
+           %materialize-process-substitution-in-context
+           (values
+            nil
+            nil
+            (%process-substitution-error
+             "nested process substitutions are not supported"))))
+        (when error
+          (return-from
+           %materialize-process-substitution-in-context
+           (values nil nil error)))
+        (when (some
+               (lambda (command)
+                 (%shell-internal-command-p context command))
+               expanded-commands)
+          (return-from
+           %materialize-process-substitution-in-context
+           (values nil nil (%process-substitution-error "the command must be external"))))
+        (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
+               (clean-commands
+                (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
+                 redirect-split))
+               (redirects
+                (nshell.domain.parsing:command-list-redirect-split-result-redirects
+                 redirect-split)))
+          (handler-case (let ((resource
+                               (nshell.infrastructure.acl:spawn-process-substitution
+                                direction
+                                clean-commands
+                                :redirects
+                                redirects)))
+                          (values
+                           (nshell.infrastructure.acl:process-substitution-resource-path
+                            resource)
+                           resource
+                           nil))
+            (error (condition)
+              (values nil nil (%process-substitution-error (princ-to-string condition))))))))))
 
 (defun %expand-command-args-in-context (context command-node)
   (let ((args nil)
-        (resources nil))
+        (resources nil)
+        (here-doc-target-p nil))
     (handler-case
         (progn
           (dolist (arg (nshell.domain.parsing:command-node-args command-node))
-            (let ((value (nshell.domain.parsing:arg-value arg)))
-              (if (and (not (nshell.domain.parsing:arg-here-doc-literal-p arg))
-                       (null (nshell.domain.parsing:arg-quote-style arg))
-                       (%process-substitution-spec-p value))
-                  (multiple-value-bind (path resource error)
-                      (%materialize-process-substitution-in-context context value)
-                    (when error
-                      (%abort-process-substitution-resources resources)
-                      (return-from %expand-command-args-in-context
-                        (values nil nil error)))
-                    (setf args
-                          (nconc
-                           args
-                           (list (nshell.domain.parsing:make-command-arg path))))
-                    (push resource resources))
-                  (setf args
-                        (nconc
-                         args
-                         (mapcar #'nshell.domain.parsing:make-command-arg
-                                 (%expand-source-arg-in-context context arg)))))))
+            (let* ((value (nshell.domain.parsing:arg-value arg))
+                   (literal-p (nshell.domain.parsing:arg-here-doc-literal-p arg)))
+              (cond
+                ((and here-doc-target-p (not literal-p))
+                 (setf args
+                       (nconc
+                        args
+                        (list
+                         (nshell.domain.parsing:make-command-arg
+                          (%expand-here-doc-body-in-context context value))))))
+                ((and (not literal-p)
+                      (null (nshell.domain.parsing:arg-quote-style arg))
+                      (%process-substitution-spec-p value))
+                 (multiple-value-bind (path resource error)
+                     (%materialize-process-substitution-in-context context value)
+                   (when error
+                     (%abort-process-substitution-resources resources)
+                     (return-from %expand-command-args-in-context
+                       (values nil nil error)))
+                   (setf args
+                         (nconc
+                          args
+                          (list (nshell.domain.parsing:make-command-arg path))))
+                   (push resource resources)))
+                (t
+                 (setf args
+                       (nconc
+                        args
+                        (mapcar #'nshell.domain.parsing:make-command-arg
+                                (%expand-source-arg-in-context context arg))))))
+              (setf here-doc-target-p
+                    (not (null (member value '("<<" "<<-") :test #'string=))))))
           (values args (nreverse resources) nil))
       (nshell.domain.expansion:parameter-expansion-error (condition)
         (%abort-process-substitution-resources resources)
@@ -97,12 +177,9 @@ command name expands to zero or multiple fields (ambiguous)."
       (let* ((alias-expanded (expand-command-alias-node
                               command-node
                               (shell-context-alias-table context)))
-             (raw-command (nshell.domain.parsing:command-node-command alias-expanded))
-             (command-style (nshell.domain.parsing:command-node-command-quote-style alias-expanded))
              (environment (shell-context-environment context)))
         (multiple-value-bind (command error)
-            (nshell.domain.expansion:expand-command-name-by-quote-style
-             raw-command command-style environment)
+            (%expand-command-name-from-fragments alias-expanded environment)
           (if error
               (values nil error)
               (multiple-value-bind (args resources arg-error)
@@ -141,11 +218,24 @@ command name expands to zero or multiple fields (ambiguous)."
     (or (lookup-builtin command)
         (nth-value 1 (gethash command (shell-context-function-table context))))))
 
-(defun %source-pipeline-exit-status (statuses pipefail-p)
-  (if pipefail-p
-      (or (find-if (lambda (status) (not (zerop status))) statuses)
-          0)
-      (or (car (last statuses)) 0)))
+(progn
+  (defun %record-pipeline-statuses (context statuses)
+    "Expose per-stage exit codes through the non-exported pipestatus binding."
+    (let ((statuses (or statuses (list 0)))
+          (environment (shell-context-environment context)))
+      (when environment
+        (setf (shell-context-environment context)
+              (nshell.domain.environment:env-set-values
+               environment
+               "pipestatus"
+               (mapcar (lambda (status) (princ-to-string (or status 0)))
+                       statuses)
+               nil)))
+      statuses))
+  (defun %source-pipeline-exit-status (statuses pipefail-p)
+    (if pipefail-p
+        (or (find-if (lambda (status) (not (zerop status))) statuses) 0)
+        (or (car (last statuses)) 0))))
 
 (defun %execute-pipeline-stage-in-context (context command-node input redirects)
   (if (%shell-internal-command-p context command-node)
@@ -164,10 +254,12 @@ command name expands to zero or multiple fields (ambiguous)."
                  (%execute-pipeline-stage-in-context context command input command-redirects)
                (setf input output)
                (push (or exit-code 0) statuses)))
-    (values input
-            (%source-pipeline-exit-status
-             (nreverse statuses)
-             (shell-context-pipefail-p context)))))
+    (let ((ordered-statuses (nreverse statuses)))
+      (%record-pipeline-statuses context ordered-statuses)
+      (values input
+              (%source-pipeline-exit-status
+               ordered-statuses
+               (shell-context-pipefail-p context))))))
 
 ;; -- Clean command node execution --------------------------------------------
 
@@ -202,25 +294,29 @@ command name expands to zero or multiple fields (ambiguous)."
   (let ((spawned-p nil))
     (unwind-protect
          (handler-case
-             (let ((exit-code 0))
+             (let ((exit-code 0)
+                   (pipeline-statuses nil))
                (values
                 (with-output-to-string (*standard-output*)
-                  (setf exit-code
-                        (or (nshell.infrastructure.acl:spawn-pipeline
-                             clean-commands
-                             :redirects redirects
-                             :pipefail-p pipefail-p
-                             :preserve-fds
-                             (%process-substitution-resource-fds resources)
-                             :after-spawn
-                             (lambda ()
-                               (setf spawned-p t)
-                               (%release-process-substitution-resources
-                                resources)))
-                            0)))
-                exit-code))
+                  (multiple-value-bind (status statuses)
+                      (nshell.infrastructure.acl:spawn-pipeline
+                       clean-commands
+                       :redirects redirects
+                       :pipefail-p pipefail-p
+                       :preserve-fds
+                       (%process-substitution-resource-fds resources)
+                       :after-spawn
+                       (lambda ()
+                         (setf spawned-p t)
+                         (%release-process-substitution-resources
+                          resources)))
+                    (setf exit-code (or status 0)
+                          pipeline-statuses (or statuses
+                                                (list exit-code)))))
+                exit-code
+                pipeline-statuses))
            (error (condition)
-             (values (format nil "nshell: ~a~%" condition) 127)))
+             (values (format nil "nshell: ~a~%" condition) 127 (list 127))))
       (if spawned-p
           (%finish-process-substitution-resources resources)
           (%abort-process-substitution-resources resources)))))
@@ -267,11 +363,11 @@ command name expands to zero or multiple fields (ambiguous)."
         (return-from execute-pipeline-node-in-context (values error 127)))
       (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
              (clean-commands
-               (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
-                redirect-split))
+              (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
+               redirect-split))
              (redirects
-               (nshell.domain.parsing:command-list-redirect-split-result-redirects
-                redirect-split)))
+              (nshell.domain.parsing:command-list-redirect-split-result-redirects
+               redirect-split)))
         (if resources
             (if (or (eq :cps (shell-context-execution-strategy context))
                     (some (lambda (cmd) (%shell-internal-command-p context cmd))
@@ -282,25 +378,34 @@ command name expands to zero or multiple fields (ambiguous)."
                    (%process-substitution-error
                     "is not supported for internal or CPS pipelines")
                    127))
-                (%execute-os-pipeline-with-process-substitutions
-                 clean-commands redirects resources
-                 (shell-context-pipefail-p context)))
+                (multiple-value-bind (output exit-code statuses)
+                    (%execute-os-pipeline-with-process-substitutions
+                     clean-commands redirects resources
+                     (shell-context-pipefail-p context))
+                  (%record-pipeline-statuses context statuses)
+                  (values output exit-code)))
             (if (or (eq :cps (shell-context-execution-strategy context))
                     (some (lambda (cmd) (%shell-internal-command-p context cmd))
                           clean-commands))
                 (%execute-source-pipeline-in-context
                  context clean-commands redirects)
-                (let ((exit-code 0))
-                  (values
-                   (with-output-to-string (*standard-output*)
-                     (setf exit-code
-                           (or (nshell.infrastructure.acl:spawn-pipeline
-                                clean-commands
-                                :redirects redirects
-                                :pipefail-p
-                                (shell-context-pipefail-p context))
-                               0)))
-                   exit-code))))))))
+                (let ((output nil)
+                      (exit-code 0)
+                      (pipeline-statuses nil))
+                  (progn
+                    (setf output
+                          (with-output-to-string (*standard-output*)
+                            (multiple-value-bind (status statuses)
+                                (nshell.infrastructure.acl:spawn-pipeline
+                                 clean-commands
+                                 :redirects redirects
+                                 :pipefail-p
+                                 (shell-context-pipefail-p context))
+                              (setf exit-code (or status 0)
+                                    pipeline-statuses
+                                    (or statuses (list exit-code))))))
+                    (%record-pipeline-statuses context pipeline-statuses)
+                    (values output exit-code)))))))))
 
 ;; -- Public pipeline API (OS-level) -------------------------------------------
 

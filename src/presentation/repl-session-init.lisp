@@ -1,31 +1,57 @@
 ;;; REPL state initialization
 (in-package #:nshell.presentation)
 
-(defun %load-interactive-config ()
-  (handler-case
-      (let ((lines (nshell.infrastructure.persistence:load-config)))
-        (when lines
-          (multiple-value-bind (output code)
-              (%execute-with-repl-shell-context
-               (lambda (context)
-                 (nshell.application:source-lines
-                  context
-                  lines
-                  ".nshellrc")))
-            (declare (ignore output))
-            (unless (zerop code)
-              (format *error-output*
-                      "nshell: .nshellrc exited with status ~a~%"
-                      code)))))
-    (error (condition)
-      (format *error-output* "nshell: .nshellrc: ~a~%" condition))))
+(defparameter *history-persistence-enabled-p* t
+  "Whether interactive commands are loaded from and appended to history.")
 
-(defun initialize-repl-state ()
+(defun %config-source-name (path)
+  (if path
+      (namestring (pathname path))
+      ".nshellrc"))
+
+(defun %load-interactive-config (&key (enabled-p t) path)
+  (when enabled-p
+    (let ((source-name (%config-source-name path)))
+      (handler-case
+          (let ((lines (if path
+                           (nshell.infrastructure.persistence:load-config path)
+                           (nshell.infrastructure.persistence:load-config))))
+            (when lines
+              (multiple-value-bind (output code)
+                  (%execute-with-repl-shell-context
+                   (lambda (context)
+                     (nshell.application:source-lines
+                      context
+                      lines
+                      source-name)))
+                (declare (ignore output))
+                (unless (zerop code)
+                  (format *error-output*
+                          "nshell: ~a exited with status ~a~%"
+                          source-name
+                          code)))))
+        (error (condition)
+          (format *error-output* "nshell: ~a: ~a~%"
+                  source-name
+                  condition))))))
+(defun %vi-mode-flag-enabled-p (flag)
+  (and flag
+       (not (member flag
+                    (list "" "0" "false" "no")
+                    :test (function string-equal)))))
+
+(defun initialize-repl-state (&key (load-config-p t) config-path (history-p t))
+  "Initialize an interactive session with explicit startup persistence policy.
+
+CONFIG-PATH overrides the default .nshellrc path when LOAD-CONFIG-P is true.
+HISTORY-P controls both loading the existing history and appending commands
+entered during this session."
   (setf *boundaries* (make-real-boundary-context)
         *running* t
         *last-exit-code* 0
         *pipefail* nil
         *last-command-duration-ms* nil
+        *history-persistence-enabled-p* history-p
         *history* (history-kit:make-history)
         *config* (nshell.domain.configuration:default-config)
         *kb* (nshell.domain.completion:make-empty-knowledge-base)
@@ -42,12 +68,11 @@
         *environment* (nshell.domain.environment:inject-os-environment
                        (nshell.domain.environment:make-default-environment)))
   (%reset-repl-state-tables)
-  (setf *vi-mode-enabled*
-        (let ((flag (host-kit:getenv "NSHELL_VI_MODE")))
-          (and flag (not (member flag '("" "0" "false" "no") :test #'string-equal)))))
+  (setf *vi-mode-enabled* (%vi-mode-flag-enabled-p (host-kit:getenv "NSHELL_VI_MODE")))
   (install-expansion-filesystem)
   (configure-completion-filesystem)
-  (%load-interactive-config)
-  (dolist (entry (reverse (nshell.infrastructure.persistence:load-history-file)))
-    (history-kit:history-add *history* entry))
+  (%load-interactive-config :enabled-p load-config-p :path config-path)
+  (when history-p
+    (dolist (entry (reverse (nshell.infrastructure.persistence:load-history-file)))
+      (history-kit:history-add *history* entry)))
   (seed-repl-completion-knowledge-base *kb*))

@@ -2,14 +2,15 @@
 
 Which packages from the [nerima-lisp org](https://github.com/orgs/nerima-lisp/repositories)
 nshell integrates, and — for every one it does not — a concrete reason. The goal
-is "adopt every applicable nerima-lisp package, directly and without adapters",
-so this table exists to prove the *un*-adopted set is non-applicable rather than
-overlooked.
+is "adopt every applicable nerima-lisp package at the direct dependency boundary,
+without compatibility wrappers", so this table exists to prove the *un*-adopted
+set is non-applicable rather than overlooked.
 
 ## Integrated and in active use
 
-Every system in `:depends-on` is genuinely exercised (qualified-symbol counts are
-from `src/`; `cl-parser-kit` is `:import-from`, so its symbols appear unqualified):
+Every runtime system in `nshell :depends-on` is genuinely exercised (qualified-
+symbol counts are from `src/`; `cl-parser-kit` is `:import-from`, so its symbols
+appear unqualified):
 
 | package | role in nshell | evidence |
 |---|---|---|
@@ -22,10 +23,16 @@ from `src/`; `cl-parser-kit` is `:import-from`, so its symbols appear unqualifie
 | `cl-tty-kit` | terminal control / raw-mode / rendering | 17 refs |
 | `cl-process-kit` | timeout-guarded external process launch (`run`) | `infrastructure/acl/syscall-process.lisp` (6 refs) |
 | `cl-history-kit` | command-history store, search, and recall navigation cursor | used directly (qualified `history-kit:...`) throughout `application/` and `presentation/`; nshell keeps only the tokenizer-coupled `!$`/Alt-. last-argument extraction in `domain/history/last-argument.lisp` |
-| `cl-weave` | the entire test framework (both suites) | `nshell/test`, `nshell/weave` |
-| `cl-prolog/weave` | cl-prolog-query coverage of the completion engine | `nshell/weave` |
+| `cl-concurrent-kit` | structured task scopes and promises for concurrent syscall work | `infrastructure/acl/syscall.lisp` (`with-task-scope`, `spawn`, `await`) |
 
 No declared dependency is unused, so there is no dead dependency to drop.
+
+The test systems are kept separate from the runtime dependency audit:
+
+| package | role in nshell's test systems | evidence |
+|---|---|---|
+| `cl-weave` | the test framework for the weave suite | `nshell/weave` |
+| `cl-prolog/weave` | cl-prolog-query coverage of the completion engine | `nshell/weave` |
 
 ## Transitive, not adopted directly
 
@@ -45,13 +52,16 @@ No declared dependency is unused, so there is no dead dependency to drop.
 
 ## Conclusion
 
-The applicable nerima-lisp surface is fully adopted: 8 runtime systems + 2 test
-systems, all directly (no wrapper adapter layer), all in active use. The
-un-adopted remainder is compiler infrastructure (`cl-cc*`), a peer application
-(`cl-tmux`), a format library for a format nshell never handles (`cl-json-kit`),
-or a build-time tool (`paredit-cli`). Re-run the usage half of this audit with:
+The applicable nerima-lisp surface is fully adopted: ten runtime systems plus
+two test systems, all directly declared where used. The executable composition
+root consumes `cl-cli` directly to parse `argv`; the command-line feature owns
+the policy, contract, and help presentation, with no compatibility adapter or
+duplicate parser. The un-adopted remainder is compiler infrastructure
+(`cl-cc*`), a peer application (`cl-tmux`), a format library for a format
+nshell never handles (`cl-json-kit`), or a build-time tool (`paredit-cli`).
+Re-run the usage half of this audit with:
 
 ```
-grep -rhoE '\b(cl-prolog|cl-dataflow|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit)::?[a-z]' src/ \
-  | sed -E 's/:.*$//' | sort | uniq -c | sort -rn
+rg -o '\b(cl-prolog|cl-dataflow|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit|cl-concurrent-kit)::?[a-z]' src/ \
+  | perl -pe 's/:.*$//' | sort | uniq -c | sort -rn
 ```

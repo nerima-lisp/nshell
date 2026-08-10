@@ -1,6 +1,6 @@
 (in-package #:nshell.presentation)
 
-;; Highlight span value object; literal data tables live in highlight-data.lisp.
+;; Highlight span value object; literal data tables live under data/.
 (define-value-struct %highlight-span
     ((start 0 :type integer)
      (end 0 :type integer)

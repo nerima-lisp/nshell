@@ -2,13 +2,14 @@
 (in-package #:nshell.domain.parsing)
 
 (defstruct (token (:constructor %make-token (type value &optional (start 0) (end 0)
-                                             (quote-style nil)))
+                                             (quote-style nil) (fragments nil)))
                   (:copier nil))
   (type :word :type keyword :read-only t)
   (value "" :type string :read-only t)
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t)
-  (quote-style nil :type symbol :read-only t))
+  (quote-style nil :type symbol :read-only t)
+  (fragments nil :type list :read-only t))
 
 ;; token-type, token-value, token-start, token-end are auto-generated struct accessors
 
@@ -37,12 +38,17 @@
                         (+ normalized-start (length normalized-value))
                         normalized-value)))
 
-(defun make-token (type value &optional (start 0) (end 0) quote-style)
-  (%make-token type
-               (%token-value value)
-               (%token-position start)
-               (%token-position end)
-               quote-style))
+(defun make-token (type value &optional (start 0) (end 0) quote-style
+                              fragments)
+  (let ((token-value (%token-value value)))
+    (%make-token type
+                 token-value
+                 (%token-position start)
+                 (%token-position end)
+                 quote-style
+                 (%copy-command-fragments
+                  (or fragments
+                      (list (make-command-fragment token-value quote-style)))))))
 
 (defstruct (tokenizer-state
             (:constructor %make-tokenizer-state)
@@ -161,17 +167,21 @@
     (%tokenizer-state-advance state)
     ch))
 
-(defun %tokenizer-state-push-token (state type value start end &optional quote-style)
-  (push (make-token type value start end quote-style) (tokenizer-state-tokens state)))
+(defun %tokenizer-state-push-token (state type value start end
+                                             &optional quote-style fragments)
+  (push (make-token type value start end quote-style fragments)
+        (tokenizer-state-tokens state)))
 
-(defun %tokenizer-state-emit-token (state type value &optional quote-style)
+(defun %tokenizer-state-emit-token (state type value &optional quote-style
+                                                fragments)
   (let ((extent (%token-extent (tokenizer-state-pos state) value)))
     (%tokenizer-state-push-token state
                                  type
                                  (%token-extent-value extent)
                                  (%token-extent-start extent)
                                  (%token-extent-end extent)
-                                 quote-style)
+                                 quote-style
+                                 fragments)
     (setf (tokenizer-state-pos state) (%token-extent-end extent))))
 
 (defun %balanced-substitution-end (input start)

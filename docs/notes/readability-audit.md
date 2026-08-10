@@ -5,13 +5,16 @@ Readability is subjective, so this measures the objective proxies that correlate
 with it — function size, nesting depth, and how the outliers were handled — and
 records where deliberate density is justified.
 
+The numeric values below are a historical metric snapshot. Re-run the metric
+sweep against the current tree before using them as release evidence.
+
 ## Structural metrics (1681 `defun`s across `src/`)
 
 | metric | value | reading |
 |---|---|---|
 | function length, median | 5 lines | most functions are one idea |
 | function length, p90 | 16 lines | the long tail is still screen-sized |
-| function length, max | 139 lines | a single load-time data table (`catalog-static`), flat |
+| function length, max | historical snapshot | load-time catalog data is split between command and display tables |
 | nesting depth, median | 4 | shallow — reads top-to-bottom |
 | nesting depth, p90 | 8 | branch-heavy dispatch, still followable |
 | functions ≥ 40 lines | 22 | mostly initarg plists and constructors (flat, not complex) |
@@ -19,7 +22,7 @@ records where deliberate density is justified.
 A median 5-line, depth-4 function body is the core readability result: the code
 is built from many small, single-purpose, shallow functions rather than a few
 large ones. The DDD layering (domain / application / infrastructure /
-presentation, one concern per file, max file 370 lines) reinforces this at the
+presentation, one concern per file) reinforces this at the
 file scale — see `docs/dead-code-audit.md` and the file-split history.
 
 ## Deep-nesting outliers, and how they were driven down
@@ -36,7 +39,8 @@ by extracting single-purpose helpers and separating data from logic:
   and turned the `if args` into a leading `(if (null args) …)` guard so the main
   path stops being nested inside it.
 
-Both are verified by the 1306-passing suite with behaviour unchanged.
+Both remain covered by the integrated suite; the current pass/fail result must
+be taken from the verification command for the current tree.
 
 ## Where density is deliberate
 
@@ -52,4 +56,4 @@ Both are verified by the 1306-passing suite with behaviour unchanged.
 The codebase is composed of small, shallow, single-purpose functions with the
 few genuine outliers driven down by helper extraction; remaining depth is
 grammar-encoding where flattening would hurt clarity. Re-run the metric sweep
-over `src/**/*.lisp` to confirm median length 5 / median depth 4 holds.
+over `src/**/*.lisp` to measure the current median length and depth.

@@ -41,5 +41,5 @@ paredit-cli is used wherever a refactor is *structural* (balanced deletion,
 cross-file call/symbol rewrite) or wherever a *report* can replace guesswork
 (unused, duplicates, similarity). It is not forced onto semantic body rewrites,
 where a direct edit verified by the test suite is clearer. Every `--write` pass
-above was gated by a preceding read-only report and followed by a full
-`nshell/test` run (1306 passing).
+above was gated by a preceding read-only report and followed by the full
+`nshell/test` run.

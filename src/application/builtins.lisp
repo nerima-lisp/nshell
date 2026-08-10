@@ -118,7 +118,8 @@ NAME resolved to a builtin or an executable, NIL when it was not found."
                    (append (nshell.domain.parsing:command-node-args alias-node)
                            (nshell.domain.parsing:command-node-args command-node))
                    nil
-                   (nshell.domain.parsing:command-node-command-quote-style alias-node))
+                   (nshell.domain.parsing:command-node-command-quote-style alias-node)
+                   (nshell.domain.parsing:command-node-command-fragments alias-node))
                   command-node))
             command-node))
       command-node))

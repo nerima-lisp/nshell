@@ -5,8 +5,8 @@ whether a name resolves to a builtin, a function, or an external program.
 
 `alias`, `abbr`, `bg`, `cd`, `complete`, `contains`, `count`, `disown`, `echo`,
 `exec`, `exit`, `export`, `false`, `fg`, `function`, `help`, `history`, `jobs`,
-`ls`, `not`, `pipeline-graph`, `pwd`, `read`, `seq`, `set`, `source`, `string`,
-`test`, `true`, `type`, `which`.
+`ls`, `not`, `pipeline-graph`, `printf`, `pwd`, `read`, `seq`, `set`, `source`,
+`string`, `test`, `true`, `type`, `unset`, `which`.
 
 ## Notes on a few of them
 

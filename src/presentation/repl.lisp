@@ -31,8 +31,11 @@
 (defun read-key-cont ()
   (if (nshell.infrastructure.acl:consume-terminal-resize-p)
       (lambda () (render-prompt-cont))
-      (let ((event (%map-rendered-mouse-event-to-buffer
-                    (nshell.infrastructure.terminal:read-key-event))))
+      (let ((event
+              (%map-rendered-mouse-event-to-buffer
+               (nshell.infrastructure.terminal:read-key-event
+                :interrupt-predicate
+                (function nshell.infrastructure.acl:consume-sigint-received-p)))))
         (cond
           (event
            (lambda ()
@@ -47,14 +50,21 @@
            nil)))))
 
 ;; REPL Entry
-(defun run-repl ()
+(defun run-repl (&key (load-config-p t) config-path (history-p t))
   "Run the interactive REPL and return the process exit code.
+
+LOAD-CONFIG-P, CONFIG-PATH, and HISTORY-P make startup persistence explicit
+for callers such as the executable's command-line policy.
+
 INSTALL-INTERACTIVE-TERMINAL is called from INSIDE the UNWIND-PROTECT on
 purpose. It changes the process group, the signal handlers, the terminal mode
 and the ANSI modes in that order, so a failure part-way through still leaves
 state to undo; installing outside the cleanup would skip the undo entirely and
 hand the user's next shell a terminal with SGR mouse reporting still on."
-  (initialize-repl-state)
+  (initialize-repl-state
+   :load-config-p load-config-p
+   :config-path config-path
+   :history-p history-p)
   (unwind-protect
       (if (install-interactive-terminal)
           (progn

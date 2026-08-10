@@ -34,16 +34,29 @@
 
 (defun %list-range-fields (fields start-index end-index)
   (let* ((count (length fields))
-         (start (%argv-normalized-index start-index count))
-         (end (%argv-normalized-index end-index count)))
-    (when (and start end)
-      (let ((step (if (<= start end) 1 -1))
-            (result nil))
-        (loop for index = start then (+ index step)
-              do (when (and (<= 0 index) (< index count))
-                   (push (nth index fields) result))
-              until (= index end))
-        (nreverse result)))))
+         (raw-start (%argv-normalized-index start-index count))
+         (raw-end (%argv-normalized-index end-index count)))
+    (when (and (plusp count) raw-start raw-end)
+      (flet ((valid-index-p (index)
+               (and (<= 0 index) (< index count)))
+             (clamp-index (index)
+               (max 0 (min (1- count) index))))
+        (let* ((same-sign-p
+                 (or (and (plusp start-index) (plusp end-index))
+                     (and (minusp start-index) (minusp end-index))))
+               (start (if (valid-index-p raw-start)
+                          raw-start
+                          (and same-sign-p (clamp-index raw-start))))
+               (end (if (valid-index-p raw-end)
+                        raw-end
+                        (and same-sign-p (clamp-index raw-end)))))
+          (when (and start end)
+            (let ((step (if (<= start end) 1 -1))
+                  (result nil))
+              (loop for index = start then (+ index step)
+                    do (push (nth index fields) result)
+                    until (= index end))
+              (nreverse result))))))))
 
 (defun %list-selection-spec-fields (fields selection)
   (case (list-selection-spec-kind selection)
@@ -55,7 +68,13 @@
     (otherwise nil)))
 
 (defun %list-spec-fields (fields spec)
-  (%list-selection-spec-fields fields (%list-selection-spec spec)))
+  (let ((selection-specs (%split-whitespace-fields spec)))
+    (if selection-specs
+        (loop for selection-spec in selection-specs
+              append (%list-selection-spec-fields
+                      fields
+                      (%list-selection-spec selection-spec)))
+        (%list-selection-spec-fields fields (%list-selection-spec spec)))))
 
 (defun %argv-spec-fields (spec)
   (%list-spec-fields *positional-args* spec))

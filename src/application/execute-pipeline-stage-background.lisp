@@ -19,6 +19,13 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
                      command-line
                      :pipefail-p (shell-context-pipefail-p context))))
         (%store-shell-process-registry-entry context job-id processes)
+        (when (shell-context-environment context)
+          (setf (shell-context-environment context)
+                (nshell.domain.environment:env-set
+                 (shell-context-environment context)
+                 "!"
+                 (princ-to-string (car (last pids)))
+                 nil)))
         job-id))))
 
 (defun %spawn-background-pipeline-in-context (context command)

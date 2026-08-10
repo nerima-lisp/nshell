@@ -14,9 +14,8 @@
 ;;; cl-tty-kit function name, argument count, and any literal argument
 ;;; (ANSI-CLEAR-SCREEN's `2`, ANSI-ENABLE-SGR-MOUSE's `:normal`) all vary
 ;;; independently of NAME, so there is no naming convention to derive from.
-;;; WITH-STREAM is nil only for the three legacy callers
-;;; (ANSI-CLEAR-SCREEN/-CLEAR-LINE/-MOVE-CURSOR) that predate every other
-;;; function's optional STREAM parameter and have no caller passing one.
+;;; WITH-STREAM is nil only for the three callers without an explicit STREAM
+;;; parameter (ANSI-CLEAR-SCREEN/-CLEAR-LINE/-MOVE-CURSOR).
 (defmacro %define-ansi-forwarder (name (&rest args) tty-kit-call &key with-stream)
   (if with-stream
       `(defun ,name (,@args &optional (stream *standard-output*))

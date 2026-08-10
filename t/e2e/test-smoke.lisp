@@ -1,7 +1,7 @@
 (in-package #:nshell/test)
 
 (defparameter +main-usage-line+
-  "Usage: nshell [--help] [--version] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]")
+  "Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]")
 
 (defun %expected-substrings (expected)
   (cond ((null expected) nil)
@@ -215,6 +215,61 @@ terminal without waiting out the real (30s) default."
     (%assert-nshell-main-result '("--version")
                                 "nshell v"
                                 0))
+
+  (it "e2e-main-background-pid-is-shell-visible"
+    "A background command publishes its process ID through $!."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main '("-c" "true & echo $!"))
+      (expect 0 :to-equal exit-code)
+      (expect "" :to-equal stderr)
+      (let ((pid (ignore-errors
+                    (parse-integer
+                     (string-trim '(#\Space #\Tab #\Newline #\Return)
+                                  stdout)))))
+        (expect (and pid (plusp pid)) :to-be-truthy))))
+  (it "e2e-main-wait-returns-background-status"
+    "wait propagates a background command's final status."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main '("-c" "false & wait %1"))
+      (expect 1 :to-equal exit-code)
+      (expect "" :to-equal stderr)
+      (expect "" :to-equal stdout)))
+  (it "e2e-main-wait-without-jobs-is-successful"
+    "wait without job arguments succeeds when there are no jobs."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main '("-c" "wait"))
+      (expect 0 :to-equal exit-code)
+      (expect "" :to-equal stderr)
+      (expect "" :to-equal stdout)))
+  (progn
+  (it "e2e-main-status-variable-follows-last-command"
+    "$status mirrors the most recent command exit code."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main (list "-c" "false; printf \"%s\\n\" $status"))
+      (expect 0 :to-equal exit-code)
+      (expect "" :to-equal stderr)
+      (expect (format nil "1~%") :to-equal stdout)))
+  (it "e2e-main-pipestatus-reports-source-order"
+    "$pipestatus exposes each internal pipeline stage in source order."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main
+         (list "-c"
+               "false | true; printf \"<%s,%s>\\n\" $pipestatus"))
+      (expect 0 :to-equal exit-code)
+      (expect "" :to-equal stderr)
+      (expect (format nil "<1,0>~%") :to-equal stdout)))
+  (it "e2e-main-pipestatus-reports-external-stage-statuses"
+    "$pipestatus exposes each external pipeline stage in source order."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main
+         (list "-c"
+               "sh -c 'exit 3' | sh -c 'exit 0'; printf \"<%s,%s>\\n\" $pipestatus"))
+      (expect 0 :to-equal exit-code)
+      (expect "" :to-equal stderr)
+      (expect (format nil "<3,0>~%") :to-equal stdout))))
+  (it "e2e-main-adjacent-quoted-fragments-concatenate" "Adjacent quoted and unquoted fragments form one shell word." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "-c" "printf \"%s\\n\" \"a\"b")) (expect (format nil "ab~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
+  (it "e2e-main-escaped-dollar-remains-literal" "A backslash protects a dollar from parameter expansion." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "-c" "printf \"%s\\n\" \\$HOME")) (expect (format nil "\$HOME~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
+  (it "e2e-main-heredoc-quoted-fragment-delimiter" "Quoted and unquoted delimiter fragments combine into one here-document marker." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "-c" (format nil "cat << E\"OF\"~%fragment-heredoc~%EOF~%"))) (expect (format nil "fragment-heredoc~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
 
   (it "e2e-main-interactive-pty-smoke"
     "The public entry point runs an interactive command loop under a real PTY."

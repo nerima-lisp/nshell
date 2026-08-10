@@ -155,6 +155,115 @@
       (expect :wheel-up :to-be (getf (nshell.infrastructure.terminal:key-event-data mouse-wheel)
                     :event))))
 
+  (it "terminal-stream-decodes-sgr-mouse-variants-and-unknown-escape-events"
+    "Mouse wheel, drag, malformed reports, and unknown escape forms remain explicit events."
+    (let ((wheel-down (single-key-event-from-string (esc-sequence "[<65;12;7M")))
+          (wheel-other (single-key-event-from-string (esc-sequence "[<66;12;7M")))
+          (drag (single-key-event-from-string (esc-sequence "[<32;12;7M")))
+          (shift-press (single-key-event-from-string (esc-sequence "[<4;12;7M")))
+          (malformed-mouse (single-key-event-from-string (esc-sequence "[<;12;7M")))
+          (unknown-csi (single-key-event-from-string (esc-sequence "[999~")))
+          (unknown-ss3 (single-key-event-from-string (esc-sequence "O?")))
+          (empty-csi (single-key-event-from-string (esc-sequence "[")))
+          (empty-ss3 (single-key-event-from-string (esc-sequence "O"))))
+      (expect :wheel-down :to-be
+              (getf (nshell.infrastructure.terminal:key-event-data wheel-down)
+                    :event))
+      (expect :wheel :to-be
+              (getf (nshell.infrastructure.terminal:key-event-data wheel-other)
+                    :event))
+      (expect :drag :to-be
+              (getf (nshell.infrastructure.terminal:key-event-data drag)
+                    :event))
+      (expect '(:shift) :to-equal
+              (getf (nshell.infrastructure.terminal:key-event-data shift-press)
+                    :modifiers))
+      (expect :unknown :to-be
+              (nshell.infrastructure.terminal:key-event-type malformed-mouse))
+      (expect :unknown :to-be
+              (nshell.infrastructure.terminal:key-event-type unknown-csi))
+      (expect :unknown :to-be
+              (nshell.infrastructure.terminal:key-event-type unknown-ss3))
+      (expect :escape :to-be
+              (nshell.infrastructure.terminal:key-event-type empty-csi))
+      (expect :escape :to-be
+              (nshell.infrastructure.terminal:key-event-type empty-ss3))))
+
+  (it "terminal-stream-decodes-remaining-escape-boundaries"
+    "Raw, paste-boundary, modifier, and control input remain explicit events."
+    (let ((raw-escape (single-key-event-from-string (string #\Esc)))
+          (paste-end (single-key-event-from-string (esc-sequence "[201~")))
+          (unterminated-paste
+            (single-key-event-from-string
+             (concatenate 'string (esc-sequence "[200~") "abc")))
+          (unknown-csi (single-key-event-from-string (esc-sequence "[q")))
+          (unknown-meta (single-key-event-from-string (esc-sequence "z")))
+          (unknown-nul (single-key-event-from-string (string (code-char 0))))
+          (carriage-return (single-key-event-from-string (string #\Return)))
+          (delete (single-key-event-from-string (string (code-char 127))))
+          (shift-alt-right (single-key-event-from-string (esc-sequence "[1;4C")))
+          (alt-ctrl-right (single-key-event-from-string (esc-sequence "[1;7C")))
+          (all-right (single-key-event-from-string (esc-sequence "[1;8C"))))
+      (expect :escape :to-be
+              (nshell.infrastructure.terminal:key-event-type raw-escape))
+      (expect :ignore :to-be
+              (nshell.infrastructure.terminal:key-event-type paste-end))
+      (expect :paste :to-be
+              (nshell.infrastructure.terminal:key-event-type unterminated-paste))
+      (expect (list :protocol :bracketed :text "abc") :to-equal
+              (nshell.infrastructure.terminal:key-event-data unterminated-paste))
+      (expect :unknown :to-be
+              (nshell.infrastructure.terminal:key-event-type unknown-csi))
+      (expect :escape :to-be
+              (nshell.infrastructure.terminal:key-event-type unknown-meta))
+      (expect :unknown :to-be
+              (nshell.infrastructure.terminal:key-event-type unknown-nul))
+      (expect :enter :to-be
+              (nshell.infrastructure.terminal:key-event-type carriage-return))
+      (expect :backspace :to-be
+              (nshell.infrastructure.terminal:key-event-type delete))
+      (expect :shift-alt-right :to-be
+              (nshell.infrastructure.terminal:key-event-type shift-alt-right))
+      (expect :alt-ctrl-right :to-be
+              (nshell.infrastructure.terminal:key-event-type alt-ctrl-right))
+      (expect :shift-alt-ctrl-right :to-be
+              (nshell.infrastructure.terminal:key-event-type all-right))))
+
+  (it "terminal-stream-decodes-ss3-and-mouse-modifier-variants"
+    "SS3 navigation and all mouse modifier masks map to normalized events."
+    (let ((ss3-up (single-key-event-from-string (esc-sequence "OA")))
+          (ss3-down (single-key-event-from-string (esc-sequence "OB")))
+          (ss3-right (single-key-event-from-string (esc-sequence "OC")))
+          (ss3-left (single-key-event-from-string (esc-sequence "OD")))
+          (ss3-home (single-key-event-from-string (esc-sequence "OH")))
+          (ss3-end (single-key-event-from-string (esc-sequence "OF")))
+          (tilde-home (single-key-event-from-string (esc-sequence "[1~")))
+          (tilde-end (single-key-event-from-string (esc-sequence "[4~")))
+          (tilde-home-alias (single-key-event-from-string (esc-sequence "[7~")))
+          (tilde-end-alias (single-key-event-from-string (esc-sequence "[8~")))
+          (mouse-alt (single-key-event-from-string (esc-sequence "[<8;12;7M")))
+          (mouse-ctrl (single-key-event-from-string (esc-sequence "[<16;12;7M")))
+          (mouse-all (single-key-event-from-string (esc-sequence "[<28;12;7M"))))
+      (expect :up :to-be (nshell.infrastructure.terminal:key-event-type ss3-up))
+      (expect :down :to-be (nshell.infrastructure.terminal:key-event-type ss3-down))
+      (expect :right :to-be (nshell.infrastructure.terminal:key-event-type ss3-right))
+      (expect :left :to-be (nshell.infrastructure.terminal:key-event-type ss3-left))
+      (expect :home :to-be (nshell.infrastructure.terminal:key-event-type ss3-home))
+      (expect :end :to-be (nshell.infrastructure.terminal:key-event-type ss3-end))
+      (expect :home :to-be (nshell.infrastructure.terminal:key-event-type tilde-home))
+      (expect :end :to-be (nshell.infrastructure.terminal:key-event-type tilde-end))
+      (expect :home :to-be (nshell.infrastructure.terminal:key-event-type tilde-home-alias))
+      (expect :end :to-be (nshell.infrastructure.terminal:key-event-type tilde-end-alias))
+      (expect '(:alt) :to-equal
+              (getf (nshell.infrastructure.terminal:key-event-data mouse-alt)
+                    :modifiers))
+      (expect '(:ctrl) :to-equal
+              (getf (nshell.infrastructure.terminal:key-event-data mouse-ctrl)
+                    :modifiers))
+      (expect '(:shift :alt :ctrl) :to-equal
+              (getf (nshell.infrastructure.terminal:key-event-data mouse-all)
+                    :modifiers))))
+
   (it "terminal-stream-queries-cursor-position"
     "Cursor position reports are decoded to 1-based coordinates."
     (let ((response (coerce (list #\Esc #\[ #\6 #\; #\1 #\1 #\R) 'string))
@@ -185,6 +294,33 @@
               (expect row :to-equal nil)
               (expect column :to-equal nil)
               (expect (read-char *standard-input* nil nil) :to-equal #\x)))))))
+
+  (it "terminal-stream-cursor-query-handles-empty-and-incomplete-responses"
+    "Cursor queries return NIL values and preserve an incomplete escape response."
+    (let ((empty-output nil)
+          (empty-row :unset)
+          (empty-column :unset))
+      (with-input-from-string (input "")
+        (let ((*standard-input* input))
+          (setf empty-output
+                (with-output-to-string (output)
+                  (let ((*standard-output* output))
+                    (multiple-value-setq (empty-row empty-column)
+                      (nshell.infrastructure.terminal:query-cursor-position
+                       :attempts 1 :sleep-seconds 0)))))))
+      (expect empty-row :to-equal nil)
+      (expect empty-column :to-equal nil)
+      (expect empty-output :to-equal (esc-sequence "[6n")))
+    (with-input-from-string (input (string #\Esc))
+      (let ((*standard-input* input))
+        (with-output-to-string (output)
+          (let ((*standard-output* output))
+            (multiple-value-bind (row column)
+                (nshell.infrastructure.terminal:query-cursor-position
+                 :attempts 1 :sleep-seconds 0)
+              (expect row :to-equal nil)
+              (expect column :to-equal nil)
+              (expect (read-char *standard-input* nil nil) :to-equal #\Esc)))))))
 
   (it "terminal-stream-decodes-meta-editing-keys"
     "ESC-prefixed Meta editing chords normalize to presentation key events."

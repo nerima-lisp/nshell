@@ -250,4 +250,21 @@
     (let ((position (nshell.presentation::%rendered-buffer-position "あいうえ" 4 4
                                                                     :terminal-width 10)))
       (expect 1 :to-equal (nshell.presentation::rendered-position-row position))
-      (expect 2 :to-equal (nshell.presentation::rendered-position-column position)))))
+      (expect 2 :to-equal (nshell.presentation::rendered-position-column position))))
+
+  (it "repl-complete-renders-a-valid-existing-session"
+    "Completion redraw should reuse candidates from a valid existing session."
+    (with-repl-test-state
+      (with-stable-repl-prompt ()
+        (with-fixed-terminal-size (24 80)
+          (with-repl-input-state (:buffer "git"
+                                  :cursor-pos 3
+                                  :completion-index 0
+                                  :completion-base-buffer "g"
+                                  :completion-base-cursor 1
+                                  :last-candidates '("git" "grep"))
+            (let ((output (capture-process-output-event :complete)))
+              (expect (search "git" output) :to-be-truthy)
+              (expect nshell.presentation::*completion-rendered-lines*
+                      :to-be-greater-than 0)))))))
+)

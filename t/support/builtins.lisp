@@ -7,7 +7,8 @@
                                      (path "/bin:/usr/bin")
                                      (files '("/bin/echo" "/tmp/file.txt"))
                                      (dirs '("/tmp"))
-                                     function-table)
+                                     function-table
+                                     (running t))
   (let ((file-table (make-hash-table :test #'equal))
         (dir-table (make-hash-table :test #'equal)))
     (dolist (file-path files)
@@ -45,7 +46,8 @@
            :redirect-input-string #'nshell.infrastructure.acl:redirect-input-string
            :redirect-input-document #'nshell.infrastructure.acl:redirect-input-document
            :restore #'nshell.infrastructure.acl:restore-redirects)
-     :terminal-fns nil)))
+     :terminal-fns nil
+     :running running)))
 
 (defmacro with-builtins-context ((context) &body body)
   `(let ((,context (make-test-builtins-context)))

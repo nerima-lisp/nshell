@@ -128,9 +128,7 @@ branch additionally skips closing when stderr is EQ to the current stdout
 -- the state REDIRECT-ERROR-TO-OUTPUT or REDIRECT-OUTPUT-AND-ERROR leaves
 behind -- so a stream already closed via the stdout branch (or never
 independently opened at all) is not closed a second time."
-  (let ((current-stdout *standard-output*)
-        (current-stderr *error-output*)
-        (current-stdin *standard-input*))
+  (let ()
     (when *redirected-stdout*
       (setf *standard-output* *redirected-stdout*))
     (when *redirected-stderr*

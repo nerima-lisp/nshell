@@ -6,12 +6,13 @@
                         (nshell.domain.completion:external-completion-command-specs)
                         (nshell.domain.completion:external-subcommand-completion-command-specs))
                 knowledge-base)
-    (destructuring-bind (command &key subcommands flags option-values exclusive-options
-                         description &allow-other-keys)
+    (destructuring-bind (command &key subcommands flags option-values option-value-kinds
+                         exclusive-options description &allow-other-keys)
         spec
       (nshell.domain.completion:kb-add-command knowledge-base command
                                                :subcommands subcommands
                                                :flags flags
                                                :option-values option-values
+                                               :option-value-kinds option-value-kinds
                                                :exclusive-options exclusive-options
                                                :description description))))

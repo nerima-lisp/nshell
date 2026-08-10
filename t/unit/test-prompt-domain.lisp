@@ -134,3 +134,87 @@
           (expect "main" :to-equal branch)
           (expect (null dirty-p) :to-be-falsy)))
       (expect 2 :to-equal (length calls)))))
+(describe "git-status-edge-tests"
+  (it "treats-detached-head-as-no-branch"
+    (let ((calls nil))
+      (nshell.infrastructure.acl:clear-git-status-cache)
+      (nshell.infrastructure.acl:with-git-runner
+          ((lambda (dir args)
+             (declare (ignore dir))
+             (push args calls)
+             (values (if (member "rev-parse" args :test (lambda (value item) (string= value item)))
+                         (format nil "HEAD~%")
+                         "")
+                     0)))
+        (multiple-value-bind (branch dirty-p)
+            (nshell.infrastructure.acl:get-git-status "/detached/")
+          (expect branch :to-be-null)
+          (expect dirty-p :to-be-falsy)))
+      (expect 1 :to-equal (length calls))))
+  (it "clearing-cache-forces-a-fresh-query"
+    (let ((calls 0))
+      (nshell.infrastructure.acl:clear-git-status-cache)
+      (nshell.infrastructure.acl:with-git-runner
+          ((lambda (dir args)
+             (declare (ignore dir args))
+             (incf calls)
+             (values (format nil "main~%") 0)))
+        (nshell.infrastructure.acl:get-git-status "/cache-reset/")
+        (nshell.infrastructure.acl:get-git-status "/cache-reset/")
+        (nshell.infrastructure.acl:clear-git-status-cache)
+        (nshell.infrastructure.acl:get-git-status "/cache-reset/"))
+      (expect 4 :to-equal calls)))
+  (it "rejects-empty-and-failed-branch-results"
+    "A missing or failed branch query does not classify the directory as a repository."
+    (dolist (case (list (list "/empty-branch/" "" 0)
+                        (list "/failed-branch/" "main" 1)))
+      (destructuring-bind (dir output code) case
+        (let ((calls 0))
+          (nshell.infrastructure.acl:clear-git-status-cache)
+          (nshell.infrastructure.acl:with-git-runner
+              ((lambda (runner-dir args)
+                 (declare (ignore runner-dir))
+                 (incf calls)
+                 (if (member "rev-parse" args
+                             :test (lambda (value item) (string= value item)))
+                     (values output code)
+                     (values (format nil " M file.lisp~%") 0))))
+            (multiple-value-bind (branch dirty-p)
+                (nshell.infrastructure.acl:get-git-status dir)
+              (expect branch :to-be-null)
+              (expect dirty-p :to-be-falsy)))
+          (expect 1 :to-equal calls)))))
+  (it "classifies-clean-git-status"
+    "A successful empty porcelain response is a clean repository."
+    (let ((calls 0))
+      (nshell.infrastructure.acl:clear-git-status-cache)
+      (nshell.infrastructure.acl:with-git-runner
+          ((lambda (runner-dir args)
+             (declare (ignore runner-dir))
+             (incf calls)
+             (if (member "rev-parse" args
+                         :test (lambda (value item) (string= value item)))
+                 (values (format nil "main~%") 0)
+                 (values "" 0))))
+        (multiple-value-bind (branch dirty-p)
+            (nshell.infrastructure.acl:get-git-status "/clean-status/")
+          (expect "main" :to-equal branch)
+          (expect dirty-p :to-be-falsy)))
+      (expect 2 :to-equal calls)))
+  (it "classifies-failed-git-status"
+    "A failed porcelain response does not report a dirty repository."
+    (let ((calls 0))
+      (nshell.infrastructure.acl:clear-git-status-cache)
+      (nshell.infrastructure.acl:with-git-runner
+          ((lambda (runner-dir args)
+             (declare (ignore runner-dir))
+             (incf calls)
+             (if (member "rev-parse" args
+                         :test (lambda (value item) (string= value item)))
+                 (values (format nil "main~%") 0)
+                 (values "status unavailable" 1))))
+        (multiple-value-bind (branch dirty-p)
+            (nshell.infrastructure.acl:get-git-status "/failed-status/")
+          (expect "main" :to-equal branch)
+          (expect dirty-p :to-be-falsy)))
+      (expect 2 :to-equal calls))))

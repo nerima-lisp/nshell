@@ -112,21 +112,56 @@
   (let* ((sequence (%argument-word-sequence-from-words words))
          (latest-word (%argument-word-sequence-latest sequence)))
     (if (and latest-word
-             (not (string= prefix ""))
-             (string= latest-word prefix))
+             (string= latest-word prefix)
+             (or (not (string= prefix ""))
+                 (string= latest-word "")))
         (%argument-word-sequence-words-before-latest sequence)
         words)))
 
 (defun %resolved-kb-command (knowledge-base command argument-words prefix)
-  "Resolve the longest registered command path before the current word."
+  "Resolve the longest known command or subcommand path before the current word."
   (let ((resolved command))
     (dolist (word (%argument-words-without-value-prefix argument-words prefix)
                   resolved)
       (let ((candidate (format nil "~a ~a" resolved word)))
         (if (and (not (%starts-with-p "-" word))
-                 (kb-command-present-p knowledge-base candidate))
+                 (or (kb-command-present-p knowledge-base candidate)
+                     (member word
+                             (kb-command-subcommands knowledge-base resolved)
+                             :test #'string=)))
             (setf resolved candidate)
             (return resolved))))))
+
+(defun kb-resolve-command-path (knowledge-base command argument-words prefix)
+  "Return the longest command path known before PREFIX."
+  (%resolved-kb-command knowledge-base command argument-words prefix))
+
+(defun %kb-option-value-kind-for-option (knowledge-base command option)
+  (second
+   (find option
+         (kb-command-option-value-kinds knowledge-base command)
+         :key #'first
+         :test #'string=)))
+
+(defun knowledge-base-option-value-kind
+    (knowledge-base command argument-words prefix)
+  "Return the filesystem value kind implied by the current option prefix."
+  (let* ((resolved-command
+           (%resolved-kb-command knowledge-base command argument-words prefix))
+         (attached-prefix (%parse-attached-option-value-prefix prefix)))
+    (or
+     (and attached-prefix
+          (%kb-option-value-kind-for-option
+           knowledge-base
+           resolved-command
+           (%attached-option-value-prefix-option attached-prefix)))
+     (let ((separate-prefix
+             (%parse-separate-option-value-prefix argument-words prefix)))
+       (and separate-prefix
+            (%kb-option-value-kind-for-option
+             knowledge-base
+             resolved-command
+             (%separate-option-value-prefix-option separate-prefix)))))))
 
 (defun %previous-option-for-value-prefix (argument-words prefix)
   (%argument-word-sequence-latest

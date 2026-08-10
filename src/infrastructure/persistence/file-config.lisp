@@ -24,10 +24,10 @@
       (write-line line stream)))
   t)
 
-(defun load-config ()
-  (let ((path (%config-file-path)))
+(defun load-config (&optional path)
+  (let ((path (or path (%config-file-path))))
     (when (probe-file path)
       (%read-config-lines path))))
 
-(defun save-config (config)
-  (%write-config-lines (%config-file-path) config))
+(defun save-config (config &optional path)
+  (%write-config-lines (or path (%config-file-path)) config))

@@ -22,6 +22,16 @@ literal, matching fish. Undefined variables expand to the empty string."
                          out)
                         (setf i end))
                       (write-char ch out))))
+               ((char= (char input (1+ i)) #\?)
+                (write-string
+                 (or (nshell.domain.environment:env-get env "?") "0")
+                 out)
+                (incf i))
+               ((char= (char input (1+ i)) #\!)
+                (write-string
+                 (or (nshell.domain.environment:env-get env "!") "")
+                 out)
+                (incf i))
                ((variable-name-start-p (char input (1+ i)))
                 (multiple-value-bind (element next)
                     (%expand-variable-reference input i len env)

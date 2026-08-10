@@ -5,29 +5,9 @@
   text
   kind)
 
-(defparameter +redirect-specs+
-  (list
-   (%make-redirect-spec-entry "0<" :<)
-   (%make-redirect-spec-entry "0<<" :<<)
-   (%make-redirect-spec-entry "0<<-" :<<-)
-   (%make-redirect-spec-entry "0<<<" :<<<)
-   (%make-redirect-spec-entry ">" :>)
-   (%make-redirect-spec-entry ">>" :>>)
-   (%make-redirect-spec-entry "<" :<)
-   (%make-redirect-spec-entry "<<" :<<)
-   (%make-redirect-spec-entry "<<-" :<<-)
-   (%make-redirect-spec-entry "<<<" :<<<)
-   (%make-redirect-spec-entry "1>" :>)
-   (%make-redirect-spec-entry "1>>" :>>)
-   (%make-redirect-spec-entry "2>" :2>)
-   (%make-redirect-spec-entry "2>>" :2>>)
-   (%make-redirect-spec-entry "2>&1" :2>&1)
-   (%make-redirect-spec-entry "&>" :&>)
-   (%make-redirect-spec-entry "&>>" :&>>)))
+(defparameter +redirect-specs+ nil)
 
-(defparameter +redirect-fd-dup-specs+
-  '(:2>&1)
-  "Redirect specs that duplicate a descriptor and so take no file target.")
+(defparameter +redirect-fd-dup-specs+ nil "Redirect specs that duplicate a descriptor and so take no file target.")
 
 (defstruct (redirect-fd-dup-target
             (:constructor make-redirect-fd-dup-target
@@ -84,20 +64,7 @@
   stdout-endpoint
   stderr-endpoint)
 
-(defparameter +redirect-kind-fact-specs+
-  (list
-   (%make-redirect-kind-fact-spec :< t nil nil nil)
-   (%make-redirect-kind-fact-spec :<< t nil nil nil)
-   (%make-redirect-kind-fact-spec :<<- t nil nil nil)
-   (%make-redirect-kind-fact-spec :<<< t nil nil nil)
-   (%make-redirect-kind-fact-spec :> nil t nil nil)
-   (%make-redirect-kind-fact-spec :>> nil t nil t)
-   (%make-redirect-kind-fact-spec :2> nil nil t nil)
-   (%make-redirect-kind-fact-spec :2>> nil nil t t)
-   (%make-redirect-kind-fact-spec :2>&1 nil nil t nil)
-   (%make-redirect-kind-fact-spec :&> nil t t nil)
-   (%make-redirect-kind-fact-spec :&>> nil t t t)
-   (%make-redirect-kind-fact-spec :fd-dup nil nil nil nil)))
+(defparameter +redirect-kind-fact-specs+ nil)
 
 (defun %redirect-spec-entry (text)
   (and text

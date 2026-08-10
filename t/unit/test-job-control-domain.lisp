@@ -108,4 +108,58 @@
       (expect (nshell.domain.execution:job-background-p job) :to-be-falsy)
       (expect :running :to-be (nshell.domain.execution:job-state job))
       (expect (nshell.domain.job-control:background-job monitor 999) :to-be-null)
-      (expect (nshell.domain.job-control:foreground-job monitor 999) :to-be-null))))
+      (expect (nshell.domain.job-control:foreground-job monitor 999) :to-be-null)))
+
+  (it "tracks-current-and-previous-jobs-for-standard-job-specs"
+    "Current and previous jobs follow the most recent active job."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (first-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "first")))
+           (second-id (nshell.domain.job-control:monitor-add-job
+                       monitor (make-test-job 0 "second")))
+           (third-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "third"))))
+      (expect third-id :to-equal
+              (nshell.domain.job-control:monitor-current-job-id monitor))
+      (expect second-id :to-equal
+              (nshell.domain.job-control:monitor-previous-job-id monitor))
+      (dolist (job-spec (list "%+" "%%" (format nil "%~d" third-id)
+                              (format nil "~d" third-id) nil))
+        (expect third-id :to-equal
+                (nshell.domain.job-control:monitor-resolve-job-spec
+                 monitor job-spec)))
+      (expect second-id :to-equal
+              (nshell.domain.job-control:monitor-resolve-job-spec monitor "%-"))
+      (expect (nshell.domain.job-control:monitor-resolve-job-spec
+               monitor "1junk") :to-be-null)
+      (progn
+        (expect (nshell.domain.job-control:monitor-resolve-job-spec
+                 monitor "%") :to-be-null)
+        (expect third-id :to-equal
+                (nshell.domain.job-control:monitor-resolve-job-spec
+                 monitor "%?ir"))
+        (expect first-id :to-equal
+                (nshell.domain.job-control:monitor-resolve-job-spec
+                 monitor "%fir"))
+        (expect second-id :to-equal
+                (nshell.domain.job-control:monitor-resolve-job-spec
+                 monitor "%?ond"))
+        (expect (nshell.domain.job-control:monitor-resolve-job-spec
+                 monitor "%missing") :to-be-null)
+        (expect (nshell.domain.job-control:monitor-resolve-job-spec
+                 monitor "%?") :to-be-null))
+      (expect (nshell.domain.job-control:monitor-resolve-job-spec
+               monitor "0") :to-be-null)
+      (nshell.domain.job-control:background-job monitor first-id)
+      (expect first-id :to-equal
+              (nshell.domain.job-control:monitor-current-job-id monitor))
+      (expect third-id :to-equal
+              (nshell.domain.job-control:monitor-previous-job-id monitor))
+      (nshell.domain.job-control:complete-job monitor first-id)
+      (expect third-id :to-equal
+              (nshell.domain.job-control:monitor-current-job-id monitor))
+      (nshell.domain.job-control:monitor-remove-job monitor third-id)
+      (expect second-id :to-equal
+              (nshell.domain.job-control:monitor-current-job-id monitor))
+      (expect (nshell.domain.job-control:monitor-previous-job-id monitor)
+              :to-be-null))))

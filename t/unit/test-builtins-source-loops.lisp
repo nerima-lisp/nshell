@@ -187,4 +187,48 @@
                                        "true"
                                        "end || echo should-not-run"
                                        "echo after"))
-        (format nil "after~%"))))
+        (format nil "after~%")))
+
+  (it "source-for-break-stops-the-current-loop"
+    "break exits the nearest loop and resumes after its end marker."
+    (with-builtins-source-ok (output code _context
+                                     '("for item in one two"
+                                       "echo before"
+                                       "break"
+                                       "echo skipped"
+                                       "end"
+                                       "echo after"))
+        (format nil "before~%after~%")))
+
+  (it "source-for-continue-skips-the-rest-of-the-body"
+    "continue starts the next iteration without running later body commands."
+    (with-builtins-source-ok (output code _context
+                                     '("for item in one two"
+                                       "echo before"
+                                       "continue"
+                                       "echo skipped"
+                                       "end"
+                                       "echo after"))
+        (format nil "before~%before~%after~%")))
+
+  (it "source-nested-break-count-propagates-through-loops"
+    "break N exits N enclosing loops."
+    (with-builtins-source-ok (output code _context
+                                     '("for outer in one two"
+                                       "for inner in one two"
+                                       "echo inner"
+                                       "break 2"
+                                       "end"
+                                       "echo outer"
+                                       "end"
+                                       "echo after"))
+        (format nil "inner~%after~%")))
+
+  (it "source-loop-control-outside-a-loop-reports-an-error"
+    "break outside a loop leaves the shell running and returns a diagnostic."
+    (with-builtins-source (output code _context
+                                  '("break"
+                                    "echo after"))
+      (expect (format nil "break: only meaningful in a loop~%after~%")
+              :to-equal output)
+      (expect 0 :to-equal code))))

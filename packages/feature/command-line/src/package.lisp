@@ -5,12 +5,11 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defpackage #:nshell.feature.command-line
     (:documentation
-     "The command-line feature's public boundary.
-The src/main.lisp composition root delegates here and retains compatibility
-with nshell's existing internal entry-point functions.")
+       "The command-line feature's public boundary.
+The src/main.lisp composition root delegates here through the feature
+boundary.")
     (:use #:cl)
     (:export #:flag-argument-p
              #:usage-synopsis
-             #:build-cli-app
              #:print-usage
              #:print-version)))

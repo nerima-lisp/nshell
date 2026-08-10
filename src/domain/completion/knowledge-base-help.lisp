@@ -2,11 +2,12 @@
 
 (defstruct (%completion-help-command-facts
             (:constructor %make-completion-help-command-facts
-                (subcommands flags option-values))
+                (subcommands flags option-values option-value-kinds))
             (:conc-name %completion-help-command-facts-))
   (subcommands nil :type list :read-only t)
   (flags nil :type list :read-only t)
-  (option-values nil :type list :read-only t))
+  (option-values nil :type list :read-only t)
+  (option-value-kinds nil :type list :read-only t))
 
 (defstruct (%completion-help-scan-state
             (:constructor %make-completion-help-scan-state ())
@@ -14,16 +15,18 @@
   (subcommands nil :type list)
   (flags nil :type list)
   (option-values nil :type list)
+  (option-value-kinds nil :type list)
   (collecting-subcommands-p nil :type boolean))
 
 (defstruct (%completion-help-line-facts
             (:constructor %make-completion-help-line-facts
-                (kind options values subcommand-name))
+                (kind options values option-value-kinds subcommand-name))
             (:conc-name %completion-help-line-facts-))
   (kind :other :type (member :heading :blank :subcommand :other :stop-subcommands)
    :read-only t)
   (options nil :type list :read-only t)
   (values nil :type list :read-only t)
+  (option-value-kinds nil :type list :read-only t)
   (subcommand-name nil :type (or null string) :read-only t))
 
 (defparameter *completion-help-section-headings*
@@ -33,7 +36,18 @@
   '(#\Space #\Tab #\, #\; #\) #\( #\[ #\] #\{ #\}))
 
 (defparameter *completion-help-option-trim-chars*
-  '(#\Space #\Tab #\, #\; #\. #\: #\) #\( #\[ #\] #\{ #\}))
+  '(#\Space #\Tab #\, #\; #\. #\: #\) #\( #\[ #\] #\{ #\}
+    #\< #\> #\' #\"))
+
+(defparameter *completion-help-value-kind-tokens*
+  '(("file" . :file)
+    ("path" . :file)
+    ("filename" . :file)
+    ("file-path" . :file)
+    ("filepath" . :file)
+    ("directory" . :directory)
+    ("dir" . :directory)
+    ("folder" . :directory)))
 
 (defparameter *completion-help-enum-delimiters*
   '(#\Space #\Tab #\Newline #\Return))
@@ -63,6 +77,63 @@
     (if equals-position
         (subseq trimmed 0 equals-position)
         trimmed)))
+
+(defun %completion-help-value-kind-token (token)
+  (let ((clean
+          (string-downcase
+           (string-trim
+            '(#\Space #\Tab #\< #\> #\[ #\] #\{ #\} #\( #\)
+              #\, #\; #\: #\= #\' #\")
+            token))))
+    (cdr (assoc clean *completion-help-value-kind-tokens*
+                :test #'string=))))
+
+(defun %completion-help-line-words (line)
+  (let ((words nil)
+        (start nil)
+        (length (length line)))
+    (labels ((flush (end)
+               (when start
+                 (push (subseq line start end) words)
+                 (setf start nil))))
+      (loop for index from 0 below length
+            for character = (char line index)
+            do (if (find character '(#\Space #\Tab))
+                   (flush index)
+                   (unless start
+                     (setf start index))))
+      (flush length))
+    (nreverse words)))
+
+(defun %completion-help-option-value-kinds (line options)
+  (loop with pending-options = nil
+        for word in (%completion-help-line-words line)
+        for clean = (%completion-help-clean-option-token word)
+        for equals-position = (position #\= word)
+        for attached-kind =
+          (and equals-position
+               (%completion-help-value-kind-token
+                (subseq word (1+ equals-position))))
+        do (cond
+             ((member clean options :test #'string=)
+              (push clean pending-options)
+              (when attached-kind
+                (return
+                 (mapcar (lambda (option)
+                           (list option attached-kind))
+                         (nreverse pending-options)))))
+             ((and pending-options
+                   (%completion-help-option-token-p clean))
+              (setf pending-options nil))
+             (pending-options
+              (let ((kind (%completion-help-value-kind-token clean)))
+                (when kind
+                  (return
+                   (mapcar (lambda (option)
+                             (list option kind))
+                           (nreverse pending-options))))
+                (setf pending-options nil))))
+        finally (return nil)))
 
 (defun %completion-help-option-token-p (token)
   (and (stringp token)
@@ -155,11 +226,13 @@ values -- rather than a nested bail-out cascade."
 (defun %completion-help-line-facts (state line)
   (let* ((options (%completion-help-options-in-line line))
          (values (%completion-help-enum-values line))
+         (option-value-kinds (%completion-help-option-value-kinds line options))
          (kind (%completion-help-line-kind state line)))
     (%make-completion-help-line-facts
      kind
      options
      values
+     option-value-kinds
      (and (eq kind :subcommand)
           (%completion-help-subcommand-name line)))))
 
@@ -178,25 +251,36 @@ values -- rather than a nested bail-out cascade."
      nil))
   state)
 
-(defun %completion-help-note-options (state options)
-  (dolist (option options state)
-    (push option (%completion-help-scan-state-flags state))))
-
 (defun %completion-help-note-option-values (state options values)
   (when values
     (dolist (option options state)
       (when (%starts-with-p "--" option)
         (push (%make-kb-option-value-spec option values)
               (%completion-help-scan-state-option-values state))))))
+(defun %completion-help-note-options (state options)
+  (dolist (option options state)
+    (push option (%completion-help-scan-state-flags state))))
+
+(defun %completion-help-note-option-value-kinds (state kinds)
+  (dolist (spec kinds state)
+    (unless (member spec
+                    (%completion-help-scan-state-option-value-kinds state)
+                    :test #'equal)
+      (push spec (%completion-help-scan-state-option-value-kinds state)))))
 
 (defun %completion-help-update-scan-state (state line)
   (let* ((facts (%completion-help-line-facts state line))
          (kind (%completion-help-line-facts-kind facts)))
     (%completion-help-note-line-kind state kind facts)
-    (%completion-help-note-options state (%completion-help-line-facts-options facts))
-    (%completion-help-note-option-values state
-                                         (%completion-help-line-facts-options facts)
-                                         (%completion-help-line-facts-values facts))
+    (%completion-help-note-options state
+                                   (%completion-help-line-facts-options facts))
+    (%completion-help-note-option-values
+     state
+     (%completion-help-line-facts-options facts)
+     (%completion-help-line-facts-values facts))
+    (%completion-help-note-option-value-kinds
+     state
+     (%completion-help-line-facts-option-value-kinds facts))
     state))
 
 (defun %completion-help-command-facts (help-text)
@@ -208,7 +292,10 @@ values -- rather than a nested bail-out cascade."
       (nreverse (%completion-help-scan-state-subcommands state)))
      (%unique-string-values
       (nreverse (%completion-help-scan-state-flags state)))
-     (nreverse (%completion-help-scan-state-option-values state)))))
+     (nreverse (%completion-help-scan-state-option-values state))
+     (remove-duplicates
+      (nreverse (%completion-help-scan-state-option-value-kinds state))
+      :test #'equal))))
 
 (defun kb-add-command-from-help (kb cmd-name help-text &key description)
   "Add command completion metadata by parsing already-fetched help text."
@@ -218,4 +305,8 @@ values -- rather than a nested bail-out cascade."
                     :flags (%completion-help-command-facts-flags facts)
                     :option-values
                     (%completion-help-command-facts-option-values facts)
+                    :option-value-kinds
+                    (%completion-help-command-facts-option-value-kinds facts)
                     :description description)))
+
+(progn)

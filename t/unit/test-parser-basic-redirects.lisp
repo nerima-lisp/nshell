@@ -11,6 +11,12 @@
       (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
       (expect "cat" :to-equal (nshell.domain.parsing:command-node-command ast))
       (expect '("x" "2>&1") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))
+    (with-complete-command-line (result ast "cat x 0<&1")
+      (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+      (expect '("x" "0<&1") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))
+    (with-complete-command-line (result ast "cat x 0<&-")
+      (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+      (expect '("x" "0<&-") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))
     (with-complete-command-line (result ast "make &>build.log")
       (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
       (expect "make" :to-equal (nshell.domain.parsing:command-node-command ast))))
@@ -513,4 +519,68 @@
       (expect "unknown" :to-equal (nshell.domain.parsing::%separator-facts-text facts))
       (expect (nshell.domain.parsing::%separator-facts-continues-p facts) :to-be-null)
       (expect (nshell.domain.parsing::%separator-text nil) :to-be-null)
-      (expect (nshell.domain.parsing::%separator-facts nil) :to-be-null))))
+      (expect (nshell.domain.parsing::%separator-facts nil) :to-be-null)))
+
+  (it "redirect-specs-cover-non-file-and-empty-inputs"
+    "Redirect projections preserve here-document kinds and empty-state semantics."
+    (multiple-value-bind (kind target)
+        (nshell.domain.parsing:redirect-input-spec '((:<< . "EOF")))
+      (expect :<< :to-be kind)
+      (expect "EOF" :to-equal target))
+    (expect (nshell.domain.parsing:redirect-input-file-target '((:<< . "EOF")))
+            :to-be-null)
+    (multiple-value-bind (target mode)
+        (nshell.domain.parsing:redirect-output-spec nil)
+      (expect target :to-be-null)
+      (expect mode :to-be-null))
+    (multiple-value-bind (kind target mode)
+        (nshell.domain.parsing:redirect-stderr-spec '((:2>> . "errors.log")))
+      (expect :file :to-be kind)
+      (expect "errors.log" :to-equal target)
+      (expect :append :to-be mode))
+    (multiple-value-bind (kind target mode)
+        (nshell.domain.parsing:redirect-stderr-spec nil)
+      (expect kind :to-be-null)
+      (expect target :to-be-null)
+      (expect mode :to-be-null)))
+
+  (it "shell-redirect-script-renders-file-and-merge-forms"
+    "Shell-wrapper lowering covers every direct file and stderr merge operator."
+    (let ((script
+            (nshell.domain.parsing:shell-redirect-script
+             (list (cons :< "in.txt")
+                   (cons :> "out.txt")
+                   (cons :>> "append.txt")
+                   (cons :2> "err.txt")
+                   (cons :2>> "err-append.txt")
+                   (cons :&> "all.txt")
+                   (cons :&>> "all-append.txt")
+                   (cons :2>&1 nil)))))
+      (expect (search "<'in.txt'" script) :to-be-truthy)
+      (expect (search ">'out.txt'" script) :to-be-truthy)
+      (expect (search ">>'append.txt'" script) :to-be-truthy)
+      (expect (search "2>'err.txt'" script) :to-be-truthy)
+      (expect (search "2>>'err-append.txt'" script) :to-be-truthy)
+      (expect (search ">'all.txt' 2>&1" script) :to-be-truthy)
+      (expect (search ">>'all-append.txt' 2>&1" script) :to-be-truthy)
+      (expect (search " 2>&1" script) :to-be-truthy)))
+
+  (it "shell-redirect-script-quotes-and-avoids-heredoc-collisions"
+    "Shell-wrapper lowering quotes file names and chooses collision-free delimiters."
+    (let ((script
+            (nshell.domain.parsing:shell-redirect-script
+             (list (cons :< "a'b")
+                   (cons :<< "NSHELL_HEREDOC_0")
+                   (cons :<<< "NSHELL_HEREDOC_1")
+                   (cons :<<- "TAB")))))
+      (expect (search "'a'\\''b'" script) :to-be-truthy)
+      (expect (search "<<'NSHELL_HEREDOC_1'" script) :to-be-truthy)
+      (expect (search "<<'NSHELL_HEREDOC_2'" script) :to-be-truthy)
+      (expect (search "<<-'NSHELL_HEREDOC_2'" script) :to-be-truthy)))
+
+  (it "shell-redirect-script-rejects-unknown-kinds"
+    "Unsupported redirect kinds fail at the shell-wrapper boundary."
+    (expect (lambda ()
+              (nshell.domain.parsing:shell-redirect-script
+               (list (cons :unknown "target"))))
+            :to-throw 'error)))

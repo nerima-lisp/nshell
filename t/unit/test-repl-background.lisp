@@ -189,4 +189,33 @@
                    (expect :completed :to-be (nshell.domain.execution:job-state job))
                    (expect 143 :to-equal (nshell.domain.execution:job-exit-code job))))
             (when (and proc (sb-ext:process-alive-p proc))
-              (sb-ext:process-kill proc 15)))))))
+              (sb-ext:process-kill proc 15))))))
+  (it "reap-background-jobs-applies-pipefail-to-completed-pipelines"
+    "Asynchronous reaping should preserve the pipeline pipefail policy."
+    (with-repl-test-state
+      (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+             (job (make-test-job 0 "false | true"))
+             (first-proc :first)
+             (last-proc :last)
+             (job-id (nshell.domain.job-control:monitor-add-job monitor job)))
+        (setf (nshell.domain.execution:job-pipefail-p job) t)
+        (let ((nshell.application:*job-monitor* monitor))
+          (repl-test-register-process-entry
+           job-id
+           (list first-proc last-proc))
+          (let ((nshell.presentation::*background-proc-alive-p*
+                  (lambda (proc)
+                    (declare (ignore proc))
+                    nil))
+                (nshell.presentation::*background-proc-exit-code*
+                  (lambda (proc)
+                    (case proc
+                      (:first 7)
+                      (:last 0)
+                      (t 0)))))
+            (nshell.presentation::reap-background-jobs))
+          (expect (repl-test-process-entry job-id) :to-be-null)
+          (expect :completed :to-be
+                  (nshell.domain.execution:job-state job))
+          (expect 7 :to-equal
+                  (nshell.domain.execution:job-exit-code job)))))))

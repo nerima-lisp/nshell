@@ -39,7 +39,7 @@ is the only layer permitted to know both the domain and the ports.")
             #:job-listing #:job-listing-p
             #:job-listing-id #:job-listing-status #:job-listing-command
             #:format-job-listing
-            #:fg #:bg #:jobs #:disown
+            #:fg #:bg #:jobs #:disown #:wait-for-job
             #:history-suggestion #:search-history-use-case
             #:interactive-history-search-use-case))
 )

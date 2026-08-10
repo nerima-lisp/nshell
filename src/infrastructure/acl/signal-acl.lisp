@@ -28,11 +28,26 @@
     ((integerp signal) signal)
     ((keywordp signal)
      (ecase signal
+       (:sighup sb-unix:sighup)
        (:sigint sb-unix:sigint)
+       (:sigquit sb-unix:sigquit)
+       (:sigill sb-unix:sigill)
+       (:sigtrap sb-unix:sigtrap)
+       (:sigbus sb-unix:sigbus)
+       (:sigfpe sb-unix:sigfpe)
+       (:sigkill sb-unix:sigkill)
+       (:sigusr1 sb-unix:sigusr1)
+       (:sigsegv sb-unix:sigsegv)
+       (:sigusr2 sb-unix:sigusr2)
+       (:sigpipe sb-unix:sigpipe)
+       (:sigalrm sb-unix:sigalrm)
        (:sigterm sb-unix:sigterm)
+       (:sigstop sb-unix:sigstop)
        (:sigtstp sb-unix:sigtstp)
        (:sigcont sb-unix:sigcont)
        (:sigchld sb-unix:sigchld)
+       (:sigttin sb-unix:sigttin)
+       (:sigttou sb-unix:sigttou)
        (:sigwinch sb-unix:sigwinch)))
     ((nshell.domain.signals:signal-p signal)
      (%signal-number (nshell.domain.signals:signal-name signal)))
@@ -93,6 +108,10 @@
   (declare (ignore signal info context))
   (setf *terminal-resized* t))
 
+(defun consume-sigint-received-p ()
+  "Return and clear the pending SIGINT notification."
+  (prog1 *sigint-received*
+    (setf *sigint-received* nil)))
 (defun consume-terminal-resize-p ()
   "Return and clear the pending terminal resize notification."
   (prog1 *terminal-resized*

@@ -8,11 +8,15 @@
   '(("alias" . %builtin-alias)
     ("abbr" . %builtin-abbr)
     ("bg" . %builtin-bg)
+    ("break" . %builtin-break)
     ("cd" . %builtin-cd)
+    ("command" . %builtin-command)
     ("complete" . %builtin-complete)
     ("contains" . %builtin-contains)
+    ("continue" . %builtin-continue)
     ("count" . %builtin-count)
     ("disown" . %builtin-disown)
+    ("eval" . %builtin-eval)
     ("exec" . %builtin-exec)
     ("export" . %builtin-export)
     ("false" . %builtin-false)
@@ -21,8 +25,10 @@
     ("help" . %builtin-help)
     ("history" . %builtin-history)
     ("jobs" . %builtin-jobs)
+    ("kill" . %builtin-kill)
     ("pipeline-graph" . %builtin-pipeline-graph)
     ("echo" . %builtin-echo)
+    ("printf" . %builtin-printf)
     ("exit" . %builtin-exit)
     ("ls" . %builtin-ls)
     ("not" . %builtin-not)
@@ -30,6 +36,7 @@
     ("read" . %builtin-read)
     ("seq" . %builtin-seq)
     ("set" . %builtin-set)
+    ("unset" . %builtin-unset)
     ("source" . %builtin-source)
     ("." . %builtin-source)
     ("string" . %builtin-string-dispatch)
@@ -37,6 +44,7 @@
     ("[" . %builtin-bracket)
     ("true" . %builtin-true)
     ("type" . %builtin-type)
+    ("wait" . %builtin-wait)
     ("which" . %builtin-which)))
 
 (defparameter +complete-option-specs+
@@ -67,17 +75,6 @@
     (:name "repeat" :handler %builtin-string-repeat :manipulation-p t)
     (:name "sub" :handler %builtin-string-sub :manipulation-p t)
     (:name "trim" :handler %builtin-string-trim)))
-
-(defun %builtin-string-subcommand-specs (&key manipulation-only-p)
-  (if manipulation-only-p
-      (remove-if-not #'%builtin-string-spec-manipulation-p
-                     +builtin-string-subcommand-specs+)
-      +builtin-string-subcommand-specs+))
-
-(defun %builtin-string-subcommand-spec (subcommand)
-  (find subcommand +builtin-string-subcommand-specs+
-        :key #'%builtin-string-spec-name
-        :test #'string=))
 
 (defparameter +string-replace-flag-option-specs+
   '((:name quiet :short "-q" :long "--quiet")

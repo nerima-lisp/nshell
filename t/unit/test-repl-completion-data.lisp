@@ -222,8 +222,8 @@
         (expect present-p :to-be-falsy)
         (expect value :to-be-null))))
 
-  (it "command-catalog-static-helper-boundaries-are-internal"
-    "Static catalog helpers should only exist behind percent-prefixed boundaries."
+  (it "command-catalog-data-helper-boundaries-are-internal"
+    "Catalog data helpers should only exist behind percent-prefixed boundaries."
     (assert-package-symbol-boundaries
         :package "NSHELL.DOMAIN.COMPLETION"
         :absent (nshell.domain.completion::catalog-entry-property-projection
@@ -391,4 +391,14 @@
                                     (char= #\- (char flag 1)))
                                long-candidates
                                short-candidates)
-                      :test #'string=) :to-be-truthy))))))
+                      :test #'string=) :to-be-truthy)))))
+  (it "catalog-rejects-non-string-command-source"
+    "Catalog construction should fail fast when a source row has no string command."
+    (let ((signaled-p nil))
+      (handler-case
+          (nshell.domain.completion::%command-catalog
+           (list (list :command 42)))
+        (error ()
+          (setf signaled-p t)))
+      (expect signaled-p :to-be-truthy)))
+  (it "catalog-entry-property-projection" "Catalog entry property access should preserve each modeled field." (let ((entry (nshell.domain.completion::%make-catalog-command-entry :command "run" :synopsis "run [args]" :description "Run a command." :subcommands (list "exec") :flags (list "--verbose") :option-values (list "json") :exclusive-options (list "--quiet")))) (expect "run" :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :command)) (expect "run [args]" :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :synopsis)) (expect "Run a command." :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :description)) (expect (list "exec") :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :subcommands)) (expect (list "--verbose") :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :flags)) (expect (list "json") :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :option-values)) (expect (list "--quiet") :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :exclusive-options)) (expect "run" :to-equal (nshell.domain.completion::%catalog-entry-command entry)))))

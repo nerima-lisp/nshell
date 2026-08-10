@@ -141,8 +141,20 @@ The terminator is consumed and not included in the returned text."
        (decode-ss3-sequence (read-ss3-sequence)))
       (t (decode-meta-key prefix)))))
 
-(defun read-key-event ()
-  "Read and decode one terminal key event from `*standard-input*'."
-  (let ((ch (read-char *standard-input* nil nil)))
-    (when ch
-      (decode-character-key ch))))
+(defun read-key-event (&key interrupt-predicate)
+  "Read and decode one terminal key event from standard input.
+When INTERRUPT-PREDICATE is supplied, poll the stream so a pending signal can
+be converted into a Ctrl-C key event without leaving the main loop blocked in
+READ-CHAR."
+  (if (null interrupt-predicate)
+      (let ((ch (read-char *standard-input* nil nil)))
+        (when ch
+          (decode-character-key ch)))
+      (loop
+        when (funcall interrupt-predicate)
+          return (make-key-event :ctrl-c)
+        when (listen *standard-input*)
+          return (let ((ch (read-char *standard-input* nil nil)))
+                   (when ch
+                     (decode-character-key ch)))
+        do (sleep 0.001))))

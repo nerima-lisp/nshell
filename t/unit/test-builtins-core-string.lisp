@@ -14,15 +14,31 @@
         ('("upper" "Hello")
          :code 0
          :output (format nil "HELLO~%"))
+        ('("join")
+         :code 1
+         :contains '("usage"))
         ('("join" "," "a" "b" "c")
          :code 0
          :output (format nil "a,b,c~%"))
+        ('("split")
+         :code 1
+         :contains '("usage"))
         ('("split" "," "a,b,,c")
          :code 0
          :output (format nil "a~%b~%~%c~%"))
         ('("trim" "  hi  ")
          :code 0
          :output (format nil "hi~%")))))
+  (it "string-builtin-covers-empty-separators-and-unknown-subcommands"
+    "string handles empty separators and reports unsupported subcommands."
+    (with-builtins-context (context)
+      (assert-string-builtin-cases (context)
+        ((list "split" "" "abc")
+         :code 0
+         :output (format nil "a~%b~%c~%"))
+        ((list "unknown")
+         :code 1
+         :contains (list "usage")))))
 
   (it "string-builtin-collect-cases"
     "string collect normalizes input streams and handles empty-input options."
@@ -72,6 +88,9 @@
         ('("replace" "--" "-old" "new" "-old value")
          :code 0
          :output (format nil "new value~%"))
+        ('("replace" "old" "new")
+         :code 1
+         :contains '("usage"))
         ('("replace" "--bogus" "x" "y" "x")
          :code 1
          :contains '("unknown option --bogus")))))
@@ -101,6 +120,9 @@
         ('("match" "--" "-*" "-abc" "abc")
          :code 0
          :output (format nil "-abc~%"))
+        ('("match" "pattern")
+         :code 1
+         :contains '("usage"))
         ('("match" "--bogus" "x" "x")
          :code 1
          :contains '("unknown option --bogus")))))
@@ -165,6 +187,9 @@
         ('("sub" "-q" "-s" "2" "abcde")
          :code 0
          :output-empty t)
+        ('("sub")
+         :code 1
+         :contains '("usage"))
         ('("sub" "-s2" "--" "-abc")
          :code 0
          :output (format nil "abc~%"))

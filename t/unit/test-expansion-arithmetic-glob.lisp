@@ -158,6 +158,10 @@
     (expect '("preapost" "prebpost") :to-equal (nshell.domain.expansion:expand-braces "pre{a,b}post"))
     (expect '("pre{x}post") :to-equal (nshell.domain.expansion:expand-braces "pre{x}post")))
 
+  (it "glob-star-does-not-cross-path-separators"
+    "A single star matches within one path segment."
+    (expect "*" :not-to-glob-match "a/b"))
+
   (it "glob-expansion-finds-files"
     "A star glob expands to matching files."
     ;; Inject filesystem adapters for DDD purity
@@ -220,6 +224,44 @@
                      (:subdirs "/tmp/")
                      (:files "/tmp/sub/")
                      (:subdirs "/tmp/sub/")) :to-equal (nreverse calls)))))
+
+  (it "glob-adapters-return-empty-when-unconfigured"
+    "Filesystem traversal stays inert until its boundary adapters are installed."
+    (let ((nshell.domain.expansion:*glob-directory-files-fn* nil)
+          (nshell.domain.expansion:*glob-subdirectories-fn* nil))
+      (expect (nshell.domain.expansion::immediate-directory-files "/tmp")
+              :to-be-null)
+      (expect (nshell.domain.expansion::recursive-directory-files "/tmp")
+              :to-be-null)))
+
+  (it "expand-glob-preserves-unmatched-pattern"
+    "A glob with no filesystem matches remains a literal argument."
+    (let ((nshell.domain.expansion:*glob-directory-files-fn*
+            (lambda (dir)
+              (declare (ignore dir))
+              nil))
+          (nshell.domain.expansion:*glob-subdirectories-fn*
+            (lambda (dir)
+              (declare (ignore dir))
+              nil)))
+      (expect '("/tmp/*.txt")
+              :to-equal
+              (nshell.domain.expansion:expand-glob "/tmp/*.txt"))))
+
+  (it "expand-all-preserves-unmatched-assignment-glob"
+    "An unmatched assignment-like glob keeps its prefix and literal suffix."
+    (let ((env (test-expansion-env))
+          (nshell.domain.expansion:*glob-directory-files-fn*
+            (lambda (dir)
+              (declare (ignore dir))
+              nil))
+          (nshell.domain.expansion:*glob-subdirectories-fn*
+            (lambda (dir)
+              (declare (ignore dir))
+              nil)))
+      (expect '("label=*.txt")
+              :to-equal
+              (nshell.domain.expansion:expand-all "label=*.txt" env))))
 
   (it "expand-glob-projects-relative-root-candidates"
     "A ./ glob root projects candidates without leaking the implicit directory prefix."

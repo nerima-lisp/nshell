@@ -140,7 +140,7 @@
   (it "source-command-substitution-expands-inside-double-quotes"
     "source supports embedded command substitutions inside double-quoted words."
     (with-builtins-source-ok (output code context
-                                     '("echo \"file-(echo main).lisp\""))
+                                     '("echo \"file-$(echo main).lisp\""))
         (format nil "file-main.lisp~%")))
 
   (it "source-command-substitution-expands-inside-compound-word"

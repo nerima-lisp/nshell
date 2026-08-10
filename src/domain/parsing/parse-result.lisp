@@ -7,7 +7,7 @@
 
 (defun %make-normalized-parse-result (ast &optional errors incomplete)
   (%make-parse-result ast
-                      (or errors '())
+                      (if errors errors nil)
                       (not (null incomplete))))
 
 (define-value-struct %parse-diagnostic

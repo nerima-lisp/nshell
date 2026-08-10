@@ -25,13 +25,14 @@ packages/
 ```
 
 The command-line feature is the first slice in this layout. Its pure option
-policy, application contract, `cl-cli` adapter, and help presentation live in
+policy, application contract, and help presentation live in
 `packages/feature/command-line/src/`. `src/main.lisp` remains a small
-composition root: its established internal entry points delegate to the
-feature boundary, so existing startup and test callers do not need to know
-where the slice is stored. ASDF loads the package modules before the legacy
-`src/<DDD>` components, preserving the dependency direction while making the
-vertical boundary explicit.
+composition root and consumes `cl-cli` directly, so the feature boundary does
+not contain a compatibility adapter. Its established internal entry points
+delegate to the feature boundary, so startup and test callers do not need to
+know where the slice is stored. ASDF loads the package modules before the
+shared `src/<DDD>` components, preserving the dependency direction while
+making the vertical boundary explicit.
 
 Tests follow the same observable boundaries: `t/unit/` checks feature policy
 and contracts, `t/integration/` checks the source topology, and `t/e2e/`

@@ -158,6 +158,7 @@
         16
         " && cat out.txt"
         :suggest-update))
+  (it "suggestion-redirection-helpers-cover-aggregate-and-invalid-targets" "Redirection acceptance keeps aggregate operators and malformed fd targets atomic." (expect 2 :to-equal (nshell.presentation::suggestion-redirection-operator-end "&>" 0)) (expect 2 :to-equal (nshell.presentation::suggestion-redirection-operator-end ">>" 0)) (expect 2 :to-equal (nshell.presentation::suggestion-compact-redirection-end "2>&x" 0)) (expect 5 :to-equal (nshell.presentation::suggestion-compact-redirection-end "2>&10" 0)))
 
   (it "input-state-copy-explicit-nil-clears-suggestion"
     (let* ((state (input-state
@@ -282,6 +283,15 @@
                       :completion-base-buffer nil
                       :completion-base-cursor nil
                       :last-candidates nil)))
+
+  (it "input-state-suggestion-accepts-contiguous-word-tokens"
+    "Adjacent word-like tokens form one acceptance segment."
+    (let ((first-token (nshell.domain.parsing:make-token :word "git" 0 3))
+          (second-token (nshell.domain.parsing:make-token :word "status" 3 9)))
+      (expect 9 :to-equal
+        (nshell.presentation::suggestion-token-accept-end
+         (list first-token second-token)
+         first-token))))
 
   (it "input-state-suggestion-word-like-token-p-returns-canonical-booleans"
     (expect t :to-be (nshell.presentation::suggestion-word-like-token-p

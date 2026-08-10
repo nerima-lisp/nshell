@@ -310,12 +310,14 @@
             (declare (ignore state candidates))
             (expect 1 :to-equal fetch-count))))))
 
-  (it "repl-completion-does-not-fetch-help-for-uncatalogued-commands"
+  (it "repl-completion-fetches-help-for-available-uncatalogued-commands"
     (with-repl-completion-help-fetcher
-        (fetch-count "Usage: should-not-run")
+        (fetch-count
+         (format nil "Usage: zz-uncatalogued~%Options:~%  --from-help"))
       (with-repl-completion-refresh (state candidates "zz-uncatalogued --")
-        (declare (ignore state candidates))
-        (expect 0 :to-equal fetch-count))))
+        (declare (ignore state))
+        (expect 1 :to-equal fetch-count)
+        (assert-completion-candidate "--from-help" candidates :kind :option))))
 
   (it "repl-completion-rejects-oversized-help-output-before-parsing"
     (with-repl-test-state

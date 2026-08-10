@@ -7,24 +7,25 @@ extensively-commented review.
 
 ## Method and result: component lists vs. the file tree
 
-Every `(:file "...")` entry was extracted from each of the three `defsystem`
-forms (`nshell`, `nshell/test`, `nshell/weave`) and diffed against a
-recursive walk of `src/`, `t/` (excluding `t/weave/`), and `t/weave/`
-respectively:
+Every `(:file "...")` entry was checked against the pathname declared by its
+containing component in each of the three `defsystem` forms (`nshell`,
+`nshell/test`, `nshell/weave`). The runtime comparison includes the shared
+`src/` tree, the command-line feature under `packages/feature/`, and the
+explicit static-data files under `data/`; the test comparisons cover `t/`
+(excluding `t/weave/`) and `t/weave/` respectively:
 
 | system | components | in tree but missing from components | in components but missing from tree |
 |---|---|---|---|
-| `nshell` (150 files) | matches `src/` exactly | none | none |
-| `nshell/test` (118 files) | matches `t/` (non-weave) exactly | none | none |
-| `nshell/weave` (7 files) | matches `t/weave/` exactly | none | none |
+| `nshell` | matches the declared `src/`, feature, and `data/` roots | none | none |
+| `nshell/test` | matches `t/` (non-weave) exactly | none | none |
+| `nshell/weave` | matches `t/weave/` exactly | none | none |
 
-No orphaned source file, and no component pointing at a file that does not
-exist -- the failure mode `:serial t` systems are prone to (someone adds a
-file and forgets the `.asd` entry, or deletes one and leaves it) is absent.
-The one apparent duplicate `:file "package"` (275 total entries, one
-repeated name) is not a bug: `nshell`'s is `src/package.lisp` and
-`nshell/test`'s is `t/package.lisp`, distinct files under each system's own
-`:pathname`.
+No declared component points at a missing file, and the production files are
+all reachable from one of the declared roots. The static tables intentionally
+live in `data/` while remaining part of the serial runtime system through
+explicit `:pathname` entries. The one apparent duplicate `:file "package"` is
+not a bug: `nshell`'s is `src/package.lisp` and `nshell/test`'s is `t/package.lisp`,
+distinct files under each system's own `:pathname`.
 
 ## Metadata key order
 
@@ -43,8 +44,9 @@ exempt from this order, per the org standard the header cites.
 `:serial t` makes load order significant, and it already encodes real
 constraints, verified rather than assumed:
 
-- The five `package*.lisp` files load before every logic file (this
-  session's split), so no file can reference a package before it exists.
+- All package modules load before every logic file, so no file can reference a
+  package before it exists. The completion catalog is split into command data
+  and display data, and REPL output event handlers have their own component.
 - `application/` loads before `infrastructure/`, which looks backwards for
   a layered architecture until read against `shell-context.lisp`: the
   application layer receives infrastructure's functions as *values*
@@ -57,9 +59,9 @@ constraints, verified rather than assumed:
 
 ## Conclusion
 
-No drift between `nshell.asd` and the tree, no ordering violation, and the
-one metadata-order question (duplicate `:file "package"`) resolves to a
-non-issue on inspection. Re-run the cross-check by extracting `(:file
-"...")` names per `defsystem` and diffing against `find src -name '*.lisp'`
-/ `find t -name '*.lisp'` (excluding `t/weave`) / `find t/weave -name
-'*.lisp'`.
+No drift between `nshell.asd` and its declared roots, no ordering violation,
+and the metadata-order question (duplicate `:file "package"`) resolves to a
+non-issue on inspection. Re-run the cross-check by resolving each component's
+effective pathname (including `:pathname` overrides) and comparing it with
+`rg --files src packages data t -g '*.lisp'`, while treating `t/weave/` as the
+separate weave system.

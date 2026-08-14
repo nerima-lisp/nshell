@@ -69,6 +69,21 @@ Verify the public artefacts from a clean checkout:
   `gh release list`, so a release whose notes were forgotten never reaches
   downstream.
 
+## Updating locked dependencies
+
+The scheduled `flake.lock` workflow updates the flake inputs and opens or
+refreshes a pull request. For a manual refresh or review:
+
+1. Inspect `git diff -- flake.lock` and confirm that only the intended
+   dependency graph changed.
+2. Run `nix flake check --print-build-logs` on Linux. On macOS, run the checks
+   available for the pinned dependency set.
+3. Keep the lock-file refresh separate from behaviour or release-version
+   changes.
+
+Merge a lock-file refresh only after reviewing the generated diff and the
+check results, because the lock file is part of the release input.
+
 When triggering the workflow manually rather than by tag push, pass the tag as
 the `tag` input so checkout, artefact naming, and the GitHub Release target all
 use it consistently. Do not build a branch ref while publishing a tag release.

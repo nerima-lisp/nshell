@@ -384,8 +384,20 @@
       # image -- its `source` builtin reads shell scripts, and no code path
       # loads an ASDF system at run time -- so shipping the source closure
       # beside the binary would buy nothing and cost the whole closure.
+      #
+      # `programPath = "src/nshell"`: cl-nix-forge's `mkExecutable` defaults
+      # to checking `$out/<lispSystem>` (i.e. `$out/nshell`) for the dumped
+      # image, but ASDF's `:build-pathname "nshell"` resolves relative to
+      # this system's own `:pathname "src"`, so `program-op` actually writes
+      # it to `$out/src/nshell` -- confirmed by the `fixupPhase` RPATH-shrink
+      # log naming that exact path. Left at the default, `mkExecutable`
+      # looks in the wrong place and fails with "ASDF program-op did not
+      # create executable nshell" even though the build succeeded; this is
+      # exactly the ASDF-specific detail `programPath`'s own docstring in
+      # cl-nix-forge says to make explicit at this boundary.
       executable = {
         installSource = false;
+        programPath = "src/nshell";
       };
 
       # docs/mkdocs.yml + docs/src/, built with `--strict` so a broken link or

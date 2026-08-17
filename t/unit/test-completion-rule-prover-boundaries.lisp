@@ -1,11 +1,11 @@
 (in-package #:nshell/test)
 
-(cl-prolog:define-foreign-predicate (test-builtin-true)
+(cl-prolog-kit:define-foreign-predicate (test-builtin-true)
     (rulebase environment depth emit)
   (declare (ignore rulebase depth))
   (funcall emit environment))
 
-(cl-prolog:define-foreign-predicate (test-builtin-string= a b)
+(cl-prolog-kit:define-foreign-predicate (test-builtin-string= a b)
     (rulebase environment depth emit)
   (declare (ignore rulebase depth))
   (when (and (stringp a) (stringp b) (string= a b))

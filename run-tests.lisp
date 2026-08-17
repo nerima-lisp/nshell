@@ -10,7 +10,7 @@
 ;;;; Dependency resolution mirrors scripts/weave.lisp: inside `nix develop` or
 ;;;; the Nix sandbox the systems are already on CL_SOURCE_REGISTRY, and for a
 ;;;; plain ghq checkout the parent directory tree is registered so sibling
-;;;; checkouts (../cl-weave, ../cl-prolog, ...) are found automatically. An
+;;;; checkouts (../cl-weave, ../cl-prolog-kit, ...) are found automatically. An
 ;;;; explicit CL_SOURCE_REGISTRY still wins, because the existing configuration
 ;;;; is inherited rather than replaced.
 

@@ -19,7 +19,7 @@ which keeps the interactive core deterministic and unit-testable.
 ## Completion is a knowledge base, not a table
 
 Completion candidates come from a logic knowledge base compiled into a
-[cl-prolog](https://github.com/nerima-lisp/cl-prolog) rulebase, queried through
+[cl-prolog-kit](https://github.com/nerima-lisp/cl-prolog-kit) rulebase, queried through
 predicates such as `completes`, `describes`, `has-flag`, `command-is`,
 `suggests-dir`, and `suggests-file`.
 

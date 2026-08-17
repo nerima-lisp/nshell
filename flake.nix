@@ -20,16 +20,16 @@
     };
 
     # Sibling packages are ALWAYS pinned to a release tag. A bare
-    # `github:nerima-lisp/cl-prolog` follows that repo's default branch, which
+    # `github:nerima-lisp/cl-prolog-kit` follows that repo's default branch, which
     # means an upstream push to main breaks this repo's CI without warning.
     #
-    # cl-prolog and cl-weave are consumed as flakes, because nshell wants
+    # cl-prolog-kit and cl-weave are consumed as flakes, because nshell wants
     # cl-weave's built CLI for the dev shell and not only its source; both
     # therefore carry the mandatory `inputs.nixpkgs.follows`, without which
     # each would drag in its own nixpkgs, inflating flake.lock and rebuilding
     # the same derivations.
-    cl-prolog = {
-      url = "github:nerima-lisp/cl-prolog/v1.4.3";
+    cl-prolog-kit = {
+      url = "github:nerima-lisp/cl-prolog-kit/v1.5.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -50,8 +50,8 @@
       url = "github:nerima-lisp/cl-parser-kit/v1.1.1";
       flake = false;
     };
-    cl-dataflow = {
-      url = "github:nerima-lisp/cl-dataflow/v1.1.1";
+    cl-dataflow-kit = {
+      url = "github:nerima-lisp/cl-dataflow-kit/v1.2.0";
       flake = false;
     };
     cl-boundary-kit = {
@@ -116,10 +116,10 @@
       self,
       nixpkgs,
       cl-nix-forge,
-      cl-prolog,
+      cl-prolog-kit,
       cl-weave,
       cl-parser-kit,
-      cl-dataflow,
+      cl-dataflow-kit,
       cl-host-kit,
       cl-boundary-kit,
       cl-cli,
@@ -196,8 +196,8 @@
         in
         rec {
           clProlog = sibling {
-            name = "cl-prolog";
-            source = cl-prolog;
+            name = "cl-prolog-kit";
+            source = cl-prolog-kit;
           };
           clWeave = sibling {
             name = "cl-weave";
@@ -208,8 +208,8 @@
             source = cl-parser-kit;
           };
           clDataflow = sibling {
-            name = "cl-dataflow";
-            source = cl-dataflow;
+            name = "cl-dataflow-kit";
+            source = cl-dataflow-kit;
             dependencies = [
               clProlog
               clConcurrentKit
@@ -303,9 +303,9 @@
             cp ${./LICENSE} "$out/LICENSE"
             cp ${ctx.pkgs.sbcl}/share/doc/sbcl/COPYING "$out/LICENSES/SBCL-COPYING"
             cp ${ctx.pkgs.zstd.src}/LICENSE "$out/LICENSES/ZSTD-LICENSE"
-            cp ${cl-prolog}/LICENSE "$out/LICENSES/CL-PROLOG-LICENSE"
+            cp ${cl-prolog-kit}/LICENSE "$out/LICENSES/CL-PROLOG-KIT-LICENSE"
             cp ${cl-parser-kit}/LICENSE "$out/LICENSES/CL-PARSER-KIT-LICENSE"
-            cp ${cl-dataflow}/LICENSE "$out/LICENSES/CL-DATAFLOW-LICENSE"
+            cp ${cl-dataflow-kit}/LICENSE "$out/LICENSES/CL-DATAFLOW-KIT-LICENSE"
             cp ${cl-host-kit}/LICENSE "$out/LICENSES/CL-HOST-KIT-LICENSE"
             cp ${cl-boundary-kit}/LICENSE "$out/LICENSES/CL-BOUNDARY-KIT-LICENSE"
             cp ${cl-cli}/LICENSE "$out/LICENSES/CL-CLI-LICENSE"
@@ -361,9 +361,9 @@
 
       # cl-weave is a dependency of `nshell/test` and `nshell/weave` only (see
       # nshell.asd), so it is a CHECK dependency: it must not enter the
-      # delivered binary's closure. cl-prolog/weave, which the nshell/weave
+      # delivered binary's closure. cl-prolog-kit/weave, which the nshell/weave
       # suite also loads, needs nothing extra -- it is a secondary system of
-      # cl-prolog, whose whole source tree is already on the registry above.
+      # cl-prolog-kit, whose whole source tree is already on the registry above.
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
 
       # Drives `checks.default`, `checks.weave` and `apps.test` from this one

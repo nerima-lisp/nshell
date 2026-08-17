@@ -1,6 +1,6 @@
 (in-package #:nshell.domain.completion)
 
-;;; Command completion data lives in a CL-PROLOG rulebase: KB-ADD-COMMAND and
+;;; Command completion data lives in a CL-PROLOG-KIT rulebase: KB-ADD-COMMAND and
 ;;; friends assert COMMAND-REGISTERED/SUBCOMMAND-OF/HAS-FLAG/OPTION-VALUE/
 ;;; EXCLUSIVE-GROUP/DESCRIBES facts, and three small rules derive COMPLETES
 ;;; from them so COMPLETE (engine.lisp) answers command, subcommand, and flag
@@ -8,7 +8,7 @@
 
 ;;; KNOWLEDGE-BASE is a RULE-KNOWLEDGE-BASE subtype so %COMPLETION-CANDIDATES
 ;;; (engine.lisp) can TYPECASE it ahead of the plain RULE-KNOWLEDGE-BASE that
-;;; *BUILT-IN-RULE-KNOWLEDGE-BASE* uses -- both are CL-PROLOG rulebases under
+;;; *BUILT-IN-RULE-KNOWLEDGE-BASE* uses -- both are CL-PROLOG-KIT rulebases under
 ;;; the hood, but they answer completion queries through different rule sets.
 (defstruct (knowledge-base (:include rule-knowledge-base)))
 
@@ -23,7 +23,7 @@
     kb))
 
 (defun %kb-solution-values (kb goal variable)
-  (mapcar (lambda (solution) (cl-prolog:solution-binding variable solution))
+  (mapcar (lambda (solution) (cl-prolog-kit:solution-binding variable solution))
           (prove-all kb goal)))
 
 (defun %unique-string-values (values)
@@ -89,8 +89,8 @@
   (let ((values-by-option (make-hash-table :test #'equal))
         (options nil))
     (dolist (solution (prove-all kb (list 'option-value cmd-name '?option '?value)))
-      (let ((option (cl-prolog:solution-binding '?option solution))
-            (value (cl-prolog:solution-binding '?value solution)))
+      (let ((option (cl-prolog-kit:solution-binding '?option solution))
+            (value (cl-prolog-kit:solution-binding '?value solution)))
         (unless (nth-value 1 (gethash option values-by-option))
           (push option options))
         (push value (gethash option values-by-option))))
@@ -106,8 +106,8 @@
    (remove-duplicates
     (loop for solution in
             (prove-all kb (list 'option-value-kind cmd-name '?option '?kind))
-          for option = (cl-prolog:solution-binding '?option solution)
-          for kind = (cl-prolog:solution-binding '?kind solution)
+          for option = (cl-prolog-kit:solution-binding '?option solution)
+          for kind = (cl-prolog-kit:solution-binding '?kind solution)
           when (and (stringp option)
                     (member kind '(:file :directory) :test #'eq))
             collect (list option kind))

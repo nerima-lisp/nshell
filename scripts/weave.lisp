@@ -2,10 +2,10 @@
 ;;;;
 ;;;; Usage:  sbcl --script scripts/weave.lisp
 ;;;;
-;;;; Beyond cl-weave and cl-prolog, this suite also depends on cl-prolog/weave.
+;;;; Beyond cl-weave and cl-prolog-kit, this suite also depends on cl-prolog-kit/weave.
 ;;;; Inside `nix develop` those systems are already on the
 ;;;; ASDF source registry.  For a plain local checkout we also register the
-;;;; parent directory tree, so sibling ghq checkouts (../cl-weave, ../cl-prolog)
+;;;; parent directory tree, so sibling ghq checkouts (../cl-weave, ../cl-prolog-kit)
 ;;;; are discovered automatically.  An explicit CL_SOURCE_REGISTRY still wins
 ;;;; because we inherit the existing configuration.
 

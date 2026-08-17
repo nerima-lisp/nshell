@@ -1,4 +1,4 @@
-;;;; The cl-prolog/weave bridge: nshell's completion rules asserted as
+;;;; The cl-prolog-kit/weave bridge: nshell's completion rules asserted as
 ;;;; declarative query cases.  deftest-queries expands each spec into an
 ;;;; independent cl-weave `it`, rebuilding the rulebase per case so no test
 ;;;; leaks state into the next.

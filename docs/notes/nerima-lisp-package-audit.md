@@ -14,9 +14,9 @@ appear unqualified):
 
 | package | role in nshell | evidence |
 |---|---|---|
-| `cl-prolog` | completion knowledge base — facts/rules, `map-prolog-solutions` | `domain/completion/rule-data.lisp` (8 refs) |
+| `cl-prolog-kit` | completion knowledge base — facts/rules, `map-prolog-solutions` | `domain/completion/rule-data.lisp` (8 refs) |
 | `cl-parser-kit` | `$((…))` arithmetic tokenizer + Pratt parser | `:import-from` in `package.lisp`; `domain/expansion/arithmetic.lisp` |
-| `cl-dataflow` | reactive dataflow wiring | 12 refs |
+| `cl-dataflow-kit` | reactive dataflow wiring | 12 refs |
 | `cl-host-kit` | host environment, pathname, and process boundaries | `presentation/repl-environment.lisp`, `infrastructure/terminal/ansi.lisp`, `application/builtin-runtime.lisp` |
 | `cl-boundary-kit` | clock/sleeper boundaries (also under cl-process-kit) | 14 refs |
 | `cl-cli` | argument-vector parsing for `main` | 13 refs |
@@ -32,7 +32,7 @@ The test systems are kept separate from the runtime dependency audit:
 | package | role in nshell's test systems | evidence |
 |---|---|---|
 | `cl-weave` | the test framework for the weave suite | `nshell/weave` |
-| `cl-prolog/weave` | cl-prolog-query coverage of the completion engine | `nshell/weave` |
+| `cl-prolog-kit/weave` | cl-prolog-kit-query coverage of the completion engine | `nshell/weave` |
 
 ## Transitive, not adopted directly
 
@@ -62,6 +62,6 @@ nshell never handles (`cl-json-kit`), or a build-time tool (`paredit-cli`).
 Re-run the usage half of this audit with:
 
 ```
-rg -o '\b(cl-prolog|cl-dataflow|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit|cl-concurrent-kit)::?[a-z]' src/ \
+rg -o '\b(cl-prolog-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit|cl-concurrent-kit)::?[a-z]' src/ \
   | perl -pe 's/:.*$//' | sort | uniq -c | sort -rn
 ```

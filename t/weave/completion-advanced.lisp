@@ -1,4 +1,4 @@
-;;;; Advanced cl-prolog usage over nshell's real completion knowledge.
+;;;; Advanced cl-prolog-kit usage over nshell's real completion knowledge.
 ;;;;
 ;;;; These cases go past yes/no proof search: aggregation with findall,
 ;;;; negation-as-failure, solution ordering, and a Lisp foreign predicate
@@ -6,7 +6,7 @@
 
 (in-package #:nshell/weave)
 
-(describe "completion knowledge via advanced cl-prolog"
+(describe "completion knowledge via advanced cl-prolog-kit"
 
   (it "aggregates every completes/2 solution into one list with findall"
     (let* ((rulebase (built-in-rulebase))

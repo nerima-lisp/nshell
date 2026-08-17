@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
+use Cwd qw(abs_path);
 use File::Find qw(find);
 use File::Basename qw(basename dirname);
 use File::Spec;
@@ -36,6 +37,14 @@ for my $relative (qw(
 die "bin/nshell is not executable\n" unless -x "$bundle/bin/nshell";
 
 my @store_references;
+# `abs_path`, not `$bundle` directly: `nix build`'s `result` is a symlink to
+# the store path, and File::Find only follows a symlink it meets while
+# descending -- given one as its OWN starting point, it visits that single
+# entry and never opens the directory it points to. Every check below this
+# point that uses `-f "$bundle/..."` or `glob "$bundle/..."` is a plain
+# string test the OS resolves through the symlink, so this was the only
+# scan silently visiting nothing under the exact `... result` invocation
+# ci.yml (and this script's own usage line) documents.
 find(
     sub {
         return unless -f $_;
@@ -44,7 +53,7 @@ find(
         my $contents = <$fh>;
         push @store_references, $File::Find::name if $contents =~ m{/nix/store/};
     },
-    $bundle,
+    abs_path($bundle),
 );
 die "Nix store reference in release bundle:\n  " . join("\n  ", @store_references) . "\n"
     if @store_references;

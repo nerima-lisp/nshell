@@ -2,25 +2,16 @@
 
 ;;; Background pipeline stage helpers.
 
-(defun %background-call-process-operation (function &rest arguments)
-  (handler-case
-      (values (apply function arguments) nil)
-    (error (condition)
-      (values nil condition))))
-
-(defun %background-process-pid (context process)
+(defun %background-process-pid (process)
   "Return the OS PID of a background PROCESS object, or NIL if unavailable."
-  (%background-call-process-operation (%process-fn context :process-pid) process))
+  (ignore-errors (sb-ext:process-pid process)))
 
 (defun %register-background-job (context processes command-line)
   "Register PROCESSES as a background job in CONTEXT's monitor and process registry.
 PROCESSES is a single process object (command) or a list (pipeline).
-  Returns the job ID, or NIL when PIDs cannot be obtained."
+Returns the job ID, or NIL when PIDs cannot be obtained."
   (let* ((proc-list (if (listp processes) processes (list processes)))
-         (pids (delete nil
-                       (mapcar (lambda (process)
-                                 (%background-process-pid context process))
-                               proc-list))))
+         (pids (delete nil (mapcar #'%background-process-pid proc-list))))
     (when pids
       (let ((job-id (nshell.domain.job-control:monitor-add-background-job
                      (shell-context-job-monitor context)
@@ -44,10 +35,10 @@ PROCESSES is a single process object (command) or a list (pipeline).
        (nshell.domain.parsing:pipeline-node-commands command))
     (cond
       (error
-       (%abort-process-substitution-resources context resources)
+       (%abort-process-substitution-resources resources)
        (values error 127))
       (resources
-       (%abort-process-substitution-resources context resources)
+       (%abort-process-substitution-resources resources)
        (values
         (%process-substitution-error
          "is not supported in background jobs")
@@ -62,8 +53,8 @@ PROCESSES is a single process object (command) or a list (pipeline).
                  redirect-split))
               (clean-pipeline (nshell.domain.parsing:make-pipeline-node
                                clean-commands))
-              (processes (funcall (%process-fn context :spawn-pipeline-async)
-                                  clean-commands :redirects redirects))
+              (processes (nshell.infrastructure.acl:spawn-pipeline-async
+                          clean-commands :redirects redirects))
               (command-line (nshell.domain.parsing:ast-node->command-line
                              clean-pipeline)))
          (when processes
@@ -75,10 +66,10 @@ PROCESSES is a single process object (command) or a list (pipeline).
       (%expand-command-node-in-context context command)
     (cond
       (error
-       (%abort-process-substitution-resources context resources)
+       (%abort-process-substitution-resources resources)
        (values error 127))
       (resources
-       (%abort-process-substitution-resources context resources)
+       (%abort-process-substitution-resources resources)
        (values
         (%process-substitution-error
          "is not supported in background jobs")
@@ -95,8 +86,8 @@ PROCESSES is a single process object (command) or a list (pipeline).
               (args (nshell.domain.parsing:command-node-arg-values clean-command))
               (command-line (nshell.domain.parsing:ast-node->command-line
                              clean-command))
-              (process (funcall (%process-fn context :spawn-async)
-                                cmd args :redirects redirects)))
+              (process (nshell.infrastructure.acl:spawn-async
+                        cmd args :redirects redirects)))
          (when process
            (%register-background-job context process command-line))
          (values nil 0))))))

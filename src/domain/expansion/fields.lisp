@@ -96,11 +96,11 @@ returning the (possibly multiple) resulting fields."
   "Dispatch on STYLE and evaluate the matching form."
   (let ((style-var (gensym "STYLE")))
     `(let ((,style-var ,style))
-      (case ,style-var
-        ((nil) ,unquoted-form)
-        (:single ,single-form)
-        (:double ,double-form)
-        (t (error "Invalid quote style ~S" ,style-var))))))
+       (case ,style-var
+         ((nil) ,unquoted-form)
+         (:single ,single-form)
+         (:double ,double-form)
+         (t (error "Invalid quote style ~S" ,style-var))))))
 
 (defun expand-double-quoted (input env)
   "Expand INPUT as the contents of a double-quoted string.
@@ -124,8 +124,8 @@ single string. Command substitution is applied by the caller before this."
   (boundaries nil :type list)
   (start nil :type (or null integer)))
 
-(defun whitespace-field-separator-p (character)
-  (member character '(#\Space #\Tab #\Newline) :test #'char=))
+(defun whitespace-field-separator-p (char)
+  (member char '(#\Space #\Tab #\Newline) :test #'char=))
 
 (defun whitespace-field-scanner-start-field (scanner index)
   (unless (whitespace-field-scanner-start scanner)
@@ -200,13 +200,13 @@ single string. Command substitution is applied by the caller before this."
         (values nil
                 (%command-name-candidate-error candidate (length fields))))))
 
-(defun single-command-name-or-error (text fields)
+(defun %single-command-name-or-error (text fields)
   "Return one command name from FIELDS or the canonical ambiguity error."
   (%resolve-command-name-candidate
    (%make-command-name-candidate text fields)))
 
 (defun expand-command-name-by-quote-style (text style env)
   "Expand a command name and return either one field or an ambiguity error."
-  (single-command-name-or-error
+  (%single-command-name-or-error
    text
    (expand-command-name-fields-by-quote-style text style env)))

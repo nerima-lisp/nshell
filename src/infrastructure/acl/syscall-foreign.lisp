@@ -12,6 +12,11 @@
   (request sb-alien:unsigned-long)
   (arg sb-sys:system-area-pointer))
 
+(defconstant +tiocgwinsz+
+  #+darwin #x40087468
+  #+linux #x5413
+  #-(or darwin linux) 0)
+
 (defconstant +tiocswinsz+
   #+darwin #x80087467
   #+linux #x5414

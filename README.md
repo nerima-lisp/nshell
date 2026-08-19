@@ -77,7 +77,7 @@ outside the tested support boundary.
 ## Development
 
 ```sh
-nix develop          # SBCL + cl-weave + paredit; registry already set
+nix develop          # SBCL with CL_SOURCE_REGISTRY already set
 nix run .#test       # run the test suite
 nix flake check      # full hermetic gate on x86_64-linux CI
 nix fmt              # format Nix sources (treefmt)

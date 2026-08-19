@@ -1,9 +1,9 @@
 (in-package #:nshell.presentation)
 
-(defun %char-visible-width (character)
-  "Terminal column width of CHARACTER, delegating to cl-tty-kit's Unicode-aware
+(defun %char-visible-width (char)
+  "Terminal column width of CHAR, delegating to cl-tty-kit's Unicode-aware
 classifier (control/combining -> 0, wide/emoji -> 2, otherwise 1)."
-  (cl-tty-kit:char-width character))
+  (cl-tty-kit:char-width char))
 
 (defun %string-visible-width (text)
   "Sum of the terminal column widths of the characters in TEXT."
@@ -53,9 +53,9 @@ it and treats a negative WIDTH as 0."
                       segment)
           else
             append (let ((truncated (%truncate-string-to-width text remaining)))
-                     (when (plusp (length truncated))
-                       (setf remaining 0)
-                       (list (nshell.domain.prompting:make-prompt-segment
+                      (when (plusp (length truncated))
+                        (setf remaining 0)
+                        (list (nshell.domain.prompting:make-prompt-segment
                                truncated
                                kind)))))))
 
@@ -65,8 +65,7 @@ it and treats a negative WIDTH as 0."
       (multiple-value-bind (rows cols) (nshell.infrastructure.acl:get-terminal-size)
         (declare (ignore rows))
         (if (plusp cols) cols 80))
-    (error (condition)
-      (values 80 condition))))
+    (error () 80)))
 
 (defun segment-kind->role (kind)
   "Map prompt segment kind to highlight role for theme lookup."
@@ -96,7 +95,7 @@ it and treats a negative WIDTH as 0."
     (let ((text (nshell.domain.prompting:prompt-segment-text seg))
           (kind (nshell.domain.prompting:prompt-segment-kind seg)))
       (format stream "~a~a"
-              (nshell.highlight:theme-color->ansi theme (segment-kind->role kind))
+              (theme-color->ansi theme (segment-kind->role kind))
               text)
       (nshell.infrastructure.terminal:ansi-reset-style stream))))
 

@@ -13,10 +13,10 @@
 Each case is (EXPECTED INPUT &rest ARGS)."
   (let ((expander (gensym "EXPANDER-")))
     `(let ((,expander ,builder))
-      ,@(mapcar (lambda (case)
-                  (destructuring-bind (expected &rest args) case
-                    `(expect (,predicate ',expected (funcall ,expander ,@args)) :to-be-truthy)))
-                cases))))
+       ,@(mapcar (lambda (case)
+                   (destructuring-bind (expected &rest args) case
+                     `(expect (,predicate ',expected (funcall ,expander ,@args)) :to-be-truthy)))
+                 cases))))
 
 (defmacro %assert-expansion-cases-with-env ((predicate expander env-form) &body cases)
   "Assert CASES against an EXPANDER that takes INPUT and ENV."
@@ -25,40 +25,40 @@ Each case is (EXPECTED INPUT &rest ARGS)."
         (expander-fn (gensym "EXPANDER-")))
     `(let ((,env ,env-form)
            (,expander-fn ,expander))
-      (%assert-expansion-cases (,predicate
-                                (lambda (,input)
-                                  (funcall ,expander-fn ,input ,env)))
-        ,@cases))))
+       (%assert-expansion-cases (,predicate
+                                 (lambda (,input)
+                                   (funcall ,expander-fn ,input ,env)))
+         ,@cases))))
 
 (defmacro %assert-multiple-value-cases ((predicate builder) &body cases)
   "Assert CASES against a BUILDER that returns multiple values."
   (let ((expander (gensym "EXPANDER-")))
     `(let ((,expander ,builder))
-      ,@(mapcar (lambda (case)
-                  (destructuring-bind (expected &rest args) case
-                    `(expect (,predicate ',expected
-                                     (multiple-value-list
-                                      (funcall ,expander ,@args))) :to-be-truthy)))
-                cases))))
+       ,@(mapcar (lambda (case)
+                   (destructuring-bind (expected &rest args) case
+                     `(expect (,predicate ',expected
+                                      (multiple-value-list
+                                       (funcall ,expander ,@args))) :to-be-truthy)))
+                 cases))))
 
 (defmacro %assert-quote-style-dispatch-case (style expected branch)
   `(let ((observed-branch nil))
-    (expect ,expected :to-equal (nshell.domain.expansion:expand-by-quote-style
-                 ,style
-                (progn (setf observed-branch :unquoted) '("unquoted"))
-                (progn (setf observed-branch :single) '("single"))
-                 (progn (setf observed-branch :double) '("double"))))
-    (expect ,branch :to-be observed-branch)))
+     (expect ,expected :to-equal (nshell.domain.expansion:expand-by-quote-style
+                  ,style
+                 (progn (setf observed-branch :unquoted) '("unquoted"))
+                 (progn (setf observed-branch :single) '("single"))
+                  (progn (setf observed-branch :double) '("double"))))
+     (expect ,branch :to-be observed-branch)))
 
 (defmacro %assert-command-name-case (input style expected-command expected-error-count env)
   `(multiple-value-bind (command error)
        (nshell.domain.expansion:expand-command-name-by-quote-style
         ,input ,style ,env)
-    (expect ,expected-command :to-equal command)
-    (if ,expected-error-count
-        (expect (format nil "nshell: ~a: command name expansion produced ~d fields~%"
-                             ,input ,expected-error-count) :to-equal error)
-        (expect error :to-be-null))))
+     (expect ,expected-command :to-equal command)
+     (if ,expected-error-count
+         (expect (format nil "nshell: ~a: command name expansion produced ~d fields~%"
+                              ,input ,expected-error-count) :to-equal error)
+         (expect error :to-be-null))))
 
 (describe "expansion-tests"
   (it "dollar-var-expansion"
@@ -180,17 +180,17 @@ Each case is (EXPECTED INPUT &rest ARGS)."
   (it "single-command-name-or-error-validates-non-empty-cardinality"
     "Command-position resolution drops empty fields before validating cardinality."
     (multiple-value-bind (command error)
-        (nshell.domain.expansion:single-command-name-or-error "$EMPTY" '(""))
+        (nshell.domain.expansion::%single-command-name-or-error "$EMPTY" '(""))
       (expect command :to-be-null)
       (expect (format nil "nshell: $EMPTY: command name expansion produced 0 fields~%") :to-equal error))
     (multiple-value-bind (command error)
-        (nshell.domain.expansion:single-command-name-or-error "$CMD" '("" "echo" ""))
+        (nshell.domain.expansion::%single-command-name-or-error "$CMD" '("" "echo" ""))
       (expect "echo" :to-equal command)
       (expect error :to-be-null))
     (multiple-value-bind (command error)
-        (nshell.domain.expansion:single-command-name-or-error "$CMD" '("echo" "printf"))
-      (expect command :to-be-null)
-      (expect (format nil "nshell: $CMD: command name expansion produced 2 fields~%") :to-equal error)))
+        (nshell.domain.expansion::%single-command-name-or-error "$CMD" '("echo" "printf"))
+        (expect command :to-be-null)
+        (expect (format nil "nshell: $CMD: command name expansion produced 2 fields~%") :to-equal error)))
 
   (it "command-name-candidate-resolves-non-empty-cardinality"
     "command-name-candidate owns empty-field removal before command resolution."

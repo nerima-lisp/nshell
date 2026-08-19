@@ -1,10 +1,9 @@
 (in-package #:nshell.application)
 
-(defun %call-process-cleanup (function &rest arguments)
-  (handler-case
-      (values (apply function arguments) nil)
-    (error (condition)
-      (values nil condition))))
+(declaim (notinline nshell.infrastructure.acl:process-substitution-resource-path
+                    nshell.infrastructure.acl:process-substitution-resource-fd))
+
+(declaim (special nshell.infrastructure.acl:*external-command-timeout*))
 
 ;;; Pipeline stage execution and command expansion.
 ;;; execute-ast-in-context (defined in execute-pipeline-control.lisp) is
@@ -36,31 +35,25 @@
     (t
      nil)))
 
-(defun %release-process-substitution-resources (context resources)
+(defun %release-process-substitution-resources (resources)
   (dolist (resource resources)
-    (%call-process-cleanup
-     (%process-fn context :release-process-substitution-fd)
-     resource)))
+    (ignore-errors
+      (nshell.infrastructure.acl:release-process-substitution-fd resource))))
 
-(defun %finish-process-substitution-resources (context resources)
+(defun %finish-process-substitution-resources (resources)
   (dolist (resource resources)
-    (%call-process-cleanup
-     (%process-fn context :wait-process-substitution)
-     resource)
-    (%call-process-cleanup
-     (%process-fn context :release-process-substitution-fd)
-     resource)))
+    (ignore-errors
+      (nshell.infrastructure.acl:wait-process-substitution resource))
+    (ignore-errors
+      (nshell.infrastructure.acl:release-process-substitution-fd resource))))
 
-(defun %abort-process-substitution-resources (context resources)
+(defun %abort-process-substitution-resources (resources)
   (dolist (resource resources)
-    (%call-process-cleanup
-     (%process-fn context :close-process-substitution)
-     resource)))
+    (ignore-errors
+      (nshell.infrastructure.acl:close-process-substitution resource))))
 
-(defun %process-substitution-resource-fds (context resources)
-  (mapcar (lambda (resource)
-            (funcall (%process-fn context :process-substitution-resource-fd)
-                     resource))
+(defun %process-substitution-resource-fds (resources)
+  (mapcar #'nshell.infrastructure.acl:process-substitution-resource-fd
           resources))
 
 (defun %materialize-process-substitution-in-context (context value)
@@ -89,7 +82,7 @@
                                                                        context
                                                                        commands)
         (when nested-resources
-          (%abort-process-substitution-resources context nested-resources)
+          (%abort-process-substitution-resources nested-resources)
           (return-from
            %materialize-process-substitution-in-context
            (values
@@ -116,18 +109,13 @@
                 (nshell.domain.parsing:command-list-redirect-split-result-redirects
                  redirect-split)))
           (handler-case (let ((resource
-                               (funcall (%process-fn
-                                         context
-                                         :spawn-process-substitution)
-                                        direction
-                                        clean-commands
-                                        :redirects
-                                        redirects)))
+                               (nshell.infrastructure.acl:spawn-process-substitution
+                                direction
+                                clean-commands
+                                :redirects
+                                redirects)))
                           (values
-                           (funcall
-                            (%process-fn
-                             context
-                             :process-substitution-resource-path)
+                           (nshell.infrastructure.acl:process-substitution-resource-path
                             resource)
                            resource
                            nil))
@@ -157,7 +145,7 @@
                  (multiple-value-bind (path resource error)
                      (%materialize-process-substitution-in-context context value)
                    (when error
-                     (%abort-process-substitution-resources context resources)
+                     (%abort-process-substitution-resources resources)
                      (return-from %expand-command-args-in-context
                        (values nil nil error)))
                    (setf args
@@ -175,7 +163,7 @@
                     (not (null (member value '("<<" "<<-") :test #'string=))))))
           (values args (nreverse resources) nil))
       (nshell.domain.expansion:parameter-expansion-error (condition)
-        (%abort-process-substitution-resources context resources)
+        (%abort-process-substitution-resources resources)
         (values nil nil
                 (format nil "nshell: ~a~%" condition))))))
 
@@ -215,7 +203,7 @@ command name expands to zero or multiple fields (ambiguous)."
           (%expand-command-node-in-context context command)
         (if error
             (progn
-              (%abort-process-substitution-resources context resources)
+              (%abort-process-substitution-resources resources)
               (return-from %expand-command-nodes-in-context
                 (values nil error nil)))
             (progn
@@ -255,7 +243,7 @@ command name expands to zero or multiple fields (ambiguous)."
           (with-input-from-string (*standard-input* input)
             (%execute-clean-command-node-in-context context command-node redirects))
           (%execute-clean-command-node-in-context context command-node redirects))
-      (%execute-external-pipeline-stage context command-node input redirects)))
+      (%execute-external-pipeline-stage command-node input redirects)))
 
 (defun %execute-source-pipeline-in-context (context commands redirects)
   (let ((input nil)
@@ -302,7 +290,7 @@ command name expands to zero or multiple fields (ambiguous)."
         (%restore-context-redirects context)))))
 
 (defun %execute-os-pipeline-with-process-substitutions
-    (context clean-commands redirects resources &optional (pipefail-p nil))
+    (clean-commands redirects resources &optional (pipefail-p nil))
   (let ((spawned-p nil))
     (unwind-protect
          (handler-case
@@ -311,17 +299,16 @@ command name expands to zero or multiple fields (ambiguous)."
                (values
                 (with-output-to-string (*standard-output*)
                   (multiple-value-bind (status statuses)
-                      (funcall (%process-fn context :spawn-pipeline)
+                      (nshell.infrastructure.acl:spawn-pipeline
                        clean-commands
                        :redirects redirects
                        :pipefail-p pipefail-p
                        :preserve-fds
-                       (%process-substitution-resource-fds context resources)
+                       (%process-substitution-resource-fds resources)
                        :after-spawn
                        (lambda ()
                          (setf spawned-p t)
                          (%release-process-substitution-resources
-                          context
                           resources)))
                     (setf exit-code (or status 0)
                           pipeline-statuses (or statuses
@@ -331,14 +318,14 @@ command name expands to zero or multiple fields (ambiguous)."
            (error (condition)
              (values (format nil "nshell: ~a~%" condition) 127 (list 127))))
       (if spawned-p
-          (%finish-process-substitution-resources context resources)
-          (%abort-process-substitution-resources context resources)))))
+          (%finish-process-substitution-resources resources)
+          (%abort-process-substitution-resources resources)))))
 
 (defun execute-command-node-in-context (context command-node)
   (multiple-value-bind (expanded error resources)
       (%expand-command-node-in-context context command-node)
     (when error
-      (%abort-process-substitution-resources context resources)
+      (%abort-process-substitution-resources resources)
       (return-from execute-command-node-in-context (values error 127)))
     (let* ((redirect-split (%extract-command-redirects expanded))
            (clean-command
@@ -350,25 +337,18 @@ command name expands to zero or multiple fields (ambiguous)."
       (if resources
           (if (%shell-internal-command-p context clean-command)
               (progn
-                (%abort-process-substitution-resources context resources)
+                (%abort-process-substitution-resources resources)
                 (values
                  (%process-substitution-error
                   "requires an external command")
                  127))
           (%execute-external-pipeline-stage
-           context
-           clean-command
-           nil
-           redirects
-           resources))
+               clean-command nil redirects resources))
           (if (and (not (%shell-internal-command-p context clean-command))
                    (nshell.domain.parsing:redirects-require-shell-wrapper-p
                     redirects))
               (%execute-external-pipeline-stage
-               context
-               clean-command
-               nil
-               redirects)
+               clean-command nil redirects)
               (%execute-clean-command-node-in-context
                context clean-command redirects))))))
 
@@ -379,7 +359,7 @@ command name expands to zero or multiple fields (ambiguous)."
     (multiple-value-bind (expanded-commands error resources)
         (%expand-command-nodes-in-context context commands)
       (when error
-        (%abort-process-substitution-resources context resources)
+        (%abort-process-substitution-resources resources)
         (return-from execute-pipeline-node-in-context (values error 127)))
       (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
              (clean-commands
@@ -393,15 +373,14 @@ command name expands to zero or multiple fields (ambiguous)."
                     (some (lambda (cmd) (%shell-internal-command-p context cmd))
                           clean-commands))
                 (progn
-                  (%abort-process-substitution-resources context resources)
+                  (%abort-process-substitution-resources resources)
                   (values
                    (%process-substitution-error
                     "is not supported for internal or CPS pipelines")
                    127))
                 (multiple-value-bind (output exit-code statuses)
-                     (%execute-os-pipeline-with-process-substitutions
-                      context
-                      clean-commands redirects resources
+                    (%execute-os-pipeline-with-process-substitutions
+                     clean-commands redirects resources
                      (shell-context-pipefail-p context))
                   (%record-pipeline-statuses context statuses)
                   (values output exit-code)))
@@ -417,7 +396,7 @@ command name expands to zero or multiple fields (ambiguous)."
                     (setf output
                           (with-output-to-string (*standard-output*)
                             (multiple-value-bind (status statuses)
-                                (funcall (%process-fn context :spawn-pipeline)
+                                (nshell.infrastructure.acl:spawn-pipeline
                                  clean-commands
                                  :redirects redirects
                                  :pipefail-p
@@ -430,16 +409,16 @@ command name expands to zero or multiple fields (ambiguous)."
 
 ;; -- Public pipeline API (OS-level) -------------------------------------------
 
-(defun execute-pipeline (pipeline-ast process-fns)
+(defun execute-pipeline (pipeline-ast)
   "Execute a pipeline AST using OS-level pipes. Returns the last process exit code."
   (let ((commands (if (nshell.domain.parsing:pipeline-node-p pipeline-ast)
                       (nshell.domain.parsing:pipeline-node-commands pipeline-ast)
                       (list pipeline-ast))))
-    (let ((context (%make-pipeline-shell-context process-fns)))
+    (let ((context (%make-pipeline-shell-context)))
       (multiple-value-bind (expanded-commands error resources)
           (%expand-command-nodes-in-context context commands)
         (when error
-          (%abort-process-substitution-resources context resources)
+          (%abort-process-substitution-resources resources)
           (write-string error *error-output*)
           (return-from execute-pipeline 127))
         (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
@@ -453,7 +432,7 @@ command name expands to zero or multiple fields (ambiguous)."
                    (some (lambda (cmd) (%shell-internal-command-p context cmd))
                          clean-commands))
               (progn
-                (%abort-process-substitution-resources context resources)
+                (%abort-process-substitution-resources resources)
                 (write-string
                  (%process-substitution-error
                   "is not supported for internal commands")
@@ -462,20 +441,19 @@ command name expands to zero or multiple fields (ambiguous)."
               (if resources
                   (nth-value
                    1
-                    (%execute-os-pipeline-with-process-substitutions
-                     context
-                     clean-commands redirects resources
+                   (%execute-os-pipeline-with-process-substitutions
+                    clean-commands redirects resources
                     (shell-context-pipefail-p context)))
-                  (funcall (%process-fn context :spawn-pipeline)
+                  (nshell.infrastructure.acl:spawn-pipeline
                    clean-commands
                    :redirects redirects
                    :pipefail-p (shell-context-pipefail-p context)))))))))
 
-(defun execute-pipeline-use-case (pipeline dispatcher process-fns)
+(defun execute-pipeline-use-case (pipeline dispatcher)
   (when dispatcher
     (publish-event dispatcher
                    (nshell.domain.events:make-pipeline-started-event pipeline nil)))
-  (let ((exit-code (or (execute-pipeline pipeline process-fns) 0)))
+  (let ((exit-code (or (execute-pipeline pipeline) 0)))
     (when dispatcher
       (publish-event dispatcher
                      (nshell.domain.events:make-pipeline-completed-event pipeline exit-code)))

@@ -10,7 +10,7 @@ Beyond `define-value-struct` (`docs/notes/value-struct-audit.md`), 26 other
 boilerplate categories this goal targets:
 
 - **Builtin command dispatch.** `define-builtin`
-  (`application/builtin-commands.lisp`) auto-generates ignore-declarations;
+  (`application/builtin-macros.lisp`) auto-generates ignore-declarations;
   `%with-option-arguments` / `%with-required-argument`
   (`application/builtin-runtime.lisp`) capture the shared "parse leading
   option flags, validate required args" skeleton; `%table-builtin-case`
@@ -20,8 +20,8 @@ boilerplate categories this goal targets:
   (`application/builtin-string-support.lisp`) cover the `string` subcommand
   family; `define-test-predicate-table` (`application/builtin-test.lisp`)
   covers `test`/`[`. Registration itself is a single data table
-  (`+builtin-registry-specs+` in `application/builtin-spec-data.lisp`), not
-  hand-written per-command code.
+  (`+builtin-registry-specs+` in `data/application/builtin-spec-data.lisp`),
+  not hand-written per-command code.
 - **Value structs.** 37 value structs generate their
   accessor/predicate/constructor boilerplate from `define-value-struct`
   instead of by hand (`docs/notes/value-struct-audit.md`).

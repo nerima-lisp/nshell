@@ -2,7 +2,7 @@
 ;;;;
 ;;;; Usage:  sbcl --script scripts/coverage.lisp
 ;;;;
-;;;; nshell/test depends on sibling nerima-lisp toolkit checkouts (cl-prolog,
+;;;; nshell/test depends on sibling nerima-lisp toolkit checkouts (cl-prolog-kit,
 ;;;; cl-parser-kit, ...). Inside `nix develop` those systems are already on the
 ;;;; ASDF source registry. Outside that shell, set NSHELL_SOURCE_TREE to one
 ;;;; explicit directory containing those systems, or set CL_SOURCE_REGISTRY

@@ -1,20 +1,20 @@
 ;;; Dataflow diagnostics: render shell pipelines and the job lifecycle through
-;;; cl-dataflow.
+;;; cl-dataflow-kit.
 ;;;
 ;;; nshell already models a pipeline as a linear PIPELINE-PLAN and a job as a
-;;; small state machine embedded in the monitor.  cl-dataflow provides a
+;;; small state machine embedded in the monitor.  cl-dataflow-kit provides a
 ;;; general computation-graph and state-machine toolkit with structural
 ;;; validation and deterministic DOT/Mermaid export.  This module bridges the
-;;; two: it translates a pipeline plan into a cl-dataflow graph (gaining free
+;;; two: it translates a pipeline plan into a cl-dataflow-kit graph (gaining free
 ;;; acyclicity/wiring validation and visualization) and describes the job
-;;; lifecycle as a cl-dataflow state machine for analysis and diagrams.
+;;; lifecycle as a cl-dataflow-kit state machine for analysis and diagrams.
 ;;;
 ;;; Everything here is additive and read-only — no existing execution or job
 ;;; path is altered.  The job-lifecycle machine is a *specification*, not a
 ;;; runtime enforcer: nshell's own JOB-STATE-TRANSITION remains authoritative.
 (in-package #:nshell.application)
 
-;;; --- Pipeline plan -> cl-dataflow graph --------------------------------
+;;; --- Pipeline plan -> cl-dataflow-kit graph --------------------------------
 
 (defun %pipeline-stage-node-name (index command)
   "Unique, human-readable node name for the stage at INDEX running COMMAND.
@@ -22,19 +22,19 @@ The index prefix keeps duplicate command names (e.g. `a | a`) distinct."
   (format nil "~D:~A" index (nshell.domain.execution:command-name command)))
 
 (defun pipeline-plan->dataflow-graph (plan)
-  "Translate a nshell PIPELINE-PLAN into a cl-dataflow graph: one node per
+  "Translate a nshell PIPELINE-PLAN into a cl-dataflow-kit graph: one node per
 stage, one edge per producer->consumer pipe.  Each node carries the stage's
 full command as :command metadata."
-  (let* ((graph (cl-dataflow:make-graph))
+  (let* ((graph (cl-dataflow-kit:make-graph))
          (commands (nshell.domain.execution:pipeline-plan-commands plan))
          (names (loop for command in commands
                       for index from 0
                       collect (%pipeline-stage-node-name index command))))
     (loop for command in commands
           for name in names
-          do (cl-dataflow:add-node
+          do (cl-dataflow-kit:add-node
               graph
-              (cl-dataflow:make-node
+              (cl-dataflow-kit:make-node
                name
                :inputs '("value")
                :outputs '("value")
@@ -42,19 +42,19 @@ full command as :command metadata."
                                (nshell.domain.execution:command-to-list command)))))
     (loop for (from to) on names
           while to
-          do (cl-dataflow:add-edge graph from to
+          do (cl-dataflow-kit:add-edge graph from to
                                    :from-port "value" :to-port "value"))
     graph))
 
 (defun pipeline-plan->dot (plan &key (name "pipeline"))
   "Render PLAN as a Graphviz DOT digraph string, validating its wiring first."
   (let ((graph (pipeline-plan->dataflow-graph plan)))
-    (cl-dataflow:validate-graph graph)
-    (cl-dataflow:graph->dot graph :name name)))
+    (cl-dataflow-kit:validate-graph graph)
+    (cl-dataflow-kit:graph->dot graph :name name)))
 
 (defun pipeline-plan->mermaid (plan &key (direction "LR"))
   "Render PLAN as a Mermaid flowchart string."
-  (cl-dataflow:graph->mermaid (pipeline-plan->dataflow-graph plan)
+  (cl-dataflow-kit:graph->mermaid (pipeline-plan->dataflow-graph plan)
                               :direction direction))
 
 ;;; --- Command line -> pipeline plan -------------------------------------
@@ -84,17 +84,17 @@ Returns NIL for input that is not a plain command or `|`-pipeline."
     (:error nil)
     (:empty nil)))
 
-;;; --- Job lifecycle -> cl-dataflow state machine ------------------------
+;;; --- Job lifecycle -> cl-dataflow-kit state machine ------------------------
 ;;;
 ;;; States and events mirror nshell's job model (job.lisp / monitor.lisp).
-;;; cl-dataflow normalizes keyword states/events to upcased strings and matches
+;;; cl-dataflow-kit normalizes keyword states/events to upcased strings and matches
 ;;; case-insensitively, so nshell's own keywords pass straight through.
 
 (defun job-lifecycle-machine ()
-  "A cl-dataflow state machine describing the nshell job lifecycle.
+  "A cl-dataflow-kit state machine describing the nshell job lifecycle.
 Transitions correspond to the monitor's real state changes plus the terminal
 reap step (:completed -> :done)."
-  (cl-dataflow:define-state-machine (:initial-state :created)
+  (cl-dataflow-kit:define-state-machine (:initial-state :created)
     (:created    :start      :running)
     (:running    :stop       :stopped)
     (:stopped    :continue   :running)
@@ -109,10 +109,10 @@ reap step (:completed -> :done)."
 (defun job-lifecycle-analysis ()
   "Return a plist summarizing the job lifecycle machine's structure."
   (let ((machine (job-lifecycle-machine)))
-    (list :states (cl-dataflow:state-machine-states machine)
-          :terminal (cl-dataflow:state-machine-terminal-states machine)
-          :unreachable (cl-dataflow:state-machine-unreachable-states machine)
-          :deterministic (cl-dataflow:state-machine-deterministic-p machine))))
+    (list :states (cl-dataflow-kit:state-machine-states machine)
+          :terminal (cl-dataflow-kit:state-machine-terminal-states machine)
+          :unreachable (cl-dataflow-kit:state-machine-unreachable-states machine)
+          :deterministic (cl-dataflow-kit:state-machine-deterministic-p machine))))
 
 ;;; --- `pipeline-graph` builtin ------------------------------------------
 

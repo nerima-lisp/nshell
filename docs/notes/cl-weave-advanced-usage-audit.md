@@ -28,12 +28,12 @@ and a dedicated `test-completion-properties.lisp` with 12), four separate
 input-state property files (core, navigation, kill-yank, search, completion),
 autosuggest, prompt rendering, and CPS.
 
-## cl-prolog-query integration — a second suite dedicated to it
+## cl-prolog-kit-query integration — a second suite dedicated to it
 
 `nshell/weave` (`nshell.asd`, `t/weave/`) is a whole second ASDF system,
 separate from `nshell/test`, whose own description is "property-based,
-fixture, benchmark, and cl-prolog-query coverage of the completion engine".
-It depends on `cl-prolog/weave` specifically for this. The weave tests use
+fixture, benchmark, and cl-prolog-kit-query coverage of the completion engine".
+It depends on `cl-prolog-kit/weave` specifically for this. The weave tests use
 `prove`/`assert-fact!`/prolog querying against the completion rulebase
 exported by `nshell.domain.completion` (`#:completes #:describes #:has-flag
 #:command-is ...` -- see `nerima-lisp-package-audit.md`), letting tests write
@@ -60,6 +60,6 @@ test.
 "cl-weave を利用して高度な使い方をしてほしい" is satisfied by breadth, not
 one showcase: mutation testing (the framework's own stated "most advanced
 facility"), property-based trials with custom generators and shrinkers,
-a second whole ASDF system dedicated to cl-prolog-query integration, and
+a second whole ASDF system dedicated to cl-prolog-kit-query integration, and
 table-driven consolidation, all exercised by the existing suite rather than
 being demonstrated once and left unused elsewhere.

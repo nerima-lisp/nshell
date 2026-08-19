@@ -2,7 +2,7 @@
 ;;;;
 ;;;; Usage:  sbcl --script scripts/weave.lisp
 ;;;;
-;;;; Beyond cl-weave and cl-prolog, this suite also depends on cl-prolog/weave.
+;;;; Beyond cl-weave and cl-prolog-kit, this suite also depends on cl-prolog-kit/weave.
 ;;;; The ASDF source and output configuration is shared with run-tests.lisp and
 ;;;; the coverage and benchmark entry points.
 

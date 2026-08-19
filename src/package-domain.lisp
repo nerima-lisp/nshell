@@ -226,7 +226,7 @@ that is what keeps expansion testable without a disk.")
   (:documentation
    "Domain: the completion engine. Reads the cursor context out of a command
 line, consults a knowledge base of commands, subcommands, and flags, and answers
-with ranked candidates. The interesting half is the cl-prolog rulebase: the
+with ranked candidates. The interesting half is the cl-prolog-kit rulebase: the
 exported predicates below are goals callers may query directly.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
@@ -244,8 +244,8 @@ exported predicates below are goals callers may query directly.")
             #:assert-fact! #:assert-rule! #:prove #:prove-all
             #:completion-rulebase
             ;; Completion logic predicates: the public vocabulary of the
-            ;; cl-prolog rulebase produced by COMPLETION-RULEBASE.  Exporting
-            ;; the predicate symbols lets callers (and the cl-weave/cl-prolog
+            ;; cl-prolog-kit rulebase produced by COMPLETION-RULEBASE.  Exporting
+            ;; the predicate symbols lets callers (and the cl-weave/cl-prolog-kit
             ;; query suites) write goals such as (completes "git" ?c) that
             ;; unify against the same interned symbols the rulebase stores.
             #:completes #:describes #:has-flag

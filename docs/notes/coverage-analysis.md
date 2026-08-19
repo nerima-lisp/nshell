@@ -36,7 +36,7 @@ minimum with `target-reached=false` is a warning, not a 100% coverage claim.
 - Unit and integration tests cover parsing, expansion, completion, environment,
   process, timeout, redirection, command dispatch, and job management.
 - The weave suite exercises the completion knowledge base through property
-  cases, fixtures, benchmarks, direct Prolog queries, and the `cl-prolog/weave`
+  cases, fixtures, benchmarks, direct Prolog queries, and the `cl-prolog-kit/weave`
   bridge.
 - PTY, terminal, and external-binary paths are verified by the PTY-capable
   runner. The Nix sandbox may skip those environment-dependent cases, so the

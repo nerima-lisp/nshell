@@ -35,14 +35,14 @@ merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
           (cons "nshell" arguments)))
 
 (defparameter +nshell-runtime-dependencies+
-  '(:cl-prolog :cl-parser-kit :cl-dataflow :cl-boundary-kit :cl-cli :cl-tty-kit
+  '(:cl-prolog-kit :cl-parser-kit :cl-dataflow-kit :cl-boundary-kit :cl-cli :cl-tty-kit
     :cl-process-kit :cl-history-kit :cl-host-kit
     ;; cl-log-kit is not an nshell dependency (see docs/nerima-lisp-package-audit.md)
     ;; but cl-boundary-kit and cl-process-kit both depend on it, and the
     ;; subprocess's central-registry holds only these explicit directories with
     ;; no :tree fallback, so it must be listed here to resolve transitively.
     :cl-log-kit
-    ;; Likewise not a direct nshell dependency: cl-dataflow depends on it.
+    ;; Likewise not a direct nshell dependency: cl-dataflow-kit depends on it.
     :cl-concurrent-kit)
   "Every external ASDF system nshell depends on at runtime, plus any transitive
 dependency needed to resolve them under an explicit :central-registry.  The
@@ -64,6 +64,27 @@ central registry, exactly as the parent process resolved them.")
                  collect "--eval"
                  collect (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)"
                                  dependency-root)))))
+
+(defun %executable-on-path-p (path)
+  (ignore-errors
+   (not (zerop (logand (sb-posix:stat-mode (sb-posix:stat path)) #o111)))))
+
+(defun %resolve-real-external-executable (name)
+  "Resolve NAME to an absolute path on the real host PATH, for e2e tests that
+must invoke a genuine external binary rather than nshell's own builtin of the
+same name -- a bare NAME always dispatches to the builtin (builtins take
+priority over PATH; see NSHELL.APPLICATION:RESOLVE-COMMAND-PATH), so only an
+absolute path, which bypasses builtin lookup entirely, can force the
+external one. A path hardcoded to a host location such as /usr/bin or /bin
+assumes filesystem visibility that a fully-sandboxed Nix Linux build does not
+grant, unlike Darwin's sandbox-exec profile or a non-sandboxed dev shell;
+searching the same PATH the spawned nshell subprocess inherits works in
+every environment CI actually builds in."
+  (or (first (nshell.domain.completion:command-path-candidates
+              name
+              (or (sb-ext:posix-getenv "PATH") "")
+              #'%executable-on-path-p))
+      (error "e2e test setup: ~a not found on PATH" name)))
 
 (defun %run-nshell-main (arguments &key input)
   (let* ((root (asdf:system-source-directory :nshell))

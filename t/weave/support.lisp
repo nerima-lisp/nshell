@@ -11,7 +11,7 @@ Referenced through the internal symbol on purpose: the suite verifies the
   nshell.domain.completion::*built-in-rule-knowledge-base*)
 
 (defun built-in-rulebase ()
-  "Compile the built-in completion KB into a fresh cl-prolog:rulebase."
+  "Compile the built-in completion KB into a fresh cl-prolog-kit:rulebase."
   (completion-rulebase (built-in-rule-kb)))
 
 (defun query-values (rulebase goal variable &key (max-depth 64))

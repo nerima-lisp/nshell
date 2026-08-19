@@ -59,7 +59,7 @@ layer where it fits the domain-driven design:
   rule-based tokenizer and Pratt (operator-precedence) parser drive `$((...))`
   arithmetic, which parses to an AST and then evaluates, adding `**`, bitwise
   `& | ^ ~`, shifts `<< >>`, and the ternary `?:`.
-- **[cl-dataflow](https://github.com/nerima-lisp/cl-dataflow)** — renders
+- **[cl-dataflow-kit](https://github.com/nerima-lisp/cl-dataflow-kit)** — renders
   pipelines as validated computation graphs (`pipeline-graph`) and models the
   job lifecycle as an analyzable state machine.
 - **[cl-boundary-kit](https://github.com/nerima-lisp/cl-boundary-kit)** — makes
@@ -83,7 +83,7 @@ layer where it fits the domain-driven design:
   timeout-guarded process launch, escalating SIGTERM to SIGKILL across a
   child's whole process group so a timed-out command substitution leaves no
   orphaned descendants.
-- **[cl-prolog](https://github.com/nerima-lisp/cl-prolog)** — the logic engine
+- **[cl-prolog-kit](https://github.com/nerima-lisp/cl-prolog-kit)** — the logic engine
   behind the completion knowledge base.
 
 ## Test suites
@@ -93,9 +93,9 @@ exposed as Nix checks:
 
 - **`nshell/test`** — the primary regression suite, in `t/`.
 - **`nshell/weave`** — a focused suite exercising the completion engine's
-  cl-prolog knowledge base with property-based tests, fixtures, benchmarks, and
+  cl-prolog-kit knowledge base with property-based tests, fixtures, benchmarks, and
   direct Prolog queries (`findall`, negation-as-failure, foreign predicates)
-  plus the `cl-prolog/weave` query bridge.
+  plus the `cl-prolog-kit/weave` query bridge.
 
 Cases that need a real PTY, `stty`, or external binaries cannot run in the Nix
 sandbox and are covered by CI's separate `integration` job; see

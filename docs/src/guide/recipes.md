@@ -12,7 +12,7 @@ pipeline-graph --mermaid 'cat access.log | grep 404 | wc -l'
 ```
 
 It is a diagnostic built on the
-[cl-dataflow](https://github.com/nerima-lisp/cl-dataflow) computation-graph
+[cl-dataflow-kit](https://github.com/nerima-lisp/cl-dataflow-kit) computation-graph
 toolkit, and it validates the pipeline as it builds the graph, so a malformed
 redirect shows up as an error rather than a picture.
 

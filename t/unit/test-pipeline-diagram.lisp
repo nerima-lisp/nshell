@@ -1,17 +1,17 @@
 (in-package #:nshell/test)
 
-;;; Tests for the cl-dataflow diagnostics module (src/application/pipeline-diagram):
-;;; pipeline plans translated into cl-dataflow graphs, and the job lifecycle
-;;; described as a cl-dataflow state machine.
+;;; Tests for the cl-dataflow-kit diagnostics module (src/application/pipeline-diagram):
+;;; pipeline plans translated into cl-dataflow-kit graphs, and the job lifecycle
+;;; described as a cl-dataflow-kit state machine.
 
 (defun %diagram-node-names (graph)
-  (cl-dataflow:graph-node-names graph))
+  (cl-dataflow-kit:graph-node-names graph))
 
 (defun %diagram-source-names (graph)
-  (mapcar #'cl-dataflow:node-name (cl-dataflow:graph-source-nodes graph)))
+  (mapcar #'cl-dataflow-kit:node-name (cl-dataflow-kit:graph-source-nodes graph)))
 
 (defun %diagram-sink-names (graph)
-  (mapcar #'cl-dataflow:node-name (cl-dataflow:graph-sink-nodes graph)))
+  (mapcar #'cl-dataflow-kit:node-name (cl-dataflow-kit:graph-sink-nodes graph)))
 
 (describe "pipeline-diagram-tests"
   (it "pipeline-plan-translates-to-linear-dataflow-graph"
@@ -22,21 +22,21 @@
       (expect '("0:a") :to-equal (%diagram-source-names graph))
       (expect '("2:c") :to-equal (%diagram-sink-names graph))
       ;; A well-wired linear pipeline is a valid, acyclic dataflow graph.
-      (expect (cl-dataflow:validate-graph graph) :to-be-truthy)))
+      (expect (cl-dataflow-kit:validate-graph graph) :to-be-truthy)))
 
   (it "pipeline-plan-keeps-duplicate-commands-distinct"
     "Repeated command names stay separate nodes via the stage-index prefix."
     (let* ((plan (nshell.application::%command-line->pipeline-plan "a | a | a"))
            (graph (nshell.application::pipeline-plan->dataflow-graph plan)))
       (expect '("0:a" "1:a" "2:a") :to-equal (%diagram-node-names graph))
-      (expect (cl-dataflow:validate-graph graph) :to-be-truthy)))
+      (expect (cl-dataflow-kit:validate-graph graph) :to-be-truthy)))
 
   (it "single-command-pipeline-has-one-node-and-no-edges"
     "A bare command produces a one-node graph."
     (let* ((plan (nshell.application::%command-line->pipeline-plan "ls -la"))
            (graph (nshell.application::pipeline-plan->dataflow-graph plan)))
       (expect '("0:ls") :to-equal (%diagram-node-names graph))
-      (expect (null (cl-dataflow:graph-edges graph)) :to-be-truthy)))
+      (expect (null (cl-dataflow-kit:graph-edges graph)) :to-be-truthy)))
 
   (it "pipeline-graph-builtin-renders-dot"
     "The pipeline-graph builtin returns exit 0 and DOT naming every stage."
@@ -91,5 +91,5 @@ guarding the spec against runtime drift."
                             ("BACKGROUND" "FOREGROUND")
                             ("RUNNING" "EXIT")))
         (destructuring-bind (state event) transition
-          (expect (cl-dataflow:state-machine-transition-for machine state event)
+          (expect (cl-dataflow-kit:state-machine-transition-for machine state event)
                   :to-be-truthy))))))

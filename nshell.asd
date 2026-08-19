@@ -15,9 +15,9 @@
   :homepage "https://github.com/nerima-lisp/nshell"
   :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
   :source-control (:git "https://github.com/nerima-lisp/nshell.git")
-  :depends-on ("cl-prolog"
+  :depends-on ("cl-prolog-kit"
                "cl-parser-kit"
-               "cl-dataflow"
+               "cl-dataflow-kit"
                "cl-host-kit"
                "cl-boundary-kit"
                "cl-cli"
@@ -420,9 +420,9 @@
   :source-control (:git "https://github.com/nerima-lisp/nshell.git")
   :description
   "cl-weave regression suite for nshell: property-based, fixture, benchmark,
-and cl-prolog-query coverage of the completion engine, complementing the
+and cl-prolog-kit-query coverage of the completion engine, complementing the
 primary suite in nshell/test."
-  :depends-on ("nshell" "cl-weave" "cl-prolog" "cl-prolog/weave")
+  :depends-on ("nshell" "cl-weave" "cl-prolog-kit" "cl-prolog-kit/weave")
   :pathname "t"
   :serial t
   :components

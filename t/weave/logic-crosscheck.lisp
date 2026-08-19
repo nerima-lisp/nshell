@@ -1,6 +1,6 @@
 ;;;; cl-weave ships its own small logic engine (logic-program / logic-run).
 ;;;; Here we model a slice of nshell's completion rules in *that* engine and
-;;;; confirm it derives the same answers cl-prolog does for the production
+;;;; confirm it derives the same answers cl-prolog-kit does for the production
 ;;;; rulebase -- a cross-check of two independent solvers against one intent.
 
 (in-package #:nshell/weave)
@@ -19,7 +19,7 @@
 
   (it "resolves a rule the way suggests-dir does in the rulebase"
     ;; Mirror ((suggests-dir ?input) (command-is ?input "cd")) as a cl-weave
-    ;; logic rule and confirm the derived binding matches cl-prolog's answer.
+    ;; logic rule and confirm the derived binding matches cl-prolog-kit's answer.
     (let* ((program (logic-program
                      (:command-is "cd" "cd")
                      (:- (:suggests-dir ?input) (:command-is ?input "cd"))))

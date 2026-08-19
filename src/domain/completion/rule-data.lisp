@@ -18,7 +18,7 @@
                 (&key (facts nil) (rules nil))))
   (facts nil :type list)
   (rules nil :type list)
-  ;; Compiling FACTS/RULES into a CL-PROLOG:RULEBASE is O(count) -- cheap once,
+  ;; Compiling FACTS/RULES into a CL-PROLOG-KIT:RULEBASE is O(count) -- cheap once,
   ;; but COMPLETION-RULEBASE used to pay it on every PROVE call.  A knowledge
   ;; base backing live completion accumulates hundreds of catalog facts and is
   ;; queried on every keystroke, so ASSERT-FACT!/ASSERT-RULE! invalidate this
@@ -62,44 +62,44 @@
   kb)
 
 (defun %make-prolog-fact (fact)
-  (cl-prolog:make-clause (list* (fact-predicate fact) (fact-args fact))))
+  (cl-prolog-kit:make-clause (list* (fact-predicate fact) (fact-args fact))))
 
 (defun %make-prolog-rule (rule)
-  (cl-prolog:make-clause
+  (cl-prolog-kit:make-clause
     (copy-tree (rule-head rule))
     (copy-tree (rule-body rule))))
 
 (defun completion-rulebase (kb)
-  "Compile the completion KB into a first-class CL-PROLOG:RULEBASE.
+  "Compile the completion KB into a first-class CL-PROLOG-KIT:RULEBASE.
 
 Every completion fact and rule becomes a Prolog clause, so the resulting
-rulebase answers the full cl-prolog query API (QUERY-PROLOG, FINDALL,
+rulebase answers the full cl-prolog-kit query API (QUERY-PROLOG, FINDALL,
 negation-as-failure, ...) over nshell's completion knowledge, not just the
 depth-bounded PROVE search used on the interactive path.  Facts and rules are
 inserted in definition order (the KB accumulates them reversed via PUSH) so
 solution order stays stable for callers that depend on it."
   (or (rule-knowledge-base-%rulebase-cache kb)
       (setf (rule-knowledge-base-%rulebase-cache kb)
-            (let ((rulebase (cl-prolog:make-rulebase)))
+            (let ((rulebase (cl-prolog-kit:make-rulebase)))
               (dolist (fact (reverse (rule-knowledge-base-facts kb)) rulebase)
-                (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-fact fact)))
+                (cl-prolog-kit:rulebase-insert-clause! rulebase (%make-prolog-fact fact)))
               (dolist (rule (reverse (rule-knowledge-base-rules kb)) rulebase)
-                (cl-prolog:rulebase-insert-clause! rulebase (%make-prolog-rule rule)))))))
+                (cl-prolog-kit:rulebase-insert-clause! rulebase (%make-prolog-rule rule)))))))
 
 (defun %prove-rulebase (rulebase goal &optional (bindings '()) (max-depth *max-proof-depth*))
     (declare (ignore bindings))
     ;; Completion treats undefined predicates and depth limits as an empty path.
     (let ((solutions '()))
       (handler-case
-          (cl-prolog:map-prolog-solutions
+          (cl-prolog-kit:map-prolog-solutions
            (lambda (solution) (push solution solutions))
            rulebase (copy-tree goal) :max-depth max-depth)
-        (cl-prolog:prolog-runtime-error () nil))
+        (cl-prolog-kit:prolog-runtime-error () nil))
       (nreverse solutions)))
 
 (defun prove (kb goal &optional (bindings '()) (max-depth *max-proof-depth*))
   (declare (ignore bindings))
-  ;; cl-prolog signals an ISO PROLOG-RUNTIME-ERROR (existence_error for a
+  ;; cl-prolog-kit signals an ISO PROLOG-RUNTIME-ERROR (existence_error for a
   ;; goal naming an undefined predicate, resource_error/PROLOG-DEPTH-LIMIT-
   ;; EXCEEDED past MAX-DEPTH, and so on) and unwinds QUERY-PROLOG's whole
   ;; search, discarding solutions already found on other branches. Standard
@@ -112,10 +112,10 @@ solution order stays stable for callers that depend on it."
   (let ((rulebase (completion-rulebase kb))
         (solutions '()))
     (handler-case
-        (cl-prolog:map-prolog-solutions
+        (cl-prolog-kit:map-prolog-solutions
          (lambda (solution) (push solution solutions))
          rulebase (copy-tree goal) :max-depth max-depth)
-      (cl-prolog:prolog-runtime-error () nil))
+      (cl-prolog-kit:prolog-runtime-error () nil))
     (nreverse solutions)))
 
 (defun prove-all (kb goal &key (max-depth *max-proof-depth*))

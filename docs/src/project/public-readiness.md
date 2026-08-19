@@ -50,7 +50,7 @@ What is actually checkable on a plain `aarch64-darwin` development machine
   `nix build --no-link .#checks.aarch64-darwin.formatting` both exit 0 -- the
   mkdocs `--strict` build and the treefmt gate pass on this platform.
 - The Darwin `build`, `default`, and `smoke-test` check attributes can remain
-  unavailable when the pinned `cl-prolog` package has no Darwin build. The
+  unavailable when the pinned `cl-prolog-kit` package has no Darwin build. The
   complete `nix flake check` and release-bundle gate are therefore verified on
   `x86_64-linux` CI; run available Darwin checks directly rather than treating a
   missing attribute as a feature failure.

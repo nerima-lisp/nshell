@@ -20,16 +20,16 @@
     };
 
     # Sibling packages are ALWAYS pinned to a release tag. A bare
-    # `github:nerima-lisp/cl-prolog` follows that repo's default branch, which
+    # `github:nerima-lisp/cl-prolog-kit` follows that repo's default branch, which
     # means an upstream push to main breaks this repo's CI without warning.
     #
-    # cl-prolog and cl-weave are consumed as flakes, because nshell wants
+    # cl-prolog-kit and cl-weave are consumed as flakes, because nshell wants
     # cl-weave's built CLI for the dev shell and not only its source; both
     # therefore carry the mandatory `inputs.nixpkgs.follows`, without which
     # each would drag in its own nixpkgs, inflating flake.lock and rebuilding
     # the same derivations.
-    cl-prolog = {
-      url = "github:nerima-lisp/cl-prolog/v1.4.3";
+    cl-prolog-kit = {
+      url = "github:nerima-lisp/cl-prolog-kit/v1.5.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -50,8 +50,8 @@
       url = "github:nerima-lisp/cl-parser-kit/v1.1.1";
       flake = false;
     };
-    cl-dataflow = {
-      url = "github:nerima-lisp/cl-dataflow/v1.1.1";
+    cl-dataflow-kit = {
+      url = "github:nerima-lisp/cl-dataflow-kit/v1.2.0";
       flake = false;
     };
     cl-boundary-kit = {
@@ -116,10 +116,10 @@
       self,
       nixpkgs,
       cl-nix-forge,
-      cl-prolog,
+      cl-prolog-kit,
       cl-weave,
       cl-parser-kit,
-      cl-dataflow,
+      cl-dataflow-kit,
       cl-host-kit,
       cl-boundary-kit,
       cl-cli,
@@ -196,8 +196,8 @@
         in
         rec {
           clProlog = sibling {
-            name = "cl-prolog";
-            source = cl-prolog;
+            name = "cl-prolog-kit";
+            source = cl-prolog-kit;
           };
           clWeave = sibling {
             name = "cl-weave";
@@ -208,8 +208,8 @@
             source = cl-parser-kit;
           };
           clDataflow = sibling {
-            name = "cl-dataflow";
-            source = cl-dataflow;
+            name = "cl-dataflow-kit";
+            source = cl-dataflow-kit;
             dependencies = [
               clProlog
               clConcurrentKit
@@ -303,9 +303,9 @@
             cp ${./LICENSE} "$out/LICENSE"
             cp ${ctx.pkgs.sbcl}/share/doc/sbcl/COPYING "$out/LICENSES/SBCL-COPYING"
             cp ${ctx.pkgs.zstd.src}/LICENSE "$out/LICENSES/ZSTD-LICENSE"
-            cp ${cl-prolog}/LICENSE "$out/LICENSES/CL-PROLOG-LICENSE"
+            cp ${cl-prolog-kit}/LICENSE "$out/LICENSES/CL-PROLOG-KIT-LICENSE"
             cp ${cl-parser-kit}/LICENSE "$out/LICENSES/CL-PARSER-KIT-LICENSE"
-            cp ${cl-dataflow}/LICENSE "$out/LICENSES/CL-DATAFLOW-LICENSE"
+            cp ${cl-dataflow-kit}/LICENSE "$out/LICENSES/CL-DATAFLOW-KIT-LICENSE"
             cp ${cl-host-kit}/LICENSE "$out/LICENSES/CL-HOST-KIT-LICENSE"
             cp ${cl-boundary-kit}/LICENSE "$out/LICENSES/CL-BOUNDARY-KIT-LICENSE"
             cp ${cl-cli}/LICENSE "$out/LICENSES/CL-CLI-LICENSE"
@@ -319,6 +319,136 @@
             cp ${./man/nshell.1} "$out/share/man/man1/nshell.1"
           '';
         });
+
+      # `packages.releaseBundle`: a relocatable artifact for users without
+      # Nix, as opposed to `deliveryFor`'s `$out/bin/nshell`, which is a
+      # `makeWrapper` script that execs a Lisp core through paths under the
+      # Nix store that built it and cannot run anywhere else.
+      # `scripts/verify-release-bundle.pl` is this function's other half --
+      # it was introduced alongside the derivation this restores (see the
+      # 2026-08-08 "add public readiness tooling" history) and every check
+      # it makes on Linux (no `/nix/store` byte sequence anywhere in the
+      # bundle, a real ELF interpreter, a license file for every runtime
+      # library actually shipped) is a property this build establishes. A
+      # later merge kept the checker and silently dropped the derivation
+      # that satisfied it, which is what this restores; it was never
+      # exercised by CI even before that (docs/src/project/public-readiness.md
+      # still records Linux release evidence as outstanding), so treat this
+      # port as unverified until `build release binary` (ci.yml, ubuntu-latest
+      # only) is green on it.
+      #
+      # Linux only: cl-nix-forge's `mkExecutable` (v0.5.0,
+      # lib/batteries/app.nix) falls back, for SBCL on Darwin, to a bare
+      # non-executable `.core` plus a `sbcl --core` wrapper -- there is no
+      # Mach-O `nshell` binary on that path to relocate the way the Linux
+      # branch below relocates one, and `ci.yml`'s "build release binary"
+      # job runs on `ubuntu-latest` only (its own comment records that the
+      # macos-14 leg was deliberately deleted, not merely disabled). So a
+      # portable Darwin bundle has no gate proving it right, and `delivery`
+      # -- unconditionally buildable on every system `mkExecutable` supports
+      # -- keeps `nix build .#releaseBundle` working on the development
+      # machine, the property cedf775 restored deliberately, without
+      # asserting a portability claim `scripts/verify-release-bundle.pl`
+      # would reject on Darwin and nothing exercises there.
+      releaseBundleFor =
+        ctx:
+        let
+          pkgs = ctx.pkgs;
+          delivery = deliveryFor ctx;
+        in
+        if !pkgs.stdenv.isLinux then
+          delivery
+        else
+          let
+            # `${ctx.executable}/bin/nshell.cl-nix-forge-unwrapped` -- not
+            # `ctx.package` -- is the dumped, `:compression t` image:
+            # `ctx.package` is the plain ASDF system build, without the
+            # `program-op` dump `mkExecutable` performs internally before
+            # wrapping it. That internal build writes the image to
+            # `$out/<programPath>` and then `mv`s it to this exact
+            # `<pname>.cl-nix-forge-unwrapped` path before installing the
+            # wrapper in its place -- an internal naming convention, not a
+            # published contract, so this coupling breaks silently on a
+            # cl-nix-forge upgrade; re-read `mkExecutable` in app.nix if
+            # this derivation starts failing right after one.
+            builtImage = "${ctx.executable}/bin/nshell.cl-nix-forge-unwrapped";
+          in
+          pkgs.runCommand "nshell-${ctx.version}-release-${ctx.system}"
+            {
+              nativeBuildInputs = [
+                pkgs.perl
+                pkgs.binutils
+                pkgs.patchelf
+              ];
+            }
+            ''
+              mkdir -p $out/bin $out/libexec $out/lib
+              cp -R ${delivery}/README.md ${delivery}/LICENSE ${delivery}/LICENSES ${delivery}/share $out/
+
+              cp ${builtImage} $out/libexec/nshell
+              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
+                --set-rpath '$ORIGIN/../lib' $out/libexec/nshell
+              cp -L ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $out/lib/
+              printf '%s\n' $out/libexec/nshell > $out/.elf-queue
+              while IFS= read -r object; do
+                for needed in $(patchelf --print-needed "$object"); do
+                  if [ -e "$out/lib/$needed" ]; then
+                    continue
+                  fi
+                  dependency=
+                  for directory in \
+                    ${pkgs.stdenv.cc.libc}/lib \
+                    ${pkgs.zstd.out}/lib \
+                    ${pkgs.stdenv.cc.cc.lib}/lib; do
+                    if [ -e "$directory/$needed" ]; then
+                      dependency="$directory/$needed"
+                      break
+                    fi
+                  done
+                  if [ -z "$dependency" ]; then
+                    echo "unsupported release dependency: $needed (needed by $object)" >&2
+                    exit 1
+                  fi
+                  cp -L "$dependency" "$out/lib/$needed"
+                  printf '%s\n' "$out/lib/$needed" >> $out/.elf-queue
+                done
+              done < $out/.elf-queue
+              rm $out/.elf-queue
+              tar -xf ${pkgs.glibc.src}
+              cp glibc-*/COPYING.LIB $out/LICENSES/GLIBC-COPYING.LIB
+              tar -xf ${pkgs.stdenv.cc.cc.src}
+              cp gcc-*/COPYING3 $out/LICENSES/GCC-COPYING3
+              cp gcc-*/COPYING.RUNTIME $out/LICENSES/GCC-RUNTIME-LIBRARY-EXCEPTION
+              cat > $out/bin/nshell <<'EOF'
+              #!/bin/sh
+              case "$0" in
+                /*) self="$0" ;;
+                */*) self="$PWD/$0" ;;
+                *) self="$(command -v "$0")" ;;
+              esac
+              while [ -L "$self" ]; do
+                directory="$(CDPATH= cd -- "''${self%/*}" && pwd)"
+                target="$(readlink "$self")"
+                case "$target" in
+                  /*) self="$target" ;;
+                  *) self="$directory/$target" ;;
+                esac
+              done
+              root="$(CDPATH= cd -- "''${self%/*}/.." && pwd)"
+              exec "$root/lib/ld-linux-x86-64.so.2" \
+                --library-path "$root/lib" --argv0 "$0" \
+                "$root/libexec/nshell" "$@"
+              EOF
+
+              # SBCL records source locations in its appended core. Dynamic
+              # dependencies have already been made relative above, so only
+              # these non-runtime metadata strings remain. Keep the prefix
+              # length unchanged to preserve binary offsets and layouts.
+              find $out -type f -exec \
+                perl -0777 -pi -e 's{/nix/store/}{/non/store/}g' {} +
+              chmod +x $out/bin/nshell $out/libexec/nshell $out/lib/ld-linux-x86-64.so.2
+              perl ${./scripts/verify-release-bundle.pl} $out --no-smoke
+            '';
     in
     # `mkPackageFlake` spans systems -- it obtains a `pkgs` and its own
     # cl-nix-forge instance per entry in `systems` -- so the per-system `lib`
@@ -361,9 +491,9 @@
 
       # cl-weave is a dependency of `nshell/test` and `nshell/weave` only (see
       # nshell.asd), so it is a CHECK dependency: it must not enter the
-      # delivered binary's closure. cl-prolog/weave, which the nshell/weave
+      # delivered binary's closure. cl-prolog-kit/weave, which the nshell/weave
       # suite also loads, needs nothing extra -- it is a secondary system of
-      # cl-prolog, whose whole source tree is already on the registry above.
+      # cl-prolog-kit, whose whole source tree is already on the registry above.
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
 
       # Drives `checks.default`, `checks.weave` and `apps.test` from this one
@@ -384,8 +514,20 @@
       # image -- its `source` builtin reads shell scripts, and no code path
       # loads an ASDF system at run time -- so shipping the source closure
       # beside the binary would buy nothing and cost the whole closure.
+      #
+      # `programPath = "src/nshell"`: cl-nix-forge's `mkExecutable` defaults
+      # to checking `$out/<lispSystem>` (i.e. `$out/nshell`) for the dumped
+      # image, but ASDF's `:build-pathname "nshell"` resolves relative to
+      # this system's own `:pathname "src"`, so `program-op` actually writes
+      # it to `$out/src/nshell` -- confirmed by the `fixupPhase` RPATH-shrink
+      # log naming that exact path. Left at the default, `mkExecutable`
+      # looks in the wrong place and fails with "ASDF program-op did not
+      # create executable nshell" even though the build succeeded; this is
+      # exactly the ASDF-specific detail `programPath`'s own docstring in
+      # cl-nix-forge says to make explicit at this boundary.
       executable = {
         installSource = false;
+        programPath = "src/nshell";
       };
 
       # docs/mkdocs.yml + docs/src/, built with `--strict` so a broken link or
@@ -463,9 +605,12 @@
         {
           # The release workflows use an explicit artifact name while the
           # contributor-facing default package remains unchanged. This is an
-          # additive output, so it belongs in extraOutputs and reuses the
-          # exact delivery derivation and man-page installation.
-          packages.releaseBundle = delivery;
+          # additive output, so it belongs in extraOutputs. Unlike
+          # `packages.default` (`delivery`, a Nix-store-relative wrapper),
+          # `releaseBundle` is `releaseBundleFor`'s relocatable, portable
+          # repackaging of the same dumped image -- see its definition for
+          # why the two cannot be the same derivation.
+          packages.releaseBundle = releaseBundleFor ctx;
 
           checks = {
             # The focused cl-weave completion suite (nshell/weave), through the

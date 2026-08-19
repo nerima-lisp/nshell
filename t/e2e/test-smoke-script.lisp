@@ -115,9 +115,11 @@
 
   (it "e2e-main-command-expands-process-substitution"
     "The -c command path materializes input process substitutions."
-    (%assert-nshell-main-result '("-c" "cat <(/usr/bin/printf process-ok)")
-                                "process-ok"
-                                0))
+    (%assert-nshell-main-result
+     (list "-c" (format nil "cat <(~a process-ok)"
+                        (%resolve-real-external-executable "printf")))
+     "process-ok"
+     0))
 
   (it "e2e-main-command-expands-output-process-substitution"
     "The -c command path materializes output process substitutions."
@@ -301,11 +303,14 @@
 
   (it "e2e-main-command-resolves-builtin-function-and-path"
     "The command builtin reports builtin, function, and external resolutions."
-    (%assert-nshell-main-result
-     '("-c"
-       "function greet; echo function-body; end; command -v echo; command -v greet; command -V greet; command -v /bin/echo; command greet")
-     '("echo" "greet" "greet is a function" "/bin/echo" "function-body")
-     0))
+    (let ((real-echo (%resolve-real-external-executable "echo")))
+      (%assert-nshell-main-result
+       (list "-c"
+             (format nil
+                     "function greet; echo function-body; end; command -v echo; command -v greet; command -V greet; command -v ~a; command greet"
+                     real-echo))
+       (list "echo" "greet" "greet is a function" real-echo "function-body")
+       0)))
 
   (it "e2e-main-eval-runs-in-the-current-context"
     "The eval builtin parses one command string and keeps its environment changes."

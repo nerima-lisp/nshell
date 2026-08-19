@@ -5,10 +5,10 @@
 ;;;;
 ;;;;   * cl-weave      -- describe/it/expect, property-based testing, fixtures,
 ;;;;                      benchmarks, and cl-weave's own embedded logic engine.
-;;;;   * cl-prolog     -- nshell's completion knowledge base compiled into a
-;;;;                      first-class cl-prolog:rulebase and queried with the
+;;;;   * cl-prolog-kit     -- nshell's completion knowledge base compiled into a
+;;;;                      first-class cl-prolog-kit:rulebase and queried with the
 ;;;;                      full engine API (query-prolog, findall, negation-as-
-;;;;                      failure, foreign predicates), plus the cl-prolog/weave
+;;;;                      failure, foreign predicates), plus the cl-prolog-kit/weave
 ;;;;                      bridge (deftest-queries / assert-query).
 ;;;;
 ;;;; Predicate symbols such as COMPLETES are imported from
@@ -29,11 +29,11 @@
                 #:gen-such-that #:gen-list
                 #:logic-program #:logic-run
                 #:run-all)
-  ;; The cl-prolog/weave bridge: declarative query cases as cl-weave tests.
-  (:import-from #:cl-prolog/weave
+  ;; The cl-prolog-kit/weave bridge: declarative query cases as cl-weave tests.
+  (:import-from #:cl-prolog-kit/weave
                 #:deftest-queries #:assert-query)
-  ;; Raw cl-prolog engine surface for the advanced query tests.
-  (:import-from #:cl-prolog
+  ;; Raw cl-prolog-kit engine surface for the advanced query tests.
+  (:import-from #:cl-prolog-kit
                 #:query-prolog #:query-prolog-first #:prolog-succeeds-p
                 #:solution-binding
                 #:make-rulebase #:make-clause #:rulebase-insert-clause!

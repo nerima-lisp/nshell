@@ -45,7 +45,7 @@ Iterate with the smallest relevant suite, then run the full gate before review.
 |---|---|
 | Anything | `nix flake check --print-build-logs` before review; the full gate runs on `x86_64-linux` CI |
 | Domain logic, builtins, parser, expansion | `nix run .#test` |
-| Completion engine or cl-prolog knowledge base | `sbcl --script scripts/weave.lisp` |
+| Completion engine or cl-prolog-kit knowledge base | `sbcl --script scripts/weave.lisp` |
 | PTY, subprocess, terminal, signal, job control | the non-sandboxed run below |
 | Coverage-oriented validation | `nix develop -c sbcl --script scripts/coverage.lisp` |
 

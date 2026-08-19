@@ -1,0 +1,25 @@
+(in-package #:nshell.application)
+
+(define-builtin %builtin-printf (context args) (context)
+  (let ((arguments (if (and args (string= (first args) "--"))
+                       (rest args)
+                       args)))
+    (if (null arguments)
+        (values nil 0)
+        (let* ((format-string (first arguments))
+               (remaining (rest arguments))
+               (valid-p t)
+               (output
+                 (with-output-to-string (out)
+                   (loop
+                     (multiple-value-bind (text consumed argument-conversion-p once-valid-p stop-p)
+                         (%printf-format-once format-string remaining)
+                       (write-string text out)
+                       (setf valid-p (and valid-p once-valid-p)
+                             remaining (nthcdr consumed remaining))
+                       (when (or stop-p
+                                 (not once-valid-p)
+                                 (null remaining)
+                                 (not argument-conversion-p))
+                         (return)))))))
+          (values output (if valid-p 0 1))))))

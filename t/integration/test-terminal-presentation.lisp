@@ -6,9 +6,9 @@
     (dolist (line (list "echo \"hi" "echo \\"))
       (let ((state (input-state)))
         (dolist (event (read-key-events-from-string (format nil "~a~%" line)))
-            (multiple-value-bind (next-state output)
+          (multiple-value-bind (next-state output)
                 (nshell.presentation:reduce-input-state state event)
-              (setf state
+            (setf state
                     (if (eq output :execute)
                         (with-parsed-command-line
                             (result (nshell.presentation:input-state-buffer next-state))
@@ -24,50 +24,48 @@
   (it "terminal-execute-on-structural-incomplete-input-indents-continuation"
     "REPL execution promotes structural incomplete input to an indented continuation."
     (with-repl-test-state
-      (dolist (case '(("echo hi |" . "echo hi |~%  ")
-                      ("echo hi &&" . "echo hi &&~%  ")
-                      ("if true" . "if true~%  ")))
-        (destructuring-bind (line . expected-format) case
+      (dolist (line '("echo hi |" "echo hi &&" "if true"))
+        (let ((expected (concatenate 'string line (string #\Newline) "  ")))
           (setf nshell.presentation::*input-state*
                 (nshell.presentation::make-repl-input-state :buffer line))
           (capture-process-output-event :execute)
-          (expect (format nil expected-format) :to-equal (nshell.presentation:input-state-buffer
-                        nshell.presentation::*input-state*))
+          (expect expected :to-equal (nshell.presentation:input-state-buffer
+                                      nshell.presentation::*input-state*))
           (expect (length (nshell.presentation:input-state-buffer
                           nshell.presentation::*input-state*)) :to-equal (nshell.presentation:input-state-cursor-pos
                   nshell.presentation::*input-state*))))))
 
   (it "terminal-highlight-uses-parser-diagnostics"
     "Presentation highlighting marks parser diagnostics as errors."
-    (let* ((spans (nshell.presentation:highlight-line "| echo nope"))
+    (let* ((spans (nshell.highlight:highlight-line "| echo nope"))
            (first-span (first spans)))
       (expect (null first-span) :to-be-falsy)
-      (expect :error :to-be (nshell.presentation:highlight-span-role first-span))
-      (expect 0 :to-equal (nshell.presentation:highlight-span-start first-span))
-      (expect 1 :to-equal (nshell.presentation:highlight-span-end first-span))))
+      (expect :error :to-be (nshell.highlight:highlight-span-role first-span))
+      (expect 0 :to-equal (nshell.highlight:highlight-span-start first-span))
+      (expect 1 :to-equal (nshell.highlight:highlight-span-end first-span))))
 
   (it "terminal-highlight-span-constructor-is-internal-boundary"
     "Highlight spans are produced by highlight-line rather than public raw construction."
-    (expect (fboundp 'nshell.presentation::make-highlight-span) :to-be-falsy)
-    (expect (fboundp 'nshell.presentation::highlight-span-p) :to-be-falsy)
-    (expect (fboundp 'nshell.presentation::copy-highlight-span) :to-be-falsy)
-    (expect (fboundp 'nshell.presentation::%make-highlight-span) :to-be-truthy))
+    (expect (fboundp 'nshell.highlight::make-highlight-span) :to-be-falsy)
+    (expect (fboundp 'nshell.highlight::highlight-span-p) :to-be-falsy)
+    (expect (fboundp 'nshell.highlight::copy-highlight-span) :to-be-falsy)
+    (expect (fboundp 'nshell.highlight::%make-highlight-span) :to-be-truthy))
 
   (it "terminal-highlight-span-type-is-internal-boundary"
     "Highlight spans are opaque presentation values with public projections only."
-    (let ((span (first (nshell.presentation:highlight-line "| echo nope"))))
-      (expect span :to-be-type-of 'nshell.presentation::%highlight-span)
-      (expect (find-symbol "HIGHLIGHT-SPAN" :nshell.presentation) :to-be-falsy)))
+    (let ((span (first (nshell.highlight:highlight-line "| echo nope"))))
+      (expect span :to-be-type-of 'nshell.highlight::%highlight-span)
+      (expect (find-symbol "HIGHLIGHT-SPAN" :nshell.highlight) :to-be-falsy)))
 
   (it "terminal-highlight-span-raw-accessors-stay-internal"
     "Highlight span projections stay behind explicit public accessors."
-    (let ((span (first (nshell.presentation:highlight-line "| echo nope"))))
-      (expect (fboundp 'nshell.presentation::%highlight-span-start) :to-be-truthy)
-      (expect (fboundp 'nshell.presentation::%highlight-span-end) :to-be-truthy)
-      (expect (fboundp 'nshell.presentation::%highlight-span-role) :to-be-truthy)
-      (expect (nshell.presentation:highlight-span-start span) :to-equal (nshell.presentation::%highlight-span-start span))
-      (expect (nshell.presentation:highlight-span-end span) :to-equal (nshell.presentation::%highlight-span-end span))
-      (expect (nshell.presentation:highlight-span-role span) :to-be (nshell.presentation::%highlight-span-role span))))
+    (let ((span (first (nshell.highlight:highlight-line "| echo nope"))))
+      (expect (fboundp 'nshell.highlight::%highlight-span-start) :to-be-truthy)
+      (expect (fboundp 'nshell.highlight::%highlight-span-end) :to-be-truthy)
+      (expect (fboundp 'nshell.highlight::%highlight-span-role) :to-be-truthy)
+      (expect (nshell.highlight:highlight-span-start span) :to-equal (nshell.highlight::%highlight-span-start span))
+      (expect (nshell.highlight:highlight-span-end span) :to-equal (nshell.highlight::%highlight-span-end span))
+      (expect (nshell.highlight:highlight-span-role span) :to-be (nshell.highlight::%highlight-span-role span))))
 
   (it "terminal-highlight-uses-public-ansi-boundary"
     "Presentation color rendering depends on the terminal ANSI public contract."

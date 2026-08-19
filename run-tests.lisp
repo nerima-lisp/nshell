@@ -7,38 +7,30 @@
 ;;;; the hermetic Nix check and a plain local run execute exactly the same code
 ;;;; path rather than two hand-rolled `--eval` chains that drift apart.
 ;;;;
-;;;; Dependency resolution mirrors scripts/weave.lisp: inside `nix develop` or
-;;;; the Nix sandbox the systems are already on CL_SOURCE_REGISTRY, and for a
-;;;; plain ghq checkout the parent directory tree is registered so sibling
-;;;; checkouts (../cl-weave, ../cl-prolog-kit, ...) are found automatically. An
-;;;; explicit CL_SOURCE_REGISTRY still wins, because the existing configuration
-;;;; is inherited rather than replaced.
+;;;; Dependency resolution is shared with the auxiliary scripts through
+;;;; scripts/asdf-runtime.lisp. An explicit CL_SOURCE_REGISTRY still wins;
+;;;; otherwise NSHELL_SOURCE_TREE opts into one explicit sibling-system tree.
 
 (require :asdf)
-(asdf:load-system :cl-host-kit)
 
-(let* ((root (truename #P"./"))
-       (parent (host-kit:parent-directory-pathname root)))
-  (asdf:initialize-source-registry
- (if (host-kit:getenv "CL_SOURCE_REGISTRY")
-     `(:source-registry
-       (:directory ,root)
-       :inherit-configuration)
-     `(:source-registry
-       (:directory ,root)
-       (:tree ,parent)
-       :inherit-configuration)))
-  ;; Warn rather than abort on compile-file warnings: the suite's own failures
-  ;; are the signal this script reports, and a style warning in a dependency
-  ;; should not masquerade as a test failure.
-  (setf asdf:*compile-file-warnings-behaviour* :warn
-        asdf:*compile-file-failure-behaviour* :warn)
-  (let ((passed-p
-          (handler-case
-              (progn
-                (asdf:load-system "nshell/test")
-                (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST")))
-            (error (condition)
-              (format *error-output* "~&nshell/test failed: ~A~%" condition)
-              nil))))
-    (sb-ext:exit :code (if passed-p 0 1))))
+(let* ((script-path (truename (or *load-truename*
+                                 *load-pathname*
+                                 #P"./run-tests.lisp")))
+       (root (uiop:pathname-directory-pathname script-path)))
+  (load (merge-pathnames #P"scripts/asdf-runtime.lisp" root))
+  (format *error-output* "~&[nshell] configure runtime~%")
+  (finish-output *error-output*)
+  (nshell-configure-runtime root)
+  (format *error-output* "~&[nshell] load nshell/test~%")
+  (finish-output *error-output*)
+  (asdf:load-system "nshell/test")
+  (format *error-output* "~&[nshell] run tests~%")
+  (finish-output *error-output*)
+  (let ((runner (find-symbol "RUN-TESTS" "NSHELL/TEST")))
+    (unless (and runner (fboundp runner))
+      (error "NSHELL/TEST:RUN-TESTS is not available."))
+    (unless (funcall runner)
+      (error "nshell/test reported failure.")))
+  (format *error-output* "~&[nshell] tests passed~%")
+  (finish-output *error-output*)
+  (sb-ext:exit :code 0))

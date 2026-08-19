@@ -29,14 +29,18 @@
            :cwd (lambda () #p"/tmp/")
            :chdir (lambda (path) (declare (ignore path)) t))
      :process-fns
-     (let ((fns (list :run-external
-                      (or external-runner
-                          (lambda (command args)
-                            (declare (ignore command args))
-                            0)))))
-       (if external-capture-runner
-           (list* :run-external-capture external-capture-runner fns)
-           fns))
+     ;; :run-external and :run-external-capture are listed ahead of
+     ;; MAKE-PROCESS-FNS's real implementations so GETF's first-match finds
+     ;; these fakes instead: an absent capture-runner must stay absent (NIL)
+     ;; so %RUN-EXTERNAL-COMMAND-IN-CONTEXT falls back to :run-external,
+     ;; rather than silently picking up the real external-process runner.
+     (list* :run-external
+           (or external-runner
+               (lambda (command args)
+                 (declare (ignore command args))
+                 0))
+           :run-external-capture external-capture-runner
+           (nshell.infrastructure.acl:make-process-fns))
      :redirect-fns
      (list :redirect-output #'nshell.infrastructure.acl:redirect-output
            :redirect-error #'nshell.infrastructure.acl:redirect-error
@@ -94,13 +98,13 @@
                                                         output-empty contains)
   (append
    (when (not (null code))
-     `((expect ,code :to-equal ,actual-code)))
+     `((expect ,actual-code :to-equal ,code)))
    (when output
-     `((expect ,output :to-equal ,actual-output)))
+     `((expect ,actual-output :to-equal ,output)))
    (when output-null
      `((expect ,actual-output :to-be-null)))
    (when output-empty
-     `((expect "" :to-equal ,actual-output)))
+     `((expect ,actual-output :to-equal "")))
    (when contains
      `((expect (%builtin-output-contains-all-p ,actual-output ,contains) :to-be-truthy)))
    `((values ,actual-output ,actual-code))))
@@ -139,8 +143,8 @@
 (defmacro with-builtins-source-ok ((output code context lines) expected-output &body extra-assertions)
   "Like WITH-BUILTINS-SOURCE but automatically asserts exit-code=0 and string output equality."
   `(with-builtins-source (,output ,code ,context ,lines)
-     (expect 0 :to-equal ,code)
-     (expect ,expected-output :to-equal ,output)
+     (expect ,code :to-equal 0)
+     (expect ,output :to-equal ,expected-output)
      ,@extra-assertions))
 
 (defmacro with-stubbed-command-executor ((&rest cases) &body body)
@@ -193,23 +197,23 @@ form should return (values output exit-code).  Example:
      (multiple-value-bind (output code)
          (call-builtin ,context ,name ,add-args)
        (expect output :to-be-null)
-       (expect 0 :to-equal code))
-     (expect ,expansion :to-equal (gethash ,key ,table-form))
-     (expect 0 :to-equal (nth-value 1 (call-builtin ,context ,name (list "-q" ,key))))
-     (expect 1 :to-equal (nth-value 1 (call-builtin ,context ,name (list "-q" ,missing-key))))
+       (expect code :to-equal 0))
+     (expect (gethash ,key ,table-form) :to-equal ,expansion)
+     (expect (nth-value 1 (call-builtin ,context ,name (list "-q" ,key))) :to-equal 0)
+     (expect (nth-value 1 (call-builtin ,context ,name (list "-q" ,missing-key))) :to-equal 1)
      ,@(when body-contains
          `((multiple-value-bind (output code)
                (call-builtin ,context ,name (list ,key))
-             (expect 0 :to-equal code)
+             (expect code :to-equal 0)
              ,@(mapcar (lambda (needle)
                          `(expect (search ,needle output) :to-be-truthy))
                        body-contains))))
      (multiple-value-bind (output code)
          (call-builtin ,context ,name nil)
-       (expect 0 :to-equal code)
+       (expect code :to-equal 0)
        (expect (search ,list-fragment output) :to-be-truthy))
      (assert-builtin-call (,context ,name '("-e"))
        :code 2
        :output ,erase-error-output)
-     (expect 0 :to-equal (nth-value 1 (call-builtin ,context ,name ,erase-args)))
+     (expect (nth-value 1 (call-builtin ,context ,name ,erase-args)) :to-equal 0)
      (expect (gethash ,key ,table-form) :to-be-null)))

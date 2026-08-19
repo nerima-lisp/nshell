@@ -53,6 +53,21 @@ Just the focused completion suite (`nshell/weave`):
 sbcl --script scripts/weave.lisp
 ```
 
+All repository entry points use `scripts/asdf-runtime.lisp` for source
+discovery and compile policy. The Nix development shell supplies a complete
+`CL_SOURCE_REGISTRY`; outside that shell, set `NSHELL_SOURCE_TREE` to an
+explicit directory containing sibling Common Lisp systems, or set
+`CL_SOURCE_REGISTRY` yourself. When no registry is supplied, the repository
+itself is registered and the runtime does not scan a worktree's parent
+directory. The shared runtime deliberately ignores inherited ASDF output
+translations and writes compiled files below `NSHELL_ASDF_OUTPUT_DIR`, or a
+temporary `nshell-asdf/` directory when that variable is unset:
+
+```sh
+NSHELL_SOURCE_TREE=/path/to/common-lisp-systems \
+  sbcl --script run-tests.lisp
+```
+
 ### The non-sandboxed integration run
 
 Some cases need a real PTY, `stty`, and external binaries, which the Nix
@@ -70,11 +85,13 @@ job-control lifecycle checks.
 ## Generate a coverage report
 
 ```sh
-nix develop -c sbcl --script scripts/coverage.lisp
+NSHELL_COVERAGE_DIR="$PWD/coverage" \
+  nix develop -c sbcl --script scripts/coverage.lisp
 ```
 
-The report is written to `coverage/cover-index.html`. Set `NSHELL_COVERAGE_DIR`
-to redirect the output.
+The report is written to `coverage/cover-index.html`, with the gate result in
+`coverage/coverage-summary.json`. Set `NSHELL_COVERAGE_DIR` to redirect both
+artifacts. The default Nix check stores them under its `$out/coverage/` output.
 
 ## Performance evidence
 

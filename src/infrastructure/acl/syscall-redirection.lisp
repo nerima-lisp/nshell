@@ -28,7 +28,23 @@
 
 (defun %close-owned-redirect-stream (stream)
   (when (and stream (streamp stream))
-    (ignore-errors (close stream))))
+    (handler-case
+        (values (close stream) nil)
+      (error (condition)
+        (values nil condition)))))
+
+(defun %install-redirect-stream (filename installer &rest open-options)
+  (let ((stream nil)
+        (installed-p nil))
+    (unwind-protect
+         (progn
+           (setf stream (apply #'open filename open-options))
+           (funcall installer stream)
+           (setf installed-p t)
+           stream)
+      (unless installed-p
+        (when stream
+          (%close-owned-redirect-stream stream))))))
 
 (defun %release-owned-stdout ()
   (let ((stream *redirected-stdout-owned*))
@@ -36,51 +52,47 @@
       (%close-owned-redirect-stream stream))
     (setf *redirected-stdout-owned* nil)))
 
-(defun %release-owned-stderr ()
-  (let ((stream *redirected-stderr-owned*))
-    (when (and stream (not (eq stream *redirected-stdout-owned*)))
-      (%close-owned-redirect-stream stream))
-    (setf *redirected-stderr-owned* nil)))
-
-(defun %release-owned-stdin ()
-  (%close-owned-redirect-stream *redirected-stdin-owned*)
-  (setf *redirected-stdin-owned* nil))
-
 (defun redirect-output (filename mode)
   "Redirect *STANDARD-OUTPUT* to FILENAME until RESTORE-REDIRECTS runs.
 MODE is a CL :IF-EXISTS value -- :SUPERSEDE for shell `>`, :APPEND for `>>`."
-  (let ((stream (open filename
-                      :direction :output
-                      :if-exists mode
-                      :if-does-not-exist :create)))
-    (%remember-redirected-stdout)
-    (setf *redirected-stdout-owned* stream
-          *standard-output* stream)))
+  (%install-redirect-stream
+   filename
+   (lambda (stream)
+     (%remember-redirected-stdout)
+     (setf *redirected-stdout-owned* stream
+           *standard-output* stream))
+   :direction :output
+   :if-exists mode
+   :if-does-not-exist :create))
 
 (defun redirect-error (filename mode)
   "Redirect *ERROR-OUTPUT* to FILENAME until RESTORE-REDIRECTS runs.
 MODE is a CL :IF-EXISTS value -- :SUPERSEDE for shell `2>`, :APPEND for `2>>`."
-  (let ((stream (open filename
-                      :direction :output
-                      :if-exists mode
-                      :if-does-not-exist :create)))
-    (%remember-redirected-stderr)
-    (setf *redirected-stderr-owned* stream
-          *error-output* stream)))
+  (%install-redirect-stream
+   filename
+   (lambda (stream)
+     (%remember-redirected-stderr)
+     (setf *redirected-stderr-owned* stream
+           *error-output* stream))
+   :direction :output
+   :if-exists mode
+   :if-does-not-exist :create))
 
 (defun redirect-output-and-error (filename mode)
   "Redirect both *STANDARD-OUTPUT* and *ERROR-OUTPUT* to the same open stream
 on FILENAME, for shell `&>`/`&>>`. MODE is a CL :IF-EXISTS value."
-  (let ((stream (open filename
-                      :direction :output
-                      :if-exists mode
-                      :if-does-not-exist :create)))
-    (%remember-redirected-stdout)
-    (%remember-redirected-stderr)
-    (setf *redirected-stdout-owned* stream
-          *redirected-stderr-owned* stream
-          *standard-output* stream
-          *error-output* stream)))
+  (%install-redirect-stream
+   filename
+   (lambda (stream)
+     (%remember-redirected-stdout)
+     (%remember-redirected-stderr)
+     (setf *redirected-stdout-owned* stream
+           *redirected-stderr-owned* stream
+           *standard-output* stream
+           *error-output* stream))
+   :direction :output
+   :if-exists mode
+   :if-does-not-exist :create))
 
 (defun redirect-output-to-error ()
   (%remember-redirected-stdout)
@@ -100,10 +112,14 @@ keeps it from double-closing a stream this function never owned."
 (defun redirect-input (filename)
   "Redirect *STANDARD-INPUT* to read from FILENAME until RESTORE-REDIRECTS
 runs, for shell `<`. Signals if FILENAME does not exist."
-  (let ((stream (open filename :direction :input :if-does-not-exist :error)))
-    (%remember-redirected-stdin)
-    (setf *redirected-stdin-owned* stream
-          *standard-input* stream)))
+  (%install-redirect-stream
+   filename
+   (lambda (stream)
+     (%remember-redirected-stdin)
+     (setf *redirected-stdin-owned* stream
+           *standard-input* stream))
+   :direction :input
+   :if-does-not-exist :error))
 
 (defun redirect-input-string (value)
   "Redirect *STANDARD-INPUT* to VALUE plus a trailing newline, for a shell

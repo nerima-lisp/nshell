@@ -552,10 +552,14 @@
       # whole docs tree.
       treefmt.evalModule = treefmt-nix.lib.evalModule;
 
-      # The cl-weave CLI, which the suites' reporters are documented against.
-      # Interactive only: the registry the shell exports already carries every
-      # system, check dependencies included.
-      devShellPackages = ctx: [ cl-weave.packages.${ctx.system}.default ];
+      # The cl-weave CLI, which the suites' reporters are documented against,
+      # and the Paredit CLI used for structural Common Lisp analysis.  Both
+      # come from the same pinned cl-weave input so the development shell does
+      # not grow a second, independently versioned tooling stack.
+      devShellPackages = ctx: [
+        cl-weave.packages.${ctx.system}.default
+        cl-weave.inputs.paredit-cli.packages.${ctx.system}.default
+      ];
 
       overrideOutputs =
         ctx:
@@ -576,14 +580,17 @@
           devShells.default = ctx.generated.devShells.default.overrideAttrs (previous: {
             shellHook = previous.shellHook + ''
               export NSHELL_ROOT=$PWD
-              alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'
-              alias coverage='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'
-              alias weave='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/scripts/weave.lisp"'
+              export NSHELL_TIMEOUT_SECONDS=1800
+              alias test='cd "$NSHELL_ROOT" && timeout --signal=TERM --kill-after=5s "$NSHELL_TIMEOUT_SECONDS" sbcl --script "$NSHELL_ROOT/run-tests.lisp"'
+              alias coverage='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" timeout --signal=TERM --kill-after=5s "$NSHELL_TIMEOUT_SECONDS" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'
+              alias weave='cd "$NSHELL_ROOT" && timeout --signal=TERM --kill-after=5s "$NSHELL_TIMEOUT_SECONDS" sbcl --script "$NSHELL_ROOT/scripts/weave.lisp"'
+              alias paredit='paredit'
               echo ""
               echo "nshell development environment"
               echo "  test  - Run the full nshell suite (cl-weave, nshell/test)"
               echo "  weave - Run the focused completion suite (nshell/weave)"
               echo "  coverage - Run the test suite and write HTML coverage to coverage/"
+              echo "  paredit - Run Paredit-aware Common Lisp analysis"
               echo "  sbcl  - Interactive Common Lisp (with cl-weave)"
               echo ""
             '';
@@ -625,8 +632,8 @@
 
             # Generate the sb-cover report and enforce the configured source
             # expression minimum. The report also records the distance from
-            # the aspirational 100% target without making an unsupported
-            # claim that structural sb-cover forms are executable.
+            # the explicit 100% target without claiming that it has been
+            # reached when executable expressions remain uncovered.
             coverage = ctx.cl.mkScriptCheck {
               drv = ctx.package;
               entryPoint = "scripts/coverage.lisp";

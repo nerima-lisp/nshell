@@ -80,7 +80,7 @@ git clone https://github.com/nerima-lisp/nshell
 cd nshell
 nix build            # produces ./result/bin/nshell
 nix flake check      # full hermetic gate on x86_64-linux CI
-nix develop          # dev shell with SBCL + cl-weave
+nix develop          # dev shell with SBCL + cl-weave + paredit
 ```
 
 `flake.nix` declares `x86_64-linux` and `aarch64-darwin`. The full hermetic

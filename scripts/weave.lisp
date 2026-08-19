@@ -3,35 +3,18 @@
 ;;;; Usage:  sbcl --script scripts/weave.lisp
 ;;;;
 ;;;; Beyond cl-weave and cl-prolog-kit, this suite also depends on cl-prolog-kit/weave.
-;;;; Inside `nix develop` those systems are already on the
-;;;; ASDF source registry.  For a plain local checkout we also register the
-;;;; parent directory tree, so sibling ghq checkouts (../cl-weave, ../cl-prolog-kit)
-;;;; are discovered automatically.  An explicit CL_SOURCE_REGISTRY still wins
-;;;; because we inherit the existing configuration.
+;;;; The ASDF source and output configuration is shared with run-tests.lisp and
+;;;; the coverage and benchmark entry points.
 
 (require :asdf)
-(asdf:load-system :cl-host-kit)
 
-(load
- (merge-pathnames
-  #P"asdf-runtime.lisp"
-  (uiop:pathname-directory-pathname
-   (or *load-truename* *load-pathname*))))
-(nshell-configure-writable-asdf-output)
-
-(let* ((root (truename #P"./"))
-       (parent (host-kit:parent-directory-pathname root)))
-  (asdf:initialize-source-registry
-   (if (host-kit:getenv "CL_SOURCE_REGISTRY")
-       `(:source-registry
-         (:directory ,root)
-         :inherit-configuration)
-       `(:source-registry
-         (:directory ,root)
-         (:tree ,parent)
-         :inherit-configuration)))
-  (setf asdf:*compile-file-warnings-behaviour* :warn
-        asdf:*compile-file-failure-behaviour* :warn)
+(let* ((script-path (truename (or *load-truename*
+                                 *load-pathname*
+                                 #P"./scripts/weave.lisp")))
+       (script-directory (uiop:pathname-directory-pathname script-path))
+       (root (uiop:pathname-parent-directory-pathname script-directory)))
+  (load (merge-pathnames #P"asdf-runtime.lisp" script-directory))
+  (nshell-configure-runtime root)
   (let ((passed-p
           (handler-case
               (progn

@@ -33,9 +33,12 @@
                  (format t "~C[7m~a~C[27m" #\Esc segment #\Esc)
                  (handler-case
                      (format t "~a"
-                             (highlight->ansi (highlight-line segment) segment theme))
-                   (error ()
-                     (format t "~a" segment))))
+                             (nshell.highlight:highlight->ansi
+                              (nshell.highlight:highlight-line segment)
+                              segment theme))
+                   (error (condition)
+                     (format t "~a" segment)
+                     (values nil condition))))
              (setf local-start local-end))))
 
 (defun render-edit-buffer (text theme &key selection-start selection-end)
@@ -81,7 +84,8 @@
               (setf *prompt-rendered-origin-row* row
                     *prompt-rendered-origin-column* column))
             (setf *prompt-rendered-origin-known-p* t))
-        (error () nil)))
+        (error (condition)
+          (values nil condition))))
     (unless *prompt-rendered-origin-known-p*
       (setf *prompt-rendered-origin-row* 1
             *prompt-rendered-origin-column* 1
@@ -114,7 +118,7 @@
   (let* ((terminal-width
            (multiple-value-bind (rows cols)
                (handler-case (nshell.infrastructure.acl:get-terminal-size)
-                 (error () (values 24 80)))
+                 (error (condition) (values 24 80 condition)))
              (declare (ignore rows))
              cols))
          (prompt-width
@@ -160,5 +164,5 @@
             *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
             *prompt-rendered-terminal-width* terminal-width
             *prompt-rendered-prompt-width* prompt-width))
-  (finish-output)
-  (lambda () (read-key-cont))))
+    (finish-output)
+    (lambda () (read-key-cont))))

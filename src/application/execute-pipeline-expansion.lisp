@@ -22,14 +22,15 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
         (first forms)
         (let ((parts (gensym "PARTS")) (pos (gensym "POS")))
           `(multiple-value-bind (,parts ,pos) ,(first forms)
-             (if ,pos
-                 (values ,parts ,pos)
-                 (%try-substitution-match ,@(rest forms))))))))
+            (if ,pos
+                (values ,parts ,pos)
+                (%try-substitution-match ,@(rest forms))))))))
 
-(defun %make-pipeline-shell-context ()
+(defun %make-pipeline-shell-context (process-fns)
   (make-shell-context
    :environment (nshell.domain.environment:inject-os-environment
-                 (nshell.domain.environment:make-default-environment))))
+                 (nshell.domain.environment:make-default-environment))
+   :process-fns process-fns))
 
 (defun execute-command-line (line history dispatcher)
   (nshell.domain.parsing:with-complete-command-line (result ast line)
@@ -140,7 +141,7 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
               (%append-expanded-fragment-fields fields fragment-fields))))))
 
 (defun %expand-command-name-from-fragments (command-node environment)
-  (nshell.domain.expansion::%single-command-name-or-error
+  (nshell.domain.expansion:single-command-name-or-error
    (nshell.domain.parsing:command-node-command command-node)
    (%expand-command-name-fields-from-fragments command-node environment)))
 
@@ -206,7 +207,7 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
   "Run the command substitution whose opening #\( is at OPEN-PAREN.
 Returns (replacement next-pos) on success, or NIL when parens are empty/unbalanced.
 %execute-command-substitution-fields is defined later in execute-pipeline-control.lisp."
-  (let ((end (nshell.domain.parsing::%balanced-substitution-end value open-paren)))
+  (let ((end (nshell.domain.parsing:balanced-substitution-end value open-paren)))
     (when (and end (> end (1+ open-paren)))
       (values (if preserve-newlines-p
                   (%execute-command-substitution-output

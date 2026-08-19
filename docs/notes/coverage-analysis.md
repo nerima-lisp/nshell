@@ -16,14 +16,20 @@ silently removed from the report.
 ## Reproduce
 
 ```sh
-NSHELL_COVERAGE_DIR=/tmp/nshell-coverage \
+NSHELL_COVERAGE_DIR="$PWD/coverage" \
   nix develop 'path:.' --command sbcl --script scripts/coverage.lisp
 ```
 
+The command writes `cover-index.html` and `coverage-summary.json` below the
+selected directory. In a Nix check, where `$out` is provided, the same files
+are retained below `$out/coverage/`. Without an explicit directory, the script
+uses `$TMPDIR/nshell-coverage/` when `TMPDIR` is available; the dev-shell
+`coverage` alias selects the repository's `coverage/` directory explicitly.
+
 The command is release evidence only when the selected test count is non-zero,
-the test and error counts are zero, the generated report exists, and both the
-minimum and target fields have been inspected. A passing minimum with
-`target-reached=false` is a warning, not a 100% coverage claim.
+the test and error counts are zero, the generated HTML and JSON artifacts
+exist, and both the minimum and target fields have been inspected. A passing
+minimum with `target-reached=false` is a warning, not a 100% coverage claim.
 
 ## What the suite verifies
 

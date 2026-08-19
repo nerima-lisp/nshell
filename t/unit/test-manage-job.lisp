@@ -30,7 +30,7 @@
                    (nth-value 1 (find-symbol "MAKE-JOB-LISTING"
                                              "NSHELL.APPLICATION"))) :to-be-falsy)
       (expect (fboundp 'nshell.application::copy-job-listing) :to-be-falsy)
-      (expect (fboundp (list 'setf 'nshell.application:job-listing-command)) :to-be-falsy)
+      (expect (fboundp '(setf nshell.application:job-listing-command)) :to-be-falsy)
       (expect "printf ok" :to-equal (nshell.application:job-listing-command listing))))
 
   (it "bg-marks-job-as-background-and-publishes-continuation"
@@ -79,17 +79,9 @@
            (job (make-test-job 0 "sleep" :args '("10") :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
            (set-foreground-calls nil)
-           (foreground-pgid 0)
-           (process-fns
-             (list :get-foreground-pgroup (lambda () 1000)
-                   :set-foreground-pgroup
-                   (lambda (pgid)
-                     (push pgid set-foreground-calls))
-                   :set-foreground-pgid-state
-                   (lambda (pgid)
-                     (setf foreground-pgid (or pgid 0)))))
            (nshell.application:*shell-pgid* 1000)
-           (nshell.application:*foreground-job-pgid* nil))
+           (nshell.application:*foreground-job-pgid* nil)
+           (nshell.infrastructure.acl::*foreground-pgid* 0))
       (with-temporary-functions
           (('nshell.application::%continue-process-group
             (lambda (pgid)
@@ -100,15 +92,19 @@
             (expect job-id :to-equal waited-job-id)
             (expect monitor :to-be waited-monitor)
             (expect 4321 :to-equal nshell.application:*foreground-job-pgid*)
-            (expect 4321 :to-equal foreground-pgid)
+            (expect 4321 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
             (error "wait failed")))
-           )
+           ('nshell.infrastructure.acl:get-foreground-pgroup
+            (lambda () 1000))
+           ('nshell.infrastructure.acl:set-foreground-pgroup
+            (lambda (pgid)
+              (push pgid set-foreground-calls))))
         (handler-case
-            (nshell.application:fg job-id nil nil nil monitor process-fns)
+            (nshell.application:fg job-id nil nil nil monitor)
           (error (condition)
             (expect (search "wait failed" (princ-to-string condition)) :to-be-truthy)))
         (expect nshell.application:*foreground-job-pgid* :to-be-null)
-        (expect 0 :to-equal foreground-pgid)
+        (expect 0 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
         (expect '(1000 4321) :to-equal set-foreground-calls))))
   (it "fg-publishes-continuation-to-dispatcher"
     "FG emits a continuation event through the supplied dispatcher."
@@ -117,17 +113,9 @@
            (job (make-test-job 0 "sleep" :args '("10") :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
            (set-foreground-calls nil)
-           (foreground-pgid 0)
-           (process-fns
-             (list :get-foreground-pgroup (lambda () 1000)
-                   :set-foreground-pgroup
-                   (lambda (pgid)
-                     (push pgid set-foreground-calls))
-                   :set-foreground-pgid-state
-                   (lambda (pgid)
-                     (setf foreground-pgid (or pgid 0)))))
            (nshell.application:*shell-pgid* 1000)
-           (nshell.application:*foreground-job-pgid* nil))
+           (nshell.application:*foreground-job-pgid* nil)
+           (nshell.infrastructure.acl::*foreground-pgid* 0))
       (with-event-capture (continued dispatcher :job-continued)
           (nshell.domain.events:domain-event-type event)
         (with-temporary-functions
@@ -140,11 +128,15 @@
                 (expect job-id :to-equal waited-job-id)
                 (expect monitor :to-be waited-monitor)
                 (expect 4321 :to-equal nshell.application:*foreground-job-pgid*)
-                (expect 4321 :to-equal foreground-pgid)
+                (expect 4321 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
                 waited-job))
-             )
+             ('nshell.infrastructure.acl:get-foreground-pgroup
+              (lambda () 1000))
+             ('nshell.infrastructure.acl:set-foreground-pgroup
+              (lambda (pgid)
+                (push pgid set-foreground-calls))))
           (expect job :to-be
-                  (nshell.application:fg job-id dispatcher nil nil monitor process-fns)))
+                  (nshell.application:fg job-id dispatcher nil nil monitor)))
         (expect (nshell.application:drain-events dispatcher) :to-be-null)
         (expect '(1000 4321) :to-equal set-foreground-calls)
         (expect '(:job-continued) :to-equal (nreverse continued)))))
@@ -248,19 +240,19 @@
     (let ((nshell.application:*shell-pgid* 1000)
           (nshell.application:*foreground-job-pgid* nil))
       (with-temporary-function
-          ('nshell.application::%get-foreground-pgroup
+          ('nshell.infrastructure.acl:get-foreground-pgroup
            (lambda () 1000))
         (expect (nshell.application::%foreground-signal-target-pgid) :to-be-null)))
     (let ((nshell.application:*shell-pgid* 1000)
           (nshell.application:*foreground-job-pgid* 1000))
       (with-temporary-function
-          ('nshell.application::%get-foreground-pgroup
+          ('nshell.infrastructure.acl:get-foreground-pgroup
            (lambda () 2000))
         (expect (nshell.application::%foreground-signal-target-pgid) :to-be-null)))
     (let ((nshell.application:*shell-pgid* 1000)
           (nshell.application:*foreground-job-pgid* nil))
       (with-temporary-function
-          ('nshell.application::%get-foreground-pgroup
+          ('nshell.infrastructure.acl:get-foreground-pgroup
            (lambda () 2000))
         (expect 2000 :to-equal (nshell.application::%foreground-signal-target-pgid)))))
 
@@ -313,7 +305,7 @@
              (calls nil))
         (nshell.domain.job-control:background-job monitor job-id)
         (with-temporary-function
-         ((quote nshell.application::%kill-process)
+         ((quote nshell.infrastructure.acl:kill-process)
           (lambda (pid signal)
             (push (list pid signal) calls)
             0))
@@ -379,14 +371,14 @@
   (it "classifies wait errors without an OS wait"
     "Known wait errors become application events while unknown errors remain unclassified."
     (let* ((no-child
-           (nshell.application::%classify-job-wait-error :echild))
+             (nshell.application::%classify-job-wait-error sb-posix:echild))
            (interrupted
-             (nshell.application::%classify-job-wait-error :eintr))
+             (nshell.application::%classify-job-wait-error sb-posix:eintr))
            (unknown-errno
-             (nshell.application::%classify-job-wait-error :enoent)))
+             (1+ (max sb-posix:echild sb-posix:eintr))))
       (expect :no-child :to-be
               (nshell.application::job-wait-event-state no-child))
       (expect :interrupted :to-be
               (nshell.application::job-wait-event-state interrupted))
       (expect nil :to-equal
-              unknown-errno))))
+              (nshell.application::%classify-job-wait-error unknown-errno)))))

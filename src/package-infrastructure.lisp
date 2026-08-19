@@ -12,7 +12,6 @@ stores in the shell context, which is what makes the layers above it mockable.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
-           #:make-process-fns
            #:spawn-pipeline #:spawn-pipeline-async #:wait-job
            #:spawn-process-substitution
            #:process-substitution-resource-p
@@ -37,9 +36,8 @@ stores in the shell context, which is what makes the layers above it mockable.")
             #:child-status #:child-status-p #:child-status-pid #:child-status-status
             #:reap-children #:get-terminal-size
             #:terminal-size-unavailable #:terminal-size-unavailable-fd
-           #:*external-command-timeout*
-           #:start-stream-copier #:wait-process-with-copiers
-           #:run-external #:run-external-capture #:run-external-exec
+            #:*external-command-timeout*
+            #:run-external #:run-external-capture #:run-external-exec
             #:process-exit-status-code
             #:with-git-runner #:clear-git-status-cache
             #:get-git-status))

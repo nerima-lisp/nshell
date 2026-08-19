@@ -47,7 +47,6 @@ coverage.dat
 
 # --- Editor and OS noise ---
 .DS_Store
-.vscode/
 *~
 \#*\#
 .\#*

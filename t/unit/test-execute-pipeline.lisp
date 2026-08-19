@@ -54,9 +54,7 @@
                                    :process-exited
                                    :pipeline-completed)
           (nshell.domain.events:domain-event-type event)
-        (expect 0 :to-equal
-                (nshell.application:execute-pipeline-use-case
-                 ast dispatcher (%default-test-process-fns)))
+        (expect 0 :to-equal (nshell.application:execute-pipeline-use-case ast dispatcher))
         (expect (nshell.application:drain-events dispatcher) :to-be-null)
         (let ((delivered (nreverse events)))
           (expect (member :pipeline-started delivered) :to-be-truthy)
@@ -71,8 +69,7 @@
              (code nil)
              (output (with-output-to-string (*standard-output*)
                        (setf code
-                             (nshell.application:execute-pipeline-use-case
-                              ast nil (%default-test-process-fns))))))
+                             (nshell.application:execute-pipeline-use-case ast nil)))))
         (expect 0 :to-equal code)
         (expect "pipeline-api" :to-equal output))))
 
@@ -85,8 +82,7 @@
             (code nil))
         (let ((error-output
                 (with-output-to-string (*error-output*)
-                  (setf code (nshell.application:execute-pipeline-use-case
-                              ast nil (%default-test-process-fns))))))
+                  (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
           (expect 127 :to-equal code)
           (expect (format nil "nshell: $NSHELL_PIPELINE_CMD: command name expansion produced 2 fields~%") :to-equal error-output)))))
 
@@ -98,8 +94,7 @@
           (code nil))
       (let ((error-output
               (with-output-to-string (*error-output*)
-                (setf code (nshell.application:execute-pipeline-use-case
-                            ast nil (%default-test-process-fns))))))
+                (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
           (expect 127 :to-equal code)
           (expect (format nil "nshell: NSHELL_MISSING_REQUIRED: required value~%") :to-equal error-output))))
 
@@ -143,16 +138,16 @@
       (unwind-protect
            (progn
              (ensure-directories-exist root)
-             (expect 0 :to-equal
-                     (nshell.application:execute-pipeline-use-case
-                      ast nil (%default-test-process-fns)))
+             (expect 0 :to-equal (nshell.application:execute-pipeline-use-case ast nil))
              (expect (probe-file output) :to-be-truthy)
              (with-open-file (stream output :direction :input)
                (let ((actual (make-string (file-length stream))))
                  (read-sequence actual stream)
                  (expect content :to-equal actual))))
-          (when (probe-file root)
-            (host-kit:delete-directory-tree root :validate t)))))
+          (handler-case
+            (when (probe-file root)
+              (host-kit:delete-directory-tree root :validate t))
+          (error ())))))
 
   (it "pipeline-stage-streams-opens-file-and-here-string-inputs"
     "Pipeline stage setup materializes file and here-string input redirects."
@@ -250,8 +245,7 @@
            (ast (nshell.domain.parsing:make-pipeline-node (list writer counter)))
            (code nil)
            (output (capture-standard-output
-                     (setf code (nshell.application:execute-pipeline-use-case
-                                 ast nil (%default-test-process-fns))))))
+                     (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
       (expect 0 :to-equal code)
       (expect (format nil "3~%") :to-equal output)))
 
@@ -265,8 +259,7 @@
            (ast (nshell.domain.parsing:make-pipeline-node (list writer counter)))
            (code nil)
            (output (capture-standard-output
-                     (setf code (nshell.application:execute-pipeline-use-case
-                                 ast nil (%default-test-process-fns))))))
+                     (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
       (expect 0 :to-equal code)
       (expect (format nil "6~%") :to-equal output)))
 
@@ -281,8 +274,7 @@
              (ast (nshell.domain.parsing:make-pipeline-node (list writer counter)))
              (code nil)
              (output (capture-standard-output
-                       (setf code (nshell.application:execute-pipeline-use-case
-                                   ast nil (%default-test-process-fns))))))
+                       (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
         (expect 0 :to-equal code)
         (expect (format nil "3~%") :to-equal output)
         (expect "OUT" :to-equal (host-kit:read-file-string target)))))
@@ -298,8 +290,7 @@
              (ast (nshell.domain.parsing:make-pipeline-node (list writer counter)))
              (code nil)
              (output (capture-standard-output
-                       (setf code (nshell.application:execute-pipeline-use-case
-                                   ast nil (%default-test-process-fns))))))
+                       (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
         (expect 0 :to-equal code)
         (expect (format nil "0~%") :to-equal output)
         (expect "OUTERR" :to-equal (host-kit:read-file-string target)))))
@@ -309,9 +300,7 @@
     (let ((ast (nshell.domain.parsing:make-command-node
                 "definitely-not-a-real-command"
                 nil)))
-      (expect 127 :to-equal
-              (nshell.application:execute-pipeline-use-case
-               ast nil (%default-test-process-fns)))))
+      (expect 127 :to-equal (nshell.application:execute-pipeline-use-case ast nil))))
 
   (it "execute-pipeline-node-in-context-times-out-external-stages-in-cps-mode"
     "The CPS execution path drains external output and times out long-running stages."
@@ -444,8 +433,7 @@
               (length (nshell.application::%process-substitution-inner-commands pipeline))))
     (expect (nshell.application::%process-substitution-inner-commands nil) :to-be-null))
   (it "process-substitution-resource-cleanup-is-best-effort"
-    (let ((context (make-test-shell-context))
-          (released nil))
+    (let ((released nil))
       (with-temporary-functions
           (((quote nshell.infrastructure.acl:release-process-substitution-fd)
             (lambda (resource)
@@ -453,12 +441,10 @@
               (when (eq resource :bad)
                 (error "release failure")))))
         (nshell.application::%release-process-substitution-resources
-         context
          (list :first :bad :last)))
       (expect (list :last :bad :first) :to-equal released)))
   (it "process-substitution-finish-and-abort-release-all-resources"
-    (let ((context (make-test-shell-context))
-          (waited nil)
+    (let ((waited nil)
           (released nil)
           (closed nil))
       (with-temporary-functions
@@ -473,8 +459,8 @@
            ((quote nshell.infrastructure.acl:close-process-substitution)
             (lambda (resource)
               (push resource closed))))
-        (nshell.application::%finish-process-substitution-resources context (list :ok :bad))
-        (nshell.application::%abort-process-substitution-resources context (list :left :right)))
+        (nshell.application::%finish-process-substitution-resources (list :ok :bad))
+        (nshell.application::%abort-process-substitution-resources (list :left :right)))
       (expect (list :bad :ok) :to-equal waited)
       (expect (list :bad :ok) :to-equal released)
       (expect (list :right :left) :to-equal closed)))
@@ -486,7 +472,6 @@
       (expect (list 3 4)
               :to-equal
               (nshell.application::%process-substitution-resource-fds
-               (make-test-shell-context)
                (list (list :fd 3) (list :fd 4))))))
   (it "source-pipeline-exit-status-honors-pipefail"
     (expect 2 :to-equal (nshell.application::%source-pipeline-exit-status (list 0 2) nil))
@@ -574,8 +559,7 @@
               (declare (ignore ignored-context))
               (values commands nil (list :nested))))
            ((quote nshell.application::%abort-process-substitution-resources)
-            (lambda (ignored-context resources)
-              (declare (ignore ignored-context))
+            (lambda (resources)
               (setf aborted resources))))
         (multiple-value-bind (path resource error)
             (nshell.application::%materialize-process-substitution-in-context
@@ -616,8 +600,8 @@
                 (declare (ignore ignored-context value))
                 (values nil nil "substitution failed")))
              ((quote nshell.application::%abort-process-substitution-resources)
-              (lambda (ignored-context resources)
-                (declare (ignore ignored-context resources))
+              (lambda (resources)
+                (declare (ignore resources))
                 (setf abort-called t))))
           (multiple-value-bind (args resources error)
               (nshell.application::%expand-command-args-in-context context command)
@@ -644,8 +628,7 @@
                   (values command nil (list :resource))
                   (values nil "node failed" nil))))
            ((quote nshell.application::%abort-process-substitution-resources)
-            (lambda (ignored-context resources)
-              (declare (ignore ignored-context))
+            (lambda (resources)
               (setf aborted resources))))
         (multiple-value-bind (commands error resources)
             (nshell.application::%expand-command-nodes-in-context
@@ -656,8 +639,7 @@
           (expect error :to-equal "node failed")
           (expect aborted :to-equal (list :resource))))))
   (it "os-process-substitution-pipeline-releases-resources-after-spawn"
-    (let ((context (make-test-shell-context))
-          (captured nil)
+    (let ((captured nil)
           (released nil)
           (waited nil))
       (with-temporary-functions
@@ -679,7 +661,6 @@
               (push resource waited))))
         (multiple-value-bind (output code)
             (nshell.application::%execute-os-pipeline-with-process-substitutions
-             context
              '(:command)
              nil
              (list :resource)
@@ -690,8 +671,7 @@
           (expect released :to-equal (list :resource :resource))
           (expect waited :to-equal (list :resource))))))
   (it "os-process-substitution-pipeline-aborts-on-spawn-failure"
-    (let ((context (make-test-shell-context))
-          (closed nil))
+    (let ((closed nil))
       (with-temporary-functions
           (((quote nshell.infrastructure.acl:process-substitution-resource-fd)
             (lambda (resource)
@@ -706,7 +686,6 @@
               (push resource closed))))
         (multiple-value-bind (output code)
             (nshell.application::%execute-os-pipeline-with-process-substitutions
-             context
              '(:command)
              nil
              (list :resource)
@@ -724,8 +703,7 @@
               (declare (ignore ignored-context ignored-command))
               (values command nil (list :resource))))
            ((quote nshell.application::%abort-process-substitution-resources)
-            (lambda (ignored-context resources)
-              (declare (ignore ignored-context))
+            (lambda (resources)
               (setf aborted resources))))
         (multiple-value-bind (output code)
             (nshell.application::execute-command-node-in-context context command)
@@ -745,8 +723,7 @@
                       nil
                       (list :resource))))
            ((quote nshell.application::%abort-process-substitution-resources)
-            (lambda (ignored-context resources)
-              (declare (ignore ignored-context))
+            (lambda (resources)
               (setf aborted resources))))
         (multiple-value-bind (output code)
             (nshell.application::execute-pipeline-node-in-context context pipeline)
@@ -765,8 +742,8 @@
                       nil
                       (list :resource))))
            ((quote nshell.application::%execute-os-pipeline-with-process-substitutions)
-            (lambda (ignored-context commands redirects resources pipefail-p)
-              (declare (ignore ignored-context commands redirects resources pipefail-p))
+            (lambda (commands redirects resources pipefail-p)
+              (declare (ignore commands redirects resources pipefail-p))
               (values "os output" 12))))
         (multiple-value-bind (output code)
             (nshell.application::execute-pipeline-node-in-context context pipeline)

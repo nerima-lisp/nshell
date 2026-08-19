@@ -7,8 +7,8 @@
    "Presentation: everything the user sees and types at. Holds the line editor's
 input state and the reducer that advances it one key event at a time -- emacs
 and vi bindings, kill ring, undo, incremental history search, completion cycling
--- plus autosuggestion, prompt drawing, and the REPL itself in its interactive,
-batch, and script forms.")
+-- plus syntax highlighting, autosuggestion, prompt drawing, and the REPL itself
+in its interactive, batch, and script forms.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:input-state #:input-state-p #:make-input-state
@@ -36,6 +36,9 @@ batch, and script forms.")
             #:run-repl #:run-repl-batch #:run-repl-script
             #:trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion
-            #:render-completions #:apply-completion
-            #:segment-kind->role))
+             #:render-completions #:apply-completion
+             #:highlight-line
+             #:highlight-span-start #:highlight-span-end
+             #:highlight-span-role
+             #:highlight->ansi #:theme-color->ansi #:segment-kind->role))
 )

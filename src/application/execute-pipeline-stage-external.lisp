@@ -1,10 +1,8 @@
 (in-package #:nshell.application)
 
-(defun %wait-external-process-for-cleanup (context process)
-  (handler-case
-      (values (funcall (%process-fn context :process-wait) process) nil)
-    (error (condition)
-      (values nil condition))))
+;; Keep the timeout variable special in this compilation unit as well so
+;; SBCL does not warn when referencing the shared ACL configuration.
+(declaim (special nshell.infrastructure.acl:*external-command-timeout*))
 
 ;;; External process execution helpers for pipeline stages.
 
@@ -71,71 +69,17 @@
               (t *standard-input*))
             opened-input)))
 
-(defstruct (%external-process-stage-plan
-            (:constructor %make-external-process-stage-plan
-                (command args input-target redirect-plan preserve-fds))
-            (:conc-name %external-process-stage-plan-))
-  command
-  args
-  input-target
-  redirect-plan
-  preserve-fds)
-
-(defun %external-process-stage-plan-from
-    (context command-node redirects process-substitution-resources)
-  (let* ((command (nshell.domain.parsing:command-node-command command-node))
-         (args (%line-command-args command-node))
-         (wrapper-p
-           (and command
-                (nshell.domain.parsing:redirects-require-shell-wrapper-p
-                 redirects)))
-         (input-target
-           (unless wrapper-p
-             (nshell.domain.parsing:redirect-input-file-target redirects)))
-         (source-redirect-plan (%external-process-redirect-plan-from redirects))
-         (redirect-plan
-           (if wrapper-p
-               (%make-external-process-redirect-plan
-                nil
-                :supersede
-                nil
-                :supersede
-                :stdout
-                :stderr
-                (%external-process-redirect-plan-merge-stderr-p
-                 source-redirect-plan))
-               source-redirect-plan))
-         (effective-command (if wrapper-p "sh" command))
-         (effective-args
-           (if wrapper-p
-               (list* "-c"
-                      (nshell.domain.parsing:shell-redirect-script redirects)
-                      "nshell-fd-wrapper"
-                      command
-                      args)
-               args))
-         (preserve-fds
-           (%process-substitution-resource-fds
-            context
-            process-substitution-resources)))
-    (%make-external-process-stage-plan effective-command
-                                       effective-args
-                                       input-target
-                                       redirect-plan
-                                       preserve-fds)))
-
-(defun %start-external-process-copiers
-    (context process stdout-buffer stderr-buffer)
+(defun %start-external-process-copiers (process stdout-buffer stderr-buffer)
   (let ((stdout-thread
-          (funcall (%process-fn context :start-stream-copier)
-           (funcall (%process-fn context :process-output) process)
+          (nshell.infrastructure.acl::%start-stream-copier
+           (sb-ext:process-output process)
            stdout-buffer
            "nshell process stdout copier"))
         (stderr-thread nil))
     (when stderr-buffer
       (setf stderr-thread
-            (funcall (%process-fn context :start-stream-copier)
-             (funcall (%process-fn context :process-error) process)
+            (nshell.infrastructure.acl::%start-stream-copier
+             (sb-ext:process-error process)
              stderr-buffer
              "nshell process stderr copier")))
     (remove nil (list stdout-thread stderr-thread))))
@@ -198,115 +142,109 @@
            nil)
           (values returned-output exit-code)))))
 
-(defun %wait-for-external-process
-    (context process stdout-buffer stderr-buffer redirect-plan command)
-  (let ((timeout-seconds
-          (funcall (%process-fn context :external-command-timeout))))
-    (unwind-protect
-         (funcall
-          (%process-fn context :wait-process-with-copiers)
-          process
-          (%start-external-process-copiers
-           context
-           process
-           stdout-buffer
-           stderr-buffer)
-          timeout-seconds
-          (lambda ()
-            (%finish-external-process-output
-             stdout-buffer
-             stderr-buffer
-             redirect-plan
-             (funcall (%process-fn context :process-exit-status-code)
-                      process)))
-          (lambda ()
-            (format *error-output*
-                    "nshell: ~a: timed out after ~a seconds~%"
-                    command
-                    timeout-seconds)
-            (%finish-external-process-output
-             stdout-buffer
-             stderr-buffer
-             redirect-plan
-             124)))
-      (when (and process
-                 (funcall (%process-fn context :process-alive-p) process))
-        (%wait-external-process-for-cleanup context process)))))
-
-(defmacro %with-process-substitution-lifecycle
-    ((context resources process-started) &body body)
-  `(unwind-protect
-       (progn ,@body)
-     (if ,process-started
-         (%finish-process-substitution-resources ,context ,resources)
-         (%abort-process-substitution-resources ,context ,resources))))
-
-(defun %execute-external-process
-    (context stage-plan stdin command &optional process-substitution-resources)
-  (let ((process-started nil))
-    (%with-process-substitution-lifecycle
-        (context process-substitution-resources process-started)
-      (let* ((stdout-buffer (make-string-output-stream))
-             ;; Asked once and reused: 2>&1 decides both whether a separate
-             ;; stderr buffer exists and what :error is.
-             (redirect-plan
-               (%external-process-stage-plan-redirect-plan stage-plan))
-             (merge-stderr-p
-               (%external-process-redirect-plan-merge-stderr-p
-                redirect-plan))
-             (stderr-buffer
-               (unless merge-stderr-p
-                 (make-string-output-stream)))
-             (process
-               (funcall (%process-fn context :run-program)
-                (%external-process-stage-plan-command stage-plan)
-                (%external-process-stage-plan-args stage-plan)
-                :input stdin
-                :output :stream
-                :error (if merge-stderr-p :output :stream)
-                :wait nil
-                :search t
-                :preserve-fds
-                (%external-process-stage-plan-preserve-fds stage-plan))))
-        (setf process-started t)
-        (%release-process-substitution-resources
-         context
-         process-substitution-resources)
-        (%wait-for-external-process
-         context
-         process
-         stdout-buffer
-         stderr-buffer
-         redirect-plan
-         command)))))
-
 (defun %execute-external-pipeline-stage
-    (context command-node input redirects &optional process-substitution-resources)
+    (command-node input redirects &optional process-substitution-resources)
   "Execute COMMAND-NODE as an external process with optional INPUT string.
   Applies REDIRECTS and returns (output exit-code)."
   (let* ((command (nshell.domain.parsing:command-node-command command-node))
-         (stage-plan
-           (%external-process-stage-plan-from
-            context
-            command-node
-            redirects
-            process-substitution-resources)))
+         (args (%line-command-args command-node))
+         (wrapper-p
+           (and command
+                (nshell.domain.parsing:redirects-require-shell-wrapper-p
+                 redirects)))
+         (input-target
+           (unless wrapper-p
+             (nshell.domain.parsing:redirect-input-file-target redirects)))
+         (source-redirect-plan (%external-process-redirect-plan-from redirects))
+         ;; The child wrapper applies file redirects itself.  Keep only the
+         ;; stream topology needed to route data that remains on the parent's
+         ;; captured stdout/stderr pipes.
+         (redirect-plan
+           (if wrapper-p
+               (%make-external-process-redirect-plan
+                nil
+                :supersede
+                nil
+                :supersede
+                :stdout
+                :stderr
+                (%external-process-redirect-plan-merge-stderr-p
+                 source-redirect-plan))
+               source-redirect-plan))
+         (effective-command (if wrapper-p "sh" command))
+         (effective-args
+           (if wrapper-p
+               (list* "-c"
+                      (nshell.domain.parsing:shell-redirect-script redirects)
+                      "nshell-fd-wrapper"
+                      command
+                      args)
+               args))
+         (preserve-fds
+           (%process-substitution-resource-fds
+            process-substitution-resources))
+         (process-started nil))
     (handler-case
         (multiple-value-bind (stdin opened-input)
-            (%external-process-input-stream
-             (%external-process-stage-plan-input-target stage-plan)
-             input)
+            (%external-process-input-stream input-target input)
           (unwind-protect
-               (%execute-external-process
-                context
-                stage-plan
-                stdin
-                command
-                process-substitution-resources)
-            (when opened-input
-              (close opened-input))))
+               (unwind-protect
+                    (let* ((stdout-buffer (make-string-output-stream))
+                           ;; Asked once and reused: 2>&1 decides both whether a
+                           ;; separate stderr buffer exists and what :error is.
+                           (merge-stderr-p
+                             (%external-process-redirect-plan-merge-stderr-p
+                              redirect-plan))
+                           (stderr-buffer
+                             (unless merge-stderr-p
+                               (make-string-output-stream)))
+                           (process (sb-ext:run-program
+                                     effective-command
+                                     effective-args
+                                     :input stdin
+                                     :output :stream
+                                     :error (if merge-stderr-p
+                                                :output
+                                                :stream)
+                                     :wait nil
+                                     :search t
+                                     :preserve-fds preserve-fds)))
+                      (setf process-started t)
+                      (%release-process-substitution-resources
+                       process-substitution-resources)
+                      (unwind-protect
+                           (nshell.infrastructure.acl::%wait-process-with-copiers
+                            process
+                            (%start-external-process-copiers process
+                                                             stdout-buffer
+                                                             stderr-buffer)
+                            nshell.infrastructure.acl:*external-command-timeout*
+                            (lambda ()
+                              (%finish-external-process-output
+                               stdout-buffer
+                               stderr-buffer
+                               redirect-plan
+                               (nshell.infrastructure.acl:process-exit-status-code
+                                process)))
+                            (lambda ()
+                              (format *error-output*
+                                      "nshell: ~a: timed out after ~a seconds~%"
+                                      command
+                                      nshell.infrastructure.acl:*external-command-timeout*)
+                              (%finish-external-process-output
+                               stdout-buffer
+                               stderr-buffer
+                               redirect-plan
+                               124)))
+                        (when (and process (sb-ext:process-alive-p process))
+                          (ignore-errors (sb-ext:process-wait process)))))
+                 (when opened-input
+                   (close opened-input)))
+            (if process-started
+                (%finish-process-substitution-resources
+                 process-substitution-resources)
+                (%abort-process-substitution-resources
+                 process-substitution-resources))))
       (error (condition)
-        (%abort-process-substitution-resources
-         context
-         process-substitution-resources)
+        (%abort-process-substitution-resources process-substitution-resources)
         (values (format nil "nshell: ~a: ~a~%" command condition) 127)))))

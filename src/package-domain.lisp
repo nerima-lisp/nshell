@@ -104,8 +104,7 @@ control-flow forms, reporting incomplete input so the reader can ask for a
 continuation line. A pure string-to-AST function with no filesystem access.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
-  (:export #:tokenize #:balanced-substitution-end
-           #:shell-assignment-word-p #:parse-command-line
+  (:export #:tokenize #:shell-assignment-word-p #:parse-command-line
            #:shell-input-blank-p
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
@@ -215,7 +214,6 @@ that is what keeps expansion testable without a disk.")
            #:expand-variables #:expand-tilde #:expand-glob #:expand-all
            #:expand-by-quote-style
            #:expand-command-name-fields-by-quote-style
-           #:single-command-name-or-error
            #:expand-command-name-by-quote-style
            #:expand-double-quoted #:expand-arithmetic #:evaluate-arithmetic
            #:expand-braces #:argv-reference-fields #:*positional-args*

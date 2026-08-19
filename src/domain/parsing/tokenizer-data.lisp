@@ -184,7 +184,10 @@
                                  fragments)
     (setf (tokenizer-state-pos state) (%token-extent-end extent))))
 
-(defun %balanced-substitution-end (input start)
+(defun balanced-substitution-end (input start)
+  "Return the closing-parenthesis index for the substitution at START.
+
+Quotes and escaped characters do not affect the parenthesis depth."
   (let ((depth 0)
         (quote nil)
         (escaped nil))
@@ -208,4 +211,4 @@
                   (return index)))))))
 
 (defun %tokenizer-balanced-substitution-end (state start)
-  (%balanced-substitution-end (tokenizer-state-input state) start))
+  (balanced-substitution-end (tokenizer-state-input state) start))

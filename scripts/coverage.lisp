@@ -4,11 +4,9 @@
 ;;;;
 ;;;; nshell/test depends on sibling nerima-lisp toolkit checkouts (cl-prolog,
 ;;;; cl-parser-kit, ...). Inside `nix develop` those systems are already on the
-;;;; ASDF source registry. For a plain local checkout we also register the
-;;;; parent directory tree, so sibling ghq checkouts are discovered
-;;;; automatically. When CL_SOURCE_REGISTRY is present (as it is in the Nix
-;;;; development shell), register only this checkout and inherit that explicit
-;;;; list. Without it, register the parent tree for a plain local checkout.
+;;;; ASDF source registry. Outside that shell, set NSHELL_SOURCE_TREE to one
+;;;; explicit directory containing those systems, or set CL_SOURCE_REGISTRY
+;;;; yourself. The shared runtime never scans a worktree parent directory.
 ;;;;
 ;;;; :force :all is required, not :force t: :force t only forces recompiling
 ;;;; nshell/test itself, leaving the nshell (src/) dependency loaded from
@@ -16,13 +14,13 @@
 ;;;; reaches src/, and the report silently covers only test files.
 (require :asdf)
 
+(defparameter *nshell-coverage-script-path*
+  (truename (or *load-truename* *load-pathname* #P"./scripts/coverage.lisp")))
+
 (load
  (merge-pathnames
   #P"asdf-runtime.lisp"
-  (uiop:pathname-directory-pathname
-   (or *load-truename* *load-pathname*))))
-(nshell-configure-writable-asdf-output)
-
+  (uiop:pathname-directory-pathname *nshell-coverage-script-path*)))
 (require :sb-cover)
 
 (declaim (optimize sb-cover:store-coverage-data))
@@ -30,6 +28,11 @@
 (progn
   (defun %coverage-string-prefix-p (prefix string)
     (and (<= (length prefix) (length string)) (string= prefix string :end2 (length prefix))))
+  (defun %coverage-call (function &rest arguments)
+    (handler-case
+        (values (apply function arguments) nil)
+      (error (condition)
+        (values nil condition))))
   (defun %next-coverage-row (text start end)
     (let ((odd (search "<tr class='odd'>" text :start2 start :end2 end))
           (even (search "<tr class='even'>" text :start2 start :end2 end)))
@@ -53,15 +56,22 @@
                  (search total-marker row :start2 (+ covered-position (length covered-marker))))))
           (if (or (null covered-position) (null total-position)) (values nil nil next-row)
             (values
-             (ignore-errors
-              (parse-integer
-               row
-               :start
-               (+ covered-position (length covered-marker))
-               :junk-allowed
-               t))
-             (ignore-errors
-              (parse-integer row :start (+ total-position (length total-marker)) :junk-allowed t))
+             (nth-value 0
+                        (%coverage-call
+                         #'parse-integer
+                         row
+                         :start
+                         (+ covered-position (length covered-marker))
+                         :junk-allowed
+                         t))
+             (nth-value 0
+                        (%coverage-call
+                         #'parse-integer
+                         row
+                         :start
+                         (+ total-position (length total-marker))
+                         :junk-allowed
+                         t))
              next-row))))))
   (defun %coverage-row-file-name (text start end)
     (let* ((row-end (search "</tr>" text :start2 start :end2 end))
@@ -130,12 +140,26 @@
     (let ((raw (uiop:getenv name)))
       (if (null raw) default
         (let ((*read-eval* nil)
-              (value (ignore-errors (read-from-string raw))))
+              (value (nth-value 0 (%coverage-call #'read-from-string raw))))
           (if (and (realp value) (<= 0 value) (<= value 100)) (float value 1.0)
             (error "Invalid ~A value ~S; expected a number from 0 to 100." name raw))))))
   (defun %json-boolean (value)
     (if value "true"
       "false"))
+  (defun %default-coverage-directory (root)
+    (let ((nix-output (uiop:getenv "out"))
+          (tmpdir (uiop:getenv "TMPDIR")))
+      (cond
+        (nix-output
+         (merge-pathnames
+          #P"coverage/"
+          (uiop:ensure-directory-pathname nix-output)))
+        (tmpdir
+         (merge-pathnames
+          #P"nshell-coverage/"
+          (uiop:ensure-directory-pathname tmpdir)))
+        (t
+         (merge-pathnames #P"coverage/" root)))))
   (defun %write-coverage-summary (pathname
                                   files
                                   covered
@@ -165,17 +189,14 @@
        (%json-boolean tests-passed)
        (%json-boolean (and (plusp total) (>= percentage minimum)))
        (%json-boolean (and (plusp total) (>= percentage target))))))
-  (let* ((root (truename #P"./"))
-         (parent (uiop:pathname-parent-directory-pathname root))
-         (tmpdir (uiop:getenv "TMPDIR"))
+  (let* ((root (uiop:pathname-parent-directory-pathname
+                (uiop:pathname-directory-pathname
+                 *nshell-coverage-script-path*)))
          (coverage-dir
           (uiop:ensure-directory-pathname
            (or
             (uiop:getenv "NSHELL_COVERAGE_DIR")
-            (if tmpdir (merge-pathnames
-                        #P"nshell-coverage/"
-                        (uiop:ensure-directory-pathname tmpdir))
-                (merge-pathnames #P"coverage/" root)))))
+            (%default-coverage-directory root))))
          (index-path (merge-pathnames #P"cover-index.html" coverage-dir))
          (summary-path (merge-pathnames #P"coverage-summary.json" coverage-dir))
          (source-root (uiop:native-namestring (truename (merge-pathnames #P"src/" root))))
@@ -184,15 +205,7 @@
          (tests-passed nil)
          (report-passed nil)
          (coverage-passed nil))
-    (asdf:initialize-source-registry
-     (if (uiop:getenv "CL_SOURCE_REGISTRY")
-         `(:source-registry
-           (:directory ,root)
-           :inherit-configuration)
-       `(:source-registry
-         (:directory ,root)
-         (:tree ,parent)
-         :inherit-configuration)))
+    (nshell-configure-runtime root)
     (ensure-directories-exist coverage-dir)
     (sb-cover:enable-coverage-logging)
     (unwind-protect (setf tests-passed (handler-case
@@ -252,7 +265,7 @@
         (unless coverage-passed
           (format
            *error-output*
-           "~&src executable expression coverage did not meet the configured minimum (~,2F%%).~%"
+           "~&src executable expression coverage did not meet the required minimum (~,2F%%).~%"
            minimum))))
     (sb-ext:exit
      :code

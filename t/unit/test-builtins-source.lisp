@@ -130,7 +130,8 @@
                process))
           (with-temporary-function
               ('nshell.application::%background-process-pid
-               (lambda (proc)
+               (lambda (ignored-context proc)
+                 (declare (ignore ignored-context))
                  (when (eq proc process)
                    4321)))
             (with-called-source (output code context '("first arg & second"))
@@ -170,7 +171,8 @@
                processes))
           (with-temporary-function
               ('nshell.application::%background-process-pid
-               (lambda (proc)
+               (lambda (ignored-context proc)
+                 (declare (ignore ignored-context))
                  (case proc
                    (:left-process 4321)
                    (:right-process 4322))))

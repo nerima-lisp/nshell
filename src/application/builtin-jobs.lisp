@@ -29,7 +29,8 @@
                   (shell-context-dispatcher context)
                   (shell-context-process-registry context)
                   (shell-context-terminal-fns context)
-                  job-monitor)))
+                  job-monitor
+                  (shell-context-process-fns context))))
     (if job
         (values nil 0)
         (values (%missing-job-output "fg" (%job-spec-label args)) 1))))
@@ -39,7 +40,8 @@
          (job-id (%resolve-job-id job-monitor args :active-only-p t))
          (job (bg job-id
                   (shell-context-dispatcher context)
-                  job-monitor)))
+                  job-monitor
+                  (shell-context-process-fns context))))
     (if job
         (values nil 0)
         (values (%missing-job-output "bg" (%job-spec-label args)) 1))))
@@ -97,7 +99,8 @@
       (type-error () nil))))
 (defun %parse-positive-integer (text)
   (let ((value (%parse-integer-designator text)))
-    (and value (plusp value) value)))
+    (when (and value (plusp value))
+      value)))
 (defun %find-job-id-by-pid (job-monitor pid)
   (let ((found nil))
     (nshell.domain.job-control:monitor-map-jobs
@@ -146,7 +149,10 @@
       (let ((job-id (%resolve-wait-job-id job-monitor job-spec)))
         (multiple-value-bind (job exit-code)
             (if job-id
-                (wait-for-job job-id process-registry job-monitor)
+                (wait-for-job job-id
+                              process-registry
+                              job-monitor
+                              (shell-context-process-fns context))
                 (values nil nil))
           (if job
               (setf last-code exit-code)
@@ -253,14 +259,18 @@
                  (string= target "-")))
     (nshell.domain.job-control:monitor-resolve-job-spec
      job-monitor target)))
-(defun %kill-one-target (job-monitor target signal)
+(defun %kill-one-target (context job-monitor target signal)
   (let ((job-id (%resolve-kill-job-id job-monitor target)))
     (cond
-      ((and job-id (signal-job job-id signal job-monitor))
+      ((and job-id
+            (signal-job job-id
+                        signal
+                        job-monitor
+                        (shell-context-process-fns context)))
        t)
       ((let ((pid (%parse-integer-designator target)))
          (when pid
-           (nshell.infrastructure.acl:kill-process pid signal)
+           (funcall (%process-fn context :kill-process) pid signal)
            t)))
       (t nil))))
 (defun %kill-list-output ()
@@ -286,6 +296,7 @@
             (dolist (target targets)
               (handler-case
                   (unless (%kill-one-target
+                           context
                            job-monitor target signal-designator)
                     (setf code 1)
                     (format out "kill: no such process or job: ~a~%"

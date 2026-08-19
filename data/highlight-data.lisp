@@ -1,8 +1,7 @@
-;;; Highlight data tables: builtin names, operator token types, and the
-;;; fallback (theme-less) ANSI role palette used by highlight.lisp.
-(in-package #:nshell.presentation)
+;;; Literal syntax-highlighting data kept separate from the classifier.
+(in-package #:nshell.highlight)
 
-(defvar *builtin-commands*
+(defparameter +highlight-builtin-names+
   '("echo" "printf" "pwd" "ls" "cd" "exit" "fg" "bg" "jobs" "disown"
     "set" "export" "unset" "alias" "abbr" "function" "source" "exec"
     "true" "false" "contains" "test" "type" "which" "history" "help")

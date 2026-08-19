@@ -1,23 +1,15 @@
-(in-package #:nshell.presentation)
+(in-package #:nshell.highlight)
 
-;; Highlight span value object; literal data tables live under data/.
 (define-value-struct %highlight-span
     ((start 0 :type integer)
      (end 0 :type integer)
      (role :normal :type keyword)))
 
-;; -- Highlight roles (fish-inspired) ----------------------
 (defun builtin-command-p (name)
-  (find name *builtin-commands* :test #'string=))
+  (find name +highlight-builtin-names+ :test #'string=))
 
 (defun classify-token-role (token-type token-value is-first-word)
-  "Map a token to its highlight role. Follows fish shell conventions:
-   - first word: command (blue) or builtin (bright blue)
-   - subsequent words: argument (normal/cyan for options)
-   - pipes/redirects: operator (yellow)
-   - strings/quoted: quote (orange)
-   - errors: error (red)
-   - comments: comment (gray)"
+  "Map a token to its syntax-highlight role."
   (case token-type
     (:word
      (cond
@@ -64,14 +56,12 @@
                  role)))
             tokens)))
 
-;; Rendering helpers for highlight spans.
 (defun fallback-highlight-control (role)
   (or (cdr (assoc role +fallback-highlight-ansi+ :test #'eq))
       "~C[0m"))
 
 (defun theme-color->ansi (theme role)
-  "Convert a highlight ROLE to ANSI escape using THEME colors.
-   Falls back to known ANSI 16-color codes when theme lookup fails."
+  "Convert a highlight ROLE to ANSI escape using THEME colors."
   (let ((color (nshell.domain.configuration:theme-color theme role)))
     (if color
         (let ((code (nshell.infrastructure.terminal:ansi-color-code color)))
@@ -83,16 +73,13 @@
   (let ((result (make-string-output-stream))
         (pos 0))
     (dolist (span spans)
-      ;; Output unhighlighted gap
       (when (> (highlight-span-start span) pos)
         (write-string (subseq input pos (highlight-span-start span)) result))
-      ;; Output highlighted span with color
       (format result "~a" (theme-color->ansi theme (highlight-span-role span)))
       (write-string (subseq input (highlight-span-start span)
                             (highlight-span-end span)) result)
       (nshell.infrastructure.terminal:ansi-reset-style result)
       (setf pos (highlight-span-end span)))
-    ;; Output remaining text
     (when (< pos (length input))
       (write-string (subseq input pos) result))
     (get-output-stream-string result)))

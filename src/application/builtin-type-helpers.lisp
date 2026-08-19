@@ -18,14 +18,18 @@
 (defun %type-option-p (option)
   (%builtin-option-like-p option))
 
+(defun %type-option-prefix-p (prefix option)
+  (and (stringp option)
+       (<= (length prefix) (length option))
+       (equal prefix (subseq option 0 (length prefix)))))
+
 (defun %type-option-kind (option)
   (cond
     ((%builtin-option-p option '("-a" "--all")) :all)
     ((%builtin-option-p option '("-s" "--short")) :short)
     ((%builtin-option-p option '("-f" "--no-functions")) :no-functions)
     ((or (string= option "--color")
-         (and (>= (length option) 8)
-              (string= option "--color=" :end1 8 :end2 8)))
+         (%type-option-prefix-p "--color=" option))
      :color)
     ((%builtin-option-p option '("-q" "--query" "--quiet")) :query)
     ((%builtin-option-p option '("-p" "--path")) :path)
@@ -36,8 +40,7 @@
 
 (defun %type-color-enabled-p (option)
   (or (string= option "--color")
-      (and (>= (length option) 8)
-           (string= option "--color=" :end1 8 :end2 8)
+      (and (%type-option-prefix-p "--color=" option)
            (let ((value (subseq option 8)))
              (or (string= value "always")
                  (string= value "auto"))))))
@@ -53,8 +56,8 @@
   (with-output-to-string (out)
     (dolist (line (%string-lines text))
       (write-string
-       (nshell.presentation:highlight->ansi
-        (nshell.presentation:highlight-line line)
+       (nshell.highlight:highlight->ansi
+        (nshell.highlight:highlight-line line)
         line
         (nshell.domain.configuration:default-theme))
        out)

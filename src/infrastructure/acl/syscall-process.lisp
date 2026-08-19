@@ -4,6 +4,12 @@
 (defparameter *external-command-timeout* 30
   "Maximum seconds for synchronous external commands. NIL disables the timeout.")
 
+(defun %process-operation (function &rest arguments)
+  (handler-case
+      (values (apply function arguments) nil)
+    (error (condition)
+      (values nil condition))))
+
 (defun process-exit-status-code (proc)
   "Return shell-compatible exit status for an SBCL process."
   (let ((code (sb-ext:process-exit-code proc)))
@@ -26,26 +32,24 @@ exit code, or 128+signal when it was terminated by a signal."
           while (plusp count)
           do (write-string buffer output :end count))
     (when (streamp output)
-      (ignore-errors
-       (finish-output output)))))
+      (%process-operation #'finish-output output))))
 
-(defun %start-stream-copier (input output name)
+(defun start-stream-copier (input output name)
+  "Copy INPUT to OUTPUT asynchronously and return the copier thread."
   (when input
     (sb-thread:make-thread
      (lambda ()
-       (ignore-errors
-        (%copy-process-output input output)))
+       (%process-operation #'%copy-process-output input output))
      :name name)))
 
 (defun %start-process-output-copier (proc output)
-  (%start-stream-copier (and proc (sb-ext:process-output proc))
-                        output
-                        "nshell process output copier"))
+  (start-stream-copier (and proc (sb-ext:process-output proc))
+                       output
+                       "nshell process output copier"))
 
 (defun %join-stream-copier (thread)
   (when thread
-    (ignore-errors
-     (sb-thread:join-thread thread))))
+    (%process-operation #'sb-thread:join-thread thread)))
 
 (defun %join-process-output-copiers (copiers)
   (dolist (copier copiers)
@@ -62,7 +66,7 @@ exit code, or 128+signal when it was terminated by a signal."
           do (sleep (min sleep-seconds (max 0 remaining-seconds)))
              (setf sleep-seconds (min 0.01 (* 2 sleep-seconds))))
     (unless (sb-ext:process-alive-p proc)
-      (ignore-errors (sb-ext:process-wait proc))
+      (%process-operation #'sb-ext:process-wait proc)
       t)))
 
 (defun %terminate-process (proc)
@@ -73,21 +77,23 @@ exit code, or 128+signal when it was terminated by a signal."
            ;; negative PID can target nshells own group and terminate its host.
            (actual-pgid (and (integerp pid)
                              (plusp pid)
-                             (ignore-errors (sb-posix:getpgid pid))))
+                             (nth-value 0 (%process-operation #'sb-posix:getpgid pid))))
            (owns-process-group-p (and (integerp actual-pgid)
                                       (plusp actual-pgid)
                                       (= pid actual-pgid))))
       (flet ((terminate (signal)
                (if owns-process-group-p
-                   (ignore-errors (%send-process-group-signal pid signal))
+                   (%process-operation #'%send-process-group-signal pid signal)
                    (when (sb-ext:process-alive-p proc)
-                     (ignore-errors (sb-ext:process-kill proc signal))))))
+                     (%process-operation #'sb-ext:process-kill proc signal)))))
         (terminate sb-unix:sigterm)
         (%wait-process-exit-with-timeout proc 0.5)
         (terminate sb-unix:sigkill)
-        (ignore-errors (sb-ext:process-wait proc))))))
+        (%process-operation #'sb-ext:process-wait proc)))))
 
-(defun %wait-process-with-copiers (proc copiers timeout-seconds success-fn timeout-fn)
+(defun wait-process-with-copiers
+    (proc copiers timeout-seconds success-fn timeout-fn)
+  "Wait for PROC while joining COPIERS, calling one of the result callbacks."
   (unwind-protect
        (if (or (null timeout-seconds)
                (%wait-process-exit-with-timeout proc timeout-seconds))
@@ -103,7 +109,7 @@ exit code, or 128+signal when it was terminated by a signal."
 
 (defun %wait-process-with-output (proc output timeout-seconds timeout-fn)
   (let ((copier (%start-process-output-copier proc output)))
-    (%wait-process-with-copiers
+    (wait-process-with-copiers
      proc
      (list copier)
      timeout-seconds
@@ -127,9 +133,11 @@ exit code, or 128+signal when it was terminated by a signal."
             return (subseq entry (length prefix)))))
 
 (defun %executable-file-p (path)
-  (ignore-errors
-   (not (zerop (logand (sb-posix:stat-mode (sb-posix:stat path))
-                       #o111)))))
+  (handler-case
+      (not (zerop (logand (sb-posix:stat-mode (sb-posix:stat path))
+                          #o111)))
+    (error (condition)
+      (values nil condition))))
 
 (defun %resolve-external-command (command &optional (environment (%get-environment)))
   (nshell.domain.completion::%first-command-path-candidate
@@ -148,6 +156,19 @@ exit code, or 128+signal when it was terminated by a signal."
 
 (defun %spawn-external-command (resolved-cmd args environment &key input output (error nil error-supplied-p)) (sb-ext:run-program resolved-cmd args :input input :output output :error (if error-supplied-p error (if *redirected-stderr* *error-output* :output)) :wait nil :search nil :environment environment))
 
+(defun %open-and-register-process-stream (pathname register &rest open-options)
+  (let ((stream nil)
+        (registered-p nil))
+    (unwind-protect
+         (progn
+           (setf stream (apply #'open pathname open-options))
+           (funcall register stream)
+           (setf registered-p t)
+           stream)
+      (unless registered-p
+        (when stream
+          (%process-operation #'close stream))))))
+
 (defun %resolve-input-redirect (redirects register)
   "Return the standard-input stream REDIRECTS ask for, calling REGISTER on any
 stream opened here so the caller can close it afterwards. With no input
@@ -156,7 +177,8 @@ redirection the process inherits *STANDARD-INPUT*."
       (nshell.domain.parsing:redirect-input-spec redirects)
     (flet ((track (stream) (funcall register stream) stream))
       (case kind
-        (:<   (track (open target :direction :input :if-does-not-exist :error)))
+        (:<   (%open-and-register-process-stream
+               target register :direction :input :if-does-not-exist :error))
         (:<<< (track (%here-string-stream target)))
         ((:<< :<<-) (track (%here-document-stream target)))
         (t    *standard-input*)))))
@@ -167,10 +189,9 @@ process's own stdout, calling REGISTER on any stream opened here."
   (multiple-value-bind (target mode)
       (nshell.domain.parsing:redirect-output-spec redirects)
     (if target
-        (let ((stream (open target :direction :output
-                                   :if-exists mode :if-does-not-exist :create)))
-          (funcall register stream)
-          stream)
+        (%open-and-register-process-stream
+         target register
+         :direction :output :if-exists mode :if-does-not-exist :create)
         t)))
 
 (defun %spawn-in-own-process-group (resolved-cmd args environment input output &key (error nil error-supplied-p))
@@ -183,7 +204,7 @@ process's own stdout, calling REGISTER on any stream opened here."
     (when proc
       (let ((pid (sb-ext:process-pid proc)))
         (when (plusp pid)
-          (ignore-errors (set-process-group pid pid))))
+          (%process-operation #'set-process-group pid pid)))
       proc)))
 
 (defun spawn-async (cmd args &key redirects)
@@ -203,7 +224,7 @@ process's own stdout, calling REGISTER on any stream opened here."
                (format *error-output* "nshell: ~a: ~a~%" cmd err)
                nil))
         (dolist (stream redirect-streams)
-          (ignore-errors (close stream)))))))
+          (%process-operation #'close stream))))))
 
 (defun %foreground-external-command-timeout ()
   "Return the timeout to apply to a foreground external command's wait: NIL
@@ -255,7 +276,7 @@ normal foreground timeout policy."
       (format *error-output* "exec: ~a: ~a~%" cmd err)
       1)))
 
- (defun run-external (cmd args)
+(defun run-external (cmd args)
   "Execute CMD with ARGS synchronously, printing output. Returns exit code."
   (handler-case
       (multiple-value-bind (resolved-cmd environment)
@@ -264,8 +285,8 @@ normal foreground timeout policy."
           (%report-external-command-not-found cmd)
           (return-from run-external 127))
         (let ((proc (%spawn-external-command resolved-cmd args environment
-                                             :input *standard-input*
-                                             :output :stream)))
+                                            :input *standard-input*
+                                            :output :stream)))
           (if proc
               (let* ((pid (sb-ext:process-pid proc))
                      (pgid (and (integerp pid) (plusp pid) pid))

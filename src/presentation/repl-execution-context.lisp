@@ -13,12 +13,7 @@
                               (not (null (host-kit:directory-exists-p path))))))
 
 (defparameter +repl-process-fns+
-  (list :run-external
-        (lambda (command args)
-          (nshell.infrastructure.acl:run-external command args))
-        :run-external-capture
-        (lambda (command args)
-          (nshell.infrastructure.acl:run-external-capture command args))))
+  (nshell.infrastructure.acl:make-process-fns))
 
 (defparameter +repl-redirect-fns+
   (list :redirect-output #'nshell.infrastructure.acl:redirect-output

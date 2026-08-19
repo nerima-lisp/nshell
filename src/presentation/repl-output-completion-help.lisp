@@ -59,9 +59,6 @@
         (setf (gethash (first spec) cache) t))))
   "Set of catalogued external commands that should be enriched from help output.")
 
-(defun %completion-help-catalogued-command-p (command)
-  (gethash command *completion-help-catalog-command-cache*))
-
 (defun %completion-help-text-p (output)
   (and (stringp output)
        (plusp (length output))
@@ -97,8 +94,8 @@
       (multiple-value-bind (output exit-code)
           (funcall *completion-help-fetcher* command)
         (%completion-help-cache-help-text command output exit-code))
-    (error ()
-      :missing)))
+    (error (condition)
+      (values :missing condition))))
 
 (progn
   (defun %warm-command-completion-help (command)

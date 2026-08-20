@@ -68,6 +68,14 @@ and reads batch input from stdin otherwise.
 With -c/--command, nshell executes COMMAND once in batch mode; trailing ARGS
 are available as $argv.
 With SCRIPT, nshell runs the script file; trailing ARGS are available as $argv.
+
+Options:
+  -i, --interactive  Force the interactive line editor.
+      --no-config    Do not load the interactive startup file.
+      --config PATH  Load PATH instead of ~/.nshellrc.
+      --no-history   Do not read or write interactive history.
+  -h, --help          Show usage and exit.
+  -V, --version       Show version and exit.
 ```
 
 ## Build from source
@@ -84,9 +92,10 @@ nix develop          # dev shell with SBCL + cl-weave
 ```
 
 `flake.nix` declares `x86_64-linux` and `aarch64-darwin`. The full hermetic
-flake and release-binary gate runs on `x86_64-linux`; `aarch64-darwin` is the
-development and non-sandboxed integration target, and some build checks can be
-unavailable there when a pinned upstream package has no Darwin build.
+flake gate, the release-binary gate, and the non-sandboxed integration suite
+all run in CI on `x86_64-linux` only; `aarch64-darwin` is a local development
+target (`nix build`, `nix develop`), and some build checks can be unavailable
+there when a pinned upstream package has no Darwin build.
 
 Inside `nix develop`, load the system into a REPL:
 

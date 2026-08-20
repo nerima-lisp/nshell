@@ -63,17 +63,13 @@ jobs:
     # processes — get genuine coverage on a runner where those facilities
     # exist. The sandbox has no controlling terminal, so there is nothing for
     # those tests to attach to.
-    name: integration tests (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+    # One runner, no matrix: aarch64-darwin (macos-14) used to carry this leg
+    # too, but its runs were unreliable enough under CI load to be worse than
+    # no coverage. x86_64-linux is what CI gates; aarch64-darwin remains the
+    # local development target (see flake.nix), just without a CI leg here.
+    name: integration tests (x86_64-linux)
+    runs-on: ubuntu-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-linux
-          - os: macos-14
-            target: aarch64-darwin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -62,10 +62,10 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%history-token-window` | `domain/history/last-argument.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%input-edit-snapshot` | `presentation/input-state-undo.lisp` | mutable — writable slot(s): buffer, cursor-pos |
 | `%input-session-clear` | `presentation/input-state-helpers.lisp` | mutable — writable slot(s): kind, overrides |
-| `%kb-command-entry` | `domain/completion/knowledge-base.lisp` | mutable — writable slot(s): description, subcommands, flags, option-values, exclusive-options |
 | `%mixed-sequence-build-state` | `domain/parsing/parser-assembly.lisp` | mutable — writable slot(s): sequence-commands, sequence-separators, pipe-group |
 | `%parse-result-facts` | `domain/parsing/parse-result.lisp` | mutable — writable slot(s): ast |
 | `%parsed-command-line-case-clause` | `domain/parsing/parse-result.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
+| `%path-command-directory-cache-entry` | `domain/completion/filesystem-path-command.lisp` | mutable — writable slot(s): stamp |
 | `%path-command-query` | `domain/completion/filesystem-path-command.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%redirect-entry` | `domain/parsing/parser-data.lisp` | mutable — writable slot(s): kind, target |
 | `%redirect-facts` | `domain/parsing/parser-data.lisp` | mutable — writable slot(s): text, kind, fd-dup-p |
@@ -98,9 +98,8 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%tokenizer-left-angle-route` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%tokenizer-left-paren-route` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%tokenizer-pipe-route` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
-| `%tokenizer-right-redirect-route` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
+| `%tokenizer-right-angle-route` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%tokenizer-special-dispatch-route` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
-| `%tokenizer-word-scan-action` | `domain/parsing/tokenizer-readers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%transient-session-clear` | `presentation/input-state-session.lisp` | mutable — writable slot(s): kind, overrides |
 | `%type-options` | `application/builtin-type-helpers.lisp` | mutable — writable slot(s): all-p, short-p, no-functions-p, color-p, query-p, path-p, force-path-p, type-p, help-p |
 | `%undo-recording-step` | `presentation/input-state-undo.lisp` | mutable — writable slot(s): undo-stack, redo-stack |
@@ -126,14 +125,16 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `here-doc-target-replacer` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): bodies, target-pending-p |
 | `if-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `incomplete-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
-| `input-state` | `presentation/input-state-core.lisp` | mutable — writable slot(s): cursor-pos, completion-index, completion-base-buffer, completion-base-cursor, last-candidates, suggestion, mode, vi-count, vi-visual-anchor, abbreviation-expander, kill-ring, last-yank-start, last-yank-end, last-yank-index, last-argument-start, last-argument-end, last-argument-index, search-query, search-original-buffer, search-original-cursor, search-index, undo-stack, redo-stack, buffer |
+| `input-state` | `presentation/input-state-data.lisp` | mutable — writable slot(s): cursor-pos, completion-index, completion-base-buffer, completion-base-cursor, last-candidates, suggestion, mode, vi-count, vi-visual-anchor, abbreviation-expander, kill-ring, last-yank-start, last-yank-end, last-yank-index, last-argument-start, last-argument-end, last-argument-index, search-query, search-original-buffer, search-original-cursor, search-index, undo-stack, redo-stack, buffer, mouse-selection-anchor, mouse-selection-end |
 | `job` | `domain/execution/job.lisp` | mutable — writable slot(s): state-kw, pgid-int, exit-code-int, pids-list, command-line-str, background-visible-p |
 | `job-monitor` | `domain/job-control/monitor.lisp` | mutable — writable slot(s): jobs-table, next-id-int |
 | `job-wait-event` | `application/manage-job.lisp` | mutable — writable slot(s): pid, state, status-code |
 | `knowledge-base` | `domain/completion/knowledge-base.lisp` | mutable — writable slot(s): commands |
 | `operator-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `pipeline-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
+| `process-substitution-resource` | `infrastructure/acl/syscall-process-substitution.lisp` | mutable — writable slot(s): path, fd, processes |
 | `pty-process` | `infrastructure/acl/pty.lisp` | mutable — writable slot(s): pid, pgid, master-fd, stream |
+| `redirect-fd-dup-target` | `domain/parsing/parser-data.lisp` | mutable — writable slot(s): source, target, operator |
 | `redirect-output-destinations` | `domain/parsing/parser-data.lisp` | mutable — writable slot(s): stdout-target, stdout-mode, stderr-target, stderr-mode |
 | `rule-knowledge-base` | `domain/completion/rule-data.lisp` | mutable — writable slot(s): facts, rules |
 | `sequence-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
@@ -145,7 +146,7 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `while-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `whitespace-field-scanner` | `domain/expansion/fields.lisp` | mutable — writable slot(s): boundaries, start |
 
-**Total: 137 raw defstructs.** mutable: 93; capsule: 28; include-hierarchy: 13; accessor/type mismatch: 1; encapsulation: 1; helper-collision: 1
+**Total: 138 raw defstructs.** mutable: 95; capsule: 27; include-hierarchy: 13; accessor/type mismatch: 1; encapsulation: 1; helper-collision: 1
 
 `command-history` and `history-entry` (both formerly `domain/history/`) are gone from this
 count: generic history storage is now `history-kit:history`/`history-kit:history-entry`,

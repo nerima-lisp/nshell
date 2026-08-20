@@ -23,7 +23,7 @@ A median 5-line, depth-4 function body is the core readability result: the code
 is built from many small, single-purpose, shallow functions rather than a few
 large ones. The DDD layering (domain / application / infrastructure /
 presentation, one concern per file) reinforces this at the
-file scale — see `docs/dead-code-audit.md` and the file-split history.
+file scale — see `docs/notes/dead-code-audit.md` and the file-split history.
 
 ## Deep-nesting outliers, and how they were driven down
 

@@ -3,10 +3,11 @@
 Run `help` inside nshell for per-command detail, and `type NAME` to check
 whether a name resolves to a builtin, a function, or an external program.
 
-`alias`, `abbr`, `bg`, `cd`, `complete`, `contains`, `count`, `disown`, `echo`,
-`exec`, `exit`, `export`, `false`, `fg`, `function`, `help`, `history`, `jobs`,
-`ls`, `not`, `pipeline-graph`, `printf`, `pwd`, `read`, `seq`, `set`, `source`,
-`string`, `test`, `true`, `type`, `unset`, `which`.
+`alias`, `abbr`, `bg`, `break`, `cd`, `command`, `complete`, `contains`,
+`continue`, `count`, `disown`, `echo`, `eval`, `exec`, `exit`, `export`,
+`false`, `fg`, `function`, `help`, `history`, `jobs`, `kill`, `ls`, `not`,
+`pipeline-graph`, `printf`, `pwd`, `read`, `seq`, `set`, `source`, `string`,
+`test`, `true`, `type`, `unset`, `wait`, `which`.
 
 ## Notes on a few of them
 

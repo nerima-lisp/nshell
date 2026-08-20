@@ -100,8 +100,8 @@ behaviour you want nshell to own.
 
 ## Reporting a vulnerability
 
-Report privately through the org
-[security policy](https://github.com/nerima-lisp/.github/blob/main/SECURITY.md),
+Report privately through this repository's
+[security policy](https://github.com/nerima-lisp/nshell/blob/main/SECURITY.md),
 never as a public issue. Redact environment values and command history unless
 they are required to reproduce.
 

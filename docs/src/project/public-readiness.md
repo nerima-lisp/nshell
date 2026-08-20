@@ -29,12 +29,11 @@ and scripting subset.
 Before a public release can claim world-level interactive-shell quality:
 
 1. `nix flake check --print-build-logs` passes on `x86_64-linux` CI, the
-   hermetic check target. `aarch64-darwin` remains declared for development and
-   the non-sandboxed integration matrix, but is not a flake-check or
-   release-binary CI target.
+   hermetic check target. `aarch64-darwin` remains declared for development,
+   but is not a flake-check, integration, or release-binary CI target.
 2. The non-sandboxed integration suite passes for PTY, subprocess, terminal,
-   signal, and job-control coverage on every target in the CI matrix:
-   `x86_64-linux` and `aarch64-darwin`.
+   signal, and job-control coverage on the sole CI matrix target,
+   `x86_64-linux`.
 3. A release binary is built on `x86_64-linux`, starts successfully, and ships
    with `README.md`, `LICENSE`, and the `nshell(1)` man page.
 4. User-visible behavior changes are represented in README, man page, the

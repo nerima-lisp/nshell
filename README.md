@@ -104,9 +104,8 @@ guide and the [package standard](https://github.com/nerima-lisp/.github/blob/mai
 ## Support
 
 See [SUPPORT](https://github.com/nerima-lisp/.github/blob/main/SUPPORT.md).
-Report vulnerabilities privately via the org
-[security policy](https://github.com/nerima-lisp/.github/blob/main/SECURITY.md)
-rather than a public issue.
+Report vulnerabilities privately per this repository's
+[security policy](SECURITY.md) rather than a public issue.
 
 ## License
 

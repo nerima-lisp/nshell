@@ -5,6 +5,11 @@ nshell \- a modern, fish-inspired interactive shell written in Common Lisp
 .B nshell
 .RB [ \-\-help ]
 .RB [ \-\-version ]
+.RB [ \-i | \-\-interactive ]
+.RB [ \-\-no\-config ]
+.RB [ \-\-config
+.IR PATH ]
+.RB [ \-\-no\-history ]
 .RB [ \-c
 .IR COMMAND
 .RI [ ARGS .\|.\|.]]
@@ -48,6 +53,22 @@ once in batch mode and exit with its status. Trailing
 .I ARGS
 are exposed as
 .BR $argv .
+.TP
+.BR \-i ", " \-\-interactive
+Force the interactive line editor, even when standard input is not a
+terminal.
+.TP
+.B \-\-no\-config
+Do not load the interactive startup file.
+.TP
+.BI \-\-config " PATH"
+Load
+.I PATH
+instead of
+.BR ~/.nshellrc .
+.TP
+.B \-\-no\-history
+Do not read or write interactive history.
 .SH KEY BINDINGS
 By default the line editor uses Emacs-style key bindings, including cursor
 motion (\fBC\-a\fR, \fBC\-e\fR, \fBM\-f\fR, \fBM\-b\fR), editing (\fBC\-k\fR,
@@ -103,12 +124,16 @@ provides the following builtins:
 .BR alias ,
 .BR abbr ,
 .BR bg ,
+.BR break ,
 .BR cd ,
+.BR command ,
 .BR complete ,
 .BR contains ,
+.BR continue ,
 .BR count ,
 .BR disown ,
 .BR echo ,
+.BR eval ,
 .BR exec ,
 .BR exit ,
 .BR export ,
@@ -118,8 +143,11 @@ provides the following builtins:
 .BR help ,
 .BR history ,
 .BR jobs ,
+.BR kill ,
 .BR ls ,
 .BR not ,
+.BR pipeline\-graph ,
+.BR printf ,
 .BR pwd ,
 .BR read ,
 .BR seq ,
@@ -129,6 +157,8 @@ provides the following builtins:
 .BR test ,
 .BR true ,
 .BR type ,
+.BR unset ,
+.BR wait ,
 .BR which .
 Run
 .B help

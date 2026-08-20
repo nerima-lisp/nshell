@@ -30,7 +30,7 @@ Verified empirically, not just by inspection: `interactive-stream-p` returns
 `T` for SBCL's real `*standard-output*` under `script(1)` (a genuine PTY) and
 `NIL` under a plain pipe — confirmed by direct `sbcl --eval` runs before
 writing the fix. A new end-to-end test,
-`e2e-main-interactive-pty-foreground-command-ignores-external-command-timeout`
+`e2e-main-interactive-pty-foreground-pipeline-ignores-external-command-timeout`
 (`t/e2e/test-smoke.lisp`), spawns real `nshell` under a real PTY with
 `*external-command-timeout*` overridden to `0.5`, runs `sleep 2; echo
 pty-outlived-timeout`, and asserts the echo occurs and no timeout message

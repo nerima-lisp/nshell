@@ -72,7 +72,7 @@ per-site with a full test run, not applied as a blind find/replace.
   position, and per-slot copier function all vary enough that capturing it
   would need a small spec DSL for a ~4-5 line-per-site saving across 7
   sites — the "three similar-but-different lines" trap this project's own
-  `docs/cps-audit.md` warns against. Left as raw `defstruct`s, consistent
+  `docs/notes/cps-audit.md` warns against. Left as raw `defstruct`s, consistent
   with `docs/notes/value-struct-audit.md`'s stated reason (`define-value-struct`
   assumes no inheritance).
 
@@ -83,4 +83,4 @@ prior refactoring rounds; this audit's one actionable finding (`ignore-errors`
 consistency) is applied. What remains unconverted is either better solved
 without a macro or is a narrow, higher-risk case for a modest win, both
 consistent with this project's readability-bounded reading of "as much as
-possible" (`docs/cps-audit.md`).
+possible" (`docs/notes/cps-audit.md`).

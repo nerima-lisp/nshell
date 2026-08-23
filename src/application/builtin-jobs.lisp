@@ -26,7 +26,6 @@
   (let* ((job-monitor (shell-context-job-monitor context))
          (job-id (%resolve-job-id job-monitor args :active-only-p t))
          (job (fg job-id
-                  (shell-context-dispatcher context)
                   (shell-context-process-registry context)
                   (shell-context-terminal-fns context)
                   job-monitor)))
@@ -37,9 +36,7 @@
 (defun %builtin-bg (context args)
   (let* ((job-monitor (shell-context-job-monitor context))
          (job-id (%resolve-job-id job-monitor args :active-only-p t))
-         (job (bg job-id
-                  (shell-context-dispatcher context)
-                  job-monitor)))
+         (job (bg job-id job-monitor)))
     (if job
         (values nil 0)
         (values (%missing-job-output "bg" (%job-spec-label args)) 1))))

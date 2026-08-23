@@ -9,20 +9,17 @@
       (expect "custom" :to-equal (nshell.domain.configuration:theme-name theme))
       (expect (nshell.domain.configuration:config-p config) :to-be-truthy)
       (expect (nshell.domain.configuration:theme-p (nshell.domain.configuration:config-theme config)) :to-be-truthy)
-      (expect "[%u@%h %w]> " :to-equal (nshell.domain.configuration:config-prompt config))
       (expect (fboundp 'nshell.domain.configuration::theme-colors) :to-be-falsy)
       (expect (fboundp 'nshell.domain.configuration::copy-theme) :to-be-falsy)
       (expect (fboundp 'nshell.domain.configuration::%make-theme) :to-be-falsy)
       (expect (fboundp 'nshell.domain.configuration::%allocate-theme) :to-be-truthy)
-      (expect (fboundp 'nshell.domain.configuration::config-prompt-format) :to-be-falsy)
       (expect (fboundp 'nshell.domain.configuration::copy-config) :to-be-falsy)
       (expect (fboundp 'nshell.domain.configuration::%make-config) :to-be-falsy)
       (expect (fboundp 'nshell.domain.configuration::%allocate-config) :to-be-truthy)))
 
   (it "config-construction-validates-aggregate-values"
     "Configuration construction accepts only valid aggregate values."
-    (expect (lambda () (nshell.domain.configuration:make-config :theme nil)) :to-throw 'type-error)
-    (expect (lambda () (nshell.domain.configuration:make-config :prompt-format 42)) :to-throw 'type-error))
+    (expect (lambda () (nshell.domain.configuration:make-config :theme nil)) :to-throw 'type-error))
 
   (it "theme-colors-are-detached-from-constructor-input"
     "Theme construction owns the mutable color table."

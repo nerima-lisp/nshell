@@ -28,8 +28,8 @@ test suite). With tests included the count falls to 179, of which paredit marks
 
 The other 161 candidates split into `struct` (103) and `unknown-macro` (58):
 
-- **`struct` (103):** `define-value-struct` type names such as `%glob-match-subject`
-  or `%domain-event`. The generated *constructor* (`%make-glob-match-subject`) is
+- **`struct` (103):** `define-value-struct` type names such as `%glob-match-subject`.
+  The generated *constructor* (`%make-glob-match-subject`) is
   what call sites use, so the type name reads as "defined but uncalled". Removing
   it would delete the struct.
 - **`unknown-macro` (58):** definitions emitted by macros paredit does not expand,

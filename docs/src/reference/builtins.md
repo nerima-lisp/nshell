@@ -5,7 +5,7 @@ whether a name resolves to a builtin, a function, or an external program.
 
 `alias`, `abbr`, `bg`, `break`, `cd`, `command`, `complete`, `contains`,
 `continue`, `count`, `disown`, `echo`, `eval`, `exec`, `exit`, `export`,
-`false`, `fg`, `function`, `help`, `history`, `jobs`, `kill`, `ls`, `not`,
+`false`, `fg`, `function`, `help`, `history`, `jobs`, `kill`, `not`,
 `pipeline-graph`, `printf`, `pwd`, `read`, `seq`, `set`, `source`, `string`,
 `test`, `true`, `type`, `unset`, `wait`, `which`.
 

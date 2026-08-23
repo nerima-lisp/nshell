@@ -3,25 +3,6 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 ;; -- Domain packages (pure, no side effects) ----------------
-(defpackage #:nshell.domain.events
-  (:documentation
-   "Domain: the vocabulary of things that happen in a shell session -- a command
-was entered, a process exited, a job stopped -- as immutable event values.
-Publishing and subscribing belong to the application layer's dispatcher; this
-package only says what an event is.")
-  (:use #:cl)
-  (:import-from #:nshell.util #:define-value-struct)
-  (:export #:domain-event-type #:domain-event-timestamp
-           #:make-generic-domain-event
-           #:make-command-entered-event #:make-command-parsed-event
-           #:make-parse-failed-event #:make-pipeline-started-event
-           #:make-process-created-event #:make-process-exited-event
-           #:make-pipeline-completed-event #:make-job-created-event
-           #:make-job-stopped-event #:make-job-continued-event
-           #:make-job-completed-event #:make-signal-caught-event
-           #:make-command-appended-to-history-event #:make-history-searched-event
-           #:make-completion-triggered-event))
-
 (defpackage #:nshell.domain.signals
   (:documentation
    "Domain: POSIX signals as domain values, with SIGINT, SIGTERM, SIGCONT, and
@@ -310,7 +291,7 @@ nshell.infrastructure.persistence's job.")
   (:use #:cl)
   (:export #:make-theme #:theme-color #:theme-name #:theme-set-color
            #:theme-p #:config-p
-           #:make-config #:config-theme #:config-prompt
+           #:make-config #:config-theme
            #:default-theme #:default-config))
 
 (defpackage #:nshell.domain.prompting

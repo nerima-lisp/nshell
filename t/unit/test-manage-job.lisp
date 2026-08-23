@@ -33,20 +33,15 @@
       (expect (fboundp '(setf nshell.application:job-listing-command)) :to-be-falsy)
       (expect "printf ok" :to-equal (nshell.application:job-listing-command listing))))
 
-  (it "bg-marks-job-as-background-and-publishes-continuation"
+  (it "bg-marks-job-as-background"
     "BG updates the job state without requiring terminal control when PGID is zero."
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-           (dispatcher (nshell.application:make-event-dispatcher))
            (job (make-test-job 0 "sleep" :args '("10")))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
            (nshell.application:*job-monitor* (nshell.domain.job-control:make-job-monitor)))
-      (with-event-capture (continued dispatcher :job-continued)
-          (nshell.domain.events:domain-event-type event)
-        (expect job :to-be (nshell.application:bg job-id dispatcher monitor))
-        (expect :background :to-be (nshell.domain.execution:job-state job))
-        (expect (nshell.domain.execution:job-background-p job) :to-be-truthy)
-        (expect (nshell.application:drain-events dispatcher) :to-be-null)
-        (expect '(:job-continued) :to-equal (nreverse continued)))))
+      (expect job :to-be (nshell.application:bg job-id monitor))
+      (expect :background :to-be (nshell.domain.execution:job-state job))
+      (expect (nshell.domain.execution:job-background-p job) :to-be-truthy)))
 
   (it "disown-removes-job-from-monitor"
     "DISOWN removes a tracked job and returns true for an existing id."
@@ -64,10 +59,10 @@
       (let (bg-result
             fg-result)
         (let ((bg-output (with-output-to-string (*standard-output*)
-                           (setf bg-result (nshell.application:bg 42 nil empty-monitor))))
+                           (setf bg-result (nshell.application:bg 42 empty-monitor))))
               (fg-output (with-output-to-string (*standard-output*)
                            (setf fg-result
-                                 (nshell.application:fg 42 nil nil nil empty-monitor)))))
+                                 (nshell.application:fg 42 nil nil empty-monitor)))))
           (expect bg-result :to-be-null)
           (expect fg-result :to-be-null)
           (expect "" :to-equal bg-output)
@@ -100,46 +95,42 @@
             (lambda (pgid)
               (push pgid set-foreground-calls))))
         (handler-case
-            (nshell.application:fg job-id nil nil nil monitor)
+            (nshell.application:fg job-id nil nil monitor)
           (error (condition)
             (expect (search "wait failed" (princ-to-string condition)) :to-be-truthy)))
         (expect nshell.application:*foreground-job-pgid* :to-be-null)
         (expect 0 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
         (expect '(1000 4321) :to-equal set-foreground-calls))))
-  (it "fg-publishes-continuation-to-dispatcher"
-    "FG emits a continuation event through the supplied dispatcher."
+  (it "fg-restores-shell-pgid-after-a-successful-wait"
+    "FG returns the job and hands the terminal back to the shell once wait returns."
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-           (dispatcher (nshell.application:make-event-dispatcher))
            (job (make-test-job 0 "sleep" :args '("10") :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
            (set-foreground-calls nil)
            (nshell.application:*shell-pgid* 1000)
            (nshell.application:*foreground-job-pgid* nil)
            (nshell.infrastructure.acl::*foreground-pgid* 0))
-      (with-event-capture (continued dispatcher :job-continued)
-          (nshell.domain.events:domain-event-type event)
-        (with-temporary-functions
-            (('nshell.application::%continue-process-group
-              (lambda (pgid)
-                (expect 4321 :to-equal pgid)))
-             ('nshell.application::%wait-job-pgid
-              (lambda (waited-job waited-job-id waited-monitor)
-                (expect job :to-be waited-job)
-                (expect job-id :to-equal waited-job-id)
-                (expect monitor :to-be waited-monitor)
-                (expect 4321 :to-equal nshell.application:*foreground-job-pgid*)
-                (expect 4321 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
-                waited-job))
-             ('nshell.infrastructure.acl:get-foreground-pgroup
-              (lambda () 1000))
-             ('nshell.infrastructure.acl:set-foreground-pgroup
-              (lambda (pgid)
-                (push pgid set-foreground-calls))))
-          (expect job :to-be
-                  (nshell.application:fg job-id dispatcher nil nil monitor)))
-        (expect (nshell.application:drain-events dispatcher) :to-be-null)
-        (expect '(1000 4321) :to-equal set-foreground-calls)
-        (expect '(:job-continued) :to-equal (nreverse continued)))))
+      (with-temporary-functions
+          (('nshell.application::%continue-process-group
+            (lambda (pgid)
+              (expect 4321 :to-equal pgid)))
+           ('nshell.application::%wait-job-pgid
+            (lambda (waited-job waited-job-id waited-monitor)
+              (expect job :to-be waited-job)
+              (expect job-id :to-equal waited-job-id)
+              (expect monitor :to-be waited-monitor)
+              (expect 4321 :to-equal nshell.application:*foreground-job-pgid*)
+              (expect 4321 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
+              waited-job))
+           ('nshell.infrastructure.acl:get-foreground-pgroup
+            (lambda () 1000))
+           ('nshell.infrastructure.acl:set-foreground-pgroup
+            (lambda (pgid)
+              (push pgid set-foreground-calls))))
+        (expect job :to-be
+                (nshell.application:fg job-id nil nil monitor)))
+      (expect nshell.application:*foreground-job-pgid* :to-be-null)
+      (expect '(1000 4321) :to-equal set-foreground-calls)))
 
   (it "wait-job-pgid-waits-for-known-pipeline-pids"
     "Foreground wait reaps every known pipeline PID and uses the last stage status."
@@ -285,7 +276,7 @@
             :to-throw 'error))
 
   (it "bg-continues-a-nonzero-process-group"
-    "BG forwards continuation to a tracked process group before publishing state."
+    "BG forwards continuation to a tracked process group before marking it background."
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))
            (job (make-test-job 0 "sleep" :args '("10") :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
@@ -294,7 +285,7 @@
           ('nshell.application::%continue-process-group
            (lambda (pgid)
              (push pgid continue-calls)))
-        (expect job :to-be (nshell.application:bg job-id nil monitor)))
+        (expect job :to-be (nshell.application:bg job-id monitor)))
       (expect '(4321) :to-equal continue-calls)
       (expect :background :to-be (nshell.domain.execution:job-state job))))
   (it "signal-job-updates-stop-and-continue-state"

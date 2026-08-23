@@ -25,10 +25,9 @@
 (describe "execute-pipeline-service-tests"
   (it "execute-command-line-adds-complete-commands-to-history"
     "A complete command line returns an AST/result pair and records history."
-    (let ((history (history-kit:make-history))
-          (dispatcher (nshell.application:make-event-dispatcher)))
+    (let ((history (history-kit:make-history)))
       (multiple-value-bind (ast result)
-          (nshell.application:execute-command-line "echo hello" history dispatcher)
+          (nshell.application:execute-command-line "echo hello" history)
         (expect (nshell.domain.parsing:parse-complete-p result) :to-be-truthy)
         (expect (nshell.domain.parsing:command-node-p ast) :to-be-truthy)
         (expect 1 :to-equal (history-kit:history-count history))
@@ -39,26 +38,15 @@
     "Incomplete input returns no AST/result values and leaves history unchanged."
     (let ((history (history-kit:make-history)))
       (multiple-value-bind (ast result)
-          (nshell.application:execute-command-line "echo 'unterminated" history nil)
+          (nshell.application:execute-command-line "echo 'unterminated" history)
         (expect ast :to-be-null)
         (expect result :to-be-null)
         (expect 0 :to-equal (history-kit:history-count history)))))
 
-  (it "execute-pipeline-use-case-runs-command-and-publishes-events"
-    "The execute-pipeline use case returns the exit status and emits lifecycle events."
-    (let ((dispatcher (nshell.application:make-event-dispatcher))
-          (ast (nshell.domain.parsing:make-command-node "true" nil)))
-      (with-event-capture (events dispatcher
-                                   :pipeline-started
-                                   :process-created
-                                   :process-exited
-                                   :pipeline-completed)
-          (nshell.domain.events:domain-event-type event)
-        (expect 0 :to-equal (nshell.application:execute-pipeline-use-case ast dispatcher))
-        (expect (nshell.application:drain-events dispatcher) :to-be-null)
-        (let ((delivered (nreverse events)))
-          (expect (member :pipeline-started delivered) :to-be-truthy)
-          (expect (member :pipeline-completed delivered) :to-be-truthy)))))
+  (it "execute-pipeline-use-case-runs-command"
+    "The execute-pipeline use case returns the exit status of the command it ran."
+    (let ((ast (nshell.domain.parsing:make-command-node "true" nil)))
+      (expect 0 :to-equal (nshell.application:execute-pipeline-use-case ast))))
 
   (it "execute-pipeline-use-case-expands-command-position-word"
     "The public pipeline API expands variables in command position before spawning."
@@ -69,7 +57,7 @@
              (code nil)
              (output (with-output-to-string (*standard-output*)
                        (setf code
-                             (nshell.application:execute-pipeline-use-case ast nil)))))
+                             (nshell.application:execute-pipeline-use-case ast)))))
         (expect 0 :to-equal code)
         (expect "pipeline-api" :to-equal output))))
 
@@ -82,7 +70,7 @@
             (code nil))
         (let ((error-output
                 (with-output-to-string (*error-output*)
-                  (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
+                  (setf code (nshell.application:execute-pipeline-use-case ast)))))
           (expect 127 :to-equal code)
           (expect (format nil "nshell: $NSHELL_PIPELINE_CMD: command name expansion produced 2 fields~%") :to-equal error-output)))))
 
@@ -94,7 +82,7 @@
           (code nil))
       (let ((error-output
               (with-output-to-string (*error-output*)
-                (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
+                (setf code (nshell.application:execute-pipeline-use-case ast)))))
           (expect 127 :to-equal code)
           (expect (format nil "nshell: NSHELL_MISSING_REQUIRED: required value~%") :to-equal error-output))))
 
@@ -138,7 +126,7 @@
       (unwind-protect
            (progn
              (ensure-directories-exist root)
-             (expect 0 :to-equal (nshell.application:execute-pipeline-use-case ast nil))
+             (expect 0 :to-equal (nshell.application:execute-pipeline-use-case ast))
              (expect (probe-file output) :to-be-truthy)
              (with-open-file (stream output :direction :input)
                (let ((actual (make-string (file-length stream))))
@@ -245,7 +233,7 @@
            (ast (nshell.domain.parsing:make-pipeline-node (list writer counter)))
            (code nil)
            (output (capture-standard-output
-                     (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
+                     (setf code (nshell.application:execute-pipeline-use-case ast)))))
       (expect 0 :to-equal code)
       (expect (format nil "3~%") :to-equal output)))
 
@@ -259,7 +247,7 @@
            (ast (nshell.domain.parsing:make-pipeline-node (list writer counter)))
            (code nil)
            (output (capture-standard-output
-                     (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
+                     (setf code (nshell.application:execute-pipeline-use-case ast)))))
       (expect 0 :to-equal code)
       (expect (format nil "6~%") :to-equal output)))
 
@@ -274,7 +262,7 @@
              (ast (nshell.domain.parsing:make-pipeline-node (list writer counter)))
              (code nil)
              (output (capture-standard-output
-                       (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
+                       (setf code (nshell.application:execute-pipeline-use-case ast)))))
         (expect 0 :to-equal code)
         (expect (format nil "3~%") :to-equal output)
         (expect "OUT" :to-equal (host-kit:read-file-string target)))))
@@ -290,7 +278,7 @@
              (ast (nshell.domain.parsing:make-pipeline-node (list writer counter)))
              (code nil)
              (output (capture-standard-output
-                       (setf code (nshell.application:execute-pipeline-use-case ast nil)))))
+                       (setf code (nshell.application:execute-pipeline-use-case ast)))))
         (expect 0 :to-equal code)
         (expect (format nil "0~%") :to-equal output)
         (expect "OUTERR" :to-equal (host-kit:read-file-string target)))))
@@ -300,7 +288,7 @@
     (let ((ast (nshell.domain.parsing:make-command-node
                 "definitely-not-a-real-command"
                 nil)))
-      (expect 127 :to-equal (nshell.application:execute-pipeline-use-case ast nil))))
+      (expect 127 :to-equal (nshell.application:execute-pipeline-use-case ast))))
 
   (it "execute-pipeline-node-in-context-times-out-external-stages-in-cps-mode"
     "The CPS execution path drains external output and times out long-running stages."

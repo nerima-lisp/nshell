@@ -36,7 +36,7 @@
 (defun %continue-process-group (pgid)
   (sb-posix:kill (- pgid) sb-unix:sigcont))
 
-(defun fg (job-id &optional dispatcher process-registry terminal-fns
+(defun fg (job-id &optional process-registry terminal-fns
                     (job-monitor *job-monitor*))
   "Move JOB-ID to the foreground, wait for it, then restore the shell PGID."
   (declare (ignore process-registry terminal-fns))
@@ -50,9 +50,6 @@
                  (%set-acl-foreground-pgid pgid)
                  (%continue-process-group pgid)
                  (nshell.domain.job-control:foreground-job job-monitor job-id)
-                 (when dispatcher
-                   (publish-event dispatcher
-                                  (nshell.domain.events:make-job-continued-event job-id)))
                  (%with-terminal-foreground-pgroup
                    pgid
                    (lambda () (%wait-job-pgid job job-id job-monitor))))
@@ -60,7 +57,7 @@
             (%set-acl-foreground-pgid nil)))
         job))))
 
-(defun bg (job-id &optional dispatcher (job-monitor *job-monitor*))
+(defun bg (job-id &optional (job-monitor *job-monitor*))
   "Continue JOB-ID in the background."
   (let ((job (%require-job job-id job-monitor)))
     (when job
@@ -68,9 +65,6 @@
         (when pgid
           (%continue-process-group pgid))
         (nshell.domain.job-control:background-job job-monitor job-id)
-        (when dispatcher
-          (publish-event dispatcher
-                         (nshell.domain.events:make-job-continued-event job-id)))
         job))))
 
 (defun jobs (&optional (job-monitor *job-monitor*))

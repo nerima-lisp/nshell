@@ -31,11 +31,8 @@
                matches)
       (first matches)))
 
-(defun history-suggestion (history input &optional dispatcher)
+(defun history-suggestion (history input)
   (unless (nshell.domain.parsing:shell-input-blank-p input)
-    (when dispatcher
-      (publish-event dispatcher
-                     (nshell.domain.events:make-completion-triggered-event input)))
     (let ((matches (history-kit:history-search history input :mode :line-prefix)))
       (when matches
         (let* ((best (%interactive-history-best-entry matches))
@@ -47,21 +44,13 @@
           (when (and suffix (< 0 (length suffix)))
             suffix))))))
 
-(defun search-history-use-case (history query mode &optional dispatcher)
-  (let ((matches (history-kit:history-search history query :mode mode)))
-    (when dispatcher
-      (publish-event dispatcher
-                     (nshell.domain.events:make-history-searched-event)))
-    matches))
+(defun search-history-use-case (history query mode)
+  (history-kit:history-search history query :mode mode))
 
-(defun interactive-history-search-use-case (history query &optional dispatcher)
+(defun interactive-history-search-use-case (history query)
   "Search for interactive reverse search, preferring command-line starts.
 
   Line-prefix matches make multi-line history feel command-aware: a continuation
   line that starts with QUERY ranks before incidental mid-line substring matches,
 while the contains fallback preserves the usual Ctrl-R substring search."
-  (let ((matches (%interactive-history-search-matches history query)))
-    (when dispatcher
-      (publish-event dispatcher
-                     (nshell.domain.events:make-history-searched-event)))
-    matches))
+  (%interactive-history-search-matches history query))

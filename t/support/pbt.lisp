@@ -261,13 +261,4 @@ Call as (PROPERTY NAME BINDINGS . BODY) or, with a law description,
            (check-property (:trials 50) ,bindings ,@real-body)))
       `(it ,name (check-property (:trials 50) ,bindings-or-doc ,@body))))
 
-(defmacro with-event-capture ((events dispatcher &rest types) projection &body body)
-  "Subscribe to TYPES on DISPATCHER and collect PROJECTION values into EVENTS."
-  `(let ((,events nil))
-     (dolist (type ',types)
-       (nshell.application:subscribe ,dispatcher type
-                                     (lambda (event)
-                                       (push ,projection ,events))))
-     ,@body))
-
 ;;; Shared test fixtures and adapters used across integration, e2e, and unit tests.

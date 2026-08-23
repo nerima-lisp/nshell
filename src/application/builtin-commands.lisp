@@ -318,17 +318,6 @@
 (define-builtin %builtin-pwd (context args) (args)
   (values (format nil "~a~%" (namestring (funcall (%filesystem-fn context :cwd)))) 0))
 
-(define-builtin %builtin-ls (context args) (args)
-  (handler-case
-      (values
-       (with-output-to-string (out)
-         (dolist (file (funcall (%filesystem-fn context :list-dir)
-                                (funcall (%filesystem-fn context :cwd))))
-           (format out "~a~%" (file-namestring file))))
-       0)
-    (error (condition)
-      (values (format nil "ls: ~a~%" condition) 1))))
-
 (defun %builtin-cd (context args)
   (handler-case
       (progn

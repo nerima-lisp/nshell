@@ -116,11 +116,10 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `command-redirect-split-result` | `domain/parsing/ast-redirect-split.lisp` | mutable — writable slot(s): clean-command |
 | `completion-context` | `domain/completion/context.lisp` | mutable — writable slot(s): argument-words |
 | `completion-query` | `domain/completion/engine.lisp` | mutable — writable slot(s): partial-input |
-| `config` | `domain/configuration/config.lisp` | accessor/type mismatch — public reader `config-prompt` maps to slot `prompt-format`; the macro would emit `config-prompt-format` instead |
+| `config` | `domain/configuration/config.lisp` | candidate — the `prompt-format` slot whose reader mismatch blocked conversion has been removed; the sole remaining slot `theme` matches its public reader `config-theme`, so a conversion attempt should now be made |
 | `env-var` | `domain/environment/env.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `environment` | `domain/environment/env.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `error-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
-| `event-dispatcher` | `application/event-dispatcher.lisp` | mutable — writable slot(s): subscribers, queue |
 | `for-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `here-doc-target-replacer` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): bodies, target-pending-p |
 | `if-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
@@ -146,11 +145,12 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `while-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
 | `whitespace-field-scanner` | `domain/expansion/fields.lisp` | mutable — writable slot(s): boundaries, start |
 
-**Total: 138 raw defstructs.** mutable: 95; capsule: 27; include-hierarchy: 13; accessor/type mismatch: 1; encapsulation: 1; helper-collision: 1
+**Total: 137 raw defstructs.** mutable: 94; capsule: 27; include-hierarchy: 13; candidate: 1; encapsulation: 1; helper-collision: 1
 
 `command-history` and `history-entry` (both formerly `domain/history/`) are gone from this
 count: generic history storage is now `history-kit:history`/`history-kit:history-entry`,
 defined and audited in the `cl-history-kit` library itself, not in this tree. Only the
 tokenizer-coupled last-argument structs above remain nshell's own.
 
-Unexplained (needs review): **none** — every remaining defstruct has a concrete non-applicability reason.
+Unexplained (needs review): **none** — every remaining defstruct has a concrete non-applicability reason,
+except `config`, whose blocker was removed with `prompt-format` and which is now an open conversion candidate.

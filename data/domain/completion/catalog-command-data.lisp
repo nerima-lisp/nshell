@@ -12,10 +12,6 @@
    (list :command "pwd"
          :synopsis "pwd"
          :description "print working directory")
-   (list :command "ls"
-         :synopsis "ls"
-         :description "list directory contents"
-         :flags '("-l" "-a" "-h" "-R" "--help"))
    (list :command "cd"
          :synopsis "cd [dir]"
          :description "change directory")

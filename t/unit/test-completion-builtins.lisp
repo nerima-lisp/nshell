@@ -11,7 +11,7 @@
   (it "command-flags-are-completed"
     (let ((candidates (nshell.domain.completion:rule-complete
                        nshell.domain.completion::*built-in-rule-knowledge-base*
-                       "ls --")))
+                       "type --")))
       (assert-completion-texts-include candidates "--help")))
 
   (it "type-command-flags-are-completed"
@@ -368,12 +368,12 @@
                        (nshell.domain.completion:rule-complete
                         nshell.domain.completion::*built-in-rule-knowledge-base*
                         "git st")))
-          (ls-help (completion-texts
-                    (nshell.domain.completion:rule-complete
-                     nshell.domain.completion::*built-in-rule-knowledge-base*
-                     "ls --"))))
+          (type-help (completion-texts
+                      (nshell.domain.completion:rule-complete
+                       nshell.domain.completion::*built-in-rule-knowledge-base*
+                       "type --"))))
       (assert-texts-include git-status "status")
-      (assert-texts-include ls-help "--help")))
+      (assert-texts-include type-help "--help")))
 
   (it "rule-completion-dedupes-multiple-proof-paths"
     (let ((kb (make-empty-rule-kb)))

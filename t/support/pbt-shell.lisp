@@ -49,7 +49,6 @@
                                   (config (nshell.domain.configuration:default-config))
                                   (knowledge-base (nshell.domain.completion:make-empty-knowledge-base))
                                   (environment (nshell.domain.environment:make-default-environment))
-                                  (dispatcher (nshell.application:make-event-dispatcher))
                                   (job-monitor (nshell.domain.job-control:make-job-monitor))
                                   (alias-table (make-hash-table :test #'equal))
                                   (abbreviation-table (make-hash-table :test #'equal))
@@ -75,7 +74,6 @@
      :config config
      :knowledge-base knowledge-base
      :environment environment
-     :dispatcher dispatcher
      :job-monitor job-monitor
      :alias-table alias-table
      :abbreviation-table abbreviation-table

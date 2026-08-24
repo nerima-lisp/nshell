@@ -449,12 +449,5 @@ command name expands to zero or multiple fields (ambiguous)."
                    :redirects redirects
                    :pipefail-p (shell-context-pipefail-p context)))))))))
 
-(defun execute-pipeline-use-case (pipeline dispatcher)
-  (when dispatcher
-    (publish-event dispatcher
-                   (nshell.domain.events:make-pipeline-started-event pipeline nil)))
-  (let ((exit-code (or (execute-pipeline pipeline) 0)))
-    (when dispatcher
-      (publish-event dispatcher
-                     (nshell.domain.events:make-pipeline-completed-event pipeline exit-code)))
-    exit-code))
+(defun execute-pipeline-use-case (pipeline)
+  (or (execute-pipeline pipeline) 0))

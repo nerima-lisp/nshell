@@ -109,32 +109,6 @@
         :code 1
         :contains '("cd:" "no such directory"))))
 
-  (it "ls-lists-directory-contents"
-    "ls emits one filename per line for each entry returned by :list-dir."
-    (let* ((context (make-test-builtins-context))
-           (original-fns (nshell.application:shell-context-filesystem-fns context)))
-      (setf (nshell.application:shell-context-filesystem-fns context)
-            (list* :list-dir (lambda (d)
-                               (declare (ignore d))
-                               (list #p"/opt/bin/foo" #p"/opt/bin/bar"))
-                   original-fns))
-      (assert-builtin-call (context "ls" nil)
-        :code 0
-        :output (format nil "foo~%bar~%"))))
-
-  (it "ls-returns-exit-1-when-list-dir-errors"
-    "ls returns exit 1 and an error message when :list-dir signals an error."
-    (let* ((context (make-test-builtins-context))
-           (original-fns (nshell.application:shell-context-filesystem-fns context)))
-      (setf (nshell.application:shell-context-filesystem-fns context)
-            (list* :list-dir (lambda (d)
-                               (declare (ignore d))
-                               (error "permission denied"))
-                   original-fns))
-      (assert-builtin-call (context "ls" nil)
-        :code 1
-        :contains '("ls:" "permission denied"))))
-
   (it "true-exits-zero-with-no-output"
     "true always returns exit code 0 and nil output regardless of arguments."
     (with-builtins-context (context)

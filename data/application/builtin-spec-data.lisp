@@ -30,7 +30,6 @@
     ("echo" . %builtin-echo)
     ("printf" . %builtin-printf)
     ("exit" . %builtin-exit)
-    ("ls" . %builtin-ls)
     ("not" . %builtin-not)
     ("pwd" . %builtin-pwd)
     ("read" . %builtin-read)

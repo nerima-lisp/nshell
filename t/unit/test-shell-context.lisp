@@ -22,7 +22,6 @@
       (expect (null (nshell.application:shell-context-knowledge-base context)) :to-be-falsy)
       (expect (nshell.domain.environment:environment-p
            (nshell.application:shell-context-environment context)) :to-be-truthy)
-      (expect (null (nshell.application:shell-context-dispatcher context)) :to-be-falsy)
       (expect (null (nshell.application:shell-context-job-monitor context)) :to-be-falsy)
       (expect (hash-table-p (nshell.application:shell-context-alias-table context)) :to-be-truthy)
       (expect (hash-table-p (nshell.application:shell-context-abbreviation-table context)) :to-be-truthy)

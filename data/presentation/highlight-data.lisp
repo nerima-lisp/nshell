@@ -3,7 +3,7 @@
 (in-package #:nshell.presentation)
 
 (defvar *builtin-commands*
-  '("echo" "printf" "pwd" "ls" "cd" "exit" "fg" "bg" "jobs" "disown"
+  '("echo" "printf" "pwd" "cd" "exit" "fg" "bg" "jobs" "disown"
     "set" "export" "unset" "alias" "abbr" "function" "source" "exec"
     "true" "false" "contains" "test" "type" "which" "history" "help")
   "Commands built into nshell that get distinct highlighting.")

@@ -1,15 +1,10 @@
 (in-package #:nshell/test)
 
 (describe "search-history-service-tests"
-  (it "history-suggestion-returns-suffix-and-publishes-completion-event"
+  (it "history-suggestion-returns-suffix"
     "Suggestions return only the completion suffix for the newest prefix match."
     (with-history (history "git status" "git stash" "echo done")
-      (let ((dispatcher (nshell.application:make-event-dispatcher)))
-        (with-event-capture (events dispatcher :completion-triggered)
-            (nshell.domain.events:domain-event-type event)
-          (expect " stash" :to-equal (nshell.application:history-suggestion history "git" dispatcher))
-          (expect (nshell.application:drain-events dispatcher) :to-be-null)
-          (expect '(:completion-triggered) :to-equal (nreverse events))))))
+      (expect " stash" :to-equal (nshell.application:history-suggestion history "git"))))
 
   (it "history-suggestion-returns-nil-without-match"
     "Suggestions are NIL when no command has the requested prefix."
@@ -56,31 +51,22 @@ git status")
   (it "history-suggestion-ignores-blank-input"
     "Empty prompts should not ghost the newest command from history."
     (with-history (history "git status" "echo done")
-      (let ((dispatcher (nshell.application:make-event-dispatcher)))
-        (with-event-capture (events dispatcher :completion-triggered)
-            (nshell.domain.events:domain-event-type event)
-          (expect (nshell.application:history-suggestion history "" dispatcher) :to-be-null)
-          (expect (nshell.application:history-suggestion history "   " dispatcher) :to-be-null)
-          (expect (nshell.application:history-suggestion history "|" dispatcher) :to-be-null)
-          (expect (nshell.application:history-suggestion history "&&" dispatcher) :to-be-null)
-          (expect events :to-be-null)))))
+      (expect (nshell.application:history-suggestion history "") :to-be-null)
+      (expect (nshell.application:history-suggestion history "   ") :to-be-null)
+      (expect (nshell.application:history-suggestion history "|") :to-be-null)
+      (expect (nshell.application:history-suggestion history "&&") :to-be-null)))
 
-  (it "search-history-use-case-delegates-mode-and-publishes-event"
-    "The search use case supports domain search modes and emits a search event."
+  (it "search-history-use-case-delegates-mode"
+    "The search use case supports domain search modes."
     (with-history (history "git status" "make test" "grep status log")
-      (let ((dispatcher (nshell.application:make-event-dispatcher)))
-        (with-event-capture (events dispatcher :history-searched)
-            (nshell.domain.events:domain-event-type event)
-          (let ((results (nshell.application:search-history-use-case
-                          history "status" :contains dispatcher)))
-            (expect 2 :to-equal (length results))
-            (let ((matching 0))
-              (dolist (entry results)
-                (when (search "status" (history-kit:history-entry-text entry))
-                  (incf matching)))
-              (expect 2 :to-equal matching)))
-          (expect (nshell.application:drain-events dispatcher) :to-be-null)
-          (expect '(:history-searched) :to-equal (nreverse events))))))
+      (let ((results (nshell.application:search-history-use-case
+                      history "status" :contains)))
+        (expect 2 :to-equal (length results))
+        (let ((matching 0))
+          (dolist (entry results)
+            (when (search "status" (history-kit:history-entry-text entry))
+              (incf matching)))
+          (expect 2 :to-equal matching)))))
 
   (it "interactive-history-search-prefers-line-prefix-before-contains"
     "Interactive reverse search ranks command-line starts before incidental substrings."
@@ -88,17 +74,12 @@ git status")
 git status"
                            "printf 'not a prefix git'"
                            "git push")
-      (let ((dispatcher (nshell.application:make-event-dispatcher)))
-        (with-event-capture (events dispatcher :history-searched)
-            (nshell.domain.events:domain-event-type event)
-          (let ((results (nshell.application:interactive-history-search-use-case
-                          history "git" dispatcher)))
-            (expect '("git push"
-                         "echo setup
+      (let ((results (nshell.application:interactive-history-search-use-case
+                      history "git")))
+        (expect '("git push"
+                     "echo setup
 git status"
-                         "printf 'not a prefix git'") :to-equal (history-kit:history-entry-texts results)))
-          (expect (nshell.application:drain-events dispatcher) :to-be-null)
-          (expect '(:history-searched) :to-equal (nreverse events))))))
+                     "printf 'not a prefix git'") :to-equal (history-kit:history-entry-texts results)))))
 
   (it "interactive-history-search-handles-large-gapped-history"
     "Interactive reverse search keeps ranking with many nonmatching entries."
@@ -130,14 +111,9 @@ git old"
   (it "interactive-history-search-ignores-blank-query"
     "Interactive reverse search should not preselect history before the user types."
     (with-history (history "git status" "docker ps")
-      (let ((dispatcher (nshell.application:make-event-dispatcher)))
-        (with-event-capture (events dispatcher :history-searched)
-            (nshell.domain.events:domain-event-type event)
-          (expect (nshell.application:interactive-history-search-use-case
-                     history "" dispatcher) :to-be-null)
-          (expect (nshell.application:interactive-history-search-use-case
-                     history "|" dispatcher) :to-be-null)
-          (expect (nshell.application:interactive-history-search-use-case
-                     history "&&" dispatcher) :to-be-null)
-          (expect (nshell.application:drain-events dispatcher) :to-be-null)
-          (expect '(:history-searched :history-searched :history-searched) :to-equal (nreverse events)))))))
+      (expect (nshell.application:interactive-history-search-use-case
+                 history "") :to-be-null)
+      (expect (nshell.application:interactive-history-search-use-case
+                 history "|") :to-be-null)
+      (expect (nshell.application:interactive-history-search-use-case
+                 history "&&") :to-be-null))))

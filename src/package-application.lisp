@@ -12,12 +12,10 @@ is the only layer permitted to know both the domain and the ports.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
-            #:make-event-dispatcher #:publish-event
-            #:subscribe #:unsubscribe #:drain-events
             #:make-shell-context #:shell-context-p
             #:shell-context-history #:shell-context-config
             #:shell-context-knowledge-base #:shell-context-environment
-            #:shell-context-dispatcher #:shell-context-job-monitor
+            #:shell-context-job-monitor
             #:shell-context-alias-table #:shell-context-abbreviation-table
             #:shell-context-function-table #:shell-context-function-source-table
             #:shell-context-filesystem-fns

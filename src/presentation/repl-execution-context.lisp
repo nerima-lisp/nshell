@@ -37,7 +37,6 @@
    :config *config*
    :knowledge-base *kb*
    :environment (ensure-environment)
-   :dispatcher nil
    :job-monitor nshell.application:*job-monitor*
    :alias-table *aliases*
    :abbreviation-table *abbreviations*

@@ -54,7 +54,7 @@
 
   (it "builtin-registry-exposes-executable-builtins-at-load-time"
     "lookup-builtin returns the executable builtin handlers immediately after load."
-    (dolist (name '("echo" "exit" "ls" "pwd" "string" "type" "not"))
+    (dolist (name '("echo" "exit" "pwd" "string" "type" "not"))
       (expect (nshell.application:lookup-builtin name) :to-be-truthy)))
 
   (it "builtin-registry-covers-the-canonical-builtin-catalog"

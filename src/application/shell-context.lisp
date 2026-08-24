@@ -7,7 +7,7 @@
 
 (defstruct (shell-context
             (:constructor %allocate-shell-context
-                (&key history config knowledge-base environment dispatcher
+                (&key history config knowledge-base environment
                       job-monitor alias-table abbreviation-table function-table
                       function-source-table filesystem-fns process-fns terminal-fns
                       redirect-fns execution-strategy pipefail-p running last-exit-code input-state
@@ -18,7 +18,6 @@
   (config nil)
   (knowledge-base nil)
   (environment nil)
-  (dispatcher nil)
   (job-monitor nil)
   (alias-table (make-hash-table :test #'equal) :type hash-table)
   (abbreviation-table (make-hash-table :test #'equal) :type hash-table)
@@ -50,7 +49,6 @@
                              config
                              knowledge-base
                              environment
-                             dispatcher
                              job-monitor
                              (alias-table (make-hash-table :test #'equal))
                              (abbreviation-table (make-hash-table :test #'equal))
@@ -80,7 +78,6 @@
    :config config
    :knowledge-base knowledge-base
    :environment environment
-   :dispatcher dispatcher
    :job-monitor job-monitor
    :alias-table (%shell-context-hash-table alias-table)
    :abbreviation-table (%shell-context-hash-table abbreviation-table)

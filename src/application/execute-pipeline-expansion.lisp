@@ -31,18 +31,9 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
    :environment (nshell.domain.environment:inject-os-environment
                  (nshell.domain.environment:make-default-environment))))
 
-(defun execute-command-line (line history dispatcher)
+(defun execute-command-line (line history)
   (nshell.domain.parsing:with-complete-command-line (result ast line)
-    (when dispatcher
-      (publish-event dispatcher
-                     (nshell.domain.events:make-command-entered-event line)))
     (history-kit:history-add history line)
-    (when dispatcher
-      (publish-event dispatcher
-                     (nshell.domain.events:make-command-appended-to-history-event line)))
-    (when dispatcher
-      (publish-event dispatcher
-                     (nshell.domain.events:make-command-parsed-event ast)))
     (values ast result)))
 
 (defparameter +command-fragment-escape-base+ #xe100)

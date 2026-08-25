@@ -9,9 +9,18 @@
         (t (list expected))))
 
 (defun %nshell-main-form (arguments)
+  ;; A subprocess that has never compiled :nshell's dependency graph before
+  ;; (no warm fasl cache) prints SBCL's compiler notes/style-warnings for
+  ;; that one-time compilation to *error-output*, which would otherwise land
+  ;; on this subprocess's stderr and fail any e2e assertion that expects it
+  ;; empty. Those notes are compile-time noise, not something a real nshell
+  ;; invocation ever surfaces to a user, so *error-output* is only
+  ;; suppressed for the duration of the load -- MAIN's own stderr still
+  ;; reaches the real stream.
   (format nil
           "(progn
-             (asdf:load-system :nshell)
+             (let ((*error-output* (make-broadcast-stream)))
+               (asdf:load-system :nshell))
              (let ((sb-ext:*posix-argv* (list ~{~S~^ ~})))
                (funcall (symbol-function (find-symbol \"MAIN\" \"NSHELL\")))))"
           (cons "nshell" arguments)))
@@ -27,7 +36,8 @@ merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
 %NSHELL-MAIN-FORM already does for MAIN."
   (format nil
           "(progn
-             (asdf:load-system :nshell)
+             (let ((*error-output* (make-broadcast-stream)))
+               (asdf:load-system :nshell))
              (set (find-symbol \"*EXTERNAL-COMMAND-TIMEOUT*\" \"NSHELL.INFRASTRUCTURE.ACL\") ~a)
              (let ((sb-ext:*posix-argv* (list ~{~S~^ ~})))
                (funcall (symbol-function (find-symbol \"MAIN\" \"NSHELL\")))))"

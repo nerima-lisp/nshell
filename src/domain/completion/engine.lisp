@@ -3,14 +3,15 @@
 (defstruct (completion-query
     (:constructor
       %make-completion-query
-      (partial-input context command arg-prefix argument-words filesystem-candidates))) (partial-input "" :type string :read-only t)
+      (partial-input context command arg-prefix argument-words filesystem filesystem-candidates))) (partial-input "" :type string :read-only t)
   (context nil :read-only t)
   (command "" :type string :read-only t)
   (arg-prefix "" :type string :read-only t)
   (argument-words nil :type list :read-only t)
+  (filesystem nil :read-only t)
   (filesystem-candidates nil :type list :read-only t))
 
-(defun completion-query-for (partial-input)
+(defun completion-query-for (partial-input &optional filesystem)
   (let* ((context (completion-context-for partial-input))
          (arg-prefix (completion-context-argument-prefix context))
          (filesystem-mode (completion-filesystem-mode context)))
@@ -20,8 +21,9 @@
       (completion-context-command context)
       arg-prefix
       (completion-context-argument-words context)
+      filesystem
       (when filesystem-mode
-        (filesystem-candidates-for-mode filesystem-mode arg-prefix)))))
+        (filesystem-candidates-for-mode filesystem-mode arg-prefix filesystem)))))
 
 (defun %rule-solution-value (variable solution)
   (cdr (assoc variable solution)))
@@ -119,22 +121,23 @@
                   :descriptions
                   (%completion-descriptions rulebase matching-values))))))))))
 
-(defun rule-complete (kb-rules partial-input)
-  (%rule-complete-query kb-rules (completion-query-for partial-input)))
+(defun rule-complete (kb-rules partial-input &optional filesystem)
+  (%rule-complete-query kb-rules (completion-query-for partial-input filesystem)))
 
-(defun %knowledge-base-command-candidates (kb path command)
+(defun %knowledge-base-command-candidates (kb path command filesystem)
   (%merge-candidates
     (knowledge-base-command-candidates kb command)
-    (%command-candidates-from-path path command)
+    (%command-candidates-from-path path command filesystem)
     (builtin-command-candidates command)))
 
-(defun %knowledge-base-argument-candidates (kb command arg-prefix argument-words)
+(defun %knowledge-base-argument-candidates
+    (kb command arg-prefix argument-words filesystem)
   (or
    (let ((kind
            (knowledge-base-option-value-kind
             kb command argument-words arg-prefix)))
      (when kind
-       (filesystem-candidates-for-value-kind kind arg-prefix)))
+       (filesystem-candidates-for-value-kind kind arg-prefix filesystem)))
    (knowledge-base-argument-candidates
     kb
     command
@@ -182,17 +185,19 @@
 
 (defun %knowledge-base-candidates (kb query path)
   (let ((command (completion-query-command query))
-        (arg-prefix (completion-query-arg-prefix query)))
+        (arg-prefix (completion-query-arg-prefix query))
+        (filesystem (completion-query-filesystem query)))
     (%query-candidates
       query
       (lambda ()
-        (%knowledge-base-command-candidates kb path command))
+        (%knowledge-base-command-candidates kb path command filesystem))
       (lambda ()
         (%knowledge-base-argument-candidates
           kb
           command
           arg-prefix
-          (completion-query-argument-words query))))))
+          (completion-query-argument-words query)
+          filesystem)))))
 
 (defun %rule-knowledge-base-candidates (kb query)
   (labels ((rule-candidates ()
@@ -203,7 +208,10 @@
   (%query-candidates
     query
     (lambda ()
-      (%command-candidates-from-path path (completion-query-command query)))
+      (%command-candidates-from-path
+       path
+       (completion-query-command query)
+       (completion-query-filesystem query)))
     (lambda ()
       nil)))
 
@@ -242,8 +250,9 @@
   (if (%completion-query-command-position-p query) (completion-query-command query)
     (completion-query-arg-prefix query)))
 
-(defun complete (kb partial-input &key path alias-table function-table)
-  (let ((query (completion-query-for partial-input)))
+(defun complete
+    (kb partial-input &key path filesystem alias-table function-table)
+  (let ((query (completion-query-for partial-input filesystem)))
     (%rank-candidates
       (%completion-ranking-prefix query)
       (%completion-candidates kb query path alias-table function-table))))

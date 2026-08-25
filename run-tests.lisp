@@ -15,12 +15,18 @@
 ;;;; is inherited rather than replaced.
 
 (require :asdf)
-(asdf:load-system :cl-host-kit)
+
+(load
+ (merge-pathnames
+  #P"scripts/asdf-runtime.lisp"
+  (uiop:pathname-directory-pathname
+   (or *load-truename* *load-pathname*))))
+(nshell-configure-writable-asdf-output)
 
 (let* ((root (truename #P"./"))
-       (parent (host-kit:parent-directory-pathname root)))
+       (parent (uiop:pathname-parent-directory-pathname root)))
   (asdf:initialize-source-registry
- (if (host-kit:getenv "CL_SOURCE_REGISTRY")
+   (if (uiop:getenv "CL_SOURCE_REGISTRY")
      `(:source-registry
        (:directory ,root)
        :inherit-configuration)
@@ -37,8 +43,15 @@
           (handler-case
               (progn
                 (asdf:load-system "nshell/test")
-                (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST")))
+                (multiple-value-bind (result selected-count)
+                    (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))
+                  (unless (and (integerp selected-count)
+                               (plusp selected-count))
+                    (error "nshell test discovery selected no tests"))
+                  result))
             (error (condition)
               (format *error-output* "~&nshell/test failed: ~A~%" condition)
               nil))))
+    (finish-output)
+    (finish-output *error-output*)
     (sb-ext:exit :code (if passed-p 0 1))))

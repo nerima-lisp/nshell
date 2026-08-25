@@ -10,19 +10,11 @@
 ;;;; because we inherit the existing configuration.
 
 (require :asdf)
-(asdf:load-system :cl-host-kit)
-
-(load
- (merge-pathnames
-  #P"asdf-runtime.lisp"
-  (uiop:pathname-directory-pathname
-   (or *load-truename* *load-pathname*))))
-(nshell-configure-writable-asdf-output)
 
 (let* ((root (truename #P"./"))
-       (parent (host-kit:parent-directory-pathname root)))
+       (parent (uiop:pathname-parent-directory-pathname root)))
   (asdf:initialize-source-registry
-   (if (host-kit:getenv "CL_SOURCE_REGISTRY")
+   (if (uiop:getenv "CL_SOURCE_REGISTRY")
        `(:source-registry
          (:directory ,root)
          :inherit-configuration)
@@ -30,6 +22,12 @@
          (:directory ,root)
          (:tree ,parent)
          :inherit-configuration)))
+  (load
+   (merge-pathnames
+    #P"asdf-runtime.lisp"
+    (uiop:pathname-directory-pathname
+     (or *load-truename* *load-pathname*))))
+  (nshell-configure-writable-asdf-output)
   (setf asdf:*compile-file-warnings-behaviour* :warn
         asdf:*compile-file-failure-behaviour* :warn)
   (let ((passed-p

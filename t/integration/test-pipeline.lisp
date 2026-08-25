@@ -125,12 +125,14 @@
                (nshell.domain.completion:complete kb "kubectl apply --dr"))
               :to-equal '("--dry-run"))))
 
-  (it "path-command-completion-uses-directory-adapter-integration"
+  (it "path-command-completion-uses-explicit-filesystem-integration"
     (let* ((root (merge-pathnames (format nil "nshell-path-completion-~a/" (gensym))
                                   (host-kit:temporary-directory)))
            (command-path (merge-pathnames "nshell-cmd" root))
-           (old-directory-files-fn nshell.domain.completion:*path-command-directory-files-fn*)
-           (old-executable-p-fn nshell.domain.completion:*path-command-executable-p-fn*))
+           (filesystem
+             (make-test-filesystem
+              :directory-files #'host-kit:directory-files
+              :executable-p (lambda (entry) (probe-file entry)))))
       (unwind-protect
            (progn
              (ensure-directories-exist root)
@@ -139,24 +141,19 @@
                                      :if-exists :supersede
                                      :if-does-not-exist :create)
                (write-line "echo ok" stream))
-             (setf nshell.domain.completion:*path-command-directory-files-fn*
-                   (lambda (directory) (host-kit:directory-files directory)))
-             (setf nshell.domain.completion:*path-command-executable-p-fn*
-                   (lambda (entry) (probe-file entry)))
              (let ((texts (completion-texts
                            (nshell.domain.completion:complete
                             (nshell.domain.completion:make-empty-knowledge-base)
                             "nshell-c"
-                            :path (namestring root)))))
+                            :path (namestring root)
+                            :filesystem filesystem))))
                (expect (member "nshell-cmd" texts :test #'string=) :to-be-truthy)))
-        (setf nshell.domain.completion:*path-command-directory-files-fn* old-directory-files-fn)
-        (setf nshell.domain.completion:*path-command-executable-p-fn* old-executable-p-fn)
         (handler-case
             (when (probe-file root)
               (host-kit:delete-directory-tree root :validate t))
           (error ())))))
 
-  (it "path-command-completion-cck-preserves-dynamic-adapters"
+  (it "path-command-completion-uses-explicit-directory-mapper"
     (let* ((directories
              (loop for index below 8
                    collect (format nil "/fixture/cck-~D/" index)))
@@ -174,15 +171,13 @@
                0))
            (expected
              (loop for index below 8
-                   collect (format nil "nshell-~D" index))))
-      (expect
-        (eq nshell.domain.completion:*path-command-directory-map-fn*
-            #'nshell.infrastructure.acl::%map-path-command-directories-with-cck)
-        :to-be-truthy)
-      (let ((nshell.domain.completion:*path-command-directory-files-fn*
-              directory-files-fn)
-            (nshell.domain.completion:*path-command-executable-p-fn*
-              executable-p-fn)
+                   collect (format nil "nshell-~D" index)))
+           (filesystem
+             (make-test-filesystem
+              :directory-files directory-files-fn
+              :executable-p executable-p-fn
+              :directory-map #'nshell.infrastructure.acl:map-path-command-directories)))
+      (let (
             (nshell.domain.completion::*path-command-directory-stamp-fn*
               directory-stamp-fn))
         (unwind-protect
@@ -192,7 +187,8 @@
                        (completion-texts
                         (nshell.domain.completion::%command-candidates-from-path
                          (format nil "~{~A~^:~}" directories)
-                         "nshell-"))))
+                         "nshell-"
+                         filesystem))))
                  (expect expected :to-equal texts)))
           (nshell.domain.completion::%invalidate-path-command-cache))))
 

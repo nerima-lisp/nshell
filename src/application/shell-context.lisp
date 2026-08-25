@@ -7,10 +7,9 @@
 
 (defstruct (shell-context
             (:constructor %allocate-shell-context
-                (&key history config knowledge-base environment
+                (&key history config knowledge-base environment filesystem
                       job-monitor alias-table abbreviation-table function-table
-                      function-source-table filesystem-fns process-fns terminal-fns
-                      redirect-fns execution-strategy pipefail-p running last-exit-code input-state
+                      function-source-table execution-strategy pipefail-p running last-exit-code input-state
                       process-registry terminal-rows terminal-cols))
             (:copier nil))
   "Dependency container for one nshell session."
@@ -18,15 +17,12 @@
   (config nil)
   (knowledge-base nil)
   (environment nil)
+  (filesystem nil)
   (job-monitor nil)
   (alias-table (make-hash-table :test #'equal) :type hash-table)
   (abbreviation-table (make-hash-table :test #'equal) :type hash-table)
   (function-table (make-hash-table :test #'equal) :type hash-table)
   (function-source-table (make-hash-table :test #'equal) :type hash-table)
-  (filesystem-fns nil :type list)
-  (process-fns nil :type list)
-  (terminal-fns nil :type list)
-  (redirect-fns nil :type list)
   (execution-strategy :cps :type (member :cps :os-pipes))
   (pipefail-p nil :type boolean)
   (running nil :type boolean)
@@ -40,24 +36,17 @@
   (check-type value hash-table)
   value)
 
-(defun %shell-context-adapter-list (value)
-  (check-type value list)
-  value)
-
 (defun make-shell-context (&key
                              history
                              config
                              knowledge-base
                              environment
+                             filesystem
                              job-monitor
                              (alias-table (make-hash-table :test #'equal))
                              (abbreviation-table (make-hash-table :test #'equal))
                              (function-table (make-hash-table :test #'equal))
                              (function-source-table (make-hash-table :test #'equal))
-                             filesystem-fns
-                             process-fns
-                             terminal-fns
-                             redirect-fns
                              (execution-strategy :cps)
                              (pipefail-p nil)
                              (running nil)
@@ -78,15 +67,12 @@
    :config config
    :knowledge-base knowledge-base
    :environment environment
+   :filesystem filesystem
    :job-monitor job-monitor
    :alias-table (%shell-context-hash-table alias-table)
    :abbreviation-table (%shell-context-hash-table abbreviation-table)
    :function-table (%shell-context-hash-table function-table)
    :function-source-table (%shell-context-hash-table function-source-table)
-   :filesystem-fns (%shell-context-adapter-list filesystem-fns)
-   :process-fns (%shell-context-adapter-list process-fns)
-   :terminal-fns (%shell-context-adapter-list terminal-fns)
-   :redirect-fns (%shell-context-adapter-list redirect-fns)
    :execution-strategy execution-strategy
    :pipefail-p pipefail-p
    :running running
@@ -120,7 +106,3 @@
 (defun %stop-shell-context (context)
   (setf (shell-context-running context) nil)
   context)
-
-(defmethod nshell.domain.completion:completion-filesystem-fns ((context shell-context))
-  "Return filesystem adapter functions used by domain completion."
-  (shell-context-filesystem-fns context))

@@ -14,9 +14,10 @@
         *prompt-rendered-origin-known-p* t
         *interactive-terminal-installed-p* nil
         *environment* (nshell.domain.environment:inject-os-environment
-                       (nshell.domain.environment:make-default-environment)))
-  (%reset-repl-state-tables)
-  (install-expansion-filesystem))
+                       (nshell.domain.environment:make-default-environment)
+                       (nshell.infrastructure.acl:current-environment-entries)
+                       #'nshell.infrastructure.acl:current-working-directory))
+  (%reset-repl-state-tables))
 
 (defun %run-batch-source-lines (lines)
   (handler-case

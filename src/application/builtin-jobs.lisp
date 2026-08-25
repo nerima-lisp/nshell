@@ -25,10 +25,7 @@
 (defun %builtin-fg (context args)
   (let* ((job-monitor (shell-context-job-monitor context))
          (job-id (%resolve-job-id job-monitor args :active-only-p t))
-         (job (fg job-id
-                  (shell-context-process-registry context)
-                  (shell-context-terminal-fns context)
-                  job-monitor)))
+         (job (fg job-id job-monitor)))
     (if job
         (values nil 0)
         (values (%missing-job-output "fg" (%job-spec-label args)) 1))))

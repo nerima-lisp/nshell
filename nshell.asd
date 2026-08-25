@@ -70,6 +70,7 @@
    (:file "domain/parsing/control-flow-data")
    (:file "domain/parsing/control-flow")
    (:file "domain/parsing/control-flow-sequence")
+   (:file "domain/parsing/parser-data-definitions")
    (:file "domain/parsing/parser-data")
    (:file "domain/parsing/parser-redirect-data"
           :pathname "../data/domain/parsing/parser-redirect-data")
@@ -81,15 +82,16 @@
    (:file "domain/parsing/parser-reduction")
    (:file "domain/parsing/parser")
     (:file "domain/environment/env")
+    (:file "domain/filesystem")
      (:file "domain/expansion/expand")
      (:file "domain/expansion/brace")
      (:file "domain/expansion/parameter-data")
      (:file "domain/expansion/parameter-selection")
      (:file "domain/expansion/parameter-braced")
      (:file "domain/expansion/parameter")
-     (:file "domain/expansion/arithmetic")
      (:file "domain/expansion/arithmetic-operator-data"
             :pathname "../data/domain/expansion/arithmetic-operator-data")
+     (:file "domain/expansion/arithmetic")
      (:file "domain/expansion/fields")
      (:file "domain/abbreviation/expansion")
    (:file "domain/completion/candidate")
@@ -149,6 +151,7 @@
    (:file "infrastructure/acl/syscall-redirection")
    (:file "infrastructure/acl/syscall-job-control")
    (:file "infrastructure/acl/syscall-process")
+   (:file "infrastructure/acl/filesystem")
    (:file "infrastructure/acl/syscall-pipeline-streams")
    (:file "infrastructure/acl/syscall-pipeline")
    (:file "infrastructure/acl/syscall-process-substitution")
@@ -159,6 +162,7 @@
    (:file "infrastructure/acl/signal-acl")
    (:file "infrastructure/persistence/file-history")
    (:file "infrastructure/persistence/file-config")
+   (:file "infrastructure/terminal/detection")
    (:file "infrastructure/terminal/raw-mode")
    (:file "infrastructure/terminal/ansi")
    (:file "infrastructure/terminal/input-core")
@@ -444,7 +448,7 @@ primary suite in nshell/test."
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
   :description "Reproducible public completion API benchmarks for nshell."
-  :depends-on ("nshell")
+  :depends-on ("nshell" "cl-host-kit")
   :pathname "bench"
   :serial t
   :components ((:file "package")

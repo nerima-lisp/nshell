@@ -43,7 +43,7 @@ completion of the most recent matching history entry trails the cursor. Press
 ### One-off command
 
 ```sh
-nshell -c 'echo hello | string upper'
+nshell -c 'string upper hello'
 ```
 
 ### Run a script

@@ -25,12 +25,14 @@
 
 (defun refresh-current-input-state-suggestion (&optional (text (input-state-buffer *input-state*)))
   (let ((completion-path
-          (nshell.domain.environment:env-get (ensure-environment) "PATH")))
+          (nshell.domain.environment:env-get (ensure-environment) "PATH"))
+        (filesystem (nshell.infrastructure.acl:make-host-filesystem)))
     (setf (input-state-suggestion *input-state*)
           (compute-suggestion *history*
                               text
                               :knowledge-base *kb*
                               :path completion-path
+                              :filesystem filesystem
                               :alias-table *aliases*
                               :function-table *functions*))))
 

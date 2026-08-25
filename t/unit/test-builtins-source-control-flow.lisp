@@ -98,12 +98,12 @@
   (it "source-if-supports-not-command-modifier"
     "source lets fish-style if conditions invert command status with not."
     (with-builtins-source-ok (output code context
-                                     '("if not test -f /tmp/file.txt"
+                                     '("if not test -f /etc/hosts"
                                        "echo missing"
                                        "else"
                                        "echo exists"
                                        "end"
-                                       "if not test -f /tmp/missing"
+                                       "if not test -f /definitely/not/a/nshell-file"
                                        "echo absent"
                                        "else"
                                        "echo present"
@@ -151,16 +151,16 @@
 
   (it "source-command-substitution-expands-external-output"
     "source expands external command substitution output when capture is available."
-    (let ((context (make-test-builtins-context
-                    :external-capture-runner
-                    (lambda (command args)
-                      (expect "capture-values" :to-equal command)
-                      (expect args :to-be-null)
-                      (values (format nil "red~%blue~%") 0)))))
-      (with-called-source (output code context
-                                  '("echo before (capture-values) after"))
-        (expect 0 :to-equal code)
-        (expect (format nil "before red blue after~%") :to-equal output))))
+    (let ((context (make-test-builtins-context)))
+      (with-test-external-capture-runner
+          (lambda (command args)
+            (expect "capture-values" :to-equal command)
+            (expect args :to-be-null)
+            (values (format nil "red~%blue~%") 0))
+        (with-called-source (output code context
+                                    '("echo before (capture-values) after"))
+          (expect 0 :to-equal code)
+          (expect (format nil "before red blue after~%") :to-equal output))))
 
   (it "source-command-substitution-keeps-non-substitution-dollar-literal"
     "source keeps a dollar that is neither arithmetic nor command substitution."
@@ -196,16 +196,16 @@
     "Single-quoted command words remain literal and are not variable-expanded."
     (let ((seen nil))
       (with-builtins-context-environment
-          (context (make-test-builtins-context
-                    :external-runner
-                    (lambda (command args)
-                      (setf seen (cons command args))
-                      127))
+          (context (make-test-builtins-context)
                    ("CMD" "echo"))
-        (with-called-source (output code context '("'$CMD' command-word"))
-          (expect 127 :to-equal code)
-          (expect "" :to-equal output)
-          (expect '("$CMD" "command-word") :to-equal seen)))))
+        (with-test-external-runner
+            (lambda (command args)
+              (setf seen (cons command args))
+              127)
+          (with-called-source (output code context '("'$CMD' command-word"))
+            (expect 127 :to-equal code)
+            (expect "" :to-equal output)
+            (expect '("$CMD" "command-word") :to-equal seen)))))
 
   (it "source-rejects-multi-field-command-position-expansion"
     "source should not dispatch an ambiguous expanded command name."
@@ -262,3 +262,4 @@
       (expect "second" :to-equal (nshell.domain.environment:env-get
                   (nshell.application:shell-context-environment context)
                   "item")))))
+))

@@ -156,6 +156,17 @@
         mainProgram = "nshell";
       };
 
+      # treefmt's check creates a temporary Git repository before comparing
+      # the formatter's output. A linked worktree carries a `.git` pointer,
+      # not a repository, so passing the raw worktree to that check makes the
+      # check fail before treefmt runs. Keep the formatter's source complete
+      # while removing repository metadata that has no formatting semantics.
+      formatSource = builtins.path {
+        path = ./.;
+        name = "nshell-format-source";
+        filter = path: type: builtins.baseNameOf path != ".git";
+      };
+
       # The toolkit family, each built from its pinned checkout as an SBCL lisp
       # library. Built here rather than taken from each sibling's own
       # `packages.<system>` (which is what cl-cowsay and cl-cmatrix do) because
@@ -455,12 +466,8 @@
     # instance this function is *taken from* contributes nothing but the
     # function itself.
     cl-nix-forge.lib.${builtins.head systems}.mkPackageFlake {
-      inherit
-        self
-        systems
-        nixpkgs
-        meta
-        ;
+      inherit systems nixpkgs meta;
+      self = formatSource;
       pname = "nshell";
 
       # Single source of truth for the package version: the `:version` form in
@@ -645,6 +652,10 @@
 
               echo "=== nshell smoke test ==="
 
+              run_nshell() {
+                "${ctx.pkgs.coreutils}/bin/timeout" --foreground --kill-after=30s 180s "${bin}"
+              }
+
               # Verify binary exists and is executable
               test -x "${bin}" || {
                 echo "FAIL: binary not found or not executable at ${bin}"
@@ -653,7 +664,7 @@
               echo "PASS: binary exists and is executable"
 
               # Test 1: echo a string
-              echo "echo hello" | "${bin}" > output 2>&1
+              echo "echo hello" | run_nshell > output 2>&1
               grep -q hello output || {
                 echo "FAIL: 'echo hello' - expected 'hello' in output"
                 echo "got: $(cat output)"
@@ -662,7 +673,7 @@
               echo "PASS: echo hello"
 
               # Test 2: pipeline
-              echo "echo hello world | grep world" | "${bin}" > output2 2>&1
+              echo "echo hello world | grep world" | run_nshell > output2 2>&1
               grep -q world output2 || {
                 echo "FAIL: pipeline grep - expected 'world' in output"
                 echo "got: $(cat output2)"
@@ -671,7 +682,7 @@
               echo "PASS: pipeline with grep"
 
               # Test 3: cd and pwd (verify pwd output is correct, not matching prompt echo)
-              echo "cd /tmp ; pwd" | "${bin}" > output3 2>&1
+              echo "cd /tmp ; pwd" | run_nshell > output3 2>&1
               # pwd should output exactly /private/tmp (macOS) or /tmp (Linux)
               { grep "/tmp" output3 | grep -v "~" | grep -v ">" ; } || {
                 echo "FAIL: 'cd /tmp ; pwd' - expected /tmp in output"

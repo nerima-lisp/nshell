@@ -14,35 +14,6 @@
         (expect 1 :to-equal code)
         (expect 1 :to-equal nshell.presentation::*last-exit-code*))))
 
-  (it "repl-batch-preserves-interactive-completion-hooks"
-    "Batch execution must not initialize interactive completion filesystem hooks."
-    (with-repl-test-state
-      (let ((path-directory-files-fn #'identity)
-            (path-executable-p-fn #'not)
-            (file-directory-files-fn #'list)
-            (file-subdirectories-fn #'cdr))
-        (let ((nshell.domain.completion:*path-command-directory-files-fn*
-                path-directory-files-fn)
-              (nshell.domain.completion:*path-command-executable-p-fn*
-                path-executable-p-fn)
-              (nshell.domain.completion:*file-completion-directory-files-fn*
-                file-directory-files-fn)
-              (nshell.domain.completion:*file-completion-subdirectories-fn*
-                file-subdirectories-fn))
-          (nshell.presentation:run-repl-batch :line "true")
-          (expect (eq path-directory-files-fn
-                      nshell.domain.completion:*path-command-directory-files-fn*)
-                  :to-be-truthy)
-          (expect (eq path-executable-p-fn
-                      nshell.domain.completion:*path-command-executable-p-fn*)
-                  :to-be-truthy)
-          (expect (eq file-directory-files-fn
-                      nshell.domain.completion:*file-completion-directory-files-fn*)
-                  :to-be-truthy)
-          (expect (eq file-subdirectories-fn
-                      nshell.domain.completion:*file-completion-subdirectories-fn*)
-                  :to-be-truthy))))))
-
   (it "repl-copy-output-event-copies-first-kill-ring-selection"
     "The copy output event sends the first kill-ring selection before redrawing the prompt."
     (with-repl-test-state
@@ -279,3 +250,4 @@
                   :to-be-truthy)
           (expect (search "nshell: forced execution failure" script-error)
                   :to-be-truthy)))))
+)

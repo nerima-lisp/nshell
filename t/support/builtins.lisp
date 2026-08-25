@@ -1,53 +1,31 @@
 (in-package #:nshell/test)
 
+(defun %make-test-builtins-filesystem (&key (files '("/bin/echo" "/tmp/file.txt")))
+  (make-test-filesystem
+   :executable-p (lambda (path) (and (member path files :test #'string=) t))))
 
 (defun make-test-builtins-context (&key
-                                     external-runner
-                                     external-capture-runner
                                      (path "/bin:/usr/bin")
-                                     (files '("/bin/echo" "/tmp/file.txt"))
-                                     (dirs '("/tmp"))
                                      function-table
+                                     (filesystem (%make-test-builtins-filesystem))
                                      (running t))
-  (let ((file-table (make-hash-table :test #'equal))
-        (dir-table (make-hash-table :test #'equal)))
-    (dolist (file-path files)
-      (setf (gethash file-path file-table) t))
-    (dolist (dir-path dirs)
-      (setf (gethash dir-path dir-table) t))
-    (make-test-shell-context
-     :environment (nshell.domain.environment:env-set
-                   (nshell.domain.environment:make-default-environment)
-                   "PATH" path t)
-     :function-table (or function-table (make-hash-table :test #'equal))
-     :filesystem-fns
-     (list :list-dir (lambda (dir) (declare (ignore dir)) nil)
-           :stat (lambda (path)
-                   (or (gethash path file-table) (gethash path dir-table)))
-           :file-exists-p (lambda (path) (gethash path file-table))
-           :directory-exists-p (lambda (path) (gethash path dir-table))
-           :cwd (lambda () #p"/tmp/")
-           :chdir (lambda (path) (declare (ignore path)) t))
-     :process-fns
-     (let ((fns (list :run-external
-                      (or external-runner
-                          (lambda (command args)
-                            (declare (ignore command args))
-                            0)))))
-       (if external-capture-runner
-           (list* :run-external-capture external-capture-runner fns)
-           fns))
-     :redirect-fns
-     (list :redirect-output #'nshell.infrastructure.acl:redirect-output
-           :redirect-error #'nshell.infrastructure.acl:redirect-error
-           :redirect-output-error #'nshell.infrastructure.acl:redirect-output-and-error
-           :redirect-error-to-output #'nshell.infrastructure.acl:redirect-error-to-output
-           :redirect-input #'nshell.infrastructure.acl:redirect-input
-           :redirect-input-string #'nshell.infrastructure.acl:redirect-input-string
-           :redirect-input-document #'nshell.infrastructure.acl:redirect-input-document
-           :restore #'nshell.infrastructure.acl:restore-redirects)
-     :terminal-fns nil
-     :running running)))
+  (make-test-shell-context
+   :environment (nshell.domain.environment:env-set
+                 (nshell.domain.environment:make-default-environment)
+                 "PATH" path t)
+   :function-table (or function-table (make-hash-table :test #'equal))
+   :filesystem filesystem
+   :running running))
+
+(defmacro with-test-external-runner (function &body body)
+  `(with-temporary-function
+       ('nshell.infrastructure.acl:run-external ,function)
+     ,@body))
+
+(defmacro with-test-external-capture-runner (function &body body)
+  `(with-temporary-function
+       ('nshell.infrastructure.acl:run-external-capture ,function)
+     ,@body))
 
 (defmacro with-builtins-context ((context) &body body)
   `(let ((,context (make-test-builtins-context)))

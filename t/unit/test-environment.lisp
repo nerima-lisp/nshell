@@ -282,7 +282,7 @@
             "/base"
             nil))
            (result
-          (nshell.domain.environment::%inject-os-environment-entries
+          (nshell.domain.environment:inject-os-environment
             base
             (quote
               ("BASE=new" "EMPTY=" "EQUAL=a=b" "=bad" "MALFORMED" "DUP=first" "DUP=last"))
@@ -314,7 +314,7 @@
             "/base"
             nil))
            (result
-          (nshell.domain.environment::%inject-os-environment-entries
+          (nshell.domain.environment:inject-os-environment
             base
             (quote ("PWD=/first" "PWD=/imported"))
             (lambda ()

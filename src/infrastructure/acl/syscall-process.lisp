@@ -126,7 +126,7 @@ exit code, or 128+signal when it was terminated by a signal."
                     (string= prefix entry :end2 (length prefix)))
             return (subseq entry (length prefix)))))
 
-(defun %executable-file-p (path)
+(defun executable-file-p (path)
   (ignore-errors
    (not (zerop (logand (sb-posix:stat-mode (sb-posix:stat path))
                        #o111)))))
@@ -136,7 +136,7 @@ exit code, or 128+signal when it was terminated by a signal."
    command
    (or (%environment-value "PATH" environment)
        "/bin:/usr/bin")
-   #'%executable-file-p
+   #'executable-file-p
    :empty-directory "."))
 
 (defun %prepare-external-command (command &optional (environment (%get-environment)))

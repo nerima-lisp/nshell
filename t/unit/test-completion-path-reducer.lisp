@@ -82,10 +82,12 @@
       (nshell.domain.completion::%invalidate-path-command-cache)))
 
   (it "turns path directory reader failures into empty results"
-    (let ((nshell.domain.completion::*path-command-directory-files-fn*
-            (lambda (directory)
-              (declare (ignore directory))
-              (error "directory adapter failed")))
+    (let ((filesystem
+            (make-test-filesystem
+             :directory-files (lambda (directory)
+                                (declare (ignore directory))
+                                (error "directory capability failed"))
+             :executable-p (constantly t)))
           (nshell.domain.completion::*path-command-directory-stamp-fn*
             (constantly 1))
           (nshell.domain.completion::*path-command-cache-clock-fn*
@@ -93,5 +95,6 @@
       (expect nil
               :to-equal
               (funcall
-               (nshell.domain.completion::%make-path-command-directory-reader)
+               (nshell.domain.completion::%make-path-command-directory-reader
+                filesystem)
                "/coverage-boundary-reader"))))

@@ -50,19 +50,12 @@
                     (if slash (subseq text (1+ slash)) text)))))
     (and (< 0 (length name)) name)))
 
-(defvar *path-command-directory-files-fn* nil
-  "Function called with a PATH directory pathname to list command candidates.")
-
-(defvar *path-command-executable-p-fn* nil
-  "Function called with a candidate pathname to decide whether it is executable.")
-
-(defvar *path-command-directory-map-fn* #'mapcar
-  "Function called with a directory reader and PATH directories to map over.")
-
-(defun %executable-candidate-p (entry)
-  (ignore-errors
-      (or (null *path-command-executable-p-fn*)
-          (funcall *path-command-executable-p-fn* entry))))
+(defun %executable-candidate-p (entry filesystem)
+  (let ((executable-p
+          (and (nshell.domain.filesystem:filesystem-p filesystem)
+               (nshell.domain.filesystem:filesystem-executable-p filesystem))))
+    (and (functionp executable-p)
+         (ignore-errors (funcall executable-p entry)))))
 
 (defstruct (%path-command-query
             (:constructor %make-path-command-query (path prefix))
@@ -70,8 +63,10 @@
   (path nil :type (or null string) :read-only t)
   (prefix "" :type string :read-only t))
 
-(defun %path-command-query-active-p (query)
-  (and *path-command-directory-files-fn*
+(defun %path-command-query-active-p (query filesystem)
+  (and (nshell.domain.filesystem:filesystem-p filesystem)
+       (functionp
+        (nshell.domain.filesystem:filesystem-directory-files filesystem))
        (%path-command-query-path query)
        (not (%command-prefix-has-directory-p
              (%path-command-query-prefix query)))))
@@ -173,16 +168,17 @@
     (clrhash *path-command-directory-cache*))
   nil)
 
-(defun %path-command-directory-cache-key (directory)
+(defun %path-command-directory-cache-key (directory filesystem)
   (list (namestring directory)
-        *path-command-directory-files-fn*
+        filesystem
         *path-command-directory-stamp-fn*
         *path-command-cache-clock-fn*
         *path-command-cache-ttl-seconds*
         *path-command-cache-limit*))
 
 (defun %path-command-directory-stamp (directory)
-  (ignore-errors (funcall *path-command-directory-stamp-fn* directory)))
+  (when (functionp *path-command-directory-stamp-fn*)
+    (ignore-errors (funcall *path-command-directory-stamp-fn* directory))))
 
 (defun %path-command-directory-cache-valid-p (entry stamp now)
   (and entry
@@ -214,10 +210,13 @@
              stamp now (copy-list entries)))))
   entries)
 
-(defun %list-path-command-directory (directory)
-  (let* ((pathname (%path-command-directory-pathname directory))
+(defun %list-path-command-directory (directory filesystem)
+  (let* ((directory-files-fn
+           (and (nshell.domain.filesystem:filesystem-p filesystem)
+                (nshell.domain.filesystem:filesystem-directory-files filesystem)))
+         (pathname (%path-command-directory-pathname directory))
          (resolved (merge-pathnames pathname))
-         (key (%path-command-directory-cache-key resolved)))
+         (key (%path-command-directory-cache-key resolved filesystem)))
     (labels ((lookup ()
                (let ((now (coerce (funcall *path-command-cache-clock-fn*)
                                    'double-float))
@@ -226,7 +225,7 @@
              (scan ()
                (let* ((generation (%path-command-directory-cache-generation))
                       (stamp-before (%path-command-directory-stamp resolved))
-                      (entries (funcall *path-command-directory-files-fn* pathname))
+                      (entries (funcall directory-files-fn pathname))
                       (stamp-after (%path-command-directory-stamp resolved))
                       (now (coerce (funcall *path-command-cache-clock-fn*)
                                    'double-float)))
@@ -269,35 +268,40 @@ ordering, so those semantics can be tested without a filesystem."
           #'string<
           :key #'candidate-text)))
 
-(defun %make-path-command-directory-reader ()
-  "Return a reader that carries request-local filesystem adapters into workers."
-  (let ((directory-files-fn *path-command-directory-files-fn*)
-        (directory-stamp-fn *path-command-directory-stamp-fn*)
+(defun %make-path-command-directory-reader (filesystem)
+  "Return a reader that carries the request-local filesystem into workers."
+  (let ((directory-stamp-fn *path-command-directory-stamp-fn*)
         (cache-clock-fn *path-command-cache-clock-fn*)
         (cache-ttl-seconds *path-command-cache-ttl-seconds*)
         (cache-limit *path-command-cache-limit*))
     (lambda (directory)
-      (let ((*path-command-directory-files-fn* directory-files-fn)
-            (*path-command-directory-stamp-fn* directory-stamp-fn)
+      (let ((*path-command-directory-stamp-fn* directory-stamp-fn)
             (*path-command-cache-clock-fn* cache-clock-fn)
             (*path-command-cache-ttl-seconds* cache-ttl-seconds)
             (*path-command-cache-limit* cache-limit))
         (handler-case
-            (%list-path-command-directory directory)
+            (%list-path-command-directory directory filesystem)
           (error () nil))))))
 
-(defun %command-candidates-from-path (path prefix)
+(defun %command-candidates-from-path (path prefix filesystem)
   "Return executable command candidates from PATH that start with PREFIX."
   (let ((query (%make-path-command-query path prefix)))
-    (if (not (%path-command-query-active-p query))
+    (if (not (%path-command-query-active-p query filesystem))
         nil
-        (let* ((query-prefix (%path-command-query-prefix query))
+        (let* ((directory-map
+                 (and (nshell.domain.filesystem:filesystem-p filesystem)
+                      (nshell.domain.filesystem:filesystem-directory-map
+                       filesystem)))
+               (query-prefix (%path-command-query-prefix query))
                (directories (%split-path (%path-command-query-path query)))
                (entries-by-directory
-                 (funcall *path-command-directory-map-fn*
-                          (%make-path-command-directory-reader)
-                          directories)))
-          (%path-command-candidates-from-entries
-           entries-by-directory
-           query-prefix
-           #'%executable-candidate-p)))))
+                 (and (functionp directory-map)
+                      (funcall directory-map
+                               (%make-path-command-directory-reader filesystem)
+                               directories))))
+          (when entries-by-directory
+            (%path-command-candidates-from-entries
+             entries-by-directory
+             query-prefix
+             (lambda (entry)
+               (%executable-candidate-p entry filesystem))))))))

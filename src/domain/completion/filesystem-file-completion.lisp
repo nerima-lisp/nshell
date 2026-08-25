@@ -76,8 +76,8 @@
                 directory-prefix)))
 
 (defun %safe-file-completion-list (fn directory)
-  "Call completion filesystem adapter FN for DIRECTORY, returning NIL on failure."
-  (when fn
+  "Call filesystem capability FN for DIRECTORY, returning NIL on failure."
+  (when (functionp fn)
     (ignore-errors (funcall fn directory))))
 
 (defun %ensure-directory-candidate-suffix (text)
@@ -86,12 +86,6 @@
           (%path-separator-p (char text (1- (length text)))))
       text
       (concatenate 'string text "/")))
-
-(defvar *file-completion-directory-files-fn* nil
-  "Function called with a directory pathname to list file completion candidates.")
-
-(defvar *file-completion-subdirectories-fn* nil
-  "Function called with a directory pathname to list directory completion candidates.")
 
 (defstruct (%file-completion-query
             (:constructor %make-file-completion-query
@@ -137,23 +131,30 @@
      candidates
      (%file-completion-entry-candidate entry kind query))))
 
-(defun %file-candidates-from-directory (prefix &key (include-files t) (include-directories t))
+(defun %file-candidates-from-directory
+    (filesystem prefix &key (include-files t) (include-directories t))
   "Return filesystem completion candidates matching PREFIX."
-  (let ((query (%file-completion-query-from-prefix
-                prefix
-                include-files
-                include-directories))
+  (let* ((directory-files-fn
+           (and (nshell.domain.filesystem:filesystem-p filesystem)
+                (nshell.domain.filesystem:filesystem-directory-files filesystem)))
+         (subdirectories-fn
+           (and (nshell.domain.filesystem:filesystem-p filesystem)
+                (nshell.domain.filesystem:filesystem-subdirectories filesystem)))
+         (query (%file-completion-query-from-prefix
+                 prefix
+                 include-files
+                 include-directories))
         (candidates (%make-empty-filesystem-candidate-set)))
     (when (%file-completion-query-include-directories query)
       (%add-file-completion-entries
-       (%safe-file-completion-list *file-completion-subdirectories-fn*
+       (%safe-file-completion-list subdirectories-fn
                                    (%file-completion-query-directory query))
        :directory
        query
        candidates))
     (when (%file-completion-query-include-files query)
       (%add-file-completion-entries
-       (%safe-file-completion-list *file-completion-directory-files-fn*
+       (%safe-file-completion-list directory-files-fn
                                    (%file-completion-query-directory query))
        :file
        query
@@ -180,25 +181,25 @@
     (t nil)))
 
 (progn
-  (defun filesystem-candidates-for-mode (mode prefix)
+  (defun filesystem-candidates-for-mode (mode prefix filesystem)
     "Return filesystem candidates for MODE and PREFIX."
     (ecase mode
       (:directories
-       (%file-candidates-from-directory prefix
+       (%file-candidates-from-directory filesystem prefix
                                         :include-files nil
                                         :include-directories t))
       (:files-and-directories
-       (%file-candidates-from-directory prefix
+       (%file-candidates-from-directory filesystem prefix
                                         :include-files t
                                         :include-directories t))))
-  (defun filesystem-candidates-for-value-kind (kind prefix)
+  (defun filesystem-candidates-for-value-kind (kind prefix filesystem)
     "Return filesystem candidates matching the value kind implied by an option."
     (ecase kind
       (:directory
-       (%file-candidates-from-directory prefix
+       (%file-candidates-from-directory filesystem prefix
                                         :include-files nil
                                         :include-directories t))
       (:file
-       (%file-candidates-from-directory prefix
+       (%file-candidates-from-directory filesystem prefix
                                         :include-files t
-                                        :include-directories t)))))
+                                        :include-directories nil)))))

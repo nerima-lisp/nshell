@@ -157,9 +157,9 @@ Each case is (EXPECTED INPUT &rest ARGS)."
     "Unquoted command names split only when raw text contains variable expansion."
     (let ((env (test-expansion-env)))
       (expect '("literal word") :to-equal (nshell.domain.expansion::%command-name-unquoted-fields
-                  "literal word" env))
+                  "literal word" env nil))
       (expect '("echo" "bar") :to-equal (nshell.domain.expansion::%command-name-unquoted-fields
-                  "echo $FOO" env))))
+                  "echo $FOO" env nil))))
 
   (it "command-name-field-splitting-required-p-documents-origin-rule"
     "Command-position splitting is tied to raw variable-reference syntax."

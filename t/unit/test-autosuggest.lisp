@@ -107,7 +107,7 @@ git status --short")
   (it "autosuggest-completes-filesystem-argument"
     (let ((history (history-kit:make-history))
           (kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-file-completion-adapters
+      (with-test-file-filesystem
           ((lambda (dir)
              (declare (ignore dir))
              nil)
@@ -117,12 +117,13 @@ git status --short")
         (expect "rc/" :to-equal (nshell.presentation:compute-suggestion
                       history
                       "cd s"
-                      :knowledge-base kb)))))
+                      :knowledge-base kb
+                      :filesystem *completion-test-filesystem*)))))
 
   (it "autosuggest-escapes-filesystem-argument-tail"
     (let ((history (history-kit:make-history))
           (kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-file-completion-adapters
+      (with-test-file-filesystem
           ((lambda (dir)
              (declare (ignore dir))
              (list #p"my file.lisp"))
@@ -132,12 +133,13 @@ git status --short")
         (expect "\\ file.lisp" :to-equal (nshell.presentation:compute-suggestion
                       history
                       "source my"
-                      :knowledge-base kb)))))
+                      :knowledge-base kb
+                      :filesystem *completion-test-filesystem*)))))
 
   (it "autosuggest-keeps-quoted-filesystem-argument-raw"
     (let ((history (history-kit:make-history))
           (kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-file-completion-adapters
+      (with-test-file-filesystem
           ((lambda (dir)
              (declare (ignore dir))
              (list #p"my file.lisp"))
@@ -148,12 +150,13 @@ git status --short")
           (expect " file.lisp" :to-equal (nshell.presentation:compute-suggestion
                         history
                         input
-                        :knowledge-base kb))))))
+                        :knowledge-base kb
+                        :filesystem *completion-test-filesystem*)))))
 
   (it "autosuggest-keeps-double-quoted-literal-backslash-prefix"
     (let ((history (history-kit:make-history))
           (kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-file-completion-adapters
+      (with-test-file-filesystem
           ((lambda (dir)
              (declare (ignore dir))
              (list (make-pathname :name "my\\ file" :type "lisp")))
@@ -163,12 +166,13 @@ git status --short")
         (expect "file.lisp" :to-equal (nshell.presentation:compute-suggestion
                       history
                       "source \"my\\ "
-                      :knowledge-base kb)))))
+                      :knowledge-base kb
+                      :filesystem *completion-test-filesystem*)))))
 
   (it "autosuggest-does-not-append-outside-closed-quoted-token"
     (let ((history (history-kit:make-history))
           (kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-file-completion-adapters
+      (with-test-file-filesystem
           ((lambda (dir)
              (declare (ignore dir))
              (list #p"my file.lisp"))
@@ -179,12 +183,13 @@ git status --short")
           (expect (nshell.presentation:compute-suggestion
                      history
                      input
-                     :knowledge-base kb) :to-be-null)))))
+                     :knowledge-base kb
+                     :filesystem *completion-test-filesystem*) :to-be-null))))))
 
   (it "autosuggest-completes-source-filesystem-arguments"
     (let ((history (history-kit:make-history))
           (kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-file-completion-adapters
+      (with-test-file-filesystem
           ((lambda (dir)
              (declare (ignore dir))
              nil)
@@ -195,12 +200,13 @@ git status --short")
           (expect "c/" :to-equal (nshell.presentation:compute-suggestion
                         history
                         input
-                        :knowledge-base kb))))))
+                        :knowledge-base kb
+                        :filesystem *completion-test-filesystem*))))))
 
   (it "autosuggest-completes-source-filesystem-arguments-after-trailing-space"
     (let ((history (history-kit:make-history))
           (kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-file-completion-adapters
+      (with-test-file-filesystem
           ((lambda (dir)
              (declare (ignore dir))
              nil)
@@ -211,7 +217,8 @@ git status --short")
           (expect "scripts.sh/" :to-equal (nshell.presentation:compute-suggestion
                         history
                         input
-                        :knowledge-base kb))))))
+                        :knowledge-base kb
+                        :filesystem *completion-test-filesystem*))))))
 
   (it "autosuggest-closed-quoted-token-p-detects-matching-delimiters"
     "autosuggest-closed-quoted-token-p returns true when the token is fully quoted."

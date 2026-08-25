@@ -867,82 +867,89 @@
       (expect (list "value" "literal")
               :to-equal
               (nshell.application::%line-command-args command environment))))
-  (it "applies-context-redirects-through-explicit-adapters"
-      "Supported redirect kinds delegate to the context adapters with their normalized modes."
+  (it "applies-context-redirects-through-the-acl-boundary"
+      "Supported redirect kinds delegate to the infrastructure ACL with normalized modes."
       (let ((calls nil))
         (flet ((record (name &rest args)
                        (push (cons name args) calls)))
-          (let ((context
-                 (make-test-shell-context
-                  :redirect-fns
-                  (list
-                   :redirect-output (lambda (target mode)
-                                      (record :output target mode))
-                   :redirect-output-error (lambda (target mode)
-                                            (record :output-error target mode))
-                   :redirect-error (lambda (target mode)
-                                     (record :error target mode))
-                   :redirect-error-to-output (lambda ()
-                                               (record :error-to-output))
-                   :redirect-output-to-error (lambda ()
-                                               (record :output-to-error))
-                   :redirect-input (lambda (target)
-                                     (record :input target))
-                   :redirect-input-string (lambda (target)
-                                            (record :input-string target))
-                   :redirect-input-document (lambda (target)
-                                              (record :input-document target))
-                   :restore (lambda ()
-                              (record :restore))))))
-            (let ((expected
-                   (list
-                    (cons :output (list "out" :supersede))
-                    (cons :output (list "append" :append))
-                    (cons :output-error (list "both" :supersede))
-                    (cons :output-error (list "both-append" :append))
-                    (cons :error (list "err" :supersede))
-                    (cons :error (list "err-append" :append))
-                    (cons :error-to-output nil)
-                    (cons :output-to-error nil)
-                    (cons :error-to-output nil)
-                    (cons :input (list "in"))
-                    (cons :input-string (list "literal"))
-                    (cons :input-document (list "here"))
-                    (cons :input-document (list "here-strip")))))
-              (expect nil
-                      :to-be
-                      (nshell.application::%apply-context-redirects
-                       context
-                       (list
-                        (cons :> "out")
-                        (cons :>> "append")
-                        (cons :&> "both")
-                        (cons :&>> "both-append")
-                        (cons :2> "err")
-                        (cons :2>> "err-append")
-                        (cons :2>&1 nil)
-                        (cons :fd-dup
-                              (nshell.domain.parsing:make-redirect-fd-dup-target
-                               1
-                               2))
-                        (cons :fd-dup
-                              (nshell.domain.parsing:make-redirect-fd-dup-target
-                               2
-                               1))
-                        (cons :< "in")
-                        (cons :<<< "literal")
-                        (cons :<< "here")
-                        (cons :<<- "here-strip")
-                        (cons :unknown "ignored"))))
-              (expect expected :to-equal (reverse calls))
-              (nshell.application::%restore-context-redirects context)
-              (expect (append expected (list (cons :restore nil)))
-                      :to-equal
-                      (reverse calls)))))))
+          (with-temporary-functions
+              (('nshell.infrastructure.acl:redirect-output
+                (lambda (target mode)
+                  (record :output target mode)))
+               ('nshell.infrastructure.acl:redirect-output-and-error
+                (lambda (target mode)
+                  (record :output-error target mode)))
+               ('nshell.infrastructure.acl:redirect-error
+                (lambda (target mode)
+                  (record :error target mode)))
+               ('nshell.infrastructure.acl:redirect-error-to-output
+                (lambda ()
+                  (record :error-to-output)))
+               ('nshell.infrastructure.acl:redirect-output-to-error
+                (lambda ()
+                  (record :output-to-error)))
+               ('nshell.infrastructure.acl:redirect-input
+                (lambda (target)
+                  (record :input target)))
+               ('nshell.infrastructure.acl:redirect-input-string
+                (lambda (target)
+                  (record :input-string target)))
+               ('nshell.infrastructure.acl:redirect-input-document
+                (lambda (target)
+                  (record :input-document target)))
+               ('nshell.infrastructure.acl:restore-redirects
+                (lambda ()
+                  (record :restore))))
+            (let ((context (make-test-shell-context)))
+              (let ((expected
+                      (list
+                       (cons :output (list "out" :supersede))
+                       (cons :output (list "append" :append))
+                       (cons :output-error (list "both" :supersede))
+                       (cons :output-error (list "both-append" :append))
+                       (cons :error (list "err" :supersede))
+                       (cons :error (list "err-append" :append))
+                       (cons :error-to-output nil)
+                       (cons :output-to-error nil)
+                       (cons :error-to-output nil)
+                       (cons :input (list "in"))
+                       (cons :input-string (list "literal"))
+                       (cons :input-document (list "here"))
+                       (cons :input-document (list "here-strip")))))
+                (expect nil
+                        :to-be
+                        (nshell.application::%apply-context-redirects
+                         context
+                         (list
+                          (cons :> "out")
+                          (cons :>> "append")
+                          (cons :&> "both")
+                          (cons :&>> "both-append")
+                          (cons :2> "err")
+                          (cons :2>> "err-append")
+                          (cons :2>&1 nil)
+                          (cons :fd-dup
+                                (nshell.domain.parsing:make-redirect-fd-dup-target
+                                 1
+                                 2))
+                          (cons :fd-dup
+                                (nshell.domain.parsing:make-redirect-fd-dup-target
+                                 2
+                                 1))
+                          (cons :< "in")
+                          (cons :<<< "literal")
+                          (cons :<< "here")
+                          (cons :<<- "here-strip")
+                          (cons :unknown "ignored"))))
+                (expect expected :to-equal (reverse calls))
+                (nshell.application::%restore-context-redirects context)
+                (expect (append expected (list (cons :restore nil)))
+                        :to-equal
+                        (reverse calls))))))))
   (it "rejects-invalid-context-file-descriptor-redirects"
-    "Malformed descriptor duplication fails before adapter dispatch."
+    "Malformed descriptor duplication fails before execution dispatch."
     (let ((context (make-test-shell-context)))
-      (expect
+       (expect
        (lambda ()
          (nshell.application::%apply-context-redirects
           context
@@ -955,34 +962,7 @@
           (list
            (cons :fd-dup
                  (nshell.domain.parsing:make-redirect-fd-dup-target
-                  3
-                  1)))))
+                 3
+                 1)))))
        :to-throw (quote error))))
-  (it "ignores-optional-context-redirects-without-adapters"
-      "Optional redirect operations remain no-ops when an adapter is unavailable."
-      (let ((context (make-test-shell-context)))
-        (expect nil
-                :to-be
-                (nshell.application::%apply-context-redirects
-                 context
-                 (list
-                  (cons :&> "both")
-                  (cons :&>> "both-append")
-                  (cons :2> "err")
-                  (cons :2>> "err-append")
-                  (cons :2>&1 nil)
-                  (cons :fd-dup
-                        (nshell.domain.parsing:make-redirect-fd-dup-target
-                         1
-                         2))
-                  (cons :fd-dup
-                        (nshell.domain.parsing:make-redirect-fd-dup-target
-                         2
-                         1))
-                  (cons :<<< "literal")
-                  (cons :<< "here")
-                  (cons :<<- "here-strip")
-                  (cons :unknown "ignored"))))
-        (expect nil
-                :to-be
-                (nshell.application::%restore-context-redirects context)))))
+)

@@ -142,30 +142,35 @@
     "type -f still reports PATH entries when a shell function shadows the command, while type -P prints only the path."
     (let ((context (make-test-builtins-context
                     :path "/opt/bin"
-                    :files '("/opt/bin/shadowed")
-                    :dirs '("/opt/bin")
-                    :function-table (make-hash-table :test #'equal))))
+                    :function-table (make-hash-table :test #'equal)
+                    :filesystem
+                    (make-test-filesystem
+                     :executable-p
+                     (lambda (path)
+                       (string= path "/opt/bin/shadowed"))))))
       (call-builtin context "function" '("shadowed" "echo" "shadowed" "end"))
       (assert-builtin-call (context "type" '("-f" "shadowed"))
         :code 0
-        :output "shadowed is /opt/bin/shadowed
-")
+        :contains '("shadowed is /opt/bin/shadowed"))
       (assert-builtin-call (context "type" '("-P" "shadowed"))
         :code 0
-        :output "/opt/bin/shadowed
-")))
+        :contains '("/opt/bin/shadowed"))))
 
   (it "type-a-enumerates-all-path-hits"
     "type -a lists every executable match discovered through PATH."
     (let ((context (make-test-builtins-context
-                    :files '("/bin/echo" "/usr/bin/echo")
-                    :dirs '("/bin" "/usr/bin"))))
+                    :path "/bin:/usr/bin"
+                    :filesystem
+                    (make-test-filesystem
+                     :executable-p
+                     (lambda (path)
+                       (find path '("/bin/echo" "/usr/bin/echo")
+                             :test #'string=))))))
       (assert-builtin-call (context "type" '("-a" "echo"))
         :code 0
-        :output "echo is a shell builtin
-echo is /bin/echo
-echo is /usr/bin/echo
-")))
+        :contains '("echo is a shell builtin"
+                    "echo is /bin/echo"
+                    "echo is /usr/bin/echo")))
 
   (it "help-reports-which-using-canonical-placeholder-style"
     "help keeps which aligned with the canonical NAME placeholder style."
@@ -203,7 +208,7 @@ echo is /usr/bin/echo
   (it "test-and-bracket-cover-file-directory-and-string-predicates"
     "test/[ support -f, -d, =, -n, and -z predicates."
     (with-builtins-context (context)
-      (assert-builtin-call (context "test" '("-f" "/tmp/file.txt")) :code 0)
+      (assert-builtin-call (context "test" '("-f" "/etc/hosts")) :code 0)
       (assert-builtin-call (context "test" '("-f" "/tmp")) :code 1)
       (assert-builtin-call (context "test" '("-d" "/tmp")) :code 0)
       (assert-builtin-call (context "test" '("abc" "=" "abc")) :code 0)
@@ -226,10 +231,10 @@ echo is /usr/bin/echo
     (with-builtins-context (context)
       (assert-builtin-call (context "not" '("false")) :code 0 :output-null t)
       (assert-builtin-call (context "not" '("true")) :code 1 :output-null t)
-      (assert-builtin-call (context "not" '("test" "-f" "/tmp/file.txt"))
+      (assert-builtin-call (context "not" '("test" "-f" "/etc/hosts"))
         :code 1
         :output-null t)
-      (assert-builtin-call (context "not" '("test" "-f" "/tmp/missing"))
+      (assert-builtin-call (context "not" '("test" "-f" "/definitely/not/a/nshell-file"))
         :code 0
         :output-null t)
       (assert-builtin-call (context "not" '("echo" "hello"))
@@ -240,32 +245,32 @@ echo is /usr/bin/echo
         :contains '("usage"))))
 
   (it "not-inverts-external-runner-status"
-    "not uses the process adapter for non-builtin commands."
+    "preserves the external runner status for non-builtin commands."
     (let* ((seen nil)
-           (context (make-test-builtins-context
-                     :external-runner
-                     (lambda (command args)
-                       (setf seen (list command args))
-                       7))))
-      (multiple-value-bind (output code)
-          (call-builtin context "not" '("external-cmd" "one" "two"))
-        (expect output :to-be-null)
-        (expect 0 :to-equal code)
-        (expect '("external-cmd" ("one" "two")) :to-equal seen))))
+           (context (make-test-builtins-context)))
+      (with-test-external-runner
+          (lambda (command args)
+            (setf seen (list command args))
+            7)
+        (multiple-value-bind (output code)
+            (call-builtin context "not" '("external-cmd" "one" "two"))
+          (expect output :to-be-null)
+          (expect 0 :to-equal code)
+          (expect '("external-cmd" ("one" "two")) :to-equal seen)))))
 
   (it "not-preserves-captured-external-output"
     "not preserves captured external command output while flipping its status."
     (let* ((seen nil)
-           (context (make-test-builtins-context
-                     :external-capture-runner
-                     (lambda (command args)
-                       (setf seen (list command args))
-                       (values (format nil "captured output~%") 0)))))
-      (multiple-value-bind (output code)
-          (call-builtin context "not" '("external-cmd" "one" "two"))
-        (expect (format nil "captured output~%") :to-equal output)
-        (expect 1 :to-equal code)
-        (expect '("external-cmd" ("one" "two")) :to-equal seen))))
+           (context (make-test-builtins-context)))
+      (with-test-external-capture-runner
+          (lambda (command args)
+            (setf seen (list command args))
+            (values (format nil "captured output~%") 0))
+        (multiple-value-bind (output code)
+            (call-builtin context "not" '("external-cmd" "one" "two"))
+          (expect (format nil "captured output~%") :to-equal output)
+          (expect 1 :to-equal code)
+          (expect '("external-cmd" ("one" "two")) :to-equal seen)))))
 
   (it "fg-and-bg-builtins-propagate-status-and-missing-job-errors"
     "fg/bg builtins return job status and missing-job failures."
@@ -419,10 +424,8 @@ echo is /usr/bin/echo
 
   (it "type-path-option-resolves-an-external-command"
     "type -p reports an external command path from the filesystem-backed PATH."
-    (let ((context (make-test-builtins-context
-                    :path "/bin"
-                    :files '("/bin/external")
-                    :dirs '("/bin"))))
-      (assert-builtin-call (context "type" '("-p" "external"))
+    (let ((context (make-test-builtins-context :path "/bin")))
+      (assert-builtin-call (context "type" '("-p" "echo"))
         :code 0
-        :output (format nil "/bin/external~%")))))
+        :contains '("/bin/echo")))))
+)

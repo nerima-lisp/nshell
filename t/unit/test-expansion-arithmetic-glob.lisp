@@ -164,136 +164,129 @@
 
   (it "glob-expansion-finds-files"
     "A star glob expands to matching files."
-    ;; Inject filesystem adapters for DDD purity
-    (setf nshell.domain.expansion:*glob-directory-files-fn*
-          (lambda (dir) (host-kit:directory-files dir)))
-    (setf nshell.domain.expansion:*glob-subdirectories-fn*
-          (lambda (dir) (host-kit:subdirectories dir)))
-    (unwind-protect
-         (let* ((root (merge-pathnames (format nil "nshell-glob-~a/" (gensym))
-                                       (host-kit:temporary-directory)))
-                (pattern (namestring (merge-pathnames "*.txt" root)))
-                (expected (namestring (merge-pathnames "alpha.txt" root))))
-           (ensure-directories-exist root)
-           (with-open-file (stream expected :direction :output :if-exists :supersede)
-             (write-line "alpha" stream))
-           (with-open-file (stream (merge-pathnames "beta.log" root)
-                                          :direction :output :if-exists :supersede)
-             (write-line "beta" stream))
-           (expect (member expected (nshell.domain.expansion:expand-glob pattern) :test #'string=) :to-be-truthy))
-      ;; Cleanup: restore dynamic variables and delete temp dir
-      (setf nshell.domain.expansion:*glob-directory-files-fn* nil)
-      (setf nshell.domain.expansion:*glob-subdirectories-fn* nil)
-      (handler-case
-          (let ((root (probe-file (merge-pathnames "nshell-glob-*/" (host-kit:temporary-directory)))))
-            (when root (host-kit:delete-directory-tree root :validate t)))
-        (error ()))))
+    (let* ((root (merge-pathnames (format nil "nshell-glob-~a/" (gensym))
+                                  (host-kit:temporary-directory)))
+           (pattern (namestring (merge-pathnames "*.txt" root)))
+           (expected (namestring (merge-pathnames "alpha.txt" root)))
+           (filesystem
+             (make-test-filesystem
+              :directory-files #'host-kit:directory-files
+              :subdirectories #'host-kit:subdirectories)))
+      (unwind-protect
+           (progn
+             (ensure-directories-exist root)
+             (with-open-file (stream expected :direction :output :if-exists :supersede)
+               (write-line "alpha" stream))
+             (with-open-file (stream (merge-pathnames "beta.log" root)
+                                     :direction :output :if-exists :supersede)
+               (write-line "beta" stream))
+             (expect (member expected
+                             (nshell.domain.expansion:expand-glob pattern filesystem)
+                             :test #'string=)
+                     :to-be-truthy))
+        (ignore-errors
+          (when (probe-file root)
+            (host-kit:delete-directory-tree root :validate t))))))
 
   (it "expand-glob-uses-immediate-directory-scope"
     "A non-recursive glob uses immediate directory candidates through expand-glob."
-    (let ((calls nil))
-      (let ((nshell.domain.expansion:*glob-directory-files-fn*
+    (let* ((calls nil)
+           (filesystem
+             (make-test-filesystem
+              :directory-files
               (lambda (dir)
                 (push (list :files (namestring dir)) calls)
                 (list (merge-pathnames "one.txt" dir)
-                      (merge-pathnames "two.log" dir))))
-            (nshell.domain.expansion:*glob-subdirectories-fn*
+                      (merge-pathnames "two.log" dir)))
+              :subdirectories
               (lambda (dir)
                 (push (list :subdirs (namestring dir)) calls)
-                nil)))
-        (expect '("/tmp/one.txt") :to-equal (nshell.domain.expansion:expand-glob "/tmp/*.txt"))
-        (expect '((:files "/tmp/")) :to-equal (nreverse calls)))))
+                nil))))
+      (expect (nshell.domain.expansion:expand-glob "/tmp/*.txt" filesystem)
+              :to-equal '("/tmp/one.txt"))
+      (expect '((:files "/tmp/")) :to-equal (nreverse calls))))
 
   (it "expand-glob-uses-recursive-directory-scope"
     "A ** pattern recursively enumerates candidates through expand-glob."
-    (let ((calls nil))
-      (let ((nshell.domain.expansion:*glob-directory-files-fn*
+    (let* ((calls nil)
+           (filesystem
+             (make-test-filesystem
+              :directory-files
               (lambda (dir)
                 (push (list :files (namestring dir)) calls)
                 (if (string= "/tmp/sub/" (namestring dir))
                     (list (merge-pathnames "one.txt" dir))
-                    nil)))
-            (nshell.domain.expansion:*glob-subdirectories-fn*
+                    nil))
+              :subdirectories
               (lambda (dir)
                 (push (list :subdirs (namestring dir)) calls)
                 (if (string= "/tmp/" (namestring dir))
                     (list #p"/tmp/sub/")
-                    nil))))
-        (expect '("/tmp/sub/one.txt") :to-equal (nshell.domain.expansion:expand-glob "/tmp/**/*.txt"))
-        (expect '((:files "/tmp/")
-                     (:subdirs "/tmp/")
-                     (:files "/tmp/sub/")
-                     (:subdirs "/tmp/sub/")) :to-equal (nreverse calls)))))
+                    nil)))))
+      (expect (nshell.domain.expansion:expand-glob "/tmp/**/*.txt" filesystem)
+              :to-equal '("/tmp/sub/one.txt"))
+      (expect '((:files "/tmp/")
+                (:subdirs "/tmp/")
+                (:files "/tmp/sub/")
+                (:subdirs "/tmp/sub/"))
+              :to-equal
+              (nreverse calls))))
 
-  (it "glob-adapters-return-empty-when-unconfigured"
-    "Filesystem traversal stays inert until its boundary adapters are installed."
-    (let ((nshell.domain.expansion:*glob-directory-files-fn* nil)
-          (nshell.domain.expansion:*glob-subdirectories-fn* nil))
-      (expect (nshell.domain.expansion::immediate-directory-files "/tmp")
-              :to-be-null)
-      (expect (nshell.domain.expansion::recursive-directory-files "/tmp")
-              :to-be-null)))
+  (it "glob-filesystem-without-capability-is-empty"
+    "Filesystem traversal stays inert without an explicit filesystem capability."
+    (expect (nshell.domain.expansion::immediate-directory-files "/tmp")
+            :to-be-null)
+    (expect (nshell.domain.expansion::recursive-directory-files "/tmp")
+            :to-be-null))
 
   (it "expand-glob-preserves-unmatched-pattern"
     "A glob with no filesystem matches remains a literal argument."
-    (let ((nshell.domain.expansion:*glob-directory-files-fn*
-            (lambda (dir)
-              (declare (ignore dir))
-              nil))
-          (nshell.domain.expansion:*glob-subdirectories-fn*
-            (lambda (dir)
-              (declare (ignore dir))
-              nil)))
+    (let ((filesystem (make-test-filesystem)))
       (expect '("/tmp/*.txt")
               :to-equal
-              (nshell.domain.expansion:expand-glob "/tmp/*.txt"))))
+              (nshell.domain.expansion:expand-glob "/tmp/*.txt" filesystem))))
 
   (it "expand-all-preserves-unmatched-assignment-glob"
     "An unmatched assignment-like glob keeps its prefix and literal suffix."
     (let ((env (test-expansion-env))
-          (nshell.domain.expansion:*glob-directory-files-fn*
-            (lambda (dir)
-              (declare (ignore dir))
-              nil))
-          (nshell.domain.expansion:*glob-subdirectories-fn*
-            (lambda (dir)
-              (declare (ignore dir))
-              nil)))
+          (filesystem (make-test-filesystem)))
       (expect '("label=*.txt")
               :to-equal
-              (nshell.domain.expansion:expand-all "label=*.txt" env))))
+              (nshell.domain.expansion:expand-all "label=*.txt" env filesystem))))
 
   (it "expand-glob-projects-relative-root-candidates"
     "A ./ glob root projects candidates without leaking the implicit directory prefix."
-    (let ((calls nil))
-      (let ((nshell.domain.expansion:*glob-directory-files-fn*
+    (let* ((calls nil)
+           (filesystem
+             (make-test-filesystem
+              :directory-files
               (lambda (dir)
                 (push (namestring dir) calls)
-                (list #p"alpha.txt" #p"beta.log")))
-            (nshell.domain.expansion:*glob-subdirectories-fn*
-              (lambda (dir)
-                (declare (ignore dir))
-                nil)))
-        (expect '("alpha.txt") :to-equal (nshell.domain.expansion:expand-glob "*.txt"))
-        (expect '("./") :to-equal (nreverse calls)))))
+                (list #p"alpha.txt" #p"beta.log"))
+              :subdirectories (constantly nil))))
+      (expect (nshell.domain.expansion:expand-glob "*.txt" filesystem)
+              :to-equal '("alpha.txt"))
+      (expect '("./") :to-equal (nreverse calls))))
 
   (it "expand-all-reattaches-assignment-like-glob-prefixes"
     "expand-all separates label-like prefixes from glob suffixes without treating paths as labels."
-    (let ((env (test-expansion-env)))
-      (let ((nshell.domain.expansion:*glob-directory-files-fn*
-              (lambda (dir)
-                (if (string= "./" (namestring dir))
-                    (list #p"alpha.txt" #p"beta.log" #p"bar1.lisp")
-                    (list (merge-pathnames "alpha.txt" dir)
-                          (merge-pathnames "beta.log" dir)
-                          (merge-pathnames "bar1.lisp" dir)))))
-            (nshell.domain.expansion:*glob-subdirectories-fn*
-              (lambda (dir)
-                (declare (ignore dir))
-                nil)))
-        (expect '("label=alpha.txt") :to-equal (nshell.domain.expansion:expand-all "label=*.txt" env))
-        (expect '("env:FOO=bar1.lisp") :to-equal (nshell.domain.expansion:expand-all "env:FOO=bar?.lisp" env))
-        (expect '("/tmp/a=b/alpha.txt") :to-equal (nshell.domain.expansion:expand-all "/tmp/a=b/*.txt" env)))))
+    (let ((env (test-expansion-env))
+          (filesystem
+            (make-test-filesystem
+             :directory-files
+             (lambda (dir)
+               (if (string= "./" (namestring dir))
+                   (list #p"alpha.txt" #p"beta.log" #p"bar1.lisp")
+                   (list (merge-pathnames "alpha.txt" dir)
+                         (merge-pathnames "beta.log" dir)
+                         (merge-pathnames "bar1.lisp" dir))))
+             :subdirectories (constantly nil))))
+      (expect '("label=alpha.txt") :to-equal
+               (nshell.domain.expansion:expand-all "label=*.txt" env filesystem))
+      (expect '("env:FOO=bar1.lisp") :to-equal
+               (nshell.domain.expansion:expand-all "env:FOO=bar?.lisp" env filesystem))
+      (expect '("/tmp/a=b/alpha.txt") :to-equal
+               (nshell.domain.expansion:expand-all "/tmp/a=b/*.txt" env filesystem))))
 
   (it "nonexistent-var-expands-empty"
     "Undefined variables expand to the empty string."

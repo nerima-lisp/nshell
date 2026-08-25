@@ -57,56 +57,59 @@
       (call-repl-builtin "exit" nil)
       (expect (repl-test-running-p) :to-be-falsy)))
 
-  (it "repl-installs-host-filesystem-boundaries"
-    "REPL setup installs host filesystem functions into completion and expansion seams."
+  (it "repl-constructs-host-filesystem-capability"
+    "The REPL execution context carries one host filesystem capability."
     (with-repl-test-state
-      (nshell.presentation::configure-completion-filesystem)
-      (nshell.presentation::install-expansion-filesystem)
-      (host-kit:with-temporary-directory (directory)
-        (let* ((file (merge-pathnames "entry.txt" directory))
-               (nested-file (merge-pathnames "nested/child.txt" directory)))
-          (ensure-directories-exist nested-file)
-          (host-kit:write-file-string "entry" file)
-          (host-kit:write-file-string "child" nested-file)
-          (let ((path-files
-                  (funcall nshell.domain.completion:*path-command-directory-files-fn*
-                           directory))
-                (file-files
-                  (funcall nshell.domain.completion:*file-completion-directory-files-fn*
-                           directory))
-                (file-subdirectories
-                  (funcall nshell.domain.completion:*file-completion-subdirectories-fn*
-                           directory))
-                (glob-files
-                  (funcall nshell.domain.expansion:*glob-directory-files-fn*
-                           directory))
-                (glob-subdirectories
-                  (funcall nshell.domain.expansion:*glob-subdirectories-fn*
-                           directory)))
+      (let ((filesystem (nshell.infrastructure.acl:make-host-filesystem)))
+        (host-kit:with-temporary-directory (directory)
+          (let* ((file (merge-pathnames "entry.txt" directory))
+                 (nested-file (merge-pathnames "nested/child.txt" directory)))
+            (ensure-directories-exist nested-file)
+            (host-kit:write-file-string "entry" file)
+            (host-kit:write-file-string "child" nested-file)
+            (let ((directory-files
+                    (nshell.domain.filesystem:filesystem-directory-files
+                     filesystem))
+                  (subdirectories
+                    (nshell.domain.filesystem:filesystem-subdirectories
+                     filesystem)))
+              (let ((path-files (funcall directory-files directory))
+                    (file-files (funcall directory-files directory))
+                    (file-subdirectories (funcall subdirectories directory))
+                    (glob-files
+                      (nshell.domain.expansion::recursive-directory-files
+                       directory filesystem))
+                    (glob-subdirectories (funcall subdirectories directory)))
             (expect (consp path-files) :to-be-truthy)
             (expect (consp file-files) :to-be-truthy)
             (expect (consp file-subdirectories) :to-be-truthy)
             (expect (consp glob-files) :to-be-truthy)
-            (expect (consp glob-subdirectories) :to-be-truthy))
-          (expect (nshell.presentation::executable-path-p
-                   (pathname (current-sbcl-executable)))
+            (expect (consp glob-subdirectories) :to-be-truthy)))
+            (expect (funcall
+                     (nshell.domain.filesystem:filesystem-executable-p filesystem)
+                     (pathname (current-sbcl-executable)))
                   :to-be-truthy)
-          (expect (nshell.presentation::executable-path-p
-                   #P"/definitely/not/a/nshell-executable")
+            (expect (funcall
+                     (nshell.domain.filesystem:filesystem-executable-p filesystem)
+                     #P"/definitely/not/a/nshell-executable")
                   :to-be-falsy)
-          (expect (nshell.presentation::executable-path-p nil)
-                  :to-be-falsy)))))
+            (expect (funcall
+                     (nshell.domain.filesystem:filesystem-executable-p filesystem)
+                     nil)
+                    :to-be-falsy))))))
   (it "vi-mode-flag-values-control-mode" "The vi-mode environment flag accepts explicit truthy values and rejects disabled values." (expect (nshell.presentation::%vi-mode-flag-enabled-p nil) :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "") :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "0") :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "false") :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "no") :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "1") :to-be-truthy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "yes") :to-be-truthy))
-  (it "repl-filesystem-function-table"
-    "The REPL filesystem table exposes file and directory predicates."
-    (let ((filesystem-fns nshell.presentation::+repl-filesystem-fns+))
-      (host-kit:with-temporary-directory (directory)
-        (let ((file (merge-pathnames "entry.txt" directory)))
-          (host-kit:write-file-string "entry" file)
-          (let ((file-exists-p (getf filesystem-fns :file-exists-p))
-                (directory-exists-p (getf filesystem-fns :directory-exists-p)))
-            (expect (funcall file-exists-p file) :to-be-truthy)
-            (expect (funcall file-exists-p directory) :to-be-falsy)
-            (expect (funcall file-exists-p "/definitely/not/a/nshell-file") :to-be-falsy)
-            (expect (funcall directory-exists-p directory) :to-be-truthy)
-            (expect (funcall directory-exists-p "/definitely/not/a/nshell-directory") :to-be-falsy)))))))
+  (it "repl-filesystem-boundary-uses-host-kit"
+    "The REPL filesystem boundary distinguishes files from directories."
+    (host-kit:with-temporary-directory (directory)
+      (let ((file (merge-pathnames "entry.txt" directory)))
+        (host-kit:write-file-string "entry" file)
+        (expect (and (probe-file file)
+                     (not (host-kit:directory-pathname-p file)))
+                :to-be-truthy)
+        (expect (and (probe-file directory)
+                     (host-kit:directory-pathname-p directory))
+                :to-be-truthy)
+        (expect (probe-file "/definitely/not/a/nshell-file")
+                :to-be-falsy)
+        (expect (host-kit:directory-exists-p "/definitely/not/a/nshell-directory")
+                :to-be-falsy)))))

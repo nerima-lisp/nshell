@@ -61,55 +61,36 @@
                (write-string separator out))
              (write-string (princ-to-string item) out))))
 
-(defun %filesystem-fn (context key)
-  (or (getf (shell-context-filesystem-fns context) key)
-      (error "Missing filesystem adapter ~s" key)))
-
-(defun %optional-filesystem-fn (context key)
-  (getf (shell-context-filesystem-fns context) key))
-
-(defun %process-fn (context key)
-  (or (getf (shell-context-process-fns context) key)
-      (error "Missing process adapter ~s" key)))
-
-(defun %optional-process-fn (context key)
-  (getf (shell-context-process-fns context) key))
-
 (defun %run-external-command-in-context (context command args)
-  (let ((capture-runner (%optional-process-fn context :run-external-capture)))
-    (if capture-runner
-        (funcall capture-runner command args)
-        (values nil
-                (funcall (%process-fn context :run-external) command args)))))
+  (declare (ignore context))
+  (nshell.infrastructure.acl:run-external-capture command args))
 
 (defun %resolve-command-path-candidates (context command)
-  (nshell.domain.completion:command-path-candidates
-   command
-   (or (and (shell-context-environment context)
-            (nshell.domain.environment:env-get
-             (shell-context-environment context) "PATH"))
-       "")
-   (lambda (path)
-     (%stat-path context path))
-   :empty-directory ""))
+  (let* ((filesystem (shell-context-filesystem context))
+         (executable-p
+           (or (and (nshell.domain.filesystem:filesystem-p filesystem)
+                    (nshell.domain.filesystem:filesystem-executable-p filesystem))
+               #'nshell.infrastructure.acl:executable-file-p)))
+    (nshell.domain.completion:command-path-candidates
+     command
+     (or (and (shell-context-environment context)
+              (nshell.domain.environment:env-get
+               (shell-context-environment context) "PATH"))
+         "")
+     executable-p
+     :empty-directory "")))
 
-(defun %stat-path (context path)
-  (ignore-errors (funcall (%filesystem-fn context :stat) path)))
+(defun %stat-path (path)
+  (ignore-errors (probe-file path)))
 
 (defun %path-file-p (context path)
-  (let ((fn (%optional-filesystem-fn context :file-exists-p)))
-    (cond
-      (fn (funcall fn path))
-      ((%stat-path context path)
-       (let ((pathname (probe-file path)))
-         (and pathname (not (host-kit:directory-pathname-p pathname)))))
-      (t nil))))
+  (declare (ignore context))
+  (let ((pathname (%stat-path path)))
+    (and pathname (not (host-kit:directory-pathname-p pathname)))))
 
 (defun %path-directory-p (context path)
-  (let ((fn (%optional-filesystem-fn context :directory-exists-p)))
-    (cond
-      (fn (funcall fn path))
-      (t (not (null (host-kit:directory-exists-p path)))))))
+  (declare (ignore context))
+  (not (null (host-kit:directory-exists-p path))))
 
 (defun resolve-command-path (context command)
   "Return COMMAND's executable path from builtins or PATH, or NIL."

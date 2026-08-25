@@ -2,6 +2,10 @@
 
 (declaim (special *shell-pgid* *foreground-pgid*))
 
+(defun current-process-id ()
+  "Return the process id of the current Lisp process."
+  (sb-posix:getpid))
+
 (defun set-process-group (pid pgid)
   "Set PID's process group to PGID."
   (sb-posix:setpgid pid pgid))
@@ -24,7 +28,7 @@
   (let ((pgid (and (boundp '*shell-pgid*) *shell-pgid*)))
     (if (and (integerp pgid) (plusp pgid))
         pgid
-        (sb-posix:getpid))))
+        (current-process-id))))
 
 (defun %assign-process-group (pid pgid)
   (when (and (integerp pid)
@@ -108,6 +112,11 @@
                                   :continued continued))
         (%decode-wait-status child-pid status))
     (sb-posix:syscall-error (condition)
-      (if (= (sb-posix:syscall-errno condition) sb-posix:echild)
-          (values nil :no-child nil)
-          (error condition)))))
+      (let ((errno (sb-posix:syscall-errno condition)))
+        (cond
+          ((= errno sb-posix:echild)
+           (values nil :no-child nil))
+          ((= errno sb-posix:eintr)
+           (values nil :interrupted nil))
+          (t
+           (error condition)))))))

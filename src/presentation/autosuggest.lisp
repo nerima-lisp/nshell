@@ -14,7 +14,10 @@
        (member (char input start) '(#\" #\') :test #'char=)
        (char= (char input start) (char input (1- end)))))
 
-(defun completion-suggestion (knowledge-base input &key path alias-table function-table)
+(defun completion-suggestion
+    (knowledge-base input &key path
+                              (filesystem (nshell.infrastructure.acl:make-host-filesystem))
+                              alias-table function-table)
   (when (and knowledge-base
              (not (nshell.domain.parsing:shell-input-blank-p input)))
     (ignore-errors
@@ -22,6 +25,7 @@
                (candidates (nshell.domain.completion:complete knowledge-base
                                                               input
                                                               :path path
+                                                              :filesystem filesystem
                                                               :alias-table alias-table
                                                               :function-table function-table))
                (text (if (or (null candidates)
@@ -56,12 +60,16 @@
                   (unless (%autosuggest-closed-quoted-token-p input token-start token-end)
                     (subseq escaped-text (length escaped-prefix))))))))))
 
-(defun compute-suggestion (history input &key knowledge-base path alias-table function-table)
+(defun compute-suggestion
+    (history input &key knowledge-base path
+                              (filesystem (nshell.infrastructure.acl:make-host-filesystem))
+                              alias-table function-table)
   (unless (nshell.domain.parsing:shell-input-blank-p input)
     (or (nshell.application:history-suggestion history input)
         (completion-suggestion knowledge-base
                                input
                                :path path
+                               :filesystem filesystem
                                :alias-table alias-table
                                :function-table function-table))))
 

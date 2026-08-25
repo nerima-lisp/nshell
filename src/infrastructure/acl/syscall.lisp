@@ -15,11 +15,11 @@
 
 (defconstant +path-command-parallel-directory-threshold+ 4)
 
-(defun %map-path-command-directories-with-cck (function directories)
+(defun map-path-command-directories (function directories)
   (if (< (length directories) +path-command-parallel-directory-threshold+)
       (mapcar function directories)
       (cl-concurrent-kit:with-task-scope (scope)
-        (mapcar
+         (mapcar
           (lambda (promise)
             (cl-concurrent-kit:await promise))
           (mapcar
@@ -29,10 +29,6 @@
                 (lambda ()
                   (funcall function directory))))
             directories)))))
-
-(eval-when (:load-toplevel :execute)
-  (setf nshell.domain.completion::*path-command-directory-map-fn*
-        #'%map-path-command-directories-with-cck))
 
 ;;; Syscall integration is split by responsibility:
 ;;; - syscall-foreign.lisp: alien declarations and platform constants

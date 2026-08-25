@@ -32,7 +32,7 @@ press `→` or `Ctrl-F` to accept it:
 
 ```
 ~/src/nshell> git com                    # "mit -m " suggested from history
-~/src/nshell> echo hello | string upper
+~/src/nshell> string upper hello
 HELLO
 ```
 

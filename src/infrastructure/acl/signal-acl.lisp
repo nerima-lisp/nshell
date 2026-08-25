@@ -58,6 +58,17 @@
   "Send SIGNAL to PID. Negative PID values target process groups."
   (sb-posix:kill pid (%signal-number signal)))
 
+(defun process-stop-signal-p (signal)
+  "Return T when SIGNAL stops a process rather than terminating it."
+  (let ((number (ignore-errors (%signal-number signal))))
+    (and number
+         (member number (list sb-unix:sigstop sb-unix:sigtstp) :test #'=))))
+
+(defun process-continue-signal-p (signal)
+  "Return T when SIGNAL continues a stopped process."
+  (let ((number (ignore-errors (%signal-number signal))))
+    (and number (= number sb-unix:sigcont))))
+
 (defun %foreground-process-group-target ()
   (when (and (integerp *foreground-pgid*)
              (plusp *foreground-pgid*)
@@ -65,7 +76,7 @@
     *foreground-pgid*))
 
 (defun %send-process-group-signal (pgid signal)
-  (sb-posix:kill (- pgid) signal))
+  (kill-process (- pgid) signal))
 
 (defun %signal-foreground-process-group (signal)
   (let ((pgid (%foreground-process-group-target)))
@@ -96,7 +107,7 @@
     ;; raw mode on resume.
     (ignore-errors (nshell.infrastructure.terminal:restore-terminal-mode))
     (sb-sys:enable-interrupt sb-unix:sigtstp :default)
-    (sb-posix:kill (sb-posix:getpid) sb-unix:sigtstp)))
+    (kill-process (current-process-id) sb-unix:sigtstp)))
 
 (defun shell-sigchld-handler (signal info context)
   "Record that child process state changed; reaping is done outside the handler."
@@ -133,11 +144,11 @@
   ;; reported. Making a failed resume visible needs a flag the main loop reads,
   ;; not a report from in here.
   (ignore-errors (nshell.infrastructure.terminal:enable-raw-mode))
-  (ignore-errors (set-foreground-pgroup (sb-posix:getpid))))
+  (ignore-errors (set-foreground-pgroup (current-process-id))))
 
 (defun install-signal-handlers ()
   "Install shell signal handlers for job-control aware interactive operation."
-  (setf *shell-pgid* (sb-posix:getpid))
+  (setf *shell-pgid* (current-process-id))
   (sb-sys:enable-interrupt sb-unix:sigint #'shell-sigint-handler)
   (sb-sys:enable-interrupt sb-unix:sigtstp #'shell-sigtstp-handler)
   (sb-sys:enable-interrupt sb-unix:sigchld #'shell-sigchld-handler)

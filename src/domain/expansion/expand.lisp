@@ -24,39 +24,39 @@
               "./"))
         (pathname-directory-string pattern))))
 
-;; Dynamic variable for filesystem operations (DDD: domain should not call the host directly)
-(defvar *glob-directory-files-fn* nil
-  "Function to list files in a directory.
-   Set to (lambda (dir) (host-kit:directory-files dir)) by infrastructure.
-   If NIL, glob expansion always returns the pattern unchanged.")
-
-(defvar *glob-subdirectories-fn* nil
-  "Function to list subdirectories. Set by infrastructure layer.")
-
-(defun %walk-directory-files (dir continuation)
+(defun %walk-directory-files (filesystem dir continuation)
   "Apply CONTINUATION to every file reachable from DIR, descending into each
 subdirectory depth-first.  Written in continuation-passing style so the
 traversal here stays free of any accumulator: what to do with each file is the
 caller's CONTINUATION, keeping the walk (data) separate from its use (logic)."
-  (dolist (file (funcall *glob-directory-files-fn* dir))
-    (funcall continuation file))
-  (dolist (subdir (funcall *glob-subdirectories-fn* dir))
-    (%walk-directory-files subdir continuation)))
+  (let ((directory-files
+          (and filesystem
+               (nshell.domain.filesystem:filesystem-directory-files filesystem)))
+        (subdirectories
+          (and filesystem
+               (nshell.domain.filesystem:filesystem-subdirectories filesystem))))
+    (when (functionp directory-files)
+      (dolist (file (funcall directory-files dir))
+        (funcall continuation file)))
+    (when (functionp subdirectories)
+      (dolist (subdir (funcall subdirectories dir))
+        (%walk-directory-files filesystem subdir continuation)))))
 
-(defun recursive-directory-files (root)
-  (unless *glob-directory-files-fn* (return-from recursive-directory-files nil))
+(defun recursive-directory-files (root &optional filesystem)
+  (unless filesystem (return-from recursive-directory-files nil))
   (ignore-errors
-      (let ((files '()))
-        (%walk-directory-files (pathname root)
-                               (lambda (file) (push file files)))
-        files)))
+    (let ((files '()))
+      (%walk-directory-files filesystem
+                             (pathname root)
+                             (lambda (file) (push file files)))
+      files)))
 
-(defun immediate-directory-files (root)
-  (unless *glob-directory-files-fn* (return-from immediate-directory-files nil))
-  (ignore-errors (funcall *glob-directory-files-fn* (pathname root))))
-
-(defun enough-path (file root)
-  (namestring (enough-namestring file (pathname root))))
+(defun immediate-directory-files (root &optional filesystem)
+  (let ((directory-files
+          (and filesystem
+               (nshell.domain.filesystem:filesystem-directory-files filesystem))))
+    (when (functionp directory-files)
+      (ignore-errors (funcall directory-files (pathname root))))))
 
 (define-value-struct %glob-match-subject
     ((pattern "" :type string)
@@ -68,10 +68,16 @@ caller's CONTINUATION, keeping the walk (data) separate from its use (logic)."
 
 (defun %glob-match-subject-candidate (subject)
   (let* ((root (glob-match-subject-root subject))
-         (relative (enough-path (glob-match-subject-file subject) root)))
-    (if (string= root "./")
-        relative
-        (concatenate 'string root relative))))
+         (candidate (namestring (glob-match-subject-file subject))))
+    (cond
+      ((string= root "./")
+       (if (string-prefix-p "./" candidate)
+           (subseq candidate 2)
+           candidate))
+      ((string-prefix-p root candidate)
+       candidate)
+      (t
+       (concatenate 'string root candidate)))))
 
 ;;; Shell glob expansion helpers
 
@@ -190,13 +196,13 @@ Unknown users and incomplete environment data remain literal."
      (%tilde-user-home input env))
     (t input)))
 
-(defun expand-glob (pattern)
+(defun expand-glob (pattern &optional filesystem)
   "Expand PATTERN containing *, ?, [abc], or ** into matching path strings.
 Returns a one-element list containing PATTERN when it has no glob syntax or no matches."
   (if (not (glob-pattern-p pattern))
       (list pattern)
       (let* ((root (glob-root pattern))
-             (files (%glob-candidate-files pattern root))
+             (files (%glob-candidate-files pattern root filesystem))
              (matches nil))
         (dolist (file files)
           (when (%glob-match-file-p pattern root file)
@@ -205,11 +211,11 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
             (sort matches #'string<)
             (list pattern)))))
 
-(defun %glob-candidate-files (pattern root)
+(defun %glob-candidate-files (pattern root filesystem)
   "Return filesystem candidates for PATTERN from ROOT using the glob recursion policy."
   (if (search "**" pattern)
-      (recursive-directory-files root)
-      (immediate-directory-files root)))
+      (recursive-directory-files root filesystem)
+      (immediate-directory-files root filesystem)))
 
 (defun %glob-match-file-p (pattern root file)
   (let ((subject (%glob-file-match-subject pattern root file)))
@@ -230,13 +236,13 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
       (values (subseq pattern 0 (1+ equals))
               (subseq pattern (1+ equals))))))
 
-(defun %expand-glob-with-prefix (pattern)
+(defun %expand-glob-with-prefix (pattern &optional filesystem)
   "Expand assignment-like compound words such as label=*.txt as label=file.txt."
   (multiple-value-bind (prefix suffix)
       (%glob-assignment-prefix-parts pattern)
     (if (null prefix)
-        (expand-glob pattern)
-        (let ((expanded (expand-glob suffix)))
+        (expand-glob pattern filesystem)
+        (let ((expanded (expand-glob suffix filesystem)))
           (if (and (= 1 (length expanded))
                    (string= suffix (first expanded)))
               (list pattern)

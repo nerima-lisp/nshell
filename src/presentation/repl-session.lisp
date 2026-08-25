@@ -68,7 +68,8 @@ RESTORE-INTERACTIVE-TERMINAL has to run either way, which is why RUN-REPL calls
 this from inside its UNWIND-PROTECT rather than before it."
   (ignore-errors
       (progn
-        (setf nshell.application:*shell-pgid* (sb-posix:getpid))
+        (setf nshell.application:*shell-pgid*
+              (nshell.infrastructure.acl:current-process-id))
         (nshell.infrastructure.acl:set-process-group 0 0)))
   (handler-case
       (nshell.infrastructure.acl:install-signal-handlers)

@@ -3,9 +3,6 @@
 (defun %path-separator-p (char)
   (or (char= char #\/) #+windows (char= char #\\) #-windows nil))
 
-(defgeneric completion-filesystem-fns (source)
-  (:documentation "Return filesystem adapter functions used by completion."))
-
 (defstruct (%filesystem-candidate-set
     (:constructor %make-filesystem-candidate-set (seen candidates))
     (:conc-name %filesystem-candidate-set-)) (seen (make-hash-table :test #'equal) :read-only t)

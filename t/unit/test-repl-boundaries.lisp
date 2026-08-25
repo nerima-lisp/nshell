@@ -42,10 +42,10 @@ reflects the injected values instead of the real machine."
         (let ((elapsed (- (nshell.presentation::boundary-monotonic) start)))
           (expect 500 :to-equal elapsed)))))
 
-  (it "real-boundary-context-exposes-every-boundary"
-    "make-real-boundary-context wires all six boundaries used by the REPL edge."
+  (it "real-boundary-context-exposes-repl-boundaries"
+    "make-real-boundary-context wires the boundaries used by the REPL edge."
     (let ((ctx (nshell.presentation::make-real-boundary-context)))
-      (dolist (key '(:filesystem :host-info :working-dir :clock :environment :process))
+      (dolist (key '(:host-info :working-dir :clock))
         (expect (not (eq :missing
                          (cl-boundary-kit:boundary-context-get ctx key :missing)))
                 :to-be-truthy)))))

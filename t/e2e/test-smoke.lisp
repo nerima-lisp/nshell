@@ -55,22 +55,10 @@ central registry, exactly as the parent process resolved them.")
   ;; resolved them however the current environment provides them (sibling
   ;; checkouts locally, or nix store paths via lispLibs in the hermetic
   ;; sandbox), and the spawned subprocess needs those same real locations.
-  ;;
-  ;; Also route the subprocess's fasl output through the same writable cache
-  ;; directory the parent process configured (NSHELL-CONFIGURE-WRITABLE-ASDF-OUTPUT
-  ;; resolves to a fixed path -- $NSHELL_ASDF_OUTPUT_DIR, or a deterministic
-  ;; temp-directory default -- not a per-process one), so the parent's earlier
-  ;; ASDF:LOAD-SYSTEM of everything nshell depends on gives this subprocess a
-  ;; warm cache instead of a cold recompile. A cold recompile of a dependency
-  ;; such as cl-parser-kit prints SBCL's compiler STYLE-WARNING/note text to
-  ;; *error-output*, which lands on this subprocess's stderr and fails any e2e
-  ;; assertion that expects it empty.
   (let ((dependency-roots
           (loop for system in +nshell-runtime-dependencies+
                 collect (namestring (asdf:system-source-directory system)))))
     (list* "--eval" "(require :asdf)"
-           "--eval" (format nil "(load (merge-pathnames #P\"scripts/asdf-runtime.lisp\" (truename ~S)))" root)
-           "--eval" "(nshell-configure-writable-asdf-output)"
            "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
            (loop for dependency-root in dependency-roots
                  collect "--eval"

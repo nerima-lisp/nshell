@@ -1,9 +1,13 @@
 (in-package #:nshell/test)
 
+(defun %make-test-builtins-filesystem (&key (files '("/bin/echo" "/tmp/file.txt")))
+  (make-test-filesystem
+   :executable-p (lambda (path) (and (member path files :test #'string=) t))))
+
 (defun make-test-builtins-context (&key
                                      (path "/bin:/usr/bin")
                                      function-table
-                                     filesystem
+                                     (filesystem (%make-test-builtins-filesystem))
                                      (running t))
   (make-test-shell-context
    :environment (nshell.domain.environment:env-set

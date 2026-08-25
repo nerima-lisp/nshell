@@ -65,6 +65,20 @@ runners, so skip the hermetic sandbox, CI, and unavailable PTYs."
   "Run all nshell tests through cl-weave.
 
 Runs single-threaded: many suites share process-global state (mock command
-tables, abbreviation/alias/history registries, dynamic completion hooks), so
+tables, abbreviation/alias/history registries, shared mutable registries), so
 concurrent execution would race.  This mirrors how the FiveAM suite ran."
-  (run-all :reporter :spec :max-workers 1 :pass-with-no-tests nil))
+  (let ((discovery-stream (make-string-output-stream)))
+    (let* ((plan (cl-weave:list-tests :reporter :sexp
+                                      :stream discovery-stream))
+           (selected-count (length plan)))
+      (unless (plusp selected-count)
+        (error "nshell test discovery selected no tests"))
+      (let* ((events (cl-weave:run (cl-weave:root-suite)
+                                   :reporter :spec
+                                   :max-workers 1))
+             (passed-p (cl-weave:results-status events)))
+        (format t "~&NSHELL_TESTS selected=~D passed=~A~%"
+                selected-count
+                passed-p)
+        (finish-output)
+        (values passed-p selected-count)))))

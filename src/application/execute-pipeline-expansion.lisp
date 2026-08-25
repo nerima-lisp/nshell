@@ -26,10 +26,13 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
                  (values ,parts ,pos)
                  (%try-substitution-match ,@(rest forms))))))))
 
-(defun %make-pipeline-shell-context ()
+(defun %make-pipeline-shell-context (&key filesystem)
   (make-shell-context
+   :filesystem filesystem
    :environment (nshell.domain.environment:inject-os-environment
-                 (nshell.domain.environment:make-default-environment))))
+                 (nshell.domain.environment:make-default-environment)
+                 (nshell.infrastructure.acl:current-environment-entries)
+                 #'nshell.infrastructure.acl:current-working-directory)))
 
 (defun execute-command-line (line history)
   (nshell.domain.parsing:with-complete-command-line (result ast line)
@@ -66,7 +69,7 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
         append (loop for field in (or fields (list ""))
                      collect (concatenate 'string prefix field))))
 
-(defun %expand-source-fragment-fields (fragment environment)
+(defun %expand-source-fragment-fields (fragment environment &optional filesystem)
   (let* ((value (nshell.domain.parsing:command-fragment-value fragment))
          (protected
            (%protect-command-fragment-escapes
@@ -76,12 +79,12 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
     (nshell.domain.expansion:expand-by-quote-style
      (nshell.domain.parsing:command-fragment-quote-style fragment)
      (if environment
-         (nshell.domain.expansion:expand-all protected environment)
+         (nshell.domain.expansion:expand-all protected environment filesystem)
          (list protected))
      (list protected)
      (if environment
          (list
-          (nshell.domain.expansion:expand-double-quoted
+           (nshell.domain.expansion:expand-double-quoted
            protected environment))
          (list protected)))))
 
@@ -92,7 +95,7 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
         (nshell.domain.parsing:arg-value arg)
         (nshell.domain.parsing:arg-quote-style arg)))))
 
-(defun %expand-source-arg (arg &optional environment)
+(defun %expand-source-arg (arg &optional environment filesystem)
   (let ((value (nshell.domain.parsing:arg-value arg)))
     (if (nshell.domain.parsing:arg-here-doc-literal-p arg)
         (list value)
@@ -102,7 +105,8 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
             (setf fields
                   (%append-expanded-fragment-fields
                    fields
-                   (%expand-source-fragment-fields fragment environment))))))))
+                   (%expand-source-fragment-fields
+                    fragment environment filesystem))))))))
 
 (defun %command-node-command-fragments (command-node)
   (or (nshell.domain.parsing:command-node-command-fragments command-node)
@@ -112,7 +116,8 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
         (nshell.domain.parsing:command-node-command-quote-style
          command-node)))))
 
-(defun %expand-command-name-fields-from-fragments (command-node environment)
+(defun %expand-command-name-fields-from-fragments
+    (command-node environment &optional filesystem)
   (let ((fields (list "")))
     (dolist (fragment (%command-node-command-fragments command-node) fields)
       (let* ((value (nshell.domain.parsing:command-fragment-value fragment))
@@ -126,14 +131,17 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
                 protected
                 (nshell.domain.parsing:command-fragment-quote-style
                  fragment)
-                environment)))
+                environment
+                filesystem)))
         (setf fields
               (%append-expanded-fragment-fields fields fragment-fields))))))
 
-(defun %expand-command-name-from-fragments (command-node environment)
+(defun %expand-command-name-from-fragments
+    (command-node environment &optional filesystem)
   (nshell.domain.expansion::%single-command-name-or-error
    (nshell.domain.parsing:command-node-command command-node)
-   (%expand-command-name-fields-from-fragments command-node environment)))
+   (%expand-command-name-fields-from-fragments
+    command-node environment filesystem)))
 
 (defun %expand-unquoted-source-arg-in-context (context value environment)
   (multiple-value-bind (fields argv-reference-p)
@@ -141,7 +149,10 @@ arithmetic $((..)) > POSIX $(..) > bare (..) > literal character."
     (if argv-reference-p
         fields
         (loop for expanded in (%expand-command-substitutions context value)
-              append (nshell.domain.expansion:expand-all expanded environment)))))
+              append (nshell.domain.expansion:expand-all
+                      expanded
+                      environment
+                      (shell-context-filesystem context))))))
 
 (defun %expand-double-quoted-source-arg-in-context (context value environment)
   (list (apply #'concatenate 'string
@@ -354,7 +365,7 @@ backslash-newline have special meaning in an unquoted heredoc."
          (protected
            (%protect-command-fragment-escapes
             value
-            (nshell.domain.parsing:command-fragment-escaped-positions
+         (nshell.domain.parsing:command-fragment-escaped-positions
              fragment)))
          (environment (shell-context-environment context)))
     (nshell.domain.expansion:expand-by-quote-style

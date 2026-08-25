@@ -9,15 +9,32 @@
 (defun completion-texts (candidates)
   (mapcar #'nshell.domain.completion:candidate-text candidates))
 
+(defvar *completion-test-filesystem* nil)
+
+(defun make-test-filesystem
+    (&key
+      (directory-files (constantly nil))
+      (subdirectories (constantly nil))
+      (executable-p (constantly nil))
+      (directory-map #'mapcar))
+  (nshell.domain.filesystem:make-filesystem
+   :directory-files directory-files
+   :subdirectories subdirectories
+   :executable-p executable-p
+   :directory-map directory-map))
+
 (defun completion-texts-for (kb input)
-  (completion-texts (nshell.domain.completion:complete kb input)))
+  (completion-texts
+   (nshell.domain.completion:complete
+    kb input :filesystem *completion-test-filesystem*)))
 
 (defmacro assert-completion-texts (expected candidates)
   `(expect ,expected :to-equal (completion-texts ,candidates)))
 
 (defmacro assert-completion-texts-for (expected kb input)
   `(assert-completion-texts ,expected
-     (nshell.domain.completion:complete ,kb ,input)))
+     (nshell.domain.completion:complete
+      ,kb ,input :filesystem *completion-test-filesystem*)))
 
 (defmacro assert-completion-texts-cases (kb &rest cases)
   `(progn
@@ -83,14 +100,19 @@
      (nshell.presentation::seed-repl-completion-knowledge-base ,kb)
      ,@body))
 
-(defmacro with-path-command-adapters ((directory-files-fn executable-p-fn) &body body)
-  `(let ((nshell.domain.completion:*path-command-directory-files-fn* ,directory-files-fn)
-         (nshell.domain.completion:*path-command-executable-p-fn* ,executable-p-fn))
+(defmacro with-test-path-filesystem ((directory-files-fn executable-p-fn) &body body)
+  `(let ((*completion-test-filesystem*
+           (make-test-filesystem
+            :directory-files ,directory-files-fn
+            :executable-p ,executable-p-fn)))
      ,@body))
 
-(defmacro with-file-completion-adapters ((directory-files-fn subdirectories-fn) &body body)
-  `(let ((nshell.domain.completion:*file-completion-directory-files-fn* ,directory-files-fn)
-         (nshell.domain.completion:*file-completion-subdirectories-fn* ,subdirectories-fn))
+(defmacro with-test-file-filesystem ((directory-files-fn subdirectories-fn) &body body)
+  `(let ((*completion-test-filesystem*
+           (make-test-filesystem
+            :directory-files ,directory-files-fn
+            :subdirectories ,subdirectories-fn
+            :executable-p (constantly t))))
      ,@body))
 
 (defmacro with-repl-completion-help-fetcher

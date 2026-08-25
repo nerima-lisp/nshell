@@ -19,26 +19,19 @@ Redirect args (and their targets) are removed from the args list."
 
 ;; -- Logic: context-level redirect application ----------------------
 
-(defun %redirect-fn (context key)
-  (getf (shell-context-redirect-fns context) key))
-
 (defun %apply-context-redirects (context redirects)
   "Apply REDIRECTS to the current shell CONTEXT's I/O streams."
+  (declare (ignore context))
   (nshell.domain.parsing:map-redirect-entries
    (lambda (kind target)
      (case kind
-       (:>    (funcall (%redirect-fn context :redirect-output) target :supersede))
-       (:>>   (funcall (%redirect-fn context :redirect-output) target :append))
-       (:&>   (let ((fn (%redirect-fn context :redirect-output-error)))
-                (when fn (funcall fn target :supersede))))
-       (:&>>  (let ((fn (%redirect-fn context :redirect-output-error)))
-                (when fn (funcall fn target :append))))
-       (:2>   (let ((fn (%redirect-fn context :redirect-error)))
-                (when fn (funcall fn target :supersede))))
-       (:2>>  (let ((fn (%redirect-fn context :redirect-error)))
-                (when fn (funcall fn target :append))))
-       (:2>&1 (let ((fn (%redirect-fn context :redirect-error-to-output)))
-                (when fn (funcall fn))))
+       (:>    (nshell.infrastructure.acl:redirect-output target :supersede))
+       (:>>   (nshell.infrastructure.acl:redirect-output target :append))
+       (:&>   (nshell.infrastructure.acl:redirect-output-and-error target :supersede))
+       (:&>>  (nshell.infrastructure.acl:redirect-output-and-error target :append))
+       (:2>   (nshell.infrastructure.acl:redirect-error target :supersede))
+       (:2>>  (nshell.infrastructure.acl:redirect-error target :append))
+       (:2>&1 (nshell.infrastructure.acl:redirect-error-to-output))
        (:fd-dup
         (unless (nshell.domain.parsing:redirect-fd-dup-target-p target)
           (error "Missing file-descriptor duplication target"))
@@ -46,26 +39,21 @@ Redirect args (and their targets) are removed from the args list."
               (destination (nshell.domain.parsing:redirect-fd-dup-target-target target)))
           (cond
             ((and (= source 1) (= destination 2))
-             (let ((fn (%redirect-fn context :redirect-output-to-error)))
-               (when fn (funcall fn))))
+             (nshell.infrastructure.acl:redirect-output-to-error))
             ((and (= source 2) (= destination 1))
-             (let ((fn (%redirect-fn context :redirect-error-to-output)))
-               (when fn (funcall fn))))
+             (nshell.infrastructure.acl:redirect-error-to-output))
             (t
              (error "Unsupported file-descriptor duplication ~d>&~d"
                     source
                     destination)))))
-       (:<    (funcall (%redirect-fn context :redirect-input) target))
-       (:<<<  (let ((fn (%redirect-fn context :redirect-input-string)))
-                (when fn (funcall fn target))))
-       (:<<   (let ((fn (%redirect-fn context :redirect-input-document)))
-                (when fn (funcall fn target))))
-       (:<<-  (let ((fn (%redirect-fn context :redirect-input-document)))
-                (when fn (funcall fn target))))
+       (:<    (nshell.infrastructure.acl:redirect-input target))
+       (:<<<  (nshell.infrastructure.acl:redirect-input-string target))
+       (:<<   (nshell.infrastructure.acl:redirect-input-document target))
+       (:<<-  (nshell.infrastructure.acl:redirect-input-document target))
        (t nil)))
    redirects))
 
 (defun %restore-context-redirects (context)
   "Restore I/O streams to their pre-redirect state."
-  (let ((restore (%redirect-fn context :restore)))
-    (when restore (funcall restore))))
+  (declare (ignore context))
+  (nshell.infrastructure.acl:restore-redirects))

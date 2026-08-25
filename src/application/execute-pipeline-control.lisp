@@ -186,7 +186,9 @@ when an enclosing loop must handle the remaining count."
 (defun %execute-case-node-in-context (context ast)
   (let* ((raw-value (nshell.domain.parsing:case-node-value ast))
          (expanded (nshell.domain.expansion:expand-all
-                    raw-value (shell-context-environment context)))
+                    raw-value
+                    (shell-context-environment context)
+                    (shell-context-filesystem context)))
          (value (or (first expanded) raw-value)))
     (loop for clause in (nshell.domain.parsing:case-node-clauses ast)
           for pattern = (nshell.domain.parsing:case-clause-pattern clause)

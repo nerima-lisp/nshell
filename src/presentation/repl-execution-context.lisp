@@ -1,51 +1,17 @@
 (in-package #:nshell.presentation)
 
-(defparameter +repl-filesystem-fns+
-  (list :cwd #'host-kit:getcwd
-        :list-dir (lambda (dir) (host-kit:directory-files dir))
-        :chdir #'host-kit:chdir
-        :stat #'probe-file
-        :file-exists-p (lambda (path)
-                         (let ((pathname (probe-file path)))
-                           (and pathname
-                                (not (host-kit:directory-pathname-p pathname)))))
-        :directory-exists-p (lambda (path)
-                              (not (null (host-kit:directory-exists-p path))))))
-
-(defparameter +repl-process-fns+
-  (list :run-external
-        (lambda (command args)
-          (nshell.infrastructure.acl:run-external command args))
-        :run-external-capture
-        (lambda (command args)
-          (nshell.infrastructure.acl:run-external-capture command args))))
-
-(defparameter +repl-redirect-fns+
-  (list :redirect-output #'nshell.infrastructure.acl:redirect-output
-        :redirect-error #'nshell.infrastructure.acl:redirect-error
-        :redirect-output-error #'nshell.infrastructure.acl:redirect-output-and-error
-        :redirect-output-to-error #'nshell.infrastructure.acl:redirect-output-to-error
-        :redirect-error-to-output #'nshell.infrastructure.acl:redirect-error-to-output
-        :redirect-input #'nshell.infrastructure.acl:redirect-input
-        :redirect-input-document #'nshell.infrastructure.acl:redirect-input-document
-        :redirect-input-string #'nshell.infrastructure.acl:redirect-input-string
-        :restore #'nshell.infrastructure.acl:restore-redirects))
-
 (defun %make-repl-shell-context ()
   (nshell.application:make-shell-context
    :history *history*
    :config *config*
    :knowledge-base *kb*
    :environment (ensure-environment)
+   :filesystem (nshell.infrastructure.acl:make-host-filesystem)
    :job-monitor nshell.application:*job-monitor*
    :alias-table *aliases*
    :abbreviation-table *abbreviations*
    :function-table *functions*
    :function-source-table *function-sources*
-   :filesystem-fns +repl-filesystem-fns+
-   :process-fns +repl-process-fns+
-   :redirect-fns +repl-redirect-fns+
-   :terminal-fns nil
    :running *running*
    :pipefail-p *pipefail*
    :last-exit-code *last-exit-code*

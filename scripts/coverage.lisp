@@ -143,7 +143,8 @@
                                   percentage
                                   minimum
                                   target
-                                  tests-passed)
+                                  tests-passed
+                                  tests-selected)
     (ensure-directories-exist pathname)
     (with-open-file (stream
                      pathname
@@ -155,13 +156,14 @@
                      :create)
       (format
        stream
-       "{~%  \"scope\": \"src-executable\",~%  \"files\": ~D,~%  \"covered\": ~D,~%  \"total\": ~D,~%  \"expression-percent\": ~,2F,~%  \"minimum-percent\": ~,2F,~%  \"target-percent\": ~,2F,~%  \"tests-passed\": ~A,~%  \"minimum-passed\": ~A,~%  \"target-reached\": ~A~%}~%"
+       "{~%  \"scope\": \"src-executable\",~%  \"files\": ~D,~%  \"covered\": ~D,~%  \"total\": ~D,~%  \"expression-percent\": ~,2F,~%  \"minimum-percent\": ~,2F,~%  \"target-percent\": ~,2F,~%  \"tests-selected\": ~D,~%  \"tests-passed\": ~A,~%  \"minimum-passed\": ~A,~%  \"target-reached\": ~A~%}~%"
        files
        covered
        total
        percentage
        minimum
        target
+       tests-selected
        (%json-boolean tests-passed)
        (%json-boolean (and (plusp total) (>= percentage minimum)))
        (%json-boolean (and (plusp total) (>= percentage target))))))
@@ -181,6 +183,7 @@
          (source-root (uiop:native-namestring (truename (merge-pathnames #P"src/" root))))
          (minimum (%coverage-threshold "NSHELL_COVERAGE_MIN" 85.0))
          (target (%coverage-threshold "NSHELL_COVERAGE_TARGET" 100.0))
+         (tests-selected 0)
          (tests-passed nil)
          (report-passed nil)
          (coverage-passed nil))
@@ -196,11 +199,15 @@
     (ensure-directories-exist coverage-dir)
     (sb-cover:enable-coverage-logging)
     (unwind-protect (setf tests-passed (handler-case
-                                           (let ((result
-                                                  (progn
-                                                    (asdf:load-system :nshell/test :force :all)
-                                                    (uiop:symbol-call :nshell/test (quote #:run-tests)))))
-                                             (not (null result)))
+                                           (progn
+                                             (asdf:load-system :nshell/test :force :all)
+                                             (multiple-value-bind (result selected-count)
+                                                 (uiop:symbol-call :nshell/test (quote #:run-tests))
+                                               (unless (and (integerp selected-count)
+                                                            (plusp selected-count))
+                                                 (error "nshell test discovery selected no tests"))
+                                               (setf tests-selected selected-count)
+                                               (and result t)))
                                          (error (condition)
                                                 (format *error-output*
                                                         "~&nshell/test failed: ~A~%"
@@ -227,6 +234,7 @@
                                report-passed
                                (plusp files)
                                (plusp total)
+                               (plusp tests-selected)
                                (>= percentage minimum)))
         (%write-coverage-summary
          summary-path
@@ -236,16 +244,18 @@
          percentage
          minimum
          target
-         tests-passed)
+         tests-passed
+         tests-selected)
         (format
          t
-         "NSHELL_COVERAGE scope=src-executable files=~D covered=~D total=~D expression-percent=~,2F minimum-percent=~,2F target-percent=~,2F tests-passed=~A minimum-passed=~A target-reached=~A~%"
+         "NSHELL_COVERAGE scope=src-executable files=~D covered=~D total=~D expression-percent=~,2F minimum-percent=~,2F target-percent=~,2F tests-selected=~D tests-passed=~A minimum-passed=~A target-reached=~A~%"
          files
          covered
          total
          percentage
          minimum
          target
+         tests-selected
          (%json-boolean tests-passed)
          (%json-boolean coverage-passed)
          (%json-boolean (and (plusp total) (>= percentage target))))
@@ -254,6 +264,8 @@
            *error-output*
            "~&src executable expression coverage did not meet the configured minimum (~,2F%%).~%"
            minimum))))
+    (finish-output)
+    (finish-output *error-output*)
     (sb-ext:exit
      :code
      (if (and tests-passed coverage-passed) 0

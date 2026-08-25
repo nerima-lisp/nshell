@@ -6,21 +6,19 @@
   (:documentation
    "Application: the use cases. Owns the shell context -- the one mutable object
 holding history, environment, aliases, functions, and the job monitor -- and
-drives the domain over infrastructure through the function tables stored in it.
-Executing a pipeline, running a builtin, and fg/bg/jobs/disown live here; this
-is the only layer permitted to know both the domain and the ports.")
+drives the domain through the infrastructure boundary. Executing a pipeline,
+running a builtin, and fg/bg/jobs/disown live here; this is the only layer
+permitted to know both the domain and infrastructure.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
             #:make-shell-context #:shell-context-p
             #:shell-context-history #:shell-context-config
             #:shell-context-knowledge-base #:shell-context-environment
+            #:shell-context-filesystem
             #:shell-context-job-monitor
             #:shell-context-alias-table #:shell-context-abbreviation-table
             #:shell-context-function-table #:shell-context-function-source-table
-            #:shell-context-filesystem-fns
-            #:shell-context-process-fns #:shell-context-terminal-fns
-            #:shell-context-redirect-fns
             #:shell-context-execution-strategy #:shell-context-pipefail-p
             #:shell-context-running
             #:shell-context-last-exit-code #:shell-context-input-state

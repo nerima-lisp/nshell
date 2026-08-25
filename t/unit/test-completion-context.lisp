@@ -66,11 +66,12 @@
              (option (concatenate 'string stem "-option"))
              (kb (nshell.domain.completion:make-empty-knowledge-base)))
         (nshell.domain.completion:kb-add-command kb command :flags (list option))
-        (with-file-completion-adapters (nil nil)
+        (with-test-file-filesystem ((constantly nil) (constantly nil))
           (let ((candidates
                   (nshell.domain.completion:complete
                    kb
-                   (format nil "~a > ~a" command stem))))
+                   (format nil "~a > ~a" command stem)
+                   :filesystem *completion-test-filesystem*)))
             (and (= 1 (length candidates))
                  (string= stem
                           (nshell.domain.completion:candidate-text (first candidates)))
@@ -254,7 +255,7 @@
   (it "pbt-filesystem-redirection-completion-preserves-prefix"
     (check-property (:trials 50)
         ((prefix (gen-command-prefix :min-length 1 :max-length 4) nil))
-      (with-file-completion-adapters
+      (with-test-file-filesystem
           ((lambda (dir)
              (declare (ignore dir))
              (list (concatenate 'string prefix "-out.log")
@@ -265,7 +266,8 @@
         (let ((candidates
                 (nshell.domain.completion:complete
                  nshell.domain.completion::*built-in-rule-knowledge-base*
-                 (concatenate 'string "git > " prefix))))
+                 (concatenate 'string "git > " prefix)
+                 :filesystem *completion-test-filesystem*)))
           (and candidates
                (every (lambda (candidate)
                         (completion-prefix-p
@@ -333,11 +335,11 @@
                                      :if-does-not-exist :create)
                (write-line "test" stream))
              (sb-posix:chmod path #o600)
-             (expect (nshell.infrastructure.acl::%executable-file-p path) :to-be-null)
+             (expect (nshell.infrastructure.acl:executable-file-p path) :to-be-null)
              (sb-posix:chmod path #o700)
-             (expect (nshell.infrastructure.acl::%executable-file-p path) :to-be-truthy))
+             (expect (nshell.infrastructure.acl:executable-file-p path) :to-be-truthy))
         (when (probe-file path) (delete-file path)))
-      (expect (nshell.infrastructure.acl::%executable-file-p
+      (expect (nshell.infrastructure.acl:executable-file-p
                (concatenate 'string path "-missing")) :to-be-null)))
 
 
@@ -497,7 +499,7 @@
         (expect (defined-symbol-p name) :to-be-falsy))))
 
   (it "file-candidates-from-directory-deduplicates-by-candidate-text"
-    (with-file-completion-adapters
+    (with-test-file-filesystem
         ((lambda (dir)
            (declare (ignore dir))
            (list #p"tool" #p"tool"))
@@ -506,6 +508,7 @@
            nil))
       (let* ((candidates
                (nshell.domain.completion::%file-candidates-from-directory
+                *completion-test-filesystem*
                 "to"
                 :include-files t
                 :include-directories nil))

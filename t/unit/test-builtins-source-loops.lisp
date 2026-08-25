@@ -73,46 +73,46 @@
     "source repeats fish-style while loops until the condition returns non-zero."
     (let ((condition-codes '(0 0 1))
           (calls nil))
-      (let ((context (make-test-builtins-context
-                      :external-capture-runner
-                      (lambda (command args)
-                        (expect args :to-be-null)
-                        (push command calls)
-                        (cond
-                          ((string= command "condition")
-                           (values "ignored-condition-output" (pop condition-codes)))
-                          ((string= command "body")
-                           (values (format nil "body~%") 0))
-                          (t
-                           (values "" 127)))))))
-        (with-called-source (output code context
-                                    '("while condition"
-                                      "body"
-                                      "end"))
-          (expect 0 :to-equal code)
-          (expect (format nil "body~%body~%") :to-equal output)
-          (expect '("condition" "body" "condition" "body" "condition") :to-equal (nreverse calls))))))
+      (let ((context (make-test-builtins-context)))
+        (with-test-external-capture-runner
+            (lambda (command args)
+              (expect args :to-be-null)
+              (push command calls)
+              (cond
+                ((string= command "condition")
+                 (values "ignored-condition-output" (pop condition-codes)))
+                ((string= command "body")
+                 (values (format nil "body~%") 0))
+                (t
+                 (values "" 127))))
+          (with-called-source (output code context
+                                      '("while condition"
+                                        "body"
+                                        "end"))
+            (expect 0 :to-equal code)
+            (expect (format nil "body~%body~%") :to-equal output)
+            (expect '("condition" "body" "condition" "body" "condition") :to-equal (nreverse calls))))))
 
   (it "source-while-returns-last-body-status"
     "source while returns the last executed body status, not the failing condition status."
     (let ((condition-codes '(0 1)))
-      (let ((context (make-test-builtins-context
-                      :external-capture-runner
-                      (lambda (command args)
-                        (expect args :to-be-null)
-                        (cond
-                          ((string= command "condition")
-                           (values nil (pop condition-codes)))
-                          ((string= command "body")
-                           (values nil 7))
-                          (t
-                           (values nil 127)))))))
-        (with-called-source (output code context
-                                    '("while condition"
-                                      "body"
-                                      "end"))
-          (expect 7 :to-equal code)
-          (expect "" :to-equal output)))))
+      (let ((context (make-test-builtins-context)))
+        (with-test-external-capture-runner
+            (lambda (command args)
+              (expect args :to-be-null)
+              (cond
+                ((string= command "condition")
+                 (values nil (pop condition-codes)))
+                ((string= command "body")
+                 (values nil 7))
+                (t
+                 (values nil 127))))
+          (with-called-source (output code context
+                                      '("while condition"
+                                        "body"
+                                        "end"))
+            (expect 7 :to-equal code)
+            (expect "" :to-equal output))))))
 
   (it "source-function-body-supports-nested-switch"
     "source keeps nested switch/case blocks inside function definitions."
@@ -232,3 +232,4 @@
       (expect (format nil "break: only meaningful in a loop~%after~%")
               :to-equal output)
       (expect 0 :to-equal code))))
+)

@@ -1,10 +1,7 @@
 (in-package #:nshell.application)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (require :sb-posix))
-
 (defvar *job-monitor* (nshell.domain.job-control:make-job-monitor))
-(defvar *shell-pgid* (sb-posix:getpid))
+(defvar *shell-pgid* nil)
 (defvar *foreground-job-pgid* nil)
 
 (define-value-struct job-listing
@@ -34,12 +31,10 @@
   (values))
 
 (defun %continue-process-group (pgid)
-  (sb-posix:kill (- pgid) sb-unix:sigcont))
+  (nshell.infrastructure.acl:kill-process (- pgid) :sigcont))
 
-(defun fg (job-id &optional process-registry terminal-fns
-                    (job-monitor *job-monitor*))
+(defun fg (job-id &optional (job-monitor *job-monitor*))
   "Move JOB-ID to the foreground, wait for it, then restore the shell PGID."
-  (declare (ignore process-registry terminal-fns))
   (let ((job (%require-job job-id job-monitor)))
     (when job
       (let ((pgid (nshell.domain.execution:job-control-pgid job)))
@@ -90,12 +85,18 @@
   "Remove JOB-ID from the job monitor."
   (nshell.domain.job-control:monitor-remove-job job-monitor job-id))
 
+(defun %shell-process-group-id ()
+  (or *shell-pgid*
+      (setf *shell-pgid* (nshell.infrastructure.acl:current-process-id))))
+
 (defun %foreground-signal-target-pgid ()
-  (let ((pgid (or *foreground-job-pgid*
+  (let ((shell-pgid (%shell-process-group-id))
+        (pgid (or *foreground-job-pgid*
                   (ignore-errors (nshell.infrastructure.acl:get-foreground-pgroup)))))
-    (when (and pgid
+    (when (and shell-pgid
+               pgid
                (nshell.domain.execution:valid-process-group-id-p pgid)
-               (/= pgid *shell-pgid*))
+               (/= pgid shell-pgid))
       pgid)))
 
 (defun %job-command-string (job)
@@ -117,48 +118,26 @@
            (ignore-errors (nshell.infrastructure.acl:set-foreground-pgroup pgid))
            (funcall thunk))
       (ignore-errors
-        (nshell.infrastructure.acl:set-foreground-pgroup (or previous *shell-pgid*))))))
+        (nshell.infrastructure.acl:set-foreground-pgroup
+         (or previous (%shell-process-group-id)))))))
 
-(defun %classify-job-wait-status (pid status
-                                    &key stopped-p exited-p exit-status
-                                      signaled-p term-signal)
-  (cond
-    ((funcall stopped-p status)
+(defun %job-wait-event-from-observation (pid state detail)
+  (case state
+    (:stopped
      (%make-job-wait-event pid :stopped nil))
-    ((funcall exited-p status)
-     (%make-job-wait-event pid :exited (funcall exit-status status)))
-    ((funcall signaled-p status)
-     (%make-job-wait-event pid :signaled
-                           (+ 128 (funcall term-signal status))))
-    (t
+    (:exited
+     (%make-job-wait-event pid :exited detail))
+    (:signaled
+     (%make-job-wait-event pid :signaled (+ 128 detail)))
+    ((:no-child :interrupted)
+     (%make-job-wait-event nil state nil))
+    (otherwise
      (%make-job-wait-event pid :unknown nil))))
 
-(defun %classify-job-wait-error (errno)
-  (cond
-    ((= errno sb-posix:echild)
-     (%make-job-wait-event nil :no-child nil))
-    ((= errno sb-posix:eintr)
-     (%make-job-wait-event nil :interrupted nil))
-    (t nil)))
-
 (defun %wait-job-pgid-event (pgid)
-  (handler-case
-      (multiple-value-bind (pid status)
-          (sb-posix:waitpid (- pgid) sb-posix:wuntraced)
-        (%classify-job-wait-status
-         pid status
-         :stopped-p #'sb-posix:wifstopped
-         :exited-p #'sb-posix:wifexited
-         :exit-status #'sb-posix:wexitstatus
-         :signaled-p #'sb-posix:wifsignaled
-         :term-signal #'sb-posix:wtermsig))
-    (sb-posix:syscall-error (condition)
-      (let ((event
-              (%classify-job-wait-error
-               (sb-posix:syscall-errno condition))))
-        (if event
-            event
-            (error condition))))))
+  (multiple-value-bind (pid state detail)
+      (nshell.infrastructure.acl:wait-job (- pgid) :untraced t)
+    (%job-wait-event-from-observation pid state detail)))
 
 (defun %wait-job-pgid (job job-id job-monitor)
   (let* ((pgid (nshell.domain.execution:job-control-pgid job))
@@ -208,16 +187,7 @@
   (nshell.domain.job-control:monitor-find-job job-monitor job-id))
 (defun signal-job (job-id signal &optional (job-monitor *job-monitor*))
   "Send SIGNAL to JOB-ID and synchronize the monitor after a successful signal."
-  (labels ((stop-signal-p (candidate)
-                          (or (member candidate (list :sigstop :sigtstp))
-                              (and (integerp candidate)
-                                   (member candidate
-                                           (list sb-unix:sigstop sb-unix:sigtstp)))))
-           (continue-signal-p (candidate)
-                              (or (eq candidate :sigcont)
-                                  (and (integerp candidate)
-                                       (= candidate sb-unix:sigcont))))
-           (record-signal-state ()
+  (labels ((record-signal-state ()
                                 (let ((current-job
                                        (nshell.domain.job-control:monitor-find-job
                                         job-monitor job-id)))
@@ -225,10 +195,12 @@
                                              (not (nshell.domain.execution:job-completed-p
                                                    current-job)))
                                     (cond
-                                     ((stop-signal-p signal)
+                                     ((nshell.infrastructure.acl:process-stop-signal-p
+                                       signal)
                                       (nshell.domain.job-control:suspend-job
                                        job-monitor job-id nil))
-                                     ((and (continue-signal-p signal)
+                                     ((and (nshell.infrastructure.acl:process-continue-signal-p
+                                           signal)
                                            (nshell.domain.execution:job-stopped-p current-job))
                                       (nshell.domain.job-control:background-job
                                        job-monitor job-id)))))))

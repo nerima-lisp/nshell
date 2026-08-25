@@ -1,34 +1,26 @@
 (in-package #:nshell/test)
 
 (describe "shell-context-tests"
-  (it "shell-context-constructs-with-all-dependencies"
-    "MAKE-SHELL-CONTEXT stores each public dependency behind the context boundary."
-    (let ((context (make-test-shell-context
-                    :filesystem-fns (list :list-dir (lambda (dir) (declare (ignore dir)) '("a" "b"))
-                                          :stat (lambda (path) (declare (ignore path)) t)
-                                          :cwd (lambda () #p"/tmp/")
-                                          :chdir (lambda (path) (declare (ignore path)) t))
-                    :process-fns (list :spawn (lambda (&rest args) (declare (ignore args)) :spawned)
-                                       :wait (lambda (&rest args) (declare (ignore args)) :waited)
-                                       :signal (lambda (&rest args) (declare (ignore args)) :signaled))
-                    :terminal-fns (list :get-size (lambda () (values 80 24))
-                                        :raw-mode (lambda () t)
-                                        :restore-mode (lambda () t)))))
+  (it "shell-context-constructs-with-session-state"
+    "MAKE-SHELL-CONTEXT stores session state behind the application boundary."
+    (let ((context (make-test-shell-context)))
       (expect (nshell.application:shell-context-p context) :to-be-truthy)
       (expect (history-kit:history-p
            (nshell.application:shell-context-history context)) :to-be-truthy)
       (expect (nshell.domain.configuration:config-p
            (nshell.application:shell-context-config context)) :to-be-truthy)
-      (expect (null (nshell.application:shell-context-knowledge-base context)) :to-be-falsy)
+      (expect (nshell.domain.completion::knowledge-base-p
+               (nshell.application:shell-context-knowledge-base context)) :to-be-truthy)
       (expect (nshell.domain.environment:environment-p
            (nshell.application:shell-context-environment context)) :to-be-truthy)
-      (expect (null (nshell.application:shell-context-job-monitor context)) :to-be-falsy)
+      (expect (nshell.domain.job-control:job-monitor-p
+               (nshell.application:shell-context-job-monitor context)) :to-be-truthy)
       (expect (hash-table-p (nshell.application:shell-context-alias-table context)) :to-be-truthy)
       (expect (hash-table-p (nshell.application:shell-context-abbreviation-table context)) :to-be-truthy)
       (expect :cps :to-be (nshell.application:shell-context-execution-strategy context))))
 
   (it "shell-context-factory-provides-safe-defaults"
-    "The public factory supplies valid empty adapters and session defaults."
+    "The public factory supplies valid session defaults."
     (let ((context (nshell.application:make-shell-context)))
       (expect :cps :to-be
               (nshell.application:shell-context-execution-strategy context))
@@ -50,19 +42,11 @@
               :to-be-truthy)
       (expect (hash-table-p
                (nshell.application::shell-context-process-registry context))
-              :to-be-truthy)
-      (expect (nshell.application:shell-context-filesystem-fns context)
-              :to-be-null)
-      (expect (nshell.application:shell-context-process-fns context)
-              :to-be-null)
-      (expect (nshell.application:shell-context-terminal-fns context)
-              :to-be-null)
-      (expect (nshell.application:shell-context-redirect-fns context)
-              :to-be-null)))
+              :to-be-truthy)))
 
   (it "shell-context-construction-boundary-is-public-factory-only"
     "The context can be built only through the public factory, not copied as a raw struct."
-    (let ((context (make-test-shell-context :terminal-fns nil)))
+    (let ((context (make-test-shell-context)))
       (expect (nshell.application:shell-context-p context) :to-be-truthy)
       (expect (fboundp 'nshell.application::copy-shell-context) :to-be-falsy)
       (expect (fboundp 'nshell.application::%allocate-shell-context) :to-be-truthy)
@@ -77,8 +61,7 @@
     (expect (lambda () (nshell.application:make-shell-context :terminal-rows 0)) :to-throw 'type-error)
     (expect (lambda () (nshell.application:make-shell-context :terminal-cols 0)) :to-throw 'type-error)
     (expect (lambda () (nshell.application:make-shell-context :alias-table nil)) :to-throw 'type-error)
-    (expect (lambda () (nshell.application:make-shell-context :process-registry nil)) :to-throw 'type-error)
-    (expect (lambda () (nshell.application:make-shell-context :filesystem-fns :not-a-plist)) :to-throw 'type-error))
+    (expect (lambda () (nshell.application:make-shell-context :process-registry nil)) :to-throw 'type-error))
 
   (it "shell-context-process-registry-exposes-job-query-only"
     "Process registry storage stays internal; callers query by job id."
@@ -95,19 +78,8 @@
                          (find-symbol "SHELL-CONTEXT-JOB-PROCESSES"
                                       :nshell.application)))))
 
-  (it "shell-context-supports-fake-adapters"
-    "Adapter plists can be replaced with test fakes."
-    (let* ((context (make-test-shell-context))
-           (filesystem-fns (nshell.application:shell-context-filesystem-fns context))
-           (process-fns (nshell.application:shell-context-process-fns context))
-           (terminal-fns (nshell.application:shell-context-terminal-fns context)))
-      (expect '("a" "b") :to-equal (funcall (getf filesystem-fns :list-dir) #p"/tmp/"))
-      (expect :spawned :to-be (funcall (getf process-fns :spawn) "echo" '("ok")))
-      (multiple-value-bind (columns rows) (funcall (getf terminal-fns :get-size))
-        (expect 80 :to-equal columns)
-        (expect 24 :to-equal rows))))
-  (it "shell-context-manages-functions-and-adapter-methods"
-  "Runtime function metadata and generic completion access share the context boundary."
+  (it "shell-context-manages-functions"
+  "Runtime function metadata stays behind the context boundary."
   (let ((context (make-test-shell-context)))
     (nshell.application::%store-shell-function-definition
      context "demo" (list "echo one") "demo.ns")
@@ -129,7 +101,4 @@
             :to-be-null)
     (setf (nshell.application:shell-context-running context) t)
     (expect context :to-be (nshell.application::%stop-shell-context context))
-    (expect (nshell.application:shell-context-running context) :to-be-falsy)
-    (expect (nshell.application:shell-context-filesystem-fns context)
-            :to-equal
-            (nshell.domain.completion:completion-filesystem-fns context)))))
+    (expect (nshell.application:shell-context-running context) :to-be-falsy))))

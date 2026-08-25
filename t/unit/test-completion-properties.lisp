@@ -94,7 +94,7 @@
   (it "pbt-path-command-completion-is-prefixed-and-deduped"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "git")
-      (with-path-command-adapters
+      (with-test-path-filesystem
           ((lambda (directory)
              (declare (ignore directory))
              (list #p"/bin/git" #p"/usr/bin/git" #p"/bin/grep" #p"/bin/awk"))
@@ -102,7 +102,10 @@
         (check-property (:trials 50)
             ((prefix (gen-command-prefix :min-length 0 :max-length 3)))
           (let* ((texts (completion-texts
-                         (nshell.domain.completion:complete kb prefix :path "/bin:/usr/bin")))
+                         (nshell.domain.completion:complete
+                          kb prefix
+                          :path "/bin:/usr/bin"
+                          :filesystem *completion-test-filesystem*)))
                  (unique-texts (remove-duplicates texts :test #'string=)))
             (and (every (lambda (text) (completion-prefix-p prefix text)) texts)
   	               (= (length texts) (length unique-texts))))))))

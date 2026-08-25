@@ -158,8 +158,7 @@ continuation line. A pure string-to-AST function with no filesystem access.")
   (:documentation
    "Domain: the shell variable environment as a value -- scalar and list
 bindings, their export flags, and the operations that produce a new environment
-from an old one. Importing the real process environment is an injection point
-filled by infrastructure, so the domain never reads getenv itself.")
+from an old one. Process values are supplied explicitly by infrastructure.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:environment-p #:make-environment
@@ -171,12 +170,21 @@ filled by infrastructure, so the domain never reads getenv itself.")
            #:env-bindings #:env-entry-p
            #:env-entry-name #:env-entry-value #:env-list))
 
+(defpackage #:nshell.domain.filesystem
+  (:documentation
+   "Domain: filesystem capabilities as explicit values. The domain consumes
+directory enumeration, executable checks, and directory mapping through this
+data object; infrastructure constructs it from host operations.")
+  (:use #:cl)
+  (:export #:filesystem #:filesystem-p #:make-filesystem
+           #:filesystem-directory-files #:filesystem-subdirectories
+           #:filesystem-executable-p #:filesystem-directory-map))
+
 (defpackage #:nshell.domain.expansion
   (:documentation
    "Domain: word expansion -- tilde, parameter, arithmetic, brace, and glob --
-applied according to each word's quoting style. Globbing needs the filesystem,
-so it reaches it through the *GLOB-*-FN* hooks rather than calling DIRECTORY:
-that is what keeps expansion testable without a disk.")
+applied according to each word's quoting style. Globbing consumes an explicit
+filesystem capability, so expansion remains testable without a disk.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:import-from #:nshell.domain.environment #:env-get)
@@ -190,8 +198,7 @@ that is what keeps expansion testable without a disk.")
                 #:register-infix-left #:register-infix-right
                 #:register-grouping #:register-ternary
                 #:parse-pratt-all #:parse-failure->string)
-  (:export #:*glob-directory-files-fn* #:*glob-subdirectories-fn*
-           #:glob-match-p
+  (:export #:glob-match-p
            #:expand-variables #:expand-tilde #:expand-glob #:expand-all
            #:expand-by-quote-style
            #:expand-command-name-fields-by-quote-style
@@ -244,13 +251,9 @@ exported predicates below are goals callers may query directly.")
             #:completion-context-argument-words
             #:completion-context-command-position-p
             #:completion-context-redirection-target-p
-            #:completion-filesystem-fns
             #:filesystem-candidates-for-value-kind
             #:command-path-candidates
-             #:*path-command-directory-map-fn*
-             #:*path-command-directory-files-fn* #:*path-command-executable-p-fn*
-            #:*file-completion-directory-files-fn*
-            #:*file-completion-subdirectories-fn*))
+            ))
 
 (defpackage #:nshell.domain.history
   (:documentation

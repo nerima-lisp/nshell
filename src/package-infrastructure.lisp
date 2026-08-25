@@ -7,11 +7,14 @@
    "Infrastructure: the anti-corruption layer over the operating system. Every
 sb-posix call the shell makes -- fork and exec, pipes, redirection, process
 groups, waitpid, PTYs, signal handlers -- is behind this one package, plus the
-git subprocess the prompt needs. Its exports are the ports the application layer
-stores in the shell context, which is what makes the layers above it mockable.")
+git subprocess the prompt needs. Application code calls this boundary directly;
+tests rebind these boundary functions when they need deterministic behavior.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
+           #:current-environment-entries #:current-environment-value
+           #:current-working-directory
+           #:map-path-command-directories #:make-host-filesystem
            #:spawn-pipeline #:spawn-pipeline-async #:wait-job
            #:spawn-process-substitution
            #:process-substitution-resource-p
@@ -33,6 +36,8 @@ stores in the shell context, which is what makes the layers above it mockable.")
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
+            #:current-process-id #:process-stop-signal-p #:process-continue-signal-p
+            #:executable-file-p
             #:child-status #:child-status-p #:child-status-pid #:child-status-status
             #:reap-children #:get-terminal-size
             #:terminal-size-unavailable #:terminal-size-unavailable-fd
@@ -54,7 +59,8 @@ line editor has a single place to import them from.")
                 #:key-event #:key-event-p #:make-key-event
                 #:key-event-type #:key-event-char #:key-event-number
                 #:key-event-data)
-  (:export #:enable-raw-mode #:restore-terminal-mode
+  (:export #:interactive-terminal-p
+            #:enable-raw-mode #:restore-terminal-mode
             #:terminal-mode-operation-failed
             #:terminal-mode-operation-failed-operation
             #:terminal-mode-operation-failed-fd

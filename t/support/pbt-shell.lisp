@@ -1,49 +1,5 @@
 (in-package #:nshell/test)
 
-(defun %default-test-filesystem-fns ()
-  (list :list-dir (lambda (dir)
-                    (declare (ignore dir))
-                    '("a" "b"))
-        :stat (lambda (path)
-                (declare (ignore path))
-                nil)
-        :file-exists-p (lambda (path)
-                         (declare (ignore path))
-                         nil)
-        :directory-exists-p (lambda (path)
-                              (declare (ignore path))
-                              nil)
-        :cwd (lambda ()
-               #p"/tmp/")
-        :chdir (lambda (path)
-                 (declare (ignore path))
-                 t)))
-
-(defun %default-test-process-fns ()
-  (list :spawn (lambda (&rest args)
-                 (declare (ignore args))
-                 :spawned)
-        :wait (lambda (&rest args)
-                (declare (ignore args))
-                :waited)
-        :signal (lambda (&rest args)
-                  (declare (ignore args))
-                  :signaled)
-        :run-external (lambda (command args)
-                        (declare (ignore command args))
-                        0)
-        :run-external-capture (lambda (command args)
-                                (declare (ignore command args))
-                                (values nil 0))))
-
-(defun %default-test-terminal-fns ()
-  (list :get-size (lambda ()
-                    (values 80 24))
-        :raw-mode (lambda ()
-                    t)
-        :restore-mode (lambda ()
-                        t)))
-
 (defun make-test-shell-context (&key
                                   (history (history-kit:make-history))
                                   (config (nshell.domain.configuration:default-config))
@@ -54,37 +10,22 @@
                                   (abbreviation-table (make-hash-table :test #'equal))
                                   (function-table (make-hash-table :test #'equal))
                                   (function-source-table (make-hash-table :test #'equal))
-                                  (filesystem-fns nil filesystem-fns-supplied-p)
-                                  (process-fns nil process-fns-supplied-p)
-                                  redirect-fns
-                                  (terminal-fns nil terminal-fns-supplied-p)
+                                  filesystem
                                   (execution-strategy :cps)
                                   (running nil))
-  (let ((filesystem-fns (if filesystem-fns-supplied-p
-                            filesystem-fns
-                            (%default-test-filesystem-fns)))
-        (process-fns (if process-fns-supplied-p
-                         process-fns
-                         (%default-test-process-fns)))
-        (terminal-fns (if terminal-fns-supplied-p
-                          terminal-fns
-                          (%default-test-terminal-fns))))
-    (nshell.application:make-shell-context
-     :history history
-     :config config
-     :knowledge-base knowledge-base
-     :environment environment
-     :job-monitor job-monitor
-     :alias-table alias-table
-     :abbreviation-table abbreviation-table
-     :function-table function-table
-     :function-source-table function-source-table
-     :filesystem-fns filesystem-fns
-     :process-fns process-fns
-     :redirect-fns redirect-fns
-     :terminal-fns terminal-fns
-     :execution-strategy execution-strategy
-     :running running)))
+  (nshell.application:make-shell-context
+   :history history
+   :config config
+   :knowledge-base knowledge-base
+   :environment environment
+   :filesystem filesystem
+   :job-monitor job-monitor
+   :alias-table alias-table
+   :abbreviation-table abbreviation-table
+   :function-table function-table
+   :function-source-table function-source-table
+   :execution-strategy execution-strategy
+   :running running))
 
 (defmacro with-parsed-command-line ((result line) &body body)
   `(nshell.domain.parsing:with-parsed-command-line (,result ,line)

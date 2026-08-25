@@ -20,8 +20,7 @@
 ;;;   * identifier predicates are pinned to the shell rule so "x-y" tokenizes
 ;;;     as x - y (cl-parser-kit's default identifier chars include #\-);
 ;;;   * operators carry no token-type (so the Pratt table dispatches on their
-;;;     text), except "?"/":" which need eql-comparable keyword keys for
-;;;     register-ternary's colon match.
+;;;     text), except punctuation whose Pratt registrars compare keys with EQL.
 
 (defun %arith-variable-start-p (char)
   (or (alpha-char-p char) (char= char #\_)))
@@ -29,7 +28,29 @@
 (defun %arith-variable-char-p (char)
   (or (alphanumericp char) (char= char #\_)))
 
-(defparameter *arith-tokenizer* nil)
+(declaim (special +arith-token-operator-texts+
+                  +arith-prefix-operator-specifications+
+                  +arith-infix-operator-specifications+))
+
+(defun %ascii-digit-p (char)
+  (and (characterp char) (char<= #\0 char #\9)))
+
+(defun %make-arithmetic-tokenizer ()
+  (make-tokenizer
+   :rules (list (make-whitespace-rule :skip-p t)
+                (make-predicate-rule :number #'%ascii-digit-p
+                                     :value-function (lambda (s)
+                                                       (parse-integer s)))
+                (make-identifier-rule :type :variable
+                                      :start-predicate #'%arith-variable-start-p
+                                      :continue-predicate #'%arith-variable-char-p)
+                (make-operator-rule :open-paren '("("))
+                (make-operator-rule :close-paren '(")"))
+                (make-operator-rule :question '("?"))
+                (make-operator-rule :colon '(":"))
+                (make-operator-rule nil +arith-token-operator-texts+))))
+
+(defparameter *arith-tokenizer* (%make-arithmetic-tokenizer))
 
 ;;; --- Pratt table (binding-power ladder, C/bash order low -> high) ------
 ;;;
@@ -38,7 +59,47 @@
 ;;; equal-precedence chains associate correctly and "**" stays right-assoc and
 ;;; binds tighter than unary minus (so -2**2 = -(2**2) = -4, matching bash).
 
-(defparameter *arith-pratt-table* nil)
+(defun %make-unary-arithmetic-node-builder (operator)
+  (lambda (operand)
+    (list operator operand)))
+
+(defun %make-binary-arithmetic-node-builder (operator)
+  (lambda (left right)
+    (list operator left right)))
+
+(defun %register-arithmetic-prefix-operators (table)
+  (dolist (specification +arith-prefix-operator-specifications+ table)
+    (destructuring-bind (text precedence operator) specification
+      (register-prefix table text precedence
+                       (%make-unary-arithmetic-node-builder operator)))))
+
+(defun %register-arithmetic-infix-operators (table)
+  (dolist (specification +arith-infix-operator-specifications+ table)
+    (destructuring-bind (associativity text precedence operator) specification
+      (ecase associativity
+        (:left
+         (register-infix-left
+          table text precedence
+          (%make-binary-arithmetic-node-builder operator)))
+        (:right
+         (register-infix-right
+          table text precedence
+          (%make-binary-arithmetic-node-builder operator)))))))
+
+(defun %make-arithmetic-pratt-table ()
+  (let ((table (make-pratt-table)))
+    (register-atom table :number (lambda (token) (token-value token)))
+    (register-atom table :variable
+                   (lambda (token) (list :var (token-value token))))
+    (register-grouping table :open-paren :close-paren)
+    (%register-arithmetic-prefix-operators table)
+    (%register-arithmetic-infix-operators table)
+    (register-ternary table :question :colon 10
+                      (lambda (condition then else)
+                        (list :if condition then else)))
+    table))
+
+(defparameter *arith-pratt-table* (%make-arithmetic-pratt-table))
 
 ;;; --- Evaluator ---------------------------------------------------------
 

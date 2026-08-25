@@ -443,7 +443,7 @@
         (expect :file :to-be (nshell.domain.completion:candidate-kind (first candidates))))))
 
   (it "complete-redirection-targets-from-filesystem"
-    (with-file-completion-adapters
+    (with-test-file-filesystem
         ((lambda (dir)
            (declare (ignore dir))
            (list #p"stderr.log" #p"stdout.txt" #p"notes.txt"))
@@ -452,14 +452,15 @@
            (list #p"staging/")))
       (let* ((candidates (nshell.domain.completion:complete
                           nshell.domain.completion::*built-in-rule-knowledge-base*
-                          "echo > st"))
+                          "echo > st"
+                          :filesystem *completion-test-filesystem*))
              (texts (completion-texts candidates))
              (kinds (mapcar #'nshell.domain.completion:candidate-kind candidates)))
         (expect '("staging/" "stderr.log" "stdout.txt") :to-equal texts)
         (expect '(:directory :file :file) :to-equal kinds))))
 
   (it "complete-cd-targets-from-filesystem-directories-only"
-    (with-file-completion-adapters
+    (with-test-file-filesystem
         ((lambda (dir)
            (declare (ignore dir))
            (list #p"src.log"))
@@ -468,14 +469,15 @@
            (list #p"src/" #p"sandbox/")))
       (let* ((candidates (nshell.domain.completion:complete
                           nshell.domain.completion::*built-in-rule-knowledge-base*
-                          "cd s"))
+                          "cd s"
+                          :filesystem *completion-test-filesystem*))
              (texts (completion-texts candidates))
              (kinds (mapcar #'nshell.domain.completion:candidate-kind candidates)))
         (expect '("sandbox/" "src/") :to-equal texts)
         (expect (every (lambda (kind) (eq kind :directory)) kinds) :to-be-truthy))))
 
   (it "complete-path-like-command-arguments-from-filesystem"
-    (with-file-completion-adapters
+    (with-test-file-filesystem
         ((lambda (dir)
            (declare (ignore dir))
            (list #p".env" #p"~config" #p"main.lisp"))
@@ -486,23 +488,26 @@
               (completion-texts
                (nshell.domain.completion:complete
                 nshell.domain.completion::*built-in-rule-knowledge-base*
-                "echo src/m")))
+                "echo src/m"
+                :filesystem *completion-test-filesystem*)))
             (dot-texts
               (completion-texts
                (nshell.domain.completion:complete
                 nshell.domain.completion::*built-in-rule-knowledge-base*
-                "echo .e")))
+                "echo .e"
+                :filesystem *completion-test-filesystem*)))
             (tilde-texts
               (completion-texts
                (nshell.domain.completion:complete
                 nshell.domain.completion::*built-in-rule-knowledge-base*
-                "echo ~c"))))
+                "echo ~c"
+                :filesystem *completion-test-filesystem*))))
         (expect '("src/module/" "src/main.lisp") :to-equal slash-texts)
         (expect '(".env") :to-equal dot-texts)
-        (expect '("~config") :to-equal tilde-texts))))
+        (expect '("~config") :to-equal tilde-texts)))
 
   (it "complete-source-targets-from-filesystem"
-    (with-file-completion-adapters
+    (with-test-file-filesystem
         ((lambda (dir)
            (declare (ignore dir))
            (list #p"init.lisp" #p"install.sh" #p"readme.md"))
@@ -513,11 +518,12 @@
         (let ((texts (completion-texts
                       (nshell.domain.completion:complete
                        nshell.domain.completion::*built-in-rule-knowledge-base*
-                       line))))
+                       line
+                       :filesystem *completion-test-filesystem*))))
           (expect '("included/" "init.lisp" "install.sh") :to-equal texts)))))
 
   (it "complete-source-targets-from-filesystem-after-trailing-space"
-    (with-file-completion-adapters
+    (with-test-file-filesystem
         ((lambda (dir)
            (declare (ignore dir))
            (list #p"init.lisp" #p"install.sh" #p"readme.md"))
@@ -528,7 +534,8 @@
         (let ((texts (completion-texts
                       (nshell.domain.completion:complete
                        nshell.domain.completion::*built-in-rule-knowledge-base*
-                       line))))
+                       line
+                       :filesystem *completion-test-filesystem*))))
           (expect '("included/" "init.lisp" "install.sh" "readme.md") :to-equal texts)))))
 
   (it "rule-completion-keeps-quoted-arguments-out-of-prefix"
@@ -567,4 +574,5 @@
           (nshell.domain.completion:candidate-description (first candidates)))
         (expect "graphical history browser" :to-equal
           (nshell.domain.completion:candidate-description (second candidates))))))
+)
 )

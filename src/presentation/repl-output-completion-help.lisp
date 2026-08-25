@@ -148,7 +148,8 @@
            (command-position-p
              (nshell.domain.completion:completion-context-command-position-p context))
            (completion-path
-             (nshell.domain.environment:env-get (ensure-environment) "PATH")))
+             (nshell.domain.environment:env-get (ensure-environment) "PATH"))
+           (filesystem (nshell.infrastructure.acl:make-host-filesystem)))
       (unless command-position-p
         (%warm-command-completion-help-path
          *kb*
@@ -159,6 +160,7 @@
                           (nshell.domain.completion:complete
                            *kb* text
                            :path completion-path
+                           :filesystem filesystem
                            :alias-table *aliases*
                            :function-table *functions*))))
         (if candidates

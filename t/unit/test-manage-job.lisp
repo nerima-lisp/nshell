@@ -62,7 +62,7 @@
                            (setf bg-result (nshell.application:bg 42 empty-monitor))))
               (fg-output (with-output-to-string (*standard-output*)
                            (setf fg-result
-                                 (nshell.application:fg 42 nil nil empty-monitor)))))
+                                 (nshell.application:fg 42 empty-monitor)))))
           (expect bg-result :to-be-null)
           (expect fg-result :to-be-null)
           (expect "" :to-equal bg-output)
@@ -95,7 +95,7 @@
             (lambda (pgid)
               (push pgid set-foreground-calls))))
         (handler-case
-            (nshell.application:fg job-id nil nil monitor)
+            (nshell.application:fg job-id monitor)
           (error (condition)
             (expect (search "wait failed" (princ-to-string condition)) :to-be-truthy)))
         (expect nshell.application:*foreground-job-pgid* :to-be-null)
@@ -128,7 +128,7 @@
             (lambda (pgid)
               (push pgid set-foreground-calls))))
         (expect job :to-be
-                (nshell.application:fg job-id nil nil monitor)))
+                (nshell.application:fg job-id monitor)))
       (expect nshell.application:*foreground-job-pgid* :to-be-null)
       (expect '(1000 4321) :to-equal set-foreground-calls)))
 
@@ -318,58 +318,33 @@
     (let ((job (make-test-job 0 "x")))
       (nshell.domain.execution::%set-job-state job :future)
       (expect "Unknown" :to-equal (nshell.application::%status-label job))))
-  (it "classifies wait status observations without an OS wait"
-    "Wait-status policy is testable independently from the foreign wait call."
-    (flet ((classify (stopped-p exited-p signaled-p)
-             (nshell.application::%classify-job-wait-status
-              321
-              :raw-status
-              :stopped-p (lambda (status)
-                           (declare (ignore status))
-                           stopped-p)
-              :exited-p (lambda (status)
-                          (declare (ignore status))
-                          exited-p)
-              :exit-status (lambda (status)
-                             (declare (ignore status))
-                             7)
-              :signaled-p (lambda (status)
-                            (declare (ignore status))
-                            signaled-p)
-              :term-signal (lambda (status)
-                             (declare (ignore status))
-                             9))))
-      (let ((stopped (classify t nil nil))
-            (exited (classify nil t nil))
-            (signaled (classify nil nil t))
-            (unknown (classify nil nil nil)))
-        (expect 321 :to-equal
-                (nshell.application::job-wait-event-pid stopped))
+  (it "classifies normalized wait observations without an OS wait"
+    "Wait-status policy is testable independently from the ACL wait call."
+    (flet ((classify (state detail)
+             (nshell.application::%job-wait-event-from-observation
+              321 state detail)))
+      (let ((stopped (classify :stopped 19))
+            (exited (classify :exited 9))
+            (signaled (classify :signaled 9))
+            (no-child (classify :no-child nil))
+            (interrupted (classify :interrupted nil))
+            (unknown (classify :future nil)))
         (expect :stopped :to-be
                 (nshell.application::job-wait-event-state stopped))
         (expect nil :to-equal
                 (nshell.application::job-wait-event-status-code stopped))
         (expect :exited :to-be
                 (nshell.application::job-wait-event-state exited))
-        (expect 7 :to-equal
+        (expect 9 :to-equal
                 (nshell.application::job-wait-event-status-code exited))
         (expect :signaled :to-be
                 (nshell.application::job-wait-event-state signaled))
         (expect 137 :to-equal
                 (nshell.application::job-wait-event-status-code signaled))
+        (expect :no-child :to-be
+                (nshell.application::job-wait-event-state no-child))
+        (expect :interrupted :to-be
+                (nshell.application::job-wait-event-state interrupted))
         (expect :unknown :to-be
                 (nshell.application::job-wait-event-state unknown)))))
-  (it "classifies wait errors without an OS wait"
-    "Known wait errors become application events while unknown errors remain unclassified."
-    (let* ((no-child
-             (nshell.application::%classify-job-wait-error sb-posix:echild))
-           (interrupted
-             (nshell.application::%classify-job-wait-error sb-posix:eintr))
-           (unknown-errno
-             (1+ (max sb-posix:echild sb-posix:eintr))))
-      (expect :no-child :to-be
-              (nshell.application::job-wait-event-state no-child))
-      (expect :interrupted :to-be
-              (nshell.application::job-wait-event-state interrupted))
-      (expect nil :to-equal
-              (nshell.application::%classify-job-wait-error unknown-errno)))))
+)

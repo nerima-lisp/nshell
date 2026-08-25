@@ -177,9 +177,11 @@ command name expands to zero or multiple fields (ambiguous)."
       (let* ((alias-expanded (expand-command-alias-node
                               command-node
                               (shell-context-alias-table context)))
-             (environment (shell-context-environment context)))
+             (environment (shell-context-environment context))
+             (filesystem (shell-context-filesystem context)))
         (multiple-value-bind (command error)
-            (%expand-command-name-from-fragments alias-expanded environment)
+            (%expand-command-name-from-fragments
+             alias-expanded environment filesystem)
           (if error
               (values nil error)
               (multiple-value-bind (args resources arg-error)
@@ -409,12 +411,12 @@ command name expands to zero or multiple fields (ambiguous)."
 
 ;; -- Public pipeline API (OS-level) -------------------------------------------
 
-(defun execute-pipeline (pipeline-ast)
+(defun execute-pipeline (pipeline-ast &key filesystem)
   "Execute a pipeline AST using OS-level pipes. Returns the last process exit code."
   (let ((commands (if (nshell.domain.parsing:pipeline-node-p pipeline-ast)
                       (nshell.domain.parsing:pipeline-node-commands pipeline-ast)
                       (list pipeline-ast))))
-    (let ((context (%make-pipeline-shell-context)))
+    (let ((context (%make-pipeline-shell-context :filesystem filesystem)))
       (multiple-value-bind (expanded-commands error resources)
           (%expand-command-nodes-in-context context commands)
         (when error
@@ -449,5 +451,5 @@ command name expands to zero or multiple fields (ambiguous)."
                    :redirects redirects
                    :pipefail-p (shell-context-pipefail-p context)))))))))
 
-(defun execute-pipeline-use-case (pipeline)
-  (or (execute-pipeline pipeline) 0))
+(defun execute-pipeline-use-case (pipeline &key filesystem)
+  (or (execute-pipeline pipeline :filesystem filesystem) 0))

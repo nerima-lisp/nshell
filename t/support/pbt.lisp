@@ -261,4 +261,4 @@ Call as (PROPERTY NAME BINDINGS . BODY) or, with a law description,
            (check-property (:trials 50) ,bindings ,@real-body)))
       `(it ,name (check-property (:trials 50) ,bindings-or-doc ,@body))))
 
-;;; Shared test fixtures and adapters used across integration, e2e, and unit tests.
+;;; Shared test fixtures used across integration, e2e, and unit tests.

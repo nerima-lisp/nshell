@@ -316,7 +316,8 @@
           (values output (if valid-p 0 1))))))
 
 (define-builtin %builtin-pwd (context args) (args)
-  (values (format nil "~a~%" (namestring (funcall (%filesystem-fn context :cwd)))) 0))
+  (declare (ignore context))
+  (values (format nil "~a~%" (namestring (host-kit:getcwd))) 0))
 
 (defun %builtin-cd (context args)
   (handler-case
@@ -336,9 +337,9 @@
                         (nshell.domain.environment:env-get environment "OLDPWD")
                         (error "OLDPWD is not set")))
                    (t (first args))))
-               (old-cwd (funcall (%filesystem-fn context :cwd))))
-          (funcall (%filesystem-fn context :chdir) directory)
-          (let ((new-cwd (funcall (%filesystem-fn context :cwd))))
+               (old-cwd (host-kit:getcwd)))
+          (host-kit:chdir directory)
+          (let ((new-cwd (host-kit:getcwd)))
             (when environment
               (setf environment
                     (nshell.domain.environment:env-set

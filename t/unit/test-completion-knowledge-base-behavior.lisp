@@ -154,15 +154,18 @@
   (it "path-command-completion-merges-with-kb-and-path-candidates"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "cargo")
-      (with-path-command-adapters
+      (with-test-path-filesystem
           ((lambda (directory)
              (declare (ignore directory))
              (list #p"/mock/cat" #p"/mock/cargo" #p"/mock/readme"))
            (lambda (entry)
              (not (string= "readme" (file-namestring entry)))))
         (let ((texts (completion-texts
-                      (nshell.domain.completion:complete kb "c" :path "/mock:/other"))))
-          (expect '("cd" "complete" "contains" "count" "cargo" "cat") :to-equal texts)))))
+                      (nshell.domain.completion:complete
+                       kb "c"
+                       :path "/mock:/other"
+                       :filesystem *completion-test-filesystem*))))
+          (expect texts :to-equal '("cd" "complete" "contains" "count" "cargo" "cat"))))))
 
   (it "path-command-cache-reuses-entries-and-rechecks-executable-status"
     (let ((directory-reads 0)
@@ -172,7 +175,7 @@
               (constantly 1))
             (nshell.domain.completion::*path-command-cache-clock-fn*
               (constantly 0d0)))
-        (with-path-command-adapters
+        (with-test-path-filesystem
             ((lambda (directory)
                (declare (ignore directory))
                (incf directory-reads)
@@ -183,10 +186,10 @@
           (expect '("cache-tool") :to-equal
                   (completion-texts
                    (nshell.domain.completion::%command-candidates-from-path
-                    "/mock" "cache-")))
+                    "/mock" "cache-" *completion-test-filesystem*)))
           (setf executable-p nil)
           (expect (nshell.domain.completion::%command-candidates-from-path
-                   "/mock" "cache-")
+                   "/mock" "cache-" *completion-test-filesystem*)
                   :to-be-null)
           (expect 1 :to-equal directory-reads)))))
 
@@ -197,19 +200,22 @@
               (constantly 1))
             (nshell.domain.completion::*path-command-cache-clock-fn*
               (constantly 0d0)))
-        (with-path-command-adapters
+        (with-test-path-filesystem
             ((lambda (directory)
                (declare (ignore directory))
                (incf directory-reads)
                nil)
              (constantly t))
-          (nshell.domain.completion::%command-candidates-from-path "/empty" "x")
-          (nshell.domain.completion::%command-candidates-from-path "/empty" "x")
+          (nshell.domain.completion::%command-candidates-from-path
+           "/empty" "x" *completion-test-filesystem*)
+          (nshell.domain.completion::%command-candidates-from-path
+           "/empty" "x" *completion-test-filesystem*)
           (expect 1 :to-equal directory-reads)))))
 
   #+sb-thread
   (it "path-command-cache-coalesces-concurrent-cold-misses-for-the-same-key"
-    (let ((directory-reads 0)
+    (let ((filesystem nil)
+          (directory-reads 0)
           (results (make-array 2))
           (reads-lock (sb-thread:make-mutex :name "path-cache-test-reads"))
           (scan-entered (sb-thread:make-semaphore :count 0))
@@ -233,13 +239,10 @@
                  (wait-for-semaphore release-scan)
                  (list #p"/mock/single-flight-tool"))
                (worker (index)
-                 (when (= index 1) (wait-for-semaphore start-second))
-                 (let ((nshell.domain.completion::*path-command-directory-files-fn* #'directory-files)
-                       (nshell.domain.completion::*path-command-executable-p-fn* (constantly t))
-                       (nshell.domain.completion::*path-command-directory-stamp-fn* (constantly 1))
-                       (nshell.domain.completion::*path-command-cache-clock-fn* (constantly 0d0)))
-                   (setf (aref results index)
-                         (nshell.domain.completion::%list-path-command-directory "/mock"))))
+               (when (= index 1) (wait-for-semaphore start-second))
+                 (setf (aref results index)
+                       (nshell.domain.completion::%list-path-command-directory
+                        "/mock" filesystem)))
                (release-waiters ()
                  (sb-thread:signal-semaphore release-scan)
                  (sb-thread:signal-semaphore release-scan)
@@ -253,6 +256,10 @@
                      (ignore-errors
                        (sb-thread:join-thread thread :timeout 1 :default nil))))))
         (nshell.domain.completion::%invalidate-path-command-cache)
+        (setf filesystem
+              (make-test-filesystem
+               :directory-files #'directory-files
+               :executable-p (constantly t)))
         (unwind-protect
              (progn
                (setf (symbol-function 'nshell.domain.completion::%path-command-directory-key-lock)
@@ -285,7 +292,8 @@
 
   #+sb-thread
   (it "path-command-cache-does-not-reinsert-a-scan-invalidated-in-flight"
-    (let ((directory-reads 0)
+    (let ((filesystem nil)
+          (directory-reads 0)
           (first-result nil)
           (scan-entered (sb-thread:make-semaphore :count 0))
           (release-scan (sb-thread:make-semaphore :count 0))
@@ -311,30 +319,22 @@
                      (ignore-errors
                        (sb-thread:join-thread scanner :timeout 1 :default nil))))))
         (nshell.domain.completion::%invalidate-path-command-cache)
-        (let ((nshell.domain.completion::*path-command-directory-files-fn*
-                #'directory-files)
-              (nshell.domain.completion::*path-command-executable-p-fn*
-                (constantly t))
-              (nshell.domain.completion::*path-command-directory-stamp-fn*
+        (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
                 (constantly 1))
               (nshell.domain.completion::*path-command-cache-clock-fn*
                 (constantly 0d0)))
+          (setf filesystem
+                (make-test-filesystem
+                 :directory-files #'directory-files
+                 :executable-p (constantly t)))
           (unwind-protect
                (progn
                  (setf scanner
                        (sb-thread:make-thread
                         (lambda ()
-                          (let ((nshell.domain.completion::*path-command-directory-files-fn*
-                                  #'directory-files)
-                                (nshell.domain.completion::*path-command-executable-p-fn*
-                                  (constantly t))
-                                (nshell.domain.completion::*path-command-directory-stamp-fn*
-                                  (constantly 1))
-                                (nshell.domain.completion::*path-command-cache-clock-fn*
-                                  (constantly 0d0)))
                             (setf first-result
                                   (nshell.domain.completion::%list-path-command-directory
-                                   "/mock"))))))
+                                   "/mock" filesystem))))))
                  (wait-for-semaphore scan-entered)
                  (nshell.domain.completion::%invalidate-path-command-cache)
                  (sb-thread:signal-semaphore release-scan)
@@ -347,11 +347,11 @@
                  (expect (list #p"/mock/fresh-tool")
                          :to-equal
                          (nshell.domain.completion::%list-path-command-directory
-                          "/mock"))
+                          "/mock" filesystem))
                  (expect (list #p"/mock/fresh-tool")
                          :to-equal
                          (nshell.domain.completion::%list-path-command-directory
-                          "/mock"))
+                          "/mock" filesystem))
                  (expect 2 :to-equal directory-reads))
             (sb-thread:signal-semaphore release-scan)
             (reap-scanner))))))
@@ -371,16 +371,20 @@
                  (declare (ignore directory))
                  (incf directory-reads)
                  (list #p"/mock/cache-tool")))
-          (with-path-command-adapters (#'directory-files (constantly t))
-            (nshell.domain.completion::%command-candidates-from-path "/mock" "cache-")
+          (with-test-path-filesystem (#'directory-files (constantly t))
+            (nshell.domain.completion::%command-candidates-from-path
+             "/mock" "cache-" *completion-test-filesystem*)
             (setf stamp 2)
-            (nshell.domain.completion::%command-candidates-from-path "/mock" "cache-")
+            (nshell.domain.completion::%command-candidates-from-path
+             "/mock" "cache-" *completion-test-filesystem*)
             (setf now 0.3d0)
-            (nshell.domain.completion::%command-candidates-from-path "/mock" "cache-")
+            (nshell.domain.completion::%command-candidates-from-path
+             "/mock" "cache-" *completion-test-filesystem*)
             (nshell.domain.completion::%invalidate-path-command-cache)
-            (nshell.domain.completion::%command-candidates-from-path "/mock" "cache-")
+            (nshell.domain.completion::%command-candidates-from-path
+             "/mock" "cache-" *completion-test-filesystem*)
             (expect 4 :to-equal directory-reads)))
-        (with-path-command-adapters
+        (with-test-path-filesystem
             ((lambda (directory)
                (declare (ignore directory))
                (incf directory-reads)
@@ -389,11 +393,13 @@
           (expect '("cache-other") :to-equal
                   (completion-texts
                    (nshell.domain.completion::%command-candidates-from-path
-                    "/mock" "cache-")))
+                    "/mock" "cache-" *completion-test-filesystem*)))
           (expect 5 :to-equal directory-reads)))))
 
-  (it "path-command-cache-isolates-request-local-adapters"
-    (let* ((directory-reads 0)
+  (it "path-command-cache-isolates-request-local-filesystems"
+    (let* ((filesystem-one nil)
+           (filesystem-two nil)
+           (directory-reads 0)
           (files-fn
             (lambda (directory)
               (declare (ignore directory))
@@ -414,30 +420,30 @@
       (unwind-protect
            (progn
              (nshell.domain.completion::%invalidate-path-command-cache)
-             (let ((nshell.domain.completion::*path-command-directory-files-fn*
-                     files-fn)
-                   (nshell.domain.completion::*path-command-executable-p-fn*
-                     (constantly t))
-                   (nshell.domain.completion::*path-command-directory-stamp-fn*
+             (setf filesystem-one
+                   (make-test-filesystem
+                    :directory-files files-fn
+                    :executable-p (constantly t)))
+             (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
                      stamp-one)
                    (nshell.domain.completion::*path-command-cache-clock-fn*
                      clock-one))
                (expect '("cache-first") :to-equal
                        (completion-texts
                         (nshell.domain.completion::%command-candidates-from-path
-                         "/mock" "cache-"))))
-             (let ((nshell.domain.completion::*path-command-directory-files-fn*
-                     files-fn)
-                   (nshell.domain.completion::*path-command-executable-p-fn*
-                     (constantly t))
-                   (nshell.domain.completion::*path-command-directory-stamp-fn*
+                         "/mock" "cache-" filesystem-one))))
+             (setf filesystem-two
+                   (make-test-filesystem
+                    :directory-files files-fn
+                    :executable-p (constantly t)))
+             (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
                      stamp-two)
                    (nshell.domain.completion::*path-command-cache-clock-fn*
                      clock-two))
                (expect '("cache-second") :to-equal
                        (completion-texts
                         (nshell.domain.completion::%command-candidates-from-path
-                         "/mock" "cache-"))))
+                         "/mock" "cache-" filesystem-two))))
              (expect 2 :to-equal directory-reads))
         (nshell.domain.completion::%invalidate-path-command-cache))))
 
@@ -461,7 +467,7 @@
   (it "command-completion-keeps-best-duplicate-metadata"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "tool" :description "managed command")
-      (with-path-command-adapters
+      (with-test-path-filesystem
           ((lambda (directory)
              (declare (ignore directory))
              (list #p"/mock/tool"))
@@ -474,7 +480,7 @@
 
   (it "path-command-completion-ignores-argument-position"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-path-command-adapters
+      (with-test-path-filesystem
           ((lambda (directory)
              (declare (ignore directory))
              (list #p"/mock/git"))
@@ -483,7 +489,7 @@
 
   (it "path-command-completion-skips-directory-prefixed-commands"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (with-path-command-adapters
+      (with-test-path-filesystem
           ((lambda (directory)
              (declare (ignore directory))
              (list #p"/mock/git"))
@@ -649,4 +655,4 @@
               :to-be-null)
       (expect (nshell.domain.completion::%completion-help-enum-values
                "--format=(")
-              :to-be-null))))
+               :to-be-null)))

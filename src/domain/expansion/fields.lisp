@@ -83,14 +83,14 @@ values stay literal."
         results
         (list (expand-variables input env)))))
 
-(defun expand-all (input env)
+(defun expand-all (input env &optional filesystem)
   "Apply brace, tilde, arithmetic, variable, and glob expansion to INPUT,
 returning the (possibly multiple) resulting fields."
   (loop for braced in (expand-braces input)
         append (loop for argv-expanded in
                      (%expand-list-references
                       (expand-arithmetic (expand-tilde braced env) env) env)
-                     append (%expand-glob-with-prefix argv-expanded))))
+                     append (%expand-glob-with-prefix argv-expanded filesystem))))
 
 (defmacro expand-by-quote-style (style unquoted-form single-form double-form)
   "Dispatch on STYLE and evaluate the matching form."
@@ -166,18 +166,18 @@ single string. Command substitution is applied by the caller before this."
 (defun %command-name-field-splitting-required-p (text)
   (find #\$ text :test #'char=))
 
-(defun %command-name-unquoted-fields (text env)
-  (let ((fields (expand-all text env)))
+(defun %command-name-unquoted-fields (text env filesystem)
+  (let ((fields (expand-all text env filesystem)))
     (if (%command-name-field-splitting-required-p text)
         (loop for field in fields
               append (%split-whitespace-fields field))
         fields)))
 
-(defun expand-command-name-fields-by-quote-style (text style env)
+(defun expand-command-name-fields-by-quote-style (text style env &optional filesystem)
   "Expand a command name according to STYLE and shell field-splitting rules."
   (expand-by-quote-style
    style
-   (%command-name-unquoted-fields text env)
+   (%command-name-unquoted-fields text env filesystem)
    (list text)
    (list (expand-double-quoted text env))))
 
@@ -205,8 +205,8 @@ single string. Command substitution is applied by the caller before this."
   (%resolve-command-name-candidate
    (%make-command-name-candidate text fields)))
 
-(defun expand-command-name-by-quote-style (text style env)
+(defun expand-command-name-by-quote-style (text style env &optional filesystem)
   "Expand a command name and return either one field or an ambiguity error."
   (%single-command-name-or-error
    text
-   (expand-command-name-fields-by-quote-style text style env)))
+   (expand-command-name-fields-by-quote-style text style env filesystem)))

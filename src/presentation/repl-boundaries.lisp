@@ -2,9 +2,8 @@
 ;;;
 ;;; nshell's domain and application layers are pure, but the presentation edge
 ;;; still reaches the outside world for a handful of effects: the prompt reads
-;;; the hostname and working directory, command timing reads a monotonic clock,
-;;; and completion lists the filesystem.  cl-boundary-kit makes each of those an
-;;; explicit, swappable boundary.
+;;; the hostname and working directory, and command timing reads a monotonic
+;;; clock.  cl-boundary-kit makes each of those an explicit, swappable boundary.
 ;;;
 ;;; A single boundary-context is created at session start (`make-real-boundary-
 ;;; context`) and bound to `*boundaries*`.  It defaults to the real host
@@ -19,16 +18,12 @@
 fall back to freshly-constructed real boundaries.")
 
 (defun make-real-boundary-context ()
-  "Construct a boundary-context wired to the real host: filesystem, host info,
-working directory, monotonic clock, environment, and process execution."
+  "Construct a boundary-context for prompt and command-timing effects."
   (cl-boundary-kit:make-boundary-context
-   :filesystem (cl-boundary-kit:make-filesystem)
    :host-info (cl-boundary-kit:make-host-info)
    :working-dir (cl-boundary-kit:make-working-directory
                  :get-fn #'host-kit:getcwd :set-fn #'host-kit:chdir)
-   :clock (cl-boundary-kit:make-clock)
-   :environment (cl-boundary-kit:make-environment)
-   :process (cl-boundary-kit:make-process-boundary)))
+   :clock (cl-boundary-kit:make-clock)))
 
 (defun %boundary (key default-thunk)
   "Return the boundary registered under KEY, or a fresh real one from

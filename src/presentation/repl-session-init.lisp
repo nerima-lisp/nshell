@@ -66,11 +66,13 @@ entered during this session."
         *prompt-rendered-origin-known-p* nil
         *interactive-terminal-installed-p* nil
         *environment* (nshell.domain.environment:inject-os-environment
-                       (nshell.domain.environment:make-default-environment)))
+                       (nshell.domain.environment:make-default-environment)
+                       (nshell.infrastructure.acl:current-environment-entries)
+                       #'nshell.infrastructure.acl:current-working-directory))
   (%reset-repl-state-tables)
-  (setf *vi-mode-enabled* (%vi-mode-flag-enabled-p (host-kit:getenv "NSHELL_VI_MODE")))
-  (install-expansion-filesystem)
-  (configure-completion-filesystem)
+  (setf *vi-mode-enabled*
+        (%vi-mode-flag-enabled-p
+         (nshell.infrastructure.acl:current-environment-value "NSHELL_VI_MODE")))
   (%load-interactive-config :enabled-p load-config-p :path config-path)
   (when history-p
     (dolist (entry (reverse (nshell.infrastructure.persistence:load-history-file)))

@@ -53,8 +53,10 @@ struct, its `%allocate-shell-context` constructor, and
 `make-shell-context`'s keyword arguments, yet every one of the three real
 `make-shell-context` call sites left them at their default and no reader
 accessor was ever called anywhere in `src/` or `t/` — unlike the sibling
-slots `filesystem-fns`/`process-fns`/`redirect-fns`/`terminal-fns`, which
-the composition root and their respective consumers do wire up. Because
+slots `filesystem-fns`/`process-fns`/`redirect-fns`/`terminal-fns` (since
+consolidated into the single `filesystem` slot; see
+[value-struct-audit.md](value-struct-audit.md)), which
+the composition root and their respective consumers did wire up. Because
 `shell-context` (the definition, and every one of its slot accessors) *is*
 used, the tool correctly does not flag it; the deadness was at the
 slot level, findable only by manually cross-checking every accessor name

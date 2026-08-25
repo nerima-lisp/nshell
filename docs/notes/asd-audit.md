@@ -49,9 +49,10 @@ constraints, verified rather than assumed:
   and display data, and REPL output event handlers have their own component.
 - `application/` loads before `infrastructure/`, which looks backwards for
   a layered architecture until read against `shell-context.lisp`: the
-  application layer receives infrastructure's functions as *values*
-  through dependency injection (`shell-context-filesystem-fns` and
-  siblings), not through a compile-time package dependency, so
+  application layer receives infrastructure's capabilities as a *value*
+  through dependency injection (`shell-context-filesystem`, a
+  `nshell.domain.filesystem` struct built by infrastructure's
+  `make-host-filesystem`), not through a compile-time package dependency, so
   infrastructure genuinely does not need to exist yet when application
   compiles.
 - `infrastructure.terminal` does depend on `domain.input` directly

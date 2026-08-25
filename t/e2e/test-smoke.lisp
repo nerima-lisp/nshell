@@ -47,7 +47,7 @@ merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
 (defparameter +nshell-runtime-dependencies+
   '(:cl-prolog-kit :cl-parser-kit :cl-dataflow-kit :cl-boundary-kit :cl-cli :cl-tty-kit
     :cl-process-kit :cl-history-kit :cl-host-kit
-    ;; cl-log-kit is not an nshell dependency (see docs/nerima-lisp-package-audit.md)
+    ;; cl-log-kit is not an nshell dependency (see docs/notes/nerima-lisp-package-audit.md)
     ;; but cl-boundary-kit and cl-process-kit both depend on it, and the
     ;; subprocess's central-registry holds only these explicit directories with
     ;; no :tree fallback, so it must be listed here to resolve transitively.

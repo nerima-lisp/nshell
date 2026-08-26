@@ -535,13 +535,19 @@ Pre-fix, RUN-EXTERNAL-CAPTURE ran through the one-shot PROCESS-KIT:RUN with no
 pgid registration: *FOREGROUND-PGID* stayed 0 for the whole wait, so the plusp
 poll below never succeeds, the forwarded SIGINT is a no-op, and the exit code
 is 0 (a full 10-second sleep) rather than 130."
+    ;; PATH-resolved "sleep" (coreutils), not "/bin/sleep": the Nix build
+    ;; sandbox has no /bin beyond sh, so the absolute path resolves to
+    ;; command-not-found (127) there and the pgid is never registered -- the
+    ;; same reason the sibling tests use PATH-resolved "echo" and "sh". A
+    ;; plain external sleeper also dies BY the forwarded SIGINT (130), where
+    ;; an SBCL child would catch it and exit 1.
     (let* ((captured nil)
            (worker (sb-thread:make-thread
                     (lambda ()
                       (setf captured
                             (multiple-value-list
                              (nshell.infrastructure.acl:run-external-capture
-                              "/bin/sleep" (list "10")))))
+                              "sleep" (list "10")))))
                     :name "run-external-capture sigint test")))
       ;; The cleanup must run even when an assertion unwinds: the worker
       ;; writes the raw *FOREGROUND-PGID* global (not a thread-local

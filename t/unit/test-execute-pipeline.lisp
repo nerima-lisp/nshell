@@ -321,7 +321,13 @@ it."
            (stdout nil)
            (stderr nil)
            (code nil))
-      (let ((nshell.infrastructure.acl:*external-command-timeout* 0.2))
+      ;; *STANDARD-OUTPUT* is bound to a string stream because the stage's
+      ;; timeout now flows through %FOREGROUND-EXTERNAL-COMMAND-TIMEOUT, which
+      ;; only applies the special when stdout is NOT interactive -- and SBCL
+      ;; reports the harness's standard streams as interactive even under the
+      ;; Nix sandbox (same trap documented on the run-external timeout tests).
+      (let ((nshell.infrastructure.acl:*external-command-timeout* 0.2)
+            (*standard-output* (make-string-output-stream)))
         (setf stderr
               (with-output-to-string (*error-output*)
                 (multiple-value-setq (stdout code)

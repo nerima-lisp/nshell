@@ -66,17 +66,26 @@
         (expect calls :to-be-null)
         (expect (null nshell.infrastructure.acl::*sigint-received*) :to-be-falsy))))
 
-  (it "sigtstp-handler-forwards-to-tracked-foreground-pgid"
-    "SIGTSTP is forwarded to the foreground job instead of suspending the shell."
+  (it "sigtstp-handler-drops-ctrl-z-while-a-foreground-child-is-tracked"
+    "SIGTSTP is neither forwarded nor self-applied while a foreground child
+is registered: the only wait that registers one without handing over the
+terminal (RUN-EXTERNAL-CAPTURE's COMMUNICATE) cannot observe a stopped
+child, so forwarding would wedge the shell behind a suspended process and
+self-suspending would stop the shell mid-command. Stop-capable waits hand
+the terminal to the child's own process group, so their Ctrl-Z is delivered
+by the kernel and never reaches this handler."
     (let ((calls nil)
           (nshell.infrastructure.acl::*shell-pgid* 1000)
           (nshell.infrastructure.acl::*foreground-pgid* 4321))
-      (with-temporary-function
-          ('nshell.infrastructure.acl::%send-process-group-signal
-           (lambda (pgid signal)
-             (push (list pgid signal) calls)))
+      (with-temporary-functions
+          (('nshell.infrastructure.acl::%send-process-group-signal
+            (lambda (pgid signal)
+              (push (list pgid signal) calls)))
+           ('nshell.infrastructure.acl:kill-process
+            (lambda (pid signal)
+              (push (list :self pid signal) calls))))
         (nshell.infrastructure.acl::shell-sigtstp-handler nil nil nil)
-        (expect (list (list 4321 sb-unix:sigtstp)) :to-equal calls))))
+        (expect calls :to-be-null))))
 
   (it "foreground-forwarding-clears-stale-pgid-errors"
     "Foreground process-group races must not escape from signal handlers."

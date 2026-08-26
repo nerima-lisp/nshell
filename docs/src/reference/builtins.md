@@ -27,4 +27,10 @@ and friends) rather than a single-purpose command.
 knowledge base the built-in command catalog uses.
 
 **`disown`** removes a job from the shell's job table so it survives exit,
-complementing `jobs`, `fg`, and `bg`.
+complementing `jobs`, `fg`, and `bg`. With no argument it acts on the
+current job, the same convention `fg` and `bg` use.
+
+**`test`** (and `[`) supports file tests (`-e -f -d`), string tests
+(`-n -z = !=`), and numeric comparisons (`-eq -ne -lt -le -gt -ge`). An
+unrecognized operator or a non-integer operand to a numeric comparison is a
+diagnosed usage error (exit 2), distinct from a false result (exit 1).

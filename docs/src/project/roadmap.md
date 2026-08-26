@@ -15,8 +15,13 @@ shift, and ternary operators; brace expansion; command substitution
 `$(...)`/`(...)`; fd redirections `2>`, `2>&1`, `&>`; here-docs `<<`;
 here-strings `<<<`; and function arguments via `$argv` / `$argv[N]`.
 
-**Job control hardening** — robust foreground process-group handling so
-`Ctrl-C` and `Ctrl-Z` reliably interrupt and suspend pipelines.
+**Job control hardening** — `Ctrl-C` now reliably interrupts foreground
+external commands (delivered through the shell's foreground-pgid forwarding,
+or directly via the terminal for `fg`-driven jobs). Remaining: `Ctrl-Z`
+suspension for directly-launched foreground commands, which is currently
+refused deliberately — the synchronous capture wait cannot represent a
+stopped job without losing its output, so the shell continues the child
+instead of suspending it.
 
 **Completion intelligence** — broader command metadata and higher-fidelity
 flag and value completion.

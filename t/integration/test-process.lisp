@@ -13,6 +13,16 @@
         form))
 
 (describe "process-tests"
+  (it "foreground-external-command-timeout-is-nil-by-default-for-noninteractive-output"
+    "With *EXTERNAL-COMMAND-TIMEOUT* left at its production default (now NIL),
+%FOREGROUND-EXTERNAL-COMMAND-TIMEOUT must return NIL even when
+*STANDARD-OUTPUT* is not an interactive terminal -- pre-fix the default was
+30, so this same non-interactive check would have returned 30 (a truthy,
+enforced timeout) instead."
+    (let ((*standard-output* (make-string-output-stream)))
+      (expect (nshell.infrastructure.acl::%foreground-external-command-timeout)
+              :to-be nil)))
+
   (it "run-external-exec-echo"
   "Exec-mode external command preserves direct standard output and returns exit 0."
   (let* ((exit nil)
@@ -515,3 +525,43 @@
               (nshell.infrastructure.acl:spawn-process-substitution
                :invalid nil))
             :to-throw 'error))
+
+  (it "run-external-capture-registers-the-child-for-sigint-forwarding"
+    "While RUN-EXTERNAL-CAPTURE waits, the child's pgid is registered as
+*FOREGROUND-PGID* so SHELL-SIGINT-HANDLER's forwarding reaches it, and the
+registration is cleared once the wait ends.
+
+Pre-fix, RUN-EXTERNAL-CAPTURE ran through the one-shot PROCESS-KIT:RUN with no
+pgid registration: *FOREGROUND-PGID* stayed 0 for the whole wait, so the plusp
+poll below never succeeds, the forwarded SIGINT is a no-op, and the exit code
+is 0 (a full 10-second sleep) rather than 130."
+    (let* ((captured nil)
+           (worker (sb-thread:make-thread
+                    (lambda ()
+                      (setf captured
+                            (multiple-value-list
+                             (nshell.infrastructure.acl:run-external-capture
+                              "/bin/sleep" (list "10")))))
+                    :name "run-external-capture sigint test")))
+      ;; The cleanup must run even when an assertion unwinds: the worker
+      ;; writes the raw *FOREGROUND-PGID* global (not a thread-local
+      ;; binding), so leaking it past this test would let a background
+      ;; thread mutate state other tests read.
+      (unwind-protect
+           (progn
+             (loop repeat 100
+                   until (plusp nshell.infrastructure.acl::*foreground-pgid*)
+                   do (sleep 0.05))
+             (expect (plusp nshell.infrastructure.acl::*foreground-pgid*)
+                     :to-be-truthy)
+             (nshell.infrastructure.acl::%signal-foreground-process-group
+              sb-unix:sigint)
+             (sb-thread:join-thread worker)
+             (expect 130 :to-equal (second captured))
+             (expect 0 :to-equal nshell.infrastructure.acl::*foreground-pgid*))
+        (when (sb-thread:thread-alive-p worker)
+          (ignore-errors
+           (nshell.infrastructure.acl::%signal-foreground-process-group
+            sb-unix:sigint))
+          (ignore-errors (sb-thread:join-thread worker :timeout 15)))
+        (setf nshell.infrastructure.acl::*foreground-pgid* 0))))

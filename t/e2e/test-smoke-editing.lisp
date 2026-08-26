@@ -230,4 +230,24 @@
       (multiple-value-bind (output-text code)
           (call-repl-execute-ast ast)
         (expect 0 :to-equal code)
-        (expect (format nil "hello~%done~%") :to-equal output-text)))))
+        (expect (format nil "hello~%done~%") :to-equal output-text))))
+
+  (it "e2e-default-output-event-clears-every-row-of-a-wrapped-prompt"
+    "An in-place redraw (typing, cursor movement) must erase every row a
+previously wrapped prompt+input occupied, not just the row the cursor
+currently sits on -- otherwise the untouched rows of the old render stay on
+screen as a duplicate of the line once new content is drawn over only the
+one row that got cleared."
+    (with-repl-test-state
+      (with-stable-repl-prompt ()
+        (with-fixed-terminal-size (24 80)
+          (with-repl-render-state (:buffer "abc" :cursor-pos 3)
+            (setf nshell.presentation::*prompt-rendered-lines* 2
+                  nshell.presentation::*prompt-rendered-cursor-row* 1)
+            (let ((output (capture-process-output-event :unrecognized)))
+              (expect 2 :to-equal
+                      (loop with needle = (esc-sequence "[2K")
+                            for start = 0 then (+ position (length needle))
+                            for position = (search needle output :start2 start)
+                            while position
+                            count position)))))))))

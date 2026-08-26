@@ -206,7 +206,7 @@
           :contains '("help: no help for missing"))))
 
   (it "test-and-bracket-cover-file-directory-and-string-predicates"
-    "test/[ support -f, -d, =, -n, and -z predicates."
+    "test/[ support -f, -d, -e, =, -n, -z, and numeric comparison predicates."
     (with-builtins-context (context)
       (assert-builtin-call (context "test" '("-f" "/etc/hosts")) :code 0)
       (assert-builtin-call (context "test" '("-f" "/tmp")) :code 1)
@@ -224,7 +224,14 @@
       (assert-builtin-call (context "test" nil) :code 1)
       (assert-builtin-call (context "test" '("a" "b" "c" "d")) :code 1)
       (assert-builtin-call (context "[" '("abc" "=" "abc" "]")) :code 0)
-      (assert-builtin-call (context "[" '("abc" "=" "abc")) :code 2)))
+      (assert-builtin-call (context "[" '("abc" "=" "abc")) :code 2)
+      (assert-builtin-call (context "test" '("1" "-lt" "2")) :code 0)
+      (assert-builtin-call (context "test" '("2" "-lt" "1")) :code 1)
+      (assert-builtin-call (context "test" '("1" "-eq" "1")) :code 0)
+      (assert-builtin-call (context "test" '("-e" "/tmp")) :code 0)
+      (assert-builtin-call (context "test" '("-e" "/nonexistent-xyz")) :code 1)
+      (assert-builtin-call (context "test" '("1" "-zz" "2")) :code 2)
+      (assert-builtin-call (context "test" '("x" "-eq" "1")) :code 2)))
 
   (it "not-inverts-command-status-and-preserves-output"
     "not dispatches a command and flips only its exit status."
@@ -314,6 +321,21 @@
         (assert-builtin-call (context "disown" (list (format nil "~d" job-id)))
           :code 1
           :output (format nil "disown: job [~d] not found~%" job-id)))))
+
+  (it "disown-without-a-job-id-operates-on-the-current-job"
+    "Bare disown targets the current job when one exists, and reports a clear error otherwise."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (job (make-test-job 0 "sleep" :args '("10")))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job)))
+      (assert-builtin-call (context "disown" nil)
+        :code 0
+        :output-null t)
+      (expect (nshell.domain.job-control:monitor-find-job monitor job-id) :to-be-null))
+    (let ((context (make-test-builtins-context)))
+      (assert-builtin-call (context "disown" nil)
+        :code 1
+        :output (format nil "disown: no current job~%"))))
 
   (it "job-builtins-resolve-standard-job-specs"
     "fg/bg/jobs accept numeric shorthand and standard current/previous job specs."
@@ -427,5 +449,18 @@
     (let ((context (make-test-builtins-context :path "/bin")))
       (assert-builtin-call (context "type" '("-p" "echo"))
         :code 0
-        :contains '("/bin/echo")))))
+        :contains '("/bin/echo"))))
+
+  (it "which-resolves-an-external-command-to-its-path"
+    "which prints only the resolved path for a PATH-discovered command, not its name."
+    (let ((context (make-test-builtins-context
+                    :path "/opt/bin"
+                    :filesystem
+                    (make-test-filesystem
+                     :executable-p
+                     (lambda (path)
+                       (string= path "/opt/bin/mytool"))))))
+      (assert-builtin-call (context "which" '("mytool"))
+        :code 0
+        :output (format nil "/opt/bin/mytool~%")))))
 )

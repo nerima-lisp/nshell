@@ -5,8 +5,10 @@
 ;;; %execute-command-substitution-fields is forward-referenced here; it lives in
 ;;; execute-pipeline-control.lisp (after execute-ast-in-context is defined).
 
-(defvar *command-substitution-timeout* 30
-  "Maximum seconds for a command substitution to complete before signalling an error.")
+(defvar *command-substitution-timeout* nil
+  "Maximum seconds for a command substitution to complete before signalling an
+error. NIL disables the timeout; bind a finite value where bounded execution is
+wanted (tests, completion helpers).")
 
 (defparameter +here-doc-escaped-dollar+ (code-char #xe000))
 (defparameter +here-doc-escaped-backtick+ (code-char #xe001))

@@ -34,6 +34,18 @@
           (format *error-output* "nshell: ~a: ~a~%"
                   source-name
                   condition))))))
+(defun %seed-history-from-file (history)
+  "Load persisted entries into HISTORY so recall starts at the newest one.
+
+LOAD-HISTORY-FILE already returns entries oldest first (see its docstring),
+which is exactly the order HISTORY-ADD wants: each call records its argument
+as the newest entry, so adding oldest-to-last makes the last (newest) file
+entry the newest entry in HISTORY too. Do not reverse the loaded list here --
+that would hand HISTORY-ADD the newest entry first, burying it under every
+older entry added afterward and inverting recall order."
+  (dolist (entry (nshell.infrastructure.persistence:load-history-file))
+    (history-kit:history-add history entry)))
+
 (defun %vi-mode-flag-enabled-p (flag)
   (and flag
        (not (member flag
@@ -75,6 +87,5 @@ entered during this session."
          (nshell.infrastructure.acl:current-environment-value "NSHELL_VI_MODE")))
   (%load-interactive-config :enabled-p load-config-p :path config-path)
   (when history-p
-    (dolist (entry (reverse (nshell.infrastructure.persistence:load-history-file)))
-      (history-kit:history-add *history* entry)))
+    (%seed-history-from-file *history*))
   (seed-repl-completion-knowledge-base *kb*))

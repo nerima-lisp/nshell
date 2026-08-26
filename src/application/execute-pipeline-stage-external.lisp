@@ -142,6 +142,19 @@
            nil)
           (values returned-output exit-code)))))
 
+(defun %continue-stopped-external-process (pgid)
+  "PGID's process stopped (SIGTSTP, typically Ctrl-Z reaching it once its own
+process group owns the terminal) while this synchronous wait holds its output
+buffers and copier threads on the call stack. Suspending here cannot work:
+this frame has no continuation for a later fg to resume, so registering a
+stopped job would strand the buffers and silently lose everything the process
+writes after resuming. Refuse the suspension instead -- continue the process
+and keep waiting -- matching RUN-EXTERNAL-CAPTURE's documented policy of
+dropping Ctrl-Z for waits that cannot observe a stop."
+  (ignore-errors
+   (nshell.infrastructure.acl:kill-process (- pgid) :sigcont))
+  :continue-wait)
+
 (defun %execute-external-pipeline-stage
     (command-node input redirects &optional process-substitution-resources)
   "Execute COMMAND-NODE as an external process with optional INPUT string.
@@ -212,32 +225,79 @@
                       (setf process-started t)
                       (%release-process-substitution-resources
                        process-substitution-resources)
-                      (unwind-protect
-                           (nshell.infrastructure.acl::%wait-process-with-copiers
-                            process
-                            (%start-external-process-copiers process
-                                                             stdout-buffer
-                                                             stderr-buffer)
-                            nshell.infrastructure.acl:*external-command-timeout*
-                            (lambda ()
-                              (%finish-external-process-output
-                               stdout-buffer
-                               stderr-buffer
-                               redirect-plan
-                               (nshell.infrastructure.acl:process-exit-status-code
-                                process)))
-                            (lambda ()
-                              (format *error-output*
-                                      "nshell: ~a: timed out after ~a seconds~%"
-                                      command
-                                      nshell.infrastructure.acl:*external-command-timeout*)
-                              (%finish-external-process-output
-                               stdout-buffer
-                               stderr-buffer
-                               redirect-plan
-                               124)))
-                        (when (and process (sb-ext:process-alive-p process))
-                          (ignore-errors (sb-ext:process-wait process)))))
+                      (let* ((pid (sb-ext:process-pid process))
+                             (pgid (and (integerp pid) (plusp pid) pid)))
+                        ;; Isolate the child in its own process group and hand
+                        ;; the terminal to it for the duration of the wait, so
+                        ;; a terminal-generated Ctrl-C/Ctrl-Z reaches the child
+                        ;; instead of nshell itself -- the same pattern
+                        ;; RUN-EXTERNAL already uses. Unconditional like there:
+                        ;; %WITH-FOREGROUND-PROCESS-GROUP's TCSETPGRP calls are
+                        ;; wrapped in IGNORE-ERRORS, so this is a no-op when
+                        ;; there is no controlling terminal (batch mode, a
+                        ;; redirected pipeline stage, `-c`/script execution).
+                        (when pgid
+                          (nshell.infrastructure.acl::%assign-process-group
+                           pid pgid))
+                        (flet ((finish-process ()
+                                 (let ((copiers
+                                         (%start-external-process-copiers
+                                          process stdout-buffer stderr-buffer))
+                                       (timeout
+                                         (nshell.infrastructure.acl::%foreground-external-command-timeout)))
+                                   (unwind-protect
+                                        (if (null timeout)
+                                            (nshell.infrastructure.acl::%wait-process-with-copiers-or-stop
+                                             process
+                                             copiers
+                                             (lambda ()
+                                               (%finish-external-process-output
+                                                stdout-buffer
+                                                stderr-buffer
+                                                redirect-plan
+                                                (nshell.infrastructure.acl:process-exit-status-code
+                                                 process)))
+                                             (lambda ()
+                                               (%continue-stopped-external-process
+                                                pgid)))
+                                            (nshell.infrastructure.acl::%wait-process-with-copiers
+                                             process
+                                             copiers
+                                             timeout
+                                             (lambda ()
+                                               (%finish-external-process-output
+                                                stdout-buffer
+                                                stderr-buffer
+                                                redirect-plan
+                                                (nshell.infrastructure.acl:process-exit-status-code
+                                                 process)))
+                                             (lambda ()
+                                               (format *error-output*
+                                                       "nshell: ~a: timed out after ~a seconds~%"
+                                                       command
+                                                       timeout)
+                                               (%finish-external-process-output
+                                                stdout-buffer
+                                                stderr-buffer
+                                                redirect-plan
+                                                124))))
+                                     ;; A process merely STOPPED at cleanup
+                                     ;; time (a Ctrl-Z that slipped past the
+                                     ;; continue-on-stop wait, e.g. on the
+                                     ;; timed branch) must not be waited on
+                                     ;; here: PROCESS-WAIT would block forever
+                                     ;; against a suspended-but-alive child.
+                                     (when (and process
+                                                (sb-ext:process-alive-p process)
+                                                (not (eq (sb-ext:process-status
+                                                          process)
+                                                         :stopped)))
+                                       (ignore-errors
+                                        (sb-ext:process-wait process)))))))
+                          (if pgid
+                              (nshell.infrastructure.acl::%with-foreground-process-group
+                               pgid (function finish-process))
+                              (finish-process)))))
                  (when opened-input
                    (close opened-input)))
             (if process-started

@@ -1,7 +1,7 @@
 (in-package #:nshell.presentation)
 
   (define-output-event-handler %process-edit-command-output-event
-                             with-cleared-rendered-completions-and-prompt-cont
+                             with-cleared-rendered-completions-and-reset-prompt-cont
                              (host-kit:with-temporary-file (stream path :suffix ".txt")
                                (close stream)
                                (format t "~%")

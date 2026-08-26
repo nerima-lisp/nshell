@@ -71,18 +71,18 @@
        (if missing 1 0)))))
 
 (defun %builtin-disown (context args)
-  (let ((job-monitor (shell-context-job-monitor context)))
-    (if args
-        (let* ((job-spec (%job-spec args))
-               (job-id (%resolve-job-id job-monitor args)))
-          (if job-id
-              (progn
-                (disown job-id job-monitor)
-                (values nil 0))
-              (values (format nil "disown: job [~a] not found~%"
-                              (or job-spec "current"))
-                      1)))
-        (%builtin-usage "disown" "disown job-id"))))
+  (let* ((job-monitor (shell-context-job-monitor context))
+         (job-spec (%job-spec args))
+         (job-id (%resolve-job-id job-monitor args)))
+    (if job-id
+        (progn
+          (disown job-id job-monitor)
+          (values nil 0))
+        (values (if args
+                    (format nil "disown: job [~a] not found~%"
+                            (or job-spec "current"))
+                    (format nil "disown: no current job~%"))
+                1))))
 (defun %parse-integer-designator (text)
   (when (stringp text)
     (handler-case

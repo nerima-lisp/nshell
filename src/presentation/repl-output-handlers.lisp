@@ -2,15 +2,35 @@
 (in-package #:nshell.presentation)
 
 (defmacro with-reset-rendered-prompt-state-and-prompt-cont (&body body)
+  "For handlers whose BODY leaves the terminal in a state CLEAR-RENDERED-PROMPT
+cannot navigate from the old geometry -- BODY already committed the prior
+render to scrollback with its own output (a trailing newline, a screen clear),
+or handed the terminal to a program outside nshell's tracking. The next
+RENDER-PROMPT-CONT must start from a blank slate rather than walk rows
+computed against a layout that no longer describes what is on screen."
   `(progn
      ,@body
      (reset-rendered-prompt-state)
      (lambda () (render-prompt-cont))))
 
-(defmacro with-cleared-rendered-completions-and-prompt-cont (&body body)
+(defmacro with-cleared-rendered-completions-and-reset-prompt-cont (&body body)
   `(with-reset-rendered-prompt-state-and-prompt-cont
      (clear-rendered-completions)
      ,@body))
+
+(defmacro with-cleared-rendered-completions-and-prompt-cont (&body body)
+  "For in-place redraws (typing, cursor movement, history/completion
+browsing) where the previously rendered prompt is still on screen exactly as
+*PROMPT-RENDERED-LINES* and *PROMPT-RENDERED-CURSOR-ROW* describe it. The
+returned RENDER-PROMPT-CONT calls CLEAR-RENDERED-PROMPT, which needs that live
+geometry to walk up and erase every row of a wrapped prompt+input; resetting
+it here first -- as the reset-based wrapper does -- makes CLEAR-RENDERED-PROMPT
+believe nothing is rendered, so it erases only the current line and leaves the
+wrapped line's other rows on screen as stale duplicates."
+  `(progn
+     (clear-rendered-completions)
+     ,@body
+     (lambda () (render-prompt-cont))))
 
 (defmacro define-output-event-handler (name wrapper &body body)
   `(defun ,name ()
@@ -322,7 +342,7 @@
        (finish-output)
        (sync-exported-environment)
        (nshell.infrastructure.acl:run-external-exec
-        (first argv) (append (rest argv) (list path))))
+        (first argv) (append (rest argv) (list (namestring path)))))
      (ignore-errors (nshell.infrastructure.terminal:enable-raw-mode))
      (ignore-errors (nshell.infrastructure.terminal:ansi-enable-bracketed-paste))
      (ignore-errors (nshell.infrastructure.terminal:ansi-enable-sgr-mouse))))

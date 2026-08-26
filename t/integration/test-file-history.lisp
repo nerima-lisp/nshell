@@ -63,4 +63,84 @@
              (when (probe-file test-path) (delete-file test-path))
              (expect (nshell.infrastructure.persistence:load-history-file) :to-be-null))
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (when (probe-file test-path) (delete-file test-path)))))
+
+  (it "file-history-load-order-chronological"
+    "LOAD-HISTORY-FILE returns entries oldest first, matching append order.
+
+Pre-fix, this passed already -- the loader itself was never inverted, only
+the seeding call site was. This pins the loader's contract so a future
+change to %READ-HISTORY-RECORDS cannot silently re-introduce the inversion
+one seam over."
+    (let ((test-path (format nil "/tmp/nshell-test-history-order-~d.lisp"
+                             (random 1000000))))
+      (unwind-protect
+           (progn
+             (setf nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+             (when (probe-file test-path) (delete-file test-path))
+             (nshell.infrastructure.persistence:append-history-entry "older")
+             (nshell.infrastructure.persistence:append-history-entry "newer")
+             (expect (list "older" "newer") :to-equal
+                     (nshell.infrastructure.persistence:load-history-file)))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (when (probe-file test-path) (delete-file test-path)))))
+
+  (it "file-history-seed-recalls-newest-first"
+    "After loading persisted history, the first Up-arrow recalls the newest
+file entry, not the oldest.
+
+Pre-fix, NSHELL.PRESENTATION::%SEED-HISTORY-FROM-FILE did not exist -- the
+seeding loop in INITIALIZE-REPL-STATE called (REVERSE (LOAD-HISTORY-FILE))
+before feeding entries to HISTORY-ADD. HISTORY-ADD always records its
+argument as the newest entry, so reversing an already-oldest-first list fed
+the newest file entry to HISTORY-ADD first, letting every older entry bury
+it. HISTORY-PREVIOUS then returned \"older\" on the first call instead of
+\"newer\", which is the exact inversion this test catches."
+    (let ((test-path (format nil "/tmp/nshell-test-history-seed-~d.lisp"
+                             (random 1000000))))
+      (unwind-protect
+           (progn
+             (setf nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+             (when (probe-file test-path) (delete-file test-path))
+             (nshell.infrastructure.persistence:append-history-entry "older")
+             (nshell.infrastructure.persistence:append-history-entry "newer")
+             (let ((history (history-kit:make-history)))
+               (nshell.presentation::%seed-history-from-file history)
+               (expect "newer" :to-equal
+                       (history-kit:history-previous history ""))
+               (expect "older" :to-equal
+                       (history-kit:history-previous history ""))))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (when (probe-file test-path) (delete-file test-path)))))
+
+  (it "file-history-seed-then-new-entry-stays-newest"
+    "A command entered in-session after loading history still recalls before
+every loaded entry.
+
+Pre-fix this already held by coincidence -- HISTORY-ADD always inserts at the
+logical head regardless of how the preceding seed order was wrong -- but it
+is pinned here so the fix above cannot be undone by, say, seeding through
+HISTORY-ADD's :UPDATE-REVISION NIL path or another shortcut that skips the
+head insertion HISTORY-PREVIOUS relies on."
+    (let ((test-path (format nil "/tmp/nshell-test-history-seed-new-~d.lisp"
+                             (random 1000000))))
+      (unwind-protect
+           (progn
+             (setf nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+             (when (probe-file test-path) (delete-file test-path))
+             (nshell.infrastructure.persistence:append-history-entry "older")
+             (nshell.infrastructure.persistence:append-history-entry "newer")
+             (let ((history (history-kit:make-history)))
+               (nshell.presentation::%seed-history-from-file history)
+               (history-kit:history-add history "in-session")
+               (expect "in-session" :to-equal
+                       (history-kit:history-previous history ""))
+               (expect "newer" :to-equal
+                       (history-kit:history-previous history ""))
+               (expect "older" :to-equal
+                       (history-kit:history-previous history ""))))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
         (when (probe-file test-path) (delete-file test-path))))))

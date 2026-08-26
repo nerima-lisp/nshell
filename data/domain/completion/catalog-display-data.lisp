@@ -49,7 +49,7 @@
      :usage "type [OPTIONS] NAME [...]")
     ("which"
      :builtin-format "~a: shell built-in command~%"
-     :path-format "~a~%"
+     :path-format "~*~a~%"
      :missing-prefix "which"
      :missing-format "no ~a in PATH"
      :usage "which NAME [NAME ...]")))

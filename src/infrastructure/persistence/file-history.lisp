@@ -63,6 +63,13 @@
           text))
 
 (defun load-history-file ()
+  "Return persisted history entries oldest first (chronological), matching
+the file's append order.
+
+Feeding this list to HISTORY-KIT:HISTORY-ADD in the order returned makes the
+last (newest) entry the most recently added, which is what HISTORY-ADD's
+\"record as newest\" contract requires for recall to start at the newest
+entry. Do not reverse this list before seeding a history store."
   (ignore-errors
       (let ((path (history-file-path)))
         (when (probe-file path)

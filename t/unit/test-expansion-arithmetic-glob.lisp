@@ -255,18 +255,53 @@
               (nshell.domain.expansion:expand-all "label=*.txt" env filesystem))))
 
   (it "expand-glob-projects-relative-root-candidates"
-    "A ./ glob root projects candidates without leaking the implicit directory prefix."
+    "A ./ glob root projects candidates without leaking the implicit directory prefix.
+The fake mirrors host-kit's real merge-pathnames behavior for a \"./\" root, which
+namestrings each entry as \"./alpha.txt\" rather than bare \"alpha.txt\" -- before the
+fix, expand-glob pushed that raw namestring, so this would have failed on
+'(\"./alpha.txt\") instead of '(\"alpha.txt\")."
     (let* ((calls nil)
            (filesystem
              (make-test-filesystem
               :directory-files
               (lambda (dir)
                 (push (namestring dir) calls)
-                (list #p"alpha.txt" #p"beta.log"))
+                (list #p"./alpha.txt" #p"./beta.log"))
               :subdirectories (constantly nil))))
       (expect (nshell.domain.expansion:expand-glob "*.txt" filesystem)
               :to-equal '("alpha.txt"))
       (expect '("./") :to-equal (nreverse calls))))
+
+  (it "expand-glob-strips-dot-slash-prefix-from-results"
+    "A bare-name pattern under an implicit \"./\" root returns bare matches, matching
+fish/bash, instead of leaking the \"./\" root prefix into the result. Before the fix
+(pushing (namestring file) instead of the normalized match candidate), this would
+have failed on '(\"./g1.txt\") instead of '(\"g1.txt\")."
+    (let ((filesystem
+            (make-test-filesystem
+             :directory-files
+             (lambda (dir)
+               (declare (ignore dir))
+               (list #p"./g1.txt"))
+             :subdirectories (constantly nil))))
+      (expect (nshell.domain.expansion:expand-glob "g*.txt" filesystem)
+              :to-equal '("g1.txt"))))
+
+  (it "expand-glob-keeps-prefix-for-relative-directory-root"
+    "A pattern rooted in a named relative directory (src/*.lisp) keeps the src/
+prefix on its results -- only the implicit \"./\" root is stripped, not an
+explicit one. Before the fix, the pushed result and the matched candidate could
+diverge; here they coincide already, so this pins that a correct \"src/\" prefix
+survives the fix and is not accidentally stripped too."
+    (let ((filesystem
+            (make-test-filesystem
+             :directory-files
+             (lambda (dir)
+               (declare (ignore dir))
+               (list #p"src/foo.lisp" #p"src/bar.txt"))
+             :subdirectories (constantly nil))))
+      (expect (nshell.domain.expansion:expand-glob "src/*.lisp" filesystem)
+              :to-equal '("src/foo.lisp"))))
 
   (it "expand-all-reattaches-assignment-like-glob-prefixes"
     "expand-all separates label-like prefixes from glob suffixes without treating paths as labels."
@@ -274,9 +309,13 @@
           (filesystem
             (make-test-filesystem
              :directory-files
+             ;; The "./" branch mirrors host-kit's real behavior for an
+             ;; implicit root -- entries namestring as "./alpha.txt", not
+             ;; bare "alpha.txt" -- same as the corrected fakes above; a
+             ;; bare-name fake here would mask a "./" -stripping regression.
              (lambda (dir)
                (if (string= "./" (namestring dir))
-                   (list #p"alpha.txt" #p"beta.log" #p"bar1.lisp")
+                   (list #p"./alpha.txt" #p"./beta.log" #p"./bar1.lisp")
                    (list (merge-pathnames "alpha.txt" dir)
                          (merge-pathnames "beta.log" dir)
                          (merge-pathnames "bar1.lisp" dir))))

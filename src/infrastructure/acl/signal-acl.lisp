@@ -94,8 +94,18 @@
   (setf *sigint-received* t))
 
 (defun shell-sigtstp-handler (signal info context)
-  "Forward SIGTSTP to the foreground process group, or suspend the shell."
+  "Ignore SIGTSTP while a foreground child runs, otherwise suspend the shell."
   (declare (ignore signal info context))
+  (when (%foreground-process-group-target)
+    ;; A foreground child is registered, which today means a wait that cannot
+    ;; observe a stop is running (RUN-EXTERNAL-CAPTURE's COMMUNICATE treats a
+    ;; stopped child as still running). Forwarding SIGTSTP there would wedge
+    ;; the shell forever behind a process nothing will resume, and suspending
+    ;; the shell itself mid-command is worse; dropping the Ctrl-Z is the only
+    ;; safe response. Waits that DO support stops (fg, the pipeline-stage
+    ;; wait) hand the terminal to the child's process group, so the kernel
+    ;; delivers their Ctrl-Z directly and this handler never sees it.
+    (return-from shell-sigtstp-handler))
   (unless (%signal-foreground-process-group sb-unix:sigtstp)
     ;; Swallowed deliberately, and -- unlike the REPL's cleanup path, which
     ;; reports -- silently. This runs asynchronously on top of whatever the

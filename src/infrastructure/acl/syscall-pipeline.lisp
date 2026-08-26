@@ -54,15 +54,16 @@
 
 (defun %run-synchronous-pipeline (procs pgid pipes pipefail-p)
   (flet ((finish-pipeline ()
-           (%wait-pipeline-with-output
-            procs
-            *external-command-timeout*
-            (lambda ()
-              (format *error-output*
-                      "nshell: pipeline timed out after ~a seconds~%"
-                      *external-command-timeout*)
-              124)
-            pipefail-p)))
+           (let ((timeout (%foreground-external-command-timeout)))
+             (%wait-pipeline-with-output
+              procs
+              timeout
+              (lambda ()
+                (format *error-output*
+                        "nshell: pipeline timed out after ~a seconds~%"
+                        timeout)
+                124)
+              pipefail-p))))
     (%close-pipeline-fds pipes)
     (if pgid
         (%with-foreground-process-group pgid (function finish-pipeline))

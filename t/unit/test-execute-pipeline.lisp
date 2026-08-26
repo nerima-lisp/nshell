@@ -290,6 +290,27 @@
                 nil)))
       (expect 127 :to-equal (nshell.application:execute-pipeline-use-case ast))))
 
+  (it "external-command-timeout-defaults-to-nil"
+    "The production default disables the foreground command timeout; a
+directly-launched external command is bounded only when a caller (e.g. a
+non-interactive redirect, or a test) explicitly binds the special. Before
+this change the default was 30, which killed any interactive foreground
+command -- like `sleep 30` typed at the prompt -- after 30 seconds
+regardless of interactivity; see %FOREGROUND-EXTERNAL-COMMAND-TIMEOUT in
+src/infrastructure/acl/syscall-process.lisp for the interactivity gate that
+now decides whether this default is even consulted."
+    (expect nil :to-equal nshell.infrastructure.acl:*external-command-timeout*))
+
+  (it "command-substitution-timeout-defaults-to-nil"
+    "Command substitution is unbounded by default, like every other shell.
+Before this change the default was 30, silently capping any `$(...)` at 30
+seconds in every mode; a caller that wants a bound binds the special (the
+0.001-second binding test elsewhere in this file covers that branch). A
+reverted default would still pass the e2e substitution smoke tests -- 30 is
+a valid SB-EXT:WITH-TIMEOUT argument -- so only this direct assertion pins
+it."
+    (expect nil :to-equal nshell.application::*command-substitution-timeout*))
+
   (it "execute-pipeline-node-in-context-times-out-external-stages-in-cps-mode"
     "The CPS execution path drains external output and times out long-running stages."
     (let* ((context (make-test-shell-context))

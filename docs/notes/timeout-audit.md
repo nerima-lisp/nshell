@@ -99,3 +99,27 @@ correct by exec's own semantics rather than "fixed" into a behavior change,
 and every other spawn/wait site was traced to confirm it already goes
 through one of the two shared, correctly-bounded choke points
 (`*external-command-timeout*` or `*git-command-timeout*`).
+
+## Addendum (2026-08-26): default timeouts removed
+
+The production-audit fixes superseded the conclusion above. The interactive
+gate was found to be bypassed on the path real interactive commands take
+(`%execute-external-pipeline-stage` and `run-external-capture` read the raw
+special), so an interactive `sleep 30` was still killed at 30 seconds. The
+resolution removes the default bound entirely rather than re-scoping it:
+
+- `*external-command-timeout*` and `*command-substitution-timeout*` now
+  default to `nil` (unbounded), matching POSIX shells, which impose no
+  execution ceiling in any mode. A long build, an editor, or an SSH session
+  is legitimate foreground work interactively *and* in scripts.
+- Bounding is the caller's job: tests and the completion-help path bind the
+  specials to finite values, and external supervision (`timeout(1)`, CI job
+  limits) owns script-level runaway protection. A security review proposed
+  restoring a finite non-interactive fallback; that was declined as it would
+  re-break batch scripts running legitimate >30s commands — the original
+  production blocker.
+- The table above therefore no longer describes default behavior: with the
+  shipped defaults, no foreground external command or command substitution
+  times out unless a caller binds the special. The gate function
+  `%foreground-external-command-timeout` remains, and still bounds
+  non-interactive runs whenever the special *is* bound.

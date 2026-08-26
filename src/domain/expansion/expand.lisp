@@ -205,8 +205,9 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
              (files (%glob-candidate-files pattern root filesystem))
              (matches nil))
         (dolist (file files)
-          (when (%glob-match-file-p pattern root file)
-            (push (namestring file) matches)))
+          (let ((candidate (%glob-file-candidate pattern root file)))
+            (when (glob-match-p pattern candidate)
+              (push candidate matches))))
         (if matches
             (sort matches #'string<)
             (list pattern)))))
@@ -217,10 +218,12 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
       (recursive-directory-files root filesystem)
       (immediate-directory-files root filesystem)))
 
-(defun %glob-match-file-p (pattern root file)
-  (let ((subject (%glob-file-match-subject pattern root file)))
-    (glob-match-p (glob-match-subject-pattern subject)
-                  (%glob-match-subject-candidate subject))))
+(defun %glob-file-candidate (pattern root file)
+  "Return the normalized candidate string for FILE under ROOT -- the same string
+tested against PATTERN and, on a match, handed back to the caller, so the result
+can never diverge from what the match was judged against (e.g. a raw \"./\"-prefixed
+namestring surviving into output after matching stripped it)."
+  (%glob-match-subject-candidate (%glob-file-match-subject pattern root file)))
 
 (defun %first-glob-index (pattern)
   (position-if #'glob-char-p pattern))

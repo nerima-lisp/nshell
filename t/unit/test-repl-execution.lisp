@@ -64,6 +64,28 @@
                     (nshell.presentation::input-state-buffer
                          nshell.presentation::*input-state*)))))))
 
+  (it "repl-edit-command-passes-string-argv-to-run-external-exec"
+    "The exec boundary requires string argv elements, so the temporary buffer
+path must be converted from a pathname before being appended."
+    (with-repl-test-state
+      (with-repl-input-state (:buffer "echo before" :cursor-pos 11)
+        (with-temporary-function
+            ('nshell.presentation::%editor-command-argv
+             (lambda () '("fake-editor")))
+          (with-temporary-function
+              ('nshell.infrastructure.acl:run-external-exec
+               (lambda (command args)
+                 (declare (ignore command))
+                 (dolist (arg args)
+                   (expect (stringp arg) :to-be-truthy))
+                 (let ((path (car (last args))))
+                   (with-open-file (stream path
+                                           :direction :output
+                                           :if-exists :supersede)
+                     (write-line "echo edited" stream)))
+                 0))
+            (capture-process-output-event :edit-command))))))
+
   (it "repl-edit-command-reports-editor-exit-status"
     (with-repl-test-state
       (with-repl-input-state (:buffer "echo before" :cursor-pos 11)

@@ -479,4 +479,48 @@
                 (nshell.application::%job-process-exit-code
                  pipefail
                  nil)))))
-)
+
+  (it "wait-for-job-reports-missing-job"
+    "Waiting for an unknown job is a pure no-result operation."
+    (let ((registry (make-hash-table))
+          (monitor (nshell.domain.job-control:make-job-monitor)))
+      (multiple-value-bind (job exit-code)
+          (nshell.application:wait-for-job 99 registry monitor)
+        (expect nil :to-be job)
+        (expect nil :to-be exit-code))))
+
+  (it "wait-for-job-reuses-completed-job"
+    "A job completed by the reaper returns its stored exit code and is removed."
+    (let* ((registry (make-hash-table))
+           (monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "true"))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job)))
+      (nshell.domain.job-control:complete-job monitor job-id 7)
+      (setf (gethash job-id registry) :already-reaped)
+      (multiple-value-bind (result exit-code)
+          (nshell.application:wait-for-job job-id registry monitor)
+        (expect job :to-be result)
+        (expect 7 :to-equal exit-code)
+        (expect nil :to-be (gethash job-id registry))))))
+
+  (it "wait-for-job-waits-and-completes-registered-processes"
+    "Registered processes are waited once, then their policy exit code is committed."
+    (let* ((registry (make-hash-table))
+           (monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "true"))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (waited nil))
+      (setf (gethash job-id registry) (list '(:status 0) '(:status 4)))
+      (with-temporary-function
+          ('nshell.application::%wait-job-processes
+           (lambda (processes)
+             (setf waited processes)))
+        (with-temporary-function
+            ('nshell.infrastructure.acl:process-exit-status-code
+             (lambda (process) (getf process :status)))
+          (multiple-value-bind (result exit-code)
+              (nshell.application:wait-for-job job-id registry monitor)
+            (expect job :to-be result)
+            (expect 4 :to-equal exit-code)
+            (expect waited :to-equal (list '(:status 0) '(:status 4)))
+            (expect nil :to-be (gethash job-id registry)))))))

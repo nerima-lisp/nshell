@@ -59,7 +59,7 @@ the minimum/target fields together in release verification.
 
 ## Latest local measurement
 
-The current aarch64-darwin development environment selected 1566 tests and
+The current aarch64-darwin development environment selected 1567 tests and
 passed all of them. The report covered 29404 of 32228 executable expressions
 in 151 source files (91.24%); the configured 85% minimum passed, while the
 100% target remained unmet. Reproduce it with:

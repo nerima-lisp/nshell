@@ -14,6 +14,33 @@
    (let ((pathname (probe-file (current-sbcl-executable))))
      (when pathname (namestring (truename pathname))))))
 
+(defparameter %job-control-driver-dependencies%
+  '(:cl-prolog-kit :cl-parser-kit :cl-dataflow-kit :cl-boundary-kit :cl-cli :cl-tty-kit
+    :cl-process-kit :cl-history-kit :cl-host-kit :cl-log-kit :cl-concurrent-kit)
+  "Duplicated from t/e2e/test-smoke.lisp's +NSHELL-RUNTIME-DEPENDENCIES+: every
+external ASDF system :NSHELL needs on a fresh subprocess's central-registry to
+load, plus transitive dependencies not directly required by :NSHELL itself (see
+that constant's docstring for why each one is listed). Duplicated rather than
+shared because t/e2e/ loads after this file (see nshell.asd) -- keep this list
+in sync with test-smoke.lisp's copy if :NSHELL's dependency graph changes.")
+
+(defun %job-control-asdf-bootstrap-arguments ()
+  "--eval arguments that REQUIRE ASDF and register :NSHELL's and
+%JOB-CONTROL-DRIVER-DEPENDENCIES%'s source directories on the fresh
+subprocess's ASDF central-registry, mirroring t/e2e/test-smoke.lisp's
+%ASDF-BOOTSTRAP-FORMS. A bare subprocess starts with an empty central-registry
+and no ASDF loaded at all, so ASDF:LOAD-SYSTEM -- or its
+FIND-SYMBOL-mediated equivalent in %JOB-CONTROL-STOP-DRIVER-EVAL-STRING --
+would fail to find :NSHELL without this, independent of the read-time symbol
+hazard that function's docstring describes."
+  (let ((root (namestring (asdf:system-source-directory :nshell))))
+    (list* "--eval" "(require :asdf)"
+           "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
+           (loop for system in %job-control-driver-dependencies%
+                 collect "--eval"
+                 collect (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)"
+                                 (namestring (asdf:system-source-directory system)))))))
+
 (defun %job-control-pty-wait-child-exit (pty &key (attempts 40) (delay 0.05))
   (loop repeat attempts
         for status = (multiple-value-list
@@ -27,37 +54,58 @@
 (defun %job-control-stop-driver-eval-string (command args)
   "Build the --eval argument for a PTY-spawned SBCL that loads :NSHELL, then
 calls %EXECUTE-EXTERNAL-PIPELINE-STAGE directly on COMMAND/ARGS and reports
-the result. Symbols inside :NSHELL's packages are resolved through
-FIND-SYMBOL on strings rather than written as literal package-qualified
-symbols, because SBCL reads the whole --eval argument as one form before any
-of it evaluates -- a literal reference would fail to read in the fresh
-subprocess, where those packages do not exist until ASDF:LOAD-SYSTEM has run."
-  (let ((form
-          `(progn
+the result. Callers must precede this --eval argument with
+%JOB-CONTROL-ASDF-BOOTSTRAP-ARGUMENTS's --eval arguments (as
+%JOB-CONTROL-STOP-DRIVER-ARGUMENTS does) -- without them ASDF is not loaded
+and :NSHELL's central-registry entry does not exist, so ASDF:LOAD-SYSTEM
+fails to find :NSHELL regardless of how it is referenced below.
+
+Built as literal TEXT via FORMAT -- exactly like t/e2e/test-smoke.lisp's
+%NSHELL-MAIN-FORM -- rather than by backquoting a Lisp form and printing it
+with ~S. An earlier version of this function backquoted (ASDF:LOAD-SYSTEM
+...) plus local variables such as NODE, STAGE-FN, and JOBS-FN; every one of
+those is an ordinary symbol interned in *some* package at backquote
+construction time (ASDF:LOAD-SYSTEM in ASDF/OPERATE under a package-split
+ASDF >= 3.2; NODE and friends in this file's own NSHELL/TEST), and printing
+that structure with ~S serializes every symbol fully package-qualified. The
+fresh subprocess -- which loads only :NSHELL, never :NSHELL/TEST, and starts
+with no ASDF loaded -- cannot read a token naming either package back,
+failing with SIMPLE-READER-PACKAGE-ERROR before any evaluation starts
+(confirmed against both ASDF/OPERATE:LOAD-SYSTEM and NSHELL/TEST::NODE).
+
+Only ~S-printing an already-known STRING value (COMMAND, each of ARGS) is
+safe, because a Lisp string literal reads back without needing any package
+to exist -- so those two are the only FORMAT directives below. Everything
+else is literal source text the subprocess reads fresh in its own default
+package, using FIND-SYMBOL on strings (never a literal package-qualified
+symbol) to reach :NSHELL's own definitions once :NSHELL has actually loaded."
+  (format nil
+          "(progn
              (handler-case
                  (let ((*error-output* (make-broadcast-stream)))
-                   (asdf:load-system :nshell))
+                   (funcall (find-symbol \"LOAD-SYSTEM\" \"ASDF\") :nshell))
                (error (condition)
-                 (format t "nshell-load-failed: ~a~%" condition)
+                 (format t \"nshell-load-failed: ~~a~~%\" condition)
                  (finish-output)
                  (sb-ext:exit :code 1)))
-             (format t "nshell-loaded~%")
+             (format t \"nshell-loaded~~%\")
              (finish-output)
-             (let* ((node (funcall (find-symbol "MAKE-COMMAND-NODE" "NSHELL.DOMAIN.PARSING")
-                                    ,command (list ,args)))
+             (let* ((node (funcall (find-symbol \"MAKE-COMMAND-NODE\" \"NSHELL.DOMAIN.PARSING\")
+                                    ~s (list ~s)))
                     (stage-fn
-                      (find-symbol "%EXECUTE-EXTERNAL-PIPELINE-STAGE" "NSHELL.APPLICATION"))
-                    (jobs-fn (find-symbol "JOBS" "NSHELL.APPLICATION")))
+                      (find-symbol \"%EXECUTE-EXTERNAL-PIPELINE-STAGE\" \"NSHELL.APPLICATION\"))
+                    (jobs-fn (find-symbol \"JOBS\" \"NSHELL.APPLICATION\")))
                (multiple-value-bind (output code) (funcall stage-fn node nil nil)
                  (declare (ignore output))
-                 (format t "exit-code=~a~%" code)
-                 (format t "jobs-count=~a~%" (length (funcall jobs-fn)))
-                 (finish-output))))))
-    (format nil "~s" form)))
+                 (format t \"exit-code=~~a~~%\" code)
+                 (format t \"jobs-count=~~a~~%\" (length (funcall jobs-fn)))
+                 (finish-output))))"
+          command args))
 
 (defun %job-control-stop-driver-arguments (command args)
-  (list "--noinform" "--disable-debugger"
-        "--eval" (%job-control-stop-driver-eval-string command args)))
+  (append (list "--noinform" "--disable-debugger")
+          (%job-control-asdf-bootstrap-arguments)
+          (list "--eval" (%job-control-stop-driver-eval-string command args))))
 
 (describe "job-control-pty-integration-tests"
   (it "directly-launched-foreground-command-survives-ctrl-z-without-hanging"

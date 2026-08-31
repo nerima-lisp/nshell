@@ -318,6 +318,40 @@
     (let ((job (make-test-job 0 "x")))
       (nshell.domain.execution::%set-job-state job :future)
       (expect "Unknown" :to-equal (nshell.application::%status-label job))))
+
+  (it "parses-kill-options-and-signal-aliases"
+    "KILL accepts numeric, named, long, list, and end-of-options forms."
+    (flet ((parsed (&rest args)
+             (multiple-value-list
+              (nshell.application::%parse-kill-arguments args))))
+      (expect :sigint :to-equal (first (parsed "-s" "INT" "123")))
+      (expect '("-s" "123") :to-equal (second (parsed "--" "-s" "123")))
+      (expect :sigkill :to-equal (first (parsed "--signal=SIGKILL" "%1")))
+      (expect '("-9") :to-equal (second (parsed "-9")))
+      (expect '("-") :to-equal (second (parsed "-")))
+      (expect (third (parsed "-l")) :to-be-truthy)))
+
+  (it "rejects-invalid-kill-options"
+    "KILL reports malformed option arguments without partially parsed targets."
+    (flet ((message (&rest args)
+             (let ((value (nth-value 3
+                            (nshell.application::%parse-kill-arguments args))))
+               (if (listp value) (first value) value))))
+      (expect "kill: option requires an argument -- signal~%"
+              :to-equal (message "-s"))
+      (expect "kill: invalid signal~%" :to-equal (message "--signal=NOPE"))
+      (expect "kill: invalid signal~%" :to-equal (message "-s" "NOPE"))
+      (expect (format nil "kill: unknown option: -NOPE~%")
+              :to-equal (message "-NOPE"))))
+
+  (it "parses-signal-designators-case-insensitively"
+    "Signal names accept an optional SIG prefix and preserve numeric signals."
+    (expect :sigterm :to-equal
+            (nshell.application::%parse-signal-designator "sigterm"))
+    (expect 15 :to-equal
+            (nshell.application::%parse-signal-designator "15"))
+    (expect (nshell.application::%parse-signal-designator "not-a-signal")
+            :to-be-null))
   (it "classifies normalized wait observations without an OS wait"
     "Wait-status policy is testable independently from the ACL wait call."
     (flet ((classify (state detail)

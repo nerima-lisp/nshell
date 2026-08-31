@@ -491,5 +491,18 @@
         :output (format nil "kill: invalid signal~%"))
       (assert-builtin-call (context "kill" '("-unknown"))
         :code 1
-        :output (format nil "kill: unknown option: -unknown~%")))
-)))
+        :output (format nil "kill: unknown option: -unknown~%"))))
+
+  (it "wait-and-kill-report-missing-targets"
+    "wait and kill preserve deterministic diagnostics for unresolved targets."
+    (let ((context (make-test-builtins-context)))
+      (assert-builtin-call (context "wait" '("%99"))
+        :code 1
+        :output (format nil "wait: no such job: %99~%"))
+      (assert-builtin-call (context "kill" nil)
+        :code 1
+        :contains '("Usage: kill"))
+      (assert-builtin-call (context "kill" '("%99"))
+        :code 1
+        :output (format nil "kill: no such process or job: %99~%"))))
+))

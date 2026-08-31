@@ -55,6 +55,25 @@
          :code 1
          :contains '("set: usage:")))))
 
+  (it "export-parsers-accept-valid-identifiers-and-split-values"
+    "Export's small parsers keep identifier validation and assignment parsing deterministic."
+    (dolist (name '("A" "_private" "A1" "A_B"))
+      (expect (nshell.application::%shell-variable-name-p name)
+              :to-be-truthy))
+    (dolist (name '("" "1A" "A-B" "A.B" nil))
+      (expect (nshell.application::%shell-variable-name-p name)
+              :to-be-falsy))
+    (multiple-value-bind (name value assignment-p)
+        (nshell.application::%export-assignment "NAME=value=with=equals")
+      (expect "NAME" :to-equal name)
+      (expect "value=with=equals" :to-equal value)
+      (expect assignment-p :to-be-truthy))
+    (multiple-value-bind (name value assignment-p)
+        (nshell.application::%export-assignment "NAME")
+      (expect "NAME" :to-equal name)
+      (expect value :to-be-null)
+      (expect assignment-p :to-be-falsy)))
+
   (it "export-marks-existing-variable-in-current-environment"
     "export marks an existing shell variable for process environments."
     (with-builtins-context (context)

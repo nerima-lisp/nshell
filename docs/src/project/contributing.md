@@ -43,16 +43,16 @@ Iterate with the smallest relevant suite, then run the full gate before review.
 
 | Change | Run |
 |---|---|
-| Anything | `timeout 1800s nix flake check --print-build-logs` before review; the full gate runs on `x86_64-linux` CI |
-| Domain logic, builtins, parser, expansion | `timeout 300s nix run .#test` |
-| Completion engine or cl-prolog-kit knowledge base | `timeout 300s sbcl --script scripts/weave.lisp` |
+| Anything | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 1800; exec @ARGV' nix flake check --print-build-logs` before review; the full gate runs on `x86_64-linux` CI |
+| Domain logic, builtins, parser, expansion | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix run .#test` |
+| Completion engine or cl-prolog-kit knowledge base | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' sbcl --script scripts/weave.lisp` |
 | PTY, subprocess, terminal, signal, job control | the non-sandboxed run below |
-| Coverage-oriented validation | `timeout 900s nix develop -c sbcl --script scripts/coverage.lisp` |
+| Coverage-oriented validation | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 900; exec @ARGV' nix develop -c sbcl --script scripts/coverage.lisp` |
 
 The non-sandboxed integration run, for changes the Nix sandbox cannot exercise:
 
 ```sh
-timeout 300s nix develop --command sbcl --script run-tests.lisp
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix develop --command sbcl --script run-tests.lisp
 ```
 
 Tests live in `t/` and must be hermetic: no dependence on the ambient working

@@ -36,21 +36,21 @@ arguments after the script name arrive as `$argv`.
 The hermetic gate CI uses, covering both suites plus formatting and docs:
 
 ```sh
-timeout 1800s nix flake check --print-build-logs
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 1800; exec @ARGV' nix flake check --print-build-logs
 ```
 
 Just the primary suite, through the same entry point CI uses:
 
 ```sh
-timeout 300s nix run .#test
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix run .#test
 # or, inside `nix develop`:
-timeout 300s sbcl --script run-tests.lisp
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' sbcl --script run-tests.lisp
 ```
 
 Just the focused completion suite (`nshell/weave`):
 
 ```sh
-timeout 300s sbcl --script scripts/weave.lisp
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' sbcl --script scripts/weave.lisp
 ```
 
 ### The non-sandboxed integration run
@@ -61,7 +61,7 @@ instead in CI's `integration` job. Run them locally when changing PTY,
 subprocess, terminal, or job-control behaviour:
 
 ```sh
-timeout 300s nix develop --command sbcl --script run-tests.lisp
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix develop --command sbcl --script run-tests.lisp
 ```
 
 This covers the real-PTY interactive smoke tests, `Ctrl-C` recovery, and the
@@ -70,7 +70,7 @@ job-control lifecycle checks.
 ## Generate a coverage report
 
 ```sh
-timeout 900s nix develop -c sbcl --script scripts/coverage.lisp
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 900; exec @ARGV' nix develop -c sbcl --script scripts/coverage.lisp
 ```
 
 The report is written to `coverage/cover-index.html`. Set `NSHELL_COVERAGE_DIR`

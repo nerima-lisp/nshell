@@ -637,4 +637,68 @@
                                                          (format nil "~a" job-id)))
       (expect nil :to-equal
               (nshell.application::%resolve-kill-job-id monitor "%99"))))
+
+  (it "job-helper-contracts-cover-empty-and-completed-selections"
+    "Job helpers distinguish current, active, completed, and missing selectors."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (active-id (nshell.domain.job-control:monitor-add-job
+                       monitor (make-test-job 0 "active" :pids '(321))))
+           (completed-id (nshell.domain.job-control:monitor-add-job
+                          monitor (make-test-job 0 "done" :pids '(654)))))
+      (nshell.domain.job-control:complete-job monitor completed-id 0)
+      (expect "current" :to-equal
+              (nshell.application::%job-spec-label nil))
+      (expect "x" :to-equal
+              (nshell.application::%job-spec-label '("x")))
+      (expect (format nil "fg: no such job: current~%") :to-equal
+              (nshell.application::%missing-job-output "fg" "current"))
+      (expect active-id :to-equal
+              (nshell.application::%resolve-job-id monitor nil
+                                                     :active-only-p t))
+      (expect nil :to-equal
+              (nshell.application::%resolve-job-id monitor
+                                                     (list (format nil "~a" completed-id))
+                                                     :active-only-p t))
+      (multiple-value-bind (selected missing)
+          (nshell.application::%select-job-listings monitor nil)
+        (expect 1 :to-equal (length selected))
+        (expect nil :to-equal missing))
+      (multiple-value-bind (selected missing)
+          (nshell.application::%select-job-listings
+           monitor (list (format nil "~a" active-id) "%99"))
+        (expect 1 :to-equal (length selected))
+        (expect '("%99") :to-equal missing))
+      (expect nil :to-equal
+              (nshell.application::%find-job-id-by-pid monitor 999))
+      (expect nil :to-equal
+              (nshell.application::%resolve-wait-job-id monitor nil))
+      (expect nil :to-equal
+              (nshell.application::%resolve-wait-job-id monitor ""))
+      (expect nil :to-equal
+              (nshell.application::%resolve-wait-job-id monitor "999"))))
+
+  (it "kill-parser-covers-option-forms-and-end-of-options"
+    "kill accepts every supported signal option form and rejects malformed values."
+    (dolist (args '(("-s" "HUP" "123")
+                    ("--signal" "SIGWINCH" "123")
+                    ("--signal=9" "123")
+                    ("-9" "123")
+                    ("--" "-bogus")))
+      (multiple-value-bind (signal targets list-signals-p parse-error)
+          (nshell.application::%parse-kill-arguments args)
+        (expect signal :to-be-truthy)
+        (expect targets :to-be-truthy)
+        (expect list-signals-p :to-be-falsy)
+        (expect parse-error :to-be-null)))
+    (multiple-value-bind (signal targets list-signals-p parse-error)
+        (nshell.application::%parse-kill-arguments '("-s" "unknown"))
+      (declare (ignore signal targets list-signals-p))
+      (expect "kill: invalid signal~%" :to-equal parse-error))
+    (multiple-value-bind (signal targets list-signals-p parse-error)
+        (nshell.application::%parse-kill-arguments '("-"))
+      (expect :sigterm :to-equal signal)
+      (expect '("-") :to-equal targets)
+      (expect list-signals-p :to-be-falsy)
+      (expect parse-error :to-be-null)))
 ))

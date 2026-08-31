@@ -353,6 +353,7 @@
    (:file "unit/test-shell-context")
    (:file "unit/test-repl-boundaries")
    (:file "unit/test-builtins")
+   (:file "unit/test-builtins-test")
    (:file "unit/test-builtins-core")
    (:file "unit/test-builtins-core-io")
    (:file "unit/test-builtins-counting")

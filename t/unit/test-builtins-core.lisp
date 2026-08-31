@@ -63,6 +63,21 @@
       (let ((command (nshell.domain.completion::%catalog-command-entry-command entry)))
         (expect (nshell.application:lookup-builtin command) :to-be-truthy))))
 
+  (it "printf-covers-escape-and-numeric-formatting"
+    "printf expands shell escapes and applies the supported numeric directives."
+    (with-builtins-context (context)
+      (assert-builtin-call
+       (context "printf"
+                '("%s|%d|%#x|%03d|%+.1f\\n" "text" "7" "15" "4" "2.5"))
+       :code 0
+       :output (format nil "text|7|0xF|004|+2.5~%"))
+      (assert-builtin-call (context "printf" '("%b" "a\\n\\0101\\cignored"))
+        :code 0
+        :output (format nil "a~%A"))
+      (assert-builtin-call (context "printf" '("%q" "value"))
+        :code 1
+        :output "")))
+
   (it "exit-stops-the-current-shell-context"
     "exit mutates only the current application shell context running flag."
     (with-builtins-context (context)

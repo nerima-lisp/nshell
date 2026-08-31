@@ -97,3 +97,45 @@
               (nshell.application::%resolve-job-id
                monitor (list (format nil "%~d" job-id))
                :active-only-p t))))
+
+(describe "builtin-job-contract-tests"
+
+  (it "keeps job builtins consistent when the monitor is empty"
+    "Empty-monitor behavior is a user-visible contract shared by job builtins."
+    (with-builtins-context (context)
+      (expect (list (format nil "fg: no such job: current~%") 1)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-fg context nil)))
+      (expect (list (format nil "bg: no such job: current~%") 1)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-bg context nil)))
+      (expect '("" 0)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-jobs context nil)))
+      (expect (list (format nil "disown: no current job~%") 1)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-disown context nil)))
+      (expect '(nil 0)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-wait context nil)))))
+
+  (it "reports unresolved job selectors consistently"
+    (with-builtins-context (context)
+      (expect (list (format nil "jobs: no such job: %99~%") 1)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-jobs context '("%99"))))
+      (expect (list (format nil "disown: job [%99] not found~%") 1)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-disown context '("%99"))))
+      (expect (list (format nil "wait: no such job: %99~%") 1)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-wait context '("%99")))))
+  ))

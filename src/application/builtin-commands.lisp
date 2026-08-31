@@ -96,7 +96,12 @@
             (%execute-command-by-name-in-context context command command-args)
           (values output (%invert-status-code code))))))
 
-(defun %builtin-exec (context args) (declare (ignore context)) (if args (sb-ext:quit :unix-status (nshell.infrastructure.acl:run-external-exec (first args) (rest args))) (%builtin-usage "exec" "exec command [args...]")))
+(define-builtin %builtin-exec (context args) (context)
+  (if args
+      (sb-ext:quit
+       :unix-status
+       (nshell.infrastructure.acl:run-external-exec (first args) (rest args)))
+      (%builtin-usage "exec" "exec command [args...]")))
 
 (defun %contains-usage ()
   (%builtin-usage

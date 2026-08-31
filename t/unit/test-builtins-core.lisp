@@ -616,4 +616,25 @@
       (expect '("123") :to-equal targets)
       (expect list-signals-p :to-be-truthy)
       (expect parse-error :to-be-null)))
+
+  (it "job-selector-parsers-distinguish-pids-and-job-specs"
+    "Job parsing accepts positive PIDs, rejects malformed integers, and resolves job selectors."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (job-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "sleep" :pids '(321)))))
+      (expect 321 :to-equal
+              (nshell.application::%parse-positive-integer "321"))
+      (dolist (value '("0" "-1" "" "3x" nil))
+        (expect nil :to-equal
+                (nshell.application::%parse-positive-integer value)))
+      (expect job-id :to-equal
+              (nshell.application::%find-job-id-by-pid monitor 321))
+      (expect job-id :to-equal
+              (nshell.application::%resolve-wait-job-id monitor "321"))
+      (expect job-id :to-equal
+              (nshell.application::%resolve-wait-job-id monitor
+                                                         (format nil "~a" job-id)))
+      (expect nil :to-equal
+              (nshell.application::%resolve-kill-job-id monitor "%99"))))
 ))

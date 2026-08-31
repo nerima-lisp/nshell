@@ -144,6 +144,38 @@
         :output "exit: too many arguments~%")
       (expect (nshell.application:shell-context-running context) :to-be-truthy)))
 
+  (it "pure-command-parsers-cover-status-sequences-and-membership"
+    "The command helpers keep parsing and sequence generation deterministic."
+    (multiple-value-bind (status valid-p)
+        (nshell.application::%parse-exit-status "-513")
+      (expect 255 :to-equal status)
+      (expect valid-p :to-be-truthy))
+    (multiple-value-bind (status valid-p)
+        (nshell.application::%parse-exit-status "12x")
+      (expect nil :to-equal status)
+      (expect valid-p :to-be-falsy))
+    (multiple-value-bind (index-p operands error-output)
+        (nshell.application::%parse-contains-args '("--index" "needle" "needle" "other"))
+      (expect index-p :to-be-truthy)
+      (expect '("needle" "needle" "other") :to-equal operands)
+      (expect nil :to-equal error-output))
+    (multiple-value-bind (index-p operands error-output)
+        (nshell.application::%parse-contains-args '("--bogus" "needle"))
+      (expect index-p :to-be-falsy)
+      (expect nil :to-equal operands)
+      (expect error-output :to-contain "unknown option"))
+    (expect '(1 3) :to-equal
+            (nshell.application::%contains-match-indexes "x" '("x" "y" "x")))
+    (multiple-value-bind (first step last)
+        (nshell.application::%seq-parse-args '("5"))
+      (expect '(1 1 5) :to-equal (list first step last)))
+    (multiple-value-bind (first step last)
+        (nshell.application::%seq-parse-args '("5" "2" "1"))
+      (expect '(5 2 1) :to-equal (list first step last)))
+    (expect '(1 3 5) :to-equal (nshell.application::%seq-values 1 2 5))
+    (expect '(5 3 1) :to-equal (nshell.application::%seq-values 5 -2 1))
+    (expect nil :to-equal (nshell.application::%seq-values 1 0 5)))
+
   (it "type-colorizes-only-the-function-definition-branch"
     "type --color colors the function definition block without changing short output."
     (with-builtins-context (context)

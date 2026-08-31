@@ -66,3 +66,34 @@
             :to-equal
             (nshell.application::%missing-job-output
              "fg" (nshell.application::%job-spec-label '("%9"))))))
+
+  (it "selects requested job listings while preserving missing specs"
+    "The listing selector keeps user order and reports unresolved selectors separately."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (first-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "first")))
+           (second-id (nshell.domain.job-control:monitor-add-job
+                       monitor (make-test-job 0 "second"))))
+      (multiple-value-bind (listings missing)
+          (nshell.application::%select-job-listings
+           monitor (list (format nil "%~d" second-id) "%99"
+                         (format nil "%~d" first-id)))
+        (expect (list second-id first-id)
+                :to-equal
+                (mapcar #'nshell.application:job-listing-id listings))
+        (expect '("%99") :to-equal missing))))
+
+  (it "resolves only active jobs when requested"
+    "Active-only resolution rejects completed jobs without changing ordinary resolution."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "done"))))
+      (expect job-id :to-equal
+              (nshell.application::%resolve-job-id
+               monitor (list (format nil "%~d" job-id))))
+      (nshell.domain.job-control:complete-job monitor job-id)
+      (expect nil :to-equal
+              (nshell.application::%resolve-job-id
+               monitor (list (format nil "%~d" job-id))
+               :active-only-p t))))

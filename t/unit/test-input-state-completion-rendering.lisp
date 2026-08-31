@@ -1,6 +1,28 @@
 (in-package #:nshell/test)
 
 (describe "input-state-tests"
+  (it "terminal-width-preserves-positive-terminal-columns"
+    (let ((original-get-terminal-size
+            (symbol-function 'nshell.infrastructure.acl:get-terminal-size)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
+                   (lambda () (values 24 120)))
+             (expect 120 :to-equal (nshell.presentation::terminal-width)))
+        (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
+              original-get-terminal-size))))
+
+  (it "terminal-width-falls-back-for-zero-terminal-columns"
+    (let ((original-get-terminal-size
+            (symbol-function 'nshell.infrastructure.acl:get-terminal-size)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
+                   (lambda () (values 24 0)))
+             (expect 80 :to-equal (nshell.presentation::terminal-width)))
+        (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
+              original-get-terminal-size))))
+
   (it "completion-rendering-highlights-selected-candidate"
     (let* ((candidates (list (nshell.domain.completion:make-candidate
                               "status"

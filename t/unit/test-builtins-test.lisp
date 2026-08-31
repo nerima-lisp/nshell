@@ -71,3 +71,52 @@
     (expect (nshell.application::%format-command-resolution
              "echo" :builtin "echo" :execute)
             :to-be-null)))
+
+(describe "command and eval dispatch"
+  (it "reports command paths and executes the selected command"
+    (with-builtins-context (context)
+      (assert-builtin-call (context "command" '("-v" "echo"))
+        :code 0 :contains '("echo"))
+      (assert-builtin-call (context "command" '("-V" "echo" "missing"))
+        :code 1 :contains '("echo is a shell builtin" "missing: not found"))
+      (assert-builtin-call (context "command" nil) :code 0 :output-null t)
+      (with-stubbed-command-executor
+          (("echo" (values "ran: hello" 7)))
+        (multiple-value-bind (output code)
+            (call-builtin context "command" '("echo" "hello"))
+          (expect "ran: hello" :to-equal output)
+          (expect 7 :to-equal code)))))
+
+  (it "prefers functions and falls back to external commands"
+    (with-builtins-context (context)
+      (let ((table (nshell.application:shell-context-function-table context)))
+        (setf (gethash "greet" table) '("echo" "hello")))
+      (with-test-external-capture-runner
+          (lambda (command args)
+            (values (format nil "external ~a ~{~a~^,~}" command args) 3))
+        (multiple-value-bind (output code)
+            (nshell.application::%execute-command-by-name-in-context
+             context "greet" nil)
+          (expect (search "external hello" output) :to-be-truthy)
+          (expect code :to-be-truthy))
+        (multiple-value-bind (output code)
+            (nshell.application::%execute-command-by-name-in-context
+             context "unknown" '("arg"))
+          (expect output :to-equal "external unknown arg")
+          (expect code :to-be-truthy)))))
+
+  (it "evaluates complete, empty, and malformed command lines"
+    (with-builtins-context (context)
+      (with-stubbed-command-executor
+          (("echo" (values "echoed hello" 0)))
+        (assert-builtin-call (context "eval" '("echo" "hello"))
+          :code 0 :output "echoed hello")
+        (assert-builtin-call (context "eval" nil) :code 0 :output-null t)
+        (assert-builtin-call (context "eval" '("echo" "|"))
+          :code 2 :contains '("eval: parse error")))))
+
+  (it "exposes command path metadata"
+    (expect (nshell.application::%command-path-spec "type")
+            :to-be-truthy)
+    (expect (nshell.application::%command-path-spec "not-a-command")
+            :to-be-null)))

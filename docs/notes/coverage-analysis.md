@@ -59,14 +59,15 @@ the minimum/target fields together in release verification.
 
 ## Latest local measurement
 
-The current aarch64-darwin development environment selected 1571 tests and
-passed all of them. The report covered 29475 of 32228 executable expressions
-in 151 source files (91.46%); the configured 85% minimum passed, while the
+The current aarch64-darwin development environment selected 1573 tests and
+passed all of them. The report covered 29590 of 32228 executable expressions
+in 151 source files (91.81%); the configured 85% minimum passed, while the
 100% target remained unmet. Reproduce it with:
 
 ```sh
 coverage_dir=$(mktemp -d /tmp/nshell-coverage.XXXXXX) && \
   NSHELL_COVERAGE_DIR="$coverage_dir" \
   nix develop --command bash -lc \
-  'timeout 900s sbcl --script scripts/coverage.lisp'
+  'perl -e '\''$SIG{ALRM}=sub { exit 124 }; alarm 900; exec @ARGV'\'' \
+  sbcl --script scripts/coverage.lisp'
 ```

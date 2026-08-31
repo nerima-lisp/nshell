@@ -362,7 +362,34 @@
     (let ((monitor (nshell.domain.job-control:make-job-monitor)))
       (expect (nshell.domain.job-control:monitor-resolve-job-spec monitor nil)
               :to-equal
-              (nshell.application::%resolve-wait-job-id monitor nil))))
+            (nshell.application::%resolve-wait-job-id monitor nil))))
+
+  (it "resolves-wait-and-kill-targets-through-the-same-job-monitor"
+    "PID targets use tracked process metadata while job targets use monitor selectors."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "sleep" :pgid 4321 :pids '(4321 4322)))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (signals nil))
+      (expect job-id :to-be
+               (nshell.application::%resolve-wait-job-id monitor "4322"))
+      (expect job-id :to-be
+               (nshell.application::%resolve-wait-job-id monitor
+                                                          (format nil "%~d" job-id)))
+      (expect (nshell.application::%resolve-wait-job-id monitor "9999")
+              :to-be-null)
+      (with-temporary-function
+          ((quote nshell.infrastructure.acl:kill-process)
+           (lambda (pid signal)
+             (push (list pid signal) signals)
+             0))
+        (expect t :to-be
+                (nshell.application::%kill-one-target monitor "4322" :sigterm))
+        (expect t :to-be
+                (nshell.application::%kill-one-target
+                 monitor (format nil "%~d" job-id) :sigint)))
+      (expect '((-4321 :sigint) (4322 :sigterm)) :to-equal signals)
+      (expect (nshell.application::%kill-one-target monitor "not-a-target" :sigterm)
+              :to-be-null)))
 
   (it "renders-the-complete-kill-signal-list"
     "KILL -l exposes the stable signal names as one human-readable line."

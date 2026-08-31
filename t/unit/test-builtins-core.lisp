@@ -462,5 +462,34 @@
                        (string= path "/opt/bin/mytool"))))))
       (assert-builtin-call (context "which" '("mytool"))
         :code 0
-        :output (format nil "/opt/bin/mytool~%")))))
-)
+        :output (format nil "/opt/bin/mytool~%"))))
+
+  (it "wait-returns-the-completed-job-status"
+    "wait consumes an already completed job without touching process objects."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (job-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "false")))
+           (registry (nshell.application::shell-context-process-registry context)))
+      (nshell.domain.job-control:complete-job monitor job-id 7)
+      (assert-builtin-call (context "wait" (list (format nil "%~d" job-id)))
+        :code 7
+        :output-null t)
+      (expect (gethash job-id registry) :to-be-null)))
+
+  (it "kill-lists-signals-and-rejects-invalid-options"
+    "kill exposes its signal table and reports malformed options consistently."
+    (let ((context (make-test-builtins-context)))
+      (assert-builtin-call (context "kill" '("-l"))
+        :code 0
+        :contains '("HUP" "TERM" "WINCH"))
+      (assert-builtin-call (context "kill" '("--signal"))
+        :code 1
+        :output (format nil "kill: option requires an argument -- signal~%"))
+      (assert-builtin-call (context "kill" '("--signal=unknown"))
+        :code 1
+        :output (format nil "kill: invalid signal~%"))
+      (assert-builtin-call (context "kill" '("-unknown"))
+        :code 1
+        :output (format nil "kill: unknown option: -unknown~%")))
+)))

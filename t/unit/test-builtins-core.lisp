@@ -477,6 +477,38 @@
         :output-null t)
       (expect (gethash job-id registry) :to-be-null)))
 
+  (it "jobs-reports-selected-and-missing-job-specs"
+    "jobs renders found listings and reports every unresolved selector."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (job-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "echo" :args '("hello")))))
+      (multiple-value-bind (output code)
+          (call-builtin context "jobs"
+                        (list (format nil "%~d" job-id) "%99"))
+        (expect 1 :to-equal code)
+        (expect (search (format nil "[~d]" job-id) output) :to-be-truthy)
+        (expect (search "jobs: no such job: %99" output) :to-be-truthy))))
+
+  (it "wait-without-target-waits-for-active-jobs"
+    "wait without selectors consumes active jobs and returns the last status."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (completed-id (nshell.domain.job-control:monitor-add-job
+                          monitor (make-test-job 0 "true")))
+           (active-id (nshell.domain.job-control:monitor-add-job
+                       monitor (make-test-job 0 "false"))))
+      (nshell.domain.job-control:complete-job monitor completed-id 0)
+      (with-temporary-function
+          ('nshell.application::wait-for-job
+           (lambda (job-id registry job-monitor)
+             (declare (ignore registry job-monitor))
+             (expect active-id :to-equal job-id)
+             (values (nshell.domain.job-control:monitor-find-job monitor job-id) 7)))
+        (assert-builtin-call (context "wait" nil)
+          :code 7
+          :output-null t))))
+
   (it "kill-lists-signals-and-rejects-invalid-options"
     "kill exposes its signal table and reports malformed options consistently."
     (let ((context (make-test-builtins-context)))

@@ -425,4 +425,24 @@
                 (nshell.application::job-wait-event-state interrupted))
         (expect :unknown :to-be
                 (nshell.application::job-wait-event-state unknown)))))
+
+  (it "continues foreground waiting across transient observations"
+    "Interrupted and unknown wait observations do not complete a running job."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "sleep" :pgid 4321 :pids '(4321)))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (events '((321 :interrupted nil)
+                     (321 :future nil)
+                     (nil :no-child nil))))
+      (with-temporary-function
+          ('nshell.application::%wait-job-pgid-event
+           (lambda (pgid)
+             (expect 4321 :to-equal pgid)
+             (destructuring-bind (pid state detail) (pop events)
+               (nshell.application::%job-wait-event-from-observation
+                pid state detail))))
+        (expect job :to-be
+                (nshell.application::%wait-job-pgid job job-id monitor)))
+      (expect :completed :to-be (nshell.domain.execution:job-state job))
+      (expect 0 :to-equal (nshell.domain.execution:job-exit-code job))))
 )

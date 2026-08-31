@@ -751,4 +751,54 @@
       (expect '("-") :to-equal targets)
       (expect list-signals-p :to-be-falsy)
       (expect parse-error :to-be-null)))
+
+  (it "kill-dispatches-pids-jobs-and-reports-signal-errors"
+    "kill sends numeric targets, resolves job targets, and normalizes failures."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (job-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "sleep" :pids '(321))))
+           (seen nil))
+      (with-temporary-function
+          ('nshell.infrastructure.acl:kill-process
+           (lambda (pid signal)
+             (push (list pid signal) seen)))
+        (assert-builtin-call (context "kill" '("321"))
+          :code 0
+          :output-empty t)
+        (expect '((321 :sigterm)) :to-equal seen))
+      (with-temporary-function
+          ('nshell.application::signal-job
+           (lambda (id signal job-monitor)
+             (declare (ignore signal job-monitor))
+             (= id job-id)))
+        (assert-builtin-call (context "kill" (list (format nil "%~d" job-id)))
+          :code 0
+          :output-empty t))
+      (with-temporary-function
+          ('nshell.infrastructure.acl:kill-process
+           (lambda (pid signal)
+             (declare (ignore pid signal))
+             (error "permission denied")))
+        (assert-builtin-call (context "kill" '("999"))
+          :code 1
+          :output (format nil "kill: 999: permission denied~%")))))
+
+  (it "kill-reports-mixed-target-results-and-wait-reports-all-missing-specs"
+    "kill keeps processing after one target fails and wait reports every missing selector."
+    (let ((context (make-test-builtins-context)))
+      (with-temporary-function
+          ('nshell.infrastructure.acl:kill-process
+           (lambda (pid signal)
+             (declare (ignore signal))
+             (if (= pid 123)
+                 nil
+                 (error "unexpected pid"))))
+        (assert-builtin-call (context "kill" '("%99" "123"))
+          :code 1
+          :contains '("kill: no such process or job: %99"
+                      "kill: 123: unexpected pid")))
+      (assert-builtin-call (context "wait" '("%98" "%99"))
+        :code 1
+        :output (format nil "wait: no such job: %98~%wait: no such job: %99~%"))))
 ))

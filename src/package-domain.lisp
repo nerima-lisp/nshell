@@ -292,6 +292,7 @@ transitions on a value.")
 defaults used when the config file is absent. Parsing and writing the file is
 nshell.infrastructure.persistence's job.")
   (:use #:cl)
+  (:import-from #:nshell.util #:define-value-struct)
   (:export #:make-theme #:theme-color #:theme-name #:theme-set-color
            #:theme-p #:config-p
            #:make-config #:config-theme

@@ -371,6 +371,7 @@
    (:file "unit/test-builtins-source-control-flow")
    (:file "unit/test-builtins-source-loops")
    (:file "unit/test-builtins-source-pipeline")
+   (:file "unit/test-execute-pipeline-support")
    (:file "unit/test-execute-pipeline")
    (:file "unit/test-manage-job")
    (:file "unit/test-search-history")

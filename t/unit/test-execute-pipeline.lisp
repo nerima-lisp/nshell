@@ -492,7 +492,21 @@ it."
     (expect 2 :to-equal (nshell.application::%source-pipeline-exit-status (list 0 2) nil))
     (expect 2 :to-equal (nshell.application::%source-pipeline-exit-status (list 0 2 0) t))
     (expect 0 :to-equal (nshell.application::%source-pipeline-exit-status (list 0 0) t))
-    (expect 0 :to-equal (nshell.application::%source-pipeline-exit-status nil nil))))
+    (expect 0 :to-equal (nshell.application::%source-pipeline-exit-status nil nil)))
+  (it "records-pipeline-statuses-as-normalized-environment-values"
+    (let ((context (make-test-builtins-context)))
+      (expect (list 0) :to-equal
+              (nshell.application::%record-pipeline-statuses context nil))
+      (expect (list "0") :to-equal
+              (nshell.domain.environment:env-get-values
+               (nshell.application:shell-context-environment context)
+               "pipestatus"))
+      (expect (list 2 nil 7) :to-equal
+              (nshell.application::%record-pipeline-statuses context (list 2 nil 7)))
+      (expect (list "2" "0" "7") :to-equal
+              (nshell.domain.environment:env-get-values
+               (nshell.application:shell-context-environment context)
+               "pipestatus")))))
 (describe "process-substitution-execution-boundaries"
   (it "materialize-reports-incomplete-and-non-command-bodies"
     (let ((context (make-test-shell-context)))

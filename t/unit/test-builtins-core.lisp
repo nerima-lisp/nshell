@@ -801,4 +801,11 @@
       (assert-builtin-call (context "wait" '("%98" "%99"))
         :code 1
         :output (format nil "wait: no such job: %98~%wait: no such job: %99~%"))))
+
+  (it "interactive-terminal-p-rejects-non-terminal-descriptors"
+    "The terminal ACL returns NIL for descriptors that are not attached to a TTY."
+    (expect (nshell.infrastructure.terminal:interactive-terminal-p 0)
+            :to-be nil)
+    (expect (nshell.infrastructure.terminal:interactive-terminal-p 999999)
+            :to-be nil))
 ))

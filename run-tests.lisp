@@ -42,7 +42,7 @@
   (let ((passed-p
           (handler-case
               (progn
-                (asdf:load-system "nshell/test")
+                (asdf:load-system "nshell/test" :force t)
                 (multiple-value-bind (result selected-count)
                     (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))
                   (unless (and (integerp selected-count)

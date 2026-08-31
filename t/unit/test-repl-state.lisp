@@ -1,5 +1,43 @@
 (in-package #:nshell/test)
 
+(defmacro expect-repl-table-contract (table test)
+  `(progn
+     (expect (hash-table-p ,table) :to-be-truthy)
+     ,test))
+
+(describe "repl-state-data-contracts"
+  (it "creates isolated tables for each shell state"
+    (multiple-value-bind (aliases abbreviations functions sources processes)
+        (nshell.presentation::%make-repl-state-tables)
+      (expect-repl-table-contract aliases (expect (eq (hash-table-test aliases) 'equal) :to-be-truthy))
+      (expect-repl-table-contract abbreviations (expect (eq (hash-table-test abbreviations) 'equal) :to-be-truthy))
+      (expect-repl-table-contract functions (expect (eq (hash-table-test functions) 'equal) :to-be-truthy))
+      (expect-repl-table-contract sources (expect (eq (hash-table-test sources) 'equal) :to-be-truthy))
+      (expect-repl-table-contract processes (expect (eq (hash-table-test processes) 'eql) :to-be-truthy))
+      (expect (not (eq aliases abbreviations)) :to-be-truthy)))
+
+  (it "runs continuation chains to completion"
+    (let ((steps 0))
+      (expect nil
+              :to-equal
+              (nshell.presentation:trampoline
+               (lambda ()
+                 (incf steps)
+                 (lambda ()
+                   (incf steps)
+                   (lambda ()
+                     (incf steps)
+                     nil)))))
+      (expect 3 :to-equal steps)))
+
+  (it "binds fresh state without changing the caller tables"
+    (let ((outer (make-hash-table :test #'equal)))
+      (let ((nshell.presentation::*aliases* outer))
+        (nshell.presentation::with-fresh-repl-state-tables
+          (setf (gethash "inner" nshell.presentation::*aliases*) t)
+          (expect (not (eq outer nshell.presentation::*aliases*)) :to-be-truthy)
+          (expect (gethash "inner" nshell.presentation::*aliases*) :to-be-truthy))))))
+
 (describe "repl-tests"
   (it "exported-environment-strings-only-include-exported-vars"
     "The REPL passes only exported domain environment variables to process launch."

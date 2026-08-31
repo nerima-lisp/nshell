@@ -352,6 +352,23 @@
             (nshell.application::%parse-signal-designator "15"))
     (expect (nshell.application::%parse-signal-designator "not-a-signal")
             :to-be-null))
+
+  (it "normalizes-integer-and-job-wait-designators"
+    "Numeric wait targets use PIDs while job syntax stays with the monitor."
+    (expect 42 :to-equal (nshell.application::%parse-integer-designator "42"))
+    (expect (nshell.application::%parse-integer-designator "42x") :to-be-null)
+    (expect 7 :to-equal (nshell.application::%parse-positive-integer "7"))
+    (expect (nshell.application::%parse-positive-integer "0") :to-be-null)
+    (let ((monitor (nshell.domain.job-control:make-job-monitor)))
+      (expect (nshell.domain.job-control:monitor-resolve-job-spec monitor nil)
+              :to-equal
+              (nshell.application::%resolve-wait-job-id monitor nil))))
+
+  (it "renders-the-complete-kill-signal-list"
+    "KILL -l exposes the stable signal names as one human-readable line."
+    (expect (format nil "HUP INT QUIT ILL TRAP BUS FPE KILL USR1 SEGV USR2 PIPE ALRM TERM STOP TSTP CONT CHLD TTIN TTOU WINCH~%")
+            :to-equal
+            (nshell.application::%kill-list-output)))
   (it "classifies normalized wait observations without an OS wait"
     "Wait-status policy is testable independently from the ACL wait call."
     (flet ((classify (state detail)

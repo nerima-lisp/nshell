@@ -29,3 +29,45 @@
         :code 2 :contains '("missing ]"))
       (assert-builtin-call (context "test" '("a" "b" "c" "d"))
         :code 1 :output-null t))))
+
+(describe "builtin runtime helpers"
+  (it "joins printable arguments without changing their values"
+    (expect "alpha::2" :to-equal
+            (nshell.application::%string-join '("alpha" 2) "::"))
+    (expect "" :to-equal
+            (nshell.application::%string-join nil "::")))
+
+  (it "parses command modes, sentinel operands, and option failures"
+    (multiple-value-bind (mode operands error status)
+        (nshell.application::%parse-command-options '("-v" "--" "-V"))
+      (expect :short :to-equal mode)
+      (expect '("-V") :to-equal operands)
+      (expect error :to-be-null)
+      (expect status :to-be-null))
+    (multiple-value-bind (mode operands error status)
+        (nshell.application::%parse-command-options '("-V" "-v"))
+      (declare (ignore mode operands))
+      (expect error :to-be-truthy)
+      (expect 2 :to-equal status))
+    (multiple-value-bind (mode operands error status)
+        (nshell.application::%parse-command-options '("--unknown"))
+      (declare (ignore mode operands))
+      (expect error :to-be-truthy)
+      (expect 2 :to-equal status)))
+
+  (it "formats every command resolution mode"
+    (expect (format nil "/bin/echo~%") :to-equal
+            (nshell.application::%format-command-resolution
+             "echo" :path "/bin/echo" :short))
+    (expect (format nil "echo is a function~%") :to-equal
+            (nshell.application::%format-command-resolution
+             "echo" :function nil :verbose))
+    (expect (format nil "echo is a shell builtin~%") :to-equal
+            (nshell.application::%format-command-resolution
+             "echo" :builtin "echo" :verbose))
+    (expect (format nil "echo is /bin/echo~%") :to-equal
+            (nshell.application::%format-command-resolution
+             "echo" :path "/bin/echo" :verbose))
+    (expect (nshell.application::%format-command-resolution
+             "echo" :builtin "echo" :execute)
+            :to-be-null)))

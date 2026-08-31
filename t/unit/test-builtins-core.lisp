@@ -597,4 +597,23 @@
       (assert-builtin-call (context "kill" '("%99"))
         :code 1
         :output (format nil "kill: no such process or job: %99~%"))))
+
+  (it "kill-parser-normalizes-signals-and-preserves-targets"
+    "The kill parser accepts signal names, numbers, and the POSIX end-of-options marker."
+    (multiple-value-bind (signal targets list-signals-p parse-error)
+        (nshell.application::%parse-kill-arguments
+         '("-HUP" "--signal=SIGTERM" "--" "-9" "%2"))
+      (expect 15 :to-equal signal)
+      (expect '("-9" "%2") :to-equal targets)
+      (expect list-signals-p :to-be-falsy)
+      (expect parse-error :to-be-null))
+    (dolist (designator '("TERM" "SIGTERM" "15"))
+      (expect 15 :to-equal
+              (nshell.application::%parse-signal-designator designator)))
+    (multiple-value-bind (signal targets list-signals-p parse-error)
+        (nshell.application::%parse-kill-arguments '("-l" "123"))
+      (expect :sigterm :to-equal signal)
+      (expect '("123") :to-equal targets)
+      (expect list-signals-p :to-be-truthy)
+      (expect parse-error :to-be-null)))
 ))

@@ -133,12 +133,10 @@
                    (literal-p (nshell.domain.parsing:arg-here-doc-literal-p arg)))
               (cond
                 ((and here-doc-target-p (not literal-p))
-                 (setf args
-                       (nconc
-                        args
-                        (list
-                         (nshell.domain.parsing:make-command-arg
-                          (%expand-here-doc-body-in-context context value))))))
+                 (push
+                  (nshell.domain.parsing:make-command-arg
+                   (%expand-here-doc-body-in-context context value))
+                  args))
                 ((and (not literal-p)
                       (null (nshell.domain.parsing:arg-quote-style arg))
                       (%process-substitution-spec-p value))
@@ -148,20 +146,16 @@
                      (%abort-process-substitution-resources resources)
                      (return-from %expand-command-args-in-context
                        (values nil nil error)))
-                   (setf args
-                         (nconc
-                          args
-                          (list (nshell.domain.parsing:make-command-arg path))))
+                   (push (nshell.domain.parsing:make-command-arg path) args)
                    (push resource resources)))
                 (t
-                 (setf args
-                       (nconc
-                        args
-                        (mapcar #'nshell.domain.parsing:make-command-arg
-                                (%expand-source-arg-in-context context arg))))))
+                 (dolist (expanded-value
+                           (%expand-source-arg-in-context context arg))
+                   (push (nshell.domain.parsing:make-command-arg expanded-value)
+                         args))))
               (setf here-doc-target-p
                     (not (null (member value '("<<" "<<-") :test #'string=))))))
-          (values args (nreverse resources) nil))
+          (values (nreverse args) (nreverse resources) nil))
       (nshell.domain.expansion:parameter-expansion-error (condition)
         (%abort-process-substitution-resources resources)
         (values nil nil

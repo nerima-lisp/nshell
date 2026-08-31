@@ -352,6 +352,7 @@
    (:file "unit/test-input-state-completion-cycling")
    (:file "unit/test-input-state-search-properties")
    (:file "unit/test-job-control-domain")
+   (:file "unit/test-builtins-job-parsing")
    (:file "unit/test-pipeline-plan")
    (:file "unit/test-pipeline-diagram")
    (:file "unit/test-shell-context")

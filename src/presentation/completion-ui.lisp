@@ -10,13 +10,6 @@
     (:variable "$ ")
     (otherwise "·")))
 
-(defun %terminal-width ()
-  (handler-case
-      (multiple-value-bind (rows columns) (nshell.infrastructure.acl:get-terminal-size)
-        (declare (ignore rows))
-        (or columns 80))
-    (error () 80)))
-
 (defun %format-candidate (candidate)
   (let* ((text (%candidate-text candidate))
          (kind (%candidate-kind candidate))
@@ -31,7 +24,7 @@ unchanged when it is already at least that wide.  Delegates to cl-tty-kit's
 display-width-aware padding so wide glyphs are accounted for correctly."
   (cl-tty-kit:pad-string text width :align :left :pad #\Space))
 
-(defun %compute-columns (candidates &key (terminal-width (%terminal-width)) (padding 2))
+(defun %compute-columns (candidates &key (terminal-width (terminal-width)) (padding 2))
   (let* ((formatted (mapcar #'%format-candidate candidates))
          (max-width (if formatted
                         (apply #'max (mapcar #'%string-visible-width formatted))
@@ -46,13 +39,13 @@ display-width-aware padding so wide glyphs are accounted for correctly."
          (if (< 64 (length formatted)) 1 0))
       0))
 
-(defun completion-render-line-count (candidates &key (terminal-width (%terminal-width)))
+(defun completion-render-line-count (candidates &key (terminal-width (terminal-width)))
   (multiple-value-bind (columns column-width formatted)
       (%compute-columns candidates :terminal-width terminal-width)
     (declare (ignore column-width))
     (%completion-render-line-count columns formatted)))
 
-(defun render-completions (candidates &key selected-index (terminal-width (%terminal-width)))
+(defun render-completions (candidates &key selected-index (terminal-width (terminal-width)))
   (if candidates
       (multiple-value-bind (columns column-width formatted)
           (%compute-columns candidates :terminal-width terminal-width)

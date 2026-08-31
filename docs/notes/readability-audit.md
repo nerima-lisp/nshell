@@ -57,3 +57,8 @@ The codebase is composed of small, shallow, single-purpose functions with the
 few genuine outliers driven down by helper extraction; remaining depth is
 grammar-encoding where flattening would hurt clarity. Re-run the metric sweep
 over `src/**/*.lisp` to measure the current median length and depth.
+
+The presentation layer now obtains terminal width through the single
+`terminal-width` function in `src/presentation/terminal-size.lisp`. Completion,
+prompt layout, and REPL redraw therefore share the same non-TTY fallback and
+error policy instead of carrying separate copies.

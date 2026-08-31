@@ -59,14 +59,6 @@ it and treats a negative WIDTH as 0."
                                truncated
                                kind)))))))
 
-(defun %prompt-terminal-width ()
-  "Return current terminal width, falling back to 80 columns outside a tty."
-  (handler-case
-      (multiple-value-bind (rows cols) (nshell.infrastructure.acl:get-terminal-size)
-        (declare (ignore rows))
-        (if (plusp cols) cols 80))
-    (error () 80)))
-
 (defun segment-kind->role (kind)
   "Map prompt segment kind to highlight role for theme lookup."
   (case kind
@@ -123,7 +115,7 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
           (%emit-right-prompt theme visible-right-segments padding))))))
 
 (defun render-prompt (config last-exit &key (last-command-duration-ms nil)
-                                      (terminal-width (%prompt-terminal-width)))
+                                      (terminal-width (terminal-width)))
   "Render the left prompt with theme colors."
   (let* ((theme (nshell.domain.configuration:config-theme config))
          (pm (%current-prompt-model last-exit last-command-duration-ms))

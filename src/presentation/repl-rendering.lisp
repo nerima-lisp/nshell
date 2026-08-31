@@ -111,12 +111,7 @@
   (reap-background-jobs)
   (clear-rendered-prompt)
   (%ensure-rendered-prompt-origin)
-  (let* ((terminal-width
-           (multiple-value-bind (rows cols)
-               (handler-case (nshell.infrastructure.acl:get-terminal-size)
-                 (error () (values 24 80)))
-             (declare (ignore rows))
-             cols))
+  (let* ((terminal-width (terminal-width))
          (prompt-width
            (render-prompt *config* *last-exit-code*
                           :last-command-duration-ms *last-command-duration-ms*

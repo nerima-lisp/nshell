@@ -173,7 +173,17 @@ that stays stopped despite STOP-FN does not busy-loop."
 (defun %report-external-command-not-found (command)
   (format *error-output* "~a" (%external-command-not-found-message command)))
 
-(defun %spawn-external-command (resolved-cmd args environment &key input output (error nil error-supplied-p)) (sb-ext:run-program resolved-cmd args :input input :output output :error (if error-supplied-p error (if *redirected-stderr* *error-output* :output)) :wait nil :search nil :environment environment))
+(defun %spawn-external-command
+    (resolved-cmd args environment &key input output (error nil error-supplied-p))
+  (sb-ext:run-program
+   resolved-cmd args
+   :input input
+   :output output
+   :error (if error-supplied-p error
+              (if *redirected-stderr* *error-output* :output))
+   :wait nil
+   :search nil
+   :environment environment))
 
 (defun %resolve-input-redirect (redirects register)
   "Return the standard-input stream REDIRECTS ask for, calling REGISTER on any

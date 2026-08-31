@@ -246,6 +246,9 @@
          target
          tests-passed
          tests-selected)
+        (unless (probe-file summary-path)
+          (error "coverage summary was not written: ~A" summary-path))
+        (format t "NSHELL_COVERAGE_SUMMARY path=~A~%" summary-path)
         (format
          t
          "NSHELL_COVERAGE scope=src-executable files=~D covered=~D total=~D expression-percent=~,2F minimum-percent=~,2F target-percent=~,2F tests-selected=~D tests-passed=~A minimum-passed=~A target-reached=~A~%"

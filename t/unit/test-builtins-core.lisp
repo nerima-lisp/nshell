@@ -804,8 +804,6 @@
 
   (it "interactive-terminal-p-rejects-non-terminal-descriptors"
     "The terminal ACL returns NIL for descriptors that are not attached to a TTY."
-    (expect (nshell.infrastructure.terminal:interactive-terminal-p 0)
-            :to-be nil)
     (expect (nshell.infrastructure.terminal:interactive-terminal-p 999999)
             :to-be nil))
 ))

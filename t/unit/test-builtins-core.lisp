@@ -86,6 +86,27 @@
       (assert-builtin-call (context "printf" '("%s" "trailing\\"))
         :code 0
         :output "trailing\\")
+      (assert-builtin-call (context "printf" nil)
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "printf" '("--"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "printf" '("%s"))
+        :code 0
+        :output "")
+      (assert-builtin-call (context "printf" '("%"))
+        :code 1
+        :output "")
+      (assert-builtin-call (context "printf" '("%d" "invalid"))
+        :code 1
+        :output "0")
+      (assert-builtin-call (context "printf" '("%f" "invalid"))
+        :code 1
+        :output "0.000000")
+      (assert-builtin-call (context "printf" '("%b" "\\q"))
+        :code 0
+        :output "q")
       (assert-builtin-call (context "printf" '("%q" "value"))
         :code 1
         :output "")))

@@ -344,6 +344,12 @@
     (let ((context (make-test-builtins-context))
           (monitor (nshell.domain.job-control:make-job-monitor)))
       (let ((nshell.application:*job-monitor* monitor))
+        (assert-builtin-call (context "bg" nil)
+          :code 1
+          :output (format nil "bg: no such job: current~%"))
+        (assert-builtin-call (context "fg" nil)
+          :code 1
+          :output (format nil "fg: no such job: current~%"))
         (assert-builtin-call (context "bg" '("42"))
           :code 1
           :output (format nil "bg: no such job: 42~%"))
@@ -417,6 +423,12 @@
       (assert-builtin-call (context "bg" (list (format nil "%~d" first-id)))
         :code 1
         :output (format nil "bg: no such job: %~d~%" first-id))
+      (assert-builtin-call (context "fg" (list (format nil "%~d" first-id)))
+        :code 1
+        :output (format nil "fg: no such job: %~d~%" first-id))
+      (assert-builtin-call (context "jobs" (list (format nil "%~d" first-id)))
+        :code 1
+        :output (format nil "jobs: no such job: %~d~%" first-id))
       (assert-builtin-call (context "bg" '("1junk"))
         :code 1
         :output (format nil "bg: no such job: 1junk~%"))))

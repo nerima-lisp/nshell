@@ -214,6 +214,13 @@ command name expands to zero or multiple fields (ambiguous)."
     (or (lookup-builtin command)
         (nth-value 1 (gethash command (shell-context-function-table context))))))
 
+(defun %source-pipeline-required-p (context commands)
+  "Return true when COMMANDS must use the source/CPS execution path."
+  (or (eq :cps (shell-context-execution-strategy context))
+      (some (lambda (command)
+              (%shell-internal-command-p context command))
+            commands)))
+
 (progn
   (defun %record-pipeline-statuses (context statuses)
     "Expose per-stage exit codes through the non-exported pipestatus binding."
@@ -365,9 +372,7 @@ command name expands to zero or multiple fields (ambiguous)."
               (nshell.domain.parsing:command-list-redirect-split-result-redirects
                redirect-split)))
         (if resources
-            (if (or (eq :cps (shell-context-execution-strategy context))
-                    (some (lambda (cmd) (%shell-internal-command-p context cmd))
-                          clean-commands))
+            (if (%source-pipeline-required-p context clean-commands)
                 (progn
                   (%abort-process-substitution-resources resources)
                   (values
@@ -380,9 +385,7 @@ command name expands to zero or multiple fields (ambiguous)."
                      (shell-context-pipefail-p context))
                   (%record-pipeline-statuses context statuses)
                   (values output exit-code)))
-            (if (or (eq :cps (shell-context-execution-strategy context))
-                    (some (lambda (cmd) (%shell-internal-command-p context cmd))
-                          clean-commands))
+            (if (%source-pipeline-required-p context clean-commands)
                 (%execute-source-pipeline-in-context
                  context clean-commands redirects)
                 (let ((output nil)

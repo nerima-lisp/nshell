@@ -56,3 +56,17 @@ The target can be raised to an enforced threshold only after the remaining
 forms have been classified and the metric is stable across the declared
 platforms. Until then, keep the raw report, the selected-test assertion, and
 the minimum/target fields together in release verification.
+
+## Latest local measurement
+
+The current aarch64-darwin development environment selected 1566 tests and
+passed all of them. The report covered 29404 of 32228 executable expressions
+in 151 source files (91.24%); the configured 85% minimum passed, while the
+100% target remained unmet. Reproduce it with:
+
+```sh
+coverage_dir=$(mktemp -d /tmp/nshell-coverage.XXXXXX) && \
+  NSHELL_COVERAGE_DIR="$coverage_dir" \
+  nix develop --command bash -lc \
+  'timeout 900s sbcl --script scripts/coverage.lisp'
+```

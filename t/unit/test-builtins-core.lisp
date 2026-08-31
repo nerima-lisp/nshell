@@ -74,6 +74,18 @@
       (assert-builtin-call (context "printf" '("%b" "a\\n\\0101\\cignored"))
         :code 0
         :output (format nil "a~%A"))
+      (assert-builtin-call (context "printf" '("%-6s|%06d|%#o" "x" "7" "9"))
+        :code 0
+        :output "x     |000007|011")
+      (assert-builtin-call
+       (context "printf" '("%b" "\\a\\b\\e\\f\\r\\t\\v\\\\\\\\"))
+       :code 0
+       :output (format nil "~C~C~C~C~C~C~C\\\\" (code-char 7) (code-char 8)
+                       (code-char 27) (code-char 12) (code-char 13)
+                       (code-char 9) (code-char 11)))
+      (assert-builtin-call (context "printf" '("%s" "trailing\\"))
+        :code 0
+        :output "trailing\\")
       (assert-builtin-call (context "printf" '("%q" "value"))
         :code 1
         :output "")))

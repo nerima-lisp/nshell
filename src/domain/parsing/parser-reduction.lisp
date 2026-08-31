@@ -162,7 +162,26 @@
        (%token-reduction-missing-redirect-target-policy pending-redirect-token))
       (%token-reduction-state-clear-pending-redirect state))))
 
-(defun %token-reduction-error-policy-from-token (token) (let ((value (token-value token))) (cond ((string= "\\" value) (%make-token-reduction-diagnostic-policy :trailing-escape "Trailing escape requires continuation")) ((and (>= (length value) 2) (or (string= "<(" (subseq value 0 2)) (string= ">(" (subseq value 0 2)))) (%make-token-reduction-diagnostic-policy :unterminated-process-substitution "Unterminated process substitution")) (t (%make-token-reduction-diagnostic-policy :unterminated-quote "Unterminated quoted string")))))
+(defun %unterminated-process-substitution-token-p (value)
+  (and (>= (length value) 2)
+       (or (string= "<(" (subseq value 0 2))
+           (string= ">(" (subseq value 0 2)))))
+
+(defun %token-reduction-error-policy-from-token (token)
+  (let ((value (token-value token)))
+    (cond
+      ((string= "\\" value)
+       (%make-token-reduction-diagnostic-policy
+        :trailing-escape
+        "Trailing escape requires continuation"))
+      ((%unterminated-process-substitution-token-p value)
+       (%make-token-reduction-diagnostic-policy
+        :unterminated-process-substitution
+        "Unterminated process substitution"))
+      (t
+       (%make-token-reduction-diagnostic-policy
+        :unterminated-quote
+        "Unterminated quoted string")))))
 
 (defun %token-reduction-command-entry-from-state (state)
   (list (%command-node-from-token-reduction-state state)

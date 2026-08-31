@@ -384,7 +384,19 @@
       (expect :unexpected-token :to-be (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind
                unexpected-token))
       (expect "Unexpected token: @" :to-equal (nshell.domain.parsing::%token-reduction-diagnostic-policy-message
-                    unexpected-token))))
+                    unexpected-token))
+      (dolist (case '(("\\" :trailing-escape "Trailing escape requires continuation")
+                      ("<(" :unterminated-process-substitution
+                       "Unterminated process substitution")
+                      ("hello" :unterminated-quote "Unterminated quoted string")))
+        (destructuring-bind (value kind message) case
+          (let ((policy
+                  (nshell.domain.parsing::%token-reduction-error-policy-from-token
+                   (nshell.domain.parsing:make-token :word value 0 (length value)))))
+            (expect kind :to-be
+             (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind policy))
+            (expect message :to-equal
+             (nshell.domain.parsing::%token-reduction-diagnostic-policy-message policy)))))))
 
   (it "parser-reduction-state-records-and-clears-command-context"
     "Token reduction state owns command entry recording and command context reset."

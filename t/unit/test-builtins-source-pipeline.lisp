@@ -221,3 +221,17 @@
           (expect "internal-value" :to-equal (nshell.domain.environment:env-get
                         (nshell.application:shell-context-environment context)
                         "captured")))))))
+
+(describe "pipeline-execution-strategy-contract-tests"
+  (it "source-pipeline-required-p-covers-strategy-and-command-kind"
+    "The dispatch policy selects CPS for explicit CPS and internal stages."
+    (let* ((context (make-test-builtins-context))
+           (internal (nshell.domain.parsing:make-command-node "echo" nil))
+           (external (nshell.domain.parsing:make-command-node "/bin/echo" nil)))
+      (flet ((required-p (strategy commands)
+               (setf (nshell.application:shell-context-execution-strategy context)
+                     strategy)
+               (nshell.application::%source-pipeline-required-p context commands)))
+        (expect t :to-equal (required-p :cps (list external)))
+        (expect t :to-equal (required-p :os-pipes (list internal)))
+        (expect nil :to-equal (required-p :os-pipes (list external)))))))

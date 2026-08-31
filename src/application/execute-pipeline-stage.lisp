@@ -217,9 +217,10 @@ command name expands to zero or multiple fields (ambiguous)."
 (defun %source-pipeline-required-p (context commands)
   "Return true when COMMANDS must use the source/CPS execution path."
   (or (eq :cps (shell-context-execution-strategy context))
-      (some (lambda (command)
-              (%shell-internal-command-p context command))
-            commands)))
+      (not (null
+            (some (lambda (command)
+                    (%shell-internal-command-p context command))
+                  commands)))))
 
 (progn
   (defun %record-pipeline-statuses (context statuses)

@@ -445,4 +445,38 @@
                 (nshell.application::%wait-job-pgid job job-id monitor)))
       (expect :completed :to-be (nshell.domain.execution:job-state job))
       (expect 0 :to-equal (nshell.domain.execution:job-exit-code job))))
+
+  (it "normalizes-registered-process-shapes"
+    "The process registry accepts one process or a pipeline list at its boundary."
+    (expect '(:process-a :process-b)
+            :to-equal
+            (nshell.application::%job-process-list '(:process-a :process-b)))
+    (expect '(:process-a)
+            :to-equal
+            (nshell.application::%job-process-list :process-a))
+    (expect nil
+            :to-equal
+            (nshell.application::%job-process-list nil)))
+
+  (it "selects-pipefail-and-last-stage-exit-codes"
+    "Exit-code policy is independent from process waiting and preserves pipefail semantics."
+    (let ((normal (make-test-job 0 "echo" :args '("ok")))
+          (pipefail (make-test-job 0 "echo" :args '("ok"))))
+      (with-temporary-function
+          ((quote nshell.infrastructure.acl:process-exit-status-code)
+           (lambda (process)
+             (getf process :status)))
+        (expect 7 :to-equal
+                (nshell.application::%job-process-exit-code
+                 normal
+                 (list '(:status 3) '(:status 7))))
+        (setf (nshell.domain.execution:job-pipefail-p pipefail) t)
+        (expect 3 :to-equal
+                (nshell.application::%job-process-exit-code
+                 pipefail
+                 (list nil '(:status 3) '(:status 7))))
+        (expect 0 :to-equal
+                (nshell.application::%job-process-exit-code
+                 pipefail
+                 nil)))))
 )

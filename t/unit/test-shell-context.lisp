@@ -61,7 +61,10 @@
     (expect (lambda () (nshell.application:make-shell-context :terminal-rows 0)) :to-throw 'type-error)
     (expect (lambda () (nshell.application:make-shell-context :terminal-cols 0)) :to-throw 'type-error)
     (expect (lambda () (nshell.application:make-shell-context :alias-table nil)) :to-throw 'type-error)
-    (expect (lambda () (nshell.application:make-shell-context :process-registry nil)) :to-throw 'type-error))
+    (expect (lambda () (nshell.application:make-shell-context :process-registry nil)) :to-throw 'type-error)
+    (expect (lambda () (nshell.application:make-shell-context :pipefail-p :yes)) :to-throw 'type-error)
+    (expect (lambda () (nshell.application:make-shell-context :running :yes)) :to-throw 'type-error)
+    (expect (lambda () (nshell.application:make-shell-context :last-exit-code "0")) :to-throw 'type-error))
 
   (it "shell-context-process-registry-exposes-job-query-only"
     "Process registry storage stays internal; callers query by job id."

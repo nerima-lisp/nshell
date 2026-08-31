@@ -232,4 +232,33 @@
       (expect (format nil "break: only meaningful in a loop~%after~%")
               :to-equal output)
       (expect 0 :to-equal code))))
+
+  (it "source-control-helpers-handle-loop-signal-contracts"
+    "Loop control consumption owns one level and propagates remaining levels."
+    (dolist (case '((nil nil nil)
+                    ((:break . 1) :break nil)
+                    ((:continue . 1) :continue nil)
+                    ((:break . 2) :propagate (:break . 1))))
+      (destructuring-bind (signal expected remaining) case
+        (let ((nshell.application::*loop-control-signal* signal))
+          (expect expected :to-equal
+                  (nshell.application::%consume-loop-control-signal))
+          (expect remaining :to-equal
+                  nshell.application::*loop-control-signal*))))
+    (let ((context (make-test-builtins-context)))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-condition-in-context context nil)
+        (expect nil :to-equal output)
+        (expect 1 :to-equal code)
+        (expect 1 :to-equal
+                (nshell.application:shell-context-last-exit-code context)))))
+
+  (it "ast-dispatcher-reports-unsupported-syntax"
+    "The generated AST dispatcher returns a stable diagnostic for unknown nodes."
+    (multiple-value-bind (output code)
+        (nshell.application::execute-ast-in-context
+         (make-test-builtins-context)
+         :unknown-ast)
+      (expect (stringp output) :to-be-truthy)
+      (expect 2 :to-equal code)))
 )

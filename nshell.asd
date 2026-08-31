@@ -136,6 +136,7 @@
    (:file "application/builtin-source-reader")
    (:file "application/builtin-source")
    (:file "application/builtin-macros")
+   (:file "application/builtin-printf")
    (:file "application/builtin-commands")
    (:file "application/builtin-commands-history")
    (:file "application/builtin-job-signal-data"

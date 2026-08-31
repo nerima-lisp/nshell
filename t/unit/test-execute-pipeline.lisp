@@ -842,6 +842,21 @@ it."
                 (nshell.application::%expand-command-substitutions
                  context
                  "a$(printf value)b")))))
+  (it "classifies-here-document-escapes"
+    (dolist (case (list
+                   (list (format nil "\\~c" #\Newline) nil 2)
+                   (list "\\$" nshell.application::+here-doc-escaped-dollar+ 2)
+                   (list "\\$(" nshell.application::+here-doc-escaped-command-open+ 3)
+                   (list "\\`" nshell.application::+here-doc-escaped-backtick+ 2)
+                   (list "\\\\" nshell.application::+here-doc-escaped-backslash+ 2)
+                   (list "\\x" nil nil)
+                   (list "x" nil nil)
+                   (list "\\" nil nil)))
+      (destructuring-bind (input expected-token expected-width) case
+        (multiple-value-bind (token width)
+            (nshell.application::%here-doc-escape-at input 0)
+          (expect expected-token :to-be token)
+          (expect expected-width :to-be width)))))
   (it "applies-quote-style-and-here-document-expansion"
     (let* ((environment
              (nshell.domain.environment:env-set

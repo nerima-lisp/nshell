@@ -298,6 +298,24 @@ Uses an iterative loop instead of tail-recursion to avoid stack depth limits."
                    pos next-pos))
         finally (return parts)))
 
+(defun %here-doc-escape-at (input position)
+  "Return the protected token and consumed width for an escape at POSITION."
+  (when (and (char= (char input position) #\\)
+             (< (1+ position) (length input)))
+    (let ((next (char input (1+ position))))
+      (cond
+        ((char= next #\Newline)
+         (values nil 2))
+        ((char= next #\$)
+         (if (and (< (+ position 2) (length input))
+                  (char= (char input (+ position 2)) #\())
+             (values +here-doc-escaped-command-open+ 3)
+             (values +here-doc-escaped-dollar+ 2)))
+        ((char= next #\`)
+         (values +here-doc-escaped-backtick+ 2))
+        ((char= next #\\)
+         (values +here-doc-escaped-backslash+ 2))))))
+
 (defun %protect-here-doc-escapes (input)
   "Protect heredoc escapes from the ordinary parameter expander.
 
@@ -307,33 +325,14 @@ backslash-newline have special meaning in an unquoted heredoc."
     (with-output-to-string (out)
       (loop with pos = 0
             while (< pos length)
-            do (let ((ch (char input pos)))
-                 (if (and (char= ch #\\)
-                          (< (1+ pos) length))
-                     (let ((next (char input (1+ pos))))
-                       (cond
-                         ((char= next #\Newline)
-                          (incf pos 2))
-                         ((char= next #\$)
-                          (if (and (< (+ pos 2) length)
-                                   (char= (char input (+ pos 2)) #\())
-                              (progn
-                                (write-char +here-doc-escaped-command-open+ out)
-                                (incf pos 3))
-                              (progn
-                                (write-char +here-doc-escaped-dollar+ out)
-                                (incf pos 2))))
-                         ((char= next #\`)
-                          (write-char +here-doc-escaped-backtick+ out)
-                          (incf pos 2))
-                         ((char= next #\\)
-                          (write-char +here-doc-escaped-backslash+ out)
-                          (incf pos 2))
-                         (t
-                          (write-char ch out)
-                          (incf pos))))
+            do (multiple-value-bind (token consumed)
+                   (%here-doc-escape-at input pos)
+                 (if consumed
                      (progn
-                       (write-char ch out)
+                       (when token (write-char token out))
+                       (incf pos consumed))
+                     (progn
+                       (write-char (char input pos) out)
                        (incf pos))))))))
 
 (defun %restore-here-doc-escapes (input)

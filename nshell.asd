@@ -137,6 +137,8 @@
    (:file "application/builtin-source")
    (:file "application/builtin-commands")
    (:file "application/builtin-commands-history")
+   (:file "application/builtin-job-signal-data"
+          :pathname "../data/application/builtin-job-signal-data")
    (:file "application/builtin-jobs")
    (:file "application/builtin-state-env")
    (:file "application/builtin-state-tables")

@@ -808,6 +808,14 @@
           :code 0
           :output-empty t))
       (with-temporary-function
+          ('nshell.application::signal-job
+           (lambda (id signal job-monitor)
+             (declare (ignore id signal job-monitor))
+             nil))
+        (assert-builtin-call (context "kill" (list (format nil "%~d" job-id)))
+          :code 1
+          :output (format nil "kill: no such process or job: %~d~%" job-id)))
+      (with-temporary-function
           ('nshell.infrastructure.acl:kill-process
            (lambda (pid signal)
              (declare (ignore pid signal))

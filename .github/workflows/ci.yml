@@ -83,6 +83,45 @@ jobs:
       - name: Run full test suite in a dev shell (non-sandboxed)
         run: nix develop --command sbcl --script run-tests.lisp
 
+  coverage:
+    # Keep coverage separate from the integration gate: the report instrumented
+    # run is slower and writes generated files, while integration remains the
+    # smallest readable behavioural gate.
+    name: source coverage (x86_64-linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/nix-setup
+        with:
+          cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
+          cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
+
+      - name: Generate source coverage report
+        run: |
+          coverage_dir="$RUNNER_TEMP/nshell-coverage"
+          mkdir -p "$coverage_dir"
+          NSHELL_COVERAGE_DIR="$coverage_dir" nix develop --command sbcl --script scripts/coverage.lisp
+          test -s "$coverage_dir/coverage-summary.json"
+          perl -0777 -ne '
+            die "coverage summary schema is incomplete\n"
+              unless /"expression-percent"\s*:\s*[0-9.]+/
+                 && /"tests-selected"\s*:\s*[0-9]+/
+                 && /"target-reached"\s*:\s*(?:true|false)/;
+            print "coverage summary schema verified\n";
+          ' "$coverage_dir/coverage-summary.json"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nshell-coverage
+          path: ${{ runner.temp }}/nshell-coverage
+          if-no-files-found: error
+          retention-days: 14
+
   binary:
     # NOT movable into `checks.*`: this confirms the dumped SBCL executable
     # actually starts and runs a command outside the build sandbox. A

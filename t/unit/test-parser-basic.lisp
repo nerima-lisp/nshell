@@ -748,4 +748,37 @@
     (with-complete-command-line (result ast "echo hello\\ world")
       (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
       (expect (nshell.domain.parsing:command-node-p ast) :to-be-truthy)
-      (expect '("hello world") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))))
+      (expect '("hello world") :to-equal (nshell.domain.parsing:command-node-arg-values ast))))
+
+  (it "token-reduction-error-policy-classifies-terminal-errors"
+    "Terminal token forms map to stable domain diagnostic kinds."
+    (flet ((policy-for (value)
+             (nshell.domain.parsing::%token-reduction-error-policy-from-token
+              (nshell.domain.parsing:make-token :error value 0 (length value)))))
+      (let ((escape-policy (policy-for "\\"))
+            (input-policy (policy-for "<("))
+            (output-policy (policy-for ">("))
+            (quote-policy (policy-for "unterminated")))
+        (expect :trailing-escape
+                :to-be
+                (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind escape-policy))
+        (expect :unterminated-process-substitution
+                :to-be
+                (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind input-policy))
+        (expect :unterminated-process-substitution
+                :to-be
+                (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind output-policy))
+        (expect :unterminated-quote
+                :to-be
+                (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind quote-policy)))))
+
+  (it "token-reduction-process-substitution-boundary-is-exact"
+    "Only the two process-substitution prefixes are classified as such."
+    (expect (nshell.domain.parsing::%unterminated-process-substitution-token-p "<(")
+            :to-be-truthy)
+    (expect (nshell.domain.parsing::%unterminated-process-substitution-token-p ">(")
+            :to-be-truthy)
+    (expect (nshell.domain.parsing::%unterminated-process-substitution-token-p "<")
+            :to-be-falsy)
+    (expect (nshell.domain.parsing::%unterminated-process-substitution-token-p "$(")
+            :to-be-falsy)))

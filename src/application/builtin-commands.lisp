@@ -11,23 +11,23 @@
 
 (defun %update-directory-environment (context environment old-cwd new-cwd)
   (when environment
-    (setf environment
-          (nshell.domain.environment:env-set
-           environment
-           "OLDPWD"
-           (namestring old-cwd)
-           (if (nshell.domain.environment:env-defined-p environment "OLDPWD")
-               (nshell.domain.environment:env-exported-p environment "OLDPWD")
-               t))
-          environment
-          (nshell.domain.environment:env-set
-           environment
-           "PWD"
-           (namestring new-cwd)
-           (if (nshell.domain.environment:env-defined-p environment "PWD")
-               (nshell.domain.environment:env-exported-p environment "PWD")
-               t))
-          (shell-context-environment context) environment)))
+    (let* ((environment
+             (nshell.domain.environment:env-set
+              environment
+              "OLDPWD"
+              (namestring old-cwd)
+              (if (nshell.domain.environment:env-defined-p environment "OLDPWD")
+                  (nshell.domain.environment:env-exported-p environment "OLDPWD")
+                  t)))
+           (environment
+             (nshell.domain.environment:env-set
+              environment
+              "PWD"
+              (namestring new-cwd)
+              (if (nshell.domain.environment:env-defined-p environment "PWD")
+                  (nshell.domain.environment:env-exported-p environment "PWD")
+                  t))))
+      (setf (shell-context-environment context) environment))))
 
 (defun %builtin-cd (context args)
   (handler-case

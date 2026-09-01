@@ -72,6 +72,7 @@
    (:file "domain/parsing/control-flow-sequence")
    (:file "domain/parsing/parser-data-definitions")
    (:file "domain/parsing/parser-data")
+   (:file "domain/parsing/parser-shell-redirect")
    (:file "domain/parsing/parser-redirect-data"
           :pathname "../data/domain/parsing/parser-redirect-data")
    (:file "domain/parsing/parser-separator-static-data"

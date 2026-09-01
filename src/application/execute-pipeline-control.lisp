@@ -63,7 +63,14 @@ Builds the final output string by joining all pushed chunks in order."
          ,form
        (when chunk
          (push chunk ,output))
-       (setf ,code ,code-value))))
+       (setf ,code ,code-value)))
+
+  (defmacro %handle-loop-control (iteration-block)
+    "Handle the pending loop signal within ITERATION-BLOCK."
+    `(case (%consume-loop-control-signal)
+       (:break (return))
+       (:propagate (return))
+       (:continue (return-from ,iteration-block nil)))))
 
 (defun %record-last-exit-code (context code)
   "Record CODE for both the execution context and the shell-visible status.
@@ -157,10 +164,7 @@ when an enclosing loop must handle the remaining count."
                   (output code)
                   (%execute-ast-list-in-context context (nshell.domain.parsing:for-node-body ast)))
                  (%record-last-exit-code context code)
-                 (case (%consume-loop-control-signal)
-                   (:break (return))
-                   (:propagate (return))
-                   (:continue (return-from for-iteration nil)))
+                 (%handle-loop-control for-iteration)
                  (unless (shell-context-running context)
                    (return)))))))
 
@@ -173,19 +177,13 @@ when an enclosing loop must handle the remaining count."
               (%execute-condition-in-context context
                                               (nshell.domain.parsing:while-node-condition ast))
             (declare (ignore _out))
-            (case (%consume-loop-control-signal)
-              (:break (return))
-              (:propagate (return))
-              (:continue (return-from while-iteration nil)))
+            (%handle-loop-control while-iteration)
             (unless (= 0 condition-code) (return)))
           (%collect-execution-result
            (output code)
            (%execute-ast-list-in-context context (nshell.domain.parsing:while-node-body ast)))
           (%record-last-exit-code context code)
-          (case (%consume-loop-control-signal)
-            (:break (return))
-            (:propagate (return))
-            (:continue (return-from while-iteration nil)))
+          (%handle-loop-control while-iteration)
           (unless (shell-context-running context)
             (return)))))))
 

@@ -822,3 +822,17 @@
               :to-be
               (nshell.domain.parsing:parse-diagnostic-kind
                (first (nshell.domain.parsing::%token-reduction-state-errors state))))))
+
+  (it "token-reduction-normalizes-pipe-and-stderr"
+    "Pipe-and-stderr shares the ordinary pipeline AST with an explicit redirect."
+    (let* ((state (nshell.domain.parsing::%make-token-reduction-state))
+           (command (nshell.domain.parsing:make-token :word "echo" 0 4))
+           (pipe-and-stderr (nshell.domain.parsing:make-token :pipe "|&" 5 7)))
+      (nshell.domain.parsing::%token-reduction-word state command)
+      (nshell.domain.parsing::%token-reduction-separator state pipe-and-stderr)
+      (expect '("2>&1") :to-equal
+              (mapcar #'nshell.domain.parsing:arg-value
+                      (nshell.domain.parsing:command-node-args
+                       (first (first (nshell.domain.parsing::%token-reduction-state-all-cmds state))))))
+      (expect :pipe :to-be
+              (second (first (nshell.domain.parsing::%token-reduction-state-all-cmds state))))))

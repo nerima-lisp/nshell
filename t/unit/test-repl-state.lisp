@@ -6,6 +6,27 @@
      ,test))
 
 (describe "repl-state-data-contracts"
+  (it "constructs the canonical input state defaults"
+    (let ((state (nshell.presentation:make-input-state)))
+      (expect "" :to-equal
+              (nshell.presentation::input-state-buffer state))
+      (expect 0 :to-equal
+              (nshell.presentation::input-state-cursor-pos state))
+      (expect -1 :to-equal
+              (nshell.presentation::input-state-completion-index state))
+      (expect :insert :to-equal
+              (nshell.presentation::input-state-mode state))
+      (expect "" :to-equal
+              (nshell.presentation::input-state-search-query state))
+      (expect "" :to-equal
+              (nshell.presentation::input-state-search-original-buffer state))
+      (expect 0 :to-equal
+              (nshell.presentation::input-state-search-index state))
+      (expect (null (nshell.presentation::input-state-undo-stack state))
+              :to-be-truthy)
+      (expect (null (nshell.presentation::input-state-redo-stack state))
+              :to-be-truthy)))
+
   (it "preserves every input-state constructor field"
     (let* ((values (list "echo あ" 4 2 "echo " 5 '("echo hi") " suggestion"
                          :insert 3 7 1 9 #'identity '("old") 0 4 2 5 8 1

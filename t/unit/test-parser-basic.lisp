@@ -388,6 +388,66 @@
       (expect '("hello") :to-equal (nshell.domain.parsing::%token-reduction-state-current-args state))
       (expect :pipe :to-be (nshell.domain.parsing::%token-reduction-state-pending-sep state))))
 
+  (it "parser-reduction-data-boundaries-preserve-explicit-fields"
+    "Reducer data objects expose every field through their domain-owned accessors."
+    (let* ((command-token (nshell.domain.parsing:make-token :word "echo" 0 4))
+           (redirect-token (nshell.domain.parsing:make-token :redirect ">" 5 6))
+           (separator-token (nshell.domain.parsing:make-token :pipe "|" 7 8))
+           (state
+             (nshell.domain.parsing::%make-token-reduction-state
+              :all-cmds '("previous")
+              :current-args '("hello")
+              :current-cmd "echo"
+              :current-cmd-token command-token
+              :current-cmd-fragments '("ec" "ho")
+              :last-word-token command-token
+              :pending-redirect-token redirect-token
+              :pending-sep :pipe
+              :pending-sep-token separator-token
+              :errors '("diagnostic")))
+           (result (nshell.domain.parsing::%make-token-reduction-result
+                    '("command") '("error")))
+           (argument (nshell.domain.parsing::%make-token-reduction-argument
+                      "hello" :double t '("hel" "lo")))
+           (policy (nshell.domain.parsing::%make-token-reduction-diagnostic-policy
+                    :unexpected-token "Unexpected token")))
+      (dolist (case `((,(nshell.domain.parsing::%token-reduction-state-all-cmds state)
+                       ("previous"))
+                      (,(nshell.domain.parsing::%token-reduction-state-current-args state)
+                       ("hello"))
+                      (,(nshell.domain.parsing::%token-reduction-state-current-cmd state) "echo")
+                      (,(nshell.domain.parsing::%token-reduction-state-current-cmd-token state)
+                       ,command-token)
+                      (,(nshell.domain.parsing::%token-reduction-state-current-cmd-fragments state)
+                       ("ec" "ho"))
+                      (,(nshell.domain.parsing::%token-reduction-state-last-word-token state)
+                       ,command-token)
+                      (,(nshell.domain.parsing::%token-reduction-state-pending-redirect-token state)
+                       ,redirect-token)
+                      (,(nshell.domain.parsing::%token-reduction-state-pending-sep state) :pipe)
+                      (,(nshell.domain.parsing::%token-reduction-state-pending-sep-token state)
+                       ,separator-token)
+                      (,(nshell.domain.parsing::%token-reduction-state-errors state)
+                       ("diagnostic"))))
+        (destructuring-bind (actual expected) case
+          (expect expected :to-equal actual)))
+      (expect '("command") :to-equal
+              (nshell.domain.parsing::%token-reduction-result-commands result))
+      (expect '("error") :to-equal
+              (nshell.domain.parsing::%token-reduction-result-errors result))
+      (expect "hello" :to-equal
+              (nshell.domain.parsing::%token-reduction-argument-value argument))
+      (expect :double :to-be
+              (nshell.domain.parsing::%token-reduction-argument-quote-style argument))
+      (expect t :to-be
+              (nshell.domain.parsing::%token-reduction-argument-syntactic-p argument))
+      (expect '("hel" "lo") :to-equal
+              (nshell.domain.parsing::%token-reduction-argument-fragments argument))
+      (expect :unexpected-token :to-be
+              (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind policy))
+      (expect "Unexpected token" :to-equal
+              (nshell.domain.parsing::%token-reduction-diagnostic-policy-message policy))))
+
   (it "parser-reduction-state-records-diagnostic-boundary"
     "Token reduction state owns diagnostic recording through a single boundary."
     (let* ((state (nshell.domain.parsing::%make-token-reduction-state))

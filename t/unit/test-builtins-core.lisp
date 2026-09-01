@@ -604,6 +604,18 @@
       (expect '("" "") :to-equal (lines (format nil "~%")))
       (expect '("a" "" "") :to-equal (lines (format nil "a~%~%")))))
 
+  (it "type-path-candidate-selection-respects-all"
+    "type path candidate selection keeps the first match unless --all is active."
+    (let ((paths '((:path "/one") (:path "/two")))
+          (options (nshell.application::make-%type-options)))
+      (expect '((:path "/one"))
+              :to-equal
+              (nshell.application::%type-add-path-candidates nil options paths))
+      (setf (nshell.application::%type-options-all-p options) t)
+      (expect '((:path "/two") (:path "/one"))
+              :to-equal
+              (nshell.application::%type-add-path-candidates nil options paths))))
+
   (it "type-option-parser-rejects-invalid-and-conflicting-options"
     "The type parser stops at --, rejects invalid flags, and rejects multiple modes."
     (multiple-value-bind (options remaining parse-error code)

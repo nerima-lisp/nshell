@@ -209,6 +209,24 @@
       (setf (car body) body-replacement)
       (expect body-original :to-be (first (nshell.domain.parsing:begin-end-node-body node)))))
 
+  (it "ast-node-leaf-constructors-preserve-domain-values"
+    "Leaf AST nodes retain their typed payload and source span."
+    (let ((span '((1 . 2) (1 . 5))))
+      (let ((argument (nshell.domain.parsing::%make-argument-node "value" span))
+            (operator (nshell.domain.parsing::%make-operator-node "&&" span))
+            (error-node (nshell.domain.parsing::%make-error-node "unexpected" 3 span))
+            (incomplete (nshell.domain.parsing::%make-incomplete-node
+                         "partial" :command span)))
+        (expect "value" :to-equal (nshell.domain.parsing::argument-node-value argument))
+        (expect "&&" :to-equal (nshell.domain.parsing::operator-node-operator operator))
+        (expect "unexpected" :to-equal (nshell.domain.parsing::error-node-message error-node))
+        (expect 3 :to-equal (nshell.domain.parsing::error-node-position error-node))
+        (expect "partial" :to-equal
+                (nshell.domain.parsing::incomplete-node-partial-text incomplete))
+        (expect :command :to-be (nshell.domain.parsing::incomplete-node-kind incomplete))
+        (dolist (node (list argument operator error-node incomplete))
+          (expect span :to-be (nshell.domain.parsing::ast-node-span node))))))
+
   (it "sequence-node-command-separators-project-copied-node-state"
     "Sequence traversal should expose typed command/separator entries without leaking AST state."
     (let* ((left (nshell.domain.parsing:make-command-node "echo" '("left")))

@@ -217,4 +217,13 @@
             (nshell.infrastructure.acl:get-git-status "/failed-status/")
           (expect "main" :to-equal branch)
           (expect dirty-p :to-be-falsy)))
-      (expect 2 :to-equal calls))))
+      (expect 2 :to-equal calls)))
+  (it "git-runner-converts-invalid-repository-to-an-empty-result"
+    "A prompt probe must remain non-blocking for an invalid repository."
+    (let ((nshell.infrastructure.acl::*git-runner* nil))
+      (multiple-value-bind (output code)
+          (nshell.infrastructure.acl::%run-git
+           "/path/that/does/not/exist/"
+           '("rev-parse" "--abbrev-ref" "HEAD"))
+        (expect "" :to-equal output)
+        (expect 128 :to-equal code)))))

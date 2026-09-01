@@ -128,24 +128,23 @@ branch additionally skips closing when stderr is EQ to the current stdout
 -- the state REDIRECT-ERROR-TO-OUTPUT or REDIRECT-OUTPUT-AND-ERROR leaves
 behind -- so a stream already closed via the stdout branch (or never
 independently opened at all) is not closed a second time."
-  (let ()
-    (when *redirected-stdout*
-      (setf *standard-output* *redirected-stdout*))
-    (when *redirected-stderr*
-      (setf *error-output* *redirected-stderr*))
-    (when *redirected-stdin*
-      (setf *standard-input* *redirected-stdin*))
-    (dolist (stream
-             (remove-duplicates
-              (remove nil
-                      (list *redirected-stdout-owned*
-                            *redirected-stderr-owned*
-                            *redirected-stdin-owned*))
-              :test #'eq))
-      (%close-owned-redirect-stream stream))
-    (setf *redirected-stdout* nil
-          *redirected-stderr* nil
-          *redirected-stdin* nil
-          *redirected-stdout-owned* nil
-          *redirected-stderr-owned* nil
-          *redirected-stdin-owned* nil)))
+  (when *redirected-stdout*
+    (setf *standard-output* *redirected-stdout*))
+  (when *redirected-stderr*
+    (setf *error-output* *redirected-stderr*))
+  (when *redirected-stdin*
+    (setf *standard-input* *redirected-stdin*))
+  (dolist (stream
+           (remove-duplicates
+            (remove nil
+                    (list *redirected-stdout-owned*
+                          *redirected-stderr-owned*
+                          *redirected-stdin-owned*))
+            :test #'eq))
+    (%close-owned-redirect-stream stream))
+  (setf *redirected-stdout* nil
+        *redirected-stderr* nil
+        *redirected-stdin* nil
+        *redirected-stdout-owned* nil
+        *redirected-stderr-owned* nil
+        *redirected-stdin-owned* nil))

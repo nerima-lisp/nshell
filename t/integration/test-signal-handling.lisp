@@ -1,6 +1,17 @@
 (in-package #:nshell/test)
 
 (describe "signal-handling-tests"
+  (it "compares signal value objects by name and number"
+    (let ((sigint (nshell.domain.signals:make-signal :sigint 2))
+          (other-name (nshell.domain.signals:make-signal :sigterm 2))
+          (other-number (nshell.domain.signals:make-signal :sigint 15)))
+      (expect (nshell.domain.signals:signal= sigint sigint) :to-be-truthy)
+      (expect (nshell.domain.signals:signal= sigint other-name) :to-be-falsy)
+      (expect (nshell.domain.signals:signal= sigint other-number) :to-be-falsy)
+      (expect (nshell.domain.signals:signal= sigint :sigint) :to-be-falsy)
+      (expect :sigint :to-equal (nshell.domain.signals:signal-name sigint))
+      (expect 2 :to-equal (nshell.domain.signals:signal-number sigint))))
+
   (it "signal-constants-and-mapping-exist"
     "Signal constants can be mapped between OS and domain values."
     (expect (nshell.domain.signals:signal-p

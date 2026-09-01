@@ -38,7 +38,9 @@
   (let ((passed-p
           (handler-case
               (progn
+                  (format *error-output* "before prolog~%")
                   (asdf:load-system "cl-prolog-kit")
+                  (format *error-output* "after prolog~%")
                   (asdf:load-system "nshell/test" :force t)
                 (multiple-value-bind (result selected-count)
                     (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))

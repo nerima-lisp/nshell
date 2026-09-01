@@ -78,7 +78,7 @@ outside the tested support boundary.
 
 ```sh
 nix develop          # SBCL with CL_SOURCE_REGISTRY already set
-nix run .#test       # run the test suite
+nix build .#checks.$(nix eval --raw --impure --expr 'builtins.currentSystem').default --no-link  # run the test suite
 nix flake check      # full hermetic gate on x86_64-linux CI
 nix fmt              # format Nix sources (treefmt)
 nix build            # produces ./result/bin/nshell

@@ -513,9 +513,8 @@
       # cl-prolog-kit, whose whole source tree is already on the registry above.
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
 
-      # Drives `checks.default`, `checks.weave` and `apps.test` from this one
-      # number, so the command a contributor runs by hand and the gate CI runs
-      # cannot drift apart. Bounded so a hung suite fails in half an hour
+      # Drives the test checks from this one number, so the contributor-facing
+      # gate and CI cannot drift apart. Bounded so a hung suite fails in half an hour
       # rather than occupying a runner until GitHub's six-hour job ceiling.
       timeoutSeconds = 1800;
 

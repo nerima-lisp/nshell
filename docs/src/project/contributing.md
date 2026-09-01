@@ -65,6 +65,16 @@ tests plus at least one integration or REPL/source test when behaviour crosses
 a layer boundary. For terminal, job-control, or process changes, state which
 operating systems were verified.
 
+### Property and fixture tests
+
+Use `nshell/weave` for completion and parser behaviours that have a meaningful
+input space rather than enumerating only examples. The suite is built on
+`cl-weave` and `cl-prolog-kit/weave`; run it with the command in the table above.
+Keep generated cases deterministic by deriving them from the supplied fixture
+seed, and keep the assertion at the observable boundary. Example-based tests
+remain appropriate for terminal, process, and signal interactions where the
+operating system is part of the behaviour.
+
 ## Quality expectations
 
 - Parser and expansion behaviour must be deterministic, and covered by negative

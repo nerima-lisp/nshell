@@ -72,6 +72,31 @@
              "echo" :builtin "echo" :execute)
             :to-be-null)))
 
+(describe "test predicate boundaries"
+  (it "covers unary and numeric false branches"
+    "Predicate helpers preserve shell test semantics at their direct boundaries."
+    (let ((context (make-test-shell-context)))
+      (expect (nshell.application::%test-unary-predicate-p context "-n" "value")
+              :to-be-truthy)
+      (expect (nshell.application::%test-unary-predicate-p context "-n" "")
+              :to-be-falsy)
+      (expect (nshell.application::%test-unary-predicate-p context "-z" "")
+              :to-be-truthy)
+      (expect (nshell.application::%test-unary-predicate-p context "-z" "value")
+              :to-be-falsy)
+      (expect (nshell.application::%test-unary-predicate-p context "-f" "/missing")
+              :to-be-falsy)
+      (expect (nshell.application::%test-unary-predicate-p context "-d" "/missing")
+              :to-be-falsy)
+      (expect (nshell.application::%test-unary-predicate-p context "-e" "/missing")
+              :to-be-falsy)
+      (expect (nshell.application::%test-unary-predicate-p context "?" "value")
+              :to-be-falsy))
+    (multiple-value-bind (output code)
+        (nshell.application::%test-binary-numeric-result "2" "-lt" "1")
+      (expect output :to-be-null)
+      (expect 1 :to-equal code))))
+
 (describe "command and eval dispatch"
   (it "reports command paths and executes the selected command"
     (with-builtins-context (context)

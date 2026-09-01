@@ -279,6 +279,39 @@ src/infrastructure/acl/syscall-process.lisp for the interactivity gate that
 now decides whether this default is even consulted."
     (expect nil :to-equal nshell.infrastructure.acl:*external-command-timeout*))
 
+  (it "external-redirect-plan-preserves-routing-data"
+    "External process routing is an immutable data boundary with no copier."
+    (let ((plan (nshell.application::%make-external-process-redirect-plan
+                 "stdout.log" :append
+                 "stderr.log" :supersede
+                 :stdout :stderr t)))
+      (expect (nshell.application::%external-process-redirect-plan-p plan)
+              :to-be-truthy)
+      (expect (fboundp
+                'nshell.application::copy-%external-process-redirect-plan)
+              :to-be-falsy)
+      (expect "stdout.log" :to-equal
+              (nshell.application::%external-process-redirect-plan-stdout-target
+               plan))
+      (expect :append :to-be
+              (nshell.application::%external-process-redirect-plan-stdout-mode
+               plan))
+      (expect "stderr.log" :to-equal
+              (nshell.application::%external-process-redirect-plan-stderr-target
+               plan))
+      (expect :supersede :to-be
+              (nshell.application::%external-process-redirect-plan-stderr-mode
+               plan))
+      (expect :stdout :to-be
+              (nshell.application::%external-process-redirect-plan-stdout-endpoint
+               plan))
+      (expect :stderr :to-be
+              (nshell.application::%external-process-redirect-plan-stderr-endpoint
+               plan))
+      (expect (nshell.application::%external-process-redirect-plan-merge-stderr-p
+               plan)
+              :to-be-truthy)))
+
   (it "command-substitution-timeout-defaults-to-nil"
     "Command substitution is unbounded by default, like every other shell.
 Before this change the default was 30, silently capping any `$(...)` at 30

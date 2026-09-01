@@ -11,7 +11,7 @@
                 (text next-position newline-p))
             (:copier nil))
   (text "" :type string :read-only t)
-  next-position
+  (next-position nil :read-only t)
   (newline-p nil :type boolean :read-only t))
 
 (defstruct (%here-doc-body
@@ -19,7 +19,7 @@
                 (body next-position missing-delimiter-p))
             (:copier nil))
   (body "" :type string :read-only t)
-  next-position
+  (next-position nil :read-only t)
   (missing-delimiter-p nil :type boolean :read-only t))
 
 (defstruct (%here-doc-consumption
@@ -27,7 +27,7 @@
                 (bodies next-position incomplete-p))
             (:copier nil))
   (bodies '() :type list :read-only t)
-  next-position
+  (next-position nil :read-only t)
   (incomplete-p nil :type boolean :read-only t))
 
 (defstruct (%here-doc-consumption-state
@@ -35,5 +35,5 @@
                 (reversed-bodies next-position incomplete-p))
             (:copier nil))
   (reversed-bodies '() :type list :read-only t)
-  next-position
+  (next-position nil :read-only t)
   (incomplete-p nil :type boolean :read-only t))

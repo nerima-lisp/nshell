@@ -130,6 +130,47 @@ by the kernel and never reaches this handler."
         (nshell.infrastructure.acl::shell-sigtstp-handler nil nil nil)
         (expect calls :to-be-null))))
 
+  (it "sigtstp-handler-suspends-the-shell-without-a-foreground-child"
+    "SIGTSTP restores the terminal and suspends the shell when idle."
+    (let ((calls nil)
+          (nshell.infrastructure.acl::*shell-pgid* 1000)
+          (nshell.infrastructure.acl::*foreground-pgid* 0))
+      (with-temporary-functions
+          (('nshell.infrastructure.acl::%signal-foreground-process-group
+            (lambda (signal)
+              (declare (ignore signal))
+              nil))
+           ('nshell.infrastructure.terminal:restore-terminal-mode
+            (lambda () (push :restore-terminal calls)))
+           ('nshell.infrastructure.acl:kill-process
+            (lambda (pid signal)
+              (push (list :self pid signal) calls)))
+           ('nshell.infrastructure.acl::current-process-id
+            (lambda () 1000)))
+        (nshell.infrastructure.acl::shell-sigtstp-handler nil nil nil)
+        (expect 2 :to-be (length calls))
+        (expect t :to-be
+                (some (lambda (call)
+                        (equal :restore-terminal call))
+                      calls)))
+        (expect t :to-be
+                (some (lambda (call)
+                        (equal (list :self 1000 sb-unix:sigtstp) call))
+                      calls))))
+
+  (it "sigcont-handler-reenables-raw-mode-and-reclaims-terminal"
+    "SIGCONT restores interactive terminal ownership."
+    (let ((calls nil))
+      (with-temporary-functions
+          (('nshell.infrastructure.terminal:enable-raw-mode
+            (lambda () (push :enable-raw-mode calls)))
+           ('nshell.infrastructure.acl:set-foreground-pgroup
+            (lambda (pgid) (push (list :foreground pgid) calls)))
+           ('nshell.infrastructure.acl::current-process-id
+            (lambda () 1000)))
+        (nshell.infrastructure.acl::shell-sigcont-handler nil nil nil)
+        (expect '((:foreground 1000) :enable-raw-mode) :to-equal calls))))
+
   (it "foreground-forwarding-clears-stale-pgid-errors"
     "Foreground process-group races must not escape from signal handlers."
     (let ((calls nil)

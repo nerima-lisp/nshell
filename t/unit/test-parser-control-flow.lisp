@@ -50,6 +50,34 @@
       (expect "invalid" :to-equal
               (nshell.domain.parsing::%token-reduction-diagnostic-policy-message policy))))
 
+  (it "parser-value-objects-default-to-empty-boundaries"
+    "Parser data records expose deterministic empty defaults before reduction."
+    (let ((scan (nshell.domain.parsing::%make-here-doc-delimiter-scan nil))
+          (state (nshell.domain.parsing::%make-token-reduction-state))
+          (result (nshell.domain.parsing::%make-token-reduction-result nil nil))
+          (argument (nshell.domain.parsing::%make-token-reduction-argument
+                     "" nil nil nil))
+          (policy (nshell.domain.parsing::%make-token-reduction-diagnostic-policy
+                   :warning "")))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-delimiter-scan-reversed-delimiters scan))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%token-reduction-state-all-cmds state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%token-reduction-state-current-args state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%token-reduction-state-errors state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%token-reduction-result-commands result))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%token-reduction-result-errors result))
+      (expect "" :to-equal
+              (nshell.domain.parsing::%token-reduction-argument-value argument))
+      (expect :warning :to-equal
+              (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind policy))
+      (expect "" :to-equal
+              (nshell.domain.parsing::%token-reduction-diagnostic-policy-message policy))))
+
   (it "parse-incomplete-control-flow-blocks"
     (do-command-lines (line '("if true"
                               "for item in a b"

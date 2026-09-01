@@ -49,6 +49,14 @@
                      (emit name))
                    table)))))
 
+(defmacro %define-name-table-formatter (name (key value) &body body)
+  `(defun ,name (table &optional names)
+     (%format-name-table
+      table
+      (lambda (out ,key ,value)
+        ,@body)
+      names)))
+
 (defun %split-alias-assignment (arg)
   (let ((position (position #\= arg)))
     (when (and position (plusp position))
@@ -101,12 +109,8 @@
                            (%alias-inline-expansion name inline-value args)))
            (%alias-store-assignment table args))))))
 
-(defun %format-aliases (table &optional names)
-  (%format-name-table
-   table
-   (lambda (out name value)
-     (format out "alias ~a=~a~%" name value))
-   names))
+(%define-name-table-formatter %format-aliases (name value)
+  (format out "alias ~a=~a~%" name value))
 
 (defun %abbreviation-expansion (value)
   (if (nshell.domain.abbreviation:abbreviation-p value)
@@ -117,25 +121,19 @@
   (when (nshell.domain.abbreviation:abbreviation-p value)
     (nshell.domain.abbreviation:abbreviation-position value)))
 
-(defun %format-abbreviations (table)
-  (%format-name-table
-   table
-   (lambda (out key value)
-     (let ((expansion (%abbreviation-expansion value))
-           (position (%abbreviation-position value)))
-       (if position
-           (format out "abbr -a --position ~a ~a ~a~%"
-                   (string-downcase (symbol-name position))
-                   key
-                   expansion)
-           (format out "abbr -a ~a ~a~%" key expansion))))))
+(%define-name-table-formatter %format-abbreviations (key value)
+  (let ((expansion (%abbreviation-expansion value))
+        (position (%abbreviation-position value)))
+    (if position
+        (format out "abbr -a --position ~a ~a ~a~%"
+                (string-downcase (symbol-name position))
+                key
+                expansion)
+        (format out "abbr -a ~a ~a~%" key expansion))))
 
-(defun %format-abbreviation-names (table)
-  (%format-name-table
-   table
-   (lambda (out key value)
-     (declare (ignore value))
-     (format out "~a~%" key))))
+(%define-name-table-formatter %format-abbreviation-names (key value)
+  (declare (ignore value))
+  (format out "~a~%" key))
 
 (defun %abbr-usage ()
   (%builtin-usage

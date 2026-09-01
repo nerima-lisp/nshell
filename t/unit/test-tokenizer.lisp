@@ -124,6 +124,47 @@ letting word-reading stop on an unconsumed terminator."
       (expect :special :to-be (kind "# comment"))
       (expect :word :to-be (kind "echo"))))
 
+  (it "tokenizer-special-dispatch-routes-only-shell-boundaries"
+    "Special dispatch should expose operator and reader boundaries, and reject words."
+    (let ((operator-route
+            (nshell.domain.parsing::%tokenizer-special-dispatch-route #\|))
+          (reader-route
+            (nshell.domain.parsing::%tokenizer-special-dispatch-route #\())
+          (word-route
+            (nshell.domain.parsing::%tokenizer-special-dispatch-route #\a)))
+      (expect :operator-separator :to-be
+              (nshell.domain.parsing::%tokenizer-special-dispatch-route-kind
+               operator-route))
+      (expect :reader-boundary :to-be
+              (nshell.domain.parsing::%tokenizer-special-dispatch-route-kind
+               reader-route))
+      (expect nil :to-be word-route)
+      (expect nil :to-be
+              (nshell.domain.parsing::%tokenizer-special-dispatch-character-p #\a))))
+
+  (it "tokenizer-fd-redirect-start-requires-a-complete-operator"
+    "A digit is a redirect prefix only when its lookahead reaches < or >."
+    (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input "2>")))
+      (expect
+       (nshell.domain.parsing::%tokenizer-fd-redirect-start-p
+        state (nshell.domain.parsing::%tokenizer-state-peek state))
+       :to-be-truthy))
+    (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input "20<")))
+      (expect
+       (nshell.domain.parsing::%tokenizer-fd-redirect-start-p
+        state (nshell.domain.parsing::%tokenizer-state-peek state))
+       :to-be-truthy))
+    (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input "2word")))
+      (expect
+       (nshell.domain.parsing::%tokenizer-fd-redirect-start-p
+        state (nshell.domain.parsing::%tokenizer-state-peek state))
+       :to-be nil))
+    (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input "2")))
+      (expect
+       (nshell.domain.parsing::%tokenizer-fd-redirect-start-p
+        state (nshell.domain.parsing::%tokenizer-state-peek state))
+       :to-be nil)))
+
   (it "tokenizer-left-paren-route-projects-command-substitution-policy"
     "Left-paren handling should project command-substitution routing before mutation."
     (flet ((route-facts (input)

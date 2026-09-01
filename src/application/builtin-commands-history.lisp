@@ -60,11 +60,11 @@
 
 (defun %builtin-history (context args)
   (let ((history (shell-context-history context)))
-    (if (null args)
-        (%history-list history)
+    (if args
         (let ((spec (cdr (assoc (first args)
                                 +history-subcommand-specs+
                                 :test #'string=))))
           (if spec
               (funcall (getf spec :handler) history (rest args))
-              (values (%history-usage) 1))))))
+              (values (%history-usage) 1)))
+        (%history-list history))))

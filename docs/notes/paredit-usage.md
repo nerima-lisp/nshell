@@ -43,3 +43,18 @@ cross-file call/symbol rewrite) or wherever a *report* can replace guesswork
 where a direct edit verified by the test suite is clearer. Every `--write` pass
 above was gated by a preceding read-only report and followed by the full
 `nshell/test` run.
+
+## Reproducible development tool
+
+The flake development shell provides `paredit-cli` as a development-only
+input, pinned independently from nshell's runtime dependencies. This keeps
+the preferred structural-editing workflow available through `nix develop`
+without making the delivered executable depend on the refactoring tool.
+
+The shell exposes `paredit` with read-only `inspect` commands, structural
+`refactor` commands, and guarded `--write` operations. Check the installed
+command with:
+
+```sh
+nix develop --command paredit --version
+```

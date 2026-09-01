@@ -39,6 +39,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # paredit-cli is a development-only structure editor. Keeping it outside
+    # the runtime registry makes the delivered shell independent of the
+    # refactoring tool while making the repository's preferred Lisp workflow
+    # reproducible.
+    paredit-cli = {
+      url = "github:nerima-lisp/paredit-cli/v1.6.2";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # The rest of the nerima-lisp toolkit family. We only need each one's
     # source tree (built as an SBCL lisp library by `lispDependencies` below),
     # so consume them as non-flake sources. `flake = false` reaches the same
@@ -118,6 +127,7 @@
       cl-nix-forge,
       cl-prolog-kit,
       cl-weave,
+      paredit-cli,
       cl-parser-kit,
       cl-dataflow-kit,
       cl-host-kit,
@@ -562,7 +572,10 @@
       # The cl-weave CLI, which the suites' reporters are documented against.
       # Interactive only: the registry the shell exports already carries every
       # system, check dependencies included.
-      devShellPackages = ctx: [ cl-weave.packages.${ctx.system}.default ];
+      devShellPackages = ctx: [
+        cl-weave.packages.${ctx.system}.default
+        paredit-cli.packages.${ctx.system}.default
+      ];
 
       overrideOutputs =
         ctx:

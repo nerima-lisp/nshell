@@ -69,6 +69,22 @@
       (expect '() :to-equal
               (coerce (nshell.util:utf-8-octets "") 'list))))
 
+  (it "pty-io-reports-invalid-descriptor-errors"
+    "Read and write failures remain visible at the PTY boundary."
+    #+(or darwin linux)
+    (let ((buffer (make-array 8 :element-type '(unsigned-byte 8))))
+      (expect (lambda ()
+                (nshell.infrastructure.acl:pty-read -1 buffer 8))
+              :to-throw 'error)
+      (expect (lambda ()
+                (nshell.infrastructure.acl:pty-write
+                 -1
+                 (make-array 1 :element-type '(unsigned-byte 8)
+                               :initial-element 0)))
+              :to-throw 'error))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
   (it "pty-open-write-read-close"
     "PTY can be opened, used in both directions, and closed."
     #-(or darwin linux)

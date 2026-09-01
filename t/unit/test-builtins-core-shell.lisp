@@ -55,6 +55,25 @@
          :code 1
          :contains '("set: usage:")))))
 
+  (it "environment-builtins-reject-invalid-identifiers-and-options"
+    "Environment builtins expose stable diagnostics for invalid names and options."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "export" '("--" "NSHELL_EXPORT_AFTER_TERMINATOR=ok"))
+        :code 0
+        :output-null t)
+      (assert-builtin-call (context "export" '("bad-name"))
+        :code 2
+        :contains '("export: invalid identifier:"))
+      (assert-builtin-call (context "unset" '("--verbose"))
+        :code 2
+        :contains '("unset: usage:"))
+      (assert-builtin-call (context "unset" '("bad-name"))
+        :code 2
+        :contains '("unset: invalid identifier:"))
+      (assert-builtin-call (context "set" '("--unknown"))
+        :code 1
+        :contains '("set: usage:"))))
+
   (it "export-parsers-accept-valid-identifiers-and-split-values"
     "Export's small parsers keep identifier validation and assignment parsing deterministic."
     (dolist (name '("A" "_private" "A1" "A_B"))

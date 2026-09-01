@@ -78,6 +78,37 @@
       (expect "" :to-equal
               (nshell.domain.parsing::%token-reduction-diagnostic-policy-message policy))))
 
+  (it "here-doc-value-objects-default-to-empty-boundaries"
+    "Here-document data records expose deterministic empty defaults before consumption."
+    (let ((line (nshell.domain.parsing::%make-here-doc-line "" nil nil))
+          (body (nshell.domain.parsing::%make-here-doc-body "" nil nil))
+          (consumption (nshell.domain.parsing::%make-here-doc-consumption nil nil nil))
+          (state (nshell.domain.parsing::%make-here-doc-consumption-state nil nil nil)))
+      (expect "" :to-equal
+              (nshell.domain.parsing::%here-doc-line-text line))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-line-next-position line))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-line-newline-p line))
+      (expect "" :to-equal
+              (nshell.domain.parsing::%here-doc-body-body body))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-body-next-position body))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-consumption-bodies consumption))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-consumption-next-position consumption))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-consumption-incomplete-p consumption))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-consumption-state-reversed-bodies state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-consumption-state-next-position state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::%here-doc-consumption-state-incomplete-p state))))
+
   (it "parse-incomplete-control-flow-blocks"
     (do-command-lines (line '("if true"
                               "for item in a b"

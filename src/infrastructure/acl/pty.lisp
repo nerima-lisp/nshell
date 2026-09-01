@@ -22,9 +22,14 @@
 (sb-alien:define-alien-routine ("posix_openpt" %posix-openpt) sb-alien:int
   (flags sb-alien:int))
 
+(defun %syscall-failed-p (result)
+  (or (null result)
+      (and (integerp result) (minusp result))))
+
 (defun %check-errno (result operation)
-  (when (minusp result)
-    (error "~a failed with errno ~d" operation (sb-unix::get-errno)))
+  (when (%syscall-failed-p result)
+    (error "~a failed (result=~s, errno=~s)"
+           operation result (sb-unix::get-errno)))
   result)
 
 (defun %pty-open-flags ()
@@ -49,7 +54,7 @@
 (defun open-pty-linux ()
   "Open a pseudo-terminal pair on Linux using posix_openpt(3)."
   (let* ((master (let ((fd (ignore-errors (%posix-openpt (%pty-open-flags)))))
-                   (if (and fd (not (minusp fd)))
+                   (if (and fd (not (%syscall-failed-p fd)))
                        fd
                        (sb-posix:open "/dev/ptmx" (%pty-open-flags)))))
          (slave-name nil))

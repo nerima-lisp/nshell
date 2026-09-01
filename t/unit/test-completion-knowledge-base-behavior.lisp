@@ -576,12 +576,15 @@
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command-from-help
        kb "tool"
-       (format nil "Commands:~%  run   execute the tool~%  test  verify behavior~%~%  --format=(json|yaml)~%  --verbose~%  --mode=(fast|safe)")
+       (format nil "Commands:~%  run   execute the tool~%  test  verify behavior~%~%  --format=(json|yaml)~%  --input <file>~%  --output <directory>~%  --verbose~%  --mode=(fast|safe)")
        :description "parsed help")
       (expect '("run" "test") :to-equal (nshell.domain.completion:kb-command-subcommands kb "tool"))
-      (expect '("--format" "--verbose" "--mode") :to-equal (nshell.domain.completion:kb-command-flags kb "tool"))
+      (expect '("--format" "--input" "--output" "--verbose" "--mode") :to-equal (nshell.domain.completion:kb-command-flags kb "tool"))
       (expect '(("--format" "json" "yaml")
                    ("--mode" "fast" "safe")) :to-equal (nshell.domain.completion:kb-command-option-values kb "tool"))
+      (expect '(("--input" :file) ("--output" :directory))
+              :to-equal
+              (nshell.domain.completion:kb-command-option-value-kinds kb "tool"))
       (expect "parsed help" :to-equal (nshell.domain.completion:kb-command-description
                     kb "tool"))))
 

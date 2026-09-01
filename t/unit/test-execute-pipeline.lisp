@@ -332,6 +332,24 @@ now decides whether this default is even consulted."
             (expect (eq *standard-input* stream) :to-be-truthy)
             (expect opened :to-be-null))))))
 
+  (it "continues-stopped-external-process-and-ignores-resume-errors"
+    "A stopped synchronous process is resumed, while a failed resume signal does not escape."
+    (let ((signals nil))
+      (with-temporary-function
+          ('nshell.infrastructure.acl:kill-process
+           (lambda (pid signal)
+             (push (list pid signal) signals)))
+        (expect :continue-wait :to-equal
+                (nshell.application::%continue-stopped-external-process 321)))
+      (expect '((-321 :sigcont)) :to-equal signals))
+    (with-temporary-function
+        ('nshell.infrastructure.acl:kill-process
+         (lambda (pid signal)
+           (declare (ignore pid signal))
+           (error "resume failed")))
+      (expect :continue-wait :to-equal
+              (nshell.application::%continue-stopped-external-process 321))))
+
   (it "command-substitution-timeout-defaults-to-nil"
     "Command substitution is unbounded by default, like every other shell.
 Before this change the default was 30, silently capping any `$(...)` at 30

@@ -12,8 +12,4 @@
                  (format nil "nshell-asdf-~36R/" (random most-positive-fixnum))
                                  (uiop:temporary-directory))))))
     (ensure-directories-exist output-root)
-    (asdf:initialize-output-translations
-     `(:output-translations
-       (t ,(truename output-root))
-       :ignore-inherited-configuration))
     output-root))

@@ -135,6 +135,11 @@
           (expect (null dirty-p) :to-be-falsy)))
       (expect 2 :to-equal (length calls)))))
 (describe "git-status-edge-tests"
+  (it "normalizes-git-output-at-the-boundary"
+    "Git command output loses trailing line-oriented whitespace before classification."
+    (expect "main"
+            :to-equal
+            (nshell.infrastructure.acl::%trim-newline (format nil "main~%~% "))))
   (it "treats-detached-head-as-no-branch"
     (let ((calls nil))
       (nshell.infrastructure.acl:clear-git-status-cache)

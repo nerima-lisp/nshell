@@ -65,3 +65,12 @@
   stderr-endpoint)
 
 (defparameter +redirect-kind-fact-specs+ nil)
+
+(defmacro define-redirect-data (specs fd-dup-kinds kind-facts)
+  `(progn
+     (setf +redirect-specs+
+           (list ,@specs))
+     (setf +redirect-fd-dup-specs+
+           ',fd-dup-kinds)
+     (setf +redirect-kind-fact-specs+
+           (list ,@kind-facts))))

@@ -137,6 +137,7 @@
    (:file "application/builtin-runtime")
    (:file "application/builtin-type-helpers")
    (:file "application/builtin-string-support")
+   (:file "application/builtin-string-repeat")
    (:file "application/builtin-string")
    (:file "application/builtin-source-reader")
    (:file "application/builtin-source")

@@ -47,19 +47,22 @@
         (terminate sb-unix:sigkill)
         (ignore-errors (sb-ext:process-wait proc))))))
 
+(defmacro %with-process-output-copiers ((copiers) &body body)
+  "Run BODY while guaranteeing that process output COPIERS are joined."
+  `(unwind-protect
+       (progn ,@body)
+     (%join-process-output-copiers ,copiers)))
+
 (defun %wait-process-with-copiers (proc copiers timeout-seconds success-fn timeout-fn)
-  (unwind-protect
-       (if (or (null timeout-seconds)
-               (%wait-process-exit-with-timeout proc timeout-seconds))
-           (progn
-             (sb-ext:process-wait proc)
-             (%join-process-output-copiers copiers)
-             (funcall success-fn))
-           (progn
-             (%terminate-process proc)
-             (%join-process-output-copiers copiers)
-             (funcall timeout-fn)))
-    (%join-process-output-copiers copiers)))
+  (%with-process-output-copiers (copiers)
+    (if (or (null timeout-seconds)
+            (%wait-process-exit-with-timeout proc timeout-seconds))
+        (progn
+          (sb-ext:process-wait proc)
+          (funcall success-fn))
+        (progn
+          (%terminate-process proc)
+          (funcall timeout-fn)))))
 
 (defun %wait-process-with-copiers-or-stop (proc copiers success-fn stop-fn)
   "Like %WAIT-PROCESS-WITH-COPIERS with no timeout, except a stopped PROC
@@ -82,11 +85,8 @@ that stays stopped despite STOP-FN does not busy-loop."
             (return decision))
           (sleep 0.05))
         (return
-          (unwind-protect
-               (progn
-                 (%join-process-output-copiers copiers)
-                 (funcall success-fn))
-            (%join-process-output-copiers copiers))))))
+          (%with-process-output-copiers (copiers)
+            (funcall success-fn))))))
 
 (defun %wait-process-with-output (proc output timeout-seconds timeout-fn)
   (let ((copier (%start-process-output-copier proc output)))
@@ -172,7 +172,7 @@ normal foreground timeout policy."
       (format *error-output* "exec: ~a: ~a~%" cmd err)
       1)))
 
- (defun run-external (cmd args)
+(defun run-external (cmd args)
   "Execute CMD with ARGS synchronously, printing output. Returns exit code."
   (handler-case
       (multiple-value-bind (resolved-cmd environment)

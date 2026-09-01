@@ -50,6 +50,12 @@ above it portable in principle and testable in practice: a test replaces a
 boundary with a value instead of arranging for the operating system to produce
 one.
 
+Pipeline orchestration keeps process waiting and termination policy in
+`infrastructure/acl/syscall-pipeline-wait.lisp`, separate from pipe topology
+and stage spawning. This makes timeout escalation, process-group ownership,
+and pipefail status calculation independently reviewable while the public
+pipeline entry points remain unchanged.
+
 ## Toolkit foundation
 
 nshell builds on the `nerima-lisp` Common Lisp toolkit family, each wired at the

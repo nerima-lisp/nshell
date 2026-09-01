@@ -60,7 +60,12 @@
                      :to-equal
                      (nshell.infrastructure.acl::%pty-read-ready-byte read-fd)))
         (nshell.infrastructure.acl::%pty-close-fd read-fd)
-        (nshell.infrastructure.acl::%pty-close-fd write-fd)))))
+        (nshell.infrastructure.acl::%pty-close-fd write-fd))))
+
+  (it "accepts nil when closing an optional file descriptor"
+    "Cleanup paths may receive no descriptor after a partial PTY setup."
+    (expect (nshell.infrastructure.acl::%pty-close-fd nil)
+            :to-be-null)))
 
 (describe "pty-foreground-integration-tests"
   (it "pty-spawn-creates-process-with-master-fd"

@@ -156,4 +156,19 @@
               :to-equal
               (multiple-value-list
                (nshell.application::%builtin-wait context '("%99")))))
+
+  (it "keeps kill argument errors and usage user-visible"
+    (with-builtins-context (context)
+      (expect (list (format nil "kill: invalid signal~%") 1)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-kill context '("-s" "unknown"))))
+      (expect (list (nshell.application::%kill-list-output) 0)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-kill context '("-l"))))
+      (expect (list (format nil "usage: kill [-signal] pid|%job~%") 2)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-kill context nil)))))
   ))

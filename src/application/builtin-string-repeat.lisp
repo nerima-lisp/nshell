@@ -69,10 +69,10 @@
       (return-from %builtin-string-repeat (values error 1)))
     (when (%string-repeat-bare-count-usage-p repeat-count max-length remaining)
       (return-from %builtin-string-repeat (%builtin-string-usage)))
-    (if (or (null remaining)
-            (not (and (plusp (or repeat-count 1))
-                      (or (null max-length) (plusp max-length)))))
-        (values "" 1)
+    (if (and remaining
+             (plusp (or repeat-count 1))
+             (or (null max-length) (plusp max-length)))
         (values (%string-repeat-output remaining repeat-count max-length
                                        quiet-p no-newline-p)
-                0))))
+                0)
+        (values "" 1))))

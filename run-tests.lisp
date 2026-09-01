@@ -24,9 +24,11 @@
 (let* ((root (uiop:pathname-directory-pathname
               (or *load-truename* *load-pathname*)))
        (parent (uiop:pathname-parent-directory-pathname root)))
-  (asdf:initialize-source-registry
-   (if (uiop:getenv "CL_SOURCE_REGISTRY")
-       '(:source-registry :inherit-configuration)
+  (if (uiop:getenv "CL_SOURCE_REGISTRY")
+      (progn
+        (asdf:clear-source-registry)
+        (asdf:initialize-source-registry))
+      (asdf:initialize-source-registry
        `(:source-registry
          (:directory ,root)
          (:tree ,parent)
@@ -39,7 +41,6 @@
   (let ((passed-p
           (handler-case
               (progn
-                  (asdf:load-system "cl-prolog-kit")
                   (asdf:load-system "nshell/test" :force t)
                 (multiple-value-bind (result selected-count)
                     (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))

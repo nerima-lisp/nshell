@@ -219,7 +219,7 @@ dropping Ctrl-Z for waits that cannot observe a stop."
                                        (ignore-errors
                                         (sb-ext:process-wait process)))))))
                           (if pgid
-                              (nshell.infrastructure.acl::%with-foreground-process-group
+                              (nshell.infrastructure.acl::%call-with-foreground-process-group
                                pgid (function finish-process))
                               (finish-process)))))
                  (when opened-input

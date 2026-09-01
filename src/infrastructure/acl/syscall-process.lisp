@@ -131,11 +131,11 @@ file` typed at an interactive prompt too."
        *external-command-timeout*))
 
 (defmacro %with-foreground-process-group-if ((pgid) &body body)
-  (let ((finish (gensym "FINISH-")))
-    `(flet ((,finish () ,@body))
-       (if ,pgid
-           (%with-foreground-process-group ,pgid (function ,finish))
-           (,finish)))))
+  (let ((pgid-var (gensym "PGID-")))
+    `(let ((,pgid-var ,pgid))
+       (if ,pgid-var
+           (%with-foreground-process-group ,pgid-var ,@body)
+           (progn ,@body)))))
 
 (defun run-external-exec (cmd args)
   "Execute CMD with ARGS for the exec builtin.

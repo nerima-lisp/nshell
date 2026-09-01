@@ -208,7 +208,7 @@ by the kernel and never reaches this handler."
             (lambda (pgid)
               (push pgid sets)
               pgid)))
-        (let ((result (nshell.infrastructure.acl::%with-foreground-process-group
+        (let ((result (nshell.infrastructure.acl::%call-with-foreground-process-group
                        4321
                        (lambda ()
                          (expect 4321 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
@@ -232,10 +232,9 @@ by the kernel and never reaches this handler."
               pgid)))
         (let ((result
                 (handler-case
-                    (nshell.infrastructure.acl::%with-foreground-process-group
+                    (nshell.infrastructure.acl::%call-with-foreground-process-group
                      4321
-                     (lambda ()
-                       (error "foreground command failed")))
+                     (lambda () (error "foreground command failed")))
                   (error () :caught))))
           (expect :caught :to-be result)
           (expect 0 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
@@ -284,7 +283,7 @@ by the kernel and never reaches this handler."
     (let ((called nil)
           (nshell.infrastructure.acl::*foreground-pgid* 777))
       (expect :done :to-be
-              (nshell.infrastructure.acl::%with-foreground-process-group
+              (nshell.infrastructure.acl::%call-with-foreground-process-group
                0
                (lambda ()
                  (setf called t)

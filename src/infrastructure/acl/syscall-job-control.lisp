@@ -42,7 +42,7 @@
           (set-process-group pid pgid)
           pgid))))
 
-(defun %with-foreground-process-group (pgid thunk)
+(defun %call-with-foreground-process-group (pgid thunk)
   (if (not (and (integerp pgid) (plusp pgid)))
       (funcall thunk)
       (let ((shell-pgid (%current-shell-pgid))
@@ -56,6 +56,13 @@
           (let ((restore-pgid (or previous-pgid shell-pgid)))
             (when (and (integerp restore-pgid) (plusp restore-pgid))
               (ignore-errors (set-foreground-pgroup restore-pgid))))))))
+
+(defmacro %with-foreground-process-group (pgid &body body)
+  (let ((pgid-var (gensym "PGID-")))
+    `(let ((,pgid-var ,pgid))
+       (%call-with-foreground-process-group
+        ,pgid-var
+        (lambda () ,@body)))))
 
 (define-value-struct child-status
     ((pid 0 :type integer)

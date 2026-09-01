@@ -66,7 +66,7 @@
               pipefail-p))))
     (%close-pipeline-fds pipes)
     (if pgid
-        (%with-foreground-process-group pgid (function finish-pipeline))
+        (%with-foreground-process-group pgid (finish-pipeline))
         (finish-pipeline))))
 
 (defun %spawn-pipeline-stage (cmd-node stage-redirects prev-pipe next-pipe redirect-streams

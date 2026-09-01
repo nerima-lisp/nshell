@@ -23,7 +23,8 @@
    (or *load-truename* *load-pathname*))))
 (nshell-configure-writable-asdf-output)
 
-(let* ((root (truename #P"./"))
+(let* ((root (uiop:pathname-directory-pathname
+              (or *load-truename* *load-pathname*)))
        (parent (uiop:pathname-parent-directory-pathname root)))
   (asdf:initialize-source-registry
    (if (uiop:getenv "CL_SOURCE_REGISTRY")

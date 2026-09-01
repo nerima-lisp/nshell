@@ -247,6 +247,25 @@
       (expect (first  (parse "-n" "nope")) :to-be-null)
       (expect (search "invalid integer" (second (parse "-n" "nope"))) :to-be-truthy)))
 
+  (it "string-subcommand-specs-filter-and-resolve"
+    "string subcommand metadata returns the complete or manipulation-only set and resolves names."
+    (let* ((all nshell.application::+builtin-string-subcommand-specs+)
+           (manipulation-only
+             (nshell.application::%builtin-string-subcommand-specs
+              :manipulation-only-p t)))
+      (expect all :to-equal
+               (nshell.application::%builtin-string-subcommand-specs))
+      (expect 5 :to-equal (length manipulation-only))
+      (expect (every (lambda (spec)
+                       (getf spec :manipulation-p))
+                     manipulation-only)
+              :to-be-truthy)
+      (expect "replace" :to-equal
+              (getf (nshell.application::%builtin-string-subcommand-spec "replace")
+                    :name))
+      (expect (nshell.application::%builtin-string-subcommand-spec "missing")
+              :to-be-null)))
+
   (it "string-resolve-attached-value-parses-inline-option-values"
     "string-resolve-attached-value extracts inline -N5 and --opt=5 values, nil otherwise."
     (flet ((resolve (option short long short-prefix-len long-prefix-len)

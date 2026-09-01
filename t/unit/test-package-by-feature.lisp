@@ -97,3 +97,20 @@
                        (error () t))
                      :to-be-truthy))
         (remhash :direct nshell.architecture::*feature-registry*))))
+
+  (it "supports empty feature registries and descriptor mutation"
+    (let ((feature (nshell.architecture:register-feature
+                    :empty :root "empty" :layers nil)))
+      (unwind-protect
+           (progn
+             (expect nil :to-equal
+                     (nshell.architecture:feature-descriptor-layers feature))
+             (expect (member :command-line
+                             (mapcar #'nshell.architecture:feature-descriptor-name
+                                     (nshell.architecture:all-features)))
+                     :to-be-truthy)
+             (setf (nshell.architecture:feature-descriptor-layers feature)
+                   '(:domain))
+             (expect '(:domain) :to-equal
+                     (nshell.architecture:feature-descriptor-layers feature)))
+        (remhash :empty nshell.architecture::*feature-registry*))))

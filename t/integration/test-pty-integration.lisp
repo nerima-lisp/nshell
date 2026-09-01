@@ -81,6 +81,20 @@
               :to-equal
               (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))))
 
+  (it "signals readiness and closes the writer in one operation"
+    "Child setup owns the notification descriptor after publishing its state."
+    (with-readiness-pipe (read-fd write-fd)
+      (nshell.infrastructure.acl::%signal-pty-child-ready
+       write-fd
+       nshell.infrastructure.acl::+pty-child-ready-ok+)
+      (setf write-fd nil)
+      (expect nshell.infrastructure.acl::+pty-child-ready-ok+
+              :to-equal
+              (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
+      (expect (lambda ()
+                (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
+              :to-throw 'error)))
+
   (it "accepts nil when closing an optional file descriptor"
     "Cleanup paths may receive no descriptor after a partial PTY setup."
     (expect (nshell.infrastructure.acl::%pty-close-fd nil)

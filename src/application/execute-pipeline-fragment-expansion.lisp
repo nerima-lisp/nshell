@@ -1,7 +1,7 @@
 (in-package #:nshell.application)
 
-(defparameter +command-fragment-escape-base+ #xe100)
-(defparameter +command-fragment-escape-limit+
+(defconstant +command-fragment-escape-base+ #xe100)
+(defconstant +command-fragment-escape-limit+
   (+ +command-fragment-escape-base+ 256))
 
 (defun %protect-command-fragment-escapes (value positions)

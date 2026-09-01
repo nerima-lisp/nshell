@@ -315,6 +315,32 @@ now decides whether this default is even consulted."
                plan)
               :to-be-truthy)))
 
+  (it "external-wrapper-redirect-plan-preserves-merged-stream-topology"
+    "A shell wrapper captures both child streams while retaining their merge policy."
+    (let* ((source-plan
+             (nshell.application::%make-external-process-redirect-plan
+              "stdout.log" :append "stderr.log" :supersede
+              :stdout :stderr nil))
+           (wrapper-plan
+             (nshell.application::%external-process-wrapper-redirect-plan
+              source-plan)))
+      (expect nil :to-equal
+              (nshell.application::%external-process-redirect-plan-stdout-target
+               wrapper-plan))
+      (expect :supersede :to-be
+              (nshell.application::%external-process-redirect-plan-stdout-mode
+               wrapper-plan))
+      (expect :stdout :to-be
+              (nshell.application::%external-process-redirect-plan-stdout-endpoint
+               wrapper-plan))
+      (expect :stderr :to-be
+              (nshell.application::%external-process-redirect-plan-stderr-endpoint
+               wrapper-plan))
+      (expect (nshell.application::%external-process-redirect-plan-merge-stderr-p
+               wrapper-plan)
+              :to-be-falsy
+              )))
+
   (it "external-process-input-stream-selects-each-input-source"
     "External stage input selection is data-driven across file, string, and stdin sources."
     (host-kit:with-temporary-directory (directory)

@@ -156,6 +156,7 @@
    (:file "infrastructure/acl/syscall-environment")
    (:file "infrastructure/acl/syscall-redirection")
    (:file "infrastructure/acl/syscall-job-control")
+   (:file "infrastructure/acl/syscall-process-resolution")
    (:file "infrastructure/acl/syscall-process")
    (:file "infrastructure/acl/filesystem")
    (:file "infrastructure/acl/syscall-pipeline-streams")

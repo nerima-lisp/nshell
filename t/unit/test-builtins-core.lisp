@@ -63,6 +63,22 @@
       (let ((command (nshell.domain.completion::%catalog-command-entry-command entry)))
         (expect (nshell.application:lookup-builtin command) :to-be-truthy))))
 
+  (it "help-renders-overview-and-command-specific-diagnostics"
+    "help exposes the catalog, known command details, and unknown-command diagnostics."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "help" nil)
+        :code 0
+        :contains '("nshell builtin commands:"))
+      (let* ((entry (first (nshell.domain.completion:builtin-help-entries)))
+             (command (getf entry :command))
+             (synopsis (getf entry :synopsis)))
+        (assert-builtin-call (context "help" (list command))
+          :code 0
+          :contains (list synopsis)))
+      (assert-builtin-call (context "help" '("missing"))
+        :code 1
+        :output (format nil "help: no help for missing~%"))))
+
   (it "printf-covers-escape-and-numeric-formatting"
     "printf expands shell escapes and applies the supported numeric directives."
     (with-builtins-context (context)

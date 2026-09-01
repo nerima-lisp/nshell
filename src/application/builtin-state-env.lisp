@@ -194,10 +194,8 @@
     (setf *loop-control-signal* (cons kind count))
     (values nil 0)))
 
-(defun %builtin-break (context args)
-  (declare (ignore context))
+(define-builtin %builtin-break (context args) (context)
   (%builtin-loop-control "break" :break args))
 
-(defun %builtin-continue (context args)
-  (declare (ignore context))
+(define-builtin %builtin-continue (context args) (context)
   (%builtin-loop-control "continue" :continue args))

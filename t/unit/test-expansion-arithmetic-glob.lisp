@@ -256,6 +256,28 @@
     (expect (nshell.domain.expansion::recursive-directory-files "/tmp")
             :to-be-null))
 
+  (it "filesystem-errors-are-contained-for-immediate-files"
+    "An unavailable immediate directory is treated as having no candidates."
+    (let ((filesystem
+            (make-test-filesystem
+             :directory-files (lambda (dir)
+                                (declare (ignore dir))
+                                (error "directory unavailable")))))
+      (expect (nshell.domain.expansion::immediate-directory-files
+               "/tmp" filesystem)
+              :to-be-null)))
+
+  (it "filesystem-errors-are-contained-for-recursive-files"
+    "An unavailable recursive directory is treated as having no candidates."
+    (let ((filesystem
+            (make-test-filesystem
+             :directory-files (lambda (dir)
+                                (declare (ignore dir))
+                                (error "directory unavailable")))))
+      (expect (nshell.domain.expansion::recursive-directory-files
+               "/tmp" filesystem)
+              :to-be-null)))
+
   (it "expand-glob-preserves-unmatched-pattern"
     "A glob with no filesystem matches remains a literal argument."
     (let ((filesystem (make-test-filesystem)))

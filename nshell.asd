@@ -43,6 +43,7 @@
     :components ((:file "package")
                  (:file "domain/feature-registry")))
    (:file "package-domain")
+   (:file "package-domain-completion")
    (:file "package-application")
    (:file "package-infrastructure")
    (:file "package-presentation")

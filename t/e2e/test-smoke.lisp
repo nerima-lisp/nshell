@@ -44,21 +44,6 @@ merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
           timeout-seconds
           (cons "nshell" arguments)))
 
-(defparameter +nshell-runtime-dependencies+
-  '(:cl-prolog-kit :cl-parser-kit :cl-dataflow-kit :cl-boundary-kit :cl-cli :cl-tty-kit
-    :cl-process-kit :cl-history-kit :cl-host-kit
-    ;; cl-log-kit is not an nshell dependency (see docs/notes/nerima-lisp-package-audit.md)
-    ;; but cl-boundary-kit and cl-process-kit both depend on it, and the
-    ;; subprocess's central-registry holds only these explicit directories with
-    ;; no :tree fallback, so it must be listed here to resolve transitively.
-    :cl-log-kit
-    ;; Likewise not a direct nshell dependency: cl-dataflow-kit depends on it.
-    :cl-concurrent-kit)
-  "Every external ASDF system nshell depends on at runtime, plus any transitive
-dependency needed to resolve them under an explicit :central-registry.  The
-subprocess that loads :nshell needs each of their source directories on its
-central registry, exactly as the parent process resolved them.")
-
 (defun %asdf-bootstrap-forms (root)
   ;; Ask the already-loaded parent process where it actually found each
   ;; dependency instead of guessing a "../<name>/" sibling checkout: the parent

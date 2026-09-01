@@ -14,16 +14,6 @@
    (let ((pathname (probe-file (current-sbcl-executable))))
      (when pathname (namestring (truename pathname))))))
 
-(defparameter %job-control-driver-dependencies%
-  '(:cl-prolog-kit :cl-parser-kit :cl-dataflow-kit :cl-boundary-kit :cl-cli :cl-tty-kit
-    :cl-process-kit :cl-history-kit :cl-host-kit :cl-log-kit :cl-concurrent-kit)
-  "Duplicated from t/e2e/test-smoke.lisp's +NSHELL-RUNTIME-DEPENDENCIES+: every
-external ASDF system :NSHELL needs on a fresh subprocess's central-registry to
-load, plus transitive dependencies not directly required by :NSHELL itself (see
-that constant's docstring for why each one is listed). Duplicated rather than
-shared because t/e2e/ loads after this file (see nshell.asd) -- keep this list
-in sync with test-smoke.lisp's copy if :NSHELL's dependency graph changes.")
-
 (defun %job-control-asdf-bootstrap-arguments ()
   "--eval arguments that REQUIRE ASDF and register :NSHELL's and
 %JOB-CONTROL-DRIVER-DEPENDENCIES%'s source directories on the fresh
@@ -36,7 +26,7 @@ hazard that function's docstring describes."
   (let ((root (namestring (asdf:system-source-directory :nshell))))
     (list* "--eval" "(require :asdf)"
            "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
-           (loop for system in %job-control-driver-dependencies%
+           (loop for system in +nshell-runtime-dependencies+
                  collect "--eval"
                  collect (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)"
                                  (namestring (asdf:system-source-directory system)))))))

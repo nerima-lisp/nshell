@@ -303,6 +303,7 @@
   :serial t
   :components
   ((:file "package")
+   (:file "support/runtime")
    (:file "support/assertions")
    (:file "helpers-runner")
                (:file "support/pbt")

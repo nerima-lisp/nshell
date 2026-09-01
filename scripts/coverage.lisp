@@ -78,8 +78,13 @@
       "package-application.lisp"
       "package-infrastructure.lisp"
       "package-presentation.lisp"))
+  (defun %coverage-declarative-source-p (path)
+    (let ((file-name (file-namestring (pathname path))))
+      (or (search "/data/" path)
+          (search "-data.lisp" file-name))))
   (defun %coverage-source-file-p (path source-root)
     (and (%coverage-string-prefix-p source-root path)
+         (not (%coverage-declarative-source-p path))
          (not (member (file-namestring (pathname path))
                       +coverage-excluded-source-file-names+
                       :test #'string=))))

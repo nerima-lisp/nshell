@@ -119,6 +119,7 @@
    (:file "domain/prompting/prompt")
    (:file "application/shell-context")
 	   (:file "application/execute-pipeline-expansion")
+	   (:file "application/execute-pipeline-expansion-here-doc")
 	   (:file "application/execute-pipeline-redirect")
 	   (:file "application/execute-pipeline-stage-external")
 	   (:file "application/execute-pipeline-stage-background")

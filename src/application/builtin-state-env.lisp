@@ -181,7 +181,7 @@
      (handler-case
          (let ((count (parse-integer (first args) :junk-allowed nil)))
            (and (plusp count) count))
-       (error () nil)))))
+       (parse-error () nil)))))
 
 (defun %builtin-loop-control (command kind args)
   (unless (plusp *loop-control-depth*)

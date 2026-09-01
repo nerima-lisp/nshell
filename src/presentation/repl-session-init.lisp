@@ -71,7 +71,7 @@ entered during this session."
         *completion-rendered-lines* 0
         *prompt-rendered-lines* 0
         *prompt-rendered-cursor-row* 0
-        *prompt-rendered-terminal-width* 80
+        *prompt-rendered-terminal-width* +default-terminal-width+
         *prompt-rendered-prompt-width* 0
         *prompt-rendered-origin-row* 1
         *prompt-rendered-origin-column* 1

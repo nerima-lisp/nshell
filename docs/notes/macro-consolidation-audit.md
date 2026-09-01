@@ -63,11 +63,11 @@ per-site with a full test run, not applied as a blind find/replace.
 
 ## Considered and rejected
 
-- **Terminal-width-with-80-fallback**, triplicated across
-  `presentation/{completion-ui,prompt-display,repl-rendering}.lisp`, is
-  genuine duplicate logic but not boilerplate a macro would help — it needs
-  one shared function, not a code shape to abstract. Left as a follow-up
-  function-extraction item, not a macro.
+- **Terminal-width-with-80-fallback** is already centralized in
+  `presentation/terminal-size.lisp`. The fallback is named
+  `+default-terminal-width+`, and REPL state initialization reuses that data
+  constant instead of repeating the literal. This is intentionally a constant
+  and function, not a macro: no caller needs generated code or lexical capture.
 - **The `ast-node` `:include` hierarchy** (`domain/parsing/ast.lisp`): 7 of
   12 node types share a `defstruct (:include ast-node)` + public
   `make-X-node` copying-wrapper shape, but the argument arity, optional-arg

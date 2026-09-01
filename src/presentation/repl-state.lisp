@@ -25,7 +25,7 @@
 (defvar *completion-rendered-lines* 0)
 (defvar *prompt-rendered-lines* 0)
 (defvar *prompt-rendered-cursor-row* 0)
-(defvar *prompt-rendered-terminal-width* 80)
+(defvar *prompt-rendered-terminal-width* +default-terminal-width+)
 (defvar *prompt-rendered-prompt-width* 0)
 (defvar *prompt-rendered-origin-row* 1)
 (defvar *prompt-rendered-origin-column* 1)

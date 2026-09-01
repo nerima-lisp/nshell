@@ -659,3 +659,20 @@
       (expect (nshell.domain.completion::%completion-help-enum-values
                "--format=(")
                :to-be-null)))
+  (it "completion-help-option-value-kinds-handle-attached-and-pending-values"
+    "Option value kinds are inferred from both attached and separated forms."
+    (flet ((kinds (line options)
+             (nshell.domain.completion::%completion-help-option-value-kinds
+              line options)))
+      (expect '(("--format" :file))
+              :to-equal
+              (kinds "--format=<file>" '("--format")))
+      (expect '(("--path" :file))
+              :to-equal
+              (kinds "--path file" '("--path")))
+      (expect '(("--format" :directory))
+              :to-equal
+              (kinds "--format=directory" '("--format")))
+      (expect nil
+              :to-equal
+              (kinds "--format --verbose" '("--format" "--verbose")))))

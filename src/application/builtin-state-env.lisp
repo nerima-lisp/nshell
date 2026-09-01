@@ -106,31 +106,33 @@
   (let ((arguments (if (and args (string= (first args) "--"))
                        (rest args)
                        args)))
-    (if (null arguments)
-        (%builtin-usage "export" "export name[=value] ...")
+    (if arguments
         (dolist (argument arguments (values nil 0))
           (multiple-value-bind (name value assignment-p)
               (%export-assignment argument)
             (unless (%shell-variable-name-p name)
               (return-from %builtin-export
                 (values (format nil "export: invalid identifier: ~a~%" argument) 2)))
-            (if assignment-p
-                (%update-shell-environment context
-                                           #'nshell.domain.environment:env-set
-                                           name
-                                           value
-                                           t)
-                (if (nshell.domain.environment:env-defined-p
-                     (shell-context-environment context)
-                     name)
-                    (%update-shell-environment context
-                                               #'nshell.domain.environment:env-export
-                                               name)
-                    (%update-shell-environment context
-                                               #'nshell.domain.environment:env-set
-                                               name
-                                               ""
-                                               t))))))))
+            (cond
+              (assignment-p
+               (%update-shell-environment context
+                                          #'nshell.domain.environment:env-set
+                                          name
+                                          value
+                                          t))
+              ((nshell.domain.environment:env-defined-p
+                (shell-context-environment context)
+                name)
+               (%update-shell-environment context
+                                          #'nshell.domain.environment:env-export
+                                          name))
+              (t
+               (%update-shell-environment context
+                                          #'nshell.domain.environment:env-set
+                                          name
+                                          ""
+                                          t)))))
+        (%builtin-usage "export" "export name[=value] ..."))))
 
 (defun %builtin-unset (context args)
   (let ((arguments (if (and args (string= (first args) "--"))

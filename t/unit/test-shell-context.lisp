@@ -1,5 +1,18 @@
 (in-package #:nshell/test)
 
+(defun make-explicit-shell-context-test-fixtures ()
+  (list :history :history
+        :config :config
+        :knowledge-base :knowledge-base
+        :environment :environment
+        :filesystem :filesystem
+        :job-monitor :job-monitor
+        :alias-table (make-hash-table :test #'equal)
+        :abbreviation-table (make-hash-table :test #'equal)
+        :function-table (make-hash-table :test #'equal)
+        :function-source-table (make-hash-table :test #'equal)
+        :process-registry (make-hash-table)))
+
 (describe "shell-context-tests"
   (it "shell-context-constructs-with-session-state"
     "MAKE-SHELL-CONTEXT stores session state behind the application boundary."
@@ -65,6 +78,44 @@
     (expect (lambda () (nshell.application:make-shell-context :pipefail-p :yes)) :to-throw 'type-error)
     (expect (lambda () (nshell.application:make-shell-context :running :yes)) :to-throw 'type-error)
     (expect (lambda () (nshell.application:make-shell-context :last-exit-code "0")) :to-throw 'type-error))
+
+  (it "shell-context-factory-preserves-explicit-runtime-state"
+    "Explicit infrastructure and runtime values remain unchanged at the boundary."
+    (let* ((fixtures (make-explicit-shell-context-test-fixtures))
+           (context (apply #'nshell.application:make-shell-context
+                           :execution-strategy :os-pipes
+                           :pipefail-p t
+                           :running t
+                           :last-exit-code 17
+                           :input-state :input-state
+                           :terminal-rows 42
+                           :terminal-cols 120
+                           fixtures)))
+      (dolist (spec '((:history shell-context-history)
+                      (:config shell-context-config)
+                      (:knowledge-base shell-context-knowledge-base)
+                      (:environment shell-context-environment)
+                      (:filesystem shell-context-filesystem)
+                      (:job-monitor shell-context-job-monitor)))
+        (expect (getf fixtures (first spec)) :to-be
+                (funcall (intern (symbol-name (second spec)) :nshell.application)
+                         context)))
+      (dolist (spec '((:alias-table shell-context-alias-table)
+                      (:abbreviation-table shell-context-abbreviation-table)
+                      (:function-table shell-context-function-table)
+                      (:function-source-table shell-context-function-source-table)))
+        (expect (getf fixtures (first spec)) :to-be
+                (funcall (intern (symbol-name (second spec)) :nshell.application)
+                         context)))
+      (expect (getf fixtures :process-registry) :to-be
+              (nshell.application::shell-context-process-registry context))
+      (expect :os-pipes :to-be (nshell.application:shell-context-execution-strategy context))
+      (expect t :to-be (nshell.application:shell-context-pipefail-p context))
+      (expect t :to-be (nshell.application:shell-context-running context))
+      (expect 17 :to-equal (nshell.application:shell-context-last-exit-code context))
+      (expect :input-state :to-be (nshell.application:shell-context-input-state context))
+      (expect 42 :to-equal (nshell.application:shell-context-terminal-rows context))
+      (expect 120 :to-equal (nshell.application:shell-context-terminal-cols context))))
 
   (it "shell-context-process-registry-exposes-job-query-only"
     "Process registry storage stays internal; callers query by job id."

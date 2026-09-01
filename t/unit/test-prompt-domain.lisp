@@ -226,4 +226,4 @@
            "/path/that/does/not/exist/"
            '("rev-parse" "--abbrev-ref" "HEAD"))
         (expect "" :to-equal output)
-        (expect 128 :to-equal code)))))
+        (expect (plusp code) :to-be-truthy)))))

@@ -43,7 +43,7 @@ caller's CONTINUATION, keeping the walk (data) separate from its use (logic)."
         (%walk-directory-files filesystem subdir continuation)))))
 
 (defun recursive-directory-files (root &optional filesystem)
-  (unless filesystem (return-from recursive-directory-files nil))
+  (unless filesystem (return-from recursive-directory-files))
   (ignore-errors
     (let ((files '()))
       (%walk-directory-files filesystem

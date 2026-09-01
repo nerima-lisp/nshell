@@ -77,7 +77,8 @@
       "package-domain.lisp"
       "package-application.lisp"
       "package-infrastructure.lisp"
-      "package-presentation.lisp"))
+      "package-presentation.lisp"
+      "package-domain-completion.lisp"))
   (defun %coverage-declarative-source-p (path)
     (let ((file-name (file-namestring (pathname path))))
       (or (search "/data/" path)

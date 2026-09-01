@@ -84,7 +84,12 @@
   (args nil :type list :read-only t)
   (command-fragments nil :type list :read-only t))
 
-(defun %command-node-fragment-quote-style (fragments) (let ((styles (remove-duplicates (mapcar #'command-fragment-quote-style fragments)))) (when (= (length styles) 1) (first styles))))
+(defun %command-node-fragment-quote-style (fragments)
+  (let ((styles
+          (remove-duplicates
+           (mapcar #'command-fragment-quote-style fragments))))
+    (when (= (length styles) 1)
+      (first styles))))
 (defun make-command-node (command args &optional span command-quote-style
                                            command-fragments)
   (let ((fragments

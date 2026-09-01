@@ -16,27 +16,28 @@
         when entry
           collect entry))
 
+(defun %redirect-parse-dynamic-fd-dup-target (text separator-text operator)
+  (let ((separator (and text (search separator-text text))))
+    (when (and separator
+               (> separator 0)
+               (< (+ separator (length separator-text))
+                  (length text)))
+      (let ((source-text (subseq text 0 separator))
+            (target-text
+              (subseq text (+ separator (length separator-text)))))
+        (when (and (every #'digit-char-p source-text)
+                   (or (string= target-text "-")
+                       (every #'digit-char-p target-text)))
+          (make-redirect-fd-dup-target
+           (parse-integer source-text)
+           (if (string= target-text "-")
+               :close
+               (parse-integer target-text))
+           operator))))))
+
 (defun %redirect-dynamic-fd-dup-target (text)
-  (labels ((parse-target (separator-text operator)
-             (let ((separator (and text (search separator-text text))))
-               (when (and separator
-                          (> separator 0)
-                          (< (+ separator (length separator-text))
-                             (length text)))
-                 (let ((source-text (subseq text 0 separator))
-                       (target-text
-                         (subseq text (+ separator (length separator-text)))))
-                   (when (and (every #'digit-char-p source-text)
-                              (or (string= target-text "-")
-                                  (every #'digit-char-p target-text)))
-                     (make-redirect-fd-dup-target
-                      (parse-integer source-text)
-                      (if (string= target-text "-")
-                          :close
-                          (parse-integer target-text))
-                      operator)))))))
-    (or (parse-target ">&" :output)
-        (parse-target "<&" :input))))
+  (or (%redirect-parse-dynamic-fd-dup-target text ">&" :output)
+      (%redirect-parse-dynamic-fd-dup-target text "<&" :input)))
 
 (defun %redirect-facts (text)
   (let ((entry (%redirect-spec-entry text)))

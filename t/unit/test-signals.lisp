@@ -26,6 +26,14 @@
       (expect (nshell.domain.signals:signal= a b) :to-be-truthy)
       (expect (nshell.domain.signals:signal= a c) :to-be-falsy)))
 
+  (it "signal-equality-rejects-non-signals-and-partial-matches"
+    (let ((sigint (nshell.domain.signals:make-signal :sigint 2))
+          (same-name (nshell.domain.signals:make-signal :sigint 15))
+          (same-number (nshell.domain.signals:make-signal :sigterm 2)))
+      (dolist (other (list nil :sigint same-name same-number))
+        (expect (nshell.domain.signals:signal= sigint other) :to-be-falsy))
+      (expect (nshell.domain.signals:signal= nil sigint) :to-be-falsy)))
+
   (it "known-signal-constants"
     (expect (nshell.domain.signals:signal-p nshell.domain.signals:+sigint+) :to-be-truthy)
     (expect (nshell.domain.signals:signal-p nshell.domain.signals:+sigterm+) :to-be-truthy)

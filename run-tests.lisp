@@ -41,7 +41,9 @@
   (let ((passed-p
           (handler-case
               (progn
-                  (asdf:load-system "nshell/test")
+                (asdf:load-system "cl-prolog-kit")
+                (asdf:load-system "cl-weave")
+                (asdf:load-system "nshell/test")
                 (multiple-value-bind (result selected-count)
                     (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))
                   (unless (and (integerp selected-count)

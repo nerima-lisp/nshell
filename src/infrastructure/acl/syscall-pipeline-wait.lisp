@@ -46,15 +46,11 @@
 
 (defun %wait-pipeline-with-output (procs timeout-seconds timeout-fn pipefail-p)
   (let ((copier (%start-process-output-copier (car procs) *standard-output*)))
-    (unwind-protect
-         (if (or (null timeout-seconds)
-                 (%wait-pipeline-exit-with-timeout procs timeout-seconds))
-             (multiple-value-prog1
-                 (%wait-pipeline-processes procs pipefail-p)
-               (%join-process-output-copiers (list copier)))
-             (progn
-               (%terminate-pipeline-processes procs)
-               (%join-process-output-copiers (list copier))
-               (let ((code (funcall timeout-fn)))
-                 (values code (list code)))))
-      (%join-process-output-copiers (list copier)))))
+    (%with-process-output-copiers ((list copier))
+      (if (or (null timeout-seconds)
+              (%wait-pipeline-exit-with-timeout procs timeout-seconds))
+          (%wait-pipeline-processes procs pipefail-p)
+          (progn
+            (%terminate-pipeline-processes procs)
+            (let ((code (funcall timeout-fn)))
+              (values code (list code))))))))

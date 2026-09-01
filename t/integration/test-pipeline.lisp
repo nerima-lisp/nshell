@@ -192,6 +192,19 @@
                  (expect expected :to-equal texts)))
           (nshell.domain.completion::%invalidate-path-command-cache))))
 
+  (it "path-command-directory-mapper-preserves-order-at-parallel-boundary"
+    (flet ((mapped (directories)
+             (nshell.infrastructure.acl:map-path-command-directories
+              (lambda (directory)
+                (list :mapped directory))
+              directories)))
+      (expect '((:mapped :one) (:mapped :two) (:mapped :three))
+              :to-equal
+              (mapped '(:one :two :three)))
+      (expect '((:mapped :one) (:mapped :two) (:mapped :three) (:mapped :four))
+              :to-equal
+              (mapped '(:one :two :three :four)))))
+
   (it "cps-trampoline-execution"
     (let ((results '()))
       (nshell.presentation:trampoline

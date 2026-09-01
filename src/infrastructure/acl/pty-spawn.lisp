@@ -39,6 +39,14 @@
   (when vector
     (ignore-errors (sb-alien:free-alien vector))))
 
+(defmacro %with-pty-exec-vectors ((argv envp program args) &body body)
+  `(let ((,argv (%make-c-string-vector (cons ,program ,args)))
+         (,envp (%make-c-string-vector (%get-environment))))
+     (unwind-protect
+          (progn ,@body)
+       (%free-c-string-vector ,argv)
+       (%free-c-string-vector ,envp))))
+
 (defun %pty-child-fail ()
   (sb-posix:_exit 127))
 
@@ -101,29 +109,24 @@
       (%pty-child-fail))))
 
 (defun %pty-fork-exec (program args master-fd slave-name rows cols)
-  (let ((argv nil)
-        (envp nil)
-        (ready-read nil)
+  (let ((ready-read nil)
         (ready-write nil))
-    (unwind-protect
-         (progn
-           (setf argv (%make-c-string-vector (cons program args))
-                 envp (%make-c-string-vector (%get-environment)))
-           (multiple-value-setq (ready-read ready-write) (sb-posix:pipe))
-           (let ((pid (sb-posix:fork)))
-             (when (zerop pid)
+    (%with-pty-exec-vectors (argv envp program args)
+      (unwind-protect
+           (progn
+             (multiple-value-setq (ready-read ready-write) (sb-posix:pipe))
+             (let ((pid (sb-posix:fork)))
+               (when (zerop pid)
+                 (%pty-close-fd ready-read)
+                 (%pty-child-exec program argv envp master-fd slave-name ready-write rows cols))
+               (%pty-close-fd ready-write)
+               (setf ready-write nil)
+               (%wait-for-pty-child-ready ready-read pid)
                (%pty-close-fd ready-read)
-               (%pty-child-exec program argv envp master-fd slave-name ready-write rows cols))
-             (%pty-close-fd ready-write)
-             (setf ready-write nil)
-             (%wait-for-pty-child-ready ready-read pid)
-             (%pty-close-fd ready-read)
-             (setf ready-read nil)
-             pid))
+               (setf ready-read nil)
+               pid)))
       (%pty-close-fd ready-read)
-      (%pty-close-fd ready-write)
-      (%free-c-string-vector argv)
-      (%free-c-string-vector envp))))
+      (%pty-close-fd ready-write))))
 
 (defun %set-pty-window-size (slave-fd rows cols)
   (let ((winsize (sb-alien:make-alien sb-alien:unsigned-short 4)))

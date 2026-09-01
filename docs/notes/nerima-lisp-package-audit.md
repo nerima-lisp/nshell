@@ -27,6 +27,13 @@ appear unqualified):
 
 No declared dependency is unused, so there is no dead dependency to drop.
 
+The flake inputs are pinned to the latest published tags currently available
+for the core packages: `cl-weave` `v1.3.0`, `cl-prolog-kit` `v1.5.0`,
+`cl-parser-kit` `v1.1.1`, and `cl-dataflow-kit` `v1.2.0`. This is checked
+against the upstream tag lists rather than by inventing a newer version; a
+future upgrade should update `flake.nix` and `flake.lock` together and rerun
+the complete check matrix.
+
 The test systems are kept separate from the runtime dependency audit:
 
 | package | role in nshell's test systems | evidence |
@@ -61,6 +68,14 @@ duplicate parser. The un-adopted remainder is compiler infrastructure
 nshell never handles (`cl-json-kit`), or a build-time tool (`paredit-cli`).
 Re-run the usage half of this audit with:
 
+```
+
+To re-check the pinned versions against upstream tags:
+
+```
+for repo in cl-weave cl-prolog-kit cl-parser-kit cl-dataflow-kit; do
+  git ls-remote --tags --refs "https://github.com/nerima-lisp/$repo.git"
+done
 ```
 rg -o '\b(cl-prolog-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit|cl-concurrent-kit)::?[a-z]' src/ \
   | perl -pe 's/:.*$//' | sort | uniq -c | sort -rn

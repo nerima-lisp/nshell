@@ -120,3 +120,20 @@
              (expect '(:domain) :to-equal
                      (nshell.architecture:feature-descriptor-layers feature)))
         (remhash :empty nshell.architecture::*feature-registry*))))
+
+  (it "defines features declaratively and handles an empty registry"
+    (let ((name :macro-feature))
+      (unwind-protect
+           (progn
+             (eval `(nshell.architecture:define-feature ,name
+                      :root "packages/macro-feature"
+                      :layers (:domain :presentation)))
+             (expect "packages/macro-feature/domain" :to-equal
+                     (nshell.architecture:feature-layer-path name :domain))
+             (clrhash nshell.architecture::*feature-registry*)
+             (expect nil :to-equal (nshell.architecture:all-features)))
+        (remhash name nshell.architecture::*feature-registry*)
+        (nshell.architecture:register-feature
+         :command-line
+         :root "packages/feature/command-line/src"
+         :layers '(:domain :application :infrastructure :presentation)))))

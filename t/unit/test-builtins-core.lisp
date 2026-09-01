@@ -110,6 +110,9 @@
       (assert-builtin-call (context "printf" '("%q" "value"))
         :code 1
         :output "")
+      (assert-builtin-call (context "printf" '("%s%q" "value" "ignored"))
+        :code 1
+        :output "value")
       (assert-builtin-call (context "printf" '("%+d" "-7"))
         :code 0
         :output "-7")

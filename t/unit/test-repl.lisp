@@ -1,6 +1,27 @@
 (in-package #:nshell/test)
 
 (describe "repl-tests"
+  (it "repl-state-tables-are-isolated-and-resettable"
+    "REPL table state is dynamically isolated and can be reset as one unit."
+    (with-repl-test-state
+      (let ((outer-aliases nshell.presentation::*aliases*)
+            (outer-cache nshell.presentation::*completion-help-cache*))
+        (setf (gethash "alias" nshell.presentation::*aliases*) "true"
+              (gethash "help" nshell.presentation::*completion-help-cache*) "cached")
+        (nshell.presentation::%reset-repl-state-tables)
+        (expect nil :to-be
+                (gethash "alias" nshell.presentation::*aliases*))
+        (expect nil :to-be
+                (gethash "help" nshell.presentation::*completion-help-cache*))
+        (expect nil :to-be (eq outer-aliases nshell.presentation::*aliases*))
+        (expect t :to-be (eq outer-cache nshell.presentation::*completion-help-cache*)))
+      (let ((tables (multiple-value-list
+                      (nshell.presentation::%make-repl-state-tables))))
+        (expect 5 :to-equal (length tables))
+        (expect t :to-be (every #'hash-table-p tables))
+        (expect 'equal :to-equal (hash-table-test (first tables)))
+        (expect 'eql :to-equal (hash-table-test (fifth tables))))))
+
   (it "repl-entrypoints-are-public"
     "CLI-facing REPL entrypoints should be exported presentation APIs."
     (expect (fboundp 'nshell.presentation:run-repl) :to-be-truthy)

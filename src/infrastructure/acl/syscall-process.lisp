@@ -130,6 +130,13 @@ file` typed at an interactive prompt too."
   (and (not (interactive-stream-p *standard-output*))
        *external-command-timeout*))
 
+(defmacro %with-foreground-process-group-if ((pgid) &body body)
+  (let ((finish (gensym "FINISH-")))
+    `(flet ((,finish () ,@body))
+       (if ,pgid
+           (%with-foreground-process-group ,pgid (function ,finish))
+           (,finish)))))
+
 (defun run-external-exec (cmd args)
   "Execute CMD with ARGS for the exec builtin.
 
@@ -149,20 +156,17 @@ normal foreground timeout policy."
               (let* ((pid (sb-ext:process-pid proc))
                      (pgid (and (integerp pid) (plusp pid) pid))
                      (timeout (%foreground-external-command-timeout)))
-                (flet ((finish-process ()
-                         (if (or (null timeout)
-                                 (%wait-process-exit-with-timeout proc timeout))
-                             (progn
-                               (sb-ext:process-wait proc)
-                               (process-exit-status-code proc))
-                             (progn
-                               (%terminate-process proc)
-                               (format *error-output* "~a"
-                                       (%external-command-timeout-message cmd timeout))
-                               124))))
-                  (if pgid
-                      (%with-foreground-process-group pgid (function finish-process))
-                      (finish-process))))
+                (%with-foreground-process-group-if (pgid)
+                  (if (or (null timeout)
+                          (%wait-process-exit-with-timeout proc timeout))
+                      (progn
+                        (sb-ext:process-wait proc)
+                        (process-exit-status-code proc))
+                      (progn
+                        (%terminate-process proc)
+                        (format *error-output* "~a"
+                                (%external-command-timeout-message cmd timeout))
+                        124))))
               1)))
     (error (err)
       (format *error-output* "exec: ~a: ~a~%" cmd err)
@@ -185,16 +189,13 @@ normal foreground timeout policy."
                      (timeout (%foreground-external-command-timeout)))
                 (when pgid
                   (%assign-process-group pid pgid))
-                (flet ((finish-process ()
-                         (%wait-process-with-output
-                          proc *standard-output* timeout
-                          (lambda ()
-                            (format *error-output* "~a"
-                                    (%external-command-timeout-message cmd timeout))
-                            124))))
-                  (if pgid
-                      (%with-foreground-process-group pgid (function finish-process))
-                      (finish-process))))
+                (%with-foreground-process-group-if (pgid)
+                  (%wait-process-with-output
+                   proc *standard-output* timeout
+                   (lambda ()
+                     (format *error-output* "~a"
+                             (%external-command-timeout-message cmd timeout))
+                     124))))
               1)))
     (error (err)
       (format *error-output* "nshell: ~a: ~a~%" cmd err)

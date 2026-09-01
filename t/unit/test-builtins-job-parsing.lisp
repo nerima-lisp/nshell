@@ -142,6 +142,19 @@
               (multiple-value-list
                (nshell.application::%builtin-wait context nil)))))
 
+  (it "formats active job listings"
+    "The jobs builtin renders each resolved listing and succeeds when all selectors resolve."
+    (with-builtins-context (context)
+      (let* ((monitor (nshell.application:shell-context-job-monitor context))
+             (job-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "echo ready"))))
+        (multiple-value-bind (output status)
+            (nshell.application::%builtin-jobs context
+                                                (list (format nil "%~d" job-id)))
+          (expect 0 :to-equal status)
+          (expect output :to-be-truthy)
+          (expect (search "echo ready" output) :to-be-truthy)))))
+
   (it "reports unresolved job selectors consistently"
     (with-builtins-context (context)
       (expect (list (format nil "jobs: no such job: %99~%") 1)

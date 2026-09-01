@@ -199,18 +199,18 @@ Unknown users and incomplete environment data remain literal."
 (defun expand-glob (pattern &optional filesystem)
   "Expand PATTERN containing *, ?, [abc], or ** into matching path strings.
 Returns a one-element list containing PATTERN when it has no glob syntax or no matches."
-  (if (not (glob-pattern-p pattern))
-      (list pattern)
-      (let* ((root (glob-root pattern))
-             (files (%glob-candidate-files pattern root filesystem))
-             (matches nil))
-        (dolist (file files)
-          (let ((candidate (%glob-file-candidate pattern root file)))
-            (when (glob-match-p pattern candidate)
-              (push candidate matches))))
-        (if matches
-            (sort matches #'string<)
-            (list pattern)))))
+  (unless (glob-pattern-p pattern)
+    (return-from expand-glob (list pattern)))
+  (let* ((root (glob-root pattern))
+         (files (%glob-candidate-files pattern root filesystem))
+         (matches nil))
+    (dolist (file files)
+      (let ((candidate (%glob-file-candidate pattern root file)))
+        (when (glob-match-p pattern candidate)
+          (push candidate matches))))
+    (if matches
+        (sort matches #'string<)
+        (list pattern))))
 
 (defun %glob-candidate-files (pattern root filesystem)
   "Return filesystem candidates for PATTERN from ROOT using the glob recursion policy."
@@ -243,12 +243,13 @@ namestring surviving into output after matching stripped it)."
   "Expand assignment-like compound words such as label=*.txt as label=file.txt."
   (multiple-value-bind (prefix suffix)
       (%glob-assignment-prefix-parts pattern)
-    (if (null prefix)
-        (expand-glob pattern filesystem)
-        (let ((expanded (expand-glob suffix filesystem)))
-          (if (and (= 1 (length expanded))
-                   (string= suffix (first expanded)))
-              (list pattern)
-              (mapcar (lambda (entry)
-                        (concatenate 'string prefix entry))
-                      expanded))))))
+    (unless prefix
+      (return-from %expand-glob-with-prefix
+        (expand-glob pattern filesystem)))
+    (let ((expanded (expand-glob suffix filesystem)))
+      (if (and (= 1 (length expanded))
+               (string= suffix (first expanded)))
+          (list pattern)
+          (mapcar (lambda (entry)
+                    (concatenate 'string prefix entry))
+                  expanded)))))

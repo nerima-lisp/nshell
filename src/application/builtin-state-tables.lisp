@@ -94,12 +94,12 @@
       (:option ("-q" "--query")
        (values nil (%table-query-status table (rest args))))
       (:default
-       (if (null (rest args))
-           (%alias-store-assignment table args)
+       (if (rest args)
            (multiple-value-bind (name inline-value) (%split-alias-assignment (first args))
              (%alias-store table
                            (or name (first args))
-                           (%alias-inline-expansion name inline-value args))))))))
+                           (%alias-inline-expansion name inline-value args)))
+           (%alias-store-assignment table args))))))
 
 (defun %format-aliases (table &optional names)
   (%format-name-table

@@ -211,6 +211,21 @@
         #+sbcl (expect (consp environment) :to-be-truthy)
         #-sbcl (expect environment :to-be-null))))
 
+  (it "process-environment-boundaries-expose-host-values"
+    "The environment ACL exposes the host value and working directory contracts."
+    (expect (stringp
+             (nshell.infrastructure.acl:current-environment-value "PATH"))
+            :to-be-truthy)
+    (expect (pathnamep
+             (nshell.infrastructure.acl:current-working-directory))
+            :to-be-truthy))
+
+  (it "process-environment-value-rejects-non-string-names"
+    "Environment lookup keeps its string name contract explicit."
+    (expect (lambda ()
+              (nshell.infrastructure.acl:current-environment-value :path))
+            :to-throw 'type-error))
+
   (it "repl-builtin-dispatches-through-application-registry"
     "REPL builtin execution uses the application builtin registry and syncs context state."
     (with-repl-test-state

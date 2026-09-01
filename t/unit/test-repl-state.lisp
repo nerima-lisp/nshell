@@ -30,6 +30,23 @@
                      nil)))))
       (expect 3 :to-equal steps)))
 
+  (it "returns immediately for an exhausted continuation"
+    (expect nil
+            :to-equal
+            (nshell.presentation:trampoline (lambda () nil))))
+
+  (it "resets mutable tables and completion cache"
+    (let ((stale-aliases (nshell.presentation::%make-repl-name-table))
+          (stale-cache (nshell.presentation::%make-repl-name-table)))
+      (setf (gethash "stale" stale-aliases) t
+            (gethash "cached" stale-cache) t)
+      (let ((nshell.presentation::*aliases* stale-aliases)
+            (nshell.presentation::*completion-help-cache* stale-cache))
+        (nshell.presentation::%reset-repl-state-tables)
+        (expect (not (eq stale-aliases nshell.presentation::*aliases*)) :to-be-truthy)
+        (expect 0 :to-equal (hash-table-count nshell.presentation::*aliases*))
+        (expect 0 :to-equal (hash-table-count nshell.presentation::*completion-help-cache*)))))
+
   (it "binds fresh state without changing the caller tables"
     (let ((outer (make-hash-table :test #'equal)))
       (let ((nshell.presentation::*aliases* outer))

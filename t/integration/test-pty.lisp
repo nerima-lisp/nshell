@@ -53,6 +53,17 @@
                  (expect (search "slave-to-master" (octets->string from-slave count)) :to-be-truthy))))
         (nshell.infrastructure.acl:pty-close master slave)))))
 
+  (it "pty-close-is-idempotent-for-shared-descriptor"
+    "PTY cleanup does not close a descriptor twice when both slots share it."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (multiple-value-bind (master slave) (nshell.infrastructure.acl:open-pty)
+      (unwind-protect
+           (expect t :to-equal
+                   (nshell.infrastructure.acl:pty-close master master))
+        (nshell.infrastructure.acl:pty-close nil slave))))
+
   (it "with-pty-binds-streams"
     "WITH-PTY binds usable unbuffered streams."
     #-(or darwin linux)

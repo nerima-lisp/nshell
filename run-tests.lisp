@@ -39,7 +39,6 @@
           (handler-case
               (progn
                   (asdf:load-system "cl-prolog-kit")
-                  (asdf:load-system "cl-weave")
                   (asdf:load-system "nshell/test" :force t)
                 (multiple-value-bind (result selected-count)
                     (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))

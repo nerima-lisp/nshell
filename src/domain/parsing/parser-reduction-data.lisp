@@ -27,8 +27,8 @@
 (defstruct (%token-reduction-result
              (:constructor %make-token-reduction-result (commands errors))
              (:copier nil))
-  (commands '() :type list)
-  (errors '() :type list))
+  (commands '() :type list :read-only t)
+  (errors '() :type list :read-only t))
 
 (defstruct (%token-reduction-argument
             (:constructor %make-token-reduction-argument

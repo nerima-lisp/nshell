@@ -113,10 +113,11 @@
 
 (defstruct (%mixed-sequence-build-state
             (:constructor %make-mixed-sequence-build-state
-                (sequence-commands sequence-separators pipe-group)))
-  (sequence-commands nil :type list)
-  (sequence-separators nil :type list)
-  (pipe-group nil :type list))
+                (sequence-commands sequence-separators pipe-group))
+            (:copier nil))
+  (sequence-commands nil :type list :read-only t)
+  (sequence-separators nil :type list :read-only t)
+  (pipe-group nil :type list :read-only t))
 
 (defun %empty-mixed-sequence-build-state ()
   (%make-mixed-sequence-build-state nil nil (%empty-pending-pipeline-group)))

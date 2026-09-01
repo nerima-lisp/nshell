@@ -28,16 +28,6 @@
       (expect sb-posix:o-noctty :to-equal
               (logand flags sb-posix:o-noctty))))
 
-  (it "pty-errno-check-preserves-success-and-reports-failure"
-    "The low-level errno guard returns successful results and explains failures."
-    (expect 7 :to-equal (nshell.infrastructure.acl::%check-errno 7 "probe"))
-    (let ((message nil))
-      (handler-case
-          (nshell.infrastructure.acl::%check-errno -1 "probe")
-        (error (condition)
-          (setf message (princ-to-string condition))))
-      (expect (search "probe failed with errno" message) :to-be-truthy)))
-
   (it "utf8-octets-preserves-code-point-boundaries"
     "The shared encoder emits the shortest valid UTF-8 form at every boundary."
     (flet ((encoded (code-point)

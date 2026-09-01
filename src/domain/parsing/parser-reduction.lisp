@@ -1,36 +1,6 @@
 ; Token reduction: collapse flat token stream into command/separator/error triples.
 (in-package #:nshell.domain.parsing)
 
-(defstruct (%token-reduction-state
-             (:constructor %make-token-reduction-state
-                 (&key (all-cmds '())
-                       (current-args '())
-                       current-cmd
-                       current-cmd-token
-                       current-cmd-fragments
-                       last-word-token
-                       pending-redirect-token
-                       pending-sep
-                       pending-sep-token
-                       (errors '())))
-             (:copier nil))
-  (all-cmds '() :type list)
-  (current-args '() :type list)
-  current-cmd
-  current-cmd-token
-  current-cmd-fragments
-  last-word-token
-  pending-redirect-token
-  pending-sep
-  pending-sep-token
-  (errors '() :type list))
-
-(defstruct (%token-reduction-result
-             (:constructor %make-token-reduction-result (commands errors))
-             (:copier nil))
-  (commands '() :type list)
-  (errors '() :type list))
-
 (defun %redirect-token-targetless-p (tok)
   (%redirect-targetless-p (token-value tok)))
 
@@ -45,15 +15,6 @@
      (when cmd-token
        (token-quote-style cmd-token))
      (%token-reduction-state-current-cmd-fragments state))))
-
-(defstruct (%token-reduction-argument
-            (:constructor %make-token-reduction-argument
-                (value quote-style syntactic-p fragments))
-            (:copier nil))
-  (value "" :type string :read-only t)
-  (quote-style nil :read-only t)
-  (syntactic-p nil :type boolean :read-only t)
-  (fragments nil :type list :read-only t))
 
 (defun %token-reduction-argument-from-word-token (tok)
   (%make-token-reduction-argument
@@ -119,13 +80,6 @@
   (setf (%token-reduction-state-pending-sep state) nil
         (%token-reduction-state-pending-sep-token state) nil)
   state)
-
-(defstruct (%token-reduction-diagnostic-policy
-            (:constructor %make-token-reduction-diagnostic-policy
-                (kind message))
-            (:copier nil))
-  (kind nil :type keyword :read-only t)
-  (message "" :type string :read-only t))
 
 (defun %token-reduction-diagnostic (token policy)
   (%token-diagnostic

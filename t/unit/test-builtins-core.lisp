@@ -833,4 +833,21 @@
     "The terminal ACL returns NIL for descriptors that are not attached to a TTY."
     (expect (nshell.infrastructure.terminal:interactive-terminal-p 999999)
             :to-be nil))
+
+  (it "type-mode-selects-the-most-specific-requested-mode"
+    "type mode selection keeps the option precedence explicit and deterministic."
+    (labels ((mode (&rest flags)
+               (let ((options (nshell.application::make-%type-options)))
+                 (dolist (flag flags)
+                   (ecase flag
+                     (:query (setf (nshell.application::%type-options-query-p options) t))
+                     (:path (setf (nshell.application::%type-options-path-p options) t))
+                     (:force-path (setf (nshell.application::%type-options-force-path-p options) t))
+                     (:type (setf (nshell.application::%type-options-type-p options) t))))
+                 (nshell.application::%builtin-type-mode options))))
+      (expect :default :to-equal (mode))
+      (expect :type :to-equal (mode :type))
+      (expect :force-path :to-equal (mode :path :force-path))
+      (expect :path :to-equal (mode :path :type))
+      (expect :query :to-equal (mode :query :path :force-path :type))))
 ))

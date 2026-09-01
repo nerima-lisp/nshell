@@ -6,6 +6,54 @@
      ,test))
 
 (describe "repl-state-data-contracts"
+  (it "preserves every input-state constructor field"
+    (let* ((values (list "echo あ" 4 2 "echo " 5 '("echo hi") " suggestion"
+                         :insert 3 7 1 9 #'identity '("old") 0 4 2 5 8 1
+                         "needle" "echo あ" 3 1 '((:buffer "before"))
+                         '((:buffer "after"))))
+           (state (apply #'nshell.presentation:make-input-state
+                         (mapcan (lambda (key value) (list key value))
+                                 '(:buffer :cursor-pos :completion-index
+                                   :completion-base-buffer :completion-base-cursor
+                                   :last-candidates :suggestion :mode :vi-count
+                                   :vi-visual-anchor :mouse-selection-anchor
+                                   :mouse-selection-end :abbreviation-expander
+                                   :kill-ring :last-yank-start :last-yank-end
+                                   :last-yank-index :last-argument-start
+                                   :last-argument-end :last-argument-index
+                                   :search-query :search-original-buffer
+                                   :search-original-cursor :search-index
+                                   :undo-stack :redo-stack)
+                                 values))))
+      (loop :for accessor :in '(nshell.presentation::input-state-buffer
+                                nshell.presentation::input-state-cursor-pos
+                                nshell.presentation::input-state-completion-index
+                                nshell.presentation::input-state-completion-base-buffer
+                                nshell.presentation::input-state-completion-base-cursor
+                                nshell.presentation::input-state-last-candidates
+                                nshell.presentation::input-state-suggestion
+                                nshell.presentation::input-state-mode
+                                nshell.presentation::input-state-vi-count
+                                nshell.presentation::input-state-vi-visual-anchor
+                                nshell.presentation::input-state-mouse-selection-anchor
+                                nshell.presentation::input-state-mouse-selection-end
+                                nshell.presentation::input-state-abbreviation-expander
+                                nshell.presentation::input-state-kill-ring
+                                nshell.presentation::input-state-last-yank-start
+                                nshell.presentation::input-state-last-yank-end
+                                nshell.presentation::input-state-last-yank-index
+                                nshell.presentation::input-state-last-argument-start
+                                nshell.presentation::input-state-last-argument-end
+                                nshell.presentation::input-state-last-argument-index
+                                nshell.presentation::input-state-search-query
+                                nshell.presentation::input-state-search-original-buffer
+                                nshell.presentation::input-state-search-original-cursor
+                                nshell.presentation::input-state-search-index
+                                nshell.presentation::input-state-undo-stack
+                                nshell.presentation::input-state-redo-stack)
+            :for value :in values
+            :always (equal value (funcall accessor state)))))
+
   (it "creates isolated tables for each shell state"
     (multiple-value-bind (aliases abbreviations functions sources processes)
         (nshell.presentation::%make-repl-state-tables)

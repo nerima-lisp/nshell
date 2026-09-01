@@ -8,11 +8,9 @@
 ;;;; path rather than two hand-rolled `--eval` chains that drift apart.
 ;;;;
 ;;;; Dependency resolution mirrors scripts/weave.lisp: inside `nix develop` or
-;;;; the Nix sandbox the systems are already on CL_SOURCE_REGISTRY, and for a
-;;;; plain ghq checkout the parent directory tree is registered so sibling
-;;;; checkouts (../cl-weave, ../cl-prolog-kit, ...) are found automatically. An
-;;;; explicit CL_SOURCE_REGISTRY still wins, because the existing configuration
-;;;; is inherited rather than replaced.
+;;;; the Nix sandbox ASDF receives CL_SOURCE_REGISTRY from the environment. For
+;;;; a plain ghq checkout the parent directory tree is registered so sibling
+;;;; checkouts (../cl-weave, ../cl-prolog-kit, ...) are found automatically.
 
 (require :asdf)
 
@@ -26,11 +24,8 @@
 (let* ((root (uiop:pathname-directory-pathname
               (or *load-truename* *load-pathname*)))
        (parent (uiop:pathname-parent-directory-pathname root)))
-  (asdf:initialize-source-registry
-   (if (uiop:getenv "CL_SOURCE_REGISTRY")
-     `(:source-registry
-       (:directory ,root)
-       :inherit-configuration)
+  (unless (uiop:getenv "CL_SOURCE_REGISTRY")
+    (asdf:initialize-source-registry
      `(:source-registry
        (:directory ,root)
        (:tree ,parent)

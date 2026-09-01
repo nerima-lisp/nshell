@@ -103,6 +103,17 @@
                           "pty-ready")) :to-be-truthy))
         (pty-test-close-process pty))))
 
+  (it "pty-spawn-cleans-up-when-child-exec-fails"
+    "A failed exec is reported after the PTY descriptors and child are cleaned up."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (expect (lambda ()
+                (nshell.infrastructure.acl:pty-spawn
+                 "/definitely/not-an-nshell-program" '()))
+              :to-throw 'error)))
+
   (it "pty-basic-io-roundtrip-through-cat"
     "PTY master can drive an interactive child with bidirectional I/O."
     #-(or darwin linux)

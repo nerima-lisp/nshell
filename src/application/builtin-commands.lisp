@@ -141,6 +141,12 @@
     (dolist (entry (nshell.domain.completion:builtin-help-entries))
       (write-string (%builtin-help-entry-output entry "  ") out))))
 
+(defun %find-builtin-help-entry (command)
+  (find command
+        (nshell.domain.completion:builtin-help-entries)
+        :key (lambda (entry) (getf entry :command))
+        :test #'string=))
+
 (defun %builtin-contains (context args)
   (declare (ignore context))
   (multiple-value-bind (index-p operands error-output)
@@ -205,10 +211,7 @@ Usage: seq LAST | seq FIRST LAST | seq FIRST STEP LAST. Useful with for loops:
 (defun %builtin-help (context args)
   (declare (ignore context))
   (if args
-      (let ((entry (find (first args)
-                         (nshell.domain.completion:builtin-help-entries)
-                         :key (lambda (entry) (getf entry :command))
-                         :test #'string=)))
+      (let ((entry (%find-builtin-help-entry (first args))))
         (if entry
             (values (%builtin-help-entry-output entry) 0)
             (values (format nil "help: no help for ~a~%" (first args)) 1)))

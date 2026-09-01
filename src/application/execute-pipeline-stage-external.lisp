@@ -38,6 +38,17 @@
                                           stderr-endpoint
                                           merge-stderr-p)))
 
+(defun %external-process-wrapper-redirect-plan (source-plan)
+  "The wrapper owns file redirects; retain only the parent's pipe topology."
+  (%make-external-process-redirect-plan
+    nil
+    :supersede
+    nil
+    :supersede
+    :stdout
+    :stderr
+    (%external-process-redirect-plan-merge-stderr-p source-plan)))
+
 (defun %external-process-input-stream (input-target input)
   (let ((opened-input nil))
     (values (cond
@@ -95,15 +106,7 @@ dropping Ctrl-Z for waits that cannot observe a stop."
          ;; captured stdout/stderr pipes.
          (redirect-plan
            (if wrapper-p
-               (%make-external-process-redirect-plan
-                nil
-                :supersede
-                nil
-                :supersede
-                :stdout
-                :stderr
-                (%external-process-redirect-plan-merge-stderr-p
-                 source-redirect-plan))
+               (%external-process-wrapper-redirect-plan source-redirect-plan)
                source-redirect-plan))
          (effective-command (if wrapper-p "sh" command))
          (effective-args

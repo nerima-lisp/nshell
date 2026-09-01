@@ -22,21 +22,8 @@
 (defun %missing-job-output (command job-spec)
   (format nil "~a: no such job: ~a~%" command job-spec))
 
-(defun %builtin-fg (context args)
-  (let* ((job-monitor (shell-context-job-monitor context))
-         (job-id (%resolve-job-id job-monitor args :active-only-p t))
-         (job (fg job-id job-monitor)))
-    (if job
-        (values nil 0)
-        (values (%missing-job-output "fg" (%job-spec-label args)) 1))))
-
-(defun %builtin-bg (context args)
-  (let* ((job-monitor (shell-context-job-monitor context))
-         (job-id (%resolve-job-id job-monitor args :active-only-p t))
-         (job (bg job-id job-monitor)))
-    (if job
-        (values nil 0)
-        (values (%missing-job-output "bg" (%job-spec-label args)) 1))))
+(define-job-selection-builtin %builtin-fg fg)
+(define-job-selection-builtin %builtin-bg bg)
 
 (defun %select-job-listings (job-monitor args)
   (let ((listings (jobs job-monitor)))

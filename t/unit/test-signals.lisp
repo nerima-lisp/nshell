@@ -17,7 +17,9 @@
 
   (it "signal-creation"
     (let ((sig (nshell.domain.signals:make-signal :sigint 2)))
-      (expect (nshell.domain.signals:signal-p sig) :to-be-truthy)))
+      (expect (nshell.domain.signals:signal-p sig) :to-be-truthy)
+      (expect :sigint :to-be (nshell.domain.signals:signal-name sig))
+      (expect 2 :to-be (nshell.domain.signals:signal-number sig))))
 
   (it "signal-equality"
     (let ((a (nshell.domain.signals:make-signal :sigterm 15))
@@ -35,7 +37,10 @@
       (expect (nshell.domain.signals:signal= nil sigint) :to-be-falsy)))
 
   (it "known-signal-constants"
-    (expect (nshell.domain.signals:signal-p nshell.domain.signals:+sigint+) :to-be-truthy)
-    (expect (nshell.domain.signals:signal-p nshell.domain.signals:+sigterm+) :to-be-truthy)
-    (expect (nshell.domain.signals:signal-p nshell.domain.signals:+sigcont+) :to-be-truthy)
-    (expect (nshell.domain.signals:signal-p nshell.domain.signals:+sigchld+) :to-be-truthy)))
+    (dolist (expected '( (:sigint . 2) (:sigterm . 15) (:sigcont . 18) (:sigchld . 17)))
+      (let ((signal (symbol-value
+                     (find-symbol (format nil "+~A+" (car expected))
+                                  '#:nshell.domain.signals))))
+        (expect (nshell.domain.signals:signal-p signal) :to-be-truthy)
+        (expect (car expected) :to-be (nshell.domain.signals:signal-name signal))
+        (expect (cdr expected) :to-be (nshell.domain.signals:signal-number signal))))))

@@ -167,6 +167,7 @@
    (:file "infrastructure/acl/syscall-process")
    (:file "infrastructure/acl/filesystem")
    (:file "infrastructure/acl/syscall-pipeline-streams")
+   (:file "infrastructure/acl/syscall-pipeline-wait")
    (:file "infrastructure/acl/syscall-pipeline")
    (:file "infrastructure/acl/syscall-process-substitution")
    (:file "infrastructure/acl/syscall-terminal")

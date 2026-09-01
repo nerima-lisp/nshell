@@ -126,22 +126,6 @@
           (when output-pipe-stream
             (ignore-errors (close output-pipe-stream))))))))
 
-(defun %pipeline-exit-status (statuses pipefail-p)
-  (if pipefail-p
-      (or (find-if (lambda (status) (not (zerop status))) statuses)
-          0)
-      (or (car (last statuses)) 0)))
-
-(defun %wait-pipeline-processes (procs &optional (pipefail-p nil))
-  (let ((statuses nil))
-    (dolist (proc procs)
-      (sb-ext:process-wait proc)
-      ;; PROCS is stored with the last stage at the head. PUSH restores
-      ;; source order, which is the order pipefail must inspect.
-      (push (process-exit-status-code proc) statuses))
-    (values (%pipeline-exit-status statuses pipefail-p)
-            statuses)))
-
 (defun %close-pipeline-fds (pipes)
   (dolist (pipe pipes)
     (let ((read-fd (first pipe))
@@ -152,53 +136,6 @@
       (when (integerp write-fd)
         (ignore-errors (sb-posix:close write-fd))
         (setf (second pipe) nil)))))
-
-(defun %terminate-pipeline-processes (procs)
-  (when procs
-    (let* ((first-proc (car (last procs)))
-           (pgid (sb-ext:process-pid first-proc))
-           ;; A failed SETPGID leaves a pipeline in the callers process group.
-           ;; Only signal a group after verifying that its leader is the child.
-           (actual-pgid (and (integerp pgid)
-                             (plusp pgid)
-                             (ignore-errors (sb-posix:getpgid pgid))))
-           (owns-process-group-p (and (integerp actual-pgid)
-                                      (plusp actual-pgid)
-                                      (= pgid actual-pgid))))
-      (flet ((terminate (signal)
-               (if owns-process-group-p
-                   (ignore-errors (%send-process-group-signal pgid signal))
-                   (dolist (proc procs)
-                     (when (sb-ext:process-alive-p proc)
-                       (ignore-errors (sb-ext:process-kill proc signal)))))))
-        (terminate sb-unix:sigterm)
-        (%wait-pipeline-exit-with-timeout procs 0.5)
-        (terminate sb-unix:sigkill)
-        (dolist (proc procs)
-          (ignore-errors (sb-ext:process-wait proc)))))))
-
-(defun %wait-pipeline-exit-with-timeout (procs timeout-seconds)
-  (let ((deadline (+ (get-internal-real-time)
-                     (round (* timeout-seconds internal-time-units-per-second)))))
-    (loop while (and (some #'sb-ext:process-alive-p procs)
-                     (< (get-internal-real-time) deadline))
-          do (sleep 0.01))
-    (not (some #'sb-ext:process-alive-p procs))))
-
-(defun %wait-pipeline-with-output (procs timeout-seconds timeout-fn pipefail-p)
-  (let ((copier (%start-process-output-copier (car procs) *standard-output*)))
-    (unwind-protect
-         (if (or (null timeout-seconds)
-                 (%wait-pipeline-exit-with-timeout procs timeout-seconds))
-             (multiple-value-prog1
-                 (%wait-pipeline-processes procs pipefail-p)
-               (%join-process-output-copiers (list copier)))
-             (progn
-               (%terminate-pipeline-processes procs)
-               (%join-process-output-copiers (list copier))
-               (let ((code (funcall timeout-fn)))
-                 (values code (list code)))))
-      (%join-process-output-copiers (list copier)))))
 
 (defun %pipeline-spawn-loop (commands pipes redirects redirect-streams
                              &key (default-input t) default-output preserve-fds

@@ -170,5 +170,9 @@
       (expect (list (format nil "usage: kill [-signal] pid|%job~%") 2)
               :to-equal
               (multiple-value-list
-               (nshell.application::%builtin-kill context nil)))))
-  ))
+               (nshell.application::%builtin-kill context nil)))
+      (expect (list (format nil "kill: no such process or job: 123~%") 1)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-kill context '("123")))))
+  )))

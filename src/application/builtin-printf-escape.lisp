@@ -1,0 +1,50 @@
+(in-package #:nshell.application)
+
+(defun %printf-read-escape (text index)
+  (if (>= index (length text))
+      (values "\\" index nil)
+      (let ((character (char text index)))
+        (case character
+          (#\a (values (string (code-char 7)) (1+ index) nil))
+          (#\b (values (string #\Backspace) (1+ index) nil))
+          (#\c (values "" (1+ index) t))
+          (#\e (values (string (code-char 27)) (1+ index) nil))
+          (#\f (values (string #\Page) (1+ index) nil))
+          (#\n (values (string #\Newline) (1+ index) nil))
+          (#\r (values (string #\Return) (1+ index) nil))
+          (#\t (values (string #\Tab) (1+ index) nil))
+          (#\v (values (string (code-char 11)) (1+ index) nil))
+          (#\\ (values (string #\\) (1+ index) nil))
+          (#\0
+           (let ((cursor (1+ index))
+                 (value 0)
+                 (digits 0))
+             (loop while (and (< cursor (length text))
+                              (< digits 3)
+                              (find (char text cursor) "01234567" :test #'char=))
+                   do (setf value (+ (* value 8)
+                                      (- (char-code (char text cursor))
+                                         (char-code #\0)))
+                          cursor (1+ cursor)
+                          digits (1+ digits)))
+             (values (string (or (code-char value) #\Null)) cursor nil)))
+          (otherwise (values (string character) (1+ index) nil))))))
+
+(defun %printf-expand-escapes (text)
+  (let* ((stop nil)
+         (result
+           (with-output-to-string (out)
+             (loop with index = 0
+                   while (< index (length text))
+                   do (if (char= (char text index) #\\)
+                          (multiple-value-bind (replacement next-index stop-p)
+                              (%printf-read-escape text (1+ index))
+                            (write-string replacement out)
+                            (setf index next-index
+                                  stop stop-p)
+                            (when stop
+                              (return)))
+                          (progn
+                            (write-char (char text index) out)
+                            (incf index)))))))
+    (values result stop)))

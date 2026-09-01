@@ -586,6 +586,28 @@
           packages.default = delivery;
           apps.default = app;
           apps.nshell = app;
+          apps.test = {
+            type = "app";
+            program = "${
+              ctx.pkgs.writeTextFile {
+                name = "nshell-test";
+                executable = true;
+                destination = "/bin/nshell-test";
+                text =
+                  builtins.replaceStrings
+                    [
+                      (builtins.fromJSON ''"\u0024{CL_SOURCE_REGISTRY:+:\u0024CL_SOURCE_REGISTRY}"'')
+                      ":/nix/store/"
+                    ]
+                    [
+                      ""
+                      "//:/nix/store/"
+                    ]
+                    (builtins.readFile ctx.generated.apps.test.program)
+                  + "\n";
+              }
+            }/bin/nshell-test";
+          };
 
           # The generated shell, plus the aliases this repository's loop is
           # written in terms of. Appended to the preset's own shellHook rather

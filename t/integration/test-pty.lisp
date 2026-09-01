@@ -28,6 +28,17 @@
       (expect sb-posix:o-noctty :to-equal
               (logand flags sb-posix:o-noctty))))
 
+  (it "pty-syscall-contract-distinguishes-success-and-failure"
+    "Low-level syscall results use NIL or negative integers as failures."
+    (expect (nshell.infrastructure.acl::%syscall-failed-p 0) :to-be-falsy)
+    (expect (nshell.infrastructure.acl::%syscall-failed-p nil) :to-be-truthy)
+    (expect (nshell.infrastructure.acl::%syscall-failed-p -1) :to-be-truthy)
+    (expect 0 :to-equal
+            (nshell.infrastructure.acl::%check-errno 0 "successful syscall"))
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%check-errno nil "failed syscall"))
+            :to-throw 'error))
+
   (it "utf8-octets-preserves-code-point-boundaries"
     "The shared encoder emits the shortest valid UTF-8 form at every boundary."
     (flet ((encoded (code-point)

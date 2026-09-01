@@ -14,7 +14,11 @@
     (expect (nshell.application::%parse-integer-designator "12x")
             :to-be-null)
     (expect (nshell.application::%parse-integer-designator nil)
-            :to-be-null))
+            :to-be-null)
+    (expect 12 :to-equal
+            (nshell.application::%parse-positive-integer "12"))
+    (expect nil :to-equal
+            (nshell.application::%parse-positive-integer "0")))
 
   (it "parses kill options and preserves target order"
     (multiple-value-bind (signal targets list-signals-p error)

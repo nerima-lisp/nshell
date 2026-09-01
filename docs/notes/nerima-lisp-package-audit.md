@@ -68,15 +68,17 @@ duplicate parser. The un-adopted remainder is compiler infrastructure
 nshell never handles (`cl-json-kit`), or a build-time tool (`paredit-cli`).
 Re-run the usage half of this audit with:
 
-```
-
-To re-check the pinned versions against upstream tags:
-
-```
-for repo in cl-weave cl-prolog-kit cl-parser-kit cl-dataflow-kit; do
-  git ls-remote --tags --refs "https://github.com/nerima-lisp/$repo.git"
-done
-```
-rg -o '\b(cl-prolog-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit|cl-concurrent-kit)::?[a-z]' src/ \
+```sh
+rg -o '\\b(cl-prolog-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit|cl-concurrent-kit)::?[a-z]' src/ \\
   | perl -pe 's/:.*$//' | sort | uniq -c | sort -rn
+```
+
+To re-check every pinned version against upstream tags:
+
+```sh
+for repo in cl-weave cl-prolog-kit cl-parser-kit cl-dataflow-kit cl-boundary-kit cl-cli cl-tty-kit cl-process-kit cl-history-kit cl-host-kit cl-codec-kit cl-concurrent-kit cl-date-kit cl-nix-forge paredit-cli; do
+  printf '%s: ' "$repo"
+  git ls-remote --tags --refs "https://github.com/nerima-lisp/$repo.git" \\
+    | perl -ne 'print "$1\\n" if /refs\\/tags\\/(v[^\\^]+)$/' | tail -1
+done
 ```

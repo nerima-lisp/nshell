@@ -8,7 +8,8 @@
          (output-root
            (uiop:ensure-directory-pathname
             (or configured-root
-                (merge-pathnames #P"nshell-asdf/"
+                (merge-pathnames
+                 (format nil "nshell-asdf-~36R/" (random most-positive-fixnum))
                                  (uiop:temporary-directory))))))
     (ensure-directories-exist output-root)
     (asdf:initialize-output-translations

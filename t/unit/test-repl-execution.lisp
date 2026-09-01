@@ -1,6 +1,15 @@
 (in-package #:nshell/test)
 
 (describe "repl-tests"
+  (it "repl-state-table-factories-use-their-declared-key-semantics"
+    "Name tables compare string keys by content while process tables compare job ids by identity."
+    (let ((name-table (nshell.presentation::%make-repl-name-table))
+          (process-table (nshell.presentation::%make-repl-process-registry)))
+      (setf (gethash (copy-seq "alias") name-table) :value
+            (gethash 7 process-table) :process)
+      (expect :value :to-equal (gethash "alias" name-table))
+      (expect :process :to-equal (gethash 7 process-table))
+      (expect nil :to-be (gethash "7" process-table))))
   (it "repl-execute-expands-history-designator-before-parsing"
     "Interactive execution expands history references before parsing and persistence."
     (let ((persisted nil))

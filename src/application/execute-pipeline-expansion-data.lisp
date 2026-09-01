@@ -1,0 +1,33 @@
+(in-package #:nshell.application)
+
+(defun %trim-command-substitution-output (output)
+  (let* ((text (or output ""))
+         (end (length text)))
+    (loop while (and (> end 0)
+                     (member (char text (1- end)) '(#\Newline #\Return)))
+          do (decf end))
+    (subseq text 0 end)))
+
+(defun %command-substitution-fields (output)
+  (let ((text (%trim-command-substitution-output output))
+        (fields nil)
+        (start 0))
+    (unless (string= text "")
+      (loop for newline = (position #\Newline text :start start)
+            do (push (subseq text start newline) fields)
+            if newline do (setf start (1+ newline))
+            else do (return)))
+    (nreverse fields)))
+
+(defun %append-command-substitution-char (parts ch)
+  (mapcar (lambda (part) (concatenate 'string part (string ch))) parts))
+
+(defun %append-command-substitution-fields (parts fields)
+  (let ((result nil)
+        (values (or fields '(""))))
+    (dolist (part parts (nreverse result))
+      (dolist (field values)
+        (push (concatenate 'string part field) result)))))
+
+(defun %append-command-substitution-string (parts string)
+  (mapcar (lambda (part) (concatenate 'string part string)) parts))

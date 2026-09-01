@@ -123,6 +123,7 @@
    (:file "domain/prompting/prompt")
    (:file "application/shell-context")
 	   (:file "application/execute-pipeline-fragment-expansion")
+	   (:file "application/execute-pipeline-expansion-data")
 	   (:file "application/execute-pipeline-expansion")
 	   (:file "application/execute-pipeline-expansion-here-doc")
 	   (:file "application/execute-pipeline-redirect")

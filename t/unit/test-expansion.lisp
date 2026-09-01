@@ -441,4 +441,12 @@ Each case is (EXPECTED INPUT &rest ARGS)."
       (expect (pat "file?.c") :to-be-truthy)
       (expect (pat "[abc]") :to-be-truthy)
       (expect (pat "plain") :to-be-falsy)
-      (expect (pat "a.b.c") :to-be-falsy))))
+      (expect (pat "a.b.c") :to-be-falsy)))
+
+  (it "glob-match-subject-normalizes-files-outside-root"
+    "A candidate outside the computed root remains usable for matching."
+    (let* ((subject (nshell.domain.expansion::%glob-file-match-subject
+                     "*.txt" "/tmp/" #p"other.txt"))
+           (candidate (nshell.domain.expansion::%glob-match-subject-candidate
+                       subject)))
+      (expect "/tmp/other.txt" :to-equal candidate))))

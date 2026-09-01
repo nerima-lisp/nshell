@@ -123,6 +123,7 @@
 	   (:file "application/execute-pipeline-stage-external")
 	   (:file "application/execute-pipeline-stage-background")
 	   (:file "application/execute-pipeline-stage")
+	   (:file "application/execute-pipeline")
 	   (:file "application/execute-pipeline-control")
    (:file "application/manage-job")
    (:file "application/pipeline-diagram")

@@ -46,6 +46,13 @@
           do (return status)
         do (sleep 0.05)))
 
+(defmacro with-readiness-pipe ((read-fd write-fd) &body body)
+  `(multiple-value-bind (,read-fd ,write-fd) (sb-posix:pipe)
+     (unwind-protect
+          (progn ,@body)
+       (nshell.infrastructure.acl::%pty-close-fd ,read-fd)
+       (nshell.infrastructure.acl::%pty-close-fd ,write-fd))))
+
 (describe "pty-readiness-protocol"
   (it "encodes argv and environment entries as a null-terminated vector"
     "The exec boundary receives stable C strings and a trailing null pointer."
@@ -65,18 +72,14 @@
 
   (it "round-trips the child readiness byte through a pipe"
     "The parent/child synchronization byte is a strict one-byte protocol."
-    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
-      (unwind-protect
-           (progn
-             (expect t :to-equal
-                     (nshell.infrastructure.acl::%pty-write-ready-byte
-                      write-fd
-                      nshell.infrastructure.acl::+pty-child-ready-ok+))
-             (expect nshell.infrastructure.acl::+pty-child-ready-ok+
-                     :to-equal
-                     (nshell.infrastructure.acl::%pty-read-ready-byte read-fd)))
-        (nshell.infrastructure.acl::%pty-close-fd read-fd)
-        (nshell.infrastructure.acl::%pty-close-fd write-fd))))
+    (with-readiness-pipe (read-fd write-fd)
+      (expect t :to-equal
+              (nshell.infrastructure.acl::%pty-write-ready-byte
+               write-fd
+               nshell.infrastructure.acl::+pty-child-ready-ok+))
+      (expect nshell.infrastructure.acl::+pty-child-ready-ok+
+              :to-equal
+              (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))))
 
   (it "accepts nil when closing an optional file descriptor"
     "Cleanup paths may receive no descriptor after a partial PTY setup."
@@ -85,33 +88,25 @@
 
   (it "rejects a readiness pipe that closes before sending a byte"
     "The parent must distinguish an incomplete child setup from success."
-    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
-      (unwind-protect
-           (progn
-             (nshell.infrastructure.acl::%pty-close-fd write-fd)
-             (setf write-fd nil)
-             (expect (lambda ()
-                       (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
-                     :to-throw 'error))
-        (nshell.infrastructure.acl::%pty-close-fd read-fd)
-        (nshell.infrastructure.acl::%pty-close-fd write-fd))))
+    (with-readiness-pipe (read-fd write-fd)
+      (nshell.infrastructure.acl::%pty-close-fd write-fd)
+      (setf write-fd nil)
+      (expect (lambda ()
+                (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
+              :to-throw 'error)))
 
   (it "rejects a readiness byte that reports child setup failure"
     "The parent propagates the child-side setup failure as an error."
-    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
-      (unwind-protect
-           (progn
-             (expect t :to-equal
-                     (nshell.infrastructure.acl::%pty-write-ready-byte
-                      write-fd
-                      nshell.infrastructure.acl::+pty-child-ready-error+))
-             (expect (lambda ()
-                       (nshell.infrastructure.acl::%wait-for-pty-child-ready
-                        read-fd
-                        -1))
-                     :to-throw 'error))
-        (nshell.infrastructure.acl::%pty-close-fd read-fd)
-        (nshell.infrastructure.acl::%pty-close-fd write-fd))))
+    (with-readiness-pipe (read-fd write-fd)
+      (expect t :to-equal
+              (nshell.infrastructure.acl::%pty-write-ready-byte
+               write-fd
+               nshell.infrastructure.acl::+pty-child-ready-error+))
+      (expect (lambda ()
+                (nshell.infrastructure.acl::%wait-for-pty-child-ready
+                 read-fd
+                 -1))
+              :to-throw 'error)))
 
 )
 

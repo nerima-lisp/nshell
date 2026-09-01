@@ -28,6 +28,19 @@
       (expect sb-posix:o-noctty :to-equal
               (logand flags sb-posix:o-noctty))))
 
+  (it "utf8-octets-preserves-code-point-boundaries"
+    "The shared encoder emits the shortest valid UTF-8 form at every boundary."
+    (flet ((encoded (code-point)
+             (coerce (nshell.util:utf-8-octets
+                      (string (code-char code-point)))
+                     'list)))
+      (expect '(127) :to-equal (encoded #x7f))
+      (expect '(194 128) :to-equal (encoded #x80))
+      (expect '(223 191) :to-equal (encoded #x7ff))
+      (expect '(224 160 128) :to-equal (encoded #x800))
+      (expect '() :to-equal
+              (coerce (nshell.util:utf-8-octets "") 'list))))
+
   (it "pty-open-write-read-close"
     "PTY can be opened, used in both directions, and closed."
     #-(or darwin linux)

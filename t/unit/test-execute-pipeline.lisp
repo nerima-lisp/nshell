@@ -118,6 +118,21 @@
               (host-kit:delete-directory-tree root :validate t))
           (error ())))))
 
+  (it "execute-pipeline-use-case-preserves-arbitrary-fd-dup-order"
+    "The application boundary retains fd 3 on the original stdout before a later file redirect."
+    (with-temporary-output-file (target :prefix "nshell-app-pipeline-arbitrary-fd-dup")
+      (let* ((ast
+               (nshell.domain.parsing:make-command-node
+                "sh"
+                (list "-c" "printf out; printf fd3 >&3" "3>&1" ">" target)))
+             (code nil)
+             (output (capture-standard-output
+                       (setf code
+                             (nshell.application:execute-pipeline-use-case ast)))))
+        (expect 0 :to-equal code)
+        (expect "fd3" :to-equal output)
+        (expect "out" :to-equal (host-kit:read-file-string target)))))
+
   (it "pipeline-stage-streams-opens-file-and-here-string-inputs"
     "Pipeline stage setup materializes file and here-string input redirects."
     (host-kit:with-temporary-directory (directory)

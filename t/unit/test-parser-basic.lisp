@@ -93,6 +93,41 @@
     (expect (lambda () (nshell.domain.parsing:make-case-clause 42 '())) :to-throw 'error)
     (expect (lambda () (nshell.domain.parsing:make-case-clause "pattern" "not-a-list")) :to-throw 'error))
 
+  (it "ast-value-objects-reject-invalid-fragment-state"
+    "Fragment metadata is validated at the AST boundary."
+    (expect (lambda ()
+              (nshell.domain.parsing:make-command-fragment
+               "value" nil '(0 -1)))
+            :to-throw 'error)
+    (expect (lambda ()
+              (nshell.domain.parsing:make-command-node
+               "echo" nil nil nil '("not-a-fragment")))
+            :to-throw 'error)
+    (let ((fragment (nshell.domain.parsing:make-command-fragment "value" :double '(0 2))))
+      (expect '(0 2) :to-equal
+              (nshell.domain.parsing:command-fragment-escaped-positions fragment))))
+
+  (it "command-node-derives-uniform-fragment-quote-style"
+    "A command has a quote style only when every fragment agrees."
+    (let ((single (nshell.domain.parsing:make-command-node
+                   "echo" nil nil nil
+                   (list (nshell.domain.parsing:make-command-fragment "e" :single)
+                         (nshell.domain.parsing:make-command-fragment "cho" :single))))
+          (mixed (nshell.domain.parsing:make-command-node
+                  "echo" nil nil nil
+                  (list (nshell.domain.parsing:make-command-fragment "e" :single)
+                        (nshell.domain.parsing:make-command-fragment "cho" :double)))))
+      (expect :single :to-be
+              (nshell.domain.parsing::command-node-command-quote-style single))
+      (expect nil :to-be
+              (nshell.domain.parsing::command-node-command-quote-style mixed))))
+
+  (it "ast-command-line-rendering-returns-empty-for-unsupported-node"
+    "Only command and pipeline nodes have a shell command-line projection."
+    (expect "" :to-equal
+            (nshell.domain.parsing:ast-node->command-line
+             (nshell.domain.parsing::%make-argument-node "argument"))))
+
   (it "ast-node-constructors-copy-list-slots"
     "AST constructors should not share mutable list slots with callers."
     (let* ((args (list "one"))

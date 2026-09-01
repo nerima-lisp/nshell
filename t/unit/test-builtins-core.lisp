@@ -122,6 +122,20 @@
       (assert-builtin-call (context "printf" '("%.3s" "abcdef"))
         :code 0
         :output "abc")
+      (dolist (case `(("%c" "A" "A")
+                      ("%c" "" ,(string (code-char 0)))
+                      ("%#X" "31" "0X1F")
+                      ("%o" "9" "11")
+                      ("%u" "7" "7")
+                      ("%-.2f" "2.5" "2.50")
+                      ("%+f" "2.5" "+2.500000")
+                      ("% f" "2.5" " 2.500000")
+                      ("%5s" "x" "    x")
+                      ("%-5s" "x" "x    ")))
+        (destructuring-bind (format argument expected) case
+          (assert-builtin-call (context "printf" (list format argument))
+            :code 0
+            :output (format nil "~A" expected))))
       ))
 
   (it "exit-stops-the-current-shell-context"

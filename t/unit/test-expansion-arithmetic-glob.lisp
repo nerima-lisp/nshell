@@ -93,6 +93,23 @@
       (expect 0 :to-equal (nshell.domain.expansion:evaluate-arithmetic "0 && 5" env))
       (expect 1 :to-equal (nshell.domain.expansion:evaluate-arithmetic "1 && 5" env))))
 
+  (it "arithmetic-logical-operators-short-circuit-errors"
+    "Skipped branches must not evaluate division by zero."
+    (let ((env (arith-env)))
+      (expect 0 :to-equal
+              (nshell.domain.expansion:evaluate-arithmetic "0 && (1 / 0)" env))
+      (expect 1 :to-equal
+              (nshell.domain.expansion:evaluate-arithmetic "1 || (1 / 0)" env))))
+
+  (it "arithmetic-variable-coercion"
+    "Unset and non-numeric variables evaluate to zero."
+    (let ((env (arith-env)))
+      (setf env (nshell.domain.environment:env-set env "NOT-A-NUMBER" "oops" nil))
+      (expect 0 :to-equal
+              (nshell.domain.expansion:evaluate-arithmetic "NOT-A-NUMBER" env))
+      (expect 10 :to-equal
+              (nshell.domain.expansion:evaluate-arithmetic "X + NOT-A-NUMBER" env))))
+
   (it "arithmetic-substitution-in-text"
     "$((expr)) is substituted within surrounding text, with variable expansion."
     (let ((env (arith-env)))

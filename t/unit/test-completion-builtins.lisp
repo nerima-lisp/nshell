@@ -331,6 +331,49 @@
           (nshell.domain.completion:kb-command-present-p
            nshell.presentation::*kb* "zz-large")))))
 
+  (it "completion-help-validates-command-and-help-shapes"
+    (expect nil :to-be
+      (nshell.presentation::%completion-help-command-parts ""))
+    (expect nil :to-be
+      (nshell.presentation::%completion-help-command-parts "echo; rm"))
+    (expect '("echo" "hello") :to-equal
+      (nshell.presentation::%completion-help-command-parts "echo  hello"))
+    (expect nil :to-be
+      (nshell.presentation::%completion-help-text-p nil))
+    (expect nil :to-be
+      (nshell.presentation::%completion-help-text-p "plain output"))
+    (expect (nshell.presentation::%completion-help-text-p "Options: --verbose")
+            :to-be-truthy))
+
+  (it "completion-help-caches-only-successful-text"
+    (with-repl-test-state
+      (let ((command "zz-cache-policy"))
+        (expect :missing :to-equal
+          (nshell.presentation::%completion-help-cache-help-text
+           command "Options: --help" 1))
+        (expect nil :to-be
+          (nshell.domain.completion:kb-command-present-p
+           nshell.presentation::*kb* command))
+        (expect :missing :to-equal
+          (nshell.presentation::%completion-help-cache-help-text
+           command 42 0))
+        (expect :loaded :to-equal
+          (nshell.presentation::%completion-help-cache-help-text
+           command "Options: --help" 0))
+        (expect (nshell.domain.completion:kb-command-present-p
+                 nshell.presentation::*kb* command)
+                :to-be-truthy))))
+
+  (it "completion-help-fetch-errors-become-missing-cache-state"
+    (with-repl-test-state
+      (let ((nshell.presentation::*completion-help-fetcher*
+              (lambda (command)
+                (declare (ignore command))
+                (error "synthetic help failure"))))
+        (expect :missing :to-equal
+          (nshell.presentation::%completion-help-fetch-cache-state
+           "zz-error")))))
+
   (it "repl-completion-does-not-fetch-help-for-unavailable-commands"
     (with-repl-completion-help-fetcher
         (fetch-count "Usage: should-not-run"

@@ -14,12 +14,6 @@
   (and (eq (token-type token) :redirect)
        (member (token-value token) '("<<" "<<-") :test #'string=)))
 
-(defstruct (%here-doc-delimiter-scan
-            (:constructor %make-here-doc-delimiter-scan
-                (reversed-delimiters))
-            (:copier nil))
-  (reversed-delimiters '() :type list :read-only t))
-
 (defun %empty-here-doc-delimiter-scan ()
   (%make-here-doc-delimiter-scan '()))
 
@@ -46,28 +40,12 @@
                                                        (token-value next)))))
     (%here-doc-delimiter-scan-result scan)))
 
-(defstruct (%here-doc-line
-            (:constructor %make-here-doc-line
-                (text next-position newline-p))
-            (:copier nil))
-  (text "" :type string :read-only t)
-  next-position
-  (newline-p nil :type boolean :read-only t))
-
 (defun %read-here-doc-line (input start)
   (let* ((end (%line-end-position input start))
          (has-newline (< end (length input))))
     (%make-here-doc-line (subseq input start end)
                          (if has-newline (1+ end) end)
                          has-newline)))
-
-(defstruct (%here-doc-body
-            (:constructor %make-here-doc-body
-                (body next-position missing-delimiter-p))
-            (:copier nil))
-  (body "" :type string :read-only t)
-  next-position
-  (missing-delimiter-p nil :type boolean :read-only t))
 
 (defun %consume-here-doc-body (input start delimiter &optional strip-tabs-p)
   (let* ((delimiter-text (if (consp delimiter) (car delimiter) delimiter))
@@ -98,22 +76,6 @@
                        (get-output-stream-string body)
                        pos
                        t))))))
-
-(defstruct (%here-doc-consumption
-            (:constructor %make-here-doc-consumption
-                (bodies next-position incomplete-p))
-            (:copier nil))
-  (bodies '() :type list :read-only t)
-  next-position
-  (incomplete-p nil :type boolean :read-only t))
-
-(defstruct (%here-doc-consumption-state
-            (:constructor %make-here-doc-consumption-state
-                (reversed-bodies next-position incomplete-p))
-            (:copier nil))
-  (reversed-bodies '() :type list :read-only t)
-  next-position
-  (incomplete-p nil :type boolean :read-only t))
 
 (defun %empty-here-doc-consumption-state (start)
   (%make-here-doc-consumption-state '() start nil))

@@ -106,7 +106,7 @@
              (ensure-directories-exist root)
              (expect 0 :to-equal (nshell.application:execute-pipeline-use-case ast))
              (expect (probe-file output) :to-be-truthy)
-             (with-open-file (stream output :direction :input)
+             (with-open-file (stream output)
                (let ((actual (make-string (file-length stream))))
                  (read-sequence actual stream)
                  (expect content :to-equal actual))))

@@ -432,4 +432,20 @@ letting word-reading stop on an unconsumed terminator."
                     (<= (nshell.domain.parsing:token-start tok)
                         (nshell.domain.parsing:token-end tok))))
              (nshell.domain.parsing::tokenization-result-tokens
-              (nshell.domain.parsing:tokenize cmd))))))
+             (nshell.domain.parsing:tokenize cmd))))))
+
+  (it "balanced-substitution-end-respects-nesting-quotes-and-escapes"
+    "Substitution scanning stops only at the matching unquoted parenthesis."
+    (flet ((end (input)
+             (nshell.domain.parsing::%balanced-substitution-end input 0)))
+      (expect 1 :to-equal (end "()"))
+      (expect 6 :to-equal (end "(a(b)c)"))
+      (expect 4 :to-equal (end "(\"(\")x)"))
+      (expect 5 :to-equal (end "(a\\)b)"))
+      (expect (end "(unfinished") :to-be-null)))
+
+  (it "tokenizer-balanced-substitution-end-uses-state-input"
+    "The state projection delegates substitution scanning to its input."
+    (let ((state (nshell.domain.parsing::%make-tokenizer-state-for-input "(ok)")))
+      (expect 3 :to-equal
+              (nshell.domain.parsing::%tokenizer-balanced-substitution-end state 0))))

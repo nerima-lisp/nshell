@@ -2,35 +2,36 @@
 
 (describe "execute-pipeline-expansion-branch-tests"
   (it "normalizes-command-substitution-data"
-    (expect "one\ntwo"
+    (expect (nshell.application::%trim-command-substitution-output
+             (format nil "one~%two~%~C" #\Return))
             :to-equal
-            (nshell.application::%trim-command-substitution-output
-             "one\ntwo\n\r"))
-    (expect (list "one" "two")
+            (format nil "one~%two"))
+    (expect (nshell.application::%command-substitution-fields
+             (format nil "one~%two~%"))
             :to-equal
-            (nshell.application::%command-substitution-fields "one\ntwo\n"))
-    (expect nil
+            (list "one" "two"))
+    (expect (nshell.application::%command-substitution-fields nil)
             :to-equal
-            (nshell.application::%command-substitution-fields nil)))
+            nil))
   (it "appends-command-substitution-fields-with-empty-fallback"
-    (expect (list "prefixone" "prefixtwo")
-            :to-equal
-            (nshell.application::%append-command-substitution-fields
+    (expect (nshell.application::%append-command-substitution-fields
              (list "prefix")
-             (list "one" "two")))
-    (expect (list "prefix")
+             (list "one" "two"))
             :to-equal
-            (nshell.application::%append-command-substitution-fields
+            (list "prefixone" "prefixtwo"))
+    (expect (nshell.application::%append-command-substitution-fields
              (list "prefix")
-             nil))
-    (expect (list "ax" "bx")
+             nil)
             :to-equal
-            (nshell.application::%append-command-substitution-char
-             (list "a" "b") #\x))
-    (expect (list "avalue" "bvalue")
+            (list "prefix"))
+    (expect (nshell.application::%append-command-substitution-char
+             (list "a" "b") #\x)
             :to-equal
-            (nshell.application::%append-command-substitution-string
-             (list "a" "b") "value")))
+            (list "ax" "bx"))
+    (expect (nshell.application::%append-command-substitution-string
+             (list "a" "b") "value")
+            :to-equal
+            (list "avalue" "bvalue")))
   (it "expands-balanced-and-falls-back-for-arithmetic-substitutions"
     (let ((balanced "$((1+2))")
           (unbalanced "$((1+2)"))

@@ -145,6 +145,11 @@
         ("X-X-X" "${P//a/X}")
         ("a-a-a" "${P/z/X}"))))
 
+  (it "parameter-substitution-empty-pattern-preserves-value"
+    "An empty literal substitution pattern is a no-op."
+    (expect "value" :to-equal
+            (nshell.domain.expansion::%string-replace "value" "" "X" t)))
+
   (it "parameter-plain-brace-still-works"
     "Plain ${VAR} expansion is unchanged by the operator support."
     (%assert-expansion-cases-with-env (string=

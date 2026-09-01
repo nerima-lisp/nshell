@@ -81,7 +81,39 @@
   (it "accepts nil when closing an optional file descriptor"
     "Cleanup paths may receive no descriptor after a partial PTY setup."
     (expect (nshell.infrastructure.acl::%pty-close-fd nil)
-            :to-be-null)))
+            :to-be-null))
+
+  (it "rejects a readiness pipe that closes before sending a byte"
+    "The parent must distinguish an incomplete child setup from success."
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (unwind-protect
+           (progn
+             (nshell.infrastructure.acl::%pty-close-fd write-fd)
+             (setf write-fd nil)
+             (expect (lambda ()
+                       (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
+                     :to-throw 'error))
+        (nshell.infrastructure.acl::%pty-close-fd read-fd)
+        (nshell.infrastructure.acl::%pty-close-fd write-fd))))
+
+  (it "rejects a readiness byte that reports child setup failure"
+    "The parent propagates the child-side setup failure as an error."
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (unwind-protect
+           (progn
+             (expect t :to-equal
+                     (nshell.infrastructure.acl::%pty-write-ready-byte
+                      write-fd
+                      nshell.infrastructure.acl::+pty-child-ready-error+))
+             (expect (lambda ()
+                       (nshell.infrastructure.acl::%wait-for-pty-child-ready
+                        read-fd
+                        -1))
+                     :to-throw 'error))
+        (nshell.infrastructure.acl::%pty-close-fd read-fd)
+        (nshell.infrastructure.acl::%pty-close-fd write-fd))))
+
+)
 
 (describe "pty-foreground-integration-tests"
   (it "pty-spawn-creates-process-with-master-fd"

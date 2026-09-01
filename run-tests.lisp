@@ -24,12 +24,13 @@
 (let* ((root (uiop:pathname-directory-pathname
               (or *load-truename* *load-pathname*)))
        (parent (uiop:pathname-parent-directory-pathname root)))
-  (unless (uiop:getenv "CL_SOURCE_REGISTRY")
-    (asdf:initialize-source-registry
-     `(:source-registry
-       (:directory ,root)
-       (:tree ,parent)
-       :inherit-configuration)))
+  (asdf:initialize-source-registry
+   (if (uiop:getenv "CL_SOURCE_REGISTRY")
+       '(:source-registry :environment)
+       `(:source-registry
+         (:directory ,root)
+         (:tree ,parent)
+         :inherit-configuration)))
   ;; Warn rather than abort on compile-file warnings: the suite's own failures
   ;; are the signal this script reports, and a style warning in a dependency
   ;; should not masquerade as a test failure.
@@ -38,9 +39,7 @@
   (let ((passed-p
           (handler-case
               (progn
-                  (format *error-output* "before prolog~%")
                   (asdf:load-system "cl-prolog-kit")
-                  (format *error-output* "after prolog~%")
                   (asdf:load-system "nshell/test" :force t)
                 (multiple-value-bind (result selected-count)
                     (funcall (find-symbol "RUN-TESTS" "NSHELL/TEST"))

@@ -43,6 +43,20 @@
       (expect (nshell.domain.parsing::%separator-facts nil) :to-be-null)
       (expect (nshell.domain.parsing::%separator-text nil) :to-be-null)))
 
+  (it "dynamic-fd-dup-parser-rejects-incomplete-or-nonnumeric-targets"
+    "Dynamic descriptor duplication accepts digits and close markers only."
+    (expect (nshell.domain.parsing::%redirect-dynamic-fd-dup-target nil)
+            :to-be-null)
+    (expect (nshell.domain.parsing::%redirect-dynamic-fd-dup-target "2>&")
+            :to-be-null)
+    (expect (nshell.domain.parsing::%redirect-dynamic-fd-dup-target "x>&1")
+            :to-be-null)
+    (expect (nshell.domain.parsing::%redirect-dynamic-fd-dup-target "2>&x")
+            :to-be-null)
+    (let ((target (nshell.domain.parsing::%redirect-dynamic-fd-dup-target "2>&-")))
+      (expect :close :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-target target))))
+
   (it "redirect-spec-entry-projects-table-shape"
     "Redirect spec entries isolate raw table shape from parser data queries."
     (let ((entry (nshell.domain.parsing::%redirect-spec-entry "2>&1")))

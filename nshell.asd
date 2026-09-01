@@ -126,6 +126,8 @@
 	   (:file "application/execute-pipeline-expansion")
 	   (:file "application/execute-pipeline-expansion-here-doc")
 	   (:file "application/execute-pipeline-redirect")
+	   (:file "application/execute-pipeline-stage-external-data")
+	   (:file "application/execute-pipeline-stage-external-output")
 	   (:file "application/execute-pipeline-stage-external")
 	   (:file "application/execute-pipeline-stage-background")
 	   (:file "application/execute-pipeline-stage")

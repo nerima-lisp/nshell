@@ -131,12 +131,45 @@
         (expect 0 :to-equal (hash-table-count nshell.presentation::*completion-help-cache*)))))
 
   (it "binds fresh state without changing the caller tables"
-    (let ((outer (make-hash-table :test #'equal)))
-      (let ((nshell.presentation::*aliases* outer))
+    (let ((outer-aliases (make-hash-table :test #'equal))
+          (outer-abbreviations (make-hash-table :test #'equal))
+          (outer-functions (make-hash-table :test #'equal))
+          (outer-sources (make-hash-table :test #'equal))
+          (outer-processes (make-hash-table :test #'eql))
+          (outer-cache (make-hash-table :test #'equal)))
+      (setf (gethash "outer" outer-cache) t)
+      (let ((nshell.presentation::*aliases* outer-aliases)
+            (nshell.presentation::*abbreviations* outer-abbreviations)
+            (nshell.presentation::*functions* outer-functions)
+            (nshell.presentation::*function-sources* outer-sources)
+            (nshell.presentation::*proc-registry* outer-processes)
+            (nshell.presentation::*completion-help-cache* outer-cache))
         (nshell.presentation::with-fresh-repl-state-tables
           (setf (gethash "inner" nshell.presentation::*aliases*) t)
-          (expect (not (eq outer nshell.presentation::*aliases*)) :to-be-truthy)
-          (expect (gethash "inner" nshell.presentation::*aliases*) :to-be-truthy))))))
+          (dolist (table (list nshell.presentation::*aliases*
+                               nshell.presentation::*abbreviations*
+                               nshell.presentation::*functions*
+                               nshell.presentation::*function-sources*))
+            (expect (eq (hash-table-test table) 'equal) :to-be-truthy)
+            (expect (<= (hash-table-count table) 1)
+                    :to-be-truthy))
+          (expect (eq (hash-table-test nshell.presentation::*proc-registry*)
+                      'eql)
+                  :to-be-truthy)
+          (expect 0 :to-equal
+                  (hash-table-count nshell.presentation::*proc-registry*))
+          (expect 0 :to-equal
+                  (hash-table-count nshell.presentation::*completion-help-cache*))
+          (expect (gethash "inner" nshell.presentation::*aliases*) :to-be-truthy)
+          (expect (not (eq outer-aliases nshell.presentation::*aliases*))
+                  :to-be-truthy))
+        (dolist (table (list outer-aliases
+                             outer-abbreviations
+                             outer-functions
+                             outer-sources
+                             outer-processes))
+          (expect (zerop (hash-table-count table)) :to-be-truthy))
+        (expect (gethash "outer" outer-cache) :to-be-truthy)))))
 
 (describe "repl-tests"
   (it "exported-environment-strings-only-include-exported-vars"

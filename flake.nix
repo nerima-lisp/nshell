@@ -9,7 +9,7 @@
     # The org flake preset. Everything this file used to spell out by hand --
     # the `.asd` version extraction, `forAllSystems`, the treefmt eval wired to
     # both `formatter` and `checks.formatting`, the mkdocs package plus its
-    # check, the run-tests.lisp gate, the `apps.test`/`apps.default` pair, and
+    # check, the run-tests.lisp gate, the `apps.default`/`apps.nshell` pair, and
     # the hand-written `save-lisp-and-die` that delivered the binary -- is one
     # `mkPackageFlake` call below. Pinned to a release TAG, never to the
     # branch: a bare `github:nerima-lisp/cl-nix-forge` follows that

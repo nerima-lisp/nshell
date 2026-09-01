@@ -196,6 +196,42 @@
         :output "exit: too many arguments~%")
       (expect (nshell.application:shell-context-running context) :to-be-truthy)))
 
+  (it "type-option-parser-covers-modes-and-color-values"
+    "type keeps display modes orthogonal and rejects invalid color values."
+    (dolist (option '(("-a" :all) ("--short" :short) ("-f" :no-functions)
+                      ("--color" :color) ("--color=auto" :color)
+                      ("-q" :query) ("--path" :path) ("-P" :force-path)
+                      ("-t" :type) ("-h" :help)))
+      (destructuring-bind (argument slot) option
+        (multiple-value-bind (parsed rest error-output code)
+            (nshell.application::%parse-type-options (list argument "name"))
+          (expect parsed :to-be-truthy)
+          (expect '("name") :to-equal rest)
+          (expect nil :to-equal error-output)
+          (expect nil :to-equal code)
+          (expect (funcall (find-symbol (format nil "%TYPE-OPTIONS-~A-P" slot)
+                                        "NSHELL.APPLICATION")
+                           parsed)
+                  :to-be-truthy))))
+    (multiple-value-bind (parsed rest error-output code)
+        (nshell.application::%parse-type-options '("--" "--color=never"))
+      (expect parsed :to-be-truthy)
+      (expect '("--color=never") :to-equal rest)
+      (expect nil :to-equal error-output)
+      (expect nil :to-equal code))
+    (multiple-value-bind (parsed rest error-output code)
+        (nshell.application::%parse-type-options '("--color=never"))
+      (expect nil :to-equal parsed)
+      (expect nil :to-equal rest)
+      (expect error-output :to-contain "unknown option")
+      (expect 2 :to-equal code))
+    (multiple-value-bind (parsed rest error-output code)
+        (nshell.application::%parse-type-options '("--path" "--type"))
+      (expect nil :to-equal parsed)
+      (expect nil :to-equal rest)
+      (expect error-output :to-contain "usage: type")
+      (expect 2 :to-equal code)))
+
   (it "pure-command-parsers-cover-status-sequences-and-membership"
     "The command helpers keep parsing and sequence generation deterministic."
     (multiple-value-bind (status valid-p)

@@ -183,7 +183,7 @@ Forms: seq LAST | seq FIRST LAST | seq FIRST STEP LAST."
           (2 (values (first nums) 1 (second nums)))
           (3 (values (first nums) (second nums) (third nums)))
           (t nil)))
-    (error () nil)))
+    (parse-error () nil)))
 
 (defun %seq-values (first step last)
   (cond

@@ -91,7 +91,8 @@
       (type-error () nil))))
 (defun %parse-positive-integer (text)
   (let ((value (%parse-integer-designator text)))
-    (and value (plusp value) value)))
+    (when (and value (plusp value))
+      value)))
 (defun %find-job-id-by-pid (job-monitor pid)
   (let ((found nil))
     (nshell.domain.job-control:monitor-map-jobs

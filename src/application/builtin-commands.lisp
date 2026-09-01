@@ -29,31 +29,33 @@
                   t))))
       (setf (shell-context-environment context) environment))))
 
+(defun %cd-target (environment args)
+  (cond
+    ((null args)
+     (or (and environment
+              (nshell.domain.environment:env-get environment "HOME"))
+         (error "HOME is not set")))
+    ((string= (first args) "-")
+     (if (and environment
+              (nshell.domain.environment:env-defined-p environment "OLDPWD"))
+         (nshell.domain.environment:env-get environment "OLDPWD")
+         (error "OLDPWD is not set")))
+    (t (first args))))
+
+(defun %cd-output (args new-cwd)
+  (when (and args (string= (first args) "-"))
+    (format nil "~a~%" (namestring new-cwd))))
+
 (defun %builtin-cd (context args)
   (handler-case
-      (progn
-        (when (> (length args) 1)
-          (return-from %builtin-cd (%builtin-usage "cd" "cd [directory]")))
-        (let* ((environment (shell-context-environment context))
-               (directory
-                 (cond
-                   ((null args)
-                    (or (and environment
-                             (nshell.domain.environment:env-get environment "HOME"))
-                        (error "HOME is not set")))
-                   ((string= (first args) "-")
-                    (if (and environment
-                             (nshell.domain.environment:env-defined-p environment "OLDPWD"))
-                        (nshell.domain.environment:env-get environment "OLDPWD")
-                        (error "OLDPWD is not set")))
-                   (t (first args))))
-               (old-cwd (host-kit:getcwd)))
-          (host-kit:chdir directory)
+      (if (> (length args) 1)
+          (%builtin-usage "cd" "cd [directory]")
+          (let* ((environment (shell-context-environment context))
+                 (old-cwd (host-kit:getcwd)))
+          (host-kit:chdir (%cd-target environment args))
           (let ((new-cwd (host-kit:getcwd)))
             (%update-directory-environment context environment old-cwd new-cwd)
-            (values (when (and args (string= (first args) "-"))
-                      (format nil "~a~%" (namestring new-cwd)))
-                    0))))
+            (values (%cd-output args new-cwd) 0))))
     (error (condition)
       (values (format nil "cd: ~a~%" condition) 1))))
 

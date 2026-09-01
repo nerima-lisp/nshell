@@ -46,6 +46,22 @@
           do (return status)
         do (sleep 0.05)))
 
+(describe "pty-readiness-protocol"
+  (it "round-trips the child readiness byte through a pipe"
+    "The parent/child synchronization byte is a strict one-byte protocol."
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (unwind-protect
+           (progn
+             (expect t :to-equal
+                     (nshell.infrastructure.acl::%pty-write-ready-byte
+                      write-fd
+                      nshell.infrastructure.acl::+pty-child-ready-ok+))
+             (expect nshell.infrastructure.acl::+pty-child-ready-ok+
+                     :to-equal
+                     (nshell.infrastructure.acl::%pty-read-ready-byte read-fd)))
+        (nshell.infrastructure.acl::%pty-close-fd read-fd)
+        (nshell.infrastructure.acl::%pty-close-fd write-fd)))))
+
 (describe "pty-foreground-integration-tests"
   (it "pty-spawn-creates-process-with-master-fd"
     "PTY-SPAWN starts a subprocess and exposes its PTY master fd."

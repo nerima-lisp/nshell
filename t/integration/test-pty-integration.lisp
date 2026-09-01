@@ -47,6 +47,22 @@
         do (sleep 0.05)))
 
 (describe "pty-readiness-protocol"
+  (it "encodes argv and environment entries as a null-terminated vector"
+    "The exec boundary receives stable C strings and a trailing null pointer."
+    (let ((vector (nshell.infrastructure.acl::%make-c-string-vector
+                   '("program" "--flag"))))
+      (unwind-protect
+           (progn
+             (expect "program" :to-equal (sb-alien:deref vector 0))
+             (expect "--flag" :to-equal (sb-alien:deref vector 1))
+             (expect nil :to-equal (sb-alien:deref vector 2)))
+        (nshell.infrastructure.acl::%free-c-string-vector vector))))
+
+  (it "releases an absent C string vector during partial setup cleanup"
+    "Failure cleanup is idempotent when allocation did not complete."
+    (expect (nshell.infrastructure.acl::%free-c-string-vector nil)
+            :to-be-null))
+
   (it "round-trips the child readiness byte through a pipe"
     "The parent/child synchronization byte is a strict one-byte protocol."
     (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)

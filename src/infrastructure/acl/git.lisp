@@ -9,8 +9,8 @@ renders as if the directory were not a repository.")
 (defvar *git-runner* nil
   "NIL, or a function (DIR ARGS) -> (values OUTPUT EXIT-CODE) substituted for the
 real git invocation in tests. A single deterministic function seam, not a
-single deterministic function seam: tests supply the git result directly rather
-than faking a subprocess object with separate spawn/output/exit-code hooks.")
+single test seam: tests supply the git result directly rather than faking a
+subprocess object with separate spawn/output/exit-code hooks.")
 
 (defvar *git-status-cache* (make-hash-table :test #'equal)
   "Directory keyed cache of git prompt status.")

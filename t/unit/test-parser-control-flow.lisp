@@ -1,6 +1,55 @@
 (in-package #:nshell/test)
 
 (describe "parser-tests"
+  (it "parser-value-objects-preserve-domain-data"
+    "Parser data records retain their typed values across construction."
+    (let* ((scan (nshell.domain.parsing::%make-here-doc-delimiter-scan '("EOF")))
+           (line (nshell.domain.parsing::%make-here-doc-line "body" 4 t))
+           (body (nshell.domain.parsing::%make-here-doc-body "body\n" 5 nil))
+           (consumption (nshell.domain.parsing::%make-here-doc-consumption
+                         (list body) 5 t))
+           (state (nshell.domain.parsing::%make-here-doc-consumption-state
+                   (list body) 5 t))
+           (reduction (nshell.domain.parsing::%make-token-reduction-state
+                       :all-cmds '("echo")
+                       :current-args '("body")
+                       :current-cmd "cat"
+                       :errors '(:error)))
+           (result (nshell.domain.parsing::%make-token-reduction-result
+                    '("cat") '(:error)))
+           (argument (nshell.domain.parsing::%make-token-reduction-argument
+                      "body" :single t nil))
+           (policy (nshell.domain.parsing::%make-token-reduction-diagnostic-policy
+                    :error "invalid")))
+      (expect '("EOF") :to-equal
+              (nshell.domain.parsing::%here-doc-delimiter-scan-reversed-delimiters scan))
+      (expect '("body") :to-equal
+              (list (nshell.domain.parsing::%here-doc-line-text line)))
+      (expect (nshell.domain.parsing::%here-doc-line-newline-p line)
+              :to-be-truthy)
+      (expect "body\n" :to-equal
+              (nshell.domain.parsing::%here-doc-body-body body))
+      (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body)
+              :to-be-falsy)
+      (expect (list body) :to-equal
+              (nshell.domain.parsing::%here-doc-consumption-bodies consumption))
+      (expect (nshell.domain.parsing::%here-doc-consumption-incomplete-p consumption)
+              :to-be-truthy)
+      (expect (list body) :to-equal
+              (nshell.domain.parsing::%here-doc-consumption-state-reversed-bodies state))
+      (expect '("echo") :to-equal
+              (nshell.domain.parsing::%token-reduction-state-all-cmds reduction))
+      (expect '("cat") :to-equal
+              (nshell.domain.parsing::%token-reduction-result-commands result))
+      (expect "body" :to-equal
+              (nshell.domain.parsing::%token-reduction-argument-value argument))
+      (expect :single :to-equal
+              (nshell.domain.parsing::%token-reduction-argument-quote-style argument))
+      (expect :error :to-equal
+              (nshell.domain.parsing::%token-reduction-diagnostic-policy-kind policy))
+      (expect "invalid" :to-equal
+              (nshell.domain.parsing::%token-reduction-diagnostic-policy-message policy))))
+
   (it "parse-incomplete-control-flow-blocks"
     (do-command-lines (line '("if true"
                               "for item in a b"

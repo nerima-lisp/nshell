@@ -100,6 +100,35 @@
                  (t ""))))
     (concatenate 'string sign prefix digits)))
 
+(defun %printf-format-real (argument conversion flags width precision)
+  (multiple-value-bind (number valid-p) (%printf-parse-real argument)
+    (let* ((digits (or precision 6))
+           (directive (case conversion
+                        ((#\e #\E) "e")
+                        ((#\g #\G) "g")
+                        (otherwise "f")))
+           (text (format nil
+                         (concatenate 'string "~," (princ-to-string digits) directive)
+                         number))
+           (text (if (and (member conversion '(#\E #\G))
+                          (position #\e text))
+                     (substitute #\E #\e text)
+                     text))
+           (text (if (and (not (minusp number))
+                          (%printf-flag-p flags #\+))
+                     (concatenate 'string "+" text)
+                     (if (and (not (minusp number))
+                              (%printf-flag-p flags #\Space))
+                         (concatenate 'string " " text)
+                         text))))
+      (values (%printf-pad text width (%printf-flag-p flags #\-)
+                           (if (and (%printf-flag-p flags #\0)
+                                    (not (%printf-flag-p flags #\-)))
+                               #\0
+                               #\Space))
+              valid-p
+              nil))))
+
 (defun %printf-format-value (argument conversion flags width precision)
   (case conversion
     (#\s
@@ -140,33 +169,7 @@
                valid-p
                nil)))
     ((#\e #\E #\f #\g #\G)
-     (multiple-value-bind (number valid-p) (%printf-parse-real argument)
-       (let* ((digits (or precision 6))
-              (directive (case conversion
-                           ((#\e #\E) "e")
-                           ((#\g #\G) "g")
-                           (otherwise "f")))
-              (text (format nil
-                            (concatenate 'string "~," (princ-to-string digits) directive)
-                            number))
-              (text (if (and (member conversion '(#\E #\G))
-                             (position #\e text))
-                        (substitute #\E #\e text)
-                        text))
-              (text (if (and (not (minusp number))
-                             (%printf-flag-p flags #\+))
-                        (concatenate 'string "+" text)
-                        (if (and (not (minusp number))
-                                 (%printf-flag-p flags #\Space))
-                            (concatenate 'string " " text)
-                            text))))
-         (values (%printf-pad text width (%printf-flag-p flags #\-)
-                              (if (and (%printf-flag-p flags #\0)
-                                       (not (%printf-flag-p flags #\-)))
-                                  #\0
-                                  #\Space))
-                 valid-p
-                 nil))))
+     (%printf-format-real argument conversion flags width precision))
     (otherwise (values "" nil nil))))
 
 (defun %printf-format-once (format-string arguments)

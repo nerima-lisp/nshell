@@ -13,10 +13,12 @@ paredit inspect unused-definitions --output json \
 
 Scanning src *with* tests matters: scanning `src/` alone reports 239 candidates
 because every public accessor and factory looks unused (its only callers are the
-test suite). With tests included the count falls to 179, of which paredit marks
-18 `bulk_removable`.
+test suite). The current combined scan reports 241 candidates; paredit marks
+66 as `bulk_removable`. The remaining candidates are generated structs or
+macro-expanded definitions that require semantic review rather than blind
+deletion.
 
-## The 18 bulk-removable flags are all false positives
+## The 66 bulk-removable flags are all false positives
 
 | flag | category | actually used at | why the scan misses it |
 |---|---|---|---|
@@ -26,7 +28,9 @@ test suite). With tests included the count falls to 179, of which paredit marks
 | `string->octets`, `pty-test-*`, `%e2e-pty-*`, `%terminate-pty-process` | function | the PTY test bodies | called inside cl-weave `it`/`describe` macro expansions (paredit's `unknown-macro` category) |
 | `open-pty-darwin`, `open-pty-linux`, `%pty-fork-exec`, `pty-spawn`, `with-pty`, `skip-when-pty-round-trip-unreliable` | function/macro | `infrastructure/acl/pty.lisp` + `infrastructure/acl/pty-spawn.lisp` + PTY tests | platform dispatch under `#+darwin`/`#+linux` reader conditionals and macro-wrapped call sites |
 
-The other 161 candidates split into `struct` (103) and `unknown-macro` (58):
+The other 175 candidates include `struct` (101) and `unknown-macro` (74),
+alongside definitions whose references are hidden behind macro expansion or
+runtime entry points:
 
 - **`struct` (103):** `define-value-struct` type names such as `%glob-match-subject`.
   The generated *constructor* (`%make-glob-match-subject`) is
@@ -41,7 +45,10 @@ No genuinely dead definition remains. The real dead code was already removed in
 earlier paredit-driven passes (`Remove unused virtual screen module`, `Remove 8
 more dead functions found via paredit's unused-definitions scan`). This scan is
 the negative result that confirms the tree is clean; re-run the command above and
-expect the same 18 structurally-explained false positives.
+expect the same categories and review the current count before acting on any
+candidate. Counts are intentionally not a release gate: the scan is a
+heuristic and macro-generated call sites must be checked against source and
+runtime tests.
 
 ## 2026-08-03 addendum: a real dead-code case this scan cannot see
 

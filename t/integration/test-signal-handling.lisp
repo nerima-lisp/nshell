@@ -20,6 +20,14 @@
          (nshell.infrastructure.acl:os-signal->domain :sigchld)) :to-be-truthy)
     (expect :sigint :to-be (nshell.infrastructure.acl:domain-signal->os nshell.domain.signals:+sigint+)))
 
+  (it "signal-mapping-covers-the-supported-boundary"
+    "Every supported OS signal name round-trips through the domain boundary."
+    (dolist (name '(:sigint :sigterm :sigtstp :sigcont :sigchld :sigwinch))
+      (let ((domain-signal (nshell.infrastructure.acl:os-signal->domain name)))
+        (expect t :to-be (nshell.domain.signals:signal-p domain-signal))
+        (expect name :to-be
+                (nshell.infrastructure.acl:domain-signal->os domain-signal)))))
+
   (it "signal-mapping-rejects-unknown-os-names"
     "Unknown OS names remain outside the domain signal boundary."
     (expect nil :to-be

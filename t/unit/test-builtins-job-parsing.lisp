@@ -35,6 +35,14 @@
       (expect list-signals-p :to-be-falsy)
       (expect error :to-be-null)))
 
+  (it "accepts short signal options and option-like targets"
+    (multiple-value-bind (signal targets list-signals-p error)
+        (nshell.application::%parse-kill-arguments '("-TERM" "-" "123"))
+      (expect :sigterm :to-equal signal)
+      (expect '("-" "123") :to-equal targets)
+      (expect list-signals-p :to-be-falsy)
+      (expect error :to-be-null)))
+
   (it "reports malformed kill options without partial targets"
     (dolist (args '( ("-s")
                      ("-s" "unknown")
@@ -115,6 +123,24 @@
               :to-equal
               (multiple-value-list
                (nshell.application::%builtin-wait context nil)))))
+
+  (it "resolves wait selectors by process id before job specifications"
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (job-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "sleep" :pids '(4242))))
+           (calls nil))
+      (with-temporary-function
+          ('nshell.application:wait-for-job
+           (lambda (selected-id process-registry selected-monitor)
+             (declare (ignore process-registry selected-monitor))
+             (push selected-id calls)
+             (values t 0)))
+        (expect '(nil 0)
+                :to-equal
+                (multiple-value-list
+                 (nshell.application::%builtin-wait context '("4242")))))
+      (expect (list job-id) :to-equal calls)))
 
 (describe "builtin-job-contract-tests"
 
@@ -232,4 +258,27 @@
             (expect (format nil "kill: 22: permission denied~%")
                     :to-equal output)))
         (expect '((22 :sigterm) (21 :sigterm)) :to-equal calls))))
+
+  (it "signals a resolved job and reports non-numeric targets"
+    (with-builtins-context (context)
+      (let* ((monitor (nshell.application:shell-context-job-monitor context))
+             (job-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "sleep")))
+             (signals nil))
+        (with-temporary-function
+            ('nshell.application::signal-job
+             (lambda (selected-id signal selected-monitor)
+               (declare (ignore selected-monitor))
+               (push (list selected-id signal) signals)
+               t))
+          (multiple-value-bind (output status)
+              (nshell.application::%builtin-kill
+               context (list (format nil "%~d" job-id)))
+            (expect nil :to-be-null output)
+            (expect 0 :to-equal status)))
+        (expect (list (list job-id :sigterm)) :to-equal signals)
+        (expect (list (format nil "kill: no such process or job: nope~%") 1)
+                :to-equal
+                (multiple-value-list
+                 (nshell.application::%builtin-kill context '("nope")))))))
   )))

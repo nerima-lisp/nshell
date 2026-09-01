@@ -15,6 +15,19 @@
   (concatenate 'string text (string #\Newline)))
 
 (describe "pty-tests"
+  (it "pty-data-boundaries-preserve-octets-and-close-empty-pair"
+    "PTY data conversion and nil-safe cleanup preserve their contracts."
+    (let ((octets (nshell.infrastructure.acl::%string-octets "A~")))
+      (expect '(65 126) :to-equal (coerce octets 'list)))
+    (expect t :to-equal
+            (nshell.infrastructure.acl:pty-close nil nil))
+    #+(or darwin linux)
+    (let ((flags (nshell.infrastructure.acl::%pty-open-flags)))
+      (expect sb-posix:o-rdwr :to-equal
+              (logand flags sb-posix:o-rdwr))
+      (expect sb-posix:o-noctty :to-equal
+              (logand flags sb-posix:o-noctty))))
+
   (it "pty-open-write-read-close"
     "PTY can be opened, used in both directions, and closed."
     #-(or darwin linux)

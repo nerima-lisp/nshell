@@ -232,6 +232,28 @@
     (expect nil :to-be (nshell.application::%parse-loop-control-count '("1" "2")))
     (expect nil :to-be (nshell.application::%parse-loop-control-count '("nope"))))
 
+  (it "seq-validates-arguments-and-renders-both-directions"
+    "seq exposes deterministic diagnostics for invalid forms and newline-delimited values for valid forms."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "seq" nil)
+        :code 2
+        :contains '("seq: usage:"))
+      (assert-builtin-call (context "seq" '("1" "2" "3" "4"))
+        :code 2
+        :contains '("seq: usage:"))
+      (assert-builtin-call (context "seq" '("not-a-number"))
+        :code 2
+        :contains '("seq: arguments must be integers"))
+      (assert-builtin-call (context "seq" '("1" "0" "3"))
+        :code 2
+        :contains '("seq: STEP must not be zero"))
+      (assert-builtin-call (context "seq" '("3"))
+        :code 0
+        :output (format nil "1~%2~%3~%"))
+      (assert-builtin-call (context "seq" '("3" "-1" "1"))
+        :code 0
+        :output (format nil "3~%2~%1~%"))))
+
   (it "type-colorizes-only-the-function-definition-branch"
     "type --color colors the function definition block without changing short output."
     (with-builtins-context (context)

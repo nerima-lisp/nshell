@@ -90,8 +90,11 @@
 
   (it "execute-pipeline-use-case-applies-stage-redirections"
     "Pipeline execution through the application API preserves per-stage redirects."
-    (let* ((root (merge-pathnames (format nil "nshell-app-pipeline-redir-~d/"
-                                           (random 1000000))
+    (let* ((root (merge-pathnames
+                  (make-pathname :directory
+                                 (list :relative
+                                       (format nil "nshell-app-pipeline-redir-~d"
+                                               (random 1000000))))
                                   (host-kit:temporary-directory)))
            (output (merge-pathnames "output.txt" root))
            (content "application pipeline redirection")

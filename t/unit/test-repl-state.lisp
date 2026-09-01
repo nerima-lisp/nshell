@@ -64,6 +64,20 @@
       (expect-repl-table-contract processes (expect (eq (hash-table-test processes) 'eql) :to-be-truthy))
       (expect (not (eq aliases abbreviations)) :to-be-truthy)))
 
+  (it "rejects incomplete filesystem capabilities"
+    "Filesystem capabilities require callable operations at every boundary."
+    (dolist (case '((:directory-files)
+                    (:subdirectories)
+                    (:executable-p)
+                    (:directory-map)))
+      (let ((initargs (list :directory-files #'list
+                            :subdirectories #'list
+                            :executable-p #'identity
+                            :directory-map #'mapcar)))
+        (setf (getf initargs (first case)) nil)
+        (expect (lambda () (apply #'nshell.domain.filesystem:make-filesystem initargs))
+                :to-throw 'type-error))))
+
   (it "runs continuation chains to completion"
     (let ((steps 0))
       (expect nil

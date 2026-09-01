@@ -109,7 +109,7 @@ to write inline."
   "UTF-8 conversion handles one-, two-, three-, and four-byte characters."
   (flet ((encoded (text)
            (nshell.infrastructure.terminal::%base64-encode-octets
-            (nshell.infrastructure.terminal::%utf-8-octets text))))
+            (nshell.util:utf-8-octets text))))
     (expect "QQ==" :to-equal (encoded "A"))
     (expect "w6k=" :to-equal (encoded "é"))
     (expect "4oKs" :to-equal (encoded (string (code-char #x20ac))))

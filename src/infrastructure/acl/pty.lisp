@@ -83,15 +83,9 @@
         (error "read failed with errno ~d" errno))
       count)))
 
-(defun %string-octets (string)
-  (let ((octets (make-array (length string) :element-type '(unsigned-byte 8))))
-    (loop for i below (length string)
-          do (setf (aref octets i) (char-code (char string i))))
-    octets))
-
 (defun pty-write (fd data)
   "Write DATA to FD. DATA may be a string or octet vector. Returns bytes written."
-  (let ((buffer (if (stringp data) (%string-octets data) data)))
+  (let ((buffer (if (stringp data) (nshell.util:utf-8-octets data) data)))
     (multiple-value-bind (count errno)
         (sb-unix:unix-write fd buffer 0 (length buffer))
       (unless count

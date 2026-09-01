@@ -6,10 +6,7 @@
           'string))
 
 (defun string->octets (string)
-  (let ((octets (make-array (length string) :element-type '(unsigned-byte 8))))
-    (loop for i below (length string)
-          do (setf (aref octets i) (char-code (char string i))))
-    octets))
+  (nshell.util:utf-8-octets string))
 
 (defun line (text)
   (concatenate 'string text (string #\Newline)))
@@ -17,8 +14,11 @@
 (describe "pty-tests"
   (it "pty-data-boundaries-preserve-octets-and-close-empty-pair"
     "PTY data conversion and nil-safe cleanup preserve their contracts."
-    (let ((octets (nshell.infrastructure.acl::%string-octets "A~")))
+    (let ((octets (nshell.util:utf-8-octets "A~")))
       (expect '(65 126) :to-equal (coerce octets 'list)))
+    (expect '(227 129 130 227 129 132)
+            :to-equal
+            (coerce (nshell.util:utf-8-octets "あい") 'list))
     (expect t :to-equal
             (nshell.infrastructure.acl:pty-close nil nil))
     #+(or darwin linux)

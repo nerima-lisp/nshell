@@ -27,5 +27,5 @@ script startup.")
 that gives the domain its immutable value types, plus small string predicates.
 Depends on nothing but CL, which is why no layer rule applies to it.")
   (:use #:cl)
-  (:export #:define-value-struct #:string-prefix-p))
+  (:export #:define-value-struct #:string-prefix-p #:utf-8-octets))
 )

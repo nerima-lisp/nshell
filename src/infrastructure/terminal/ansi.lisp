@@ -43,37 +43,6 @@
 (defparameter +base64-alphabet+
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 
-(defun %utf-8-octets (text)
-  (let ((octets (make-array (* 4 (length text))
-                            :element-type '(unsigned-byte 8)))
-        (count 0))
-    (flet ((emit (octet)
-             (setf (aref octets count) octet)
-             (incf count)))
-      (loop for character across text
-            for code = (char-code character)
-            do (cond
-                 ((<= code #x7f)
-                  (emit code))
-                 ((<= code #x7ff)
-                  (emit (logior #xc0 (ash code -6)))
-                  (emit (logior #x80 (logand code #x3f))))
-                 ((or (<= code #xd7ff)
-                      (<= #xe000 code #xffff))
-                  (emit (logior #xe0 (ash code -12)))
-                  (emit (logior #x80 (logand (ash code -6) #x3f)))
-                  (emit (logior #x80 (logand code #x3f))))
-                 ((and (<= #x10000 code)
-                       (<= code #x10ffff))
-                  (emit (logior #xf0 (ash code -18)))
-                  (emit (logior #x80 (logand (ash code -12) #x3f)))
-                  (emit (logior #x80 (logand (ash code -6) #x3f)))
-                  (emit (logior #x80 (logand code #x3f))))
-                 (t
-                  (error "Cannot encode character U+~8,'0X as UTF-8."
-                         code)))))
-    (subseq octets 0 count)))
-
 (defun %base64-encode-octets (octets)
   (with-output-to-string (output)
     (loop for index from 0 below (length octets) by 3
@@ -104,7 +73,7 @@
 (defun ansi-copy-to-clipboard (text &optional (stream *standard-output*))
   (write-char #\Esc stream)
   (write-string "]52;c;" stream)
-  (write-string (%base64-encode-octets (%utf-8-octets text)) stream)
+  (write-string (%base64-encode-octets (nshell.util:utf-8-octets text)) stream)
   (write-char #\Bell stream))
 
 (defparameter +host-clipboard-commands+

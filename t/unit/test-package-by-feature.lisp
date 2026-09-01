@@ -82,3 +82,18 @@
                        nil)
               (error () t))
               :to-be-truthy))))
+
+  (it "accepts descriptors directly and validates requested layers"
+    (let ((feature (nshell.architecture:register-feature
+                    :direct :root "direct" :layers '(:domain))))
+      (unwind-protect
+           (progn
+             (expect "direct/domain" :to-equal
+                     (nshell.architecture:feature-layer-path feature :domain))
+             (expect (handler-case
+                         (progn
+                           (nshell.architecture:feature-layer-path feature "domain")
+                           nil)
+                       (error () t))
+                     :to-be-truthy))
+        (remhash :direct nshell.architecture::*feature-registry*))))

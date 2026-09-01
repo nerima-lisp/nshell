@@ -36,8 +36,25 @@
     (expect 0 :to-equal
             (nshell.infrastructure.acl::%check-errno 0 "successful syscall"))
     (expect (lambda ()
-              (nshell.infrastructure.acl::%check-errno nil "failed syscall"))
+            (nshell.infrastructure.acl::%check-errno nil "failed syscall"))
             :to-throw 'error))
+
+  (it "pty-child-resource-helpers-are-nil-safe"
+    "Child-side cleanup helpers tolerate absent or already-invalid resources."
+    #+(or darwin linux)
+    (progn
+      (expect sb-posix:o-rdwr :to-equal
+              (nshell.infrastructure.acl::%pty-child-open-flags))
+      (expect nil :to-be
+              (nshell.infrastructure.acl::%pty-close-fd nil))
+      (expect nil :to-be
+              (nshell.infrastructure.acl::%pty-close-fd -1))
+      (expect nil :to-be
+              (nshell.infrastructure.acl::%free-c-string-vector nil))
+      (expect nil :to-be
+              (nshell.infrastructure.acl::%signal-pty-child-ready nil 0)))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
 
   (it "utf8-octets-preserves-code-point-boundaries"
     "The shared encoder emits the shortest valid UTF-8 form at every boundary."

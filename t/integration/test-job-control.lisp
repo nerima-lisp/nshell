@@ -1,5 +1,10 @@
 (in-package #:nshell/test)
 
+(defmacro expect-waitpid-flags (expected &rest options)
+  `(expect ,expected
+           :to-equal
+           (nshell.infrastructure.acl::%waitpid-flags ,@options)))
+
 ;;; PTY-driven coverage for a directly-launched (non-`fg`) foreground external
 ;;; command: the process-group handoff and Ctrl-Z stop handling added to
 ;;; NSHELL.APPLICATION::%EXECUTE-EXTERNAL-PIPELINE-STAGE (see
@@ -193,3 +198,12 @@ exit status, no job registered, and above all no hang: pre-fix, the plain
                :nohang t
                :untraced t
                :continued t))))
+
+  (it "wait-job-flags-compose-each-independent-option"
+    "Each waitpid option contributes only its own platform flag."
+    (expect-waitpid-flags 0)
+    (expect-waitpid-flags sb-posix:wnohang :nohang t)
+    (expect-waitpid-flags sb-posix:wuntraced :untraced t)
+    (let* ((symbol (find-symbol "WCONTINUED" "SB-POSIX"))
+           (continued (and symbol (boundp symbol) (symbol-value symbol))))
+      (expect-waitpid-flags (or continued 0) :continued t)))

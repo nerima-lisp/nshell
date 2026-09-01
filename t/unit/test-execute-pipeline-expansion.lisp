@@ -1,6 +1,36 @@
 (in-package #:nshell/test)
 
 (describe "execute-pipeline-expansion-branch-tests"
+  (it "normalizes-command-substitution-data"
+    (expect "one\ntwo"
+            :to-equal
+            (nshell.application::%trim-command-substitution-output
+             "one\ntwo\n\r"))
+    (expect (list "one" "two")
+            :to-equal
+            (nshell.application::%command-substitution-fields "one\ntwo\n"))
+    (expect nil
+            :to-equal
+            (nshell.application::%command-substitution-fields nil)))
+  (it "appends-command-substitution-fields-with-empty-fallback"
+    (expect (list "prefixone" "prefixtwo")
+            :to-equal
+            (nshell.application::%append-command-substitution-fields
+             (list "prefix")
+             (list "one" "two")))
+    (expect (list "prefix")
+            :to-equal
+            (nshell.application::%append-command-substitution-fields
+             (list "prefix")
+             nil))
+    (expect (list "ax" "bx")
+            :to-equal
+            (nshell.application::%append-command-substitution-char
+             (list "a" "b") #\x))
+    (expect (list "avalue" "bvalue")
+            :to-equal
+            (nshell.application::%append-command-substitution-string
+             (list "a" "b") "value")))
   (it "expands-balanced-and-falls-back-for-arithmetic-substitutions"
     (let ((balanced "$((1+2))")
           (unbalanced "$((1+2)"))

@@ -1,6 +1,39 @@
 (in-package #:nshell/test)
 
 (describe "execute-pipeline-expansion-branch-tests"
+  (it "protects-and-restores-only-valid-byte-escapes"
+    (let* ((wide-character (code-char 955))
+           (value (format nil "a~Cz" wide-character))
+           (protected (nshell.application::%protect-command-fragment-escapes
+                       value
+                       (list -1 0 1 3)))
+           (escape-base #xe100))
+      (expect (code-char (+ escape-base (char-code #\a)))
+              :to-be
+              (char protected 0))
+      (expect wide-character :to-be (char protected 1))
+      (expect value
+              :to-equal
+              (nshell.application::%restore-command-fragment-escapes protected))
+      (expect "x"
+              :to-equal
+              (nshell.application::%restore-command-fragment-escapes "x"))))
+  (it "expands-source-fragments-with-and-without-an-environment"
+    (let* ((fragment (nshell.domain.parsing:make-command-fragment "$FOO"))
+           (environment
+             (nshell.domain.environment:env-set
+              (nshell.domain.environment:make-default-environment)
+              "FOO"
+              "bar"
+              nil)))
+      (expect (list "$FOO")
+              :to-equal
+              (nshell.application::%expand-source-fragment-fields
+               fragment nil))
+      (expect (list "bar")
+              :to-equal
+              (nshell.application::%expand-source-fragment-fields
+               fragment environment))))
   (it "normalizes-command-substitution-data"
     (expect (nshell.application::%trim-command-substitution-output
              (format nil "one~%two~%~C" #\Return))

@@ -10,7 +10,9 @@ Beyond `define-value-struct` (`docs/notes/value-struct-audit.md`), 26 other
 boilerplate categories this goal targets:
 
 - **Builtin command dispatch.** `define-builtin`
-  (`application/builtin-commands.lisp`) auto-generates ignore-declarations;
+  (`application/builtin-macros.lisp`) auto-generates ignore-declarations, and
+  `define-status-builtin` specializes that form for fixed-status commands such
+  as `true` and `false`;
   `%with-option-arguments` / `%with-required-argument`
   (`application/builtin-runtime.lisp`) capture the shared "parse leading
   option flags, validate required args" skeleton; `%table-builtin-case`

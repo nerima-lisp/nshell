@@ -218,6 +218,8 @@
     (expect 1 :to-equal (nshell.application::%parse-loop-control-count nil))
     (expect 3 :to-equal (nshell.application::%parse-loop-control-count '("3")))
     (expect nil :to-be (nshell.application::%parse-loop-control-count '("0")))
+    (expect nil :to-be (nshell.application::%parse-loop-control-count '("-1")))
+    (expect nil :to-be (nshell.application::%parse-loop-control-count '("")))
     (expect nil :to-be (nshell.application::%parse-loop-control-count '("1" "2")))
     (expect nil :to-be (nshell.application::%parse-loop-control-count '("nope"))))
 

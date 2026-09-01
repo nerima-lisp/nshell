@@ -588,6 +588,9 @@
           apps.nshell = app;
           apps.test = {
             type = "app";
+            meta = {
+              description = "Run the complete nshell test suite";
+            };
             program = "${
               ctx.pkgs.writeTextFile {
                 name = "nshell-test";

@@ -11,7 +11,7 @@ context-aware completion engine driven by a logic knowledge base — on top of a
 domain-driven core whose line editor is a pure reducer over an immutable input
 state, and a reproducible Nix build that ships as a single dumped SBCL image.
 
-> **Status: early development (0.4.x).** The interactive editor and core
+> **Status: development preview (0.4.x).** The interactive editor and core
 > pipeline execution are solid and heavily tested. The shell *language* is a
 > growing subset of POSIX/fish semantics. nshell is usable as a daily
 > interactive shell for common workflows; it is not a script-compatible

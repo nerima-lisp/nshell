@@ -7,7 +7,7 @@ real-time syntax highlighting, history-aware autosuggestions, fish-style
 abbreviations, and a fast, context-aware completion engine — all built on a
 clean, test-driven Common Lisp core and a reproducible Nix build.
 
-!!! note "Status: early development (0.4.x)"
+!!! note "Status: development preview (0.4.x)"
 
     The interactive editor and core pipeline execution are solid and heavily
     tested. The shell *language* is a growing subset of POSIX/fish semantics —

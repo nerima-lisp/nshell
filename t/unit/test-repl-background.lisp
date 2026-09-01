@@ -1,6 +1,17 @@
 (in-package #:nshell/test)
 
 (describe "repl-tests"
+  (it "background-stage-boundaries-handle-unavailable-pids-and-invalid-nodes"
+    "Background execution keeps process registration optional and rejects unsupported AST nodes."
+    (expect nil :to-equal
+            (nshell.application::%background-process-pid nil))
+    (multiple-value-bind (message code)
+        (nshell.application::%spawn-background-node-in-context
+         (make-test-shell-context)
+         (nshell.domain.parsing::make-sequence-node nil nil))
+      (expect "nshell: cannot run construct in background~%" :to-equal message)
+      (expect 1 :to-equal code)))
+
   (it "repl-background-execution-expands-command-position-word"
     "Background execution expands the command word before spawning."
     (with-repl-test-state

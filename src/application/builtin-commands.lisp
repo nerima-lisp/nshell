@@ -147,8 +147,7 @@
         :key (lambda (entry) (getf entry :command))
         :test #'string=))
 
-(defun %builtin-contains (context args)
-  (declare (ignore context))
+(define-builtin %builtin-contains (context args) (context)
   (multiple-value-bind (index-p operands error-output)
       (%parse-contains-args args)
     (cond
@@ -166,10 +165,9 @@
                        (format out "~d~%" index))))
                  (if indexes 0 1)))))))
 
-(defun %builtin-count (context args)
+(define-builtin %builtin-count (context args) (context)
   "Print the number of ARGS (like fish's count). Exit status is 0 when there is
 at least one argument, otherwise 1 -- which makes `count $argv` usable in tests."
-  (declare (ignore context))
   (let ((n (length args)))
     (values (format nil "~d~%" n) (if (plusp n) 0 1))))
 

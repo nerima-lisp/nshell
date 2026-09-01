@@ -92,6 +92,43 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux"))
 
+  (it "pty-ready-pipe-reports-read-boundaries"
+    "Readiness failures distinguish an invalid descriptor from EOF."
+    #+(or darwin linux)
+    (progn
+      (expect (lambda ()
+                (nshell.infrastructure.acl::%pty-read-ready-byte -1))
+              :to-throw 'error)
+      (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.acl::%pty-close-fd write-fd)
+               (setf write-fd nil)
+               (expect (lambda ()
+                         (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
+                       :to-throw 'error))
+          (nshell.infrastructure.acl::%pty-close-fd read-fd)
+          (nshell.infrastructure.acl::%pty-close-fd write-fd))))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
+  (it "pty-child-ready-signal-closes-invalid-descriptors"
+    "The child readiness signal remains cleanup-safe after a write failure."
+    #+(or darwin linux)
+    (expect nil :to-be
+            (nshell.infrastructure.acl::%signal-pty-child-ready -1 0))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
+  (it "pty-window-size-reports-invalid-descriptors"
+    "Window-size setup surfaces ioctl failures to the caller."
+    #+(or darwin linux)
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%set-pty-window-size -1 24 80))
+            :to-throw 'error)
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
   (it "utf8-octets-preserves-code-point-boundaries"
     "The shared encoder emits the shortest valid UTF-8 form at every boundary."
     (flet ((encoded (code-point)

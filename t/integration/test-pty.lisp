@@ -56,6 +56,42 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux"))
 
+  (it "pty-child-argv-vectors-are-null-terminated"
+    "Child exec vectors preserve argument order and terminate with a null pointer."
+    #+(or darwin linux)
+    (let ((vector (nshell.infrastructure.acl::%make-c-string-vector
+                   '("program" "--flag" "value"))))
+      (unwind-protect
+           (progn
+             (expect "program" :to-equal
+                     (sb-alien:deref vector 0))
+             (expect "--flag" :to-equal
+                     (sb-alien:deref vector 1))
+             (expect "value" :to-equal
+                     (sb-alien:deref vector 2))
+             (expect nil :to-be
+                     (sb-alien:deref vector 3)))
+        (nshell.infrastructure.acl::%free-c-string-vector vector)))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
+  (it "pty-ready-pipe-transfers-status-byte"
+    "The readiness protocol transfers exactly one setup status byte."
+    #+(or darwin linux)
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (unwind-protect
+           (progn
+              (expect (nshell.infrastructure.acl::%pty-write-ready-byte
+                       write-fd
+                       nshell.infrastructure.acl::+pty-child-ready-ok+)
+                      :to-be-truthy)
+             (expect nshell.infrastructure.acl::+pty-child-ready-ok+ :to-equal
+                     (nshell.infrastructure.acl::%pty-read-ready-byte read-fd)))
+        (nshell.infrastructure.acl::%pty-close-fd read-fd)
+        (nshell.infrastructure.acl::%pty-close-fd write-fd)))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
   (it "utf8-octets-preserves-code-point-boundaries"
     "The shared encoder emits the shortest valid UTF-8 form at every boundary."
     (flet ((encoded (code-point)

@@ -26,6 +26,12 @@
              :to-equal
              (nshell.feature.command-line:usage-synopsis)))
 
+  (it "rejects empty and non-string flag arguments"
+    (expect (nshell.feature.command-line:flag-argument-p "")
+            :to-be-falsy)
+    (expect (nshell.feature.command-line:flag-argument-p 42)
+            :to-be-falsy))
+
   (it "orders the registered descriptors by name"
     (let ((first (nshell.architecture:register-feature
                   :aaa :root "a" :layers '(:domain)))

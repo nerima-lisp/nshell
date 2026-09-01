@@ -41,7 +41,8 @@
              (expect (integerp slave) :to-be-truthy)
              (expect (stringp slave-name) :to-be-truthy)
              (let ((from-master (make-array 64 :element-type '(unsigned-byte 8))))
-               (nshell.infrastructure.acl:pty-write master (string->octets (line "master-to-slave")))
+               (expect (length (line "master-to-slave")) :to-equal
+                       (nshell.infrastructure.acl:pty-write master (line "master-to-slave")))
                (let ((count (nshell.infrastructure.acl:pty-read slave from-master 64)))
                  (expect (plusp count) :to-be-truthy)
                  (expect (search "master-to-slave" (octets->string from-master count)) :to-be-truthy)))

@@ -1,6 +1,57 @@
 (in-package #:nshell/test)
 
 (describe "input-state-tests"
+  (it "input-state-constructor-preserves-the-complete-data-record"
+    (let ((expander (lambda (text) (concatenate 'string text "!")))
+          (values '((:buffer . "line")
+                    (:cursor-pos . 2)
+                    (:completion-index . 4)
+                    (:completion-base-buffer . "prefix")
+                    (:completion-base-cursor . 1)
+                    (:last-candidates . ("one" "two"))
+                    (:suggestion . "suggested")
+                    (:mode . :vi-c)
+                    (:vi-count . 3)
+                    (:vi-visual-anchor . 1)
+                    (:mouse-selection-anchor . 0)
+                    (:mouse-selection-end . 2)
+                    (:abbreviation-expander . :expander)
+                    (:kill-ring . ("cut"))
+                    (:last-yank-start . 1)
+                    (:last-yank-end . 2)
+                    (:last-yank-index . 0)
+                    (:last-argument-start . 3)
+                    (:last-argument-end . 4)
+                    (:last-argument-index . 1)
+                    (:search-query . "query")
+                    (:search-original-buffer . "origin")
+                    (:search-original-cursor . 5)
+                    (:search-index . 6)
+                    (:undo-stack . (:undo))
+                    (:redo-stack . (:redo)))))
+      (let ((state (apply #'nshell.presentation:make-input-state
+                          (loop for (key . value) in values
+                                append (list key (if (eq value :expander)
+                                                     expander
+                                                     value))))))
+        (dolist (entry values)
+          (let* ((key (car entry))
+                 (expected (if (eq (cdr entry) :expander)
+                               expander
+                               (cdr entry)))
+                 (accessor (find-symbol
+                            (format nil "INPUT-STATE-~A"
+                                    (substitute #\- #\_ (symbol-name key)))
+                            '#:nshell.presentation)))
+            (expect expected :to-equal (funcall accessor state)))))
+      (let ((defaults (nshell.presentation:make-input-state)))
+        (expect "" :to-equal (nshell.presentation:input-state-buffer defaults))
+        (expect 0 :to-equal (nshell.presentation:input-state-cursor-pos defaults))
+        (expect -1 :to-equal (nshell.presentation:input-state-completion-index defaults))
+        (expect :insert :to-be (nshell.presentation:input-state-mode defaults))
+        (expect "" :to-equal (nshell.presentation:input-state-search-query defaults))
+        (expect 0 :to-equal (nshell.presentation:input-state-search-index defaults)))))
+
   (it "input-state-raw-constructor-is-internal-boundary"
     (let ((state (nshell.presentation:make-input-state :buffer "abc" :cursor-pos 2)))
       (expect (nshell.presentation:input-state-p state) :to-be-truthy)

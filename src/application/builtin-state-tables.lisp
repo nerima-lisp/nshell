@@ -16,21 +16,23 @@
       1))
 
 (defmacro %table-builtin-case (args &body clauses)
-  `(cond
-     ,@(mapcar (lambda (clause)
-                 (destructuring-bind (kind &rest rest) clause
-                   (ecase kind
-                     (:empty
-                     `((null ,args)
-                       ,@rest))
-                     (:option
-                      (destructuring-bind (names &body body) rest
-                        `((%builtin-option-p (first ,args) ',names)
-                          ,@body)))
-                     (:default
-                      `(t
-                        ,@rest)))))
-               clauses)))
+  (let ((args-variable (gensym "ARGS-")))
+    `(let ((,args-variable ,args))
+       (cond
+         ,@(mapcar (lambda (clause)
+                     (destructuring-bind (kind &rest rest) clause
+                       (ecase kind
+                         (:empty
+                          `((null ,args-variable)
+                            ,@rest))
+                         (:option
+                          (destructuring-bind (names &body body) rest
+                            `((%builtin-option-p (first ,args-variable) ',names)
+                              ,@body)))
+                         (:default
+                          `(t
+                            ,@rest)))))
+                   clauses)))))
 
 (defun %format-name-table (table emitter &optional names)
   (with-output-to-string (out)
@@ -49,7 +51,7 @@
 
 (defun %split-alias-assignment (arg)
   (let ((position (position #\= arg)))
-    (when (and position (> position 0))
+    (when (and position (plusp position))
       (values (subseq arg 0 position)
               (subseq arg (1+ position))))))
 

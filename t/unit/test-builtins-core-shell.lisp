@@ -213,6 +213,46 @@
         :output-null t)
       (expect (nshell.application:shell-context-pipefail-p context) :to-be-falsy)))
 
+  (it "command-reports-unknown-verbose-operands"
+    "command -V reports unresolved names and returns a failure status."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "command" '("-V" "definitely-not-a-nshell-command"))
+        :code 1
+        :contains '("definitely-not-a-nshell-command: not found"))))
+
+  (it "eval-reports-invalid-and-empty-input"
+    "eval records parse failures and treats an empty command line as successful."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "eval" '("echo" "'"))
+        :code 2
+        :contains '("eval: parse error:"))
+      (assert-builtin-call (context "eval" nil)
+        :code 0
+        :output-null t)
+      (expect 0 :to-equal
+              (nshell.application:shell-context-last-exit-code context))))
+
+  (it "loop-control-validates-context-and-count"
+    "break and continue reject invalid contexts/counts and expose their signals."
+    (multiple-value-bind (output code)
+        (nshell.application::%builtin-loop-control "break" :break nil)
+      (expect output :to-equal "break: only meaningful in a loop
+")
+      (expect code :to-equal 1))
+    (let ((nshell.application::*loop-control-depth* 1)
+          (nshell.application::*loop-control-signal* nil))
+      (dolist (args '("0" "1x"))
+        (multiple-value-bind (output code)
+            (nshell.application::%builtin-loop-control "continue" :continue (list args))
+          (expect output :to-equal "continue: usage: continue [N]
+")
+          (expect code :to-equal 2)))
+      (multiple-value-bind (output code)
+          (nshell.application::%builtin-loop-control "break" :break '("2"))
+        (expect output :to-be-null)
+        (expect code :to-equal 0)
+        (expect nshell.application::*loop-control-signal* :to-equal '(:break . 2)))))
+
   (it "alias-adds-lists-queries-and-erases-expansions"
     "alias stores fish-style multi-token command expansions in the current context."
     (with-builtins-context (context)

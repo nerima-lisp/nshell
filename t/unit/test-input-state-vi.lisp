@@ -30,6 +30,11 @@
     (with-vi-command-state (cmd (input-state :buffer "hello" :cursor-pos 2))
       (with-reduced-input-state (s0) (reduce-once cmd :char #\0)
         (is-input-state s0 :cursor-pos 0))
+      (with-reduced-input-state (counted) (reduce-once cmd :char #\2)
+        (with-reduced-input-state (counted-and-zero)
+          (reduce-once counted :char #\0)
+          (expect 1 :to-equal
+                  (nshell.presentation:input-state-cursor-pos counted-and-zero))))
       (with-reduced-input-state (se) (reduce-once cmd :char #\$)
         (is-input-state se :cursor-pos 4))))
 

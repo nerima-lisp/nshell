@@ -13,6 +13,7 @@ filesystem.")
              #:feature-descriptor-name
              #:feature-descriptor-root
              #:feature-descriptor-layers
+             #:define-feature
              #:register-feature
              #:find-feature
              #:all-features

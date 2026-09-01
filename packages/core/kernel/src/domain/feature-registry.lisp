@@ -14,6 +14,15 @@ tests without making the domain depend on the host filesystem."
 (defvar *feature-registry* (make-hash-table :test #'eq)
   "The loaded feature descriptors, keyed by their keyword names.")
 
+(defmacro define-feature (name &key root layers)
+  "Declare a feature descriptor at load time.
+
+NAME, ROOT, and LAYERS are source-level architecture data.  The generated
+registration remains an ordinary function call so reloads retain the same
+runtime semantics as programmatic registration."
+  `(eval-when (:load-toplevel :execute)
+     (register-feature ,name :root ,root :layers ',layers)))
+
 (defun register-feature (name &key root layers)
   "Register NAME as a feature rooted at ROOT and split across LAYERS.
 

@@ -204,3 +204,13 @@
         (expect (streamp master) :to-be-truthy)
         (expect (streamp slave) :to-be-truthy)
         (expect (stringp slave-name) :to-be-truthy)))))
+
+  (it "with-pty-allows-omitting-slave-name"
+    "WITH-PTY does not require callers to bind the diagnostic slave name."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (nshell.infrastructure.acl:with-pty (master slave)
+        (expect (streamp master) :to-be-truthy)
+        (expect (streamp slave) :to-be-truthy))))

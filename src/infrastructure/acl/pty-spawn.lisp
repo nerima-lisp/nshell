@@ -172,8 +172,11 @@
 (defmacro with-pty ((master-stream slave-stream &optional slave-name) &body body)
   "Open a PTY pair, bind MASTER-STREAM and SLAVE-STREAM, and ensure cleanup."
   (let ((master-fd (gensym "MASTER-FD"))
-        (slave-fd (gensym "SLAVE-FD")))
-    `(multiple-value-bind (,master-fd ,slave-fd ,slave-name) (open-pty)
+        (slave-fd (gensym "SLAVE-FD"))
+        (ignored-slave-name (gensym "IGNORED-SLAVE-NAME")))
+    `(multiple-value-bind (,master-fd ,slave-fd
+                           ,(or slave-name ignored-slave-name))
+         (open-pty)
        (let ((,master-stream nil)
              (,slave-stream nil))
          (unwind-protect

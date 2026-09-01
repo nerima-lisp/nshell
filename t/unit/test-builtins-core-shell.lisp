@@ -347,6 +347,17 @@
       (expect (first (split "noequalssign")) :to-be-null)
       (expect (first (split "=value")) :to-be-null)))
 
+  (it "table-builtin-case-evaluates-arguments-once"
+    "table builtin dispatch evaluates its argument form once before selecting a clause."
+    (let ((evaluations 0))
+      (expect :empty
+              :to-be
+              (nshell.application::%table-builtin-case
+                  (progn (incf evaluations) nil)
+                (:empty :empty)
+                (:default :default)))
+      (expect 1 :to-equal evaluations)))
+
   (it "abbr-parse-position-maps-known-strings"
     "abbr-parse-position returns keyword for 'command'/'anywhere', nil for unknowns."
     (flet ((pos (s) (nshell.application::%abbr-parse-position s)))

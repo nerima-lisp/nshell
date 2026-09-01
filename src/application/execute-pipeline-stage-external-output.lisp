@@ -30,38 +30,23 @@
     (stdout-buffer stderr-buffer redirect-plan exit-code)
   (let* ((output (get-output-stream-string stdout-buffer))
          (errout (and stderr-buffer
-                      (get-output-stream-string stderr-buffer)))
-         (stdout-target
-           (%external-process-redirect-plan-stdout-target redirect-plan))
-         (stdout-mode
-           (%external-process-redirect-plan-stdout-mode redirect-plan))
-         (stderr-target
-           (%external-process-redirect-plan-stderr-target redirect-plan))
-         (stderr-mode
-           (%external-process-redirect-plan-stderr-mode redirect-plan))
-         (stdout-endpoint
-           (%external-process-redirect-plan-stdout-endpoint redirect-plan))
-         (stderr-endpoint
-           (%external-process-redirect-plan-stderr-endpoint redirect-plan)))
-    (if (%external-process-redirect-plan-merge-stderr-p redirect-plan)
-        (values (%route-external-process-output
-                 stdout-endpoint
-                 stdout-target
-                 stdout-mode
-                 output
-                 t)
-                exit-code)
-        (let ((returned-output
-                (%route-external-process-output
-                 stdout-endpoint
-                 stdout-target
-                 stdout-mode
-                 output
-                 t)))
-          (%route-external-process-output
-           stderr-endpoint
-           stderr-target
-           stderr-mode
-           (or errout "")
-           nil)
-          (values returned-output exit-code)))))
+                      (get-output-stream-string stderr-buffer))))
+    (%with-external-process-redirect-plan
+        (redirect-plan
+         :stdout-target stdout-target
+         :stdout-mode stdout-mode
+         :stderr-target stderr-target
+         :stderr-mode stderr-mode
+         :stdout-endpoint stdout-endpoint
+         :stderr-endpoint stderr-endpoint
+         :merge-stderr-p merge-stderr-p)
+      (if merge-stderr-p
+          (values (%route-external-process-output
+                   stdout-endpoint stdout-target stdout-mode output t)
+                  exit-code)
+          (let ((returned-output
+                  (%route-external-process-output
+                   stdout-endpoint stdout-target stdout-mode output t)))
+            (%route-external-process-output
+             stderr-endpoint stderr-target stderr-mode (or errout "") nil)
+            (values returned-output exit-code))))))

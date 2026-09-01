@@ -120,7 +120,7 @@ enforced timeout) instead."
                          (nshell.infrastructure.acl:run-external
                           "/bin/sh"
                           (list "-c"
-                                "trap \"\" TERM; sleep 0.05; sleep 30 & echo $! > \"$1\"; wait"
+                                "trap \"\" TERM; sleep 30 & echo $! > \"$1\"; wait"
                                 "sh"
                                 (namestring pid-file))))))
                (setf child-pid

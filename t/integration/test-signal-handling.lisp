@@ -9,6 +9,25 @@
          (nshell.infrastructure.acl:os-signal->domain :sigchld)) :to-be-truthy)
     (expect :sigint :to-be (nshell.infrastructure.acl:domain-signal->os nshell.domain.signals:+sigint+)))
 
+  (it "process-signal-classification-accepts-domain-and-os-designators"
+    "Process control predicates classify both domain signals and OS designators."
+    (dolist (case '((:sigstop t nil)
+                    (:sigtstp t nil)
+                    (:sigcont nil t)
+                    (:sigterm nil nil)
+                    (nil nil nil)))
+      (destructuring-bind (signal stop-p continue-p) case
+        (expect stop-p :to-be
+                (nshell.infrastructure.acl:process-stop-signal-p signal))
+        (expect continue-p :to-be
+                (nshell.infrastructure.acl:process-continue-signal-p signal))))
+    (expect t :to-be
+            (nshell.infrastructure.acl:process-stop-signal-p
+             (nshell.domain.signals:make-signal :sigstop 19)))
+    (expect t :to-be
+            (nshell.infrastructure.acl:process-continue-signal-p
+             (nshell.domain.signals:make-signal :sigcont 18))))
+
   (it "install-signal-handlers-does-not-crash"
     "Installing signal handlers should complete without killing the shell."
     (expect t :to-be (nshell.infrastructure.acl:install-signal-handlers)))

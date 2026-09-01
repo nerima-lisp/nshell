@@ -62,7 +62,8 @@
   "Return T when SIGNAL stops a process rather than terminating it."
   (let ((number (ignore-errors (%signal-number signal))))
     (and number
-         (member number (list sb-unix:sigstop sb-unix:sigtstp) :test #'=))))
+         (not (null (member number (list sb-unix:sigstop sb-unix:sigtstp)
+                             :test #'=))))))
 
 (defun process-continue-signal-p (signal)
   "Return T when SIGNAL continues a stopped process."

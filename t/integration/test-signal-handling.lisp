@@ -20,6 +20,11 @@
          (nshell.infrastructure.acl:os-signal->domain :sigchld)) :to-be-truthy)
     (expect :sigint :to-be (nshell.infrastructure.acl:domain-signal->os nshell.domain.signals:+sigint+)))
 
+  (it "signal-mapping-rejects-unknown-os-names"
+    "Unknown OS names remain outside the domain signal boundary."
+    (expect nil :to-be
+            (nshell.infrastructure.acl:os-signal->domain :not-a-signal)))
+
   (it "process-signal-classification-accepts-domain-and-os-designators"
     "Process control predicates classify both domain signals and OS designators."
     (dolist (case '((:sigstop t nil)

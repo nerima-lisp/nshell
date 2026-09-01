@@ -74,6 +74,24 @@
           :code 0
           :output-null t))))
 
+  (it "cd-rejects-multiple-directories"
+    "cd reports usage when more than one directory argument is supplied."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "cd" '("/tmp" "/work"))
+        :code 1
+        :contains '("usage: cd" "cd [directory]"))))
+
+  (it "cd-dash-fails-without-oldpwd"
+    "cd - reports a clear error when OLDPWD is unset."
+    (with-builtins-context (context)
+      (setf (nshell.application:shell-context-environment context)
+            (nshell.domain.environment:env-unset
+             (nshell.application:shell-context-environment context)
+             "OLDPWD"))
+      (assert-builtin-call (context "cd" '("-"))
+        :code 1
+        :contains '("cd:" "OLDPWD is not set"))))
+
   (it "cd-maintains-pwd-and-oldpwd-and-supports-dash"
     "cd updates PWD and OLDPWD, and cd - returns to the previous directory."
     (with-builtins-context-environment

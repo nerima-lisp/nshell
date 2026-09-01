@@ -11,6 +11,15 @@
     `(define-builtin ,name (context args) (context args)
        (values nil ,status)))
 
+  (defmacro %with-option-terminator-removed ((arguments args) &body body)
+    (let ((source (gensym "ARGS-")))
+      `(let* ((,source ,args)
+              (,arguments (if (and ,source
+                                   (string= (first ,source) "--"))
+                              (rest ,source)
+                              ,source)))
+         ,@body)))
+
   (defmacro define-job-selection-builtin (name operation)
     (let ((command (string-downcase (symbol-name operation)))
           (job-monitor (gensym "JOB-MONITOR-"))

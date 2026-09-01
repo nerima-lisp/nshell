@@ -103,9 +103,7 @@
        (values nil 0)))))
 
 (defun %builtin-export (context args)
-  (let ((arguments (if (and args (string= (first args) "--"))
-                       (rest args)
-                       args)))
+  (%with-option-terminator-removed (arguments args)
     (if arguments
         (dolist (argument arguments (values nil 0))
           (multiple-value-bind (name value assignment-p)
@@ -135,9 +133,7 @@
         (%builtin-usage "export" "export name[=value] ..."))))
 
 (defun %builtin-unset (context args)
-  (let ((arguments (if (and args (string= (first args) "--"))
-                       (rest args)
-                       args)))
+  (%with-option-terminator-removed (arguments args)
     (when (and arguments
                (%builtin-option-like-p (first arguments)))
       (return-from %builtin-unset

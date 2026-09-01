@@ -68,7 +68,7 @@ hand the user's next shell a terminal with SGR mouse reporting still on."
   (unwind-protect
       (if (install-interactive-terminal)
           (progn
-            (trampoline (lambda () (render-prompt-cont)))
+            (with-cps-trampoline (render-prompt-cont))
             0)
           ;; Raw mode is a precondition for the line editor and could not be
           ;; entered; INSTALL-INTERACTIVE-TERMINAL has already said so on

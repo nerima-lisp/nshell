@@ -30,4 +30,13 @@
               (loop for i from 1 to depth collect i)))))
 
   (it "trampoline-termination"
-    (assert-trampoline-sequence nil nil)))
+    (assert-trampoline-sequence nil nil))
+
+  (it "with-cps-trampoline-runs-the-initial-step"
+    (let ((steps '()))
+      (nshell.presentation:with-cps-trampoline
+        (push :initial steps)
+        (lambda ()
+          (push :continuation steps)
+          nil))
+      (expect '(:continuation :initial) :to-equal steps))))

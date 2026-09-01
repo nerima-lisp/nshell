@@ -34,7 +34,7 @@ in its interactive, batch, and script forms.")
             #:output-event
             #:exported-environment-strings
             #:run-repl #:run-repl-batch #:run-repl-script
-            #:trampoline #:render-prompt
+            #:trampoline #:with-cps-trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion
              #:render-completions #:apply-completion
              #:highlight-line

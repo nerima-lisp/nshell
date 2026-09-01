@@ -111,7 +111,8 @@
 
 (defun %pty-fork-exec (program args master-fd slave-name rows cols)
   (let ((ready-read nil)
-        (ready-write nil))
+        (ready-write nil)
+        (child-pid nil))
     (%with-pty-exec-vectors (argv envp program args)
       (unwind-protect
            (progn
@@ -125,9 +126,10 @@
                (%wait-for-pty-child-ready ready-read pid)
                (%pty-close-fd ready-read)
                (setf ready-read nil)
-               pid)))
-      (%pty-close-fd ready-read)
-      (%pty-close-fd ready-write))))
+               (setf child-pid pid)))
+        (%pty-close-fd ready-read)
+        (%pty-close-fd ready-write)))
+    child-pid))
 
 (defun %set-pty-window-size (slave-fd rows cols)
   (let ((winsize (sb-alien:make-alien sb-alien:unsigned-short 4)))

@@ -222,6 +222,7 @@
    (:file "presentation/repl-diagnostics")
    (:file "presentation/repl-output-completion-help")
    (:file "presentation/repl-output-completion")
+   (:file "presentation/editor")
    (:file "presentation/repl-output-handlers")
    (:file "presentation/repl-output-event-handlers")
    (:file "presentation/repl-output")

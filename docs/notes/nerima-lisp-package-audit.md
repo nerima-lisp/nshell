@@ -53,6 +53,12 @@ The test systems are kept separate from the runtime dependency audit:
 | package | what it is | why nshell cannot use it |
 |---|---|---|
 | `cl-json-kit` | dependency-free JSON reader/writer | nshell has no JSON I/O. The only `json` tokens in the tree are completion-catalog *values* (e.g. `kubectl --output json`), not parsing. |
+| `cl-http-kit`, `cl-http-message-kit`, `cl-websocket-kit`, `cl-sse-kit` | HTTP, message, WebSocket, and SSE protocol libraries | nshell is a local process shell and exposes no network protocol endpoint. |
+| `cl-postgresql-kit`, `cl-redis-kit` | database clients | No database connection or persistence boundary exists in the shell. |
+| `cl-observability-kit`, `cl-log-kit`, `cl-resilience-kit`, `cl-event-sourcing-kit` | service observability, logging, resilience, and event-sourcing libraries | These solve service/runtime concerns absent from a local CLI; diagnostics remain user-facing stderr. |
+| `cl-cffi-kit`, `cl-regex-kit`, `cl-hpack-codec-kit` | FFI, regular-expression, and compression helpers | No direct feature requires them; adding them would duplicate existing host/parser boundaries or add unused functionality. |
+| `cl-tui-kit`, `cl-glfw3-kit`, `cl-vulkan-kit`, `cl-fx-quant-kit` | UI, graphics, and quantitative-computing libraries | nshell uses `cl-tty-kit` for terminal control and has no graphical or numerical UI. |
+| `cl-asciiquarium`, `cl-chip8`, `cl-cmatrix`, `cl-cowsay`, `cl-nes`, `cl-nyancat`, `cl-sl`, `ncl`, `nerimux`, `loom`, `cachix` | standalone applications, tools, or infrastructure | They are independently runnable products rather than libraries used by a shell execution boundary. |
 | `cl-tmux` | a full terminal multiplexer in CL | Orthogonal peer application. A multiplexer *hosts* shells; a shell does not embed one. Integration would be a dependency inversion. |
 | `cl-cc`, `cl-cc-ast`, `cl-cc-binary`, `cl-cc-javascript`, `cl-cc-php`, `cl-cc-runtime`, `cl-cc-type` | a self-hosting CL compiler collection | Language-implementation infrastructure with no surface a shell consumes. |
 | `paredit-cli` | the Rust S-expression refactoring CLI | A development *tool* used to perform these refactors, not a runtime dependency. |
@@ -76,9 +82,8 @@ rg -o '\\b(cl-prolog-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|proce
 To re-check every pinned version against upstream tags:
 
 ```sh
-for repo in cl-weave cl-prolog-kit cl-parser-kit cl-dataflow-kit cl-boundary-kit cl-cli cl-tty-kit cl-process-kit cl-history-kit cl-host-kit cl-codec-kit cl-concurrent-kit cl-date-kit cl-nix-forge paredit-cli; do
+for repo in cl-weave cl-prolog-kit cl-parser-kit cl-dataflow-kit cl-boundary-kit cl-cli cl-tty-kit cl-process-kit cl-history-kit cl-host-kit cl-codec-kit cl-concurrent-kit cl-date-kit; do
   printf '%s: ' "$repo"
-  git ls-remote --tags --refs "https://github.com/nerima-lisp/$repo.git" \\
-    | perl -ne 'print "$1\\n" if /refs\\/tags\\/(v[^\\^]+)$/' | tail -1
+  gh api "repos/nerima-lisp/$repo/tags?per_page=1" --jq '.[0].name'
 done
 ```

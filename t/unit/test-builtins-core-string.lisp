@@ -323,6 +323,10 @@
     (expect (match "a*b" "aXYZb") :to-be-truthy)
     (expect (match "GIT*" "git-status" :ignore-case t) :to-be-truthy)
     (expect (match "GIT*" "git-status" :ignore-case nil) :to-be-falsy)
+    (expect (match "" "") :to-be-truthy)
+    (expect (match "" "text") :to-be-falsy)
+    (expect (match "text" "") :to-be-falsy)
+    (expect (match "literal" "LITERAL" :ignore-case t) :to-be-truthy)
     (expect (match "*a*a*a*a*a*a*a*a*a*b"
                    (make-string 32 :initial-element #\a))
             :to-be-falsy)))

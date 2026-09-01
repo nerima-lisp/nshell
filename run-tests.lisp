@@ -26,7 +26,7 @@
        (parent (uiop:pathname-parent-directory-pathname root)))
   (asdf:initialize-source-registry
    (if (uiop:getenv "CL_SOURCE_REGISTRY")
-       '(:source-registry :environment)
+       '(:source-registry :inherit-configuration)
        `(:source-registry
          (:directory ,root)
          (:tree ,parent)

@@ -78,11 +78,9 @@
              (setf (shell-context-last-exit-code context) 2)
              (values "exit: numeric argument required~%" 2)))))))
 
-(define-builtin %builtin-true (context args) (context args)
-  (values nil 0))
+(define-status-builtin %builtin-true 0)
 
-(define-builtin %builtin-false (context args) (context args)
-  (values nil 1))
+(define-status-builtin %builtin-false 1)
 
 (defun %invert-status-code (code)
   (if (zerop (or code 0)) 1 0))

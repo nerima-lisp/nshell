@@ -5,4 +5,8 @@
     `(defun ,name ,lambda-list
        ,@(when ignore-variables
            `((declare (ignore ,@ignore-variables))))
-       ,@body)))
+       ,@body))
+
+  (defmacro define-status-builtin (name status)
+    `(define-builtin ,name (context args) (context args)
+       (values nil ,status))))

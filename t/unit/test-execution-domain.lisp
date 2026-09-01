@@ -76,6 +76,12 @@
     (let ((cmd (nshell.domain.execution:make-command "echo" '("hello" "world"))))
       (expect '("echo" "hello" "world") :to-equal (nshell.domain.execution:command-to-list cmd))))
 
+  (it "command-preserves-non-string-arguments"
+    "Command arguments that are not strings remain domain values."
+    (let ((cmd (nshell.domain.execution:make-command "printf" '(42))))
+      (expect '(42) :to-equal (nshell.domain.execution:command-args cmd))
+      (expect '("printf" 42) :to-equal (nshell.domain.execution:command-to-list cmd))))
+
   (it "command-rejects-invalid-values-at-domain-boundary"
     "Command construction validates values before allocating the structure."
     (expect (lambda () (nshell.domain.execution:make-command :echo '("hello"))) :to-throw 'type-error)

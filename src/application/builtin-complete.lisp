@@ -63,7 +63,7 @@
                 (cddr remaining)))))
 
 (defun %complete-merge-strings (new existing)
-  (remove-duplicates (append (or new nil) (or existing nil))
+  (remove-duplicates (append new existing)
                      :test #'string=))
 
 (defun %complete-option-values-for (option-values option)

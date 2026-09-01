@@ -1,7 +1,7 @@
 (in-package #:nshell.application)
 
-(defun %job-spec (args)
-  (first args))
+(defmacro %job-spec (args)
+  `(first ,args))
 
 (defun %resolve-job-id (job-monitor args &key active-only-p)
   (let ((job-id
@@ -16,8 +16,8 @@
                           (not (nshell.domain.execution:job-completed-p job))))))
       job-id)))
 
-(defun %job-spec-label (args)
-  (or (%job-spec args) "current"))
+(defmacro %job-spec-label (args)
+  `(or (%job-spec ,args) "current"))
 
 (defun %missing-job-output (command job-spec)
   (format nil "~a: no such job: ~a~%" command job-spec))

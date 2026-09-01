@@ -2,26 +2,14 @@
 
 (describe "input-state-tests"
   (it "terminal-width-preserves-positive-terminal-columns"
-    (let ((original-get-terminal-size
-            (symbol-function 'nshell.infrastructure.acl:get-terminal-size)))
-      (unwind-protect
-           (progn
-             (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
-                   (lambda () (values 24 120)))
-             (expect 120 :to-equal (nshell.presentation::terminal-width)))
-        (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
-              original-get-terminal-size))))
+    (with-rebound-function (nshell.infrastructure.acl:get-terminal-size
+                            (lambda () (values 24 120)))
+      (expect 120 :to-equal (nshell.presentation::terminal-width))))
 
   (it "terminal-width-falls-back-for-zero-terminal-columns"
-    (let ((original-get-terminal-size
-            (symbol-function 'nshell.infrastructure.acl:get-terminal-size)))
-      (unwind-protect
-           (progn
-             (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
-                   (lambda () (values 24 0)))
-             (expect 80 :to-equal (nshell.presentation::terminal-width)))
-        (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
-              original-get-terminal-size))))
+    (with-rebound-function (nshell.infrastructure.acl:get-terminal-size
+                            (lambda () (values 24 0)))
+      (expect 80 :to-equal (nshell.presentation::terminal-width))))
 
   (it "completion-rendering-highlights-selected-candidate"
     (let* ((candidates (list (nshell.domain.completion:make-candidate
@@ -57,31 +45,19 @@
                :terminal-width 1)))
 
   (it "completion-default-terminal-width-uses-terminal-columns"
-    (let ((original-get-terminal-size
-            (symbol-function 'nshell.infrastructure.acl:get-terminal-size)))
-      (unwind-protect
-           (progn
-             (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
-                   (lambda () (values 24 80)))
-             (expect 1 :to-equal (nshell.presentation::completion-render-line-count
-                       '("123456789012345"
-                         "abcdefghijklmno"
-                         "zzzzzzzzzzzzzzz"
-                         "yyyyyyyyyyyyyyy"))))
-        (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
-              original-get-terminal-size))))
+    (with-rebound-function (nshell.infrastructure.acl:get-terminal-size
+                            (lambda () (values 24 80)))
+      (expect 1 :to-equal (nshell.presentation::completion-render-line-count
+                            '("123456789012345"
+                              "abcdefghijklmno"
+                              "zzzzzzzzzzzzzzz"
+                              "yyyyyyyyyyyyyyy")))))
 
   (it "completion-rendering-falls-back-when-terminal-size-fails"
-    (let ((original-get-terminal-size
-            (symbol-function 'nshell.infrastructure.acl:get-terminal-size)))
-      (unwind-protect
-           (progn
-             (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
-                   (lambda () (error "terminal size unavailable")))
-             (expect 1 :to-equal (nshell.presentation::completion-render-line-count
-                       '("fallback"))))
-        (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
-              original-get-terminal-size))))
+    (with-rebound-function (nshell.infrastructure.acl:get-terminal-size
+                            (lambda () (error "terminal size unavailable")))
+      (expect 1 :to-equal (nshell.presentation::completion-render-line-count
+                            '("fallback")))))
 
   (it "completion-rendering-uses-all-candidate-kind-icons"
     (let* ((candidates (list

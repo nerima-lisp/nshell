@@ -1,5 +1,13 @@
 (in-package #:nshell/test)
 
+(defmacro with-rebound-function ((name replacement) &body body)
+  `(let ((original-function (symbol-function ',name)))
+     (unwind-protect
+          (progn
+            (setf (symbol-function ',name) ,replacement)
+            ,@body)
+       (setf (symbol-function ',name) original-function))))
+
 (defun %package-name-has-no-definition-p (name package)
   "True when NAME names no function, variable, setf-function, or class in
 PACKAGE.  Writing a package-qualified symbol (e.g. in an :absent boundary list)

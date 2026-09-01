@@ -144,7 +144,7 @@
         (destructuring-bind (format argument expected) case
           (assert-builtin-call (context "printf" (list format argument))
             :code 0
-            :output (format nil "~A" expected))))
+            :output expected)))
       ))
 
   (it "exit-stops-the-current-shell-context"

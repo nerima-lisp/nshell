@@ -2,7 +2,8 @@
 
 The repository keeps the 100% target visible without claiming that it has been
 reached. `scripts/coverage.lisp` runs the complete test system, generates an
-`sb-cover` report, and publishes a machine-readable summary. The enforced
+`sb-cover` report, and publishes machine-readable summary and per-file
+breakdowns. The enforced
 release gate is the configured minimum; the 100% value is an explicit target
 that remains a warning until the report reaches it.
 
@@ -24,6 +25,11 @@ The command is release evidence only when the selected test count is non-zero,
 the test and error counts are zero, the generated report exists, and both the
 minimum and target fields have been inspected. A passing minimum with
 `target-reached=false` is a warning, not a 100% coverage claim.
+
+The same directory contains `coverage-files.json`, which lists each included
+source file with its covered and total expression counts. Use this report to
+choose the next test target; do not infer a 100% result from the aggregate
+minimum gate.
 
 ## What the suite verifies
 

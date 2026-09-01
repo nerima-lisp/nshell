@@ -89,15 +89,13 @@
          (not (member (file-namestring (pathname path))
                       +coverage-excluded-source-file-names+
                       :test #'string=))))
-  (defun %coverage-totals (index-path source-root)
+  (defun %coverage-file-totals (index-path source-root)
     (let* ((html (uiop:read-file-string index-path))
            (section-marker "<tr class='subheading'><td colspan='7'>")
            (section-marker-length (length section-marker))
            (html-length (length html)))
       (loop with cursor = 0
-            with file-count = 0
-            with covered-count = 0
-            with total-count = 0
+            with files = nil
             for section-start = (search section-marker html :start2 cursor)
             while section-start
             do (let* ((path-start (+ section-start section-marker-length))
@@ -125,10 +123,15 @@
                                             source-root)
                                            (integerp covered)
                                            (integerp total))
-                                  (incf file-count)
-                                  (incf covered-count covered)
-                                  (incf total-count total)))))))
-            finally (return (values file-count covered-count total-count)))))
+                                  (push (list (concatenate 'string path file-name)
+                                               covered
+                                               total)
+                                        files)))))))
+            finally (return (nreverse files)))))
+  (defun %coverage-totals (files)
+    (values (length files)
+            (reduce #'+ files :key #'second :initial-value 0)
+            (reduce #'+ files :key #'third :initial-value 0)))
   (defun %coverage-percentage (covered total)
     (if (plusp total) (* 100.0 (/ covered total))
       0.0))
@@ -173,6 +176,16 @@
        (%json-boolean tests-passed)
        (%json-boolean (and (plusp total) (>= percentage minimum)))
        (%json-boolean (and (plusp total) (>= percentage target))))))
+  (defun %write-coverage-files (pathname files)
+    (ensure-directories-exist pathname)
+    (with-open-file (stream pathname :direction :output :if-exists :supersede :if-does-not-exist :create)
+      (format stream "[~%")
+      (loop for (path covered total) in files
+            for first = t then nil
+            do (unless first (format stream ",~%"))
+               (format stream "  {\"path\": \"~A\", \"covered\": ~D, \"total\": ~D, \"expression-percent\": ~,2F}"
+                       path covered total (%coverage-percentage covered total)))
+      (format stream "~%]~%")))
   (let* ((root (truename #P"./"))
          (parent (uiop:pathname-parent-directory-pathname root))
          (tmpdir (uiop:getenv "TMPDIR"))
@@ -186,6 +199,7 @@
                 (merge-pathnames #P"coverage/" root)))))
          (index-path (merge-pathnames #P"cover-index.html" coverage-dir))
          (summary-path (merge-pathnames #P"coverage-summary.json" coverage-dir))
+         (files-path (merge-pathnames #P"coverage-files.json" coverage-dir))
          (source-root (uiop:native-namestring (truename (merge-pathnames #P"src/" root))))
          (minimum (%coverage-threshold "NSHELL_COVERAGE_MIN" 85.0))
          (target (%coverage-threshold "NSHELL_COVERAGE_TARGET" 100.0))
@@ -225,16 +239,17 @@
                                           (error (condition)
                                                  (format *error-output* "~&sb-cover report failed: ~A~%" condition)
                                                  nil))))
-    (multiple-value-bind (files covered total) (if report-passed (handler-case (%coverage-totals
-                                                                                index-path
-                                                                                source-root)
+    (let ((file-totals (if report-passed (handler-case (%coverage-file-totals
+                                                       index-path
+                                                       source-root)
                                                                    (error (condition)
                                                                           (format
                                                                            *error-output*
                                                                            "~&coverage summary failed: ~A~%"
                                                                            condition)
-                                                                          (values 0 0 0)))
-                                                   (values 0 0 0))
+                                                                          nil))
+                                                   nil)))
+      (multiple-value-bind (files covered total) (%coverage-totals file-totals)
       (let ((percentage (%coverage-percentage covered total)))
         (setf coverage-passed (and
                                report-passed
@@ -252,9 +267,11 @@
          target
          tests-passed
          tests-selected)
+        (%write-coverage-files files-path file-totals)
         (unless (probe-file summary-path)
           (error "coverage summary was not written: ~A" summary-path))
         (format t "NSHELL_COVERAGE_SUMMARY path=~A~%" summary-path)
+        (format t "NSHELL_COVERAGE_FILES path=~A~%" files-path)
         (format
          t
          "NSHELL_COVERAGE scope=src-executable files=~D covered=~D total=~D expression-percent=~,2F minimum-percent=~,2F target-percent=~,2F tests-selected=~D tests-passed=~A minimum-passed=~A target-reached=~A~%"
@@ -278,4 +295,4 @@
     (sb-ext:exit
      :code
      (if (and tests-passed coverage-passed) 0
-         1))))
+         1)))))

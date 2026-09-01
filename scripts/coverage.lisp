@@ -84,6 +84,7 @@
           (search "-data.lisp" file-name))))
   (defun %coverage-source-file-p (path source-root)
     (and (%coverage-string-prefix-p source-root path)
+         (search "/src/" path)
          (not (%coverage-declarative-source-p path))
          (not (member (file-namestring (pathname path))
                       +coverage-excluded-source-file-names+

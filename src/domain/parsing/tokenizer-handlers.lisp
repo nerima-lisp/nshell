@@ -161,11 +161,30 @@
      (%tokenizer-pipe-route-token-type route)
      (%tokenizer-pipe-route-value route))))
 
-(defstruct (%tokenizer-right-angle-route (:constructor %make-tokenizer-right-angle-route (kind value))) (kind :redirect :type keyword :read-only t) (value ">" :type (or null string) :read-only t))
+(defstruct (%tokenizer-right-angle-route
+            (:constructor %make-tokenizer-right-angle-route (kind value)))
+  (kind :redirect :type keyword :read-only t)
+  (value ">" :type (or null string) :read-only t))
 
-(defun %tokenizer-right-angle-route-for (state) (cond ((eql (%tokenizer-state-peek state 1) #\() (%make-tokenizer-right-angle-route :process-substitution nil)) ((eql (%tokenizer-state-peek state 1) #\>) (%make-tokenizer-right-angle-route :redirect ">>")) (t (%make-tokenizer-right-angle-route :redirect ">"))))
+(defun %tokenizer-right-angle-route-for (state)
+  (cond
+    ((eql (%tokenizer-state-peek state 1) #\()
+     (%make-tokenizer-right-angle-route :process-substitution nil))
+    ((eql (%tokenizer-state-peek state 1) #\>)
+     (%make-tokenizer-right-angle-route :redirect ">>"))
+    (t
+     (%make-tokenizer-right-angle-route :redirect ">"))))
 
-(defun %tokenizer-handle-right-angle (state) (let ((route (%tokenizer-right-angle-route-for state))) (case (%tokenizer-right-angle-route-kind route) (:process-substitution (%tokenizer-read-balanced-process-substitution state)) (t (%tokenizer-state-emit-token state :redirect (%tokenizer-right-angle-route-value route))))))
+(defun %tokenizer-handle-right-angle (state)
+  (let ((route (%tokenizer-right-angle-route-for state)))
+    (case (%tokenizer-right-angle-route-kind route)
+      (:process-substitution
+       (%tokenizer-read-balanced-process-substitution state))
+      (t
+       (%tokenizer-state-emit-token
+        state
+        :redirect
+        (%tokenizer-right-angle-route-value route))))))
 
 (defstruct (%tokenizer-left-angle-route
             (:constructor %make-tokenizer-left-angle-route (kind value)))

@@ -95,6 +95,12 @@
                 (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
               :to-throw 'error)))
 
+  (it "rejects a readiness read when the descriptor is invalid"
+    "A syscall failure must remain distinct from an orderly pipe close."
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%pty-read-ready-byte -1))
+            :to-throw 'error))
+
   (it "rejects a readiness byte that reports child setup failure"
     "The parent propagates the child-side setup failure as an error."
     (with-readiness-pipe (read-fd write-fd)

@@ -298,4 +298,13 @@ by the kernel and never reaches this handler."
         (nshell.infrastructure.acl::%decode-wait-status 0 0)
       (expect 0 :to-equal pid)
       (expect :running :to-be state)
-      (expect nil :to-be detail))))
+      (expect nil :to-be detail)))
+
+  (it "decodes-exited-wait-status"
+    "A normally exited child exposes its exit code."
+    (multiple-value-bind (pid state detail)
+        (nshell.infrastructure.acl::%decode-wait-status 321
+                                                        (ash 17 8))
+      (expect 321 :to-equal pid)
+      (expect :exited :to-be state)
+      (expect 17 :to-equal detail))))

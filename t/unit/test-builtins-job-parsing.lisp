@@ -98,6 +98,20 @@
                monitor (list (format nil "%~d" job-id))
                :active-only-p t))))
 
+  (it "waits only for active jobs when no selectors are supplied"
+    "Completed jobs are excluded from the implicit wait set."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.domain.job-control:make-job-monitor))
+           (completed-id
+             (nshell.domain.job-control:monitor-add-job
+              monitor (make-test-job 0 "done"))))
+      (setf (nshell.application:shell-context-job-monitor context) monitor)
+      (nshell.domain.job-control:complete-job monitor completed-id)
+      (expect '(nil 0)
+              :to-equal
+              (multiple-value-list
+               (nshell.application::%builtin-wait context nil)))))
+
 (describe "builtin-job-contract-tests"
 
   (it "keeps job builtins consistent when the monitor is empty"

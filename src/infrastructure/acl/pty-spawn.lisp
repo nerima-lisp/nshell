@@ -62,11 +62,12 @@
 (defun %pty-read-ready-byte (fd)
   (let ((buffer (make-array 1 :element-type '(unsigned-byte 8))))
     (sb-sys:with-pinned-objects (buffer)
-      (multiple-value-bind (count errno)
-          (sb-unix:unix-read fd (sb-sys:vector-sap buffer) 1)
+          (multiple-value-bind (count)
+              (sb-unix:unix-read fd (sb-sys:vector-sap buffer) 1)
         (cond
           ((null count)
-           (error "PTY child readiness read failed with errno ~d" errno))
+           (error "PTY child readiness read failed with errno ~d"
+                  (sb-unix::get-errno)))
           ((zerop count)
            (error "PTY child closed readiness pipe before setup completed"))
           (t

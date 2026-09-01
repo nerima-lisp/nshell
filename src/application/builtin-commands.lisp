@@ -89,13 +89,13 @@
   (if (zerop (or code 0)) 1 0))
 
 (defun %builtin-not (context args)
-  (if (null args)
-      (%builtin-usage "not" "not command [args...]" 2)
+  (if args
       (let* ((command (first args))
              (command-args (rest args)))
         (multiple-value-bind (output code)
             (%execute-command-by-name-in-context context command command-args)
-          (values output (%invert-status-code code))))))
+          (values output (%invert-status-code code))))
+      (%builtin-usage "not" "not command [args...]" 2)))
 
 (define-builtin %builtin-exec (context args) (context)
   (if args

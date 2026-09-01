@@ -1,6 +1,16 @@
 (in-package #:nshell/test)
 
 (describe "signal-handling-tests"
+  (it "rejects-invalid-domain-signal-values"
+    "Signal value objects enforce their keyword and POSIX number invariants."
+    (dolist (arguments '((:sigint 0)
+                         (:sigint 65)
+                         ("sigint" 2)))
+      (destructuring-bind (name number) arguments
+        (expect (lambda ()
+                  (nshell.domain.signals:make-signal name number))
+                :to-throw 'error))))
+
   (it "compares signal value objects by name and number"
     (let ((sigint (nshell.domain.signals:make-signal :sigint 2))
           (other-name (nshell.domain.signals:make-signal :sigterm 2))

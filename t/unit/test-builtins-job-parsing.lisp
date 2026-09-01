@@ -188,4 +188,48 @@
               :to-equal
               (multiple-value-list
                (nshell.application::%builtin-kill context '("123")))))
+
+  (it "covers successful job removal and explicit wait delegation"
+    (with-builtins-context (context)
+      (let* ((monitor (nshell.application:shell-context-job-monitor context))
+             (job-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "sleep"))))
+        (expect '(nil 0)
+                :to-equal
+                (multiple-value-list
+                 (nshell.application::%builtin-disown
+                  context (list (format nil "%~d" job-id)))))
+        (expect nil :to-be-null
+                (nshell.domain.job-control:monitor-find-job monitor job-id)))
+      (expect nil :to-be-null
+              (nshell.application::%parse-integer-designator 42))))
+
+  (it "covers explicit wait and kill error continuation"
+    (with-builtins-context (context)
+      (let* ((monitor (nshell.application:shell-context-job-monitor context))
+             (job-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "sleep")))
+             (calls nil))
+        (with-temporary-function
+            ('nshell.application:wait-for-job
+             (lambda (selected-id process-registry selected-monitor)
+               (declare (ignore process-registry selected-monitor))
+               (expect job-id :to-equal selected-id)
+               (values (list :job) 7)))
+          (expect '(7 7)
+                  :to-equal
+                  (multiple-value-list
+                   (nshell.application::%builtin-wait
+                    context (list (format nil "%~d" job-id))))))
+        (with-temporary-function
+            ('nshell.infrastructure.acl:kill-process
+             (lambda (pid signal)
+               (push (list pid signal) calls)
+               (if (= pid 22) (error "permission denied") 0)))
+          (multiple-value-bind (output status)
+              (nshell.application::%builtin-kill context '("21" "22"))
+            (expect 1 :to-equal status)
+            (expect (format nil "kill: 22: permission denied~%")
+                    :to-equal output)))
+        (expect '((22 :sigterm) (21 :sigterm)) :to-equal calls))))
   )))

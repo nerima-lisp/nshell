@@ -109,7 +109,20 @@
         :output "q")
       (assert-builtin-call (context "printf" '("%q" "value"))
         :code 1
-        :output "")))
+        :output "")
+      (assert-builtin-call (context "printf" '("%+d" "-7"))
+        :code 0
+        :output "-7")
+      (assert-builtin-call (context "printf" '("% d" "7"))
+        :code 0
+        :output " 7")
+      (assert-builtin-call (context "printf" '("%#x" "0"))
+        :code 0
+        :output "0")
+      (assert-builtin-call (context "printf" '("%.3s" "abcdef"))
+        :code 0
+        :output "abc")
+      ))
 
   (it "exit-stops-the-current-shell-context"
     "exit mutates only the current application shell context running flag."

@@ -119,7 +119,7 @@
                                           (let ((conversion (char format-string format-index)))
                                             (incf format-index)
                                             (setf argument-conversion-p t)
-                                            (if (find conversion "sbcdiuoxXeEfFgG"
+                                            (if (find conversion *printf-conversions*
                                                       :test #'char=)
                                                 (let ((argument
                                                         (if (< argument-index (length arguments))

@@ -151,6 +151,7 @@
    (:file "application/builtin-printf-format-support")
 (:file "application/builtin-printf-escape")
 (:file "application/builtin-printf-number")
+(:file "application/builtin-printf-data")
 (:file "application/builtin-printf")
    (:file "application/builtin-commands")
    (:file "application/builtin-commands-history")

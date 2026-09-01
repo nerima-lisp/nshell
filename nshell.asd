@@ -149,8 +149,9 @@
    (:file "application/builtin-source-reader")
    (:file "application/builtin-source")
    (:file "application/builtin-printf-format-support")
-   (:file "application/builtin-printf-escape")
-   (:file "application/builtin-printf")
+(:file "application/builtin-printf-escape")
+(:file "application/builtin-printf-number")
+(:file "application/builtin-printf")
    (:file "application/builtin-commands")
    (:file "application/builtin-commands-history")
    (:file "application/builtin-job-signal-data"

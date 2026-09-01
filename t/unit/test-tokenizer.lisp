@@ -94,6 +94,22 @@ letting word-reading stop on an unconsumed terminator."
     (expect (fboundp 'nshell.domain.parsing::make-tokenizer-state) :to-be-falsy)
     (expect (fboundp 'nshell.domain.parsing::copy-tokenizer-state) :to-be-falsy))
 
+  (it "tokenizer-state-defaults-are-empty-data"
+    "Tokenizer state starts from deterministic empty input boundaries."
+    (let ((state (nshell.domain.parsing::%make-tokenizer-state)))
+      (expect nil :to-equal
+              (nshell.domain.parsing::tokenizer-state-input state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::tokenizer-state-len state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::tokenizer-state-cursor-pos state))
+      (expect 0 :to-equal
+              (nshell.domain.parsing::tokenizer-state-pos state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::tokenizer-state-tokens state))
+      (expect nil :to-equal
+              (nshell.domain.parsing::tokenizer-state-incomplete state))))
+
   (it "tokenizer-dispatch-kind-projects-main-loop-boundaries"
     "Tokenizer dispatch classification should remain separate from state mutation."
     (flet ((kind (input)

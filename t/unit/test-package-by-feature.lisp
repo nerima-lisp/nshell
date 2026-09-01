@@ -13,9 +13,9 @@
               (nshell.architecture:feature-descriptor-layers feature))
       (expect "packages/feature/command-line/src/domain" :to-equal
               (nshell.architecture:feature-layer-path feature :domain))
-      (expect "packages/feature/command-line/src/presentation" :to-equal
-              (nshell.architecture:feature-layer-path :command-line
-                                                      :presentation))))
+       (expect "packages/feature/command-line/src/presentation" :to-equal
+               (nshell.architecture:feature-layer-path :command-line
+                                                       :presentation)))
 
   (it "keeps command-line policy independent from the parser implementation"
     (expect (nshell.feature.command-line:flag-argument-p "--help")
@@ -23,8 +23,8 @@
     (expect (nshell.feature.command-line:flag-argument-p "script.nsh")
             :to-be-falsy)
     (expect "Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
-            :to-equal
-            (nshell.feature.command-line:usage-synopsis))))
+             :to-equal
+             (nshell.feature.command-line:usage-synopsis)))
 
   (it "orders the registered descriptors by name"
     (let ((first (nshell.architecture:register-feature
@@ -49,36 +49,36 @@
            (expect "new" :to-equal
                    (nshell.architecture:feature-descriptor-root
                     (nshell.architecture:find-feature :temporary)))
-           (expect t :to-be-truthy
-                   (handler-case
+           (expect (handler-case
                        (progn
                          (nshell.architecture:feature-layer-path
                           :temporary :domain)
                          nil)
-                     (error () t))))
+                     (error () t))
+                   :to-be-truthy))
       (remhash :temporary nshell.architecture::*feature-registry*)))
 
   (it "rejects unknown features and malformed registrations"
-    (expect t :to-be-truthy
-            (handler-case
+    (expect (handler-case
                 (progn (nshell.architecture:feature-layer-path :missing :domain)
                        nil)
-              (error () t)))
-    (expect t :to-be-truthy
-            (handler-case
+              (error () t))
+            :to-be-truthy)
+    (expect (handler-case
                 (progn (nshell.architecture:register-feature
                         "not-a-keyword" :root "x" :layers nil)
                        nil)
-              (error () t)))
-    (expect t :to-be-truthy
-            (handler-case
+              (error () t))
+            :to-be-truthy)
+    (expect (handler-case
                 (progn (nshell.architecture:register-feature
                         :bad-root :root 42 :layers nil)
                        nil)
-              (error () t)))
-    (expect t :to-be-truthy
-            (handler-case
+              (error () t))
+            :to-be-truthy)
+    (expect (handler-case
                 (progn (nshell.architecture:register-feature
                         :bad-layer :root "x" :layers '(domain))
                        nil)
-              (error () t))))
+              (error () t))
+              :to-be-truthy))))

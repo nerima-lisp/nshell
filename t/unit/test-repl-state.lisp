@@ -99,6 +99,21 @@
         (expect (lambda () (apply #'nshell.domain.filesystem:make-filesystem initargs))
                 :to-throw 'type-error))))
 
+  (it "constructs filesystem capabilities with the default directory mapper"
+    (let ((filesystem
+            (nshell.domain.filesystem:make-filesystem
+             :directory-files #'list
+             :subdirectories #'list
+             :executable-p #'identity)))
+      (expect #'list :to-equal
+              (nshell.domain.filesystem:filesystem-directory-files filesystem))
+      (expect #'list :to-equal
+              (nshell.domain.filesystem:filesystem-subdirectories filesystem))
+      (expect #'identity :to-equal
+              (nshell.domain.filesystem:filesystem-executable-p filesystem))
+      (expect #'mapcar :to-equal
+              (nshell.domain.filesystem:filesystem-directory-map filesystem))))
+
   (it "runs continuation chains to completion"
     (let ((steps 0))
       (expect nil

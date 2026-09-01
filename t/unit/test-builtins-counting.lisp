@@ -1,5 +1,9 @@
 (in-package #:nshell/test)
 
+(defmacro expect-values (expected function &rest arguments)
+  `(expect ,expected :to-equal
+           (multiple-value-list (,function ,@arguments))))
+
 (describe "builtin-tests"
   (it "count-reports-number-of-arguments"
     "count prints the argument count, exiting 0 when non-empty and 1 when empty."
@@ -92,14 +96,12 @@
 
   (it "seq-parse-args-normalizes-1-2-and-3-arg-forms"
     "seq-parse-args converts 1/2/3 string args to (values FIRST STEP LAST) integers."
-    (flet ((parse (&rest args)
-             (multiple-value-list (nshell.application::%seq-parse-args args))))
-      (expect '(1 1 5) :to-equal (parse "5"))
-      (expect '(2 1 5) :to-equal (parse "2" "5"))
-      (expect '(1 2 10) :to-equal (parse "1" "2" "10"))
-      (expect '(5 -1 1) :to-equal (parse "5" "-1" "1"))
-      (expect '(nil) :to-equal (parse "x"))
-      (expect '(nil) :to-equal (parse "1" "2" "3" "4"))))
+    (expect-values '(1 1 5) nshell.application::%seq-parse-args '("5"))
+    (expect-values '(2 1 5) nshell.application::%seq-parse-args '("2" "5"))
+    (expect-values '(1 2 10) nshell.application::%seq-parse-args '("1" "2" "10"))
+    (expect-values '(5 -1 1) nshell.application::%seq-parse-args '("5" "-1" "1"))
+    (expect-values '(nil) nshell.application::%seq-parse-args '("x"))
+    (expect-values '(nil) nshell.application::%seq-parse-args '("1" "2" "3" "4")))
 
   (it "seq-values-generates-ascending-and-descending-sequences"
     "seq-values handles positive/negative step and zero guard."

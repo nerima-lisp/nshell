@@ -127,13 +127,24 @@ and returns MAKE-INPUT-STATE plists directly, with no intermediate value record.
                     value
                     "old"
                     :acceptp #'integerp))
+      (expect "new" :to-equal (nshell.presentation::input-state-copy-override-resolve
+                    value
+                    "old"))
       (expect "old" :to-equal (nshell.presentation::input-state-copy-override-resolve
                     optional-current
                     "old"))
       (expect 3 :to-equal (nshell.presentation::input-state-copy-anchor-override-resolve
               (nshell.presentation::input-state-copy-override-for t 99)
               0
-              "abc"))))
+              "abc"))
+      (expect 0 :to-equal (nshell.presentation::input-state-copy-anchor-override-resolve
+              (nshell.presentation::input-state-copy-override-for t -1)
+              0
+              "abc"))
+      (expect nil :to-be (nshell.presentation::input-state-copy-anchor-override-resolve
+                           (nshell.presentation::input-state-copy-override-for nil 99)
+                           nil
+                           "abc"))))
 
   (it "input-state-copy-with-assembles-all-overridable-fields"
     "Every overridable field handed to COPY-INPUT-STATE-WITH flows through to the

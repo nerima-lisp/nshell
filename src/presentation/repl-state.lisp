@@ -1,12 +1,5 @@
 (in-package #:nshell.presentation)
 
-;; Trampoline
-(defun trampoline (thunk)
-  "Run THUNK and repeatedly invoke each returned continuation until NIL."
-  (loop for continuation = (funcall thunk)
-        then (funcall continuation)
-        while continuation))
-
 ;; REPL State
 (defun %make-repl-name-table ()
   (make-hash-table :test #'equal))

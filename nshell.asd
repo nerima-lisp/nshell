@@ -205,7 +205,8 @@
    (:file "presentation/highlight-data"
           :pathname "../data/presentation/highlight-data")
    (:file "presentation/highlight")
-		   (:file "presentation/repl-state")
+	   (:file "presentation/cps")
+	   (:file "presentation/repl-state")
 		   (:file "presentation/repl-input-state")
 		   (:file "presentation/repl-completion-seed")
 		   (:file "presentation/repl-environment")

@@ -312,6 +312,26 @@ now decides whether this default is even consulted."
                plan)
               :to-be-truthy)))
 
+  (it "external-process-input-stream-selects-each-input-source"
+    "External stage input selection is data-driven across file, string, and stdin sources."
+    (host-kit:with-temporary-directory (directory)
+      (let ((input-path (merge-pathnames "external-input.txt" directory)))
+        (host-kit:write-file-string "file input" input-path)
+        (dolist (case (list (list (namestring input-path) nil "file input")
+                            (list nil "string input" "string input")))
+          (destructuring-bind (target input expected) case
+            (multiple-value-bind (stream opened)
+                (nshell.application::%external-process-input-stream target input)
+              (unwind-protect
+                   (expect expected :to-equal (read-line stream))
+                (when opened
+                  (close opened))))))
+        (let ((*standard-input* (make-string-input-stream "standard input")))
+          (multiple-value-bind (stream opened)
+              (nshell.application::%external-process-input-stream nil nil)
+            (expect (eq *standard-input* stream) :to-be-truthy)
+            (expect opened :to-be-null))))))
+
   (it "command-substitution-timeout-defaults-to-nil"
     "Command substitution is unbounded by default, like every other shell.
 Before this change the default was 30, silently capping any `$(...)` at 30

@@ -17,8 +17,7 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
           (push line lines))))
     (values (nreverse lines) has-non-empty)))
 
-(defun %builtin-string-collect (context args)
-  (declare (ignore context))
+(define-builtin %builtin-string-collect (context args) ()
   (let ((allow-empty-p nil)
         (preserve-newlines-p nil)
         (remaining args))
@@ -54,13 +53,11 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
 
 (define-string-line-builtin %builtin-string-upper #'string-upcase)
 
-(defun %builtin-string-join (context args)
-  (declare (ignore context))
+(define-builtin %builtin-string-join (context args) ()
   (if (rest args) (values (format nil "~a~%" (%string-join (rest args) (first args))) 0)
     (%builtin-string-usage)))
 
-(defun %builtin-string-split (context args)
-  (declare (ignore context))
+(define-builtin %builtin-string-split (context args) ()
   (if (rest args) (labels ((split-on (separator string)
                (cond
             ((%string-empty-p separator) (map 'list #'string string))
@@ -109,8 +106,7 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
     (if (< (length remaining) required-args) (%builtin-string-usage)
       (funcall collector quiet-p all-p ignore-case-p remaining))))
 
-(defun %builtin-string-replace (context args)
-  (declare (ignore context))
+(define-builtin %builtin-string-replace (context args) ()
   (%string-pattern-builtin
     args
     +string-replace-flag-option-specs+
@@ -132,8 +128,7 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
               :ignore-case
               ignore-case-p)))))))
 
-(defun %builtin-string-match (context args)
-  (declare (ignore context))
+(define-builtin %builtin-string-match (context args) ()
   (%string-pattern-builtin
     args
     +string-match-flag-option-specs+
@@ -195,8 +190,7 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
     (if (and (< start-index text-length) (>= end-index start-index)) (subseq text start-index end-index)
       "")))
 
-(defun %builtin-string-sub (context args)
-  (declare (ignore context))
+(define-builtin %builtin-string-sub (context args) ()
   (multiple-value-bind (start length end quiet-p remaining error) (%parse-string-sub-options args)
     (when error
       (return-from %builtin-string-sub (values error 1)))
@@ -218,7 +212,7 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
   (lambda (text)
     (string-trim '(#\Space #\Tab #\Newline #\Return) text)))
 
-(defun %builtin-string-dispatch (context args)
+(define-builtin %builtin-string-dispatch (context args) ()
   (let* ((subcommand (first args))
          (spec (%builtin-string-subcommand-spec subcommand))
          (handler (%builtin-string-spec-handler spec)))

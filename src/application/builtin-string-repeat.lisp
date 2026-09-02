@@ -60,8 +60,7 @@
                (unless (or quiet-p (and no-newline-p (null (rest texts))))
                  (write-char #\Newline out))))))
 
-(defun %builtin-string-repeat (context args)
-  (declare (ignore context))
+(define-builtin %builtin-string-repeat (context args) ()
   (multiple-value-bind
         (repeat-count max-length quiet-p no-newline-p remaining error)
       (%parse-string-repeat-options args)

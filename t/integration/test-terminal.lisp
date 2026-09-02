@@ -329,6 +329,24 @@ on the way out, and the session reports success."
         (expect (member call calls) :to-be-truthy)))))
 
 (describe "terminal-size-tests"
+  (it "terminal-width-preserves-a-positive-column-count"
+    (with-temporary-function
+        ('nshell.infrastructure.acl:get-terminal-size (lambda ()
+                                                         (values 24 120)))
+      (expect 120 :to-equal (nshell.presentation::terminal-width))))
+
+  (it "terminal-width-falls-back-for-a-non-positive-column-count"
+    (with-temporary-function
+        ('nshell.infrastructure.acl:get-terminal-size (lambda ()
+                                                         (values 24 0)))
+      (expect 80 :to-equal (nshell.presentation::terminal-width))))
+
+  (it "terminal-width-falls-back-when-size-query-fails"
+    (with-temporary-function
+        ('nshell.infrastructure.acl:get-terminal-size (lambda ()
+                                                         (error "no tty")))
+      (expect 80 :to-equal (nshell.presentation::terminal-width))))
+
   (it "terminal-size-reports-rows-then-columns"
     "GET-TERMINAL-SIZE keeps nshell's (VALUES ROWS COLUMNS) contract on top of
 cl-tty-kit:terminal-size, which returns (VALUES COLUMNS ROWS)."

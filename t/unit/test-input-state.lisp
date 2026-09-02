@@ -1,5 +1,23 @@
 (in-package #:nshell/test)
 
+(describe "key-event-value-tests"
+  (it "constructs decoded events with defaults and structured payloads"
+    (let ((default (nshell.domain.input:make-key-event :char))
+          (event (nshell.domain.input:make-key-event
+                  :mouse #\x 7 '(:button 1))))
+      (expect :char :to-be
+              (nshell.domain.input:key-event-type default))
+      (expect (nshell.domain.input:key-event-data default)
+              :to-be-null)
+      (expect :mouse :to-be
+              (nshell.domain.input:key-event-type event))
+      (expect #\x :to-be
+              (nshell.domain.input:key-event-char event))
+      (expect 7 :to-be
+              (nshell.domain.input:key-event-number event))
+      (expect '(:button 1) :to-equal
+              (nshell.domain.input:key-event-data event)))))
+
 (describe "input-state-tests"
   (it "input-state-constructor-macro-expands-defaults-and-keywords"
     (let ((expansion

@@ -1,6 +1,27 @@
 (in-package #:nshell/test)
 
 (describe "parser-tests"
+  (it "redirect-fd-dup-target-round-trips-domain-fields"
+    "The public redirect value object preserves its explicit fields and default operator."
+    (let ((explicit
+            (nshell.domain.parsing:make-redirect-fd-dup-target 2 1 :input))
+          (default
+            (nshell.domain.parsing:make-redirect-fd-dup-target 2 :close)))
+      (expect (nshell.domain.parsing:redirect-fd-dup-target-p explicit)
+              :to-be-truthy)
+      (expect 2 :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-source explicit))
+      (expect 1 :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-target explicit))
+      (expect :input :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-operator explicit))
+      (expect (nshell.domain.parsing:redirect-fd-dup-target-p default)
+              :to-be-truthy)
+      (expect :close :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-target default))
+      (expect :output :to-be
+              (nshell.domain.parsing:redirect-fd-dup-target-operator default))))
+
   (it "parse-fd-redirects-tokenize-and-need-no-spurious-target"
     "fd-prefixed and combined redirects parse cleanly; 2>&1 needs no file target."
     (expect (nshell.domain.parsing::%redirect-targetless-p "2>&1") :to-be-truthy)

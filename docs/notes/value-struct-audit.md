@@ -86,7 +86,7 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%source-function-definition-result` | `application/builtin-source-reader.lisp` | mutable — writable slot(s): remaining-lines |
 | `%source-lines-step-result` | `application/builtin-source-reader.lisp` | mutable — writable slot(s): remaining-lines |
 | `%structural-diagnostics` | `domain/parsing/parser.lisp` | mutable — writable slot(s): incomplete-p |
-| `%structural-diagnostics-accumulator` | `domain/parsing/parser.lisp` | mutable — writable slot(s): incomplete-p, diagnostics |
+| `%structural-diagnostics-accumulator` | `domain/parsing/parser.lisp` | immutable value; diagnostic accumulation returns fresh state |
 | `%structural-diagnostics-input` | `domain/parsing/parser.lisp` | mutable — writable slot(s): commands |
 | `%token-extent` | `domain/parsing/tokenizer-data.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%token-reduction-argument` | `domain/parsing/parser-reduction.lisp` | mutable — writable slot(s): value |

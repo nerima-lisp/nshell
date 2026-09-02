@@ -142,6 +142,18 @@
                  (nshell.application::%builtin-wait context '("4242")))))
       (expect (list job-id) :to-equal calls)))
 
+  (it "resolves implicit and unresolved wait selectors through the monitor"
+    "Wait uses the monitor's current job for NIL and preserves unknown designators."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "current"))))
+      (expect job-id :to-equal
+              (nshell.application::%resolve-wait-job-id monitor nil))
+      (expect nil :to-equal
+              (nshell.application::%resolve-wait-job-id monitor 99999))
+      (expect nil :to-equal
+              (nshell.application::%resolve-wait-job-id monitor "not-a-job"))))
+
 (describe "builtin-job-contract-tests"
 
   (it "keeps job builtins consistent when the monitor is empty"

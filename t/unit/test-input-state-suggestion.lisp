@@ -170,6 +170,34 @@
                        :suggestion nil)))
       (is-input-state new-state :suggestion nil)))
 
+  (it "input-state-copy-clear-overrides-reset-optional-session-values"
+    (let* ((state (input-state
+                   :buffer "git status"
+                   :cursor-pos 10
+                   :completion-index 1
+                   :completion-base-buffer "git st"
+                   :completion-base-cursor 6
+                   :last-candidates '("status")
+                   :search-query "git"
+                   :search-original-buffer "git status"
+                   :search-original-cursor 10
+                   :search-index 2
+                   :kill-ring '("git status")))
+           (new-state (nshell.presentation::copy-input-state-with
+                       state
+                       :completion-index -1
+                       :search-query :clear
+                       :search-original-buffer :clear
+                       :kill-ring :clear)))
+      (is-input-state new-state
+                      :completion-index -1
+                      :completion-base-buffer nil
+                      :completion-base-cursor nil
+                      :search-query ""
+                      :search-original-buffer ""
+                      :kill-ring nil)
+      (expect 2 :to-equal (nshell.presentation:input-state-search-index new-state))))
+
   (it "input-state-normalize-clamps-cursor-and-keeps-other-slots"
     (let ((state (input-state
                   :buffer "git"

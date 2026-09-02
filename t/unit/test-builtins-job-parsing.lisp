@@ -45,6 +45,7 @@
 
   (it "reports malformed kill options without partial targets"
     (dolist (args '( ("-s")
+                     ("--signal")
                      ("-s" "unknown")
                      ("--signal=unknown")
                      ("--unknown")))
@@ -54,6 +55,14 @@
         (expect targets :to-be-null)
         (expect list-signals-p :to-be-null)
         (expect error :to-be-truthy))))
+
+  (it "keeps signal listing independent from following targets"
+    (multiple-value-bind (signal targets list-signals-p error)
+        (nshell.application::%parse-kill-arguments '("-l" "TERM"))
+      (expect signal :to-be-truthy)
+      (expect '("TERM") :to-equal targets)
+      (expect list-signals-p :to-be-truthy)
+      (expect error :to-be-null)))
 
   (it "recognizes list-signals and explicit option termination"
     (multiple-value-bind (signal targets list-signals-p error)
@@ -152,6 +161,12 @@
                 (multiple-value-list
                  (nshell.application::%builtin-wait context '("4242")))))
       (expect (list job-id) :to-equal calls)))
+
+  (it "rejects non-positive wait process selectors before process lookup"
+    (expect (nshell.application::%parse-positive-integer "0")
+            :to-be-null)
+    (expect (nshell.application::%parse-positive-integer "-1")
+            :to-be-null))
 
   (it "resolves implicit and unresolved wait selectors through the monitor"
     "Wait uses the monitor's current job for NIL and preserves unknown designators."

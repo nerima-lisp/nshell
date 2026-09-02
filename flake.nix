@@ -591,25 +591,7 @@
             meta = {
               description = "Run the complete nshell test suite";
             };
-            program = "${
-              ctx.pkgs.writeTextFile {
-                name = "nshell-test";
-                executable = true;
-                destination = "/bin/nshell-test";
-                text =
-                  builtins.replaceStrings
-                    [
-                      (builtins.fromJSON ''"\u0024{CL_SOURCE_REGISTRY:+:\u0024CL_SOURCE_REGISTRY}"'')
-                      ":/nix/store/"
-                    ]
-                    [
-                      ""
-                      "//:/nix/store/"
-                    ]
-                    (builtins.readFile ctx.generated.apps.test.program)
-                  + "\n";
-              }
-            }/bin/nshell-test";
+            program = ctx.generated.apps.test.program;
           };
 
           # The generated shell, plus the aliases this repository's loop is

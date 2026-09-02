@@ -41,29 +41,23 @@
 
 (defparameter +source-definition-end-keyword+ "end")
 
-(defstruct (%source-function-consumption
-            (:constructor %make-source-function-consumption
-                (closed-p remaining-lines depth body-lines)))
-  (closed-p nil :type boolean :read-only t)
-  (remaining-lines nil :type list :read-only t)
-  (depth 0 :type integer :read-only t)
-  (body-lines nil :type list :read-only t))
+(define-value-struct %source-function-consumption
+    ((closed-p nil :type boolean)
+     (remaining-lines nil :type list)
+     (depth 0 :type integer)
+     (body-lines nil :type list)))
 
-(defstruct (%source-function-definition-result
-            (:constructor %make-source-function-definition-result
-                (remaining-lines output-chunk exit-code stop-p)))
-  (remaining-lines nil :type list :read-only t)
-  (output-chunk nil :type (or null string) :read-only t)
-  (exit-code 0 :type integer :read-only t)
-  (stop-p nil :type boolean :read-only t))
+(define-value-struct %source-function-definition-result
+    ((remaining-lines nil :type list)
+     (output-chunk nil :type (or null string))
+     (exit-code 0 :type integer)
+     (stop-p nil :type boolean)))
 
-(defstruct (%source-lines-step-result
-            (:constructor %make-source-lines-step-result
-                (remaining-lines output-chunks exit-code stop-p)))
-  (remaining-lines nil :type list :read-only t)
-  (output-chunks nil :type list :read-only t)
-  (exit-code 0 :type integer :read-only t)
-  (stop-p nil :type boolean :read-only t))
+(define-value-struct %source-lines-step-result
+    ((remaining-lines nil :type list)
+     (output-chunks nil :type list)
+     (exit-code 0 :type integer)
+     (stop-p nil :type boolean)))
 
 (defun %source-line-segments (line)
   (let ((tokens (nshell.domain.parsing:tokenization-result-tokens

@@ -64,6 +64,17 @@
   stdout-endpoint
   stderr-endpoint)
 
+(defstruct (redirect-output-destinations
+            (:constructor %make-redirect-output-destinations
+                (stdout-target stdout-mode stderr-target stderr-mode
+                 &optional (stdout-endpoint :stdout) (stderr-endpoint :stderr))))
+  stdout-target
+  stdout-mode
+  stderr-target
+  stderr-mode
+  stdout-endpoint
+  stderr-endpoint)
+
 (defparameter +redirect-kind-fact-specs+ nil)
 
 (defmacro define-redirect-data (specs fd-dup-kinds kind-facts)

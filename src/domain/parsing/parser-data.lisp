@@ -164,17 +164,6 @@
   (%make-redirect-output-destination-state nil :supersede nil :supersede
                                            :stdout :stderr))
 
-(defstruct (redirect-output-destinations
-            (:constructor %make-redirect-output-destinations
-                (stdout-target stdout-mode stderr-target stderr-mode
-                 &optional (stdout-endpoint :stdout) (stderr-endpoint :stderr))))
-  stdout-target
-  stdout-mode
-  stderr-target
-  stderr-mode
-  stdout-endpoint
-  stderr-endpoint)
-
 (defun %redirect-output-destinations-from-state (state)
   (%make-redirect-output-destinations
    (%redirect-output-destination-state-stdout-target state)

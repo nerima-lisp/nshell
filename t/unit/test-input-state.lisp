@@ -19,7 +19,7 @@
               (nshell.domain.input:key-event-data event))))
 
   (it "rejects non-character key payloads"
-    (let ((invalid-value (copy-seq "x")))
+    (let ((invalid-value (read-from-string "\"x\"")))
       (expect (lambda ()
                 (nshell.domain.input:make-key-event :char invalid-value))
               :to-throw 'type-error))))

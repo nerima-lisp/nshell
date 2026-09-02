@@ -58,7 +58,7 @@
   (declare (ignore args))
   (values (format nil "~d~%" (history-kit:history-count history)) 0))
 
-(defun %builtin-history (context args)
+(define-builtin %builtin-history (context args) ()
   (let ((history (shell-context-history context)))
     (if args
         (let ((spec (cdr (assoc (first args)

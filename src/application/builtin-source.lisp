@@ -1,6 +1,6 @@
 (in-package #:nshell.application)
 
-(defun %builtin-source (context args)
+(define-builtin %builtin-source (context args) ()
   (if args
       (handler-case
           (with-open-file (stream (first args) :direction :input)

@@ -90,7 +90,7 @@
 (defun %invert-status-code (code)
   (if (zerop (or code 0)) 1 0))
 
-(defun %builtin-not (context args)
+(define-builtin %builtin-not (context args) ()
   (if args
       (let* ((command (first args))
              (command-args (rest args)))

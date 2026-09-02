@@ -66,7 +66,7 @@
     (t
      (values (format nil "test: unknown operator: ~a~%" op) 2))))
 
-(defun %builtin-test (context args)
+(define-builtin %builtin-test (context args) ()
   (case (length args)
     (0 (values nil 1))
     (1 (values nil (if (string= (first args) "") 1 0)))
@@ -74,7 +74,7 @@
     (3 (%test-three-argument-result context (first args) (second args) (third args)))
     (otherwise (values nil 1))))
 
-(defun %builtin-bracket (context args)
+(define-builtin %builtin-bracket (context args) ()
   (if (and args (string= (car (last args)) "]"))
       (%builtin-test context (butlast args))
       (values (format nil "[: missing ]~%") 2)))

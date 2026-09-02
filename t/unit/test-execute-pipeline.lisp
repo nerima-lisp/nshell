@@ -332,28 +332,33 @@ now decides whether this default is even consulted."
 
   (it "external-redirect-plan-projects-domain-redirects"
     "External execution derives stream topology and file destinations from domain redirects."
-    (flet ((field (redirects accessor)
-             (funcall accessor
-                      (nshell.application::%external-process-redirect-plan-from
-                       redirects))))
+    (macrolet ((expect-plan-field (redirects accessor matcher expected)
+                 `(expect ,expected ,matcher
+                          (funcall ,accessor
+                                   (nshell.application::%external-process-redirect-plan-from
+                                    ,redirects)))))
       (expect :stdout
               :to-be
-              (field nil
-                     #'nshell.application::%external-process-redirect-plan-stdout-endpoint))
+              (funcall #'nshell.application::%external-process-redirect-plan-stdout-endpoint
+                       (nshell.application::%external-process-redirect-plan-from nil)))
       (expect :stderr
               :to-be
-              (field nil
-                     #'nshell.application::%external-process-redirect-plan-stderr-endpoint))
-      (expect (field nil
-                     #'nshell.application::%external-process-redirect-plan-merge-stderr-p)
+              (funcall #'nshell.application::%external-process-redirect-plan-stderr-endpoint
+                       (nshell.application::%external-process-redirect-plan-from nil)))
+      (expect (funcall #'nshell.application::%external-process-redirect-plan-merge-stderr-p
+                       (nshell.application::%external-process-redirect-plan-from nil))
               :to-be-truthy)
       (let ((separate
               (nshell.application::%external-process-redirect-plan-from
                '((:> . "out.log") (:2> . "err.log")))))
-        (expect "out.log" :to-equal
-                (nshell.application::%external-process-redirect-plan-stdout-target separate))
-        (expect "err.log" :to-equal
-                (nshell.application::%external-process-redirect-plan-stderr-target separate))
+        (expect-plan-field '((:> . "out.log") (:2> . "err.log"))
+                           #'nshell.application::%external-process-redirect-plan-stdout-target
+                           :to-equal
+                           "out.log")
+        (expect-plan-field '((:> . "out.log") (:2> . "err.log"))
+                           #'nshell.application::%external-process-redirect-plan-stderr-target
+                           :to-equal
+                           "err.log")
         (expect (nshell.application::%external-process-redirect-plan-merge-stderr-p separate)
                 :to-be-falsy))
       (let ((merged

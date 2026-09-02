@@ -25,6 +25,13 @@
       (expect (fboundp 'nshell.domain.input::%make-key-event) :to-be-falsy)
       (expect (fboundp 'nshell.domain.input::copy-key-event) :to-be-falsy)))
 
+  (it "key-event-constructor-applies-data-defaults"
+    (let ((event (nshell.domain.input:make-key-event :char nil)))
+      (expect :char :to-be (nshell.domain.input:key-event-type event))
+      (expect nil :to-be (nshell.domain.input:key-event-char event))
+      (expect nil :to-be (nshell.domain.input:key-event-number event))
+      (expect nil :to-be (nshell.domain.input:key-event-data event))))
+
   (it "key-event-preserves-structured-payload"
     (let ((event (nshell.domain.input:make-key-event
                   :mouse nil 7 '(:button 1 :shift-p t))))

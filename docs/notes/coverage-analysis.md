@@ -67,9 +67,11 @@ the minimum/target fields together in release verification.
 
 ## Latest local measurement
 
-The latest local run passed the complete selected suite, while the 100% target
-remained unmet. Do not copy its counts into documentation: the source set and
-instrumentation output change as the implementation evolves. Read the
+The latest ordinary run passed the complete suite, while the latest instrumented
+runs exposed intermittent failures in external-process redirection tests. The
+100% target remains unmet. Do not copy individual counts into documentation:
+the source set and instrumentation output change as the implementation evolves.
+Read the
 machine-readable `coverage-summary.json` produced by the command below and
 verify the selected-test, error, minimum, and target fields together.
 

@@ -217,6 +217,7 @@
    (:file "presentation/input-state-kill-yank")
    (:file "presentation/input-state-history-search")
    (:file "presentation/input-state-dispatch-data")
+   (:file "presentation/input-state-dispatch-mouse")
    (:file "presentation/input-state-dispatch")
 	   (:file "presentation/input-state-vi-data")
 	   (:file "presentation/input-state-vi")

@@ -39,6 +39,18 @@
             (nshell.infrastructure.acl::%check-errno nil "failed syscall"))
             :to-throw 'error))
 
+  (it "checked-syscall-macro-returns-result-after-body"
+    "The syscall boundary macro keeps the result available after successful work."
+    (let ((body-result nil))
+      (flet ((nshell.infrastructure.acl::%syscall-failed-p (result)
+               (declare (ignore result))
+               nil))
+        (expect 7 :to-equal
+                (nshell.infrastructure.acl::with-checked-syscall
+                    ("test-syscall" 7)
+                  (setf body-result :ran))))
+      (expect :ran :to-equal body-result)))
+
   (it "pty-child-resource-helpers-are-nil-safe"
     "Child-side cleanup helpers tolerate absent or already-invalid resources."
     #+(or darwin linux)

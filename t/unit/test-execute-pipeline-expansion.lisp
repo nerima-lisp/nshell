@@ -128,6 +128,33 @@
                 (nshell.application::%expand-command-substitutions
                  context
                  "a$(printf value)b")))))
+  (it "selects-command-substitution-modes-explicitly"
+    (let ((context (make-test-shell-context)))
+      (with-temporary-functions
+          (('nshell.application::%execute-command-substitution-fields
+            (lambda (ignored-context text)
+              (declare (ignore ignored-context))
+              (when (string= text "printf posix")
+                (list "one" "two"))))
+           ('nshell.application::%execute-command-substitution-output
+            (lambda (ignored-context text)
+              (declare (ignore ignored-context))
+              (when (string= text "printf posix")
+                "one\ntwo\n"))))
+        (expect (list "(printf bare)")
+                :to-equal
+                (nshell.application::%expand-command-substitutions
+                 context
+                 "(printf bare)"
+                 nil
+                 nil))
+        (expect (list "one\ntwo\n")
+                :to-equal
+                (nshell.application::%expand-command-substitutions
+                 context
+                 "$(printf posix)"
+                 t
+                 nil)))))
   (it "classifies-here-document-escapes"
     (dolist (case (list
                    (list (format nil "\\~c" #\Newline) nil 2)

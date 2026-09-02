@@ -377,7 +377,7 @@
           pkgs = ctx.pkgs;
           delivery = deliveryFor ctx;
         in
-        if !pkgs.stdenv.isLinux then
+        if !pkgs.stdenv.hostPlatform.isLinux then
           delivery
         else
           let

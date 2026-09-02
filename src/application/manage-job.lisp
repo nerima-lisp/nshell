@@ -33,6 +33,27 @@
 (defun %continue-process-group (pgid)
   (nshell.infrastructure.acl:kill-process (- pgid) :sigcont))
 
+(defmacro %with-terminal-foreground-pgroup (pgid &body body)
+  (let ((previous (gensym "PREVIOUS-FOREGROUND-PGID-")))
+    `(let ((,previous
+             (ignore-errors
+               (funcall
+                (symbol-function
+                 'nshell.infrastructure.acl:get-foreground-pgroup)))))
+       (unwind-protect
+            (progn
+              (ignore-errors
+                (funcall
+                 (symbol-function
+                  'nshell.infrastructure.acl:set-foreground-pgroup)
+                 ,pgid))
+              ,@body)
+         (ignore-errors
+           (funcall
+            (symbol-function
+             'nshell.infrastructure.acl:set-foreground-pgroup)
+            (or ,previous (%shell-process-group-id))))))))
+
 (defun fg (job-id &optional (job-monitor *job-monitor*))
   "Move JOB-ID to the foreground, wait for it, then restore the shell PGID."
   (let ((job (%require-job job-id job-monitor)))
@@ -47,7 +68,8 @@
                  (nshell.domain.job-control:foreground-job job-monitor job-id)
                  (%with-terminal-foreground-pgroup
                    pgid
-                   (lambda () (%wait-job-pgid job job-id job-monitor))))
+                   (funcall (symbol-function '%wait-job-pgid)
+                            job job-id job-monitor)))
             (setf *foreground-job-pgid* nil)
             (%set-acl-foreground-pgid nil)))
         job))))
@@ -111,15 +133,6 @@
     (:created "Created")
     (otherwise "Unknown")))
 
-(defun %with-terminal-foreground-pgroup (pgid thunk)
-  (let ((previous (ignore-errors (nshell.infrastructure.acl:get-foreground-pgroup))))
-    (unwind-protect
-         (progn
-           (ignore-errors (nshell.infrastructure.acl:set-foreground-pgroup pgid))
-           (funcall thunk))
-      (ignore-errors
-        (nshell.infrastructure.acl:set-foreground-pgroup
-         (or previous (%shell-process-group-id)))))))
 
 (defun %job-wait-event-from-observation (pid state detail)
   (case state

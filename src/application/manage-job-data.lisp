@@ -10,7 +10,7 @@
      (command ""))
   :constructor %allocate-job-listing)
 
-(defstruct (job-wait-event (:constructor %make-job-wait-event (pid state status-code)))
-  pid
-  state
-  status-code)
+(define-value-struct job-wait-event
+    ((pid nil)
+     (state nil)
+     (status-code nil)))

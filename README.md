@@ -86,6 +86,20 @@ nix build .#releaseBundle
 perl scripts/verify-release-bundle.pl result
 ```
 
+To measure executable-source coverage, keep the report outside the checkout
+and run the same hermetic test loader used by CI:
+
+```sh
+NSHELL_COVERAGE_DIR="$(mktemp -d)" \
+  nix develop -c sbcl --script scripts/coverage.lisp
+```
+
+The command writes `coverage-summary.json` and `coverage-files.json` to the
+selected directory. Declarative data and package-definition forms are kept
+out of the executable expression denominator; the report still lists every
+source file so uncovered behavior is visible. The configured minimum is a
+gate, while the target remains 100%.
+
 Tests live in `t/` and run under
 [cl-weave](https://github.com/nerima-lisp/cl-weave), the org's test framework.
 Cases needing a real PTY, `stty`, or external binaries cannot run in the Nix

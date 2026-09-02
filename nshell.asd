@@ -400,6 +400,7 @@
    (:file "unit/test-builtins-test")
    (:file "unit/test-builtins-core")
    (:file "unit/test-terminal-detection")
+   (:file "unit/test-terminal-size")
    (:file "unit/test-builtins-core-io")
    (:file "unit/test-builtins-counting")
    (:file "unit/test-builtins-core-string")

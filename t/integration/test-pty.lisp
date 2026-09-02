@@ -87,6 +87,19 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux"))
 
+  (it "pty-exec-vector-scope-cleans-up-after-body"
+    "The child exec vector scope exposes both vectors and always returns the body result."
+    #+(or darwin linux)
+    (expect :completed :to-equal
+            (nshell.infrastructure.acl::%with-pty-exec-vectors
+                (argv envp "program" '("--flag"))
+              (expect "program" :to-equal (sb-alien:deref argv 0))
+              (expect nil :to-be (sb-alien:deref argv 2))
+              (expect (sb-alien:deref envp 0) :to-be-truthy)
+              :completed))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
   (it "pty-ready-pipe-transfers-status-byte"
     "The readiness protocol transfers exactly one setup status byte."
     #+(or darwin linux)

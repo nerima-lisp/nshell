@@ -11,7 +11,10 @@
 
 (require :asdf)
 
-(let* ((root (truename #P"./"))
+(let* ((script-directory
+         (uiop:pathname-directory-pathname
+          (or *load-truename* *load-pathname*)))
+       (root (uiop:pathname-parent-directory-pathname script-directory))
        (parent (uiop:pathname-parent-directory-pathname root)))
   (asdf:initialize-source-registry
    (if (uiop:getenv "CL_SOURCE_REGISTRY")
@@ -22,11 +25,7 @@
          (:directory ,root)
          (:tree ,parent)
          :inherit-configuration)))
-  (load
-   (merge-pathnames
-    #P"asdf-runtime.lisp"
-    (uiop:pathname-directory-pathname
-     (or *load-truename* *load-pathname*))))
+  (load (merge-pathnames #P"asdf-runtime.lisp" script-directory))
   (nshell-configure-writable-asdf-output)
   (setf asdf:*compile-file-warnings-behaviour* :warn
         asdf:*compile-file-failure-behaviour* :warn)

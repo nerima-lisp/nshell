@@ -5,11 +5,9 @@
          (ftype (function (t) t)
                 group-control-flow))
 
-(defstruct (%control-flow-boundary-consumption
-            (:constructor %make-control-flow-boundary-consumption
-                (separator rest-separators)))
-  (separator nil :read-only t)
-  (rest-separators nil :type list :read-only t))
+(define-value-struct %control-flow-boundary-consumption
+    ((separator nil)
+     (rest-separators nil :type list)))
 
 (defun %control-flow-boundary-consumption-from-consumed-commands
     (commands rest separators)
@@ -23,13 +21,11 @@
                    separator-cursor (rest separator-cursor)))
     (%make-control-flow-boundary-consumption boundary separator-cursor)))
 
-(defstruct (%control-flow-sequence-step
-            (:constructor %make-control-flow-sequence-step
-                (grouped-command boundary-separator rest-commands rest-separators)))
-  (grouped-command nil :read-only t)
-  (boundary-separator nil :read-only t)
-  (rest-commands nil :type list :read-only t)
-  (rest-separators nil :type list :read-only t))
+(define-value-struct %control-flow-sequence-step
+    ((grouped-command nil)
+     (boundary-separator nil)
+     (rest-commands nil :type list)
+     (rest-separators nil :type list)))
 
 (defun %control-flow-sequence-step-result (commands separators)
   (let* ((grouping (%group-control-flow-next commands))
@@ -43,11 +39,9 @@
        rest
        (%control-flow-boundary-consumption-rest-separators consumption)))))
 
-(defstruct (%control-flow-sequence
-            (:constructor %make-control-flow-sequence
-                (commands separators)))
-  (commands nil :type list :read-only t)
-  (separators nil :type list :read-only t))
+(define-value-struct %control-flow-sequence
+    ((commands nil :type list)
+     (separators nil :type list)))
 
 (defun %control-flow-sequence-from-node (node)
   (%make-control-flow-sequence
@@ -91,10 +85,9 @@
      (nreverse grouped-commands)
      (nreverse grouped-separators))))
 
-(defstruct (%control-flow-grouper-route
-            (:constructor %make-control-flow-grouper-route (keyword grouper)))
-  (keyword nil :type (or null string) :read-only t)
-  (grouper nil :read-only t))
+(define-value-struct %control-flow-grouper-route
+    ((keyword nil :type (or null string))
+     (grouper nil)))
 
 (defun %control-flow-grouper-route (keyword)
   (let ((entry (assoc keyword +control-flow-grouper-specs+ :test #'string=)))

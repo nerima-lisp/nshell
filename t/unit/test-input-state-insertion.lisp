@@ -24,6 +24,15 @@
       (expect (fboundp 'nshell.domain.input::%make-key-event) :to-be-truthy)
       (expect (fboundp 'nshell.domain.input::copy-key-event) :to-be-falsy)))
 
+  (it "key-event-preserves-structured-payload"
+    (let ((event (nshell.domain.input:make-key-event
+                  :mouse nil 7 '(:button 1 :shift-p t))))
+      (expect :mouse :to-be (nshell.domain.input:key-event-type event))
+      (expect 7 :to-equal (nshell.domain.input:key-event-number event))
+      (expect '(:button 1 :shift-p t)
+              :to-equal
+              (nshell.domain.input:key-event-data event))))
+
   (it "input-state-inserting-unicode-char-updates-buffer"
     (let ((state (input-state :buffer "xy" :cursor-pos 1))
           (ch (char "あ" 0)))

@@ -1,15 +1,5 @@
 (in-package #:nshell.application)
 
-(defvar *job-monitor* (nshell.domain.job-control:make-job-monitor))
-(defvar *shell-pgid* nil)
-(defvar *foreground-job-pgid* nil)
-
-(define-value-struct job-listing
-    ((id 0)
-     (status "")
-     (command ""))
-  :constructor %allocate-job-listing)
-
 (defun make-job-listing (id status command)
   (unless (and (integerp id) (plusp id))
     (error "Job listing id must be a positive integer: ~s" id))
@@ -18,11 +8,6 @@
   (unless (stringp command)
     (error "Job listing command must be a string: ~s" command))
   (%allocate-job-listing id status command))
-
-(defstruct (job-wait-event (:constructor %make-job-wait-event (pid state status-code)))
-  pid
-  state
-  status-code)
 
 (defun %set-acl-foreground-pgid (pgid)
   (let ((symbol (find-symbol "*FOREGROUND-PGID*" "NSHELL.INFRASTRUCTURE.ACL")))

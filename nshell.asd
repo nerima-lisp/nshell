@@ -139,6 +139,7 @@
 	   (:file "application/execute-pipeline-stage")
 	   (:file "application/execute-pipeline")
 	   (:file "application/execute-pipeline-control")
+   (:file "application/manage-job-data")
    (:file "application/manage-job")
    (:file "application/pipeline-diagram")
    (:file "application/builtin-spec-data"

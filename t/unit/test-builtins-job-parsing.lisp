@@ -114,15 +114,26 @@
     "Completed jobs are excluded from the implicit wait set."
     (let* ((context (make-test-builtins-context))
            (monitor (nshell.domain.job-control:make-job-monitor))
+           (active-id
+             (nshell.domain.job-control:monitor-add-job
+              monitor (make-test-job 0 "active")))
            (completed-id
              (nshell.domain.job-control:monitor-add-job
               monitor (make-test-job 0 "done"))))
       (setf (nshell.application:shell-context-job-monitor context) monitor)
       (nshell.domain.job-control:complete-job monitor completed-id)
-      (expect '(nil 0)
-              :to-equal
-              (multiple-value-list
-               (nshell.application::%builtin-wait context nil)))))
+      (let ((calls nil))
+        (with-temporary-function
+            ('nshell.application:wait-for-job
+             (lambda (selected-id process-registry selected-monitor)
+               (declare (ignore process-registry selected-monitor))
+               (push selected-id calls)
+               (values t 0)))
+          (expect '(nil 0)
+                  :to-equal
+                  (multiple-value-list
+                   (nshell.application::%builtin-wait context nil))))
+        (expect (list active-id) :to-equal calls))))
 
   (it "resolves wait selectors by process id before job specifications"
     (let* ((context (make-test-builtins-context))

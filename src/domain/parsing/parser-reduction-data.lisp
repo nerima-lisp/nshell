@@ -24,24 +24,16 @@
   pending-sep-token
   (errors '() :type list))
 
-(defstruct (%token-reduction-result
-             (:constructor %make-token-reduction-result (commands errors))
-             (:copier nil))
-  (commands '() :type list :read-only t)
-  (errors '() :type list :read-only t))
+(define-value-struct %token-reduction-result
+  ((commands '() :type list)
+   (errors '() :type list)))
 
-(defstruct (%token-reduction-argument
-            (:constructor %make-token-reduction-argument
-                (value quote-style syntactic-p fragments))
-            (:copier nil))
-  (value "" :type string :read-only t)
-  (quote-style nil :read-only t)
-  (syntactic-p nil :type boolean :read-only t)
-  (fragments nil :type list :read-only t))
+(define-value-struct %token-reduction-argument
+  ((value "" :type string)
+   (quote-style nil)
+   (syntactic-p nil :type boolean)
+   (fragments nil :type list)))
 
-(defstruct (%token-reduction-diagnostic-policy
-            (:constructor %make-token-reduction-diagnostic-policy
-                (kind message))
-            (:copier nil))
-  (kind nil :type keyword :read-only t)
-  (message "" :type string :read-only t))
+(define-value-struct %token-reduction-diagnostic-policy
+  ((kind nil :type keyword)
+   (message "" :type string)))

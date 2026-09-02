@@ -16,7 +16,12 @@
       (expect 7 :to-be
               (nshell.domain.input:key-event-number event))
       (expect '(:button 1) :to-equal
-              (nshell.domain.input:key-event-data event)))))
+              (nshell.domain.input:key-event-data event))))
+
+  (it "rejects non-character key payloads"
+    (expect (lambda ()
+              (nshell.domain.input:make-key-event :char "x"))
+            :to-throw 'type-error)))
 
 (describe "input-state-tests"
   (it "input-state-constructor-macro-expands-defaults-and-keywords"

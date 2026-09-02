@@ -35,17 +35,17 @@
   (values (history-search-transition-state transition)
           (history-search-transition-output transition)))
 
-(defun make-history-search-query-edit (text)
-  (%make-history-search-edit
-   (%make-history-search-edit-plan :kind :query :text text)))
+(defmacro define-history-search-edit (name lambda-list kind &body initargs)
+  `(defun ,name ,lambda-list
+     (%make-history-search-edit
+      (%make-history-search-edit-plan :kind ,kind ,@initargs))))
 
-(defun make-history-search-selection-edit (delta)
-  (%make-history-search-edit
-   (%make-history-search-edit-plan :kind :selection :delta delta)))
-
-(defun make-history-search-backspace-edit ()
-  (%make-history-search-edit
-   (%make-history-search-edit-plan :kind :backspace)))
+(define-history-search-edit make-history-search-query-edit
+    (text) :query :text text)
+(define-history-search-edit make-history-search-selection-edit
+    (delta) :selection :delta delta)
+(define-history-search-edit make-history-search-backspace-edit
+    () :backspace :delta 0)
 
 (defun history-search-query-insertion-for-text (query text)
   (let ((remaining (- +max-input-buffer-size+ (length query))))

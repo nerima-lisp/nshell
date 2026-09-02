@@ -31,12 +31,14 @@
 (defun %block-opening-keyword-p (keyword)
   (not (null (member keyword +control-flow-block-keywords+ :test #'string=))))
 
-(defstruct (%control-flow-header-args
-            (:constructor %make-control-flow-header-args (first rest all))
-            (:copier nil))
-  (first nil :read-only t)
-  (rest nil :type list :read-only t)
-  (all nil :type list :read-only t))
+(define-value-struct %control-flow-header-args-value
+    ((first nil)
+     (rest nil :type list)
+     (all nil :type list))
+  :accessor-prefix %control-flow-header-args
+  :constructor %make-control-flow-header-args
+  :predicate %control-flow-header-args-p
+  :public-accessors nil)
 
 (defun %control-flow-header-args (header)
   (let ((args (and (command-node-p header) (command-node-args header))))
@@ -96,12 +98,13 @@
     (cons (%make-control-flow-frame (control-flow-frame-keyword frame) t)
           (rest stack))))
 
-(defstruct (%control-flow-stack-transition
-            (:constructor %make-control-flow-stack-transition
-                (stack unexpected-keyword))
-            (:copier nil))
-  (stack nil :type list :read-only t)
-  (unexpected-keyword nil :read-only t))
+(define-value-struct %control-flow-stack-transition-value
+    ((stack nil :type list)
+     (unexpected-keyword nil))
+  :accessor-prefix %control-flow-stack-transition
+  :constructor %make-control-flow-stack-transition
+  :predicate %control-flow-stack-transition-p
+  :public-accessors nil)
 
 (defun %control-flow-stack-transition (stack cmd)
   (let ((keyword (%command-keyword cmd)))
@@ -140,17 +143,21 @@
                    (%control-flow-stack-transition-stack transition)))
         finally (return (not (null stack)))))
 
-(defstruct (%control-flow-diagnostic-span
-            (:constructor %make-control-flow-diagnostic-span (start end))
-            (:copier nil))
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t))
+(define-value-struct %control-flow-diagnostic-span-value
+    ((start 0 :type integer)
+     (end 0 :type integer))
+  :accessor-prefix %control-flow-diagnostic-span
+  :constructor %make-control-flow-diagnostic-span
+  :predicate %control-flow-diagnostic-span-p
+  :public-accessors nil)
 
-(defstruct (%control-flow-node-span
-            (:constructor %make-control-flow-node-span (start end))
-            (:copier nil))
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t))
+(define-value-struct %control-flow-node-span-value
+    ((start 0 :type integer)
+     (end 0 :type integer))
+  :accessor-prefix %control-flow-node-span
+  :constructor %make-control-flow-node-span
+  :predicate %control-flow-node-span-p
+  :public-accessors nil)
 
 (defun %control-flow-node-span-from-raw-span (span)
   (when (and (consp span) (consp (rest span)))

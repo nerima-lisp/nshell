@@ -8,14 +8,14 @@
   :public-accessors nil
   :constructor %make-completion-help-command-facts)
 
-(defstruct (%completion-help-scan-state
-            (:constructor %make-completion-help-scan-state ())
-            (:conc-name %completion-help-scan-state-))
-  (subcommands nil :type list)
-  (flags nil :type list)
-  (option-values nil :type list)
-  (option-value-kinds nil :type list)
-  (collecting-subcommands-p nil :type boolean))
+(define-value-struct %completion-help-scan-state
+  ((subcommands nil :type list)
+   (flags nil :type list)
+   (option-values nil :type list)
+   (option-value-kinds nil :type list)
+   (collecting-subcommands-p nil :type boolean))
+  :public-accessors nil
+  :constructor %make-completion-help-scan-state)
 
 (define-value-struct %completion-help-line-facts
   ((kind :other :type (member :heading :blank :subcommand :other :stop-subcommands))

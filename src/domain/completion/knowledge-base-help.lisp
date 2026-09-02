@@ -187,34 +187,73 @@ values -- rather than a nested bail-out cascade."
 (defun %completion-help-note-line-kind (state kind facts)
   (ecase kind
     (:heading
-     (setf (%completion-help-scan-state-collecting-subcommands-p state) t))
+     (%make-completion-help-scan-state
+      (%completion-help-scan-state-subcommands state)
+      (%completion-help-scan-state-flags state)
+      (%completion-help-scan-state-option-values state)
+      (%completion-help-scan-state-option-value-kinds state)
+      t))
     (:blank
-     (setf (%completion-help-scan-state-collecting-subcommands-p state) nil))
+     (%make-completion-help-scan-state
+      (%completion-help-scan-state-subcommands state)
+      (%completion-help-scan-state-flags state)
+      (%completion-help-scan-state-option-values state)
+      (%completion-help-scan-state-option-value-kinds state)
+      nil))
     (:subcommand
-     (push (%completion-help-line-facts-subcommand-name facts)
-           (%completion-help-scan-state-subcommands state)))
+     (%make-completion-help-scan-state
+      (cons (%completion-help-line-facts-subcommand-name facts)
+            (%completion-help-scan-state-subcommands state))
+      (%completion-help-scan-state-flags state)
+      (%completion-help-scan-state-option-values state)
+      (%completion-help-scan-state-option-value-kinds state)
+      (%completion-help-scan-state-collecting-subcommands-p state)))
     (:stop-subcommands
-     (setf (%completion-help-scan-state-collecting-subcommands-p state) nil))
+     (%make-completion-help-scan-state
+      (%completion-help-scan-state-subcommands state)
+      (%completion-help-scan-state-flags state)
+      (%completion-help-scan-state-option-values state)
+      (%completion-help-scan-state-option-value-kinds state)
+      nil))
     (:other
-     nil))
-  state)
+     state)))
 
 (defun %completion-help-note-option-values (state options values)
-  (when values
-    (dolist (option options state)
-      (when (%starts-with-p "--" option)
-        (push (%make-kb-option-value-spec option values)
-              (%completion-help-scan-state-option-values state))))))
+  (if (null values)
+      state
+      (%make-completion-help-scan-state
+       (%completion-help-scan-state-subcommands state)
+       (%completion-help-scan-state-flags state)
+       (reduce (lambda (result option)
+                 (if (%starts-with-p "--" option)
+                     (cons (%make-kb-option-value-spec option values) result)
+                     result))
+               options
+               :initial-value
+               (%completion-help-scan-state-option-values state))
+       (%completion-help-scan-state-option-value-kinds state)
+       (%completion-help-scan-state-collecting-subcommands-p state))))
 (defun %completion-help-note-options (state options)
-  (dolist (option options state)
-    (push option (%completion-help-scan-state-flags state))))
+  (%make-completion-help-scan-state
+   (%completion-help-scan-state-subcommands state)
+   (append (reverse options) (%completion-help-scan-state-flags state))
+   (%completion-help-scan-state-option-values state)
+   (%completion-help-scan-state-option-value-kinds state)
+   (%completion-help-scan-state-collecting-subcommands-p state)))
 
 (defun %completion-help-note-option-value-kinds (state kinds)
-  (dolist (spec kinds state)
-    (unless (member spec
-                    (%completion-help-scan-state-option-value-kinds state)
-                    :test #'equal)
-      (push spec (%completion-help-scan-state-option-value-kinds state)))))
+  (%make-completion-help-scan-state
+   (%completion-help-scan-state-subcommands state)
+   (%completion-help-scan-state-flags state)
+   (%completion-help-scan-state-option-values state)
+   (reduce (lambda (result spec)
+             (if (member spec result :test #'equal)
+                 result
+                 (cons spec result)))
+           kinds
+           :initial-value
+           (%completion-help-scan-state-option-value-kinds state))
+   (%completion-help-scan-state-collecting-subcommands-p state)))
 
 (defmacro %with-completion-help-line-facts ((facts state line) &body body)
   `(let ((,facts (%completion-help-line-facts ,state ,line)))
@@ -223,22 +262,22 @@ values -- rather than a nested bail-out cascade."
 (defun %completion-help-update-scan-state (state line)
   (%with-completion-help-line-facts (facts state line)
     (let ((kind (%completion-help-line-facts-kind facts)))
-      (%completion-help-note-line-kind state kind facts)
-      (%completion-help-note-options state
-                                     (%completion-help-line-facts-options facts))
-      (%completion-help-note-option-values
-       state
-       (%completion-help-line-facts-options facts)
-       (%completion-help-line-facts-values facts))
-      (%completion-help-note-option-value-kinds
-       state
-       (%completion-help-line-facts-option-value-kinds facts))
+      (setf state (%completion-help-note-line-kind state kind facts)
+            state (%completion-help-note-options
+                   state (%completion-help-line-facts-options facts))
+            state (%completion-help-note-option-values
+                   state
+                   (%completion-help-line-facts-options facts)
+                   (%completion-help-line-facts-values facts))
+            state (%completion-help-note-option-value-kinds
+                   state
+                   (%completion-help-line-facts-option-value-kinds facts)))
       state)))
 
 (defun %completion-help-command-facts (help-text)
-  (let ((state (%make-completion-help-scan-state)))
+  (let ((state (%make-completion-help-scan-state nil nil nil nil nil)))
     (dolist (line (%completion-help-lines help-text))
-      (%completion-help-update-scan-state state line))
+      (setf state (%completion-help-update-scan-state state line)))
     (%make-completion-help-command-facts
      (%unique-string-values
       (nreverse (%completion-help-scan-state-subcommands state)))

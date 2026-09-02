@@ -118,6 +118,8 @@
     (with-builtins-context (context)
       (let ((table (nshell.application:shell-context-function-table context)))
         (setf (gethash "greet" table) '("echo" "hello")))
+      (assert-builtin-call (context "command" '("-V" "greet"))
+        :code 0 :contains '("greet is a function"))
       (with-test-external-capture-runner
           (lambda (command args)
             (values (format nil "external ~a ~{~a~^,~}" command args) 3))

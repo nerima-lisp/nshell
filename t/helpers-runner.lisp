@@ -66,7 +66,9 @@ runners, so skip the hermetic sandbox, CI, and unavailable PTYs."
 
 Runs single-threaded: many suites share process-global state (mock command
 tables, abbreviation/alias/history registries, shared mutable registries), so
-concurrent execution would race.  This mirrors how the FiveAM suite ran."
+concurrent execution would race.  This mirrors how the FiveAM suite ran.
+Each test has a bounded execution time so a hung subprocess is reported as a
+test failure instead of blocking the entire verification indefinitely."
   (let ((discovery-stream (make-string-output-stream)))
     (let* ((plan (cl-weave:list-tests :reporter :sexp
                                       :stream discovery-stream))
@@ -75,7 +77,8 @@ concurrent execution would race.  This mirrors how the FiveAM suite ran."
         (error "nshell test discovery selected no tests"))
       (let* ((events (cl-weave:run (cl-weave:root-suite)
                                    :reporter :spec
-                                   :max-workers 1))
+                                   :max-workers 1
+                                   :timeout-ms 120000))
              (passed-p (cl-weave:results-status events)))
         (format t "~&NSHELL_TESTS selected=~D passed=~A~%"
                 selected-count

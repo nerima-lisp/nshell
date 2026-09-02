@@ -64,8 +64,9 @@
    (current-cmd-fragments (copy-list (token-fragments tok)))
    (last-word-token tok)))
 
-(defun %token-reduction-state-clear-pending-redirect (state)
-  (%update-token-reduction-state state (pending-redirect-token nil)))
+(define-token-reduction-transition
+    %token-reduction-state-clear-pending-redirect (state)
+  (pending-redirect-token nil))
 
 (defun %token-reduction-state-mark-pending-redirect (state tok)
   (%update-token-reduction-state state (pending-redirect-token tok)))
@@ -76,11 +77,10 @@
    (pending-sep separator)
    (pending-sep-token token)))
 
-(defun %token-reduction-state-clear-pending-separator (state)
-  (%update-token-reduction-state
-   state
-   (pending-sep nil)
-   (pending-sep-token nil)))
+(define-token-reduction-transition
+    %token-reduction-state-clear-pending-separator (state)
+  (pending-sep nil)
+  (pending-sep-token nil))
 
 (defun %token-reduction-diagnostic (token policy)
   (%token-diagnostic

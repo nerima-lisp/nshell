@@ -36,6 +36,11 @@
                        slot-updates))
        ,state)))
 
+(defmacro define-token-reduction-transition (name (state) &body slot-updates)
+  "Define a reducer transition that updates named slots and returns STATE."
+  `(defun ,name (,state)
+     (%update-token-reduction-state ,state ,@slot-updates)))
+
 (define-value-struct %token-reduction-result
   ((commands '() :type list)
    (errors '() :type list)))

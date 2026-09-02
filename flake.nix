@@ -660,6 +660,30 @@
               timeoutSeconds = 1800;
             };
 
+            # Keep every Lisp source structurally readable before the more
+            # expensive ASDF checks run. This is the same paredit executable
+            # used by the contributor workflow, applied one file at a time so
+            # a malformed form cannot disappear in an empty selector.
+            syntax =
+              ctx.pkgs.runCommand "nshell-lisp-syntax"
+                {
+                  nativeBuildInputs = [ paredit-cli.packages.${ctx.system}.default ];
+                }
+                ''
+                  set -euo pipefail
+
+                  file_count=0
+                  while IFS= read -r file; do
+                    TERM=dumb paredit inspect check --file "$file"
+                    file_count=$((file_count + 1))
+                  done < <(find ${formatSource}/src ${formatSource}/t ${formatSource}/scripts \
+                    -type f -name '*.lisp' -print)
+
+                  test "$file_count" -gt 0
+                  printf '%s\n' "$file_count Lisp sources passed paredit syntax check"
+                  touch "$out"
+                '';
+
             # Verify the delivered package compiles and the image dumps.
             build = delivery;
 

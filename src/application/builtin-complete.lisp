@@ -1,14 +1,18 @@
 (in-package #:nshell.application)
 
-(defstruct (%complete-parse-state
-            (:constructor %make-complete-parse-state))
-  command
-  flags
-  long-options
-  short-options
-  arguments
-  description
-  erase)
+(nshell.util:define-value-struct %complete-parse-state
+    ((command nil)
+     (flags nil :copy :list)
+     (long-options nil :copy :list)
+     (short-options nil :copy :list)
+     (arguments nil :copy :list)
+     (description nil)
+     (erase nil))
+  :constructor %allocate-complete-parse-state
+  :public-accessors nil)
+
+(defun %make-complete-parse-state ()
+  (%allocate-complete-parse-state nil nil nil nil nil nil nil))
 
 (defun %complete-option-spec (option)
   (cdr (assoc option +complete-option-specs+ :test #'string=)))
@@ -33,27 +37,71 @@
 (defun %complete-apply-option-value (spec state value)
   (ecase (getf spec :kind)
     (:command
-     (setf (%complete-parse-state-command state) value))
+     (%allocate-complete-parse-state
+      value
+      (%complete-parse-state-flags state)
+      (%complete-parse-state-long-options state)
+      (%complete-parse-state-short-options state)
+      (%complete-parse-state-arguments state)
+      (%complete-parse-state-description state)
+      (%complete-parse-state-erase state)))
     (:flag
-     (setf (%complete-parse-state-flags state)
-           (cons value (%complete-parse-state-flags state))))
+     (%allocate-complete-parse-state
+      (%complete-parse-state-command state)
+      (cons value (%complete-parse-state-flags state))
+      (%complete-parse-state-long-options state)
+      (%complete-parse-state-short-options state)
+      (%complete-parse-state-arguments state)
+      (%complete-parse-state-description state)
+      (%complete-parse-state-erase state)))
     (:long-option
-     (setf (%complete-parse-state-long-options state)
-           (cons (%complete-long-option-name value)
-                 (%complete-parse-state-long-options state))))
+     (%allocate-complete-parse-state
+      (%complete-parse-state-command state)
+      (%complete-parse-state-flags state)
+      (cons (%complete-long-option-name value)
+            (%complete-parse-state-long-options state))
+      (%complete-parse-state-short-options state)
+      (%complete-parse-state-arguments state)
+      (%complete-parse-state-description state)
+      (%complete-parse-state-erase state)))
     (:short-option
-     (setf (%complete-parse-state-short-options state)
-           (cons (%complete-short-option-name value)
-                 (%complete-parse-state-short-options state))))
+     (%allocate-complete-parse-state
+      (%complete-parse-state-command state)
+      (%complete-parse-state-flags state)
+      (%complete-parse-state-long-options state)
+      (cons (%complete-short-option-name value)
+            (%complete-parse-state-short-options state))
+      (%complete-parse-state-arguments state)
+      (%complete-parse-state-description state)
+      (%complete-parse-state-erase state)))
     (:arguments
-     (setf (%complete-parse-state-arguments state)
-           (append (%complete-parse-state-arguments state)
-                   (%complete-argument-values value))))
+     (%allocate-complete-parse-state
+      (%complete-parse-state-command state)
+      (%complete-parse-state-flags state)
+      (%complete-parse-state-long-options state)
+      (%complete-parse-state-short-options state)
+      (append (%complete-parse-state-arguments state)
+              (%complete-argument-values value))
+      (%complete-parse-state-description state)
+      (%complete-parse-state-erase state)))
     (:description
-     (setf (%complete-parse-state-description state) value))
+     (%allocate-complete-parse-state
+      (%complete-parse-state-command state)
+      (%complete-parse-state-flags state)
+      (%complete-parse-state-long-options state)
+      (%complete-parse-state-short-options state)
+      (%complete-parse-state-arguments state)
+      value
+      (%complete-parse-state-erase state)))
     (:erase
-     (setf (%complete-parse-state-erase state) t)))
-  state)
+     (%allocate-complete-parse-state
+      (%complete-parse-state-command state)
+      (%complete-parse-state-flags state)
+      (%complete-parse-state-long-options state)
+      (%complete-parse-state-short-options state)
+      (%complete-parse-state-arguments state)
+      (%complete-parse-state-description state)
+      t))))
 
 (defun %complete-apply-option (spec remaining state)
   (let ((value (second remaining)))

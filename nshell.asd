@@ -223,6 +223,8 @@
           :pathname "../data/presentation/highlight-data")
    (:file "presentation/highlight")
 	   (:file "presentation/cps")
+	   (:file "presentation/repl-state-primitives")
+	   (:file "presentation/repl-state-data")
 	   (:file "presentation/repl-state")
 		   (:file "presentation/repl-input-state")
 		   (:file "presentation/repl-completion-seed")

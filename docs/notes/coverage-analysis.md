@@ -78,6 +78,6 @@ Reproduce it with:
 ```sh
 NSHELL_COVERAGE_DIR=/tmp/nshell-coverage \
   nix develop --command bash -lc \
-  'perl -e '\''$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV'\'' \
+  'perl -e '\''$SIG{ALRM}=sub { exit 124 }; alarm 900; exec @ARGV'\'' \
   sbcl --script scripts/coverage.lisp
 ```

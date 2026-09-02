@@ -25,22 +25,24 @@ fall back to freshly-constructed real boundaries.")
                  :get-fn #'host-kit:getcwd :set-fn #'host-kit:chdir)
    :clock (cl-boundary-kit:make-clock)))
 
-(defun %boundary (key default-thunk)
-  "Return the boundary registered under KEY, or a fresh real one from
-DEFAULT-THUNK when no context (or no such boundary) is present.  Reading through
-this keeps callers safe even before `*boundaries*` is initialized."
-  (if *boundaries*
-      (cl-boundary-kit:boundary-context-get *boundaries* key (funcall default-thunk))
-      (funcall default-thunk)))
+(defmacro %boundary (key default-form)
+  "Return the boundary registered under KEY, or evaluate DEFAULT-FORM.
+Reading through this keeps callers safe even before `*boundaries*` is
+initialized."
+  (let ((boundaries (gensym "BOUNDARIES-")))
+    `(let ((,boundaries *boundaries*))
+       (if ,boundaries
+           (cl-boundary-kit:boundary-context-get ,boundaries ,key ,default-form)
+           ,default-form))))
 
 (defun boundary-host-info ()
-  (%boundary :host-info #'cl-boundary-kit:make-host-info))
+  (%boundary :host-info (cl-boundary-kit:make-host-info)))
 
 (defun boundary-working-directory ()
-  (%boundary :working-dir #'cl-boundary-kit:make-working-directory))
+  (%boundary :working-dir (cl-boundary-kit:make-working-directory)))
 
 (defun boundary-clock ()
-  (%boundary :clock #'cl-boundary-kit:make-clock))
+  (%boundary :clock (cl-boundary-kit:make-clock)))
 
 (defun boundary-hostname ()
   "Current hostname via the host-info boundary, defaulting to \"localhost\"."

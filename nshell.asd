@@ -218,6 +218,7 @@
 	   (:file "presentation/input-state-vi-data")
 	   (:file "presentation/input-state-vi")
 	   (:file "presentation/input-state-vi-edit")
+   (:file "presentation/input-state-session-data")
    (:file "presentation/input-state-session")
    (:file "presentation/repl-boundaries")
    (:file "presentation/terminal-size")

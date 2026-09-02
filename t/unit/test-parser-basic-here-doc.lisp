@@ -68,6 +68,35 @@
       (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body)
               :to-be-falsy)))
 
+  (it "parser-here-doc-covers-terminal-and-incomplete-boundaries"
+    "Here-document scanning preserves terminal cursors and missing delimiters."
+    (let* ((terminal-line (nshell.domain.parsing::%read-here-doc-line "tail" 0))
+           (empty-body (nshell.domain.parsing::%consume-here-doc-body "" 0 "EOF"))
+           (partial (nshell.domain.parsing::%consume-here-docs-result
+                     (format nil "one~%A~%two")
+                     0
+                     '("A" "B"))))
+      (expect "tail" :to-equal (nshell.domain.parsing::%here-doc-line-text terminal-line))
+      (expect 4 :to-equal (nshell.domain.parsing::%here-doc-line-next-position terminal-line))
+      (expect nil :to-be (nshell.domain.parsing::%here-doc-line-newline-p terminal-line))
+      (expect "" :to-equal (nshell.domain.parsing::%here-doc-body-body empty-body))
+      (expect 0 :to-equal (nshell.domain.parsing::%here-doc-body-next-position empty-body))
+      (expect t :to-be (nshell.domain.parsing::%here-doc-body-missing-delimiter-p empty-body))
+      (expect (list (format nil "one~%"))
+              :to-equal (nshell.domain.parsing::%here-doc-consumption-bodies partial))
+      (expect t :to-be (nshell.domain.parsing::%here-doc-consumption-incomplete-p partial))))
+
+  (it "parser-here-doc-covers-empty-tail-and-redirect-metadata"
+    "Here-document metadata and blank tails remain explicit at the tokenizer boundary."
+    (let* ((redirect (nshell.domain.parsing:make-token :redirect "<<-" 0 3))
+           (target (nshell.domain.parsing:make-token :word "EOF" 4 7))
+           (tokens (list redirect target))
+           (result (nshell.domain.parsing::%tokenize-here-doc-tail "   " 3 tokens nil nil)))
+      (expect '(("EOF" . t))
+              :to-equal (nshell.domain.parsing::%here-doc-delimiters tokens t))
+      (expect tokens :to-equal (nshell.domain.parsing:tokenization-result-tokens result))
+      (expect nil :to-be (nshell.domain.parsing:tokenization-result-incomplete-p result))))
+
   (it "parser-here-doc-delimiter-scan-projects-left-to-right-delimiters"
     "Here-doc delimiter scanning owns accumulation order."
     (let ((scan (nshell.domain.parsing::%here-doc-delimiter-scan-add

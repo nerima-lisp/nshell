@@ -6,17 +6,13 @@
                     %redirect-facts-fd-dup-p
                     %redirect-facts-fd-dup-target))
 
-(defstruct (command-redirect-split-result
-            (:constructor %make-command-redirect-split-result
-                (clean-command redirects)))
-  (clean-command nil :read-only t)
-  (redirects nil :type list :read-only t))
+(define-value-struct command-redirect-split-result
+    ((clean-command nil)
+     (redirects nil :type list)))
 
-(defstruct (command-list-redirect-split-result
-            (:constructor %make-command-list-redirect-split-result
-                (clean-commands redirects)))
-  (clean-commands nil :type list :read-only t)
-  (redirects nil :type list :read-only t))
+(define-value-struct command-list-redirect-split-result
+    ((clean-commands nil :type list)
+     (redirects nil :type list)))
 
 (defstruct (%command-redirect-split-state
             (:constructor %make-command-redirect-split-state (clean redirects)))

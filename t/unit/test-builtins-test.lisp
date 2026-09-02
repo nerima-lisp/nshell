@@ -30,6 +30,16 @@
       (assert-builtin-call (context "test" '("a" "b" "c" "d"))
         :code 1 :output-null t))))
 
+(describe "shell context defaults"
+  (it "constructs the default mutable tables and terminal geometry"
+    (let ((context (nshell.application:make-shell-context)))
+      (expect (hash-table-p (nshell.application:shell-context-alias-table context))
+              :to-be-truthy)
+      (expect (hash-table-p (nshell.application::shell-context-process-registry context))
+              :to-be-truthy)
+      (expect 24 :to-equal (nshell.application:shell-context-terminal-rows context))
+      (expect 80 :to-equal (nshell.application:shell-context-terminal-cols context)))))
+
 (describe "builtin runtime helpers"
   (it "joins printable arguments without changing their values"
     (expect "alpha::2" :to-equal

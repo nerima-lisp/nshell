@@ -10,17 +10,21 @@
              colors)
     copy))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (theme
-              (:constructor %allocate-theme (name colors))
-              (:conc-name %theme-)
-              (:copier nil))
-    (name "default" :type string :read-only t)
-    (colors (make-hash-table :test #'eq) :type hash-table :read-only t))
+(nshell.util:define-value-struct
+  theme
+  ((name "default" :type string)
+   (colors (make-hash-table :test #'eq) :type hash-table))
+  :documentation
+  "An immutable named mapping from highlight roles to color strings."
+  :constructor
+  %allocate-theme
+  :public-accessors
+  nil)
 
-  (defun make-theme (&key (name "default") (colors (make-hash-table :test #'eq)))
-    (check-type name string)
-    (%allocate-theme name (%copy-theme-colors colors))))
+(defun make-theme (&key (name "default") (colors (make-hash-table :test #'eq)))
+  (check-type name string)
+  (check-type colors hash-table)
+  (%allocate-theme name (%copy-theme-colors colors)))
 
 (defun theme-name (theme)
   "Return THEME's display name."
@@ -31,26 +35,20 @@
   (gethash key (%theme-colors theme)))
 
 (defun theme-set-color (theme key value)
-  "Set THEME's color value for KEY and return THEME."
+  "Return a theme with VALUE configured for KEY."
   (check-type value string)
-  (setf (gethash key (%theme-colors theme)) value)
-  theme)
+  (let ((colors (%copy-theme-colors (%theme-colors theme))))
+    (setf (gethash key colors) value)
+    (%allocate-theme (%theme-name theme) colors)))
 
 (defun default-theme ()
-  (let ((th (make-theme :name "nshell-default")))
-    (theme-set-color th :normal "00FF00")
-    (theme-set-color th :command "00AFFF")
-    (theme-set-color th :param "00AFFF")
-    (theme-set-color th :comment "737373")
-    (theme-set-color th :error "FF0000")
-    (theme-set-color th :operator "FFFF00")
-    (theme-set-color th :quote "FFA500")
-    (theme-set-color th :redirection "00AFFF")
-    (theme-set-color th :autosuggestion "555555")
-    (theme-set-color th :search-match "FFFF00")
-    (theme-set-color th :selection "FFFFFF")
-    (theme-set-color th :prompt-host "00AFFF")
-    (theme-set-color th :prompt-path "00FF00")
-    (theme-set-color th :prompt-error "FF0000")
-    (theme-set-color th :prompt-ok "00FF00")
-    th))
+  (reduce (lambda (theme color)
+            (apply #'theme-set-color theme color))
+          '((:normal "00FF00") (:command "00AFFF") (:param "00AFFF")
+            (:comment "737373") (:error "FF0000") (:operator "FFFF00")
+            (:quote "FFA500") (:redirection "00AFFF")
+            (:autosuggestion "555555") (:search-match "FFFF00")
+            (:selection "FFFFFF") (:prompt-host "00AFFF")
+            (:prompt-path "00FF00") (:prompt-error "FF0000")
+            (:prompt-ok "00FF00"))
+          :initial-value (make-theme :name "nshell-default")))

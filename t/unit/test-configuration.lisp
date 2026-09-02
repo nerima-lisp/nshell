@@ -46,8 +46,8 @@
 
   (it "theme-set-color"
     "Can set and retrieve custom color"
-    (let ((theme (nshell.domain.configuration:make-theme :name "test")))
-      (nshell.domain.configuration:theme-set-color theme :custom "FF00FF")
+      (let ((theme (nshell.domain.configuration:make-theme :name "test")))
+      (setf theme (nshell.domain.configuration:theme-set-color theme :custom "FF00FF"))
       (expect "FF00FF" :to-equal (nshell.domain.configuration:theme-color theme :custom))))
 
   (it "default-config"

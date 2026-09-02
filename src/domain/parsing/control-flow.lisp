@@ -3,18 +3,14 @@
 (declaim (ftype (function (list) t)
                 %group-control-flow-if))
 
-(defstruct (%control-flow-body-scan
-            (:constructor %make-control-flow-body-scan
-                (body rest terminator)))
-  (body nil :type list :read-only t)
-  (rest nil :type list :read-only t)
-  (terminator nil :type (or null string) :read-only t))
+(define-value-struct %control-flow-body-scan
+    ((body nil :type list)
+     (rest nil :type list)
+     (terminator nil :type (or null string))))
 
-(defstruct (%control-flow-node-grouping
-            (:constructor %make-control-flow-node-grouping
-                (node rest)))
-  (node nil :read-only t)
-  (rest nil :type list :read-only t))
+(define-value-struct %control-flow-node-grouping
+    ((node nil)
+     (rest nil :type list)))
 
 (defmacro %with-control-flow-body-scan ((body rest terminator)
                                         nodes
@@ -54,17 +50,13 @@
                           (%control-flow-node-grouping-rest grouping)))))
     (%make-control-flow-body-scan (nreverse body) remaining stop)))
 
-(defstruct (%control-flow-clause-parse-result
-            (:constructor %make-control-flow-clause-parse-result
-                (clauses rest)))
-  (clauses nil :type list :read-only t)
-  (rest nil :type list :read-only t))
+(define-value-struct %control-flow-clause-parse-result
+    ((clauses nil :type list)
+     (rest nil :type list)))
 
-(defstruct (%control-flow-clause-scan
-            (:constructor %make-control-flow-clause-scan
-                (clauses rest)))
-  (clauses nil :type list :read-only t)
-  (rest nil :type list :read-only t))
+(define-value-struct %control-flow-clause-scan
+    ((clauses nil :type list)
+     (rest nil :type list)))
 
 (defun %group-control-flow-clauses (nodes clause-parser)
   (let ((clauses nil)
@@ -142,11 +134,9 @@
        (list (make-case-clause pattern body))
        rest))))
 
-(defstruct (%control-flow-for-header-binding
-            (:constructor %make-control-flow-for-header-binding
-                (var-name in-values)))
-  (var-name "" :type string :read-only t)
-  (in-values nil :type list :read-only t))
+(define-value-struct %control-flow-for-header-binding
+    ((var-name "" :type string)
+     (in-values nil :type list)))
 
 (defun %control-flow-for-header-binding-from-header (header)
   (let* ((args (command-node-args header))
@@ -184,10 +174,8 @@
       nodes
       #'%control-flow-case-clause-parse-result))))
 
-(defstruct (%control-flow-switch-case-patterns
-            (:constructor %make-control-flow-switch-case-patterns
-                (values)))
-  (values nil :type list :read-only t))
+(define-value-struct %control-flow-switch-case-patterns
+    ((values nil :type list)))
 
 (defun %control-flow-switch-case-patterns-from-header (header)
   (%make-control-flow-switch-case-patterns

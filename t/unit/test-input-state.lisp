@@ -1,6 +1,19 @@
 (in-package #:nshell/test)
 
 (describe "input-state-tests"
+  (it "input-state-constructor-macro-expands-defaults-and-keywords"
+    (let ((expansion
+            (macroexpand-1
+             '(nshell.presentation::define-input-state-constructor
+                ((alpha nil) (beta 42))))))
+      (expect 'defun :to-be (first expansion))
+      (expect 'nshell.presentation::make-input-state :to-be (second expansion))
+      (expect '(&key alpha (beta 42)) :to-equal (third expansion))
+      (expect (fourth expansion)
+              :to-equal
+              '(nshell.presentation::%make-input-state
+                :alpha alpha :beta beta))))
+
   (it "input-state-constructor-preserves-the-complete-data-record"
     (let ((expander (lambda (text) (concatenate 'string text "!")))
           (values '((:buffer . "line")

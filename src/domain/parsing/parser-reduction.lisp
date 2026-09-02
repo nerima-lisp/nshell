@@ -42,8 +42,9 @@
    (%token-reduction-argument-from-word-token tok)))
 
 (defun %token-reduction-state-append-argument (state argument)
-  (push argument (%token-reduction-state-current-args state))
-  state)
+  (%update-token-reduction-state
+   state
+   (current-args (cons argument (%token-reduction-state-current-args state)))))
 
 (defun %token-reduction-state-append-word-argument (state tok)
   (%token-reduction-state-append-argument state
@@ -88,9 +89,10 @@
    token))
 
 (defun %token-reduction-state-record-diagnostic (state token policy)
-  (push (%token-reduction-diagnostic token policy)
-        (%token-reduction-state-errors state))
-  state)
+  (%update-token-reduction-state
+   state
+   (errors (cons (%token-reduction-diagnostic token policy)
+                 (%token-reduction-state-errors state)))))
 
 (defun %token-reduction-missing-redirect-target-policy (token)
   (%make-token-reduction-diagnostic-policy
@@ -143,19 +145,20 @@
         (%token-reduction-state-pending-sep-token state)))
 
 (defun %token-reduction-state-record-command-entry (state)
-  (push (%token-reduction-command-entry-from-state state)
-        (%token-reduction-state-all-cmds state))
-  state)
+  (%update-token-reduction-state
+   state
+   (all-cmds (cons (%token-reduction-command-entry-from-state state)
+                   (%token-reduction-state-all-cmds state)))))
 
 (defun %token-reduction-state-clear-command-context (state)
-  (setf (%token-reduction-state-current-cmd state) nil
-        (%token-reduction-state-current-cmd-token state) nil
-        (%token-reduction-state-current-cmd-fragments state) nil
-        (%token-reduction-state-last-word-token state) nil
-        (%token-reduction-state-current-args state) '())
-  (%token-reduction-state-clear-pending-redirect state)
-  (%token-reduction-state-clear-pending-separator state)
-  state)
+  (%update-token-reduction-state
+   (%token-reduction-state-clear-pending-separator
+    (%token-reduction-state-clear-pending-redirect state))
+   (current-cmd nil)
+   (current-cmd-token nil)
+   (current-cmd-fragments nil)
+   (last-word-token nil)
+   (current-args '())))
 
 (defun %flush-token-reduction-command (state)
   (when (%token-reduction-state-current-cmd state)

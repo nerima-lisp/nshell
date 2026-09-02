@@ -308,5 +308,3 @@ values -- rather than a nested bail-out cascade."
                     :option-value-kinds
                     (%completion-help-command-facts-option-value-kinds facts)
                     :description description)))
-
-(progn)

@@ -232,6 +232,14 @@
           (when signaled-p
             (record-signal-state))
           job)))))
+(defun %complete-waited-job (job-id process-registry job job-monitor processes)
+  (%wait-job-processes processes)
+  (let ((exit-code (%job-process-exit-code job processes)))
+    (nshell.domain.job-control:complete-job
+     job-monitor job-id exit-code)
+    (remhash job-id process-registry)
+    (values job exit-code)))
+
 (defun wait-for-job (job-id process-registry
                        &optional (job-monitor *job-monitor*))
   "Wait for JOB-ID using the registered SBCL process objects.
@@ -252,13 +260,8 @@ exit status when the reaper has already completed the domain job."
        (let ((processes (%job-process-list (gethash job-id process-registry))))
          (if (null processes)
              (values nil nil)
-             (progn
-               (%wait-job-processes processes)
-               (let ((exit-code (%job-process-exit-code job processes)))
-                 (nshell.domain.job-control:complete-job
-                  job-monitor job-id exit-code)
-                 (remhash job-id process-registry)
-                 (values job exit-code)))))))))
+             (%complete-waited-job
+              job-id process-registry job job-monitor processes)))))))
 (defun %job-process-exit-code (job processes)
   (let ((statuses
           (mapcar

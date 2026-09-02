@@ -330,6 +330,43 @@ now decides whether this default is even consulted."
                plan)
               :to-be-truthy)))
 
+  (it "external-redirect-plan-projects-domain-redirects"
+    "External execution derives stream topology and file destinations from domain redirects."
+    (flet ((field (redirects accessor)
+             (funcall accessor
+                      (nshell.application::%external-process-redirect-plan-from
+                       redirects))))
+      (expect :stdout
+              :to-be
+              (field nil
+                     #'nshell.application::%external-process-redirect-plan-stdout-endpoint))
+      (expect :stderr
+              :to-be
+              (field nil
+                     #'nshell.application::%external-process-redirect-plan-stderr-endpoint))
+      (expect (field nil
+                     #'nshell.application::%external-process-redirect-plan-merge-stderr-p)
+              :to-be-truthy)
+      (let ((separate
+              (nshell.application::%external-process-redirect-plan-from
+               '((:> . "out.log") (:2> . "err.log")))))
+        (expect "out.log" :to-equal
+                (nshell.application::%external-process-redirect-plan-stdout-target separate))
+        (expect "err.log" :to-equal
+                (nshell.application::%external-process-redirect-plan-stderr-target separate))
+        (expect (nshell.application::%external-process-redirect-plan-merge-stderr-p separate)
+                :to-be-falsy))
+      (let ((merged
+              (nshell.application::%external-process-redirect-plan-from
+               '((:> . "combined.log") (:2>&1 . nil)))))
+        (expect "combined.log" :to-equal
+                (nshell.application::%external-process-redirect-plan-stdout-target merged))
+        (expect (nshell.application::%external-process-redirect-plan-stdout-endpoint merged)
+                :to-be
+                (nshell.application::%external-process-redirect-plan-stderr-endpoint merged))
+        (expect (nshell.application::%external-process-redirect-plan-merge-stderr-p merged)
+                :to-be-truthy))))
+
   (it "external-wrapper-redirect-plan-preserves-merged-stream-topology"
     "A shell wrapper captures both child streams while retaining their merge policy."
     (let* ((source-plan

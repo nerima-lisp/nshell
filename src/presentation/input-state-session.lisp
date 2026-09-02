@@ -5,15 +5,14 @@
 (defun input-session-reduction (state output)
   (%make-input-session-reduction state output))
 
-(defun %yank-session-clear-overrides ()
-  '(:last-yank-start nil
-    :last-yank-end nil
-    :last-yank-index nil))
-
-(defun %argument-session-clear-overrides ()
-  '(:last-argument-start nil
-    :last-argument-end nil
-    :last-argument-index nil))
+(defmacro define-session-clear (name kind slots)
+  `(progn
+     (defun ,(intern (format nil "%~A-OVERRIDES" name)) ()
+       ',(loop for slot in slots append (list (intern (symbol-name slot) :keyword) nil)))
+     (defun ,name ()
+       (%make-transient-session-clear
+        ,kind
+        (,(intern (format nil "%~A-OVERRIDES" name)))))))
 
 (defun %assert-transient-session-clear-kind (clear kind)
   (unless (and (%transient-session-clear-p clear)
@@ -23,13 +22,11 @@
            clear))
   clear)
 
-(defun yank-session-clear ()
-  (%make-transient-session-clear :yank
-                                 (%yank-session-clear-overrides)))
+(define-session-clear yank-session-clear :yank
+  (last-yank-start last-yank-end last-yank-index))
 
-(defun argument-session-clear ()
-  (%make-transient-session-clear :argument
-                                 (%argument-session-clear-overrides)))
+(define-session-clear argument-session-clear :argument
+  (last-argument-start last-argument-end last-argument-index))
 
 (defun apply-transient-session-clear (state clear)
   (check-type clear %transient-session-clear)

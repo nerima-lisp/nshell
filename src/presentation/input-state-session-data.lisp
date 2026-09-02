@@ -25,8 +25,6 @@
     ((state nil)
      (output :none :type symbol)))
 
-(defstruct (%transient-session-clear
-            (:constructor %make-transient-session-clear (kind overrides))
-            (:conc-name %transient-session-clear-))
-  kind
-  overrides)
+(define-value-struct %transient-session-clear
+    ((kind nil :type keyword)
+     (overrides nil)))

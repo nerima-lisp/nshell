@@ -151,6 +151,9 @@
        (cdr (assoc name
                    +job-signal-specs+
                    :test #'string=))))))
+(defmacro %kill-parse-error (message-form)
+  `(return-from %parse-kill-arguments
+     (values nil nil nil ,message-form)))
 (defun %parse-kill-arguments (args)
   (let ((remaining (copy-list args))
         (signal-designator :sigterm)
@@ -168,15 +171,12 @@
                        (or (string= arg "-s")
                            (string= arg "--signal")))
                   (if (null remaining)
-                      (return-from %parse-kill-arguments
-                        (values nil nil nil
-                                "kill: option requires an argument -- signal~%"))
+                      (%kill-parse-error
+                       "kill: option requires an argument -- signal~%")
                       (let ((parsed (%parse-signal-designator
                                      (pop remaining))))
                         (if (null parsed)
-                            (return-from %parse-kill-arguments
-                              (values nil nil nil
-                                      "kill: invalid signal~%"))
+                            (%kill-parse-error "kill: invalid signal~%")
                             (setf signal-designator parsed)))))
                  ((and options-p
                        (string-prefix-p "--signal=" arg))
@@ -184,9 +184,7 @@
                           (%parse-signal-designator
                            (subseq arg (length "--signal=")))))
                     (if (null parsed)
-                        (return-from %parse-kill-arguments
-                          (values nil nil nil
-                                  "kill: invalid signal~%"))
+                        (%kill-parse-error "kill: invalid signal~%")
                         (setf signal-designator parsed))))
                  ((and options-p (string= arg "-"))
                   (push arg targets))
@@ -198,10 +196,8 @@
                       (let ((parsed
                               (%parse-signal-designator (subseq arg 1))))
                         (if (null parsed)
-                            (return-from %parse-kill-arguments
-                              (values nil nil nil
-                                      (format nil "kill: unknown option: ~a~%"
-                                              arg)))
+                            (%kill-parse-error
+                             (format nil "kill: unknown option: ~a~%" arg))
                             (setf signal-designator parsed)))))
                  (t
                   (push arg targets)))))

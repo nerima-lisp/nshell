@@ -18,6 +18,18 @@
              (nshell.infrastructure.acl:current-environment-value "PATH"))
             :to-be-truthy))
 
+  (it "returns nil for an unset process environment value"
+    (expect nil :to-equal
+            (nshell.infrastructure.acl:current-environment-value
+             "NSHELL_VALUE_THAT_IS_NOT_SET")))
+
+  (it "delegates working-directory lookup to the host"
+    (with-temporary-function
+        ('host-kit:getcwd (lambda () #p"/tmp/nshell-test/"))
+      (expect #p"/tmp/nshell-test/"
+              :to-equal
+              (nshell.infrastructure.acl:current-working-directory))))
+
   (it "prefers explicitly exported environment entries"
     (let ((nshell.infrastructure.acl:*exported-environment*
             '("NSHELL_TEST_VALUE=explicit")))

@@ -5,7 +5,7 @@
   (values (format nil "~{~a~^ ~}~%" args) 0))
 
 
-(define-builtin %builtin-pwd (context args) (args)
+(define-builtin %builtin-pwd (context args) (context args)
   (values (format nil "~a~%" (namestring (host-kit:getcwd))) 0))
 
 (defun %update-directory-environment (context environment old-cwd new-cwd)

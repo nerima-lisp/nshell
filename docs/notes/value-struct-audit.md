@@ -89,9 +89,9 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%structural-diagnostics-accumulator` | `domain/parsing/parser.lisp` | immutable value; diagnostic accumulation returns fresh state |
 | `%structural-diagnostics-input` | `domain/parsing/parser.lisp` | mutable — writable slot(s): commands |
 | `%token-extent` | `domain/parsing/tokenizer-data.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
-| `%token-reduction-argument` | `domain/parsing/parser-reduction.lisp` | mutable — writable slot(s): value |
-| `%token-reduction-diagnostic-policy` | `domain/parsing/parser-reduction.lisp` | mutable — writable slot(s): kind |
-| `%token-reduction-result` | `domain/parsing/parser-reduction.lisp` | mutable — writable slot(s): commands, errors |
+| `%token-reduction-argument` | `domain/parsing/parser-reduction-data.lisp` | converted — immutable reduction input; argument construction returns a value |
+| `%token-reduction-diagnostic-policy` | `domain/parsing/parser-reduction-data.lisp` | converted — immutable diagnostic policy value |
+| `%token-reduction-result` | `domain/parsing/parser-reduction-data.lisp` | converted — immutable reduction result value |
 | `%token-reduction-state` | `domain/parsing/parser-reduction.lisp` | mutable — writable slot(s): current-args, current-cmd, current-cmd-token, pending-redirect-token, pending-sep, pending-sep-token, errors, all-cmds |
 | `%tokenizer-ampersand-route` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%tokenizer-balanced-token-boundary` | `domain/parsing/tokenizer-readers.lisp` | mutable — writable slot(s): substitution-end |

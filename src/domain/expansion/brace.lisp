@@ -49,16 +49,14 @@ range CONTENT, or NIL when CONTENT is not a valid range."
       (let ((parts (%split-top-level-commas content)))
         (when (> (length parts) 1) parts))))
 
-(defstruct (brace-expansion-frame
-            (:constructor %make-brace-expansion-frame
-                (input open close prefix content suffix options)))
-  (input "" :type string :read-only t)
-  (open 0 :type fixnum :read-only t)
-  (close 0 :type fixnum :read-only t)
-  (prefix "" :type string :read-only t)
-  (content "" :type string :read-only t)
-  (suffix "" :type string :read-only t)
-  (options nil :read-only t))
+(define-value-struct brace-expansion-frame
+    ((input "" :type string)
+     (open 0 :type fixnum)
+     (close 0 :type fixnum)
+     (prefix "" :type string)
+     (content "" :type string)
+     (suffix "" :type string)
+     (options nil)))
 
 (defun %brace-expansion-literal-results (frame suffix-expansions)
   (let ((literal (%brace-expansion-frame-literal frame)))

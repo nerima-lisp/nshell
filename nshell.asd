@@ -87,6 +87,7 @@
    (:file "domain/parsing/parser-here-doc-targets")
    (:file "domain/parsing/parser-reduction-data")
    (:file "domain/parsing/parser-reduction")
+   (:file "domain/parsing/parser-structure-data")
    (:file "domain/parsing/parser")
     (:file "domain/environment/env")
     (:file "domain/filesystem")

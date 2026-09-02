@@ -14,10 +14,10 @@
     ((clean-commands nil :type list)
      (redirects nil :type list)))
 
-(defstruct (%command-redirect-split-state
-            (:constructor %make-command-redirect-split-state (clean redirects)))
-  (clean nil :type list :read-only t)
-  (redirects nil :type list :read-only t))
+(define-value-struct command-redirect-split-state
+    ((clean nil :type list)
+     (redirects nil :type list))
+  :public-accessors nil)
 
 (defun %empty-command-redirect-split-state ()
   (%make-command-redirect-split-state nil nil))
@@ -33,11 +33,10 @@
    (cons (cons kind target)
          (%command-redirect-split-state-redirects state))))
 
-(defstruct (%command-redirect-arg-cursor
-            (:constructor %make-command-redirect-arg-cursor
-                (arg remaining-args)))
-  (arg nil :read-only t)
-  (remaining-args nil :type list :read-only t))
+(define-value-struct command-redirect-arg-cursor
+    ((arg nil)
+     (remaining-args nil :type list))
+  :public-accessors nil)
 
 (defun %command-redirect-arg-cursor-from-args (args)
   (when args
@@ -54,11 +53,10 @@
   (%command-redirect-arg-cursor-from-args
    (rest (%command-redirect-arg-cursor-remaining-args cursor))))
 
-(defstruct (%command-redirect-split-step
-            (:constructor %make-command-redirect-split-step
-                (state cursor)))
-  (state nil :read-only t)
-  (cursor nil :read-only t))
+(define-value-struct command-redirect-split-step
+    ((state nil)
+     (cursor nil))
+  :public-accessors nil)
 
 (defun %command-redirect-split-state-accept-cursor (state cursor)
   (let* ((arg (%command-redirect-arg-cursor-arg cursor))
@@ -110,11 +108,10 @@ Redirect operator args and their targets are removed from the clean command."
                      cursor (%command-redirect-split-step-cursor step))))
     (%command-redirect-split-result-from-state cmd-node state)))
 
-(defstruct (%command-list-redirect-split-state
-            (:constructor %make-command-list-redirect-split-state
-                (clean-commands redirects)))
-  (clean-commands nil :type list :read-only t)
-  (redirects nil :type list :read-only t))
+(define-value-struct command-list-redirect-split-state
+    ((clean-commands nil :type list)
+     (redirects nil :type list))
+  :public-accessors nil)
 
 (defun %empty-command-list-redirect-split-state ()
   (%make-command-list-redirect-split-state nil nil))

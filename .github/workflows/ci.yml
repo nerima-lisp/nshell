@@ -16,15 +16,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # One job on purpose. Granularity belongs in the flake's `checks.*`
+  # One Linux job on purpose. Granularity belongs in the flake's `checks.*`
   # attributes, which `nix flake check` evaluates in parallel with build
   # caching. Splitting these into separate GitHub jobs would duplicate that
   # scheduling and lose cache sharing between them.
   #
   # Add a second job ONLY for work the Nix sandbox cannot do: network access,
   # a real PTY/TTY, or artifact upload. "A different runner OS" is no longer
-  # one of them: as of the 2026-08-01 revision flake.nix declares x86_64-linux
-  # alone. The two extra jobs below still qualify; see the comment on each.
+  # one of them: the flake's aarch64-darwin target is for local development,
+  # while the Linux target is the hosted release and integration gate. The two
+  # extra jobs below still qualify; see the comment on each.
   check:
     name: nix flake check
     runs-on: ubuntu-latest
@@ -46,9 +47,9 @@ jobs:
       # suite (checks.weave), the treefmt formatting gate (checks.formatting),
       # the mkdocs --strict build (checks.docs), and the binary smoke test.
       #
-      # No `--all-systems`. The flake declares x86_64-linux alone, so it would
-      # not widen the check; and it realises foreign derivations rather than
-      # merely evaluating them, so it can only ever fail on this runner.
+      # No `--all-systems`: this hosted job is the Linux gate. The Darwin target
+      # is intentionally evaluated on its native development platform rather
+      # than realised as a foreign derivation on this runner.
       - name: Check flake
         run: nix flake check --print-build-logs
 
@@ -128,11 +129,8 @@ jobs:
     # derivation that builds the image proves it links; only running it proves
     # `save-lisp-and-die`'s toplevel and saved runtime options survived.
     #
-    # One runner, no matrix. The matrix used to track the flake's `systems` and
-    # carried a macos-14 (aarch64-darwin) leg; the 2026-08-01 revision reduced
-    # `systems` to x86_64-linux alone, so `nix build` on macOS would now fail on
-    # a missing attribute. A one-element matrix is deleted rather than left in
-    # place — it signals an intent to add a platform, and there is none.
+    # One Linux runner, no matrix. The aarch64-darwin target is for local
+    # development; release artifacts are intentionally built on Linux.
     name: build release binary
     runs-on: ubuntu-latest
     timeout-minutes: 60

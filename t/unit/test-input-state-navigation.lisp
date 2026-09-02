@@ -202,6 +202,21 @@
         (expect 5 :to-equal (nshell.presentation::shell-token-range-start last-range))
         (expect 8 :to-equal (nshell.presentation::shell-token-range-end last-range)))))
 
+  (it "shell-token-range-set-binding-evaluates-inputs-once"
+    "The range-set binding macro evaluates each input expression once."
+    (let ((text-evaluations 0)
+          (limit-evaluations 0)
+          (range-set nil))
+      (nshell.presentation::%with-shell-token-range-set
+          (bound-range
+           (progn (incf text-evaluations) "echo foo")
+           (progn (incf limit-evaluations) 8))
+        (setf range-set bound-range))
+      (expect 1 :to-equal text-evaluations)
+      (expect 1 :to-equal limit-evaluations)
+      (expect 2 :to-equal
+              (length (nshell.presentation::%shell-token-range-set-ranges range-set)))))
+
   (it "shell-token-range-raw-accessors-stay-internal"
     "shell-token-range exposes explicit readers; generated slot readers remain internal."
     (let ((range (nshell.presentation::shell-token-range-at-position "echo foo" 5)))

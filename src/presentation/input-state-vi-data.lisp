@@ -2,12 +2,10 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (vi-input-transition
-             (:constructor %make-vi-input-transition
-                 (state output))
-             (:conc-name vi-input-transition-))
-  (state nil :read-only t)
-  (output :none :type symbol :read-only t))
+(define-value-struct vi-input-transition
+    ((state nil)
+     (output :none :type symbol))
+  :constructor %make-vi-input-transition)
 
 (defun %vi-clear-count (state)
   (copy-input-state-with state :vi-count nil))

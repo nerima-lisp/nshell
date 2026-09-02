@@ -32,11 +32,11 @@
     (= (input-state-cursor-pos state)
        (length (input-state-buffer state)))))
 
-(defstruct (%input-session-clear
-            (:constructor %make-input-session-clear (kind overrides))
-            (:conc-name %input-session-clear-))
-  kind
-  overrides)
+(define-value-struct %input-session-clear
+    ((kind nil :type symbol)
+     (overrides nil :type list :copy :list))
+  :constructor %make-input-session-clear
+  :public-accessors nil)
 
 (defun %completion-session-clear-overrides ()
   (list :completion-index -1

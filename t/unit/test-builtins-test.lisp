@@ -140,6 +140,8 @@
           :code 0 :output "echoed hello")
         (assert-builtin-call (context "eval" nil) :code 0 :output-null t)
         (assert-builtin-call (context "eval" '("echo" "|"))
+          :code 2 :contains '("eval: parse error"))
+        (assert-builtin-call (context "eval" '("echo" ")"))
           :code 2 :contains '("eval: parse error")))))
 
   (it "exposes command path metadata"

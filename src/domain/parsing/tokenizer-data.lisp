@@ -24,12 +24,12 @@
 (defun %token-value (value)
   (or value ""))
 
-(defstruct (%token-extent
-            (:constructor %make-token-extent (start end value))
-            (:copier nil))
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t)
-  (value "" :type string :read-only t))
+(define-value-struct %token-extent
+  ((start 0 :type integer)
+   (end 0 :type integer)
+   (value "" :type string))
+  :public-accessors nil
+  :constructor %make-token-extent)
 
 (defun %token-extent (start value)
   (let* ((normalized-start (%token-position start))
@@ -89,16 +89,16 @@
   '(:pipe :and :or :semicolon :newline :ampersand)
   "Token types that separate shell command segments.")
 
-(defstruct (%shell-character-boundary
-            (:constructor %make-shell-character-boundary (character kind))
-            (:copier nil))
-  (character nil :read-only t)
-  (kind nil :type (or null keyword) :read-only t))
+(define-value-struct %shell-character-boundary
+  ((character nil)
+   (kind nil :type (or null keyword)))
+  :public-accessors nil
+  :constructor %make-shell-character-boundary)
 
-(defstruct (%shell-input-blankness-spec
-            (:constructor %make-shell-input-blankness-spec (include-return-p))
-            (:copier nil))
-  (include-return-p nil :type boolean :read-only t))
+(define-value-struct %shell-input-blankness-spec
+  ((include-return-p nil :type boolean))
+  :public-accessors nil
+  :constructor %make-shell-input-blankness-spec)
 
 (defun %shell-separator-character-p (ch separators)
   (and ch (not (null (member ch separators :test #'char=)))))

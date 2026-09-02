@@ -519,6 +519,17 @@ it."
       ;; nil fields → same as ("") → each part unchanged
       (expect '("x" "y") :to-equal (app '("x" "y") nil)))))
 (describe "execute-pipeline-branch-tests"
+  (it "continues-stopped-external-process-and-ignores-signal-errors"
+    "A stopped process group receives SIGCONT while delivery failures remain best effort."
+    (let ((calls nil))
+      (with-temporary-function
+          ((quote nshell.infrastructure.acl:kill-process)
+           (lambda (pid signal)
+             (push (list pid signal) calls)
+             (error "signal delivery failure")))
+        (expect :continue-wait :to-be
+                (nshell.application::%continue-stopped-external-process 4321)))
+      (expect '((-4321 :sigcont)) :to-equal calls)))
   (it "process-substitution-spec-and-direction-are-classified"
     (expect (nshell.application::%process-substitution-spec-p nil) :to-be-falsy)
     (expect (nshell.application::%process-substitution-spec-p "") :to-be-falsy)

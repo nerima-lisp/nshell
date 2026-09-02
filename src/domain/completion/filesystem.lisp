@@ -3,19 +3,23 @@
 (defun %path-separator-p (char)
   (or (char= char #\/) #+windows (char= char #\\) #-windows nil))
 
-(defstruct (%filesystem-candidate-set
-    (:constructor %make-filesystem-candidate-set (seen candidates))
-    (:conc-name %filesystem-candidate-set-)) (seen (make-hash-table :test #'equal) :read-only t)
-  (candidates nil :type list))
+(nshell.util:define-value-struct %filesystem-candidate-set
+    ((seen nil :type list :copy :list)
+     (candidates nil :type list :copy :list))
+  :constructor %make-filesystem-candidate-set
+  :predicate nil
+  :public-accessors nil)
 
 (defun %make-empty-filesystem-candidate-set ()
-  (%make-filesystem-candidate-set (make-hash-table :test #'equal) nil))
+  (%make-filesystem-candidate-set nil nil))
 
 (defun %filesystem-candidate-set-add (set candidate)
-  (when candidate
-    (let ((text (candidate-text candidate))
-          (seen (%filesystem-candidate-set-seen set)))
-      (unless (gethash text seen)
-        (setf (gethash text seen) t
-              (%filesystem-candidate-set-candidates set) (cons candidate (%filesystem-candidate-set-candidates set))))))
-  set)
+  (if (or (null candidate)
+          (member (candidate-text candidate)
+                  (%filesystem-candidate-set-seen set)
+                  :test #'string=))
+      set
+      (%make-filesystem-candidate-set
+       (cons (candidate-text candidate)
+             (%filesystem-candidate-set-seen set))
+       (cons candidate (%filesystem-candidate-set-candidates set)))))

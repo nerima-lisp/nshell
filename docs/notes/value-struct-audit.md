@@ -50,7 +50,7 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%fd-redirect-token-text` | `domain/parsing/tokenizer-handlers.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%file-completion-prefix-projection` | `domain/completion/filesystem-file-completion.lisp` | mutable — writable slot(s): directory-prefix |
 | `%file-completion-query` | `domain/completion/filesystem-file-completion.lisp` | mutable — writable slot(s): directory-prefix |
-| `%filesystem-candidate-set` | `domain/completion/filesystem.lisp` | mutable — writable slot(s): candidates |
+| `%filesystem-candidate-set` | `domain/completion/filesystem.lisp` | converted — immutable value; candidate insertion returns a fresh deduplicated set |
 | `%here-doc-body` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): body, next-position |
 | `%here-doc-consumption` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): bodies, next-position |
 | `%here-doc-consumption-state` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): reversed-bodies, next-position |

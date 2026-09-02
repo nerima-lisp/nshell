@@ -125,9 +125,10 @@
 
 (defun %add-file-completion-entries (entries kind query candidates)
   (dolist (entry entries candidates)
-    (%filesystem-candidate-set-add
-     candidates
-     (%file-completion-entry-candidate entry kind query))))
+    (setf candidates
+          (%filesystem-candidate-set-add
+           candidates
+           (%file-completion-entry-candidate entry kind query)))))
 
 (defun %file-candidates-from-directory
     (filesystem prefix &key (include-files t) (include-directories t))
@@ -144,19 +145,19 @@
                  include-directories))
         (candidates (%make-empty-filesystem-candidate-set)))
     (when (%file-completion-query-include-directories query)
-      (%add-file-completion-entries
+      (setf candidates (%add-file-completion-entries
        (%safe-file-completion-list subdirectories-fn
                                    (%file-completion-query-directory query))
        :directory
        query
-       candidates))
+       candidates)))
     (when (%file-completion-query-include-files query)
-      (%add-file-completion-entries
+      (setf candidates (%add-file-completion-entries
        (%safe-file-completion-list directory-files-fn
                                    (%file-completion-query-directory query))
        :file
        query
-       candidates))
+       candidates)))
     (%filesystem-candidate-set-candidates candidates)))
 
 (defun %path-like-completion-prefix-p (prefix)

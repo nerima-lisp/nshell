@@ -83,9 +83,10 @@ ordering, so those semantics can be tested without a filesystem."
     (dolist (entries entries-by-directory)
       (handler-case
           (dolist (entry entries)
-            (%filesystem-candidate-set-add
-             candidates
-             (%path-command-entry-candidate entry prefix executable-p)))
+            (setf candidates
+                  (%filesystem-candidate-set-add
+                   candidates
+                   (%path-command-entry-candidate entry prefix executable-p))))
         (error () candidates)))
     (sort (%filesystem-candidate-set-candidates candidates)
           #'string<

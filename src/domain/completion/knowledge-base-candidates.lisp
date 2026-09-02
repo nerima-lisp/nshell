@@ -27,17 +27,17 @@
   (%unique-string-values
    (append (kb-command-flags kb command) (kb-command-subcommands kb command))))
 
-(defstruct (%attached-option-value-prefix
-            (:constructor %make-attached-option-value-prefix (option value-prefix))
-            (:conc-name %attached-option-value-prefix-))
-  option
-  value-prefix)
+(define-value-struct %attached-option-value-prefix
+  ((option nil)
+   (value-prefix nil))
+  :public-accessors nil
+  :constructor %make-attached-option-value-prefix)
 
-(defstruct (%separate-option-value-prefix
-            (:constructor %make-separate-option-value-prefix (option value-prefix))
-            (:conc-name %separate-option-value-prefix-))
-  option
-  value-prefix)
+(define-value-struct %separate-option-value-prefix
+  ((option nil)
+   (value-prefix nil))
+  :public-accessors nil
+  :constructor %make-separate-option-value-prefix)
 
 (defun %parse-attached-option-value-prefix (prefix)
   (let ((separator-position (position #\= prefix)))
@@ -62,13 +62,12 @@
                   (%starts-with-p value-prefix value))
           collect value))
 
-(defstruct (%argument-word-sequence
-            (:constructor %make-argument-word-sequence
-                (words latest words-before-latest))
-            (:conc-name %argument-word-sequence-))
-  words
-  latest
-  words-before-latest)
+(define-value-struct %argument-word-sequence
+  ((words nil)
+   (latest nil)
+   (words-before-latest nil))
+  :public-accessors nil
+  :constructor %make-argument-word-sequence)
 
 (defun %argument-word-sequence-from-words (words)
   (let ((latest nil)

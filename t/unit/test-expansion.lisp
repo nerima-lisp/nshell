@@ -348,8 +348,9 @@ Each case is (EXPECTED INPUT &rest ARGS)."
     (let* ((text (format nil " alpha~Cbeta~Cgamma " #\Tab #\Newline))
            (scanner (nshell.domain.expansion::%make-whitespace-field-scanner text)))
       (loop for index from 0 below (length text)
-            do (nshell.domain.expansion::whitespace-field-scanner-accept
-                scanner index (char text index)))
+            do (setf scanner
+                     (nshell.domain.expansion::whitespace-field-scanner-accept
+                      scanner index (char text index))))
       (let ((boundaries
               (nshell.domain.expansion::whitespace-field-scanner-field-boundaries scanner)))
         (expect (every #'nshell.domain.expansion::whitespace-field-boundary-p boundaries) :to-be-truthy)

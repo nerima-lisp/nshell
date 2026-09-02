@@ -143,7 +143,7 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `tokenizer-state` | `domain/parsing/tokenizer-data.lisp` | mutable — writable slot(s): input, len, cursor-pos, pos, tokens, incomplete |
 | `vi-input-transition` | `presentation/input-state-vi-data.lisp` | mutable — writable slot(s): state |
 | `while-node` | `domain/parsing/ast.lisp` | include-hierarchy — `:include ast-node`; the macro cannot generate an inheriting struct |
-| `whitespace-field-scanner` | `domain/expansion/fields.lisp` | mutable — writable slot(s): boundaries, start |
+| `whitespace-field-scanner` | `domain/expansion/fields.lisp` | immutable value; transitions return fresh scanner state |
 
 **Total: 137 raw defstructs.** mutable: 94; capsule: 27; include-hierarchy: 13; encapsulation: 1; helper-collision: 1
 

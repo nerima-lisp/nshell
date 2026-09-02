@@ -118,39 +118,47 @@ single string. Command substitution is applied by the caller before this."
           (whitespace-field-boundary-start boundary)
           (whitespace-field-boundary-end boundary)))
 
-(defstruct (whitespace-field-scanner
-            (:constructor %make-whitespace-field-scanner (text)))
-  (text "" :type string :read-only t)
-  (boundaries nil :type list)
-  (start nil :type (or null integer)))
+(define-value-struct whitespace-field-scanner
+    ((text "" :type string)
+     (boundaries nil :type list :copy :list)
+     (start nil :type (or null integer)))
+  :constructor %allocate-whitespace-field-scanner)
+
+(defun %make-whitespace-field-scanner (text)
+  (%allocate-whitespace-field-scanner text nil nil))
 
 (defun whitespace-field-separator-p (char)
   (member char '(#\Space #\Tab #\Newline) :test #'char=))
 
 (defun whitespace-field-scanner-start-field (scanner index)
-  (unless (whitespace-field-scanner-start scanner)
-    (setf (whitespace-field-scanner-start scanner) index))
-  scanner)
+  (if (whitespace-field-scanner-start scanner)
+      scanner
+      (%allocate-whitespace-field-scanner
+       (whitespace-field-scanner-text scanner)
+       (whitespace-field-scanner-boundaries scanner)
+       index)))
 
 (defun whitespace-field-scanner-finish-field (scanner end)
   (let ((start (whitespace-field-scanner-start scanner)))
-    (when start
-      (push (%make-whitespace-field-boundary start end)
-            (whitespace-field-scanner-boundaries scanner))
-      (setf (whitespace-field-scanner-start scanner) nil)))
-  scanner)
+    (if start
+        (%allocate-whitespace-field-scanner
+         (whitespace-field-scanner-text scanner)
+         (cons (%make-whitespace-field-boundary start end)
+               (whitespace-field-scanner-boundaries scanner))
+         nil)
+        scanner)))
 
 (defun whitespace-field-scanner-accept (scanner index char)
   (if (whitespace-field-separator-p char)
       (whitespace-field-scanner-finish-field scanner index)
-      (whitespace-field-scanner-start-field scanner index))
-  scanner)
+      (whitespace-field-scanner-start-field scanner index)))
 
 (defun whitespace-field-scanner-field-boundaries (scanner)
-  (whitespace-field-scanner-finish-field
-   scanner
-   (length (whitespace-field-scanner-text scanner)))
-  (reverse (whitespace-field-scanner-boundaries scanner)))
+  (reverse
+   (whitespace-field-scanner-boundaries
+    (whitespace-field-scanner-finish-field
+     scanner
+     (length (whitespace-field-scanner-text scanner))))))
 
 (defun whitespace-field-scanner-result (scanner)
   (let ((text (whitespace-field-scanner-text scanner)))
@@ -160,7 +168,8 @@ single string. Command substitution is applied by the caller before this."
 (defun %split-whitespace-fields (text)
   (let ((scanner (%make-whitespace-field-scanner text)))
     (loop for index from 0 below (length text)
-          do (whitespace-field-scanner-accept scanner index (char text index)))
+          do (setf scanner
+                   (whitespace-field-scanner-accept scanner index (char text index))))
     (whitespace-field-scanner-result scanner)))
 
 (defun %command-name-field-splitting-required-p (text)

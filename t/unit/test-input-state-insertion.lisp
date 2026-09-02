@@ -16,12 +16,13 @@
           :suggest-update
           (:buffer "x" :cursor-pos 1))))
 
-  (it "key-event-raw-constructor-is-internal-boundary"
+  (it "key-event-constructor-exposes-the-value-contract"
     (let ((event (nshell.domain.input:make-key-event :char #\x)))
       (expect (nshell.domain.input:key-event-p event) :to-be-truthy)
       (expect :char :to-be (nshell.domain.input:key-event-type event))
       (expect #\x :to-equal (nshell.domain.input:key-event-char event))
-      (expect (fboundp 'nshell.domain.input::%make-key-event) :to-be-truthy)
+      (expect (fboundp 'nshell.domain.input:make-key-event) :to-be-truthy)
+      (expect (fboundp 'nshell.domain.input::%make-key-event) :to-be-falsy)
       (expect (fboundp 'nshell.domain.input::copy-key-event) :to-be-falsy)))
 
   (it "key-event-preserves-structured-payload"

@@ -7,12 +7,10 @@
      (char nil :type (or null character) :optional t)
      (number nil :type (or null integer) :optional t)
      (data nil :optional t))
+  :constructor make-key-event
   :documentation "Decoded shell input event.
 
 TYPE is a keyword such as :CHAR, :PASTE, :ENTER, :TAB, :LEFT, :CTRL-C, or :SHIFT-TAB.
 CHAR is populated for printable character events. NUMBER and DATA carry optional
 structured payloads for terminal protocols such as mouse reporting or
 bracketed paste.")
-
-(defun make-key-event (type &optional char number data)
-  (%make-key-event type char number data))

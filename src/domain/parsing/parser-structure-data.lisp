@@ -15,12 +15,11 @@
     ((incomplete-p nil :type boolean)
      (diagnostics nil :type list)))
 
-(defstruct (%structural-diagnostics-accumulator
-            (:constructor %make-structural-diagnostics-accumulator
-                (&key (incomplete-p nil) (diagnostics nil)))
-            (:copier nil))
-  (incomplete-p nil :type boolean)
-  (diagnostics nil :type list))
+(define-value-struct %structural-diagnostics-accumulator
+    ((incomplete-p nil :type boolean)
+     (diagnostics nil :type list :copy :list))
+  :constructor %make-structural-diagnostics-accumulator
+  :predicate nil)
 
 (define-value-struct %structural-diagnostics-input
     ((commands nil :type list)

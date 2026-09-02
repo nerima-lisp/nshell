@@ -47,15 +47,15 @@
    input-length))
 
 (defun %empty-structural-diagnostics-accumulator ()
-  (%make-structural-diagnostics-accumulator))
+  (%make-structural-diagnostics-accumulator nil nil))
 
 (defun %structural-diagnostics-accumulator-add-diagnostic
     (accumulator diagnostic &key incomplete-p)
-  (push diagnostic
-        (%structural-diagnostics-accumulator-diagnostics accumulator))
-  (when incomplete-p
-    (setf (%structural-diagnostics-accumulator-incomplete-p accumulator) t))
-  accumulator)
+  (%make-structural-diagnostics-accumulator
+   (or incomplete-p
+       (%structural-diagnostics-accumulator-incomplete-p accumulator))
+   (cons diagnostic
+         (%structural-diagnostics-accumulator-diagnostics accumulator))))
 
 (defun %structural-diagnostics-from-accumulator (accumulator)
   (%make-structural-diagnostics
@@ -77,19 +77,22 @@
         (input-length (%structural-diagnostics-input-input-length input))
         (diagnostics (%empty-structural-diagnostics-accumulator)))
     (when (%continuation-separator-p last-sep)
-      (%structural-diagnostics-accumulator-add-diagnostic
-       diagnostics
-       (%continuation-separator-diagnostic
-        last-sep last-sep-token input-length)
-       :incomplete-p t))
+      (setf diagnostics
+            (%structural-diagnostics-accumulator-add-diagnostic
+             diagnostics
+             (%continuation-separator-diagnostic
+              last-sep last-sep-token input-length)
+             :incomplete-p t)))
     (when (%unclosed-control-flow-p cmds)
-      (%structural-diagnostics-accumulator-add-diagnostic
-       diagnostics
-       (%unclosed-control-flow-diagnostic input-length)
-       :incomplete-p t))
+      (setf diagnostics
+            (%structural-diagnostics-accumulator-add-diagnostic
+             diagnostics
+             (%unclosed-control-flow-diagnostic input-length)
+             :incomplete-p t)))
     (dolist (diagnostic (%unexpected-control-flow-diagnostics cmds input-length))
-      (%structural-diagnostics-accumulator-add-diagnostic diagnostics
-                                                         diagnostic))
+      (setf diagnostics
+            (%structural-diagnostics-accumulator-add-diagnostic
+             diagnostics diagnostic)))
     (%structural-diagnostics-from-accumulator diagnostics)))
 
 (defun %parse-result-from-reduced-command-stream (stream errors incomplete input-length)

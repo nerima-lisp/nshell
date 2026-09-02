@@ -118,11 +118,12 @@
            (unclosed
              (nshell.domain.parsing::%unclosed-control-flow-diagnostic 9))
            (result
-             (progn
-               (nshell.domain.parsing::%structural-diagnostics-accumulator-add-diagnostic
-                accumulator continuation :incomplete-p t)
-               (nshell.domain.parsing::%structural-diagnostics-accumulator-add-diagnostic
-                accumulator unclosed)
+             (let* ((accumulator
+                      (nshell.domain.parsing::%structural-diagnostics-accumulator-add-diagnostic
+                       accumulator continuation :incomplete-p t))
+                    (accumulator
+                      (nshell.domain.parsing::%structural-diagnostics-accumulator-add-diagnostic
+                       accumulator unclosed)))
                (nshell.domain.parsing::%structural-diagnostics-from-accumulator
                 accumulator))))
       (expect (nshell.domain.parsing::%structural-diagnostics-incomplete-p result) :to-be-truthy)

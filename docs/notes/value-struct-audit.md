@@ -1,7 +1,7 @@
 # Value-struct audit
 
 `define-value-struct` (`src/util/struct-macros.lisp`) now generates every applicable
-value struct in nshell (38 converted this cycle). This table mechanically accounts
+value struct in nshell (40 converted this cycle). This table mechanically accounts
 for **every** raw `defstruct` that remains, with the concrete reason it is not a
 `define-value-struct` candidate. Regenerate by re-running the classifier over `src/`.
 
@@ -57,8 +57,8 @@ for **every** raw `defstruct` that remains, with the concrete reason it is not a
 | `%here-doc-delimiter-scan` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): reversed-delimiters |
 | `%here-doc-line` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): text, next-position |
 | `%here-doc-target-body-cursor` | `domain/parsing/parser-here-doc.lisp` | mutable — writable slot(s): body, remaining-bodies |
-| `%history-last-argument-scan-state` | `domain/history/last-argument.lisp` | mutable — writable slot(s): last-argument, skip-redirect-target, seen-command-word |
-| `%history-logical-word-cursor` | `domain/history/last-argument.lisp` | mutable — writable slot(s): remaining |
+| `%history-last-argument-scan-state` | `domain/history/last-argument.lisp` | immutable value; token handling returns fresh scan state |
+| `%history-logical-word-cursor` | `domain/history/last-argument.lisp` | immutable value; token consumption returns a fresh cursor |
 | `%history-token-window` | `domain/history/last-argument.lisp` | capsule — read-only, but its slots have no public readers (behavior-only API); the macro would leak them |
 | `%input-edit-snapshot` | `presentation/input-state-undo.lisp` | mutable — writable slot(s): buffer, cursor-pos |
 | `%input-session-clear` | `presentation/input-state-helpers.lisp` | mutable — writable slot(s): kind, overrides |

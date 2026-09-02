@@ -35,12 +35,16 @@
                     (rest tokens)))
            (cursor (nshell.domain.history::%make-history-logical-word-cursor
                     (nshell.domain.history::%history-logical-words tokens)))
-           (command-word (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
-                          cursor
-                          (first tokens)))
-           (argument-word (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
-                           cursor
-                           word-token)))
+           (command-word nil)
+           (argument-word nil))
+      (multiple-value-setq
+       (command-word cursor)
+       (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
+        cursor (first tokens)))
+      (multiple-value-setq
+       (argument-word cursor)
+       (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
+        cursor word-token))
       (expect (fboundp 'nshell.domain.history::copy-%history-token-window) :to-be-falsy)
       (expect (fboundp 'nshell.domain.history::copy-%history-logical-word-cursor) :to-be-falsy)
       (expect (fboundp 'nshell.domain.history::copy-%history-last-argument-scan-state) :to-be-falsy)

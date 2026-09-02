@@ -43,7 +43,7 @@
                   (push job-spec missing))))
           (values (nreverse selected) (nreverse missing))))))
 
-(defun %builtin-jobs (context args)
+(define-builtin %builtin-jobs (context args) ()
   (let ((job-monitor (shell-context-job-monitor context)))
     (multiple-value-bind (listings missing)
         (%select-job-listings job-monitor args)
@@ -57,7 +57,7 @@
                          out)))
        (if missing 1 0)))))
 
-(defun %builtin-disown (context args)
+(define-builtin %builtin-disown (context args) ()
   (let* ((job-monitor (shell-context-job-monitor context))
          (job-spec (%job-spec args))
          (job-id (%resolve-job-id job-monitor args)))
@@ -107,7 +107,7 @@
            (and pid (%find-job-id-by-pid job-monitor pid)))
          (nshell.domain.job-control:monitor-resolve-job-spec
           job-monitor job-spec)))))
-(defun %builtin-wait (context args)
+(define-builtin %builtin-wait (context args) ()
   (let* ((job-monitor (shell-context-job-monitor context))
          (process-registry (shell-context-process-registry context))
          (specs
@@ -223,7 +223,7 @@
 (defun %kill-list-output ()
   (format nil "~{~a~^ ~}~%"
           (mapcar #'car +job-signal-specs+)))
-(defun %builtin-kill (context args)
+(define-builtin %builtin-kill (context args) ()
   (multiple-value-bind (signal-designator targets list-signals-p parse-error)
       (%parse-kill-arguments args)
     (cond

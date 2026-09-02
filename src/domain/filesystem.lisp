@@ -1,13 +1,11 @@
 (in-package #:nshell.domain.filesystem)
 
-(defstruct (filesystem
-            (:constructor %allocate-filesystem
-                (directory-files subdirectories executable-p directory-map))
-            (:copier nil))
-  directory-files
-  subdirectories
-  executable-p
-  directory-map)
+(nshell.util:define-value-struct filesystem
+    ((directory-files nil)
+     (subdirectories nil)
+     (executable-p nil)
+     (directory-map nil))
+  :constructor %allocate-filesystem)
 
 (defun make-filesystem (&key directory-files subdirectories executable-p
                               (directory-map #'mapcar))

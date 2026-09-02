@@ -106,8 +106,14 @@
                           (:constructor %make-pipeline-node (commands &optional span)))
   (commands nil :type list :read-only t))
 
-(defun make-pipeline-node (commands &optional span)
-  (%make-pipeline-node (%copy-ast-list commands) span))
+(defmacro define-ast-constructor (name lambda-list constructor &body arguments)
+  `(defun ,name ,lambda-list
+     (,constructor ,@arguments)))
+
+(define-ast-constructor make-pipeline-node
+    (commands &optional span)
+    %make-pipeline-node
+    (%copy-ast-list commands) span)
 
 (defstruct (sequence-node (:include ast-node)
                            (:constructor %make-sequence-node (commands &optional separators span)))
@@ -116,10 +122,12 @@
   (commands nil :type list :read-only t)
   (separators nil :type list :read-only t))
 
-(defun make-sequence-node (commands &optional separators span)
-  (%make-sequence-node (%copy-ast-list commands)
-                       (%copy-ast-list separators)
-                       span))
+(define-ast-constructor make-sequence-node
+    (commands &optional separators span)
+    %make-sequence-node
+    (%copy-ast-list commands)
+    (%copy-ast-list separators)
+    span)
 
 (define-value-struct sequence-node-command-separator
     ((command nil)
@@ -141,11 +149,13 @@ shorter argument and the command list is one longer than the separators."
   (then-branch nil :type list :read-only t)
   (else-branch nil :type list :read-only t))
 
-(defun make-if-node (condition then-branch &optional else-branch span)
-  (%make-if-node condition
-                 (%copy-ast-list then-branch)
-                 (%copy-ast-list else-branch)
-                 span))
+(define-ast-constructor make-if-node
+    (condition then-branch &optional else-branch span)
+    %make-if-node
+    condition
+    (%copy-ast-list then-branch)
+    (%copy-ast-list else-branch)
+    span)
 
 (defstruct (for-node (:include ast-node)
                      (:constructor %make-for-node
@@ -154,19 +164,25 @@ shorter argument and the command list is one longer than the separators."
   (in-values nil :type list :read-only t)
   (body nil :type list :read-only t))
 
-(defun make-for-node (var-name in-values body &optional span)
-  (%make-for-node var-name
-                  (%copy-ast-list in-values)
-                  (%copy-ast-list body)
-                  span))
+(define-ast-constructor make-for-node
+    (var-name in-values body &optional span)
+    %make-for-node
+    var-name
+    (%copy-ast-list in-values)
+    (%copy-ast-list body)
+    span)
 
 (defstruct (while-node (:include ast-node)
                        (:constructor %make-while-node (condition body &optional span)))
   (condition nil :type (or null ast-node) :read-only t)
   (body nil :type list :read-only t))
 
-(defun make-while-node (condition body &optional span)
-  (%make-while-node condition (%copy-ast-list body) span))
+(define-ast-constructor make-while-node
+    (condition body &optional span)
+    %make-while-node
+    condition
+    (%copy-ast-list body)
+    span)
 
 (define-value-struct case-clause
     ((pattern "*" :type string)
@@ -183,15 +199,22 @@ shorter argument and the command list is one longer than the separators."
   (value "" :type string :read-only t)
   (clauses nil :type list :read-only t))
 
-(defun make-case-node (value clauses &optional span)
-  (%make-case-node value (%copy-ast-list clauses) span))
+(define-ast-constructor make-case-node
+    (value clauses &optional span)
+    %make-case-node
+    value
+    (%copy-ast-list clauses)
+    span)
 
 (defstruct (begin-end-node (:include ast-node)
                            (:constructor %make-begin-end-node (body &optional span)))
   (body nil :type list :read-only t))
 
-(defun make-begin-end-node (body &optional span)
-  (%make-begin-end-node (%copy-ast-list body) span))
+(define-ast-constructor make-begin-end-node
+    (body &optional span)
+    %make-begin-end-node
+    (%copy-ast-list body)
+    span)
 
 (defstruct (argument-node (:include ast-node)
                           (:constructor %make-argument-node (value &optional span)))

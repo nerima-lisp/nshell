@@ -45,7 +45,7 @@
   (when (and args (string= (first args) "-"))
     (format nil "~a~%" (namestring new-cwd))))
 
-(defun %builtin-cd (context args)
+(define-builtin %builtin-cd (context args) ()
   (handler-case
       (if (> (length args) 1)
           (%builtin-usage "cd" "cd [directory]")

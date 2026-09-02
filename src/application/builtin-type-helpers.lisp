@@ -49,6 +49,9 @@
     ((%builtin-option-p option '("-h" "--help")) :help)
     (t nil)))
 
+(defmacro %enable-type-option (options kind)
+  `(setf ,options (%type-options-with ,options ,kind)))
+
 (defun %type-color-enabled-p (option)
   (or (string= option "--color")
       (and (>= (length option) 8)
@@ -88,21 +91,21 @@
                 (return))
                (t
                 (case (%type-option-kind option)
-                  (:all (setf options (%type-options-with options :all)))
-                  (:short (setf options (%type-options-with options :short)))
-                  (:no-functions (setf options (%type-options-with options :no-functions)))
+                  (:all (%enable-type-option options :all))
+                  (:short (%enable-type-option options :short))
+                  (:no-functions (%enable-type-option options :no-functions))
                   (:color
                    (unless (%type-color-enabled-p option)
                      (return-from %parse-type-options
                        (values nil nil
                                (format nil "type: unknown option ~a~%" option)
                                2)))
-                   (setf options (%type-options-with options :color)))
-                  (:query (setf options (%type-options-with options :query)))
-                  (:path (setf options (%type-options-with options :path)))
-                  (:force-path (setf options (%type-options-with options :force-path)))
-                  (:type (setf options (%type-options-with options :type)))
-                  (:help (setf options (%type-options-with options :help)))
+                   (%enable-type-option options :color))
+                  (:query (%enable-type-option options :query))
+                  (:path (%enable-type-option options :path))
+                  (:force-path (%enable-type-option options :force-path))
+                  (:type (%enable-type-option options :type))
+                  (:help (%enable-type-option options :help))
                   (otherwise
                    (return-from %parse-type-options
                      (values nil nil

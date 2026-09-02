@@ -112,11 +112,13 @@
 (defun %record-missing-redirect-target (state)
   (let ((pending-redirect-token (%token-reduction-state-pending-redirect-token state)))
     (when pending-redirect-token
-      (%token-reduction-state-record-diagnostic
-       state
-       pending-redirect-token
-       (%token-reduction-missing-redirect-target-policy pending-redirect-token))
-      (%token-reduction-state-clear-pending-redirect state))))
+      (setf state
+            (%token-reduction-state-record-diagnostic
+             state
+             pending-redirect-token
+             (%token-reduction-missing-redirect-target-policy pending-redirect-token)))
+      (setf state (%token-reduction-state-clear-pending-redirect state)))
+    state))
 
 (defun %unterminated-process-substitution-token-p (value)
   (and (>= (length value) 2)
@@ -162,15 +164,16 @@
 
 (defun %flush-token-reduction-command (state)
   (when (%token-reduction-state-current-cmd state)
-    (%record-missing-redirect-target state)
-    (%token-reduction-state-record-command-entry state)
-    (%token-reduction-state-clear-command-context state)))
+    (setf state (%record-missing-redirect-target state))
+    (setf state (%token-reduction-state-record-command-entry state))
+    (setf state (%token-reduction-state-clear-command-context state)))
+  state)
 
 (defun %record-token-reduction-separator (state separator token)
   (if (%token-reduction-state-current-cmd state)
       (progn
-        (%record-missing-redirect-target state)
-        (%token-reduction-state-mark-pending-separator state separator token)
+        (setf state (%record-missing-redirect-target state))
+        (setf state (%token-reduction-state-mark-pending-separator state separator token))
         (%flush-token-reduction-command state))
       (unless (eq (token-type token) :newline)
         (%token-reduction-state-record-diagnostic
@@ -180,65 +183,70 @@
           (%separator-text separator))))))
 
 (defun %token-reduction-word (state tok)
-  (if (%token-reduction-state-current-cmd state)
-      (progn
-        (if (and (%token-reduction-state-last-word-token state)
-                 (= (token-end (%token-reduction-state-last-word-token state))
-                    (token-start tok)))
-            (if (%token-reduction-state-current-args state)
-                (let ((argument (first (%token-reduction-state-current-args state))))
-                  (%update-token-reduction-state
-                   state
-                   (current-args
-                    (cons (make-command-arg
-                           (concatenate 'string
-                                        (command-arg-value argument)
-                                        (token-value tok))
-                           nil
-                           (command-arg-here-doc-literal-p argument)
-                           (append (copy-list (command-arg-fragments argument))
-                                   (copy-list (token-fragments tok))))
-                          (rest (%token-reduction-state-current-args state))))))
-                (%update-token-reduction-state
-                 state
-                 (current-cmd
-                  (concatenate 'string
-                               (%token-reduction-state-current-cmd state)
-                               (token-value tok)))
+  (cond
+    ((null (%token-reduction-state-current-cmd state))
+     (%token-reduction-state-start-command state tok))
+    ((and (%token-reduction-state-last-word-token state)
+          (= (token-end (%token-reduction-state-last-word-token state))
+             (token-start tok)))
+     (let ((next-state
+             (if (%token-reduction-state-current-args state)
+                 (let ((argument (first (%token-reduction-state-current-args state))))
+                   (%update-token-reduction-state
+                    state
+                    (current-args
+                     (cons (make-command-arg
+                            (concatenate 'string
+                                         (command-arg-value argument)
+                                         (token-value tok))
+                            nil
+                            (command-arg-here-doc-literal-p argument)
+                            (append (copy-list (command-arg-fragments argument))
+                                    (copy-list (token-fragments tok))))
+                           (rest (%token-reduction-state-current-args state)))))
+                 (%update-token-reduction-state
+                  state
+                  (current-cmd
+                   (concatenate 'string
+                                (%token-reduction-state-current-cmd state)
+                                (token-value tok)))
                   (current-cmd-fragments
                    (append
                     (copy-list
                      (%token-reduction-state-current-cmd-fragments state))
-                    (copy-list (token-fragments tok)))))
-            (%token-reduction-state-append-word-argument state tok))
-        (%token-reduction-state-clear-pending-redirect state)
-        (%update-token-reduction-state state (last-word-token tok)))
-      (%token-reduction-state-start-command state tok)))
+                    (copy-list (token-fragments tok))))))))))
+       (%token-reduction-state-clear-pending-redirect next-state)
+       (%update-token-reduction-state next-state (last-word-token tok))))
+    (t
+     (let ((next-state (%token-reduction-state-append-word-argument state tok)))
+       (%token-reduction-state-clear-pending-redirect next-state)
+       (%update-token-reduction-state next-state (last-word-token tok)))))
 
 (defun %token-reduction-redirect (state tok)
-  (%update-token-reduction-state state (last-word-token nil))
+  (setf state (%update-token-reduction-state state (last-word-token nil)))
   (if (%token-reduction-state-current-cmd state)
       (progn
-        (%record-missing-redirect-target state)
-        (%token-reduction-state-append-redirect-argument state tok)
+        (setf state (%record-missing-redirect-target state))
+        (setf state (%token-reduction-state-append-redirect-argument state tok))
         ;; Targetless redirects (e.g. 2>&1) are self-contained and do
         ;; not start a pending redirect.
         (unless (%redirect-token-targetless-p tok)
-          (%token-reduction-state-mark-pending-redirect state tok)))
+          (setf state (%token-reduction-state-mark-pending-redirect state tok)))
+        state)
       (%token-reduction-state-record-diagnostic
        state
        tok
        (%token-reduction-missing-command-policy (token-value tok)))))
 
 (defun %token-reduction-error (state tok)
-  (%update-token-reduction-state state (last-word-token nil))
+  (setf state (%update-token-reduction-state state (last-word-token nil)))
   (%token-reduction-state-record-diagnostic
    state
    tok
    (%token-reduction-error-policy-from-token tok)))
 
 (defun %token-reduction-separator (state tok)
-  (%update-token-reduction-state state (last-word-token nil))
+  (setf state (%update-token-reduction-state state (last-word-token nil)))
   (let ((separator (%separator-from-token-type (token-type tok))))
     (if separator
         (progn
@@ -247,9 +255,10 @@
                      (%token-reduction-state-current-cmd state))
             ;; Normalize pipe-and-stderr into the existing redirect AST so
             ;; execution and pipeline planning share the ordinary pipe path.
-            (%token-reduction-state-append-argument
-             state
-             (make-command-arg "2>&1")))
+            (setf state
+                  (%token-reduction-state-append-argument
+                   state
+                   (make-command-arg "2>&1"))))
           (%record-token-reduction-separator state separator tok))
         (%token-reduction-state-record-diagnostic
          state
@@ -264,8 +273,7 @@
     (t (%token-reduction-separator state tok))))
 
 (defun %token-reduction-state-after-token (state tok)
-  (%reduce-token state tok)
-  state)
+  (%reduce-token state tok))
 
 (defun %token-reduction-state-from-tokens (tokens)
   (let ((state (reduce #'%token-reduction-state-after-token
@@ -281,4 +289,4 @@
 
 (defun %reduce-token-stream-result (tokens)
   (%token-reduction-result-from-state
-   (%token-reduction-state-from-tokens tokens))))
+   (%token-reduction-state-from-tokens tokens)))

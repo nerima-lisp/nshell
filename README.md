@@ -78,8 +78,8 @@ outside the tested support boundary.
 
 ```sh
 nix develop          # SBCL with CL_SOURCE_REGISTRY already set
-nix build .#checks.$(nix eval --raw --impure --expr 'builtins.currentSystem').default --no-link  # run the test suite
-nix flake check      # full hermetic gate on x86_64-linux CI
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix build .#checks.$(nix eval --raw --impure --expr 'builtins.currentSystem').default --no-link  # run the test suite
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix flake check      # full hermetic gate on x86_64-linux CI
 nix fmt              # format Nix sources (treefmt)
 nix build            # produces ./result/bin/nshell
 nix build .#releaseBundle

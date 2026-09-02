@@ -18,12 +18,11 @@
                            (nshell.infrastructure.persistence:load-config))))
             (when lines
               (multiple-value-bind (output code)
-                  (%execute-with-repl-shell-context
-                   (lambda (context)
-                     (nshell.application:source-lines
-                      context
-                      lines
-                      source-name)))
+                  (%with-repl-shell-context (context)
+                    (nshell.application:source-lines
+                     context
+                     lines
+                     source-name))
                 (declare (ignore output))
                 (unless (zerop code)
                   (format *error-output*

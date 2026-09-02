@@ -13,9 +13,8 @@
         (progn
           (%reap-background-jobs-for-command cmd)
           (multiple-value-bind (output code)
-              (%execute-with-repl-shell-context
-               (lambda (context)
-                 (funcall handler context args)))
+              (%with-repl-shell-context (context)
+                (funcall handler context args))
             (declare (ignore output))
             (values t code)))
         (values nil nil))))
@@ -27,8 +26,7 @@
          (cmd (nshell.domain.parsing:command-node-command expanded-ast)))
     (%reap-background-jobs-for-command cmd)
     (nth-value 1
-               (%execute-with-repl-shell-context
-                (lambda (context)
-                  (nshell.application:execute-command-node-in-context
-                   context
-                   expanded-ast))))))
+               (%with-repl-shell-context (context)
+                 (nshell.application:execute-command-node-in-context
+                  context
+                  expanded-ast)))))

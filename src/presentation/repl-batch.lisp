@@ -22,9 +22,8 @@
 (defun %run-batch-source-lines (lines)
   (handler-case
          (multiple-value-bind (output code)
-             (%execute-with-repl-shell-context
-              (lambda (context)
-                (nshell.application:source-lines context lines)))
+             (%with-repl-shell-context (context)
+               (nshell.application:source-lines context lines))
         (declare (ignore output))
         (setf *last-exit-code* (or code 0)))
     (error (condition)
@@ -50,10 +49,9 @@ script as $argv. Returns the exit status of the last command."
   (handler-case
       (let ((nshell.domain.expansion:*positional-args* script-args))
         (multiple-value-bind (output code)
-            (%execute-with-repl-shell-context
-             (lambda (context)
-               (funcall (nshell.application:lookup-builtin "source")
-                        context (list path))))
+            (%with-repl-shell-context (context)
+              (funcall (nshell.application:lookup-builtin "source")
+                       context (list path)))
           (declare (ignore output))
           (setf *last-exit-code* (or code 0))))
     (error (condition)

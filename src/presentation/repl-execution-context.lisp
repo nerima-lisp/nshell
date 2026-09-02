@@ -44,3 +44,8 @@
       (when output
         (write-string output))
       (values output (or code 0)))))
+
+(defmacro %with-repl-shell-context ((context) &body body)
+  `(%execute-with-repl-shell-context
+    (lambda (,context)
+      ,@body)))

@@ -108,9 +108,3 @@
 (defun make-pty-stream (fd)
   "Create an unbuffered character stream for FD."
   (sb-sys:make-fd-stream fd :input t :output t :buffering :none))
-
-(defstruct pty-process
-  pid
-  pgid
-  master-fd
-  stream)

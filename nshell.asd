@@ -181,6 +181,7 @@
    (:file "infrastructure/acl/syscall-process-substitution")
    (:file "infrastructure/acl/syscall-terminal")
    (:file "infrastructure/acl/git")
+   (:file "infrastructure/acl/pty-data")
    (:file "infrastructure/acl/pty")
    (:file "infrastructure/acl/pty-spawn")
    (:file "infrastructure/acl/signal-acl")

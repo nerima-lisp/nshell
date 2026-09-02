@@ -13,7 +13,7 @@
     "Pipeline stages should apply their own input and output redirects."
     (with-repl-test-state
       (let* ((root (merge-pathnames (format nil "nshell-pipeline-redir-~d/"
-                                            (random 1000000))
+                                            (get-internal-real-time))
                                     (host-kit:temporary-directory)))
              (input (merge-pathnames "input.txt" root))
              (output (merge-pathnames "output.txt" root))
@@ -34,11 +34,8 @@
                       (call-repl-execute-ast ast)
                     (declare (ignore output-text))
                     (expect 0 :to-equal code))
-                  (expect (probe-file output) :to-be-truthy)
-                   (with-open-file (stream output :direction :input)
-                     (let ((actual (make-string (file-length stream))))
-                       (read-sequence actual stream)
-                       (expect content :to-equal actual))))))
+                  (expect (wait-for-file-content (namestring output) content)
+                          :to-be-truthy))))
           (handler-case
               (when (probe-file root)
                 (host-kit:delete-directory-tree root :validate t))

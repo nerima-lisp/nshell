@@ -24,6 +24,18 @@
   pending-sep-token
   (errors '() :type list))
 
+(defmacro %update-token-reduction-state (state &body slot-updates)
+  "Apply named reducer-state updates and return STATE for threaded folds."
+  (let ((accessor (lambda (slot)
+                    (intern (format nil "%TOKEN-REDUCTION-STATE-~A" slot)
+                            (symbol-package '%update-token-reduction-state)))))
+    `(progn
+       (setf ,@(mapcan (lambda (update)
+                         (destructuring-bind (slot value) update
+                           (list `(,(funcall accessor slot) ,state) value)))
+                       slot-updates))
+       ,state)))
+
 (define-value-struct %token-reduction-result
   ((commands '() :type list)
    (errors '() :type list)))

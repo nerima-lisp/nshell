@@ -56,30 +56,30 @@
     (%token-reduction-argument-from-redirect-token tok))))
 
 (defun %token-reduction-state-start-command (state tok)
-  (setf (%token-reduction-state-current-cmd state) (token-value tok)
-        (%token-reduction-state-current-cmd-token state) tok
-        (%token-reduction-state-current-cmd-fragments state)
-        (copy-list (token-fragments tok))
-        (%token-reduction-state-last-word-token state) tok)
-  state)
+  (%update-token-reduction-state
+   state
+   (current-cmd (token-value tok))
+   (current-cmd-token tok)
+   (current-cmd-fragments (copy-list (token-fragments tok)))
+   (last-word-token tok)))
 
 (defun %token-reduction-state-clear-pending-redirect (state)
-  (setf (%token-reduction-state-pending-redirect-token state) nil)
-  state)
+  (%update-token-reduction-state state (pending-redirect-token nil)))
 
 (defun %token-reduction-state-mark-pending-redirect (state tok)
-  (setf (%token-reduction-state-pending-redirect-token state) tok)
-  state)
+  (%update-token-reduction-state state (pending-redirect-token tok)))
 
 (defun %token-reduction-state-mark-pending-separator (state separator token)
-  (setf (%token-reduction-state-pending-sep state) separator
-        (%token-reduction-state-pending-sep-token state) token)
-  state)
+  (%update-token-reduction-state
+   state
+   (pending-sep separator)
+   (pending-sep-token token)))
 
 (defun %token-reduction-state-clear-pending-separator (state)
-  (setf (%token-reduction-state-pending-sep state) nil
-        (%token-reduction-state-pending-sep-token state) nil)
-  state)
+  (%update-token-reduction-state
+   state
+   (pending-sep nil)
+   (pending-sep-token nil)))
 
 (defun %token-reduction-diagnostic (token policy)
   (%token-diagnostic

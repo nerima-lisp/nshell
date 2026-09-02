@@ -36,6 +36,7 @@
      (rest nil :type list)
      (all nil :type list))
   :accessor-prefix %control-flow-header-args
+  :private-accessor-prefix %control-flow-header-args
   :constructor %make-control-flow-header-args
   :predicate %control-flow-header-args-p
   :public-accessors nil)
@@ -102,6 +103,7 @@
     ((stack nil :type list)
      (unexpected-keyword nil))
   :accessor-prefix %control-flow-stack-transition
+  :private-accessor-prefix %control-flow-stack-transition
   :constructor %make-control-flow-stack-transition
   :predicate %control-flow-stack-transition-p
   :public-accessors nil)
@@ -147,6 +149,7 @@
     ((start 0 :type integer)
      (end 0 :type integer))
   :accessor-prefix %control-flow-diagnostic-span
+  :private-accessor-prefix %control-flow-diagnostic-span
   :constructor %make-control-flow-diagnostic-span
   :predicate %control-flow-diagnostic-span-p
   :public-accessors nil)
@@ -155,6 +158,7 @@
     ((start 0 :type integer)
      (end 0 :type integer))
   :accessor-prefix %control-flow-node-span
+  :private-accessor-prefix %control-flow-node-span
   :constructor %make-control-flow-node-span
   :predicate %control-flow-node-span-p
   :public-accessors nil)

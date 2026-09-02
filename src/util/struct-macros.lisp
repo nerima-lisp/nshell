@@ -35,6 +35,7 @@ and NIL returns the slot value directly."
 
 (defmacro define-value-struct (name (&rest slot-specs)
                                &key documentation keyword-constructor accessor-prefix
+                                    private-accessor-prefix
                                     (public-accessors t)
                                     constructor (predicate nil predicate-supplied-p))
   "Define an opaque, read-only value struct NAME plus public accessors that
@@ -58,6 +59,9 @@ COPY-NAME is generated: value structs are opaque and never shallow-copied.
 Keyword options tune the generated names to fit existing code:
 :ACCESSOR-PREFIX overrides the public accessor prefix (default: NAME sans %),
 so a type like %COMPLETION-CANDIDATE can expose CANDIDATE-* readers.
+:PRIVATE-ACCESSOR-PREFIX overrides the generated DEFSTRUCT conc-name, which
+is useful when a value type is split into a private type name and an existing
+internal accessor namespace.
 :PUBLIC-ACCESSORS controls whether those public readers are emitted; set it to
 NIL for opaque implementation values that must not cross a package boundary.
 :CONSTRUCTOR overrides the private constructor name (default: %MAKE-<NAME sans
@@ -67,8 +71,10 @@ deliberately-private predicates."
   (let* ((bare-name (let ((text (symbol-name name)))
                       (if (char= (char text 0) #\%) (subseq text 1) text)))
          (public-prefix (if accessor-prefix (symbol-name accessor-prefix) bare-name))
+         (private-prefix (or (and private-accessor-prefix
+                                  (symbol-name private-accessor-prefix))
+                             (format nil "%~A" bare-name)))
          (constructor-name (or constructor (intern (format nil "%MAKE-~A" bare-name))))
-         (private-prefix (format nil "%~A" bare-name))
          (conc-name (intern (format nil "~A-" private-prefix)))
          (constructor-lambda-list
            (%value-struct-constructor-lambda-list slot-specs keyword-constructor)))

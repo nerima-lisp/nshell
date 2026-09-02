@@ -20,13 +20,11 @@
 (defun parse-errors (result)
   (parse-result-errors result))
 
-(defstruct (%parse-result-facts
-            (:constructor %make-parse-result-facts
-                (ast errors incomplete))
-            (:copier nil))
-  (ast nil :read-only t)
-  (errors nil :type list :read-only t)
-  (incomplete nil :type boolean :read-only t))
+(define-value-struct %parse-result-facts
+    ((ast nil :type (or null ast-node))
+     (errors nil :type list)
+     (incomplete nil :type boolean))
+  :public-accessors nil)
 
 (defun %parse-result-facts-from-result (result)
   (%make-parse-result-facts
@@ -70,10 +68,10 @@
                    :key #'parse-diagnostic-kind))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (%parsed-command-line-case-clause
-              (:constructor %make-parsed-command-line-case-clause (keyword body)))
-    (keyword nil :type keyword :read-only t)
-    (body nil :type list :read-only t))
+  (define-value-struct %parsed-command-line-case-clause
+      ((keyword nil :type keyword)
+       (body nil :type list))
+    :public-accessors nil)
 
   (defun %parsed-command-line-case-clause (keyword clauses)
     (let ((body (cdr (assoc keyword clauses))))

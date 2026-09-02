@@ -110,7 +110,9 @@ jobs:
           perl -0777 -ne '
             die "coverage summary schema is incomplete\n"
               unless /"expression-percent"\s*:\s*[0-9.]+/
-                 && /"tests-selected"\s*:\s*[0-9]+/
+                 && /"tests-selected"\s*:\s*[1-9][0-9]*/
+                 && /"tests-passed"\s*:\s*true/
+                 && /"minimum-passed"\s*:\s*true/
                  && /"target-reached"\s*:\s*(?:true|false)/;
             print "coverage summary schema verified\n";
           ' "$coverage_dir/coverage-summary.json"

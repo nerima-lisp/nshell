@@ -24,7 +24,10 @@
        (eq (signal-name a) (signal-name b))
        (= (signal-number a) (signal-number b))))
 
-(defvar +sigint+  (load-time-value (make-signal :sigint 2)))
-(defvar +sigterm+ (load-time-value (make-signal :sigterm 15)))
-(defvar +sigcont+ (load-time-value (make-signal :sigcont 18)))
-(defvar +sigchld+ (load-time-value (make-signal :sigchld 17)))
+(defmacro define-signal-constant (name signal-name number)
+  `(defvar ,name (load-time-value (make-signal ,signal-name ,number))))
+
+(define-signal-constant +sigint+ :sigint 2)
+(define-signal-constant +sigterm+ :sigterm 15)
+(define-signal-constant +sigcont+ :sigcont 18)
+(define-signal-constant +sigchld+ :sigchld 17)

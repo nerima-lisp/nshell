@@ -74,8 +74,7 @@
   (when (stringp text)
     (handler-case
         (parse-integer text :junk-allowed nil)
-      (parse-error () nil)
-      (type-error () nil))))
+      (parse-error () nil))))
 (defun %parse-positive-integer (text)
   (let ((value (%parse-integer-designator text)))
     (when (and value (plusp value))

@@ -17,7 +17,8 @@
 (define-value-struct command-redirect-split-state
     ((clean nil :type list)
      (redirects nil :type list))
-  :public-accessors nil)
+  :public-accessors nil
+  :predicate %command-redirect-split-state-p)
 
 (defun %empty-command-redirect-split-state ()
   (%make-command-redirect-split-state nil nil))

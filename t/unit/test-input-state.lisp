@@ -19,9 +19,10 @@
               (nshell.domain.input:key-event-data event))))
 
   (it "rejects non-character key payloads"
-    (expect (lambda ()
-              (nshell.domain.input:make-key-event :char "x"))
-            :to-throw 'type-error)))
+    (let ((invalid-value (copy-seq "x")))
+      (expect (lambda ()
+                (nshell.domain.input:make-key-event :char invalid-value))
+              :to-throw 'type-error))))
 
 (describe "input-state-tests"
   (it "input-state-constructor-macro-expands-defaults-and-keywords"

@@ -143,8 +143,19 @@
                          "ioctl(TIOCSWINSZ)"))
       (sb-alien:free-alien winsize))))
 
+(defun %validate-pty-spawn-input (program args rows cols)
+  (check-type program string)
+  (check-type args list)
+  (unless (every #'stringp args)
+    (error "PTY arguments must all be strings: ~S" args))
+  (unless (and (integerp rows) (plusp rows)
+               (integerp cols) (plusp cols))
+    (error "PTY dimensions must be positive integers: ~S x ~S" rows cols))
+  t)
+
 (defun pty-spawn (program args &key (rows 24) (cols 80))
   "Spawn PROGRAM with ARGS attached to a newly opened PTY."
+  (%validate-pty-spawn-input program args rows cols)
   #-(or darwin linux)
   (declare (ignore program args rows cols))
   #-(or darwin linux)

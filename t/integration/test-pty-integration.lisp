@@ -54,6 +54,23 @@
        (nshell.infrastructure.acl::%pty-close-fd ,write-fd))))
 
 (describe "pty-readiness-protocol"
+  (it "validates PTY spawn input before opening resources"
+    (expect (nshell.infrastructure.acl::%validate-pty-spawn-input
+             "/bin/sh" '("-c" "true") 24 80)
+            :to-be-truthy)
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%validate-pty-spawn-input
+               nil '() 24 80))
+            :to-throw 'type-error)
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%validate-pty-spawn-input
+               "/bin/sh" '("-c" 1) 24 80))
+            :to-throw 'error)
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%validate-pty-spawn-input
+               "/bin/sh" '() 0 80))
+            :to-throw 'error))
+
   (it "encodes argv and environment entries as a null-terminated vector"
     "The exec boundary receives stable C strings and a trailing null pointer."
     (let ((vector (nshell.infrastructure.acl::%make-c-string-vector

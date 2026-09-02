@@ -11,3 +11,11 @@
   (fd sb-alien:int)
   (request sb-alien:unsigned-long)
   (arg sb-sys:system-area-pointer))
+
+(defmacro with-checked-syscall ((name call) &body body)
+  `(let ((result ,call))
+     (when (%syscall-failed-p result)
+       (error "~a failed (result=~s, errno=~s)"
+              ,name result (sb-unix::get-errno)))
+     ,@body
+     result))

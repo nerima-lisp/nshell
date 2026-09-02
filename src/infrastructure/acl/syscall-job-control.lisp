@@ -12,19 +12,11 @@
 
 (defun set-foreground-pgroup (pgid)
   "Make PGID the foreground process group for the controlling terminal."
-  (let ((result (%tcsetpgrp 0 pgid)))
-    (when (%syscall-failed-p result)
-      (error "tcsetpgrp failed (result=~s, errno=~s)"
-             result (sb-unix::get-errno)))
-    result))
+  (with-checked-syscall ("tcsetpgrp" (%tcsetpgrp 0 pgid))))
 
 (defun get-foreground-pgroup ()
   "Return the foreground process group of the controlling terminal."
-  (let ((result (%tcgetpgrp 0)))
-    (when (%syscall-failed-p result)
-      (error "tcgetpgrp failed (result=~s, errno=~s)"
-             result (sb-unix::get-errno)))
-    result))
+  (with-checked-syscall ("tcgetpgrp" (%tcgetpgrp 0))))
 
 (defun %current-shell-pgid ()
   (let ((pgid (and (boundp '*shell-pgid*) *shell-pgid*)))

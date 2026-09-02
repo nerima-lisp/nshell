@@ -643,11 +643,12 @@
   (it "type-path-candidate-selection-respects-all"
     "type path candidate selection keeps the first match unless --all is active."
     (let ((paths '((:path "/one") (:path "/two")))
-          (options (nshell.application::make-%type-options)))
+          (options (nshell.application::%make-type-options
+                    nil nil nil nil nil nil nil nil nil)))
       (expect '((:path "/one"))
               :to-equal
               (nshell.application::%type-add-path-candidates nil options paths))
-      (setf (nshell.application::%type-options-all-p options) t)
+      (setf options (nshell.application::%type-options-with options :all))
       (expect '((:path "/two") (:path "/one"))
               :to-equal
               (nshell.application::%type-add-path-candidates nil options paths))))
@@ -942,13 +943,14 @@
   (it "type-mode-selects-the-most-specific-requested-mode"
     "type mode selection keeps the option precedence explicit and deterministic."
     (labels ((mode (&rest flags)
-               (let ((options (nshell.application::make-%type-options)))
+               (let ((options (nshell.application::%make-type-options
+                               nil nil nil nil nil nil nil nil nil)))
                  (dolist (flag flags)
                    (ecase flag
-                     (:query (setf (nshell.application::%type-options-query-p options) t))
-                     (:path (setf (nshell.application::%type-options-path-p options) t))
-                     (:force-path (setf (nshell.application::%type-options-force-path-p options) t))
-                     (:type (setf (nshell.application::%type-options-type-p options) t))))
+                     (:query (setf options (nshell.application::%type-options-with options :query)))
+                     (:path (setf options (nshell.application::%type-options-with options :path)))
+                     (:force-path (setf options (nshell.application::%type-options-with options :force-path)))
+                     (:type (setf options (nshell.application::%type-options-with options :type)))))
                  (nshell.application::%builtin-type-mode options))))
       (expect :default :to-equal (mode))
       (expect :type :to-equal (mode :type))

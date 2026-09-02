@@ -32,6 +32,15 @@
   (it "trampoline-termination"
     (assert-trampoline-sequence nil nil))
 
+  (it "trampoline-does-not-invoke-a-nil-continuation"
+    (let ((calls 0))
+      (expect nil :to-be
+        (nshell.presentation:trampoline
+         (lambda ()
+           (incf calls)
+           nil)))
+      (expect 1 :to-equal calls)))
+
   (it "with-cps-trampoline-runs-the-initial-step"
     (let ((steps '()))
       (nshell.presentation:with-cps-trampoline

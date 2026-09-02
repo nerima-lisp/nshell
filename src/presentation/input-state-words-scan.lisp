@@ -6,10 +6,11 @@
     ((start 0 :type fixnum)
      (end 0 :type fixnum)))
 
-(defstruct (%shell-token-range-set
-            (:constructor %make-shell-token-range-set (ranges))
-            (:conc-name %shell-token-range-set-))
-  (ranges nil :type list :read-only t))
+(define-value-struct %shell-token-range-set
+    ((ranges nil :type list))
+  :constructor %make-shell-token-range-set
+  :predicate %shell-token-range-set-p
+  :public-accessors nil)
 
 (defun shell-token-range-set-empty-p (range-set)
   (null (%shell-token-range-set-ranges range-set)))

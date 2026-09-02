@@ -53,6 +53,34 @@
       (expect "git main" :to-equal (nshell.presentation::buffer-splice-result splice "git old main"))
       (expect 4 :to-equal (nshell.presentation::buffer-splice-cursor-pos splice))))
 
+  (it "input-state-constructor-retains-data-fields-and-defaults"
+    (let ((state (input-state :buffer "echo"
+                              :cursor-pos 2
+                              :completion-index 1
+                              :completion-base-buffer "ec"
+                              :completion-base-cursor 2
+                              :last-candidates '("echo")
+                              :suggestion "echo"
+                              :mode :vi-c
+                              :vi-count 3
+                              :search-query "ec"
+                              :search-index 1
+                              :undo-stack '(:before)
+                              :redo-stack '(:after))))
+      (expect "echo" :to-be (nshell.presentation:input-state-buffer state))
+      (expect 2 :to-be (nshell.presentation:input-state-cursor-pos state))
+      (expect 1 :to-be (nshell.presentation:input-state-completion-index state))
+      (expect "ec" :to-be (nshell.presentation:input-state-completion-base-buffer state))
+      (expect 2 :to-be (nshell.presentation:input-state-completion-base-cursor state))
+      (expect '("echo") :to-equal (nshell.presentation:input-state-last-candidates state))
+      (expect :vi-c :to-be (nshell.presentation:input-state-mode state))
+      (expect 3 :to-be (nshell.presentation::input-state-vi-count state))
+      (expect "ec" :to-be (nshell.presentation:input-state-search-query state))
+      (expect 1 :to-be (nshell.presentation:input-state-search-index state))
+      (expect '(:before) :to-equal (nshell.presentation::input-state-undo-stack state))
+      (expect '(:after) :to-equal (nshell.presentation::input-state-redo-stack state))
+      (expect nil :to-be (nshell.presentation:input-state-kill-ring state))))
+
   (it "input-state-buffer-insertion-projects-capped-result-and-cursor"
     (let* ((buffer "echo  done")
            (insertion (nshell.presentation::buffer-insertion-at-cursor

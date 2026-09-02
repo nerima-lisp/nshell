@@ -6,6 +6,27 @@
      ,test))
 
 (describe "repl-state-data-contracts"
+  (it "creates isolated name and process tables"
+    (let ((names (nshell.presentation::%make-repl-name-table))
+          (processes (nshell.presentation::%make-repl-process-registry)))
+      (expect-repl-table-contract names
+        (expect (funcall (hash-table-test names) "x" "x") :to-be-truthy))
+      (expect-repl-table-contract processes
+        (expect (funcall (hash-table-test processes) 1 1) :to-be-truthy))
+      (setf (gethash "alias" names) "value")
+      (expect (null (gethash "alias" processes)) :to-be-truthy)))
+
+  (it "recreates every mutable repl table when reset"
+    (let ((old-aliases nshell.presentation::*aliases*)
+          (old-processes nshell.presentation::*proc-registry*))
+      (setf (gethash "stale" nshell.presentation::*aliases*) t
+            (gethash 1 nshell.presentation::*proc-registry*) t)
+      (nshell.presentation::%reset-repl-state-tables)
+      (expect (not (eq old-aliases nshell.presentation::*aliases*)) :to-be-truthy)
+      (expect (not (eq old-processes nshell.presentation::*proc-registry*)) :to-be-truthy)
+      (expect (null (gethash "stale" nshell.presentation::*aliases*)) :to-be-truthy)
+      (expect (null (gethash 1 nshell.presentation::*proc-registry*)) :to-be-truthy)))
+
   (it "constructs the canonical input state defaults"
     (let ((state (nshell.presentation:make-input-state)))
       (expect "" :to-equal

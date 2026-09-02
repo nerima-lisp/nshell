@@ -33,12 +33,12 @@
       (%history-search-options args)
     (if query-parts
         (values
-      (%history-format-entries
+         (%history-format-entries
           (history-kit:history-search
-            history (%string-join query-parts " ")
-            :mode mode
-            :case-sensitive case-sensitive
-            :smartcase (not case-sensitive)))
+           history (%string-join query-parts " ")
+           :mode mode
+           :case-sensitive case-sensitive
+           :smartcase (not case-sensitive)))
          0)
         (values (%history-usage) 1))))
 

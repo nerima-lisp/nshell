@@ -2,12 +2,11 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (%buffer-splice
-             (:constructor make-buffer-splice (start end &optional (inserted "")))
-             (:conc-name %buffer-splice-))
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t)
-  (inserted "" :type string :read-only t))
+(nshell.util:define-value-struct %buffer-splice
+    ((start 0 :type fixnum)
+     (end 0 :type fixnum)
+     (inserted "" :type string :optional t))
+  :constructor make-buffer-splice)
 
 (defun buffer-splice-result (splice buffer)
   (concatenate 'string
@@ -19,15 +18,13 @@
   (+ (%buffer-splice-start splice)
      (length (%buffer-splice-inserted splice))))
 
-(defstruct (%buffer-insertion-plan
-             (:constructor %make-buffer-insertion-plan (splice))
-             (:conc-name %buffer-insertion-plan-))
-  splice)
+(nshell.util:define-value-struct %buffer-insertion-plan
+    ((splice nil))
+  :public-accessors nil)
 
-(defstruct (%buffer-insertion
-             (:constructor %make-buffer-insertion (plan))
-             (:conc-name %buffer-insertion-))
-  plan)
+(nshell.util:define-value-struct %buffer-insertion
+    ((plan nil))
+  :public-accessors nil)
 
 (defun buffer-insertion-at-cursor (buffer cursor text)
   (when (stringp text)
@@ -50,21 +47,18 @@
   (buffer-splice-cursor-pos
    (%buffer-insertion-plan-splice (%buffer-insertion-plan insertion))))
 
-(defstruct (%buffer-deletion
-             (:constructor %make-buffer-deletion (plan))
-             (:conc-name %buffer-deletion-))
-  plan)
+(nshell.util:define-value-struct %buffer-deletion
+    ((plan nil))
+  :public-accessors nil)
 
-(defstruct (%buffer-deletion-plan
-             (:constructor %make-buffer-deletion-plan (splice))
-             (:conc-name %buffer-deletion-plan-))
-  splice)
+(nshell.util:define-value-struct %buffer-deletion-plan
+    ((splice nil))
+  :public-accessors nil)
 
-(defstruct (%buffer-deletion-request
-             (:constructor %make-buffer-deletion-request (kind cursor))
-             (:conc-name %buffer-deletion-request-))
-  (kind :before-cursor :read-only t)
-  (cursor 0 :type fixnum :read-only t))
+(nshell.util:define-value-struct %buffer-deletion-request
+    ((kind :before-cursor)
+     (cursor 0 :type fixnum))
+  :public-accessors nil)
 
 (defun buffer-deletion-request-before-cursor (cursor)
   (%make-buffer-deletion-request :before-cursor cursor))
@@ -95,13 +89,12 @@
   (buffer-splice-cursor-pos
    (%buffer-deletion-plan-splice (%buffer-deletion-plan deletion))))
 
-(defstruct (%cursor-move-request
-             (:constructor %make-cursor-move-request (kind cursor delta position))
-             (:conc-name %cursor-move-request-))
-  (kind :by :read-only t)
-  (cursor 0 :type fixnum :read-only t)
-  (delta 0 :type fixnum :read-only t)
-  (position 0 :type fixnum :read-only t))
+(nshell.util:define-value-struct %cursor-move-request
+    ((kind :by)
+     (cursor 0 :type fixnum)
+     (delta 0 :type fixnum)
+     (position 0 :type fixnum))
+  :public-accessors nil)
 
 (defun cursor-move-request-by (cursor-pos delta)
   (%make-cursor-move-request :by cursor-pos delta 0))
@@ -109,10 +102,9 @@
 (defun cursor-move-request-to (position)
   (%make-cursor-move-request :to 0 0 position))
 
-(defstruct (%cursor-move-edit
-             (:constructor %make-cursor-move-edit (cursor-pos))
-             (:conc-name %cursor-move-edit-))
-  (cursor-pos 0 :type fixnum :read-only t))
+(nshell.util:define-value-struct %cursor-move-edit
+    ((cursor-pos 0 :type fixnum))
+  :public-accessors nil)
 
 (defun cursor-move-edit-for-request (request)
   (case (%cursor-move-request-kind request)
@@ -124,18 +116,16 @@
      (%make-cursor-move-edit
       (%cursor-move-request-position request)))))
 
-(defstruct (%buffer-clear-plan
-             (:constructor %make-buffer-clear-plan
-                 (&key buffer cursor-pos mode vi-count vi-visual-anchor
-                       clear-completion-p clear-history-search-p))
-             (:conc-name %buffer-clear-plan-))
-  (buffer "" :type string :read-only t)
-  (cursor-pos 0 :type fixnum :read-only t)
-  (mode :insert :read-only t)
-  (vi-count nil :read-only t)
-  (vi-visual-anchor :clear :read-only t)
-  (clear-completion-p t :type boolean :read-only t)
-  (clear-history-search-p t :type boolean :read-only t))
+(nshell.util:define-value-struct %buffer-clear-plan
+    ((buffer "" :type string)
+     (cursor-pos 0 :type fixnum)
+     (mode :insert)
+     (vi-count nil)
+     (vi-visual-anchor :clear)
+     (clear-completion-p t :type boolean)
+     (clear-history-search-p t :type boolean))
+  :public-accessors nil
+  :keyword-constructor t)
 
 (defun make-buffer-clear-plan ()
   (%make-buffer-clear-plan
@@ -147,10 +137,9 @@
    :clear-completion-p t
    :clear-history-search-p t))
 
-(defstruct (%buffer-clear-edit
-             (:constructor %make-buffer-clear-edit (plan))
-             (:conc-name %buffer-clear-edit-))
-  plan)
+(nshell.util:define-value-struct %buffer-clear-edit
+    ((plan nil))
+  :public-accessors nil)
 
 (defun make-buffer-clear-edit ()
   (%make-buffer-clear-edit (make-buffer-clear-plan)))

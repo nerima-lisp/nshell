@@ -1,15 +1,13 @@
 (in-package #:nshell.domain.completion)
 
-(defstruct (completion-context
-            (:constructor %make-raw-completion-context
-                (&key (command "") (argument-prefix "") command-position-p
-                      (argument-words '()) redirection-target-p))
-            (:conc-name %completion-context-))
-  (command "" :type string :read-only t)
-  (argument-prefix "" :type string :read-only t)
-  (argument-words '() :type list :read-only t)
-  (command-position-p nil :type boolean :read-only t)
-  (redirection-target-p nil :type boolean :read-only t))
+(nshell.util:define-value-struct completion-context
+    ((command "" :type string)
+     (argument-prefix "" :type string)
+     (argument-words '() :type list :copy :list)
+     (command-position-p nil :type boolean)
+     (redirection-target-p nil :type boolean))
+  :constructor %make-raw-completion-context
+  :keyword-constructor t)
 
 (defun %make-completion-context (&key (command "") (argument-prefix "")
                                       command-position-p
@@ -22,38 +20,22 @@
    :command-position-p command-position-p
    :redirection-target-p redirection-target-p))
 
-(defun completion-context-command (context)
-  (%completion-context-command context))
+(nshell.util:define-value-struct %completion-word
+    ((value "" :type string)
+     (start 0 :type integer)
+     (end 0 :type integer))
+  :constructor %make-completion-word
+  :public-accessors nil)
 
-(defun completion-context-argument-prefix (context)
-  (%completion-context-argument-prefix context))
-
-(defun completion-context-argument-words (context)
-  (copy-list (%completion-context-argument-words context)))
-
-(defun completion-context-command-position-p (context)
-  (%completion-context-command-position-p context))
-
-(defun completion-context-redirection-target-p (context)
-  (%completion-context-redirection-target-p context))
-
-(defstruct (%completion-word
-            (:constructor %make-completion-word (value start end))
-            (:conc-name %completion-word-))
-  (value "" :type string :read-only t)
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t))
-
-(defstruct (%completion-input-analysis
-            (:constructor %make-completion-input-analysis
-                (partial-input cursor segment-tokens words current-word command-word))
-            (:conc-name %completion-input-analysis-))
-  (partial-input "" :type string :read-only t)
-  (cursor 0 :type integer :read-only t)
-  (segment-tokens '() :type list :read-only t)
-  (words '() :type list :read-only t)
-  (current-word nil :read-only t)
-  (command-word nil :read-only t))
+(nshell.util:define-value-struct %completion-input-analysis
+    ((partial-input "" :type string)
+     (cursor 0 :type integer)
+     (segment-tokens '() :type list)
+     (words '() :type list)
+     (current-word nil)
+     (command-word nil))
+  :constructor %make-completion-input-analysis
+  :public-accessors nil)
 
 (defun %starts-with-p (prefix text)
   (and (>= (length text) (length prefix))

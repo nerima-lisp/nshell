@@ -643,8 +643,7 @@
   (it "type-path-candidate-selection-respects-all"
     "type path candidate selection keeps the first match unless --all is active."
     (let ((paths '((:path "/one") (:path "/two")))
-          (options (nshell.application::%make-type-options
-                    nil nil nil nil nil nil nil nil nil)))
+          (options (nshell.application::%make-type-options)))
       (expect '((:path "/one"))
               :to-equal
               (nshell.application::%type-add-path-candidates nil options paths))
@@ -943,8 +942,7 @@
   (it "type-mode-selects-the-most-specific-requested-mode"
     "type mode selection keeps the option precedence explicit and deterministic."
     (labels ((mode (&rest flags)
-               (let ((options (nshell.application::%make-type-options
-                               nil nil nil nil nil nil nil nil nil)))
+               (let ((options (nshell.application::%make-type-options)))
                  (dolist (flag flags)
                    (ecase flag
                      (:query (setf options (nshell.application::%type-options-with options :query)))

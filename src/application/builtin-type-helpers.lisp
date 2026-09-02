@@ -12,19 +12,20 @@
      (type-p nil)
      (help-p nil))
   :constructor %make-type-options
+  :keyword-constructor t
   :public-accessors nil)
 
 (defun %type-options-with (options kind)
   (%make-type-options
-   (or (%type-options-all-p options) (eq kind :all))
-   (or (%type-options-short-p options) (eq kind :short))
-   (or (%type-options-no-functions-p options) (eq kind :no-functions))
-   (or (%type-options-color-p options) (eq kind :color))
-   (or (%type-options-query-p options) (eq kind :query))
-   (or (%type-options-path-p options) (eq kind :path))
-   (or (%type-options-force-path-p options) (eq kind :force-path))
-   (or (%type-options-type-p options) (eq kind :type))
-   (or (%type-options-help-p options) (eq kind :help))))
+   :all-p (or (%type-options-all-p options) (eq kind :all))
+   :short-p (or (%type-options-short-p options) (eq kind :short))
+   :no-functions-p (or (%type-options-no-functions-p options) (eq kind :no-functions))
+   :color-p (or (%type-options-color-p options) (eq kind :color))
+   :query-p (or (%type-options-query-p options) (eq kind :query))
+   :path-p (or (%type-options-path-p options) (eq kind :path))
+   :force-path-p (or (%type-options-force-path-p options) (eq kind :force-path))
+   :type-p (or (%type-options-type-p options) (eq kind :type))
+   :help-p (or (%type-options-help-p options) (eq kind :help))))
 
 (defun %type-usage (&optional (code 1))
   (%builtin-usage "type" "type [OPTIONS] NAME [...]" code))
@@ -75,7 +76,7 @@
       (terpri out))))
 
 (defun %parse-type-options (args)
-  (let ((options (%make-type-options nil nil nil nil nil nil nil nil nil))
+  (let ((options (%make-type-options))
         (remaining args))
     (loop while remaining
           for option = (first remaining)

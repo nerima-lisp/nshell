@@ -264,3 +264,21 @@
       (nshell.infrastructure.acl:with-pty (master slave)
         (expect (streamp master) :to-be-truthy)
         (expect (streamp slave) :to-be-truthy)))))
+
+(describe "pty-cleanup-tests"
+  (it "with-pty-closes-streams-when-body-signals"
+    "WITH-PTY closes both streams before propagating a body error."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (let ((master-stream nil)
+            (slave-stream nil))
+        (expect (lambda ()
+                  (nshell.infrastructure.acl:with-pty (master slave)
+                    (setf master-stream master
+                          slave-stream slave)
+                    (error "body failure")))
+                :to-throw 'error)
+        (expect (open-stream-p master-stream) :to-be-falsy)
+        (expect (open-stream-p slave-stream) :to-be-falsy)))))

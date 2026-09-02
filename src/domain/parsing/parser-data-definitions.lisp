@@ -1,79 +1,62 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (%redirect-spec-entry
-            (:constructor %make-redirect-spec-entry (text kind)))
-  text
-  kind)
+(define-value-struct %redirect-spec-entry
+  ((text nil)
+   (kind nil)))
 
 (defparameter +redirect-specs+ nil)
 
 (defparameter +redirect-fd-dup-specs+ nil "Redirect specs that duplicate a descriptor and so take no file target.")
 
-(defstruct (redirect-fd-dup-target
-            (:constructor make-redirect-fd-dup-target
-                (source target &optional (operator :output))))
-  source
-  target
-  operator)
+(define-value-struct redirect-fd-dup-target
+  ((source nil)
+   (target nil)
+   (operator :output :optional t))
+  :constructor make-redirect-fd-dup-target)
 
-(defstruct (%redirect-facts
-            (:constructor %make-redirect-facts
-                (text kind fd-dup-p &optional fd-dup-target)))
-  text
-  kind
-  fd-dup-p
-  fd-dup-target)
+(define-value-struct %redirect-facts
+  ((text nil)
+   (kind nil)
+   (fd-dup-p nil)
+   (fd-dup-target nil :optional t)))
 
-(defstruct (%redirect-target-policy
-            (:constructor %make-redirect-target-policy
-                (kind target-required-p)))
-  kind
-  target-required-p)
+(define-value-struct %redirect-target-policy
+  ((kind nil)
+   (target-required-p nil)))
 
-(defstruct (%redirect-kind-facts
-            (:constructor %make-redirect-kind-facts
-                (kind input-p output-p stderr-p append-p)))
-  kind
-  input-p
-  output-p
-  stderr-p
-  append-p)
+(define-value-struct %redirect-kind-facts
+  ((kind nil)
+   (input-p nil)
+   (output-p nil)
+   (stderr-p nil)
+   (append-p nil)))
 
-(defstruct (%redirect-kind-fact-spec
-            (:constructor %make-redirect-kind-fact-spec
-                (kind input-p output-p stderr-p append-p)))
-  kind
-  input-p
-  output-p
-  stderr-p
-  append-p)
+(define-value-struct %redirect-kind-fact-spec
+  ((kind nil)
+   (input-p nil)
+   (output-p nil)
+   (stderr-p nil)
+   (append-p nil)))
 
-(defstruct (%redirect-entry
-            (:constructor %make-redirect-entry (kind target)))
-  kind
-  target)
+(define-value-struct %redirect-entry
+  ((kind nil)
+   (target nil)))
 
-(defstruct (%redirect-output-destination-state
-            (:constructor %make-redirect-output-destination-state
-                (stdout-target stdout-mode stderr-target stderr-mode
-                 &optional (stdout-endpoint :stdout) (stderr-endpoint :stderr))))
-  stdout-target
-  stdout-mode
-  stderr-target
-  stderr-mode
-  stdout-endpoint
-  stderr-endpoint)
+(define-value-struct %redirect-output-destination-state
+  ((stdout-target nil)
+   (stdout-mode :supersede)
+   (stderr-target nil)
+   (stderr-mode :supersede)
+   (stdout-endpoint :stdout :optional t)
+   (stderr-endpoint :stderr :optional t)))
 
-(defstruct (redirect-output-destinations
-            (:constructor %make-redirect-output-destinations
-                (stdout-target stdout-mode stderr-target stderr-mode
-                 &optional (stdout-endpoint :stdout) (stderr-endpoint :stderr))))
-  stdout-target
-  stdout-mode
-  stderr-target
-  stderr-mode
-  stdout-endpoint
-  stderr-endpoint)
+(define-value-struct redirect-output-destinations
+  ((stdout-target nil)
+   (stdout-mode :supersede)
+   (stderr-target nil)
+   (stderr-mode :supersede)
+   (stdout-endpoint :stdout :optional t)
+   (stderr-endpoint :stderr :optional t)))
 
 (defparameter +redirect-kind-fact-specs+ nil)
 

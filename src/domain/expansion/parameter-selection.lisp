@@ -157,11 +157,11 @@ or NIL when no bracket starts at NAME-END."
       (variable-reference-syntax-bracket-next reference)
       (variable-reference-syntax-name-end reference)))
 
-(defun %reference-fields-for-syntax (reference indexed-thunk unindexed-thunk)
-  (%with-variable-reference-dispatch (reference fields next
-                                      (funcall indexed-thunk)
-                                      (funcall unindexed-thunk))
-    (values fields next)))
+(defmacro %reference-fields-for-syntax ((reference) indexed-form unindexed-form)
+  `(%with-variable-reference-dispatch (,reference fields next
+                                       ,indexed-form
+                                       ,unindexed-form)
+     (values fields next)))
 
 (defun argv-reference-fields (value)
   "Return (values fields recognized-p) for an exact fish-style $argv reference.
@@ -181,27 +181,23 @@ negative indexes count from the end, and $argv[A..B] returns an inclusive range.
   "Return (values expansion next-index) for a scanned $argv reference."
   (let ((reference (%variable-reference-syntax-after-name "argv" input name-end len)))
     (multiple-value-bind (fields next)
-        (%reference-fields-for-syntax reference
-                                      (lambda ()
-                                        (%argv-spec-fields
-                                         (variable-reference-syntax-bracket-spec reference)))
-                                      (lambda ()
-                                        *positional-args*))
+        (%reference-fields-for-syntax (reference)
+          (%argv-spec-fields
+           (variable-reference-syntax-bracket-spec reference))
+          *positional-args*)
       (values (%join-fields fields) next))))
 
 (defun %variable-expansion-after-name (input name env name-end len)
   "Return (values expansion next-index) for a scanned normal variable reference."
   (let ((reference (%variable-reference-syntax-after-name name input name-end len)))
     (multiple-value-bind (value next)
-        (%reference-fields-for-syntax reference
-                                      (lambda ()
-                                        (%join-fields
-                                         (%variable-spec-fields
-                                          name
-                                          (variable-reference-syntax-bracket-spec reference)
-                                          env)))
-                                      (lambda ()
-                                        (or (nshell.domain.environment:env-get env name) "")))
+        (%reference-fields-for-syntax (reference)
+          (%join-fields
+           (%variable-spec-fields
+            name
+            (variable-reference-syntax-bracket-spec reference)
+            env))
+          (or (nshell.domain.environment:env-get env name) ""))
       (values value next))))
 
 (defun %variable-reference-at (input start len env)
@@ -209,24 +205,19 @@ negative indexes count from the end, and $argv[A..B] returns an inclusive range.
   (%with-scanned-variable-reference (reference input start len)
     (if (%argv-reference-p reference)
         (multiple-value-bind (fields next)
-            (%reference-fields-for-syntax reference
-                                          (lambda ()
-                                            (%argv-spec-fields
-                                             (variable-reference-syntax-bracket-spec reference)))
-                                          (lambda ()
-                                            (copy-list *positional-args*)))
+            (%reference-fields-for-syntax (reference)
+              (%argv-spec-fields
+               (variable-reference-syntax-bracket-spec reference))
+              (copy-list *positional-args*))
           (values fields next t))
         (let ((name (variable-reference-syntax-name reference)))
           (multiple-value-bind (fields next)
-              (%reference-fields-for-syntax
-               reference
-               (lambda ()
-                 (%variable-spec-fields
-                  name
-                  (variable-reference-syntax-bracket-spec reference)
-                  env))
-               (lambda ()
-                 (nshell.domain.environment:env-get-values env name)))
+              (%reference-fields-for-syntax (reference)
+                (%variable-spec-fields
+                 name
+                 (variable-reference-syntax-bracket-spec reference)
+                 env)
+                (nshell.domain.environment:env-get-values env name))
             (values fields next t))))))
 
 (defun %expand-variable-reference (input start len env)

@@ -124,6 +124,26 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux"))
 
+  (it "pty-ready-pipe-reports-child-setup-failure"
+    "The parent rejects a readiness byte that reports child setup failure."
+    #+(or darwin linux)
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (unwind-protect
+           (progn
+             (expect (nshell.infrastructure.acl::%pty-write-ready-byte
+                      write-fd
+                      nshell.infrastructure.acl::+pty-child-ready-error+)
+                     :to-be-truthy)
+             (expect (lambda ()
+                       (nshell.infrastructure.acl::%wait-for-pty-child-ready
+                        read-fd
+                        -1))
+                     :to-throw 'error))
+        (nshell.infrastructure.acl::%pty-close-fd read-fd)
+        (nshell.infrastructure.acl::%pty-close-fd write-fd)))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
   (it "pty-child-ready-signal-closes-invalid-descriptors"
     "The child readiness signal remains cleanup-safe after a write failure."
     #+(or darwin linux)

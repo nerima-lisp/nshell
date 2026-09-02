@@ -28,6 +28,18 @@ the test and error counts are zero, the generated report exists, and both the
 minimum and target fields have been inspected. A passing minimum with
 `target-reached=false` is a warning, not a 100% coverage claim.
 
+The coverage process intentionally measures `nshell/test` and the Weave suite
+separately. Both suites mutate process-global package and shell state, so
+loading and running them twice in one SBCL process can create false failures.
+Run the ordinary coverage command above and the independent Weave regression
+suite below; treat both results as release evidence.
+
+```sh
+nix develop 'path:.' --command bash -lc \
+  'perl -e '\''$SIG{ALRM}=sub { exit 124 }; alarm 900; exec @ARGV'\'' \
+  sbcl --script scripts/weave.lisp
+```
+
 The same directory contains `coverage-files.json`, which lists each included
 source file with its covered and total expression counts. Use this report to
 choose the next test target; do not infer a 100% result from the aggregate

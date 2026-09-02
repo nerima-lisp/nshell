@@ -16,13 +16,10 @@
   bodies
   (target-pending-p nil :type boolean))
 
-(defstruct (%here-doc-target-body-cursor
-            (:constructor %make-here-doc-target-body-cursor
-                (body remaining-bodies))
-            (:conc-name %here-doc-target-body-cursor-)
-            (:copier nil))
-  body
-  remaining-bodies)
+(define-value-struct %here-doc-target-body-cursor
+    ((body nil)
+     (remaining-bodies nil))
+  :public-accessors nil)
 
 (defun %here-doc-target-body-cursor (bodies)
   (%make-here-doc-target-body-cursor (first bodies) (rest bodies)))

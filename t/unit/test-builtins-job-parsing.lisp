@@ -281,4 +281,31 @@
                 :to-equal
                 (multiple-value-list
                  (nshell.application::%builtin-kill context '("nope")))))))
-  )))
+
+  (it "reports jobs that disappear while waiting or cannot be signaled"
+    (with-builtins-context (context)
+      (let* ((monitor (nshell.application:shell-context-job-monitor context))
+             (job-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "sleep"))))
+        (with-temporary-function
+            ('nshell.application:wait-for-job
+             (lambda (selected-id process-registry selected-monitor)
+               (declare (ignore selected-id process-registry selected-monitor))
+               (values nil nil)))
+          (expect (list (format nil "wait: no such job: %~d~%" job-id) 1)
+                  :to-equal
+                  (multiple-value-list
+                   (nshell.application::%builtin-wait
+                    context (list (format nil "%~d" job-id))))))
+        (with-temporary-function
+            ('nshell.application::signal-job
+             (lambda (selected-id signal selected-monitor)
+               (declare (ignore selected-id signal selected-monitor))
+               nil))
+          (expect (list (format nil "kill: no such process or job: %~d~%" job-id)
+                        1)
+                  :to-equal
+                  (multiple-value-list
+                   (nshell.application::%builtin-kill
+                    context (list (format nil "%~d" job-id))))))))))
+  ))

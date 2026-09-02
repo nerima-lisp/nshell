@@ -1,14 +1,19 @@
 ;;; Environment variable model
 (in-package #:nshell.domain.environment)
 
-(defstruct (env-var
-    (:constructor %allocate-env-var (name values exported-p))
-    (:conc-name %env-var-)
-    (:predicate nil)
-    (:copier nil)) "A shell environment variable."
-  (name "" :type string :read-only t)
-  (values nil :type list :read-only t)
-  (exported-p nil :type boolean :read-only t))
+(nshell.util:define-value-struct
+  env-var
+  ((name "" :type string)
+   (values nil :type list :copy :list)
+   (exported-p nil :type boolean))
+  :documentation
+  "A read-only shell environment variable."
+  :constructor
+  %allocate-env-var
+  :predicate
+  nil
+  :public-accessors
+  nil)
 
 (defun %copy-env-value-list (values)
   "Return a detached environment value list after validating its elements."

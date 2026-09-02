@@ -1,16 +1,30 @@
 ; Helpers for the 'type' builtin command.
 (in-package #:nshell.application)
 
-(defstruct %type-options
-  (all-p nil)
-  (short-p nil)
-  (no-functions-p nil)
-  (color-p nil)
-  (query-p nil)
-  (path-p nil)
-  (force-path-p nil)
-  (type-p nil)
-  (help-p nil))
+(define-value-struct %type-options
+    ((all-p nil)
+     (short-p nil)
+     (no-functions-p nil)
+     (color-p nil)
+     (query-p nil)
+     (path-p nil)
+     (force-path-p nil)
+     (type-p nil)
+     (help-p nil))
+  :constructor %make-type-options
+  :public-accessors nil)
+
+(defun %type-options-with (options kind)
+  (%make-type-options
+   (or (%type-options-all-p options) (eq kind :all))
+   (or (%type-options-short-p options) (eq kind :short))
+   (or (%type-options-no-functions-p options) (eq kind :no-functions))
+   (or (%type-options-color-p options) (eq kind :color))
+   (or (%type-options-query-p options) (eq kind :query))
+   (or (%type-options-path-p options) (eq kind :path))
+   (or (%type-options-force-path-p options) (eq kind :force-path))
+   (or (%type-options-type-p options) (eq kind :type))
+   (or (%type-options-help-p options) (eq kind :help))))
 
 (defun %type-usage (&optional (code 1))
   (%builtin-usage "type" "type [OPTIONS] NAME [...]" code))
@@ -61,7 +75,7 @@
       (terpri out))))
 
 (defun %parse-type-options (args)
-  (let ((options (make-%type-options))
+  (let ((options (%make-type-options nil nil nil nil nil nil nil nil nil))
         (remaining args))
     (loop while remaining
           for option = (first remaining)
@@ -73,21 +87,21 @@
                 (return))
                (t
                 (case (%type-option-kind option)
-                  (:all (setf (%type-options-all-p options) t))
-                  (:short (setf (%type-options-short-p options) t))
-                  (:no-functions (setf (%type-options-no-functions-p options) t))
+                  (:all (setf options (%type-options-with options :all)))
+                  (:short (setf options (%type-options-with options :short)))
+                  (:no-functions (setf options (%type-options-with options :no-functions)))
                   (:color
                    (unless (%type-color-enabled-p option)
                      (return-from %parse-type-options
                        (values nil nil
                                (format nil "type: unknown option ~a~%" option)
                                2)))
-                   (setf (%type-options-color-p options) t))
-                  (:query (setf (%type-options-query-p options) t))
-                  (:path (setf (%type-options-path-p options) t))
-                  (:force-path (setf (%type-options-force-path-p options) t))
-                  (:type (setf (%type-options-type-p options) t))
-                  (:help (setf (%type-options-help-p options) t))
+                   (setf options (%type-options-with options :color)))
+                  (:query (setf options (%type-options-with options :query)))
+                  (:path (setf options (%type-options-with options :path)))
+                  (:force-path (setf options (%type-options-with options :force-path)))
+                  (:type (setf options (%type-options-with options :type)))
+                  (:help (setf options (%type-options-with options :help)))
                   (otherwise
                    (return-from %parse-type-options
                      (values nil nil

@@ -70,6 +70,12 @@
                       :buffer "abc"
                       :cursor-pos 3)))
 
+  (it "input-state-session-reduction-preserves-state-and-output"
+    (let* ((state (input-state :buffer "ready" :cursor-pos 5))
+           (reduction (nshell.presentation::input-session-reduction state :redraw)))
+      (expect state :to-be (nshell.presentation::input-session-reduction-state reduction))
+      (expect :redraw :to-be (nshell.presentation::input-session-reduction-output reduction))))
+
   (it "input-state-yank-session-clear-is-private-value"
     (let* ((state (input-state
                    :buffer "git st"

@@ -1,11 +1,9 @@
 ; Low-level character readers for words, quotes, balanced substitutions.
 (in-package #:nshell.domain.parsing)
 
-(defstruct (%tokenizer-balanced-token-boundary
-            (:constructor %make-tokenizer-balanced-token-boundary
-                (substitution-end token-end)))
-  (substitution-end nil :read-only t)
-  (token-end 0 :type integer :read-only t))
+(define-value-struct %tokenizer-balanced-token-boundary
+    ((substitution-end nil)
+     (token-end 0 :type integer)))
 
 (defun %tokenizer-balanced-token-boundary-for (state paren-pos)
   (let ((end (%tokenizer-balanced-substitution-end state paren-pos)))

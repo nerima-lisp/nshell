@@ -1,6 +1,21 @@
 (in-package #:nshell/test)
 
 (describe "parser-tests"
+  (it "define-redirect-data-expands-to-data-only-assignments"
+    "The redirect catalog macro keeps declarative data separate from lookup logic."
+    (let ((expansion
+            (macroexpand-1
+             '(nshell.domain.parsing::define-redirect-data
+                ((:entry "2>&1"))
+                (:2>&1)
+                ((:kind :2>&1 :input-p nil :output-p t
+                        :stderr-p t :append-p nil))))))
+      (expect 'progn :to-be (first expansion))
+      (expect 3 :to-equal (length (rest expansion)))
+      (expect 'setf :to-be (first (second expansion)))
+      (expect 'setf :to-be (first (third expansion)))
+      (expect 'setf :to-be (first (fourth expansion)))))
+
   (it "redirect-fd-dup-target-round-trips-domain-fields"
     "The public redirect value object preserves its explicit fields and default operator."
     (let ((explicit

@@ -3,14 +3,11 @@
 (in-package #:nshell.presentation)
 
 (defstruct (%buffer-splice
-             (:constructor %make-buffer-splice (start end inserted))
+             (:constructor make-buffer-splice (start end &optional (inserted "")))
              (:conc-name %buffer-splice-))
   (start 0 :type fixnum :read-only t)
   (end 0 :type fixnum :read-only t)
   (inserted "" :type string :read-only t))
-
-(defun make-buffer-splice (start end &optional (inserted ""))
-  (%make-buffer-splice start end inserted))
 
 (defun buffer-splice-result (splice buffer)
   (concatenate 'string

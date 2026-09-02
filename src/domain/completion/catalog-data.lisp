@@ -23,19 +23,18 @@
   %catalog-command-entry-option-value-kinds)
 (define-catalog-entry-accessor %catalog-exclusive-options %catalog-command-entry-exclusive-options)
 
-(defstruct (%catalog-command-projection
-            (:constructor %make-catalog-command-projection
-                (&key command description synopsis subcommands flags option-values
-                      option-value-kinds exclusive-options))
-            (:conc-name %catalog-command-projection-))
-  command
-  description
-  synopsis
-  subcommands
-  flags
-  option-values
-  option-value-kinds
-  exclusive-options)
+(define-value-struct %catalog-command-projection
+  ((command nil)
+   (description nil)
+   (synopsis nil)
+   (subcommands nil)
+   (flags nil)
+   (option-values nil)
+   (option-value-kinds nil)
+   (exclusive-options nil))
+  :keyword-constructor t
+  :public-accessors nil
+  :constructor %make-catalog-command-projection)
 
 (defmacro %catalog-entry-projection-plist (entry &rest properties)
   "Expand to a spliceable (LIST :PROPERTY1 value1 ...) plist, one pair per

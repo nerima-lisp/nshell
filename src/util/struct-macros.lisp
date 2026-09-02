@@ -35,6 +35,7 @@ and NIL returns the slot value directly."
 
 (defmacro define-value-struct (name (&rest slot-specs)
                                &key documentation keyword-constructor accessor-prefix
+                                    (public-accessors t)
                                     constructor (predicate nil predicate-supplied-p))
   "Define an opaque, read-only value struct NAME plus public accessors that
 delegate to its private slots.
@@ -57,6 +58,8 @@ COPY-NAME is generated: value structs are opaque and never shallow-copied.
 Keyword options tune the generated names to fit existing code:
 :ACCESSOR-PREFIX overrides the public accessor prefix (default: NAME sans %),
 so a type like %COMPLETION-CANDIDATE can expose CANDIDATE-* readers.
+:PUBLIC-ACCESSORS controls whether those public readers are emitted; set it to
+NIL for opaque implementation values that must not cross a package boundary.
 :CONSTRUCTOR overrides the private constructor name (default: %MAKE-<NAME sans
 %>), e.g. to keep an %ALLOCATE-* raw-allocation convention. :PREDICATE overrides
 the DEFSTRUCT predicate name (NIL suppresses it), for custom-named or
@@ -83,11 +86,11 @@ deliberately-private predicates."
                            `(,slot-name ,default :type ,type :read-only t)
                            `(,slot-name ,default :read-only t))))
                    slot-specs))
-       ,@(mapcar (lambda (spec)
+       ,@(when public-accessors (mapcar (lambda (spec)
                    (destructuring-bind (slot-name default &key type optional copy) spec
                      (declare (ignore default type optional))
                      (let ((public-fn (intern (format nil "~A-~A" public-prefix slot-name)))
                            (private-fn (intern (format nil "~A-~A" private-prefix slot-name))))
                        `(defun ,public-fn (instance)
                           ,(%value-struct-accessor-copy copy `(,private-fn instance))))))
-                 slot-specs))))
+                 slot-specs)))))

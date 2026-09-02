@@ -1,10 +1,10 @@
 (in-package #:nshell.domain.completion)
 
-(defstruct (%path-command-query
-            (:constructor %make-path-command-query (path prefix))
-            (:conc-name %path-command-query-))
-  (path nil :type (or null string) :read-only t)
-  (prefix "" :type string :read-only t))
+(define-value-struct %path-command-query
+  ((path nil :type (or null string))
+   (prefix "" :type string))
+  :public-accessors nil
+  :constructor %make-path-command-query)
 
 (defparameter *path-command-cache-ttl-seconds* 0.25d0
   "Maximum age of cached PATH directory entries.")
@@ -21,13 +21,12 @@
        (coerce internal-time-units-per-second 'double-float)))
   "Monotonic clock used to expire PATH directory cache records.")
 
-(defstruct (%path-command-directory-cache-entry
-            (:constructor %make-path-command-directory-cache-entry
-                (stamp checked-at entries))
-            (:conc-name %path-command-directory-cache-entry-))
-  stamp
-  (checked-at 0d0 :type double-float :read-only t)
-  (entries nil :type list :read-only t))
+(define-value-struct %path-command-directory-cache-entry
+  ((stamp nil)
+   (checked-at 0d0 :type double-float)
+   (entries nil :type list))
+  :public-accessors nil
+  :constructor %make-path-command-directory-cache-entry)
 
 (defvar *path-command-directory-cache* (make-hash-table :test #'equal))
 (defvar *path-command-directory-cache-generation* 0)

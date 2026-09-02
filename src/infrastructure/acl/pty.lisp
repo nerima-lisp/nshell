@@ -26,11 +26,8 @@
   (or (null result)
       (and (integerp result) (minusp result))))
 
-(defun %check-errno (result operation)
-  (when (%syscall-failed-p result)
-    (error "~a failed (result=~s, errno=~s)"
-           operation result (sb-unix::get-errno)))
-  result)
+(defmacro %check-errno (result operation)
+  `(with-checked-syscall (,operation ,result)))
 
 (defun %pty-open-flags ()
   (logior sb-posix:o-rdwr sb-posix:o-noctty))

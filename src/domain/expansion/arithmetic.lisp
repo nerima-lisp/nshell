@@ -166,7 +166,7 @@ integer. Variables are resolved from ENV."
                    "invalid arithmetic expression")))
       (%arith-eval ast env))))
 
-(defun %arithmetic-substitution-end (input start)
+(defun %find-arithmetic-substitution-end (input start)
   "Given INPUT and START pointing at the first #\( of a $(( opener, return the
 index just past the matching )). The opening ( ( and the closing ) ) are
 balanced by paren depth, so depth returning to zero marks the end. Returns NIL
@@ -180,11 +180,11 @@ when unbalanced."
                     (when (zerop depth)
                       (return (1+ i))))))))
 
-(defstruct (arithmetic-substitution
-            (:constructor %make-arithmetic-substitution (start end expression)))
-  (start 0 :type fixnum :read-only t)
-  (end 0 :type fixnum :read-only t)
-  (expression "" :type string :read-only t))
+(define-value-struct arithmetic-substitution
+  ((start 0 :type fixnum)
+   (end 0 :type fixnum)
+   (expression "" :type string))
+  :constructor %make-arithmetic-substitution)
 
 (defun %arithmetic-substitution-at (input start)
   "Return the arithmetic substitution at START, or NIL when START is not a $(( opener."
@@ -192,7 +192,7 @@ when unbalanced."
              (char= (char input start) #\$)
              (char= (char input (1+ start)) #\()
              (char= (char input (+ start 2)) #\())
-    (let ((end (%arithmetic-substitution-end input (1+ start))))
+    (let ((end (%find-arithmetic-substitution-end input (1+ start))))
       (when end
         (%make-arithmetic-substitution start
                                        end

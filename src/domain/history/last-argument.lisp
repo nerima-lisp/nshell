@@ -19,11 +19,11 @@
           "History word start must not exceed end.")
   (%allocate-history-word start end))
 
-(defstruct (%history-token-window
-            (:constructor %make-history-token-window (current next))
-            (:copier nil))
-  (current nil :read-only t)
-  (next nil :read-only t))
+(define-value-struct %history-token-window
+    ((current nil)
+     (next nil))
+  :constructor %make-history-token-window
+  :predicate nil)
 
 (defstruct (%history-logical-word-cursor
             (:constructor %make-history-logical-word-cursor (remaining))

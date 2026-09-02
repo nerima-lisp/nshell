@@ -9,7 +9,9 @@ that remains a warning until the report reaches it.
 
 The production scope is the executable source under `src/`. Package
 declarations are excluded from the denominator because loading a package is a
-build prerequisite rather than shell behaviour. Static tables, macro
+build prerequisite rather than shell behaviour. The platform request constants
+in `src/infrastructure/acl/syscall-constants.lisp` are also excluded: they are
+compile-time OS declarations with no executable branch. Static tables, macro
 expansion forms, custom-constructor defaults, and foreign/PTY boundaries are
 reported by `sb-cover` according to how SBCL instruments them; they are not
 silently removed from the report.

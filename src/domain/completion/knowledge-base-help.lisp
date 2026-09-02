@@ -268,20 +268,24 @@ values -- rather than a nested bail-out cascade."
                     :test #'equal)
       (push spec (%completion-help-scan-state-option-value-kinds state)))))
 
+(defmacro %with-completion-help-line-facts ((facts state line) &body body)
+  `(let ((,facts (%completion-help-line-facts ,state ,line)))
+     ,@body))
+
 (defun %completion-help-update-scan-state (state line)
-  (let* ((facts (%completion-help-line-facts state line))
-         (kind (%completion-help-line-facts-kind facts)))
-    (%completion-help-note-line-kind state kind facts)
-    (%completion-help-note-options state
-                                   (%completion-help-line-facts-options facts))
-    (%completion-help-note-option-values
-     state
-     (%completion-help-line-facts-options facts)
-     (%completion-help-line-facts-values facts))
-    (%completion-help-note-option-value-kinds
-     state
-     (%completion-help-line-facts-option-value-kinds facts))
-    state))
+  (%with-completion-help-line-facts (facts state line)
+    (let ((kind (%completion-help-line-facts-kind facts)))
+      (%completion-help-note-line-kind state kind facts)
+      (%completion-help-note-options state
+                                     (%completion-help-line-facts-options facts))
+      (%completion-help-note-option-values
+       state
+       (%completion-help-line-facts-options facts)
+       (%completion-help-line-facts-values facts))
+      (%completion-help-note-option-value-kinds
+       state
+       (%completion-help-line-facts-option-value-kinds facts))
+      state)))
 
 (defun %completion-help-command-facts (help-text)
   (let ((state (%make-completion-help-scan-state)))

@@ -25,7 +25,7 @@
           (job-monitor (gensym "JOB-MONITOR-"))
           (job-id (gensym "JOB-ID-"))
           (job (gensym "JOB-")))
-      `(defun ,name (context args)
+      `(define-builtin ,name (context args) ()
          (let* ((,job-monitor (shell-context-job-monitor context))
                 (,job-id (%resolve-job-id ,job-monitor args :active-only-p t))
                 (,job (,operation ,job-id ,job-monitor)))

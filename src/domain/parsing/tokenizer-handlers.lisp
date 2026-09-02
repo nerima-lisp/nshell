@@ -25,11 +25,6 @@
                  '(#\> #\<)
                  :test #'eql))))
 
-(defstruct (%fd-redirect-token-text
-            (:constructor %make-fd-redirect-token-text (value advance-count)))
-  (value "" :type string :read-only t)
-  (advance-count 0 :type fixnum :read-only t))
-
 (defun %fd-redirect-token-text (fd op next after-next)
   (let ((base (coerce (list fd op) 'string)))
     (cond
@@ -47,15 +42,6 @@
         1))
       (t
        (%make-fd-redirect-token-text base 0)))))
-
-(defparameter +tokenizer-special-reader-dispatch-characters+
-  '(#\( #\) #\# #\' #\")
-  "Non-operator characters that route through tokenizer special handlers.")
-
-(defstruct (%tokenizer-special-dispatch-route
-            (:constructor %make-tokenizer-special-dispatch-route (character kind)))
-  (character nil :read-only t)
-  (kind nil :type (or null keyword) :read-only t))
 
 (defun %tokenizer-special-reader-dispatch-character-p (ch)
   (%shell-separator-character-p ch +tokenizer-special-reader-dispatch-characters+))
@@ -81,11 +67,6 @@
          :special)
         (t
          :word)))
-
-(defstruct (%tokenizer-ampersand-route
-            (:constructor %make-tokenizer-ampersand-route (token-type value)))
-  (token-type :ampersand :type keyword :read-only t)
-  (value "&" :type string :read-only t))
 
 (defun %tokenizer-ampersand-route-for (state)
   (let ((next (%tokenizer-state-peek state 1)))
@@ -140,11 +121,6 @@
                                   start
                                   (tokenizer-state-pos state))))
 
-(defstruct (%tokenizer-pipe-route
-            (:constructor %make-tokenizer-pipe-route (token-type value)))
-  (token-type :pipe :type keyword :read-only t)
-  (value "|" :type string :read-only t))
-
 (defun %tokenizer-pipe-route-for (state)
   (cond
     ((eql (%tokenizer-state-peek state 1) #\|)
@@ -160,11 +136,6 @@
      state
      (%tokenizer-pipe-route-token-type route)
      (%tokenizer-pipe-route-value route))))
-
-(defstruct (%tokenizer-right-angle-route
-            (:constructor %make-tokenizer-right-angle-route (kind value)))
-  (kind :redirect :type keyword :read-only t)
-  (value ">" :type (or null string) :read-only t))
 
 (defun %tokenizer-right-angle-route-for (state)
   (cond
@@ -185,11 +156,6 @@
         state
         :redirect
         (%tokenizer-right-angle-route-value route))))))
-
-(defstruct (%tokenizer-left-angle-route
-            (:constructor %make-tokenizer-left-angle-route (kind value)))
-  (kind :redirect :type keyword :read-only t)
-  (value "<" :type (or null string) :read-only t))
 
 (defun %tokenizer-left-angle-route-for (state)
   (cond
@@ -216,11 +182,6 @@
         state
         :redirect
         (%tokenizer-left-angle-route-value route))))))
-
-(defstruct (%tokenizer-left-paren-route
-            (:constructor %make-tokenizer-left-paren-route (kind end)))
-  (kind :literal :type keyword :read-only t)
-  (end nil :read-only t))
 
 (defun %tokenizer-left-paren-route-for (state)
   (let ((next (%tokenizer-state-peek state 1)))

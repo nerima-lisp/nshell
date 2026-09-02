@@ -67,6 +67,7 @@
      (:file "domain/parsing/ast-redirect-split")
      (:file "domain/parsing/tokenizer-data")
      (:file "domain/parsing/tokenizer-readers")
+     (:file "domain/parsing/tokenizer-route-data")
      (:file "domain/parsing/tokenizer-handlers")
    (:file "domain/parsing/parse-result")
    (:file "domain/parsing/control-flow-data")

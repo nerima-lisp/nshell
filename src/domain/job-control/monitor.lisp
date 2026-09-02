@@ -1,13 +1,10 @@
 (in-package #:nshell.domain.job-control)
 
-(defstruct (job-monitor (:constructor %make-job-monitor ())
+(defstruct (job-monitor (:constructor make-job-monitor ())
                         (:copier nil))
   (jobs-table (make-hash-table) :type hash-table)
   (next-id-int 1 :type integer)
   (job-history-list nil :type list))
-
-(defun make-job-monitor ()
-  (%make-job-monitor))
 
 (defun monitor-empty-p (monitor)
   (zerop (hash-table-count (job-monitor-jobs-table monitor))))

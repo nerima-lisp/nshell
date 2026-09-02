@@ -11,6 +11,14 @@
 (defun line (text)
   (concatenate 'string text (string #\Newline)))
 
+(defmacro with-open-pty ((master slave slave-name) &body body)
+  "Bind a raw PTY pair and close both descriptors after BODY."
+  `(multiple-value-bind (,master ,slave ,slave-name)
+       (nshell.infrastructure.acl:open-pty)
+     (unwind-protect
+          (progn ,@body)
+       (nshell.infrastructure.acl:pty-close ,master ,slave))))
+
 (describe "pty-tests"
   (it "pty-data-boundaries-preserve-octets-and-close-empty-pair"
     "PTY data conversion and nil-safe cleanup preserve their contracts."
@@ -209,24 +217,21 @@
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
     (skip-when-pty-round-trip-unreliable "PTY master/slave round-trip I/O is unreliable"
-    (multiple-value-bind (master slave slave-name) (nshell.infrastructure.acl:open-pty)
-      (unwind-protect
-           (progn
-             (expect (integerp master) :to-be-truthy)
-             (expect (integerp slave) :to-be-truthy)
-             (expect (stringp slave-name) :to-be-truthy)
-             (let ((from-master (make-array 64 :element-type '(unsigned-byte 8))))
-               (expect (length (line "master-to-slave")) :to-equal
-                       (nshell.infrastructure.acl:pty-write master (line "master-to-slave")))
-               (let ((count (nshell.infrastructure.acl:pty-read slave from-master 64)))
-                 (expect (plusp count) :to-be-truthy)
-                 (expect (search "master-to-slave" (octets->string from-master count)) :to-be-truthy)))
-             (let ((from-slave (make-array 64 :element-type '(unsigned-byte 8))))
-               (nshell.infrastructure.acl:pty-write slave (string->octets (line "slave-to-master")))
-               (let ((count (nshell.infrastructure.acl:pty-read master from-slave 64)))
-                 (expect (plusp count) :to-be-truthy)
-                 (expect (search "slave-to-master" (octets->string from-slave count)) :to-be-truthy))))
-        (nshell.infrastructure.acl:pty-close master slave)))))
+    (with-open-pty (master slave slave-name)
+      (expect (integerp master) :to-be-truthy)
+      (expect (integerp slave) :to-be-truthy)
+      (expect (stringp slave-name) :to-be-truthy)
+      (let ((from-master (make-array 64 :element-type '(unsigned-byte 8))))
+        (expect (length (line "master-to-slave")) :to-equal
+                (nshell.infrastructure.acl:pty-write master (line "master-to-slave")))
+        (let ((count (nshell.infrastructure.acl:pty-read slave from-master 64)))
+          (expect (plusp count) :to-be-truthy)
+          (expect (search "master-to-slave" (octets->string from-master count)) :to-be-truthy)))
+      (let ((from-slave (make-array 64 :element-type '(unsigned-byte 8))))
+        (nshell.infrastructure.acl:pty-write slave (string->octets (line "slave-to-master")))
+        (let ((count (nshell.infrastructure.acl:pty-read master from-slave 64)))
+          (expect (plusp count) :to-be-truthy)
+          (expect (search "slave-to-master" (octets->string from-slave count)) :to-be-truthy)))))
 
   (it "pty-close-is-idempotent-for-shared-descriptor"
     "PTY cleanup does not close a descriptor twice when both slots share it."
@@ -258,4 +263,4 @@
     (skip-when-pty-unavailable "requires a usable PTY"
       (nshell.infrastructure.acl:with-pty (master slave)
         (expect (streamp master) :to-be-truthy)
-        (expect (streamp slave) :to-be-truthy))))
+        (expect (streamp slave) :to-be-truthy)))))

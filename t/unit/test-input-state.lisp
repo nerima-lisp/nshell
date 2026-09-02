@@ -60,6 +60,18 @@
       (expect :insert :to-be (nshell.presentation:input-state-mode state))
       (expect (fboundp 'nshell.presentation::%make-input-state) :to-be-truthy)))
 
+  (it "input-state-normalization-clamps-cursor-to-buffer"
+    (dolist (case '(("abc" . -1) ("abc" . 99) ("" . 4)))
+      (let* ((buffer (car case))
+             (cursor (cdr case))
+             (state (nshell.presentation:make-input-state
+                     :buffer buffer :cursor-pos cursor))
+             (normalized (nshell.presentation::normalize-input-state state)))
+        (expect buffer :to-equal
+                (nshell.presentation:input-state-buffer normalized))
+        (expect (max 0 (min cursor (length buffer))) :to-equal
+                (nshell.presentation:input-state-cursor-pos normalized)))))
+
   (it "input-state-copy-groups-resolve-overrides-into-initargs"
     "The copy machinery is exactly override helpers plus per-group initarg
 builders: it resolves each (SUPPLIED-P VALUE) override against the current state

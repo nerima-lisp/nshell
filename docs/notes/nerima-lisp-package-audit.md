@@ -27,12 +27,14 @@ appear unqualified):
 
 No declared dependency is unused, so there is no dead dependency to drop.
 
-The flake inputs are pinned to the latest published tags currently available
-for the core packages: `cl-weave` `v1.3.0`, `cl-prolog-kit` `v1.5.0`,
-`cl-parser-kit` `v1.1.1`, and `cl-dataflow-kit` `v1.2.0`. This is checked
-against the upstream tag lists rather than by inventing a newer version; a
-future upgrade should update `flake.nix` and `flake.lock` together and rerun
-the complete check matrix.
+The flake inputs are pinned to explicit upstream release refs rather than
+floating branches. The current pins include `cl-weave` `v1.3.0`,
+`cl-prolog-kit` `v1.5.0`, `cl-parser-kit` `v1.1.1`, and `cl-dataflow-kit`
+`v1.2.0`; the complete resolved set is recorded in `flake.lock`. A release
+API's `latest` field is not treated as authoritative here because an upstream
+tag may exist before its GitHub release metadata is published. A future upgrade
+must update `flake.nix` and `flake.lock` together and rerun the complete check
+matrix.
 
 The test systems are kept separate from the runtime dependency audit:
 
@@ -79,7 +81,7 @@ rg -o '\\b(cl-prolog-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|proce
   | perl -pe 's/:.*$//' | sort | uniq -c | sort -rn
 ```
 
-To re-check every pinned version against upstream tags:
+To re-check the release refs and compare them with the lock file:
 
 ```sh
 for repo in cl-weave cl-prolog-kit cl-parser-kit cl-dataflow-kit cl-boundary-kit cl-cli cl-tty-kit cl-process-kit cl-history-kit cl-host-kit cl-codec-kit cl-concurrent-kit cl-date-kit; do

@@ -265,6 +265,36 @@ rebuilt state, so the completion, transient, and session groups each assemble.
                         :search-original-cursor nil
                         :search-index 9))))
 
+  (it "input-state-copy-with-resets-completion-and-clamps-selection"
+    (let* ((expander (lambda (text) text))
+           (state (input-state
+                   :buffer "abcdef"
+                   :cursor-pos 6
+                   :completion-index 2
+                   :completion-base-buffer "prefix"
+                   :completion-base-cursor 3
+                   :mouse-selection-anchor 4
+                   :mouse-selection-end 5
+                   :abbreviation-expander expander))
+           (copy (nshell.presentation::copy-input-state-with
+                  state
+                  :buffer "xy"
+                  :completion-index -1
+                  :mouse-selection-anchor 99
+                  :mouse-selection-end -1)))
+      (expect -1 :to-equal
+              (nshell.presentation::input-state-completion-index copy))
+      (expect nil :to-be
+              (nshell.presentation::input-state-completion-base-buffer copy))
+      (expect nil :to-be
+              (nshell.presentation::input-state-completion-base-cursor copy))
+      (expect 2 :to-equal
+              (nshell.presentation::input-state-mouse-selection-anchor copy))
+      (expect 0 :to-equal
+              (nshell.presentation::input-state-mouse-selection-end copy))
+      (expect expander :to-be
+              (nshell.presentation::input-state-abbreviation-expander copy))))
+
   (it "input-edit-snapshot-is-private-value"
     (let* ((state (nshell.presentation:make-input-state :buffer "abc"
                                                         :cursor-pos 2))

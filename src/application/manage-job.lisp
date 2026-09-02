@@ -1,14 +1,5 @@
 (in-package #:nshell.application)
 
-(defun make-job-listing (id status command)
-  (unless (and (integerp id) (plusp id))
-    (error "Job listing id must be a positive integer: ~s" id))
-  (unless (stringp status)
-    (error "Job listing status must be a string: ~s" status))
-  (unless (stringp command)
-    (error "Job listing command must be a string: ~s" command))
-  (%allocate-job-listing id status command))
-
 (defun %set-acl-foreground-pgid (pgid)
   (let ((symbol (find-symbol "*FOREGROUND-PGID*" "NSHELL.INFRASTRUCTURE.ACL")))
     (when symbol
@@ -69,25 +60,6 @@
         (nshell.domain.job-control:background-job job-monitor job-id)
         job))))
 
-(defun jobs (&optional (job-monitor *job-monitor*))
-  "Return current job listings without writing to the terminal."
-  (let (listings)
-    (nshell.domain.job-control:monitor-map-jobs
-     job-monitor
-     (lambda (job-id job)
-       (push (make-job-listing job-id
-                               (%status-label job)
-                               (%job-command-string job))
-             listings)))
-    (nreverse listings)))
-
-(defun format-job-listing (listing &optional stream)
-  "Render LISTING in the user-facing jobs format."
-  (format stream "[~d] ~a ~a~%"
-          (job-listing-id listing)
-          (job-listing-status listing)
-          (job-listing-command listing)))
-
 (defun disown (job-id &optional (job-monitor *job-monitor*))
   "Remove JOB-ID from the job monitor."
   (nshell.domain.job-control:monitor-remove-job job-monitor job-id))
@@ -105,18 +77,6 @@
                (nshell.domain.execution:valid-process-group-id-p pgid)
                (/= pgid shell-pgid))
       pgid)))
-
-(defun %job-command-string (job)
-  (nshell.domain.execution:job-command-display-string job))
-
-(defun %status-label (job)
-  (case (nshell.domain.execution:job-state job)
-    (:running "Running")
-    (:background "Running")
-    (:stopped "Stopped")
-    ((:completed :done) "Done")
-    (:created "Created")
-    (otherwise "Unknown")))
 
 
 (defun %job-wait-event-from-observation (pid state detail)

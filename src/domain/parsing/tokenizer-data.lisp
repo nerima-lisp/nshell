@@ -1,17 +1,14 @@
 ; Token data structures, character predicates, and state operations.
 (in-package #:nshell.domain.parsing)
 
-(defstruct (token (:constructor %make-token (type value &optional (start 0) (end 0)
-                                             (quote-style nil) (fragments nil)))
-                  (:copier nil))
-  (type :word :type keyword :read-only t)
-  (value "" :type string :read-only t)
-  (start 0 :type integer :read-only t)
-  (end 0 :type integer :read-only t)
-  (quote-style nil :type symbol :read-only t)
-  (fragments nil :type list :read-only t))
-
-;; token-type, token-value, token-start, token-end are auto-generated struct accessors
+(define-value-struct token
+    ((type :word :type keyword)
+     (value "" :type string)
+     (start 0 :type integer)
+     (end 0 :type integer)
+     (quote-style nil :type symbol)
+     (fragments nil :type list :copy :list))
+  :constructor %make-token)
 
 (define-value-struct tokenization-result
     ((tokens nil :type list :copy :list)
@@ -21,7 +18,7 @@
 (defun %token-position (position)
   (or position 0))
 
-(defun %token-value (value)
+(defun %normalize-token-value (value)
   (or value ""))
 
 (define-value-struct %token-extent
@@ -33,14 +30,14 @@
 
 (defun %token-extent (start value)
   (let* ((normalized-start (%token-position start))
-         (normalized-value (%token-value value)))
+         (normalized-value (%normalize-token-value value)))
     (%make-token-extent normalized-start
                         (+ normalized-start (length normalized-value))
                         normalized-value)))
 
 (defun make-token (type value &optional (start 0) (end 0) quote-style
                               fragments)
-  (let ((token-value (%token-value value)))
+  (let ((token-value (%normalize-token-value value)))
     (%make-token type
                  token-value
                  (%token-position start)

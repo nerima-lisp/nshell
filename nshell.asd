@@ -116,6 +116,7 @@
    (:file "domain/completion/context")
    (:file "domain/completion/filesystem")
    (:file "domain/completion/filesystem-path-command-data")
+   (:file "domain/completion/filesystem-path-command-cache")
    (:file "domain/completion/filesystem-path-command")
    (:file "domain/completion/filesystem-file-completion")
    (:file "domain/completion/knowledge-base-candidates")

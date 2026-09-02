@@ -46,12 +46,11 @@
            trimmed)))
     (t nil)))
 
-(defstruct (%file-completion-prefix-projection
-            (:constructor %make-file-completion-prefix-projection
-                (directory-prefix file-prefix))
-            (:conc-name %file-completion-prefix-projection-))
-  (directory-prefix "" :type string :read-only t)
-  (file-prefix "" :type string :read-only t))
+(define-value-struct %file-completion-prefix-projection
+  ((directory-prefix "" :type string)
+   (file-prefix "" :type string))
+  :public-accessors nil
+  :constructor %make-file-completion-prefix-projection)
 
 (defun %project-file-completion-prefix (prefix)
   "Project a raw file completion PREFIX into directory and file-prefix parts."
@@ -87,15 +86,14 @@
       text
       (concatenate 'string text "/")))
 
-(defstruct (%file-completion-query
-            (:constructor %make-file-completion-query
-                (directory-prefix name-prefix directory include-files include-directories))
-            (:conc-name %file-completion-query-))
-  (directory-prefix "" :type string :read-only t)
-  (name-prefix "" :type string :read-only t)
-  (directory #p"./" :type pathname :read-only t)
-  (include-files t :type boolean :read-only t)
-  (include-directories t :type boolean :read-only t))
+(define-value-struct %file-completion-query
+  ((directory-prefix "" :type string)
+   (name-prefix "" :type string)
+   (directory #p"./" :type pathname)
+   (include-files t :type boolean)
+   (include-directories t :type boolean))
+  :public-accessors nil
+  :constructor %make-file-completion-query)
 
 (defun %file-completion-query-from-prefix (prefix include-files include-directories)
   (multiple-value-bind (directory-prefix name-prefix)

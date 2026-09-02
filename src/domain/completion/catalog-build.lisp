@@ -20,19 +20,18 @@
   (when (%catalog-source-entry-property-present-p entry property)
     (list property (%catalog-source-entry-property-value entry property))))
 
-(defstruct (%catalog-command-entry
-            (:constructor %make-catalog-command-entry
-                (&key command synopsis description subcommands flags option-values
-                      option-value-kinds exclusive-options))
-            (:conc-name %catalog-command-entry-))
-  command
-  synopsis
-  description
-  subcommands
-  flags
-  option-values
-  option-value-kinds
-  exclusive-options)
+(define-value-struct %catalog-command-entry
+  ((command nil)
+   (synopsis nil)
+   (description nil)
+   (subcommands nil)
+   (flags nil)
+   (option-values nil)
+   (option-value-kinds nil)
+   (exclusive-options nil))
+  :public-accessors nil
+  :keyword-constructor t
+  :constructor %make-catalog-command-entry)
 
 (defun %catalog-entry-property-value (entry property)
   (ecase property

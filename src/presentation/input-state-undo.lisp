@@ -2,35 +2,32 @@
 
 (in-package #:nshell.presentation)
 
-(defstruct (%input-edit-snapshot
-            (:constructor %make-input-edit-snapshot (buffer cursor-pos))
-            (:conc-name %input-edit-snapshot-))
-  buffer
-  cursor-pos)
+(define-value-struct %input-edit-snapshot
+    ((buffer nil)
+     (cursor-pos 0 :type fixnum))
+  :public-accessors nil
+  :constructor %make-input-edit-snapshot)
 
-(defstruct (%undo-stack-step
-            (:constructor %make-undo-stack-step
-                (snapshot undo-stack redo-stack))
-            (:conc-name %undo-stack-step-))
-  snapshot
-  undo-stack
-  redo-stack)
+(define-value-struct %undo-stack-step
+    ((snapshot nil)
+     (undo-stack nil :type list)
+     (redo-stack nil :type list))
+  :public-accessors nil
+  :constructor %make-undo-stack-step)
 
-(defstruct (%undo-recording-step
-            (:constructor %make-undo-recording-step
-                (undo-stack redo-stack))
-            (:conc-name %undo-recording-step-))
-  undo-stack
-  redo-stack)
+(define-value-struct %undo-recording-step
+    ((undo-stack nil :type list)
+     (redo-stack nil :type list))
+  :public-accessors nil
+  :constructor %make-undo-recording-step)
 
-(defstruct (%undo-recording-transition
-            (:constructor %make-undo-recording-transition
-                (old-state new-state output key-event))
-            (:conc-name %undo-recording-transition-))
-  old-state
-  new-state
-  output
-  key-event)
+(define-value-struct %undo-recording-transition
+    ((old-state nil)
+     (new-state nil)
+     (output nil)
+     (key-event nil))
+  :public-accessors nil
+  :constructor %make-undo-recording-transition)
 
 (defun input-edit-snapshot (state)
   (%make-input-edit-snapshot (input-state-buffer state)

@@ -340,6 +340,7 @@
    (:file "unit/test-configuration")
    (:file "unit/test-tokenizer")
    (:file "unit/test-environment")
+   (:file "unit/test-syscall-environment")
    (:file "unit/test-expansion")
    (:file "unit/test-expansion-parameter")
    (:file "unit/test-expansion-arithmetic-glob")

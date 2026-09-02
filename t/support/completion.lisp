@@ -100,19 +100,22 @@
      (nshell.presentation::seed-repl-completion-knowledge-base ,kb)
      ,@body))
 
-(defmacro with-test-path-filesystem ((directory-files-fn executable-p-fn) &body body)
+(defmacro with-test-filesystem ((&rest initargs) &body body)
   `(let ((*completion-test-filesystem*
-           (make-test-filesystem
-            :directory-files ,directory-files-fn
-            :executable-p ,executable-p-fn)))
+           (make-test-filesystem ,@initargs)))
+     ,@body))
+
+(defmacro with-test-path-filesystem ((directory-files-fn executable-p-fn) &body body)
+  `(with-test-filesystem
+       (:directory-files ,directory-files-fn
+        :executable-p ,executable-p-fn)
      ,@body))
 
 (defmacro with-test-file-filesystem ((directory-files-fn subdirectories-fn) &body body)
-  `(let ((*completion-test-filesystem*
-           (make-test-filesystem
-            :directory-files ,directory-files-fn
-            :subdirectories ,subdirectories-fn
-            :executable-p (constantly t))))
+  `(with-test-filesystem
+       (:directory-files ,directory-files-fn
+        :subdirectories ,subdirectories-fn
+        :executable-p (constantly t))
      ,@body))
 
 (defmacro with-repl-completion-help-fetcher

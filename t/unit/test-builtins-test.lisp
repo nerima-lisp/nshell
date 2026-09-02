@@ -102,6 +102,8 @@
     (with-builtins-context (context)
       (assert-builtin-call (context "command" '("-v" "echo"))
         :code 0 :contains '("echo"))
+      (assert-builtin-call (context "command" '("-v"))
+        :code 1 :output-null t)
       (assert-builtin-call (context "command" '("-V" "echo" "missing"))
         :code 1 :contains '("echo is a shell builtin" "missing: not found"))
       (assert-builtin-call (context "command" nil) :code 0 :output-null t)

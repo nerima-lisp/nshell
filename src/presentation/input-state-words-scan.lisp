@@ -91,30 +91,37 @@
 (defun shell-token-range-set-before (text limit)
   (%make-shell-token-range-set (shell-token-ranges-before text limit)))
 
+(defmacro %with-shell-token-range-set ((name text limit) &body body)
+  "Evaluate TEXT and LIMIT once, then run BODY with their range set."
+  (let ((text-var (gensym "TEXT-"))
+        (limit-var (gensym "LIMIT-")))
+    `(let* ((,text-var ,text)
+            (,limit-var ,limit)
+            (,name (shell-token-range-set-before ,text-var ,limit-var)))
+       ,@body)))
+
 (defun shell-token-range-at-position (text position)
   "Return the shell token range containing POSITION, or NIL."
-  (shell-token-range-set-find-at-position
-   (shell-token-range-set-before text (length text))
-   position))
+  (%with-shell-token-range-set (range-set text (length text))
+    (shell-token-range-set-find-at-position range-set position)))
 
 (defun shell-token-range-at-or-after-cursor (buffer cursor)
   "Return the shell token range containing or following CURSOR, or NIL."
   (let* ((end (length buffer))
-         (position (min cursor end))
-         (range-set (shell-token-range-set-before buffer end)))
-    (cond
-      ((shell-token-range-set-empty-p range-set)
-       nil)
-      ((>= position end)
-       (shell-token-range-set-last range-set))
-      (t
-       (shell-token-range-set-find-at-or-after range-set position)))))
+         (position (min cursor end)))
+    (%with-shell-token-range-set (range-set buffer end)
+      (cond
+        ((shell-token-range-set-empty-p range-set)
+         nil)
+        ((>= position end)
+         (shell-token-range-set-last range-set))
+        (t
+         (shell-token-range-set-find-at-or-after range-set position))))))
 
 (defun shell-token-range-before-position (buffer position)
   "Return the shell token range before POSITION, or NIL."
-  (shell-token-range-set-before-position
-   (shell-token-range-set-before buffer (length buffer))
-   position))
+  (%with-shell-token-range-set (range-set buffer (length buffer))
+    (shell-token-range-set-before-position range-set position)))
 
 (defun previous-kill-word-start (buffer cursor)
   (let ((pos cursor))

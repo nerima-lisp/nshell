@@ -3,17 +3,15 @@
 (in-package #:nshell.presentation)
 
 (defmacro define-input-state-constructor (fields)
-  `(defun make-input-state (&key ,@(mapcar (lambda (field)
-                                             (destructuring-bind (name default) field
-                                               (if (null default)
-                                                   name
-                                                   `(,name ,default))))
-                                           fields))
-     (%make-input-state
-      ,@(mapcan (lambda (field)
-                  (let ((name (first field)))
-                    (list (intern (symbol-name name) :keyword) name)))
-                fields))))
+  (let ((lambda-list '())
+        (constructor-arguments '()))
+    (dolist (field fields)
+      (destructuring-bind (name default) field
+        (push (if (null default) name `(,name ,default)) lambda-list)
+        (push (intern (symbol-name name) :keyword) constructor-arguments)
+        (push name constructor-arguments)))
+    `(defun make-input-state (&key ,@(nreverse lambda-list))
+       (%make-input-state ,@(nreverse constructor-arguments)))))
 
 (define-input-state-constructor
   ((buffer "")

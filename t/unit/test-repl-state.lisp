@@ -232,6 +232,16 @@
         #+sbcl (expect (consp environment) :to-be-truthy)
         #-sbcl (expect environment :to-be-null))))
 
+  (it "process-environment-entries-are-independent-copies"
+    "Environment snapshots can be changed without mutating a later snapshot."
+    (let ((first (nshell.infrastructure.acl:current-environment-entries))
+          (second (nshell.infrastructure.acl:current-environment-entries)))
+      (push "NSHELL_TEST_COPY_ISOLATION=changed" first)
+      (expect (member "NSHELL_TEST_COPY_ISOLATION=changed"
+                      second
+                      :test #'string=)
+              :to-be-falsy)))
+
   (it "process-environment-boundaries-expose-host-values"
     "The environment ACL exposes the host value and working directory contracts."
     (expect (stringp

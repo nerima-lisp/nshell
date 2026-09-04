@@ -59,6 +59,7 @@ appears and the full matrix accepts it.
 |---|---|
 | `cl-log-kit` | Pulled in transitively by `cl-process-kit` for *its* structured logging. nshell itself performs no logging (a shell's diagnostics go to the user's stderr, not a structured log sink), so it is deliberately absent from nshell's own `:depends-on`. Adopting it directly would mean inventing a logging concern the shell does not have. |
 | `cl-date-kit` | Pulled in transitively by `cl-concurrent-kit`; nshell consumes concurrency primitives, not date formatting or parsing. |
+| `cl-codec-kit` | Pulled in transitively by `cl-tty-kit` and `cl-process-kit`; nshell consumes terminal and process APIs, not the codec surface, so it remains an indirect build input. |
 
 ## Non-applicable org repositories
 

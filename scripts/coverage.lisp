@@ -79,6 +79,8 @@
       "package-infrastructure.lisp"
       "package-presentation.lisp"
       "package-domain-completion.lisp"
+      "package-domain-configuration-prompting.lisp"
+      "package-domain-signals-input-abbreviation.lisp"
       "key-event.lisp"
       "syscall-constants.lisp"))
   (defun %coverage-declarative-source-p (path)

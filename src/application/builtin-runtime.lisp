@@ -81,7 +81,7 @@
      :empty-directory "")))
 
 (defun %stat-path (path)
-  (ignore-errors (probe-file path)))
+  (probe-file path))
 
 (defun %path-file-p (context path)
   (declare (ignore context))

@@ -32,6 +32,14 @@
       (expect nil :to-be (nshell.domain.input:key-event-number event))
       (expect nil :to-be (nshell.domain.input:key-event-data event))))
 
+  (it "key-event-constructor-validates-optional-value-types"
+    (expect (lambda ()
+              (nshell.domain.input:make-key-event :char "x"))
+            :to-throw 'type-error)
+    (expect (lambda ()
+              (nshell.domain.input:make-key-event :mouse nil "7"))
+            :to-throw 'type-error))
+
   (it "key-event-preserves-structured-payload"
     (let ((event (nshell.domain.input:make-key-event
                   :mouse nil 7 '(:button 1 :shift-p t))))

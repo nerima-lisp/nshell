@@ -252,17 +252,16 @@ values -- rather than a nested bail-out cascade."
 (defun %completion-help-update-scan-state (state line)
   (%with-completion-help-line-facts (facts state line)
     (let ((kind (%completion-help-line-facts-kind facts)))
-      (setf state (%completion-help-note-line-kind state kind facts)
-            state (%completion-help-note-options
-                   state (%completion-help-line-facts-options facts))
-            state (%completion-help-note-option-values
-                   state
-                   (%completion-help-line-facts-options facts)
-                   (%completion-help-line-facts-values facts))
-            state (%completion-help-note-option-value-kinds
-                   state
-                   (%completion-help-line-facts-option-value-kinds facts)))
-      state)))
+      (let* ((state (%completion-help-note-line-kind state kind facts))
+             (state (%completion-help-note-options
+                     state (%completion-help-line-facts-options facts)))
+             (state (%completion-help-note-option-values
+                     state
+                     (%completion-help-line-facts-options facts)
+                     (%completion-help-line-facts-values facts))))
+        (%completion-help-note-option-value-kinds
+         state
+         (%completion-help-line-facts-option-value-kinds facts))))))
 
 (defun %completion-help-command-facts (help-text)
   (let ((state (%make-completion-help-scan-state nil nil nil nil nil)))

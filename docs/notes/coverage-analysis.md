@@ -77,14 +77,15 @@ forms have been classified and the metric is stable across the declared
 platforms. Until then, keep the raw report, the selected-test assertion, and
 the minimum/target fields together in release verification.
 
-## Latest local measurement
+## Interpreting the latest local measurement
 
-The latest ordinary and instrumented runs passed the complete suite. Earlier
-instrumented runs exposed intermittent failures in external-process
-redirection tests; the synchronization in the pipeline redirection assertion
-now waits for the expected file content, and the latest instrumented run passed
-those cases. The 100% target remains unmet. Do not copy individual counts into documentation:
-the source set and instrumentation output change as the implementation evolves.
+The ordinary test run passes the complete suite, while an instrumented run can
+still expose a failure in the external-process pipeline assertion. Treat that
+failure as release-blocking until it reproduces consistently and its cause is
+understood; do not describe the coverage report as passing merely because the
+configured minimum is met. The 100% target remains unmet. Do not copy
+individual counts into documentation: the source set and instrumentation
+output change as the implementation evolves.
 Read the
 machine-readable `coverage-summary.json` produced by the command below and
 verify the selected-test, error, minimum, and target fields together.

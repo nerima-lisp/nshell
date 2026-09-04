@@ -3,28 +3,25 @@
 (defun %printf-format-value (argument conversion flags width precision)
   (case conversion
     (#\s
-     (values (%printf-pad (if precision
-                              (subseq argument 0 (min precision (length argument)))
-                              argument)
-                          width
-                          (%printf-flag-p flags #\-))
+     (values (%with-printf-padding (width flags)
+               (if precision
+                   (subseq argument 0 (min precision (length argument)))
+                   argument))
              t
              nil))
     (#\b
      (multiple-value-bind (text stop-p) (%printf-expand-escapes argument)
-       (values (%printf-pad (if precision
-                              (subseq text 0 (min precision (length text)))
-                              text)
-                          width
-                          (%printf-flag-p flags #\-))
+       (values (%with-printf-padding (width flags)
+                 (if precision
+                     (subseq text 0 (min precision (length text)))
+                     text))
                t
                stop-p)))
     (#\c
-     (values (%printf-pad (if (plusp (length argument))
-                              (string (char argument 0))
-                              (string #\Null))
-                          width
-                          (%printf-flag-p flags #\-))
+     (values (%with-printf-padding (width flags)
+               (if (plusp (length argument))
+                   (string (char argument 0))
+                   (string #\Null)))
              t
              nil))
     ((#\d #\i #\u #\o #\x #\X)

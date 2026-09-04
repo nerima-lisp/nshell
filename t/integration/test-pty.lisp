@@ -61,7 +61,10 @@
             :to-throw 'error)
     (expect (lambda ()
               (nshell.infrastructure.acl:pty-spawn "/bin/echo" '() :cols -1))
-            :to-throw 'error))
+            :to-throw 'error)
+    (expect t :to-equal
+            (nshell.infrastructure.acl::%validate-pty-spawn-input
+             "/bin/echo" '("hello") 24 80)))
 
   (it "checked-syscall-macro-returns-result-after-body"
     "The syscall boundary macro keeps the result available after successful work."

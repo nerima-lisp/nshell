@@ -61,7 +61,7 @@ instead in CI's `integration` job. Run them locally when changing PTY,
 subprocess, terminal, or job-control behaviour:
 
 ```sh
-perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix develop --command sbcl --script run-tests.lisp
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix develop -c sbcl --script run-tests.lisp
 ```
 
 This covers the real-PTY interactive smoke tests, `Ctrl-C` recovery, and the

@@ -52,7 +52,7 @@ Iterate with the smallest relevant suite, then run the full gate before review.
 The non-sandboxed integration run, for changes the Nix sandbox cannot exercise:
 
 ```sh
-perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix develop --command sbcl --script run-tests.lisp
+perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix develop -c sbcl --script run-tests.lisp
 ```
 
 Tests live in `t/` and must be hermetic: no dependence on the ambient working

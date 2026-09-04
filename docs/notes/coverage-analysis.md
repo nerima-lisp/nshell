@@ -20,7 +20,7 @@ silently removed from the report.
 
 ```sh
 NSHELL_COVERAGE_DIR=/tmp/nshell-coverage \
-  nix develop 'path:.' --command sbcl --script scripts/coverage.lisp
+  nix develop 'path:.' -c sbcl --script scripts/coverage.lisp
 ```
 
 The command is release evidence only when the selected test count is non-zero,
@@ -35,7 +35,7 @@ Run the ordinary coverage command above and the independent Weave regression
 suite below; treat both results as release evidence.
 
 ```sh
-nix develop 'path:.' --command bash -lc \
+nix develop 'path:.' -c bash -lc \
   'perl -e '\''$SIG{ALRM}=sub { exit 124 }; alarm 900; exec @ARGV'\'' \
   sbcl --script scripts/weave.lisp
 ```
@@ -109,7 +109,7 @@ Reproduce it with:
 
 ```sh
 NSHELL_COVERAGE_DIR=/tmp/nshell-coverage \
-  nix develop --command bash -lc \
+  nix develop -c bash -lc \
   'perl -e '\''$SIG{ALRM}=sub { exit 124 }; alarm 900; exec @ARGV'\'' \
   sbcl --script scripts/coverage.lisp
 ```

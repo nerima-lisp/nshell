@@ -43,7 +43,7 @@ Verify the public artefacts from a clean checkout:
   signal, and job-control coverage:
 
   ```sh
-  nix develop --command sbcl --script run-tests.lisp
+  nix develop -c sbcl --script run-tests.lisp
   ```
 
 - `nix build .#releaseBundle --print-build-logs` produces the executable,

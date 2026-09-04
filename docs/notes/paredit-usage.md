@@ -57,5 +57,5 @@ The shell exposes `paredit` with read-only `inspect` commands, structural
 command with:
 
 ```sh
-nix develop --command paredit --version
+nix develop -c paredit --version
 ```

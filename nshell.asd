@@ -206,6 +206,8 @@
    (:file "infrastructure/acl/syscall-pipeline-streams")
    (:file "infrastructure/acl/syscall-pipeline-wait")
    (:file "infrastructure/acl/syscall-pipeline")
+   (:file "infrastructure/acl/syscall-pipeline-spawn-loop")
+   (:file "infrastructure/acl/syscall-pipeline-entrypoints")
    (:file "infrastructure/acl/syscall-process-substitution")
    (:file "infrastructure/acl/syscall-terminal")
    (:file "infrastructure/acl/git")

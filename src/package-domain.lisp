@@ -2,47 +2,6 @@
 ;;; DDD architecture: domain/ must not import from application/, infrastructure/, or presentation/
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-;; -- Domain packages (pure, no side effects) ----------------
-(defpackage #:nshell.domain.signals
-  (:documentation
-   "Domain: POSIX signals as domain values, with SIGINT, SIGTERM, SIGCONT, and
-SIGCHLD named rather than numbered. Lets job control reason about signals
-without any layer above it having to reach for sb-posix; the number mapping is
-applied in nshell.infrastructure.acl.")
-  (:use #:cl)
-  (:import-from #:nshell.util #:define-value-struct)
-  (:export #:make-signal #:signal-name #:signal-number #:signal-p #:signal=
-           #:+sigint+ #:+sigterm+ #:+sigcont+ #:+sigchld+))
-
-(defpackage #:nshell.domain.input
-  (:documentation
-   "Domain: the key-event value type -- one keystroke, already classified into a
-character, a named key, or a mouse or paste event. It is the seam between the
-terminal byte decoder in infrastructure and the line editor in presentation, so
-neither side has to know the other's representation.")
-  (:use #:cl)
-  (:import-from #:nshell.util #:define-value-struct)
-  (:export #:key-event #:key-event-p #:make-key-event
-           #:key-event-type #:key-event-char #:key-event-number
-           #:key-event-data))
-
-(defpackage #:nshell.domain.abbreviation
-  (:documentation
-   "Domain: fish-style abbreviations -- deciding whether the word before the
-cursor is an abbreviation, whether it sits in command position, and what text it
-expands to. Purely a function of the buffer and the abbreviation table; the
-editing of the buffer is presentation's concern.")
-  (:use #:cl)
-  (:import-from #:nshell.util #:define-value-struct)
-  (:export #:abbreviation-boundary-p
-           #:abbreviation-target-before-cursor
-           #:abbreviation-command-position-p
-           #:abbreviation-p
-           #:make-abbreviation
-           #:abbreviation-expansion
-           #:abbreviation-position
-           #:expand-abbreviation))
-
 (defpackage #:nshell.domain.execution
   (:documentation
    "Domain: commands, pipelines, pipeline plans, and jobs as values, together

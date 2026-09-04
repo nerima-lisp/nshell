@@ -65,16 +65,14 @@ processes."
 Returns :BREAK or :CONTINUE when this loop owns the signal, and :PROPAGATE
 when an enclosing loop must handle the remaining count."
   (when *loop-control-signal*
-    (let ((kind (car *loop-control-signal*))
-          (count (cdr *loop-control-signal*)))
-      (if (= count 1)
-          (progn
-            (setf *loop-control-signal* nil)
-            kind)
-          (progn
-            (setf *loop-control-signal*
-                  (cons kind (1- count)))
-            :propagate)))))
+    (destructuring-bind (kind . count) *loop-control-signal*
+      (cond
+        ((= count 1)
+         (setf *loop-control-signal* nil)
+         kind)
+        (t
+         (decf (cdr *loop-control-signal*))
+         :propagate)))))
 
 ;; -- Control flow node helpers -----------------------------------------------
 

@@ -1,6 +1,35 @@
 (in-package #:nshell/test)
 
 (describe "execute-pipeline-service-tests"
+  (it "finish-external-process-output-routes-merged-and-separate-streams"
+    "Captured process output follows the redirect plan for both stream modes."
+    (let ((merged-plan
+            (nshell.application::%make-external-process-redirect-plan
+             nil :supersede nil :supersede :stdout :stdout t))
+          (separate-plan
+            (nshell.application::%make-external-process-redirect-plan
+             nil :supersede nil :supersede :stdout :stderr nil)))
+      (multiple-value-bind (output code)
+          (nshell.application::%finish-external-process-output
+           (make-string-output-stream)
+           nil
+           merged-plan
+           7)
+        (declare (ignore output))
+        (expect 7 :to-equal code))
+      (let ((stdout-buffer (make-string-output-stream))
+            (stderr-buffer (make-string-output-stream)))
+        (write-string "out" stdout-buffer)
+        (write-string "err" stderr-buffer)
+        (let ((error-output (make-string-output-stream)))
+          (let ((*error-output* error-output))
+            (multiple-value-bind (output code)
+                (nshell.application::%finish-external-process-output
+                 stdout-buffer stderr-buffer separate-plan 3)
+              (expect "out" :to-equal output)
+              (expect 3 :to-equal code)))
+          (expect "err" :to-equal (get-output-stream-string error-output))))))
+
   (it "execute-command-line-adds-complete-commands-to-history"
     "A complete command line returns an AST/result pair and records history."
     (let ((history (history-kit:make-history)))

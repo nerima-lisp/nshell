@@ -71,6 +71,15 @@
                "/bin/sh" '() 0 80))
             :to-throw 'error))
 
+  (it "reports invalid terminal setup descriptors"
+    "Terminal setup failures remain visible at the child boundary."
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%claim-controlling-terminal -1 1))
+            :to-throw 'error)
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%redirect-pty-slave -1))
+            :to-throw 'error))
+
   (it "encodes argv and environment entries as a null-terminated vector"
     "The exec boundary receives stable C strings and a trailing null pointer."
     (let ((vector (nshell.infrastructure.acl::%make-c-string-vector

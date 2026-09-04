@@ -47,6 +47,21 @@
             (nshell.infrastructure.acl::%check-errno nil "failed syscall"))
             :to-throw 'error))
 
+  (it "pty-spawn-validates-input-contract-before-opening-a-pty"
+    "PTY creation rejects malformed programs, arguments, and dimensions early."
+    (expect (lambda ()
+              (nshell.infrastructure.acl:pty-spawn 42 '()))
+            :to-throw 'type-error)
+    (expect (lambda ()
+              (nshell.infrastructure.acl:pty-spawn "/bin/echo" '(42)))
+            :to-throw 'error)
+    (expect (lambda ()
+              (nshell.infrastructure.acl:pty-spawn "/bin/echo" '() :rows 0))
+            :to-throw 'error)
+    (expect (lambda ()
+              (nshell.infrastructure.acl:pty-spawn "/bin/echo" '() :cols -1))
+            :to-throw 'error))
+
   (it "checked-syscall-macro-returns-result-after-body"
     "The syscall boundary macro keeps the result available after successful work."
     (let ((body-result nil))

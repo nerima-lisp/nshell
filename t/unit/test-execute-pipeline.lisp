@@ -9,14 +9,13 @@
           (separate-plan
             (nshell.application::%make-external-process-redirect-plan
              nil :supersede nil :supersede :stdout :stderr nil)))
-      (multiple-value-bind (output code)
-          (nshell.application::%finish-external-process-output
-           (make-string-output-stream)
-           nil
-           merged-plan
-           7)
-        (declare (ignore output))
-        (expect 7 :to-equal code))
+      (let ((stdout-buffer (make-string-output-stream)))
+        (write-string "merged" stdout-buffer)
+        (multiple-value-bind (output code)
+            (nshell.application::%finish-external-process-output
+             stdout-buffer nil merged-plan 7)
+          (expect "merged" :to-equal output)
+          (expect 7 :to-equal code)))
       (let ((stdout-buffer (make-string-output-stream))
             (stderr-buffer (make-string-output-stream)))
         (write-string "out" stdout-buffer)

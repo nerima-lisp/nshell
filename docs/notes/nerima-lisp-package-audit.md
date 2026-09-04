@@ -21,7 +21,7 @@ appear unqualified):
 | `cl-boundary-kit` | clock/sleeper boundaries (also under cl-process-kit) | 14 refs |
 | `cl-cli` | argument-vector parsing for `main` | 13 refs |
 | `cl-tty-kit` | terminal control / raw-mode / rendering | 17 refs |
-| `cl-process-kit` | timeout-guarded external process launch (`run`) | `infrastructure/acl/syscall-process.lisp` (6 refs) |
+| `cl-process-kit` | timeout-guarded external process launch (`run`) | `infrastructure/acl/syscall-process-execution.lisp` (6 refs) |
 | `cl-history-kit` | command-history store, search, and recall navigation cursor | used directly (qualified `history-kit:...`) throughout `application/` and `presentation/`; nshell keeps only the tokenizer-coupled `!$`/Alt-. last-argument extraction in `domain/history/last-argument.lisp` |
 | `cl-concurrent-kit` | structured task scopes and promises for concurrent syscall work | `infrastructure/acl/syscall.lisp` (`with-task-scope`, `spawn`, `await`) |
 

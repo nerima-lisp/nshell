@@ -32,6 +32,9 @@
            (owns-process-group-p (and (integerp actual-pgid)
                                       (plusp actual-pgid) (= pid actual-pgid))))
       (flet ((terminate (signal)
+               ;; Signal the process group only when this process created it;
+               ;; otherwise a timeout could kill the shell's own foreground
+               ;; group or an unrelated group reused by the OS.
                (if owns-process-group-p
                    (ignore-errors (%send-process-group-signal pid signal))
                    (when (sb-ext:process-alive-p proc)

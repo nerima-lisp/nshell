@@ -85,7 +85,11 @@ normal foreground timeout policy."
 
 (defun run-external-capture (cmd args)
   "Execute CMD with ARGS synchronously, capturing stdout for command
-substitution. Returns the captured output and a shell exit code."
+substitution. Returns the captured output and a shell exit code. Stderr is
+forwarded separately when the current command has redirected stderr; stdin is
+forwarded only when command substitution explicitly permits it. The process
+kit handles stream draining and the configured timeout so large output cannot
+deadlock the shell."
   (handler-case
       (multiple-value-bind (resolved-cmd environment)
           (%prepare-external-command cmd)

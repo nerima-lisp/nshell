@@ -179,6 +179,11 @@ and returns MAKE-INPUT-STATE plists directly, with no intermediate value record.
       (expect "new" :to-equal (nshell.presentation::input-state-copy-override-resolve
                     value
                     "old"))
+      (expect :fallback :to-be
+              (nshell.presentation::input-state-copy-override-resolve
+               clear
+               "old"
+               :clear-value :fallback))
       (expect "old" :to-equal (nshell.presentation::input-state-copy-override-resolve
                     optional-current
                     "old"))

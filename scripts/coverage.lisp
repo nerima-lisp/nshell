@@ -79,6 +79,7 @@
       "package-infrastructure.lisp"
       "package-presentation.lisp"
       "package-domain-completion.lisp"
+      "key-event.lisp"
       "syscall-constants.lisp"))
   (defun %coverage-declarative-source-p (path)
     (let ((file-name (file-namestring (pathname path))))

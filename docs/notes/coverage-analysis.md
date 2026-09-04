@@ -86,6 +86,11 @@ investigate it before release. Do not describe the coverage report as passing
 merely because the configured minimum is met. The 100% target remains unmet.
 Do not copy individual counts into documentation: the source set and
 instrumentation output change as the implementation evolves.
+Pure value-structure definitions such as `key-event.lisp` are excluded from
+the executable-source denominator; the coverage script records that policy
+alongside package, constants, and other declarative files. Forked PTY child
+setup remains covered by integration tests, but its child-process expressions
+are not merged into the parent sb-cover report.
 Read the
 machine-readable `coverage-summary.json` produced by the command below and
 verify the selected-test, error, minimum, and target fields together.

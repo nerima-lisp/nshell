@@ -6,6 +6,10 @@
     (expect (nshell.infrastructure.terminal:interactive-terminal-p 999999)
             :to-be nil))
 
+  (it "uses standard input when no descriptor is supplied"
+    (expect (nshell.infrastructure.terminal:interactive-terminal-p)
+            :to-be nil))
+
   (it "exposes platform terminal request constants"
     (expect (plusp nshell.infrastructure.acl::+tiocswinsz+)
             :to-be-truthy)

@@ -525,3 +525,24 @@
                       (first nested-else)))
         (expect '("yes") :to-equal (nshell.domain.parsing:command-node-arg-values
                     (first nested-else)))))))
+
+  (it "control-flow-ast-constructors-copy-list-fields"
+    "Control-flow constructors preserve scalar fields while isolating list inputs."
+    (let* ((condition (nshell.domain.parsing:make-command-node "true" nil))
+           (body (list (nshell.domain.parsing:make-command-node "echo" '("ok"))))
+           (clauses (list (nshell.domain.parsing::make-case-clause
+                          "ok" body)))
+           (if-node (nshell.domain.parsing::make-if-node condition body body))
+           (for-node (nshell.domain.parsing::make-for-node "item" '("a") body))
+           (while-node (nshell.domain.parsing::make-while-node condition body))
+           (case-node (nshell.domain.parsing::make-case-node "value" clauses))
+           (begin-node (nshell.domain.parsing::make-begin-end-node body)))
+      (dolist (node (list if-node for-node while-node case-node begin-node))
+        (expect (nshell.domain.parsing::ast-node-p node) :to-be-truthy))
+      (expect "item" :to-equal (nshell.domain.parsing:for-node-var-name for-node))
+      (expect '("a") :to-equal (nshell.domain.parsing:for-node-in-values for-node))
+      (expect "value" :to-equal (nshell.domain.parsing:case-node-value case-node))
+      (expect "ok" :to-equal
+              (nshell.domain.parsing:case-clause-pattern
+               (first (nshell.domain.parsing:case-node-clauses case-node))))
+      (expect 1 :to-equal (length (nshell.domain.parsing:begin-end-node-body begin-node)))))

@@ -349,6 +349,39 @@ rebuilt state, so the completion, transient, and session groups each assemble.
       (expect expander :to-be
               (nshell.presentation::input-state-abbreviation-expander copy))))
 
+  (it "input-state-copy-with-rejects-invalid-typed-overrides"
+    (let* ((expander (lambda (text) text))
+           (state (input-state
+                   :buffer "abc"
+                   :cursor-pos 1
+                   :completion-base-buffer "base"
+                   :completion-base-cursor 2
+                   :mode :vi-c
+                   :vi-visual-anchor 2
+                   :mouse-selection-anchor 1
+                   :mouse-selection-end 2
+                   :abbreviation-expander expander))
+           (copy (nshell.presentation::copy-input-state-with
+                  state
+                  :completion-base-buffer 7
+                  :completion-base-cursor "not-an-integer"
+                  :mode nil
+                  :vi-visual-anchor nil
+                  :mouse-selection-anchor nil
+                  :mouse-selection-end nil
+                  :abbreviation-expander nil)))
+      (is-input-state copy
+                      :completion-base-buffer "base"
+                      :completion-base-cursor 2
+                      :mode :vi-c
+                      :vi-visual-anchor nil)
+      (expect nil :to-be
+              (nshell.presentation::input-state-mouse-selection-anchor copy))
+      (expect nil :to-be
+              (nshell.presentation::input-state-mouse-selection-end copy))
+      (expect expander :to-be
+              (nshell.presentation::input-state-abbreviation-expander copy))))
+
   (it "input-edit-snapshot-is-private-value"
     (let* ((state (nshell.presentation:make-input-state :buffer "abc"
                                                         :cursor-pos 2))

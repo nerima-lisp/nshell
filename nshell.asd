@@ -131,6 +131,8 @@
    (:file "domain/completion/knowledge-base-candidates")
    (:file "domain/completion/candidate-ranking")
    (:file "domain/completion/query-data")
+   (:file "domain/completion/rule-completion")
+   (:file "domain/completion/candidate-routing")
    (:file "domain/completion/engine")
    (:file "domain/history/last-argument")
    (:file "domain/history/expansion")

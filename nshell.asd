@@ -208,6 +208,7 @@
    (:file "infrastructure/acl/git")
    (:file "infrastructure/acl/pty-data")
    (:file "infrastructure/acl/pty")
+   (:file "infrastructure/acl/pty-spawn-child")
    (:file "infrastructure/acl/pty-spawn")
    (:file "infrastructure/acl/signal-acl")
    (:file "infrastructure/persistence/file-history")

@@ -85,6 +85,7 @@
    (:file "domain/parsing/parser-separator-data")
    (:file "domain/parsing/parser-assembly")
    (:file "domain/parsing/parser-here-doc-data")
+   (:file "domain/parsing/parser-here-doc-consumption")
    (:file "domain/parsing/parser-here-doc")
    (:file "domain/parsing/parser-here-doc-targets")
    (:file "domain/parsing/parser-reduction-data")

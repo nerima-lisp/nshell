@@ -1,6 +1,14 @@
 (in-package #:nshell/test)
 
 (describe "builtin-tests"
+  (it "printf-padding-does-not-capture-callers-lexical-variable"
+    "The padding macro keeps its temporary binding hygienic."
+    (let ((padded-text "caller-value"))
+      (expect "   inner" :to-equal
+              (nshell.application::%with-printf-padding (8 nil)
+                "inner"))
+      (expect "caller-value" :to-equal padded-text)))
+
   (it "type-and-which-resolve-builtins-aliases-functions-and-path"
     "type reports aliases, functions, builtins, and commands discovered through PATH."
     (with-builtins-context (context)

@@ -13,5 +13,6 @@
   (find flag flags :test #'char=))
 
 (defmacro %with-printf-padding ((width flags) &body body)
-  `(let ((padded-text (progn ,@body)))
-     (%printf-pad padded-text ,width (%printf-flag-p ,flags #\-))))
+  (let ((padded-text (gensym "PADDED-TEXT-")))
+    `(let ((,padded-text (progn ,@body)))
+       (%printf-pad ,padded-text ,width (%printf-flag-p ,flags #\-)))))

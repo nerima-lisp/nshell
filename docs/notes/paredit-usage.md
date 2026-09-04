@@ -15,6 +15,7 @@ docstring).
 | `inspect unused-definitions src/**/*.lisp t/**/*.lisp` | the dead-code audit (`docs/notes/dead-code-audit.md`): the current scan reports 241 candidates and 66 bulk-removable flags, each reviewed as a false positive. Scanning src+t together makes cross-references from tests visible. |
 | `inspect duplicates src/**/*.lisp` | found the four byte-identical prefix helpers later consolidated into `nshell.util:string-prefix-p`, and confirmed the top clone shapes were idiomatic `let` bindings that must *not* be macro-ified. |
 | `inspect duplicates t/unit/*.lisp` | located the same-shape `it`-block clusters that became `it-each` tables (tokenizer word/redirect/command-sub/process-sub, parser diagnostics). |
+| `inspect lint src --output json` | reviewed the whole-source lint report before changing code. The `self-comparison` hits in `application/builtin-type-helpers.lisp` are bounded `string=` calls with equal `:end1`/`:end2` limits, not equal operands; the `duplicate-case-keys` hits in `application/builtin-printf.lisp` distinguish upper- and lower-case character objects. These are analyzer false positives and were left unchanged. |
 
 ## Structural rewrites (`paredit refactor …`)
 

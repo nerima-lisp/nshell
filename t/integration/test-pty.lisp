@@ -262,6 +262,23 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux"))
 
+  (it "pty-io-preserves-zero-length-boundaries"
+    "Zero-length reads and writes complete without touching the descriptor."
+    #+(or darwin linux)
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (unwind-protect
+           (let ((buffer (make-array 8 :element-type '(unsigned-byte 8))))
+             (expect 0 :to-equal
+                     (nshell.infrastructure.acl:pty-read read-fd buffer 0))
+             (expect 0 :to-equal
+                     (nshell.infrastructure.acl:pty-write
+                      write-fd
+                      (make-array 0 :element-type '(unsigned-byte 8)))))
+        (nshell.infrastructure.acl::%pty-close-fd read-fd)
+        (nshell.infrastructure.acl::%pty-close-fd write-fd)))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
   (it "pty-open-write-read-close"
     "PTY can be opened, used in both directions, and closed."
     #-(or darwin linux)

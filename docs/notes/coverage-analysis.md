@@ -76,6 +76,11 @@ test:
    corresponding host boundary. Their tests must run against a real control
    object or a known-good injected boundary, never against state dirtied by the
    coverage probe itself.
+   For example, `src/infrastructure/acl/syscall-environment.lisp` reports the
+   non-SBCL `host-kit:getenv` fallback as conditionalized out on SBCL, while
+   `src/infrastructure/acl/pty.lisp` has separate Darwin and Linux opening
+   implementations. A Linux run cannot claim coverage for the Darwin branch;
+   those branches require their declared host platforms.
 
 The target can be raised to an enforced threshold only after the remaining
 forms have been classified and the metric is stable across the declared

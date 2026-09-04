@@ -94,6 +94,7 @@
    (:file "domain/parsing/parser")
     (:file "domain/environment/env")
     (:file "domain/filesystem")
+     (:file "domain/expansion/glob-matching")
      (:file "domain/expansion/expand")
      (:file "domain/expansion/brace")
      (:file "domain/expansion/parameter-data")

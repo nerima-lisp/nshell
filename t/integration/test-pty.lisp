@@ -39,6 +39,7 @@
   (it "pty-syscall-contract-distinguishes-success-and-failure"
     "Low-level syscall results use NIL or negative integers as failures."
     (expect (nshell.infrastructure.acl::%syscall-failed-p 0) :to-be-falsy)
+    (expect (nshell.infrastructure.acl::%syscall-failed-p :success) :to-be-falsy)
     (expect (nshell.infrastructure.acl::%syscall-failed-p nil) :to-be-truthy)
     (expect (nshell.infrastructure.acl::%syscall-failed-p -1) :to-be-truthy)
     (expect 0 :to-equal

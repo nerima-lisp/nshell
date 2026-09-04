@@ -63,6 +63,7 @@
    (:file "domain/execution/pipeline")
    (:file "domain/execution/job")
      (:file "domain/parsing/ast")
+     (:file "domain/parsing/ast-control-flow")
      (:file "domain/parsing/ast-arguments")
      (:file "domain/parsing/ast-redirect-split")
      (:file "domain/parsing/tokenizer-data")

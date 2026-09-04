@@ -53,10 +53,11 @@
       (%redirect-kind-facts-from-spec spec))))
 
 (defmacro %define-redirect-kind-predicate (name accessor)
-  `(defun ,name (kind)
-     (let ((facts (%redirect-kind-facts kind)))
-       (and facts
-            (,accessor facts)))))
+  (let ((facts-var (gensym "FACTS-")))
+    `(defun ,name (kind)
+       (let ((,facts-var (%redirect-kind-facts kind)))
+         (and ,facts-var
+              (,accessor ,facts-var))))))
 
 (%define-redirect-kind-predicate redirect-input-kind-p
   %redirect-kind-facts-input-p)

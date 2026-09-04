@@ -13,9 +13,10 @@
   (arg sb-sys:system-area-pointer))
 
 (defmacro with-checked-syscall ((name call) &body body)
-  `(let ((result ,call))
-     (when (%syscall-failed-p result)
+  (let ((result-var (gensym "RESULT-")))
+    `(let ((,result-var ,call))
+       (when (%syscall-failed-p ,result-var)
        (error "~a failed (result=~s, errno=~s)"
-              ,name result (sb-unix::get-errno)))
-     ,@body
-     result))
+              ,name ,result-var (sb-unix::get-errno)))
+       ,@body
+       ,result-var)))

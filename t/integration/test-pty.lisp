@@ -88,6 +88,18 @@
               :to-throw 'error)
       (expect nil :to-be body-ran)))
 
+  (it "checked-syscall-macro-does-not-capture-result"
+    "The syscall boundary macro keeps its temporary result binding hygienic."
+    (let ((result :caller-value))
+      (flet ((nshell.infrastructure.acl::%syscall-failed-p (value)
+               (declare (ignore value))
+               nil))
+        (expect 7 :to-equal
+                (nshell.infrastructure.acl::with-checked-syscall
+                    ("test-syscall" 7)
+                  result)))
+      (expect :caller-value :to-be result)))
+
   (it "pty-child-resource-helpers-are-nil-safe"
     "Child-side cleanup helpers tolerate absent or already-invalid resources."
     #+(or darwin linux)

@@ -323,6 +323,21 @@
         (expect (streamp slave) :to-be-truthy)
         (expect (stringp slave-name) :to-be-truthy)))))
 
+  (it "make-pty-stream-creates-unbuffered-stream"
+    "MAKE-PTY-STREAM wraps a descriptor as an unbuffered character stream."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (multiple-value-bind (master slave) (nshell.infrastructure.acl:open-pty)
+      (unwind-protect
+           (let ((stream (nshell.infrastructure.acl:make-pty-stream master)))
+             (unwind-protect
+                  (progn
+                    (expect (streamp stream) :to-be-truthy)
+                    (expect (open-stream-p stream) :to-be-truthy))
+               (close stream)))
+        (nshell.infrastructure.acl:pty-close master slave))))
+
   (it "with-pty-allows-omitting-slave-name"
     "WITH-PTY does not require callers to bind the diagnostic slave name."
     #-(or darwin linux)

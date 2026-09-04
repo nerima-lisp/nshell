@@ -1,21 +1,8 @@
 (in-package #:nshell.infrastructure.terminal)
 
-;;; The escape-sequence vocabulary is provided by cl-tty-kit, whose ANSI helpers
-;;; return strings.  nshell's helpers keep their side-effecting, stream-writing
-;;; signatures (callers are unchanged) but delegate the actual byte sequence to
-;;; cl-tty-kit, so there is a single source of truth for terminal control codes.
-;;; Every sequence below was verified byte-identical to the previous hand-rolled
-;;; output (see integration/test-terminal-ansi), including the SGR-mouse ordering.
-;;;
-;;; Every export here is the same two-line shape -- forward ARGS plus an
-;;; optional STREAM to a cl-tty-kit call, write the string it returns -- so
-;;; %DEFINE-ANSI-FORWARDER generates the DEFUN rather than each being spelled
-;;; out. TTY-KIT-CALL is the full call form rather than derived from NAME: the
-;;; cl-tty-kit function name, argument count, and any literal argument
-;;; (ANSI-CLEAR-SCREEN's `2`, ANSI-ENABLE-SGR-MOUSE's `:normal`) all vary
-;;; independently of NAME, so there is no naming convention to derive from.
-;;; WITH-STREAM is nil only for the three callers without an explicit STREAM
-;;; parameter (ANSI-CLEAR-SCREEN/-CLEAR-LINE/-MOVE-CURSOR).
+;;; Keep terminal control codes in cl-tty-kit while preserving nshell's
+;;; stream-writing API. The macro covers the uniform forwarding functions;
+;;; TTY-KIT-CALL remains explicit because its arguments are not name-derived.
 (defmacro %define-ansi-forwarder (name (&rest args) tty-kit-call &key with-stream)
   (if with-stream
       `(defun ,name (,@args &optional (stream *standard-output*))
@@ -110,11 +97,7 @@
         (ansi-copy-to-clipboard text stream)
         :osc52)))
 
-;;; Cursor motion and SGR styling. These exist so the presentation tier stops
-;;; hand-writing "~C[~dA" and friends: the vocabulary belongs to this layer, and
-;;; routing through it keeps cl-tty-kit named in one file rather than in a dozen
-;;; rendering functions. Each is byte-identical to the sequence its call sites
-;;; used to build by hand.
+;;; Cursor motion and SGR styling belong to this terminal boundary.
 (%define-ansi-forwarder ansi-cursor-up (count) (cl-tty-kit:ansi-cursor-up count) :with-stream t)
 (%define-ansi-forwarder ansi-cursor-down (count) (cl-tty-kit:ansi-cursor-down count) :with-stream t)
 (%define-ansi-forwarder ansi-cursor-forward (count) (cl-tty-kit:ansi-cursor-forward count) :with-stream t)

@@ -48,6 +48,16 @@
             (nshell.infrastructure.acl::%check-errno nil "failed syscall"))
             :to-throw 'error))
 
+  (it "pty-slave-open-reports-missing-device"
+    "Opening a missing slave device reports the operating-system error."
+    #+(or darwin linux)
+    (expect (lambda ()
+              (nshell.infrastructure.acl::%open-slave
+               "/definitely/missing/nshell-pty-device"))
+            :to-throw 'error)
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
   (it "pty-spawn-validates-input-contract-before-opening-a-pty"
     "PTY creation rejects malformed programs, arguments, and dimensions early."
     (expect (lambda ()

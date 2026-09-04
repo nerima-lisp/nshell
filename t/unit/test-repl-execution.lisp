@@ -10,6 +10,13 @@
       (expect :value :to-equal (gethash "alias" name-table))
       (expect :process :to-equal (gethash 7 process-table))
       (expect nil :to-be (gethash "7" process-table))))
+  (it "repl-state-tables-provide-independent-name-and-process-tables"
+    "The REPL state starts with four name tables and one process registry."
+    (multiple-value-bind (aliases functions variables completions processes)
+        (nshell.presentation::%make-repl-state-tables)
+      (dolist (table (list aliases functions variables completions))
+        (expect 'equal :to-equal (hash-table-test table)))
+      (expect 'eql :to-equal (hash-table-test processes))))
   (it "repl-execute-expands-history-designator-before-parsing"
     "Interactive execution expands history references before parsing and persistence."
     (let ((persisted nil))

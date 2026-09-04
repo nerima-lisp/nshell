@@ -30,6 +30,13 @@
         :code 0
         :output (format nil "literal~%"))))
 
+  (it "printf-preserves-case-sensitive-numeric-conversions"
+    "printf keeps lower- and upper-case hexadecimal conversions distinct."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "printf" '("%#x%#X" "42" "42"))
+        :code 0
+        :output "0x2A0X2A")))
+
   (it "pwd-returns-current-working-directory"
     "pwd returns the context cwd as a string with a trailing newline."
     (with-temporary-function

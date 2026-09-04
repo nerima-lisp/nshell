@@ -9,14 +9,7 @@
         (t (list expected))))
 
 (defun %nshell-main-form (arguments)
-  ;; A subprocess that has never compiled :nshell's dependency graph before
-  ;; (no warm fasl cache) prints SBCL's compiler notes/style-warnings for
-  ;; that one-time compilation to *error-output*, which would otherwise land
-  ;; on this subprocess's stderr and fail any e2e assertion that expects it
-  ;; empty. Those notes are compile-time noise, not something a real nshell
-  ;; invocation ever surfaces to a user, so *error-output* is only
-  ;; suppressed for the duration of the load -- MAIN's own stderr still
-  ;; reaches the real stream.
+  "Build the subprocess form used by the command-line integration tests."
   (format nil
           "(progn
              (let ((*error-output* (make-broadcast-stream)))
@@ -26,14 +19,7 @@
           (cons "nshell" arguments)))
 
 (defun %nshell-main-form-with-timeout (arguments timeout-seconds)
-  "Like %NSHELL-MAIN-FORM, but overrides
-NSHELL.INFRASTRUCTURE.ACL:*EXTERNAL-COMMAND-TIMEOUT* right after
-:NSHELL loads and before MAIN runs. The whole --eval string is READ as one
-form before any of it evaluates, so a literal
-NSHELL.INFRASTRUCTURE.ACL:*EXTERNAL-COMMAND-TIMEOUT* reference would fail to
-read -- that package does not exist until ASDF:LOAD-SYSTEM has *run*, not
-merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
-%NSHELL-MAIN-FORM already does for MAIN."
+  "Build a subprocess form with an explicit external-command timeout."
   (format nil
           "(progn
              (let ((*error-output* (make-broadcast-stream)))
@@ -45,11 +31,7 @@ merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
           (cons "nshell" arguments)))
 
 (defun %asdf-bootstrap-forms (root)
-  ;; Ask the already-loaded parent process where it actually found each
-  ;; dependency instead of guessing a "../<name>/" sibling checkout: the parent
-  ;; resolved them however the current environment provides them (sibling
-  ;; checkouts locally, or nix store paths via lispLibs in the hermetic
-  ;; sandbox), and the spawned subprocess needs those same real locations.
+  "Return ASDF setup forms for ROOT and its loaded dependencies."
   (let ((dependency-roots
           (loop for system in +nshell-runtime-dependencies+
                 collect (namestring (asdf:system-source-directory system)))))
@@ -65,16 +47,7 @@ merely been read. FIND-SYMBOL-by-string sidesteps this exactly as
    (not (zerop (logand (sb-posix:stat-mode (sb-posix:stat path)) #o111)))))
 
 (defun %resolve-real-external-executable (name)
-  "Resolve NAME to an absolute path on the real host PATH, for e2e tests that
-must invoke a genuine external binary rather than nshell's own builtin of the
-same name -- a bare NAME always dispatches to the builtin (builtins take
-priority over PATH; see NSHELL.APPLICATION:RESOLVE-COMMAND-PATH), so only an
-absolute path, which bypasses builtin lookup entirely, can force the
-external one. A path hardcoded to a host location such as /usr/bin or /bin
-assumes filesystem visibility that a fully-sandboxed Nix Linux build does not
-grant, unlike Darwin's sandbox-exec profile or a non-sandboxed dev shell;
-searching the same PATH the spawned nshell subprocess inherits works in
-every environment CI actually builds in."
+  "Resolve NAME to an executable path, bypassing nshell builtins."
   (or (first (nshell.domain.completion:command-path-candidates
               name
               (or (sb-ext:posix-getenv "PATH") "")

@@ -31,6 +31,21 @@
           :code 1
           :output (format nil "fg: no such job: 42~%")))))
 
+  (it "excludes-completed-jobs-from-active-selection"
+    "fg/bg selection accepts only jobs that are not completed."
+    (let* ((context (make-test-builtins-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (job-id (nshell.domain.job-control:monitor-add-job
+                    monitor (make-test-job 0 "true"))))
+      (nshell.domain.job-control:complete-job monitor job-id 0)
+      (expect nil :to-be
+              (nshell.application::%resolve-job-id
+               monitor (list (format nil "~d" job-id))
+               :active-only-p t))
+      (expect job-id :to-be
+              (nshell.application::%resolve-job-id
+               monitor (list (format nil "~d" job-id))))))
+
   (it "jobs-and-disown-builtins-use-context-monitor"
     "jobs/disown builtins operate on the shell context monitor, not the global monitor."
     (let* ((context (make-test-builtins-context))

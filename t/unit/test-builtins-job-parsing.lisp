@@ -168,6 +168,17 @@
     (expect (nshell.application::%parse-positive-integer "-1")
             :to-be-null))
 
+  (it "keeps job designator helpers total for unsupported values"
+    (let ((monitor (nshell.domain.job-control:make-job-monitor)))
+      (expect (nshell.application::%parse-signal-designator 15)
+              :to-be-null)
+      (expect (nshell.application::%find-job-id-by-pid monitor 9999)
+              :to-be-null)
+      (expect (nshell.application::%resolve-kill-job-id monitor "plain")
+              :to-be-null)
+      (expect (nshell.application::%resolve-kill-job-id monitor nil)
+              :to-be-null)))
+
   (it "resolves implicit and unresolved wait selectors through the monitor"
     "Wait uses the monitor's current job for NIL and preserves unknown designators."
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))

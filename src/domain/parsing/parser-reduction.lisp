@@ -50,6 +50,35 @@
   (%token-reduction-state-append-argument state
                                           (%token-reduction-word-argument tok)))
 
+(defun %token-reduction-merge-argument-token (argument tok)
+  (make-command-arg
+   (concatenate 'string
+                (command-arg-value argument)
+                (token-value tok))
+   nil
+   (command-arg-here-doc-literal-p argument)
+   (append (copy-list (command-arg-fragments argument))
+           (copy-list (token-fragments tok)))))
+
+(defun %token-reduction-merge-current-argument (state tok)
+  (let ((argument (first (%token-reduction-state-current-args state))))
+    (%update-token-reduction-state
+     state
+     (current-args
+      (cons (%token-reduction-merge-argument-token argument tok)
+            (rest (%token-reduction-state-current-args state)))))))
+
+(defun %token-reduction-merge-current-command (state tok)
+  (%update-token-reduction-state
+   state
+   (current-cmd
+    (concatenate 'string
+                 (%token-reduction-state-current-cmd state)
+                 (token-value tok)))
+   (current-cmd-fragments
+    (append (copy-list (%token-reduction-state-current-cmd-fragments state))
+            (copy-list (token-fragments tok))))))
+
 (defun %token-reduction-state-append-redirect-argument (state tok)
   (%token-reduction-state-append-argument
    state
@@ -189,35 +218,8 @@
                  (= (token-end (%token-reduction-state-last-word-token state))
                     (token-start tok)))
             (if (%token-reduction-state-current-args state)
-                (let ((argument
-                        (first (%token-reduction-state-current-args state))))
-                  (setf state
-                        (%update-token-reduction-state
-                         state
-                         (current-args
-                          (cons
-                           (make-command-arg
-                            (concatenate 'string
-                                         (command-arg-value argument)
-                                         (token-value tok))
-                            nil
-                            (command-arg-here-doc-literal-p argument)
-                            (append
-                             (copy-list (command-arg-fragments argument))
-                             (copy-list (token-fragments tok))))
-                           (rest (%token-reduction-state-current-args state)))))))
-                (setf state
-                      (%update-token-reduction-state
-                       state
-                       (current-cmd
-                        (concatenate 'string
-                                     (%token-reduction-state-current-cmd state)
-                                     (token-value tok)))
-                       (current-cmd-fragments
-                        (append
-                         (copy-list
-                          (%token-reduction-state-current-cmd-fragments state))
-                         (copy-list (token-fragments tok)))))))
+                (setf state (%token-reduction-merge-current-argument state tok))
+                (setf state (%token-reduction-merge-current-command state tok)))
             (setf state (%token-reduction-state-append-word-argument state tok)))
         (setf state (%token-reduction-state-clear-pending-redirect state))
         (%update-token-reduction-state state (last-word-token tok)))

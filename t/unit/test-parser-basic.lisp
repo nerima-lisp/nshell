@@ -1,6 +1,18 @@
 (in-package #:nshell/test)
 
 (describe "parser-tests"
+  (it "merges-adjacent-word-data-without-mutating-the-originals"
+    "Adjacent lexical pieces form one argument while retaining source metadata."
+    (let* ((second-token (nshell.domain.parsing:make-token :word "b" 1 2))
+           (argument (nshell.domain.parsing:make-command-arg
+                      "a" :single nil nil)))
+      (let ((merged (nshell.domain.parsing::%token-reduction-merge-argument-token
+                     argument second-token)))
+        (expect "ab" :to-equal
+                (nshell.domain.parsing:command-arg-value merged))
+        (expect :single :to-be
+                (nshell.domain.parsing:command-arg-quote-style argument)))))
+
   (it "parse-keeps-dollar-substitutions-attached-to-word"
     "$( ) and $(( )) stay attached to surrounding word characters as one argument."
     (with-complete-ast (ast "echo a$((1+2))b")

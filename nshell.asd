@@ -403,6 +403,7 @@
    (:file "unit/test-builtins")
    (:file "unit/test-builtins-test")
    (:file "unit/test-builtins-core")
+   (:file "unit/test-builtins-jobs")
    (:file "unit/test-terminal-detection")
    (:file "unit/test-terminal-size")
    (:file "unit/test-builtins-core-io")

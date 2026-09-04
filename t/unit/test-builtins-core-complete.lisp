@@ -133,7 +133,11 @@
          :output (format nil "git status --short~%"))
         ('("search" "--exact" "--case-sensitive" "Git status") :code 0
          :output (format nil "Git status~%"))
+        ('("search") :code 1
+         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]~%"))
         ('("delete" "docker" "ps") :code 0 :output (format nil "1~%"))
+        ('("delete") :code 1
+         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]~%"))
         ('("size") :code 0 :output (format nil "4~%"))
         ('("clear") :code 0 :output-null t)
         ('("bogus") :code 1

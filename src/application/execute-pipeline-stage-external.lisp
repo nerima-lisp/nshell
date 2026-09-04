@@ -164,60 +164,12 @@ dropping Ctrl-Z for waits that cannot observe a stop."
                           (nshell.infrastructure.acl::%assign-process-group
                            pid pgid))
                         (flet ((finish-process ()
-                                 (let ((copiers
-                                         (%start-external-process-copiers
-                                          process stdout-buffer stderr-buffer))
-                                       (timeout
-                                         (nshell.infrastructure.acl::%foreground-external-command-timeout)))
-                                   (macrolet
-                                       ((%finish-output (status-form)
-                                          `(%finish-external-process-output
-                                            stdout-buffer
-                                            stderr-buffer
-                                            redirect-plan
-                                            ,status-form)))
-                                     (unwind-protect
-                                          (if (null timeout)
-                                              (nshell.infrastructure.acl::%wait-process-with-copiers-or-stop
-                                               process
-                                               copiers
-                                               (lambda ()
-                                                 (%finish-output
-                                                   (nshell.infrastructure.acl:process-exit-status-code
-                                                    process)))
-                                               (lambda ()
-                                                 (%continue-stopped-external-process
-                                                  pgid)))
-                                              (nshell.infrastructure.acl::%wait-process-with-copiers
-                                               process
-                                               copiers
-                                               timeout
-                                               (lambda ()
-                                                 (%finish-output
-                                                   (nshell.infrastructure.acl:process-exit-status-code
-                                                    process)))
-                                               (lambda ()
-                                                 (format *error-output*
-                                                         "nshell: ~a: timed out after ~a seconds~%"
-                                                         command
-                                                         timeout)
-                                                 (%finish-output 124))))
-                                       ;; A process merely STOPPED at cleanup
-                                       ;; time (a Ctrl-Z that slipped past the
-                                       ;; continue-on-stop wait, e.g. on the
-                                       ;; timed branch) must not be waited on
-                                       ;; here: PROCESS-WAIT would block forever
-                                       ;; against a suspended-but-alive child.
-                                       (when (and process
-                                                  (sb-ext:process-alive-p process)
-                                                  (not (eq (sb-ext:process-status
-                                                            process)
-                                                           :stopped)))
-                                         (ignore-errors
-                                          (sb-ext:process-wait process))))))))
+                                 (%finish-external-pipeline-process
+                                  process stdout-buffer stderr-buffer
+                                  redirect-plan command pgid)))
                           (if pgid
                               (nshell.infrastructure.acl::%call-with-foreground-process-group
-                               pgid (function finish-process))
+                               pgid #'finish-process)
                               (finish-process)))))
                  (when opened-input
                    (close opened-input)))

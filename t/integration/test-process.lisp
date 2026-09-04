@@ -23,6 +23,13 @@ enforced timeout) instead."
       (expect (nshell.infrastructure.acl::%foreground-external-command-timeout)
               :to-be nil)))
 
+  (it "foreground-process-group-macro-runs-body-without-a-pgid"
+    "The foreground-group wrapper preserves execution when no group is available."
+    (let ((ran nil))
+      (nshell.infrastructure.acl::%with-foreground-process-group-if (nil)
+        (setf ran t))
+      (expect t :to-equal ran)))
+
   (it "run-external-exec-echo"
   "Exec-mode external command preserves direct standard output and returns exit 0."
   (let* ((exit nil)

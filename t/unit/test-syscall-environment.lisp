@@ -40,4 +40,12 @@
             '("NSHELL_TEST_VALUE=explicit")))
       (expect nshell.infrastructure.acl:*exported-environment*
               :to-equal
-              (nshell.infrastructure.acl::%get-environment)))))
+              (nshell.infrastructure.acl::%get-environment))))
+
+  (it "inherits the process environment when no exports are set"
+    (let ((nshell.infrastructure.acl:*exported-environment* nil))
+      (expect (some (lambda (entry)
+                      (and (stringp entry)
+                           (find #\= entry)))
+                    (nshell.infrastructure.acl::%get-environment))
+              :to-be-truthy))))

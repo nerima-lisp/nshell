@@ -34,10 +34,12 @@
 
   (it "key-event-constructor-validates-optional-value-types"
     (expect (lambda ()
-              (nshell.domain.input:make-key-event :char "x"))
+              (let ((bad-value (read-from-string "\"x\"")))
+                (funcall #'nshell.domain.input:make-key-event :char bad-value)))
             :to-throw 'type-error)
     (expect (lambda ()
-              (nshell.domain.input:make-key-event :mouse nil "7"))
+              (let ((bad-value (read-from-string "\"7\"")))
+                (funcall #'nshell.domain.input:make-key-event :mouse nil bad-value)))
             :to-throw 'type-error))
 
   (it "key-event-preserves-structured-payload"

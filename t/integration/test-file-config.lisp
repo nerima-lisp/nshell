@@ -1,6 +1,13 @@
 (in-package #:nshell/test)
 
 (describe "file-config-tests"
+  (it "file-config-default-path"
+    "The default config path is derived from the user's home directory."
+    (let ((nshell.infrastructure.persistence::*config-file-path-override* nil))
+      (expect (nshell.infrastructure.persistence::%default-config-file-path)
+              :to-equal
+              (nshell.infrastructure.persistence::%config-file-path))))
+
   (it "file-config-missing-file"
     "Loading a missing config file returns NIL."
     (let* ((test-path (format nil "/tmp/nshell-test-config-missing-~d.lisp"

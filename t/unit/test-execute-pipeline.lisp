@@ -486,9 +486,10 @@ now decides whether this default is even consulted."
 
   (it "finishes-external-pipeline-process-with-unbounded-wait"
     "The unbounded CPS wait drains a real process and returns its output and status."
-    (let* ((process (sb-ext:run-program "/usr/bin/printf" '("waited")
+    (let* ((process (sb-ext:run-program "printf" '("waited")
                                         :output :stream
-                                        :error :stream))
+                                        :error :stream
+                                        :search t))
            (stdout-buffer (make-string-output-stream))
            (stderr-buffer (make-string-output-stream))
            (redirect-plan

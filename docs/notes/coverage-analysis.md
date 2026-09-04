@@ -65,6 +65,11 @@ test:
    covered with a value-level or boundary-injected test.
 2. Load-time declarations and static data are structural forms; exercising a
    second load does not model shell behaviour.
+   For example, `src/presentation/repl-state-primitives.lisp` reports the
+   macro definition and its backquoted expansion as unexecuted, while the
+   generated table factories and their hash-table semantics are exercised by
+   the REPL unit tests. This is an instrumentation boundary, not an untested
+   runtime path.
 3. A slot default made unreachable by an explicit BOA constructor is a
    constructor-design property, not an omitted runtime branch.
 4. OS-specific syscall, signal, PTY, and interactive-terminal paths need the

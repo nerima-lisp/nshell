@@ -37,6 +37,11 @@ wrapped line's other rows on screen as stale duplicates."
      (,wrapper
       ,@body)))
 
+(defmacro %set-command-failure-state (exit-code)
+  `(setf *last-exit-code* ,exit-code
+         *last-command-duration-ms* nil
+         *input-state* (make-repl-input-state)))
+
 (defun %elapsed-command-duration-ms (start-time end-time)
   (max 0
        (round (* 1000
@@ -158,9 +163,7 @@ wrapped line's other rows on screen as stale duplicates."
   (with-reset-rendered-prompt-state-and-prompt-cont
     (format t "~%")
     (report-parse-diagnostics result *error-output*)
-    (setf *last-exit-code* 2
-          *last-command-duration-ms* nil
-          *input-state* (make-repl-input-state))))
+    (%set-command-failure-state 2)))
 
 (defun %execute-incomplete-command (result)
   (format t "~%")
@@ -186,9 +189,7 @@ wrapped line's other rows on screen as stale duplicates."
             (if expansion-error
                 (with-reset-rendered-prompt-state-and-prompt-cont
                  (format t "~%nshell: ~a~%" expansion-error)
-                 (setf *last-exit-code* 2
-                       *last-command-duration-ms* nil
-                       *input-state* (make-repl-input-state)))
+                 (%set-command-failure-state 2))
                 (nshell.domain.parsing:with-parsed-command-line-case
                  (result ast expanded-text)
                  (:complete
@@ -200,9 +201,7 @@ wrapped line's other rows on screen as stale duplicates."
     (error (condition)
            (with-reset-rendered-prompt-state-and-prompt-cont
             (format t "~%nshell error: ~a~%" condition)
-            (setf *last-exit-code* 1
-                  *last-command-duration-ms* nil
-                  *input-state* (make-repl-input-state))))))
+            (%set-command-failure-state 1)))))
 
   (defun %process-execute-output-event ()
     (clear-rendered-completions)

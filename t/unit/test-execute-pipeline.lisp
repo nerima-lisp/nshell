@@ -484,6 +484,23 @@ now decides whether this default is even consulted."
       (expect :continue-wait :to-equal
               (nshell.application::%continue-stopped-external-process 321))))
 
+  (it "finishes-external-pipeline-process-with-unbounded-wait"
+    "The unbounded CPS wait drains a real process and returns its output and status."
+    (let* ((process (sb-ext:run-program "/usr/bin/printf" '("waited")
+                                        :output :stream
+                                        :error :stream))
+           (stdout-buffer (make-string-output-stream))
+           (stderr-buffer (make-string-output-stream))
+           (redirect-plan
+             (nshell.application::%make-external-process-redirect-plan
+              nil :supersede nil :supersede :stdout :stdout t)))
+      (let ((nshell.infrastructure.acl:*external-command-timeout* nil))
+        (multiple-value-bind (output code)
+            (nshell.application::%finish-external-pipeline-process
+             process stdout-buffer stderr-buffer redirect-plan "printf waited" 0)
+          (expect "waited" :to-equal output)
+          (expect 0 :to-equal code)))))
+
   (it "command-substitution-timeout-defaults-to-nil"
     "Command substitution is unbounded by default, like every other shell.
 Before this change the default was 30, silently capping any `$(...)` at 30

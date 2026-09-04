@@ -94,6 +94,22 @@ changing its value.")
            (declare (ignore ignored))
            29))
       (expect 29 :to-equal (nshell::%run-parsed-invocation (parse nil)))))
+    (let ((error-output
+            (with-output-to-string (*error-output*)
+              (expect 1 :to-equal
+                      (nshell::%run-parsed-invocation
+                       (nth-value 0
+                                  (nshell::%parse-cli-arguments
+                                   (list "--no-config" "--config" "custom.rc"))))))))
+      (expect (search "--config and --no-config" error-output) :to-be-truthy))
+    (let ((error-output
+            (with-output-to-string (*error-output*)
+              (expect 1 :to-equal
+                      (nshell::%run-parsed-invocation
+                       (nth-value 0
+                                  (nshell::%parse-cli-arguments
+                                   (list "--interactive" "-c" "echo no"))))))))
+      (expect (search "--interactive cannot be combined" error-output) :to-be-truthy))
   (let ((repl-called nil))
     (with-temporary-function
         ((quote nshell::tty-p) (lambda () t))
@@ -102,6 +118,19 @@ changing its value.")
            (lambda () (setf repl-called t)))
         (expect 0 :to-equal (nshell::%run-default-invocation))))
     (expect repl-called :to-be-truthy))
+  (let ((repl-call nil))
+    (with-temporary-function
+        ((quote nshell.presentation:run-repl)
+         (lambda (&rest arguments)
+           (setf repl-call arguments)))
+      (expect 0 :to-equal
+              (nshell::%run-default-invocation
+               :interactive-p t
+               :load-config-p nil
+               :config-path "custom.rc"
+               :history-p nil)))
+    (expect '(:load-config-p nil :config-path "custom.rc" :history-p nil)
+            :to-equal repl-call))
   (let ((batch-called nil))
     (with-temporary-function
         ((quote nshell::tty-p) (lambda () nil))

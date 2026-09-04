@@ -120,6 +120,10 @@
               (nshell.infrastructure.acl::%pty-close-fd nil))
       (expect nil :to-be
               (nshell.infrastructure.acl::%pty-close-fd -1))
+      (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+        (declare (ignore write-fd))
+        (expect 0 :to-equal
+                (nshell.infrastructure.acl::%pty-close-fd read-fd)))
       (expect nil :to-be
               (nshell.infrastructure.acl::%free-c-string-vector nil))
       (expect nil :to-be

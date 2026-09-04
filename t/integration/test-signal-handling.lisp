@@ -306,4 +306,12 @@ by the kernel and never reaches this handler."
                                                         (ash 17 8))
       (expect 321 :to-equal pid)
       (expect :exited :to-be state)
-      (expect 17 :to-equal detail))))
+      (expect 17 :to-equal detail)))
+
+  (it "decodes-signaled-wait-status"
+    "A signaled child exposes the terminating signal."
+    (multiple-value-bind (pid state detail)
+        (nshell.infrastructure.acl::%decode-wait-status 321 15)
+      (expect 321 :to-equal pid)
+      (expect :signaled :to-be state)
+      (expect 15 :to-equal detail))))

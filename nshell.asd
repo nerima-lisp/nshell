@@ -44,6 +44,7 @@
                  (:file "domain/feature-registry")))
    (:file "package-domain")
    (:file "package-domain-completion")
+   (:file "package-domain-configuration-prompting")
    (:file "package-application")
    (:file "package-infrastructure")
    (:file "package-presentation")

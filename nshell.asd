@@ -184,6 +184,7 @@
    (:file "infrastructure/acl/syscall-process-resolution")
    (:file "infrastructure/acl/syscall-process-io")
    (:file "infrastructure/acl/syscall-process")
+   (:file "infrastructure/acl/syscall-process-execution")
    (:file "infrastructure/acl/filesystem")
    (:file "infrastructure/acl/syscall-pipeline-streams")
    (:file "infrastructure/acl/syscall-pipeline-wait")

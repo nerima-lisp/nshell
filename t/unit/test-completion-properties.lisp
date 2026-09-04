@@ -52,7 +52,6 @@
       (expect 111000 :to-equal (score "git" "git" :description "v-ctrl"))
       ;; prefix-only (not exact): base + 10000
       (expect 10000 :to-equal (score "git" "gitk"))
-      ;; no bonus: just base
       (expect 5 :to-equal (score "git" "awk" :base 5))))
 
   (it "better-duplicate-candidate-p-prefers-higher-score-then-description"

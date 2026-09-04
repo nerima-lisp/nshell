@@ -49,6 +49,5 @@
       (expect (plusp (length c-subcommands)) :to-be-truthy)
       (expect (every (lambda (s) (char= #\c (char s 0))) c-subcommands)
               :to-be-truthy)
-      ;; The obvious git subcommands survive the filter.
       (expect (subsetp '("commit" "clone" "checkout") c-subcommands :test #'equal)
               :to-be-truthy))))

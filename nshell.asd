@@ -158,6 +158,7 @@
    (:file "application/builtin-string-support")
    (:file "application/builtin-string-repeat")
    (:file "application/builtin-string")
+   (:file "application/builtin-source-reader-function")
    (:file "application/builtin-source-reader")
    (:file "application/builtin-source")
    (:file "application/builtin-printf-format-support")

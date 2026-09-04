@@ -1,6 +1,14 @@
 (in-package #:nshell/test)
 
 (describe "terminal-width-tests"
+  (it "keeps a positive numeric width"
+    (expect 120 :to-equal
+            (nshell.presentation::%terminal-width-or-default 120)))
+
+  (it "uses the fallback for a non-numeric width"
+    (expect 80 :to-equal
+            (nshell.presentation::%terminal-width-or-default nil)))
+
   (it "returns the reported positive width"
     (with-temporary-function
         ('nshell.infrastructure.acl:get-terminal-size

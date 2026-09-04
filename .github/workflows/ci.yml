@@ -82,7 +82,7 @@ jobs:
           cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
       - name: Run full test suite in a dev shell (non-sandboxed)
-        run: nix develop --command sbcl --script run-tests.lisp
+        run: nix develop -c sbcl --script run-tests.lisp
 
   coverage:
     # Keep coverage separate from the integration gate: the report instrumented
@@ -105,7 +105,7 @@ jobs:
         run: |
           coverage_dir="$RUNNER_TEMP/nshell-coverage"
           mkdir -p "$coverage_dir"
-          NSHELL_COVERAGE_DIR="$coverage_dir" nix develop --command sbcl --script scripts/coverage.lisp
+          NSHELL_COVERAGE_DIR="$coverage_dir" nix develop -c sbcl --script scripts/coverage.lisp
           test -s "$coverage_dir/coverage-summary.json"
           perl -0777 -ne '
             die "coverage summary schema is incomplete\n"

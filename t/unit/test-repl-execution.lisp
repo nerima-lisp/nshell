@@ -17,6 +17,25 @@
       (dolist (table (list aliases functions variables completions))
         (expect 'equal :to-equal (hash-table-test table)))
       (expect 'eql :to-equal (hash-table-test processes))))
+
+  (it "process-environment-boundaries-preserve-inheritance-and-overrides"
+    "Environment ACLs expose the process values and prefer explicitly exported entries."
+    (let* ((nshell.infrastructure.acl::*exported-environment* nil)
+           (entries (nshell.infrastructure.acl:current-environment-entries))
+           (entry (first entries))
+           (separator (and entry (position #\= entry)))
+           (name (and separator (subseq entry 0 separator)))
+           (value (and separator (subseq entry (1+ separator)))))
+      (expect entries :to-be-truthy)
+      (expect (and name value) :to-be-truthy)
+      (expect (equal value (nshell.infrastructure.acl:current-environment-value name))
+              :to-be-truthy)
+      (expect (or (pathnamep (nshell.infrastructure.acl:current-working-directory))
+                  (stringp (nshell.infrastructure.acl:current-working-directory)))
+              :to-be-truthy)
+      (setf nshell.infrastructure.acl::*exported-environment* '("PATH=/custom"))
+      (expect '("PATH=/custom") :to-equal
+              (nshell.infrastructure.acl::%get-environment))))
   (it "repl-execute-expands-history-designator-before-parsing"
     "Interactive execution expands history references before parsing and persistence."
     (let ((persisted nil))

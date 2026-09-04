@@ -156,6 +156,22 @@
 
 )
 
+(describe "pty-low-level-io"
+  (it "reports failed reads and writes"
+    (let ((buffer (make-array 1 :element-type '(unsigned-byte 8))))
+      (expect (lambda ()
+                (nshell.infrastructure.acl:pty-read -1 buffer 1))
+              :to-throw 'error)
+      (expect (lambda ()
+                (nshell.infrastructure.acl:pty-write -1 buffer))
+              :to-throw 'error)))
+
+  (it "accepts absent descriptors during pair cleanup"
+    (expect (nshell.infrastructure.acl:pty-close nil nil)
+            :to-be-truthy)
+    (expect (nshell.infrastructure.acl:pty-close -1 -1)
+            :to-be-truthy)))
+
 (describe "pty-foreground-integration-tests"
   (it "pty-spawn-creates-process-with-master-fd"
     "PTY-SPAWN starts a subprocess and exposes its PTY master fd."

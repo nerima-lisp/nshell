@@ -86,19 +86,26 @@
       (funcall apply-clear state clear)
       state))
 
-(defun %apply-yank-session-policy (state policy)
-  (%clear-transient-session-when
-   state
-   (not (input-session-transition-policy-preserve-yank-session-p policy))
-   (yank-session-clear)
-   #'apply-yank-session-clear))
+(defmacro define-session-policy-applier
+    (name preserve-accessor clear-constructor clear-applier)
+  `(defun ,name (state policy)
+     (%clear-transient-session-when
+      state
+      (not (,preserve-accessor policy))
+      (,clear-constructor)
+      #',clear-applier)))
 
-(defun %apply-argument-session-policy (state policy)
-  (%clear-transient-session-when
-   state
-   (not (input-session-transition-policy-preserve-argument-session-p policy))
-   (argument-session-clear)
-   #'apply-argument-session-clear))
+(define-session-policy-applier
+    %apply-yank-session-policy
+    input-session-transition-policy-preserve-yank-session-p
+    yank-session-clear
+    apply-yank-session-clear)
+
+(define-session-policy-applier
+    %apply-argument-session-policy
+    input-session-transition-policy-preserve-argument-session-p
+    argument-session-clear
+    apply-argument-session-clear)
 
 (defun %clear-transient-session-state (state policy)
   (%apply-argument-session-policy (%apply-yank-session-policy state policy)

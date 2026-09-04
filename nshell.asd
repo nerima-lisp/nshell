@@ -156,6 +156,7 @@
    (:file "application/builtin-type-helpers")
    (:file "application/builtin-macros")
    (:file "application/builtin-string-support")
+   (:file "application/builtin-string-text")
    (:file "application/builtin-string-repeat")
    (:file "application/builtin-string")
    (:file "application/builtin-source-reader-function")

@@ -147,6 +147,7 @@
 	   (:file "application/execute-pipeline-stage-external")
 	   (:file "application/execute-pipeline-stage-background")
 	   (:file "application/execute-pipeline-stage")
+	   (:file "application/execute-source-pipeline")
 	   (:file "application/execute-pipeline")
    (:file "application/execute-command-substitution")
    (:file "application/execute-pipeline-control")

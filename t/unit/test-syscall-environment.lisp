@@ -18,6 +18,11 @@
              (nshell.infrastructure.acl:current-environment-value "PATH"))
             :to-be-truthy))
 
+  (it "validates environment variable names at the boundary"
+    (expect (lambda ()
+              (nshell.infrastructure.acl:current-environment-value 42))
+            :to-throw 'type-error))
+
   (it "returns nil for an unset process environment value"
     (expect nil :to-equal
             (nshell.infrastructure.acl:current-environment-value

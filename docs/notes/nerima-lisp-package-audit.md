@@ -63,6 +63,7 @@ The test systems are kept separate from the runtime dependency audit:
 | `cl-asciiquarium`, `cl-chip8`, `cl-cmatrix`, `cl-cowsay`, `cl-nes`, `cl-nyancat`, `cl-sl`, `ncl`, `nerimux`, `loom`, `cachix` | standalone applications, tools, or infrastructure | They are independently runnable products rather than libraries used by a shell execution boundary. |
 | `cl-tmux` | a full terminal multiplexer in CL | Orthogonal peer application. A multiplexer *hosts* shells; a shell does not embed one. Integration would be a dependency inversion. |
 | `cl-cc`, `cl-cc-ast`, `cl-cc-binary`, `cl-cc-javascript`, `cl-cc-php`, `cl-cc-runtime`, `cl-cc-type` | a self-hosting CL compiler collection | Language-implementation infrastructure with no surface a shell consumes. |
+| `cl-vcs-kit` | version-control toolkit | nshell only needs the prompt's small, timeout-bounded `git` probe; adopting a repository abstraction would add a broader policy surface without replacing the existing process boundary. |
 | `paredit-cli` | the Rust S-expression refactoring CLI | A development *tool* used to perform these refactors, not a runtime dependency. |
 
 ## Conclusion
@@ -72,8 +73,10 @@ two test systems, all directly declared where used. The executable composition
 root consumes `cl-cli` directly to parse `argv`; the command-line feature owns
 the policy, contract, and help presentation, with no compatibility adapter or
 duplicate parser. The un-adopted remainder is compiler infrastructure
-(`cl-cc*`), a peer application (`cl-tmux`), a format library for a format
-nshell never handles (`cl-json-kit`), or a build-time tool (`paredit-cli`).
+(`cl-cc*`), a version-control helper whose surface is broader than nshell's
+prompt probe (`cl-vcs-kit`), a peer application (`cl-tmux`), a format library
+for a format nshell never handles (`cl-json-kit`), or a build-time tool
+(`paredit-cli`).
 Re-run the usage half of this audit with:
 
 ```sh

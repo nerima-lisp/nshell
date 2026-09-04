@@ -43,6 +43,16 @@ The test systems are kept separate from the runtime dependency audit:
 | `cl-weave` | the test framework for the weave suite | `nshell/weave` |
 | `cl-prolog-kit/weave` | cl-prolog-kit-query coverage of the completion engine | `nshell/weave` |
 
+As of the current upstream tag listing, every pinned nerima-lisp input is
+already at its newest published tag: `cl-nix-forge` `v0.5.0`, `paredit-cli`
+`v1.6.2`, `cl-parser-kit` `v1.1.1`, `cl-dataflow-kit` `v1.2.0`,
+`cl-boundary-kit` `v2.3.0`, `cl-cli` `v1.3.0`, `cl-tty-kit` `v1.6.1`,
+`cl-log-kit` `v2.2.0`, `cl-process-kit` `v3.2.0`, `cl-history-kit` `v1.0.4`,
+`cl-host-kit` `v0.3.1`, `cl-codec-kit` `v0.5.0`, `cl-concurrent-kit` `v0.6.1`,
+and `cl-date-kit` `v1.0.0`. This is a tag comparison, not a claim that every
+upstream branch is API-compatible; upgrade only when a newer release tag
+appears and the full matrix accepts it.
+
 ## Transitive, not adopted directly
 
 | package | why not direct |

@@ -48,6 +48,14 @@ One `handler-case` in `repl-session.lisp` (`install-interactive-terminal`'s
 signal-handler installation) was left alone: its `(error (condition) ...)`
 clause binds and logs the condition, which `ignore-errors` cannot express.
 
+The same policy applies to the lifecycle handlers in
+`enter-raw-mode-or-report` and `leave-raw-mode-reporting-failures`: their
+condition clauses deliberately convert an operational failure into a caller
+visible `NIL` result or a diagnostic while cleanup continues. Paredit's
+`handler-case-swallows-error` lint finding is therefore expected here; turning
+these handlers into uncaught signals would make a failed terminal restoration
+more dangerous, not more observable.
+
 `%seq-parse-args` (`application/builtin-commands.lisp`) was converted, then
 **reverted** after the full suite caught a real behavioral difference:
 `ignore-errors`'s error path returns `(values nil condition)`, while

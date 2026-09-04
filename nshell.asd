@@ -365,6 +365,7 @@
    (:file "unit/test-parser")
     (:file "unit/test-parser-basic")
     (:file "unit/test-parser-sequences")
+    (:file "unit/test-parser-token-reduction")
     (:file "unit/test-parser-basic-redirects")
    (:file "unit/test-parser-basic-here-doc")
    (:file "unit/test-parser-diagnostics")

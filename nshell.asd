@@ -112,6 +112,7 @@
    (:file "domain/completion/rule-data")
    (:file "domain/completion/knowledge-base")
    (:file "domain/completion/knowledge-base-help-data")
+   (:file "domain/completion/knowledge-base-help-parse")
    (:file "domain/completion/knowledge-base-help")
    (:file "domain/completion/context")
    (:file "domain/completion/filesystem")

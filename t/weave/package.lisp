@@ -44,7 +44,7 @@
   ;; entry points, and the exported logic predicate vocabulary.
   (:import-from #:nshell.domain.completion
                 #:completion-rulebase
-                #:complete #:prove-all
+                #:complete #:candidate-text #:prove-all
                 #:builtin-rule-facts #:builtin-rule-rules
                 #:make-fact #:make-rule
                 #:completes #:describes #:has-flag

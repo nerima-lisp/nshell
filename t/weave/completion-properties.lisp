@@ -12,6 +12,13 @@
       ((input (gen-string :max-length 24)))
     (expect (listp (complete (built-in-rule-kb) input)) :to-be-truthy))
 
+  (it-property "complete returns candidates with string text"
+      ((input (gen-string :max-length 24)))
+    (expect (every (lambda (candidate)
+                     (stringp (candidate-text candidate)))
+                   (complete (built-in-rule-kb) input))
+            :to-be-truthy))
+
   (it-property "complete is deterministic for a given input"
       ((input (gen-one-of (gen-member '("" "g" "gi" "git " "cd " "ls -"))
                           (gen-string :max-length 12))))

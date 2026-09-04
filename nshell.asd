@@ -183,6 +183,7 @@
    (:file "application/builtin-state-env")
    (:file "application/builtin-state-tables")
    (:file "application/builtin-state-functions")
+   (:file "application/builtin-complete-args")
    (:file "application/builtin-complete")
    (:file "application/builtin-test")
    (:file "application/builtins")

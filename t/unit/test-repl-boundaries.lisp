@@ -32,6 +32,17 @@ reflects the injected values instead of the real machine."
       (expect (stringp (nshell.presentation::boundary-hostname)) :to-be-truthy)
       (expect (integerp (nshell.presentation::boundary-monotonic)) :to-be-truthy)))
 
+  (it "working-directory-boundary-returns-the-injected-directory"
+    "The working-directory accessor exposes the configured boundary directly."
+    (let* ((wd (cl-boundary-kit:make-test-working-directory
+                :initial #P"/tmp/nshell-boundary/"))
+           (nshell.presentation::*boundaries*
+             (cl-boundary-kit:make-boundary-context :working-dir wd)))
+      (expect wd :to-equal (nshell.presentation::boundary-working-directory))
+      (expect "/tmp/nshell-boundary/"
+              :to-equal
+              (nshell.presentation::boundary-current-directory))))
+
   (it "command-timing-reads-a-fake-clock-deterministically"
     "A fake clock drives boundary-monotonic, so elapsed duration is exact."
     (let* ((clock (cl-boundary-kit:make-fake-clock :start 0 :monotonic-start 0))

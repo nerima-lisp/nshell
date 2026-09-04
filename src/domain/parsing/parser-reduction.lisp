@@ -172,8 +172,6 @@
       (progn
         (setf state (%record-missing-redirect-target state))
         (setf state (%token-reduction-state-append-redirect-argument state tok))
-        ;; Targetless redirects (e.g. 2>&1) are self-contained and do
-        ;; not start a pending redirect.
         (unless (%redirect-token-targetless-p tok)
           (setf state (%token-reduction-state-mark-pending-redirect state tok)))
         state)
@@ -197,8 +195,6 @@
           (when (and (eq (token-type tok) :pipe)
                      (string= (token-value tok) "|&")
                      (%token-reduction-state-current-cmd state))
-            ;; Normalize pipe-and-stderr into the existing redirect AST so
-            ;; execution and pipeline planning share the ordinary pipe path.
             (setf state
                   (%token-reduction-state-append-argument
                    state
@@ -216,11 +212,8 @@
     (:error (%token-reduction-error state tok))
     (t (%token-reduction-separator state tok))))
 
-(defun %token-reduction-state-after-token (state tok)
-  (%reduce-token state tok))
-
 (defun %token-reduction-state-from-tokens (tokens)
-  (let ((state (reduce #'%token-reduction-state-after-token
+  (let ((state (reduce #'%reduce-token
                        tokens
                        :initial-value (%make-token-reduction-state))))
     (%flush-token-reduction-command state)

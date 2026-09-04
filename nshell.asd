@@ -414,6 +414,7 @@
    (:file "unit/test-builtins-source-pipeline")
    (:file "unit/test-execute-pipeline-support")
    (:file "unit/test-execute-pipeline")
+   (:file "unit/test-execute-pipeline-branches")
    (:file "unit/test-execute-pipeline-expansion")
    (:file "unit/test-manage-job")
    (:file "unit/test-search-history")

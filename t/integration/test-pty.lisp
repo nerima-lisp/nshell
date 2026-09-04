@@ -78,6 +78,16 @@
                   (setf body-result :ran))))
       (expect :ran :to-equal body-result)))
 
+  (it "checked-syscall-macro-reports-failure-before-body"
+    "The syscall boundary macro raises an error and skips BODY for failed work."
+    (let ((body-ran nil))
+      (expect (lambda ()
+                (nshell.infrastructure.acl::with-checked-syscall
+                    ("test-syscall" nil)
+                  (setf body-ran t)))
+              :to-throw 'error)
+      (expect nil :to-be body-ran)))
+
   (it "pty-child-resource-helpers-are-nil-safe"
     "Child-side cleanup helpers tolerate absent or already-invalid resources."
     #+(or darwin linux)

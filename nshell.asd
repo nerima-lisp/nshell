@@ -222,6 +222,7 @@
    (:file "presentation/input-state-words")
    (:file "presentation/input-state-undo")
    (:file "presentation/input-state-suggestion")
+   (:file "presentation/completion-ui-text")
    (:file "presentation/completion-ui-logic")
    (:file "presentation/input-state-completion")
    (:file "presentation/input-state-kill-yank")

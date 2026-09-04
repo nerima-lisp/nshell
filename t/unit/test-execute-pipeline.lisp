@@ -1,6 +1,26 @@
 (in-package #:nshell/test)
 
 (describe "execute-pipeline-service-tests"
+  (it "sequence-stop-predicate-stops-and-on-failure"
+    "The sequence control rule stops && after a non-zero status."
+    (expect t :to-equal
+            (nshell.application::%sequence-should-stop-after-command-p :and 1)))
+
+  (it "sequence-stop-predicate-continues-and-on-success"
+    "The sequence control rule continues && after a zero status."
+    (expect nil :to-equal
+            (nshell.application::%sequence-should-stop-after-command-p :and 0)))
+
+  (it "sequence-stop-predicate-stops-or-on-success"
+    "The sequence control rule stops || after a zero status."
+    (expect t :to-equal
+            (nshell.application::%sequence-should-stop-after-command-p :or 0)))
+
+  (it "sequence-stop-predicate-continues-or-on-failure"
+    "The sequence control rule continues || after a non-zero status."
+    (expect nil :to-equal
+            (nshell.application::%sequence-should-stop-after-command-p :or 1)))
+
   (it "finish-external-process-output-routes-merged-and-separate-streams"
     "Captured process output follows the redirect plan for both stream modes."
     (let ((merged-plan

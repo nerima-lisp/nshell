@@ -174,6 +174,10 @@ when an enclosing loop must handle the remaining count."
 (defun %execute-begin-end-node-in-context (context ast)
   (%execute-ast-list-in-context context (nshell.domain.parsing:begin-end-node-body ast)))
 
+(defun %sequence-should-stop-after-command-p (separator code)
+  (or (and (eq :and separator) (/= code 0))
+      (and (eq :or separator) (= code 0))))
+
 (defun %execute-sequence-node-in-context (context ast)
   (%with-output-code-accumulator (output code)
     (dolist (entry (nshell.domain.parsing:sequence-node-command-separators ast))
@@ -194,8 +198,7 @@ when an enclosing loop must handle the remaining count."
                (output code)
                (execute-ast-in-context context command))
               (%record-last-exit-code context code)
-              (when (or (and (eq :and separator) (/= code 0))
-                        (and (eq :or separator)  (= code 0)))
+              (when (%sequence-should-stop-after-command-p separator code)
                 (return))))
         (when (or *loop-control-signal*
                   (not (shell-context-running context)))

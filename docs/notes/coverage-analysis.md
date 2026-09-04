@@ -79,13 +79,13 @@ the minimum/target fields together in release verification.
 
 ## Interpreting the latest local measurement
 
-The ordinary test run passes the complete suite, while an instrumented run can
-still expose a failure in the external-process pipeline assertion. Treat that
-failure as release-blocking until it reproduces consistently and its cause is
-understood; do not describe the coverage report as passing merely because the
-configured minimum is met. The 100% target remains unmet. Do not copy
-individual counts into documentation: the source set and instrumentation
-output change as the implementation evolves.
+The ordinary test run and the two latest instrumented runs pass the complete
+suite. An earlier instrumented run exposed a failure in the external-process
+pipeline assertion, so rerun the complete command if that failure returns and
+investigate it before release. Do not describe the coverage report as passing
+merely because the configured minimum is met. The 100% target remains unmet.
+Do not copy individual counts into documentation: the source set and
+instrumentation output change as the implementation evolves.
 Read the
 machine-readable `coverage-summary.json` produced by the command below and
 verify the selected-test, error, minimum, and target fields together.

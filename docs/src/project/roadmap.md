@@ -1,7 +1,7 @@
 # Roadmap
 
-nshell is converging on world-class interactive-shell parity. For the release
-bar each area is measured against, see
+Release readiness tracks the areas below. For the release bar each area is
+measured against, see
 [Release readiness](public-readiness.md).
 
 ## Near-term focus

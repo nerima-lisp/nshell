@@ -88,9 +88,9 @@ per-site with a full test run, not applied as a blind find/replace.
 
 ## Conclusion
 
-"defmacroに可能な限り全て寄せたい" was already substantially executed across
-prior refactoring rounds; this audit's one actionable finding (`ignore-errors`
-consistency) is applied. What remains unconverted is either better solved
-without a macro or is a narrow, higher-risk case for a modest win, both
+The macro consolidation is substantially complete. This audit's one actionable
+finding (`ignore-errors` consistency) is applied. What remains unconverted is
+either better solved without a macro or is a narrow, higher-risk case for a modest
+win, both
 consistent with this project's readability-bounded reading of "as much as
 possible" (`docs/notes/cps-audit.md`).

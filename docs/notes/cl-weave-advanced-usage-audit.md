@@ -50,15 +50,15 @@ boundary down with a temporary description-query counter.
 ## Table-driven suites
 
 `it-each`/`describe-each` fold parametrically-identical cases into one
-table (6 files; see the `execution-domain` value-boundary consolidation in
-this session's history for a worked example), and `it-fails` documents a
+table (6 files; `t/unit/test-execution-domain.lisp` provides a worked
+value-boundary example), and `it-fails` documents a
 currently-failing case as an assertion about *that*, not a silently-skipped
 test.
 
 ## Conclusion
 
-"cl-weave を利用して高度な使い方をしてほしい" is satisfied by breadth, not
-one showcase: mutation testing (the framework's own stated "most advanced
+The advanced cl-weave usage is demonstrated by breadth, not one showcase:
+mutation testing (the framework's own stated "most advanced
 facility"), property-based trials with custom generators and shrinkers,
 a second whole ASDF system dedicated to cl-prolog-kit-query integration, and
 table-driven consolidation, all exercised by the existing suite rather than

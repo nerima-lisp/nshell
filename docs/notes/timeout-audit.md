@@ -1,4 +1,4 @@
-# Command-execution timeout audit: コマンド実行のtimeoutは必ず適切に設定してほしい
+# Command-execution timeout audit
 
 Every place `src/` spawns, waits on, or reads from an external OS process,
 and whether it is bounded — "適切に" (appropriately), not "always killed
@@ -89,21 +89,10 @@ PTY-based e2e test harness (`t/e2e/test-smoke.lisp`'s
 present risk; would need a bound before being wired into a real interactive
 feature.
 
-## Conclusion
+## Current conclusion (2026-08-26)
 
-"必ず適切に" required finding the one place a timeout existed but was
-*inappropriate* (killing interactive foreground programs), not only places a
-timeout was missing. That is now fixed and proven with a real-PTY test, the
-one structurally-inconsistent-looking site (`%builtin-exec`) is verified
-correct by exec's own semantics rather than "fixed" into a behavior change,
-and every other spawn/wait site was traced to confirm it already goes
-through one of the two shared, correctly-bounded choke points
-(`*external-command-timeout*` or `*git-command-timeout*`).
-
-## Addendum (2026-08-26): default timeouts removed
-
-The production-audit fixes superseded the conclusion above. The interactive
-gate was found to be bypassed on the path real interactive commands take
+The production-audit fixes removed the default timeout. The interactive gate
+was found to be bypassed on the path real interactive commands take
 (`%execute-external-pipeline-stage` and `run-external-capture` read the raw
 special), so an interactive `sleep 30` was still killed at 30 seconds. The
 resolution removes the default bound entirely rather than re-scoping it:

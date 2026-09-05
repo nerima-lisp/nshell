@@ -27,24 +27,15 @@
 ;;;          multi-line output stair-step down the screen.
 ;;;
 ;;; cl-tty-kit has no option to keep those bits, so the flag work stays here.
-;;; See the report accompanying this change for the requested kit API.
-;;;
-;;; What DID move here from the previous implementation is the part cl-tty-kit
-;;; gets right and this file got wrong:
 ;;;
 ;;;   - the saved settings are keyed by fd rather than held in one global, and
 ;;;   - a failed tcgetattr/tcsetattr signals instead of being swallowed by
 ;;;     `ignore-errors', which used to leave the terminal in an unknown state
 ;;;     with no indication that anything had gone wrong.
 ;;;
-;;; Signalling is only half of that second point.  It buys nothing if the
-;;; callers put the `ignore-errors' back one layer up -- which is exactly where
-;;; it ended up for a while.  What to DO with TERMINAL-MODE-OPERATION-FAILED is
-;;; policy, and policy lives with the caller; the note at the top of
-;;; presentation/repl-session.lisp states it.  In short: a failed enter is
-;;; reported on stderr and aborts the interactive session, a failed restore is
-;;; reported and swallowed because it runs from an UNWIND-PROTECT cleanup, and
-;;; the two handlers in acl/signal-acl.lisp swallow silently because they run in
+;;; Callers decide how to handle TERMINAL-MODE-OPERATION-FAILED: entering raw
+;;; mode reports the error and aborts the session, restoration reports and
+;;; continues from UNWIND-PROTECT cleanup, and signal handlers swallow it in
 ;;; asynchronous context.
 ;;;
 ;;; Note the saved state is guarded rather than depth-counted.  cl-tty-kit

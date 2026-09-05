@@ -266,10 +266,6 @@ on the way out, and the session reports success."
       (expect edited :to-be-truthy)
       (expect restored :to-be-truthy)
       (expect 0 :to-equal code))))
-;;; The condition above is only worth defining if something consumes it. These
-;;; cover the consuming half: what the REPL's session lifecycle does with a
-;;; terminal it cannot configure, in each of the two directions.
-
 (describe "terminal-lifecycle-seam-tests"
   (it "installs-and-restores-terminal-through-boundary-calls"
     (let ((calls nil)

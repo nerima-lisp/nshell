@@ -1,10 +1,8 @@
 # S-expression syntax redesign
 
-Design decisions from a requirements session. **None of the syntax work here is
-implemented**; the three removals under [Remove](#remove) have since shipped and
-are marked as such. This note records what was decided, what follows from those
-decisions, and what is still open, so the next session does not re-litigate
-settled ground.
+**None of the syntax work here is implemented**; the three removals under
+[Remove](#remove) have since shipped and are marked as such. This note records
+the decisions, their consequences, and the remaining open questions.
 
 The headline decision: nshell stops being fish-inspired. The surface syntax
 becomes S-expressions, with bare command lines as sugar over them.

@@ -5,7 +5,7 @@
 ;;; layer-free utility package), package-domain.lisp, package-application.lisp,
 ;;; package-infrastructure.lisp, and package-presentation.lisp, loaded in that
 ;;; order (nshell.asd's :serial t component list). Each file wraps its own
-;;; DEFPACKAGE forms in EVAL-WHEN, exactly as this file did before the split;
+;;; DEFPACKAGE forms in EVAL-WHEN;
 ;;; the load order matches every cross-package :IMPORT-FROM in the tree, all of
 ;;; which point earlier in this list, never later.
 

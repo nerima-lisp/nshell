@@ -302,6 +302,24 @@
           };
         };
 
+      spawnHelperFor =
+        ctx:
+        ctx.pkgs.stdenv.mkDerivation {
+          pname = "cl-process-kit-spawn";
+          version = ctx.cl.fromAsdSystem "${cl-process-kit}/cl-process-kit.asd";
+          dontUnpack = true;
+          buildPhase = ''
+            runHook preBuild
+            $CC -std=c11 -O2 -Wall -Wextra -Werror ${cl-process-kit}/native/spawn.c -o cl-process-kit-spawn
+            runHook postBuild
+          '';
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 cl-process-kit-spawn "$out/bin/cl-process-kit-spawn"
+            runHook postInstall
+          '';
+        };
+
       # The delivered binary plus its human-readable release metadata.
       # `overrideAttrs` on the delivery,
       # not a second derivation wrapping it: `mkExecutable` returns a
@@ -319,6 +337,8 @@
         ctx:
         ctx.executable.overrideAttrs (previous: {
           buildCommand = previous.buildCommand + ''
+            wrapProgram "$out/bin/nshell" --inherit-argv0 \
+              --prefix PATH : ${ctx.pkgs.lib.makeBinPath [ (spawnHelperFor ctx) ]}
             mkdir -p "$out/share/man/man1" "$out/LICENSES"
             cp ${./README.md} "$out/README.md"
             cp ${./LICENSE} "$out/LICENSE"
@@ -407,10 +427,13 @@
               cp -R ${delivery}/README.md ${delivery}/LICENSE ${delivery}/LICENSES ${delivery}/share $out/
 
               cp ${builtImage} $out/libexec/nshell
+              cp ${spawnHelperFor ctx}/bin/cl-process-kit-spawn $out/libexec/cl-process-kit-spawn
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 --set-rpath '$ORIGIN/../lib' $out/libexec/nshell
+              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
+                --set-rpath '$ORIGIN/../lib' $out/libexec/cl-process-kit-spawn
               cp -L ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $out/lib/
-              printf '%s\n' $out/libexec/nshell > $out/.elf-queue
+              printf '%s\n' $out/libexec/nshell $out/libexec/cl-process-kit-spawn > $out/.elf-queue
               while IFS= read -r object; do
                 for needed in $(patchelf --print-needed "$object"); do
                   if [ -e "$out/lib/$needed" ]; then
@@ -456,10 +479,16 @@
                 esac
               done
               root="$(CDPATH= cd -- "''${self%/*}/.." && pwd)"
+              case "''${self##*/}" in
+                cl-process-kit-spawn) program=cl-process-kit-spawn ;;
+                *) program=nshell ;;
+              esac
+              export PATH="$root/bin:$PATH"
               exec "$root/lib/ld-linux-x86-64.so.2" \
                 --library-path "$root/lib" --argv0 "$0" \
-                "$root/libexec/nshell" "$@"
+                "$root/libexec/$program" "$@"
               EOF
+              cp $out/bin/nshell $out/bin/cl-process-kit-spawn
 
               # SBCL records source locations in its appended core. Dynamic
               # dependencies have already been made relative above, so only
@@ -467,7 +496,8 @@
               # length unchanged to preserve binary offsets and layouts.
               find $out -type f -exec \
                 perl -0777 -pi -e 's{/nix/store/}{/non/store/}g' {} +
-              chmod +x $out/bin/nshell $out/libexec/nshell $out/lib/ld-linux-x86-64.so.2
+              chmod +x $out/bin/nshell $out/bin/cl-process-kit-spawn \
+                $out/libexec/nshell $out/libexec/cl-process-kit-spawn $out/lib/ld-linux-x86-64.so.2
               perl ${./scripts/verify-release-bundle.pl} $out --no-smoke
             '';
     in
@@ -512,6 +542,10 @@
       # suite also loads, needs nothing extra -- it is a secondary system of
       # cl-prolog-kit, whose whole source tree is already on the registry above.
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
+
+      packageArgs = ctx: {
+        nativeBuildInputs = [ (spawnHelperFor ctx) ];
+      };
 
       # Drives the test checks from this one number, so the contributor-facing
       # gate and CI cannot drift apart. Bounded so a hung suite fails in half an hour
@@ -572,6 +606,7 @@
       # Interactive only: the registry the shell exports already carries every
       # system, check dependencies included.
       devShellPackages = ctx: [
+        (spawnHelperFor ctx)
         cl-weave.packages.${ctx.system}.default
         paredit-cli.packages.${ctx.system}.default
       ];
@@ -581,6 +616,13 @@
         let
           delivery = deliveryFor ctx;
           app = ctx.cl.mkApp { drv = delivery; };
+          testApp = ctx.pkgs.writeShellApplication {
+            name = "nshell-test";
+            runtimeInputs = [ (spawnHelperFor ctx) ];
+            text = ''
+              exec ${ctx.generated.apps.test.program} "$@"
+            '';
+          };
         in
         {
           packages.default = delivery;
@@ -591,7 +633,7 @@
             meta = {
               description = "Run the complete nshell test suite";
             };
-            program = ctx.generated.apps.test.program;
+            program = "${testApp}/bin/nshell-test";
           };
 
           # The generated shell, plus the aliases this repository's loop is

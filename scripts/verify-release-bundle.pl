@@ -94,15 +94,16 @@ if ($^O eq 'darwin') {
         }
     }
 } elsif ($^O eq 'linux') {
-    for my $relative (qw(libexec/nshell lib/ld-linux-x86-64.so.2 LICENSES/GLIBC-COPYING.LIB)) {
+    my @executables = qw(libexec/nshell libexec/cl-process-kit-spawn);
+    for my $relative (@executables, qw(bin/cl-process-kit-spawn lib/ld-linux-x86-64.so.2 LICENSES/GLIBC-COPYING.LIB)) {
         die "missing Linux release file: $relative\n" unless -f "$bundle/$relative";
     }
-    for my $relative (qw(libexec/nshell lib/ld-linux-x86-64.so.2)) {
+    for my $relative (@executables, qw(bin/cl-process-kit-spawn lib/ld-linux-x86-64.so.2)) {
         die "$relative is not executable\n" unless -x "$bundle/$relative";
     }
 
     my %libraries = map { basename($_) => $_ } grep { -f $_ } glob "$bundle/lib/*";
-    my @queue = ("$bundle/libexec/nshell", values %libraries);
+    my @queue = ((map { "$bundle/$_" } @executables), values %libraries);
     my %checked;
     while (my $object = shift @queue) {
         next if $checked{$object}++;
@@ -118,11 +119,14 @@ if ($^O eq 'darwin') {
         }
     }
 
-    open my $headers, '-|', 'readelf', '-l', "$bundle/libexec/nshell" or die "readelf: $!\n";
-    my $program_headers = do { local $/; <$headers> };
-    close $headers or die "readelf -l failed\n";
-    die "unexpected ELF interpreter\n"
-        unless $program_headers =~ m{Requesting program interpreter: /lib64/ld-linux-x86-64\.so\.2};
+    for my $relative (@executables) {
+        my $object = "$bundle/$relative";
+        open my $headers, '-|', 'readelf', '-l', $object or die "readelf: $!\n";
+        my $program_headers = do { local $/; <$headers> };
+        close $headers or die "readelf -l failed for $object\n";
+        die "unexpected ELF interpreter in $object\n"
+            unless $program_headers =~ m{Requesting program interpreter: /lib64/ld-linux-x86-64\.so\.2\]};
+    }
 
     my @license_for = (
         [ qr/^ld-linux-/, 'LICENSES/GLIBC-COPYING.LIB' ],

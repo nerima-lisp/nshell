@@ -1,6 +1,110 @@
 (in-package #:nshell/test)
 
 (describe "execute-pipeline-service-tests"
+  (dolist (phase '(:wait-error :callback-error))
+    (let ((phase phase))
+      (it (format nil "copier-order-~(~A~)" phase)
+        (let ((joins 0)
+              (failure (make-condition 'simple-error)))
+          (with-temporary-functions
+              (('nshell.infrastructure.acl::%wait-process-exit-with-timeout
+                (lambda (&rest arguments)
+                  (declare (ignore arguments))
+                  (when (eq phase :wait-error) (error failure))
+                  nil))
+               ('nshell.infrastructure.acl::%terminate-process
+                (lambda (process) (declare (ignore process))))
+               ('nshell.infrastructure.acl::%join-process-output-copiers
+                (lambda (copiers)
+                  (declare (ignore copiers))
+                  (incf joins))))
+            (expect failure :to-equal
+                    (handler-case
+                        (nshell.infrastructure.acl::%wait-process-with-copiers
+                         :process '(:copier) 1
+                         (lambda () (error "Unexpected success"))
+                         (lambda () (error failure)))
+                      (simple-error (condition) condition)))
+            (expect 1 :to-equal joins))))))
+
+  (dolist (mode '(:success :timeout :resumed-stop))
+    (let ((mode mode))
+      (it (format nil "copier-order-~(~A~)" mode)
+        (let ((buffer (make-string-output-stream))
+              (joins 0)
+              (waits 0)
+              (terminated nil))
+          (sb-ext:without-package-locks
+            (with-temporary-functions
+                (('sb-ext:process-wait
+                  (lambda (&rest arguments)
+                    (declare (ignore arguments))
+                    (incf waits)))
+                 ('sb-ext:process-status
+                  (lambda (process)
+                    (declare (ignore process))
+                    (if (= waits 1) :stopped :exited)))
+                 ('nshell.infrastructure.acl::%wait-process-exit-with-timeout
+                  (lambda (&rest arguments)
+                    (declare (ignore arguments))
+                    nil))
+                 ('nshell.infrastructure.acl::%terminate-process
+                  (lambda (process)
+                    (declare (ignore process))
+                    (setf terminated t)))
+                 ('nshell.infrastructure.acl::%join-process-output-copiers
+                  (lambda (copiers)
+                    (expect '(:copier) :to-equal copiers)
+                    (incf joins)
+                    (write-string "complete" buffer))))
+              (flet ((collect-output ()
+                       (values (get-output-stream-string buffer) 7)))
+                (multiple-value-bind (output code)
+                    (if (eq mode :resumed-stop)
+                        (nshell.infrastructure.acl::%wait-process-with-copiers-or-stop
+                         :process '(:copier) #'collect-output
+                         (lambda ()
+                           (expect 0 :to-equal joins)
+                           :continue-wait))
+                        (nshell.infrastructure.acl::%wait-process-with-copiers
+                         :process '(:copier) (when (eq mode :timeout) 1)
+                         #'collect-output #'collect-output))
+                  (expect "complete" :to-equal output)
+                  (expect 7 :to-equal code)
+                  (expect 1 :to-equal joins)
+                  (expect (eq mode :timeout) :to-equal terminated)))))))))
+
+  (it "command-substitution-keeps-capture-under-terminal-runner"
+    (let ((context (make-test-shell-context))
+          (nshell.application::*foreground-terminal-runner*
+            (lambda (thunk)
+              (declare (ignore thunk))
+              (error "Substitution must not inherit the foreground terminal"))))
+      (expect "captured" :to-equal
+              (nshell.application::%execute-command-substitution-output
+               context (format nil "~S captured"
+                               (or (nshell.infrastructure.acl::%resolve-external-command "printf")
+                                   (error "External printf is required for this test")))))))
+
+  (it "function-pipeline-keeps-capture-under-terminal-runner"
+    (let ((nshell.application::*foreground-terminal-runner*
+            (lambda (thunk)
+              (declare (ignore thunk))
+              (error "Pipeline stages must not inherit the foreground terminal"))))
+      (with-builtins-source (output code context
+                             (list "function produce"
+                               (format nil "~S captured"
+                                       (or (nshell.infrastructure.acl::%resolve-external-command "printf")
+                                           (error "External printf is required for this test")))
+                               "end"
+                               "produce | read captured"))
+        (expect "" :to-equal output)
+        (expect 0 :to-equal code)
+        (expect "captured" :to-equal
+                (nshell.domain.environment:env-get
+                 (nshell.application:shell-context-environment context)
+                 "captured")))))
+
   (it "sequence-stop-predicate-stops-and-on-failure"
     "The sequence control rule stops && after a non-zero status."
     (expect t :to-equal
@@ -234,14 +338,16 @@
           (unwind-protect
                (progn
                  (expect (streamp output) :to-be-truthy)
-                 (expect (eq :output error-output) :to-be-truthy)
-                 (write-string "merged" output)
+                 (expect (eq output error-output) :to-be-truthy)
+                 (write-string "stdout" output)
                  (finish-output output)
+                 (write-string "stderr" error-output)
+                 (finish-output error-output)
                  (expect output-pipe :to-be-null)
                  (expect 1 :to-equal (length redirect-streams)))
             (nshell.infrastructure.acl::%close-new-redirect-streams
              redirect-streams nil)))
-        (expect "merged" :to-equal (host-kit:read-file-string merged-path)))))
+        (expect "stdoutstderr" :to-equal (host-kit:read-file-string merged-path)))))
 
   (it "redirect-output-to-error-releases-output-and-aliases-error"
     "Output-to-error redirection closes its owned stream and preserves stderr output."

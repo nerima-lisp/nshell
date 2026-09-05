@@ -101,7 +101,7 @@
     (append (list "--noinform"
                   "--disable-debugger")
             (%asdf-bootstrap-forms root)
-            (list "--eval" (%nshell-main-form nil)))))
+            (list "--eval" (%nshell-main-form '("--no-config" "--no-history"))))))
 
 (defun %nshell-main-pty-arguments-with-timeout (timeout-seconds)
   "Like %NSHELL-MAIN-PTY-ARGUMENTS, but overrides
@@ -112,7 +112,8 @@ terminal without waiting out the real (30s) default."
     (append (list "--noinform"
                   "--disable-debugger")
             (%asdf-bootstrap-forms root)
-            (list "--eval" (%nshell-main-form-with-timeout nil timeout-seconds)))))
+            (list "--eval" (%nshell-main-form-with-timeout
+                            '("--no-config" "--no-history") timeout-seconds)))))
 
 (defun %e2e-pty-read-available (fd &key (timeout-usec 100000) (limit 8192))
   (let ((buffer (make-array limit :element-type '(unsigned-byte 8))))
@@ -152,6 +153,11 @@ terminal without waiting out the real (30s) default."
 (defun %e2e-pty-write-line (fd line)
   (nshell.infrastructure.acl:pty-write fd (format nil "~A~%" line)))
 
+(defun %e2e-pty-await-ready (fd)
+  (%e2e-pty-write-line fd "printf 'pty-%s\\n' e2e-ready")
+  (expect (search "pty-e2e-ready"
+                  (%e2e-pty-read-until fd "pty-e2e-ready")) :to-be-truthy))
+
 (defun %wait-pty-child-exit (pty &key (attempts 40) (delay 0.05))
   (loop repeat attempts
         for status = (multiple-value-list
@@ -160,8 +166,16 @@ terminal without waiting out the real (30s) default."
                        :nohang t))
         when (member (second status) '(:exited :signaled :no-child))
           do (return status)
-        do (sleep delay)
+        ;; Terminal restoration can wait for the PTY consumer to drain output.
+        do (%e2e-pty-read-available
+            (nshell.infrastructure.acl:pty-process-master-fd pty)
+            :timeout-usec 0)
+           (sleep delay)
         finally (return nil)))
+
+(defun %assert-pty-child-exit (pty &optional (exit-code 0))
+  (expect (list (nshell.infrastructure.acl:pty-process-pid pty) :exited exit-code)
+          :to-equal (%wait-pty-child-exit pty :attempts 80 :delay 0.05)))
 
 (defun %terminate-pty-process (pty)
   (when pty
@@ -177,7 +191,69 @@ terminal without waiting out the real (30s) default."
     (ignore-errors
       (close (nshell.infrastructure.acl:pty-process-stream pty)))))
 
+(defun %assert-interactive-pty-exit (command exit-command expected-code)
+  #-(or darwin linux)
+  (skip "PTY tests are only supported on Darwin and Linux")
+  #+(or darwin linux)
+  (skip-when-pty-unavailable "launches real nshell under a PTY"
+    (let ((program (%absolute-sbcl-executable))
+          (pty nil))
+      (unless program
+        (skip "requires an absolute SBCL runtime path"))
+      (unwind-protect
+           (progn
+             (setf pty
+                   (nshell.infrastructure.acl:pty-spawn
+                    program (%nshell-main-pty-arguments) :rows 24 :cols 100))
+             (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
+               (expect (search ">" (%e2e-pty-read-until fd ">")) :to-be-truthy)
+               (when command
+                 (%e2e-pty-write-line fd command))
+               (if exit-command
+                   (%e2e-pty-write-line fd exit-command)
+                   (nshell.infrastructure.acl:pty-write fd (string (code-char 4))))
+               (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
+               (%assert-pty-child-exit pty expected-code)))
+        (%terminate-pty-process pty)))))
+
+(defun %assert-batch-preserves-terminal (arguments)
+  (let* ((stty (%resolve-real-external-executable "stty"))
+         (wrapper
+           (format nil "before=$('~a' -g) || exit 90; \"$@\"; code=$?; after=$('~a' -g) || exit 91; if [ \"$before\" = \"$after\" ]; then printf 'batch-termios:<%s>\\n' unchanged; else printf 'batch-termios:<%s>\\n' changed; fi; exit \"$code\"" stty stty))
+         (pty nil))
+    (unwind-protect
+         (progn
+           (setf pty
+                 (nshell.infrastructure.acl:pty-spawn
+                  (%resolve-real-external-executable "sh")
+                  (append (list "-c" wrapper "terminal-check"
+                                (%absolute-sbcl-executable) "--noinform" "--disable-debugger")
+                          (%asdf-bootstrap-forms
+                           (namestring (asdf:system-source-directory :nshell)))
+                          (list "--eval" (%nshell-main-form
+                                         (append '("--no-config" "--no-history") arguments))))
+                  :rows 24 :cols 100))
+           (let ((output (%e2e-pty-read-until
+                          (nshell.infrastructure.acl:pty-process-master-fd pty)
+                          "batch-termios:<unchanged>")))
+             (expect (search "batch-termios:<unchanged>" output) :to-be-truthy))
+           (%assert-pty-child-exit pty))
+      (%terminate-pty-process pty))))
+
 (describe "e2e-tests"
+  (it "e2e-main-tty-batch-builtin-preserves-terminal"
+    (skip-when-pty-unavailable "compares terminal settings around actual batch main"
+      (%assert-batch-preserves-terminal '("-c" "true"))))
+  (it "e2e-main-tty-batch-external-preserves-terminal"
+    (skip-when-pty-unavailable "compares terminal settings around actual batch main"
+      (%assert-batch-preserves-terminal
+       (list "-c" (%resolve-real-external-executable "true")))))
+  (it "e2e-main-tty-script-external-preserves-terminal"
+    (skip-when-pty-unavailable "compares terminal settings around actual script main"
+      (with-temporary-output-file (script-path :prefix "nshell-e2e-terminal-script")
+        (with-open-file (stream script-path :direction :output :if-exists :supersede)
+          (write-line (%resolve-real-external-executable "true") stream))
+        (%assert-batch-preserves-terminal (list (namestring script-path))))))
   (it "e2e-echo-command"
     (with-complete-command-line (result ast "echo hello world")
       (expect (nshell.domain.parsing:command-node-p ast) :to-be-truthy)
@@ -279,13 +355,78 @@ terminal without waiting out the real (30s) default."
                       :rows 24
                       :cols 100))
                 (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                  (expect (search "nshell v" (%e2e-pty-read-until fd "nshell v")) :to-be-truthy)
-                  (%e2e-pty-write-line fd "echo pty-e2e-ready")
-                  (expect (search "pty-e2e-ready"
-                              (%e2e-pty-read-until fd "pty-e2e-ready")) :to-be-truthy)
+                  (%e2e-pty-await-ready fd)
                   (%e2e-pty-write-line fd "exit")
                   (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
-                  (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))
+                  (%assert-pty-child-exit pty)))
+          (%terminate-pty-process pty)))))
+
+  (it "e2e-main-interactive-pty-explicit-exit-status"
+    (%assert-interactive-pty-exit nil "exit 7" 7))
+
+  (it "e2e-main-interactive-pty-exit-preserves-last-status"
+    (%assert-interactive-pty-exit "false" "exit" 1))
+
+  (it "e2e-main-interactive-pty-ctrl-d-preserves-last-status"
+    (%assert-interactive-pty-exit "false" nil 1))
+
+  (it "e2e-main-interactive-pty-initial-ctrl-d-exits-zero"
+    (%assert-interactive-pty-exit nil nil 0))
+
+  (it "e2e-main-interactive-pty-status-survives-input-boundaries"
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "keeps command status across real interactive inputs"
+      (let ((program (%absolute-sbcl-executable))
+            (pty nil))
+        (unless program
+          (skip "requires an absolute SBCL runtime path"))
+        (unwind-protect
+             (progn
+               (setf pty (nshell.infrastructure.acl:pty-spawn
+                          program (%nshell-main-pty-arguments) :rows 24 :cols 100))
+               (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
+                 (%e2e-pty-await-ready fd)
+                 (dolist (case '(("false" "input-status:<1,1>")
+                                 ("true" "input-status:<0,0>")))
+                   (%e2e-pty-write-line fd (first case))
+                   (%e2e-pty-write-line fd "printf 'input-status:<%s,%s>\\n' $status $?")
+                   (expect (search (second case)
+                                   (%e2e-pty-read-until fd (second case)))
+                           :to-be-truthy))
+                 (%e2e-pty-write-line fd "exit")
+                 (%assert-pty-child-exit pty)))
+          (%terminate-pty-process pty)))))
+
+  (it "e2e-main-interactive-pty-backspace-edits-command"
+    "Backspace edits the command executed through the public interactive prompt."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "launches real nshell under a PTY"
+      (let ((program (%absolute-sbcl-executable))
+            (pty nil))
+        (unless program
+          (skip "requires an absolute SBCL runtime path"))
+        (unwind-protect
+             (progn
+               (setf pty
+                     (nshell.infrastructure.acl:pty-spawn
+                      program
+                      (%nshell-main-pty-arguments)
+                      :rows 24
+                      :cols 100))
+               (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
+                 (%e2e-pty-await-ready fd)
+                 (nshell.infrastructure.acl:pty-write fd "printf 'pty-edit:<%s>\\n' okx")
+                 (nshell.infrastructure.acl:pty-write fd (string (code-char 8)))
+                 (nshell.infrastructure.acl:pty-write fd (string #\Newline))
+                 (expect (search "pty-edit:<ok>"
+                                 (%e2e-pty-read-until fd "pty-edit:<ok>")) :to-be-truthy)
+                 (%e2e-pty-write-line fd "exit")
+                 (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
+                 (%assert-pty-child-exit pty)))
           (%terminate-pty-process pty)))))
 
   (it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command"
@@ -307,22 +448,20 @@ terminal without waiting out the real (30s) default."
                       :rows 24
                       :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                 (expect (search "nshell v" (%e2e-pty-read-until fd "nshell v")) :to-be-truthy)
-                 (%e2e-pty-write-line fd "echo ctrl-c-probe-ready")
-                 (expect (search "ctrl-c-probe-ready"
-                             (%e2e-pty-read-until fd "ctrl-c-probe-ready")) :to-be-truthy)
-                 (%e2e-pty-write-line fd "/bin/sleep 10")
-                 (sleep 0.2)
+                 (%e2e-pty-await-ready fd)
+                 (%e2e-pty-write-line
+                  fd "sh -c 'printf \"ctrl-c-%s\\n\" foreground-ready > /dev/tty; exec sleep 10'")
+                 (expect (search "ctrl-c-foreground-ready"
+                                 (%e2e-pty-read-until fd "ctrl-c-foreground-ready")) :to-be-truthy)
                  (nshell.infrastructure.acl:pty-write fd (string (code-char 3)))
-                 (sleep 0.2)
-                 (%e2e-pty-write-line fd "echo after-ctrl-c")
-                 (let ((output (%e2e-pty-read-until fd "after-ctrl-c" :attempts 220)))
-                   (expect (search "after-ctrl-c" output) :to-be-truthy)
+                 (%e2e-pty-write-line fd "printf 'after-ctrl-c:<%s>\\n' $status")
+                 (let ((output (%e2e-pty-read-until fd "after-ctrl-c:<130>" :attempts 220)))
+                   (expect (search "after-ctrl-c:<130>" output) :to-be-truthy)
                    (expect (search "SB-SYS:INTERACTIVE-INTERRUPT" output) :to-be-falsy)
                    (expect (search "unhandled" output :test #'char-equal) :to-be-falsy))
                  (%e2e-pty-write-line fd "exit")
                  (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
-                 (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))
+                 (%assert-pty-child-exit pty)))
           (%terminate-pty-process pty)))))
 
   (it "e2e-main-interactive-pty-job-control-lifecycle"
@@ -344,7 +483,7 @@ terminal without waiting out the real (30s) default."
                       :rows 24
                       :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                 (expect (search "nshell v" (%e2e-pty-read-until fd "nshell v")) :to-be-truthy)
+                 (%e2e-pty-await-ready fd)
                  (%e2e-pty-write-line fd "/bin/sleep 3 &")
                  (%e2e-pty-write-line fd "jobs")
                  (let ((running-output (%e2e-pty-read-until fd "Running")))
@@ -357,7 +496,7 @@ terminal without waiting out the real (30s) default."
                    (expect (search "/bin/sleep 3" done-output) :to-be-truthy))
                  (%e2e-pty-write-line fd "exit")
                  (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
-                 (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))
+                 (%assert-pty-child-exit pty)))
           (%terminate-pty-process pty)))))
 
   (it "e2e-main-interactive-pty-foreground-pipeline-ignores-external-command-timeout"
@@ -379,14 +518,14 @@ terminal without waiting out the real (30s) default."
                     :rows 24
                     :cols 100))
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-               (expect (search "nshell v" (%e2e-pty-read-until fd "nshell v")) :to-be-truthy)
-               (%e2e-pty-write-line fd "sh -c 'sleep 2; echo pty-outlived-timeout' | cat")
+               (%e2e-pty-await-ready fd)
+               (%e2e-pty-write-line fd "sh -c 'sleep 2; printf \"pty-%s\\n\" outlived-timeout' | cat")
                (let ((output (%e2e-pty-read-until fd "pty-outlived-timeout" :attempts 220)))
                  (expect (search "pty-outlived-timeout" output) :to-be-truthy)
                  (expect (search "timed out after" output) :to-be-falsy))
                (%e2e-pty-write-line fd "exit")
                (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
-               (expect (%wait-pty-child-exit pty :attempts 80 :delay 0.05) :to-be-truthy)))
+               (%assert-pty-child-exit pty)))
         (%terminate-pty-process pty)))))
 
   (it "e2e-main-invalid-args-report-usage"

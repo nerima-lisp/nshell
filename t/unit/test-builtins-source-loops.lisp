@@ -69,6 +69,32 @@
                                        "echo after"))
         (format nil "after~%")))
 
+  (it "source-if-condition-exit-stops-before-either-branch"
+    (dolist (status '(7 0))
+      (dolist (else-lines '(nil ("else" "echo unreachable-else")))
+        (with-builtins-source
+            (output code context
+                    (append (list (format nil "if exit ~D" status)
+                                  "echo unreachable-then")
+                            else-lines '("end" "echo unreachable-after")))
+          (expect "" :to-equal output)
+          (expect status :to-equal code)
+          (expect status :to-equal
+                  (nshell.application:shell-context-last-exit-code context))
+          (expect (nshell.application:shell-context-running context) :to-be-falsy)))))
+
+  (it "source-while-condition-exit-stops-before-body"
+    (dolist (status '(7 0))
+      (with-builtins-source
+          (output code context
+                  (list (format nil "while exit ~D" status)
+                        "echo unreachable-body" "end" "echo unreachable-after"))
+        (expect "" :to-equal output)
+        (expect status :to-equal code)
+        (expect status :to-equal
+                (nshell.application:shell-context-last-exit-code context))
+        (expect (nshell.application:shell-context-running context) :to-be-falsy))))
+
   (it "source-while-repeats-while-condition-succeeds"
     "source repeats fish-style while loops until the condition returns non-zero."
     (let ((condition-codes '(0 0 1))

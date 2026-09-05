@@ -1,5 +1,26 @@
 (in-package #:nshell.application)
 
+(defun %wait-terminal-processes (processes)
+  (loop
+    for states = (mapcar #'sb-ext:process-status processes)
+    when (every (lambda (state) (member state '(:exited :signaled))) states)
+      return :completed
+    when (and (member :stopped states)
+              (every (lambda (state) (member state '(:exited :signaled :stopped)))
+                     states))
+      return :stopped
+    do (sleep 0.01)))
+
+(defun %wait-registered-foreground-job (job job-id monitor registry processes)
+  (if (eq :stopped (%wait-terminal-processes processes))
+      (progn
+        (nshell.domain.job-control:suspend-job monitor job-id nil)
+        (values job (+ 128 sb-unix:sigtstp)))
+      (let ((code (%job-process-exit-code job processes)))
+        (nshell.domain.job-control:complete-job monitor job-id code)
+        (remhash job-id registry)
+        (values job code))))
+
 (defun %job-wait-event-from-observation (pid state detail)
   (case state
     (:stopped

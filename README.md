@@ -9,7 +9,8 @@ SBCL. It puts the *interactive* experience first — real-time syntax
 highlighting, history-aware autosuggestions, fish-style abbreviations, and a
 context-aware completion engine driven by a logic knowledge base — on top of a
 domain-driven core whose line editor is a pure reducer over an immutable input
-state, and a reproducible Nix build that ships as a single dumped SBCL image.
+state, and a reproducible Nix build that packages a dumped SBCL image with its
+process-launch helper.
 
 > **Status: development preview (0.4.x).** The interactive editor and core
 > pipeline execution are solid and heavily tested. The shell *language* is a

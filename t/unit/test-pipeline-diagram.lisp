@@ -1,9 +1,5 @@
 (in-package #:nshell/test)
 
-;;; Tests for the cl-dataflow-kit diagnostics module (src/application/pipeline-diagram):
-;;; pipeline plans translated into cl-dataflow-kit graphs, and the job lifecycle
-;;; described as a cl-dataflow-kit state machine.
-
 (defun %diagram-node-names (graph)
   (cl-dataflow-kit:graph-node-names graph))
 
@@ -70,26 +66,4 @@
     (multiple-value-bind (output code)
         (nshell.application::%builtin-pipeline-graph nil nil)
       (expect 2 :to-equal code)
-      (expect (search "usage" output) :to-be-truthy)))
-
-  (it "job-lifecycle-machine-is-well-formed"
-    "Every job state is reachable, DONE is the only terminal state, and the
-machine is deterministic."
-    (let ((analysis (nshell.application::job-lifecycle-analysis)))
-      (expect '("DONE") :to-equal (getf analysis :terminal))
-      (expect (null (getf analysis :unreachable)) :to-be-truthy)
-      (expect (getf analysis :deterministic) :to-be-truthy)))
-
-  (it "job-lifecycle-machine-covers-the-real-monitor-transitions"
-    "The documented machine admits every transition the job monitor performs,
-guarding the spec against runtime drift."
-    (let ((machine (nshell.application::job-lifecycle-machine)))
-      (dolist (transition '(("CREATED" "START")
-                            ("RUNNING" "STOP")
-                            ("STOPPED" "CONTINUE")
-                            ("RUNNING" "BACKGROUND")
-                            ("BACKGROUND" "FOREGROUND")
-                            ("RUNNING" "EXIT")))
-        (destructuring-bind (state event) transition
-          (expect (cl-dataflow-kit:state-machine-transition-for machine state event)
-                  :to-be-truthy))))))
+      (expect (search "usage" output) :to-be-truthy))))

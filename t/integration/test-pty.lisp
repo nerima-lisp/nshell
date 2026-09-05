@@ -19,6 +19,60 @@
           (progn ,@body)
        (nshell.infrastructure.acl:pty-close ,master ,slave))))
 
+(describe "pty-availability-probe"
+  (it "caches-success-only-after-closing-the-pair"
+    (let ((*pty-availability* :unknown)
+          (opens 0)
+          (closed nil))
+      (with-rebound-function (nshell.infrastructure.acl:open-pty
+                             (lambda () (incf opens) (values 10 11 "probe")))
+        (with-rebound-function (nshell.infrastructure.acl:pty-close
+                               (lambda (master slave)
+                                 (push (list master slave) closed)))
+          (expect t :to-equal (pty-available-p))
+          (expect t :to-equal (pty-available-p))
+          (expect 1 :to-equal opens)
+          (expect '((10 11)) :to-equal closed)))))
+  (it "caches-known-open-capability-failures"
+    (dolist (errno (list sb-posix:eacces sb-posix:eperm sb-posix:enoent
+                        sb-posix:enodev sb-posix:enxio sb-posix:enosys))
+      (let ((*pty-availability* :unknown)
+            (opens 0))
+        (with-rebound-function (nshell.infrastructure.acl:open-pty
+                               (lambda ()
+                                 (incf opens)
+                                 (error 'sb-posix:syscall-error
+                                        :name "open" :errno errno)))
+          (expect nil :to-equal (pty-available-p))
+          (expect nil :to-equal (pty-available-p))
+          (expect 1 :to-equal opens)))))
+  (it "propagates-programming-errors-from-open"
+    (let ((*pty-availability* :unknown))
+      (with-rebound-function (nshell.infrastructure.acl:open-pty
+                             (lambda () (error 'type-error :datum nil
+                                                          :expected-type 'integer)))
+        (expect (lambda () (pty-available-p)) :to-throw 'type-error)
+        (expect :unknown :to-equal *pty-availability*))))
+  (it "propagates-unexpected-open-syscall-errors"
+    (let ((*pty-availability* :unknown))
+      (with-rebound-function (nshell.infrastructure.acl:open-pty
+                             (lambda ()
+                               (error 'sb-posix:syscall-error
+                                      :name "open" :errno sb-posix:ebadf)))
+        (expect (lambda () (pty-available-p)) :to-throw 'sb-posix:syscall-error)
+        (expect :unknown :to-equal *pty-availability*))))
+  (it "does-not-treat-cleanup-errors-as-unavailability"
+    (let ((*pty-availability* :unknown))
+      (with-rebound-function (nshell.infrastructure.acl:open-pty
+                             (lambda () (values 10 11 "probe")))
+        (with-rebound-function (nshell.infrastructure.acl:pty-close
+                               (lambda (master slave)
+                                 (declare (ignore master slave))
+                                 (error 'sb-posix:syscall-error
+                                        :name "close" :errno sb-posix:eacces)))
+          (expect (lambda () (pty-available-p)) :to-throw 'sb-posix:syscall-error)
+          (expect :unknown :to-equal *pty-availability*))))))
+
 (describe "pty-tests"
   (it "pty-data-boundaries-preserve-octets-and-close-empty-pair"
     "PTY data conversion and nil-safe cleanup preserve their contracts."

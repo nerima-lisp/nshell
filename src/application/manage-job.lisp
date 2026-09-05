@@ -30,7 +30,80 @@
              'nshell.infrastructure.acl:set-foreground-pgroup)
             (or ,previous (%shell-process-group-id))))))))
 
-(defun fg (job-id &optional (job-monitor *job-monitor*))
+(defun %run-terminal-command (context command args)
+  (let ((process (nshell.infrastructure.acl::%spawn-terminal-command command args)))
+    (unless process
+      (return-from %run-terminal-command
+        (values (format nil "nshell: ~a: command not found~%" command) 127)))
+    (let ((pgid (sb-ext:process-pid process)))
+      (unwind-protect
+           (progn
+             (setf *foreground-job-pgid* pgid)
+             (%set-acl-foreground-pgid pgid)
+             (%with-terminal-foreground-pgroup pgid
+               (sb-ext:process-kill process sb-unix:sigcont :pid)
+               (if (eq :stopped (%wait-terminal-processes (list process)))
+                   (let* ((monitor (shell-context-job-monitor context))
+                          (id (nshell.domain.job-control:monitor-add-background-job
+                               monitor (list pgid)
+                               (%string-join (cons command args) " ")
+                               :pipefail-p (shell-context-pipefail-p context))))
+                     (%store-shell-process-registry-entry context id process)
+                     (nshell.domain.job-control:suspend-job monitor id nil)
+                     (values nil (+ 128 sb-unix:sigtstp)))
+                   (values nil (nshell.infrastructure.acl:process-exit-status-code
+                                process)))))
+        (setf *foreground-job-pgid* nil)
+        (%set-acl-foreground-pgid nil)))))
+
+(defun %run-terminal-pipeline (context commands redirects)
+  (let ((processes (nshell.infrastructure.acl:spawn-pipeline-async
+                    commands :redirects redirects :start-p nil)))
+    (unless processes
+      (return-from %run-terminal-pipeline (values nil 127 (list 127))))
+    (let ((pgid (sb-ext:process-pid (first processes)))
+          (retained-p nil))
+      (unwind-protect
+           (progn
+             (setf *foreground-job-pgid* pgid)
+             (%set-acl-foreground-pgid pgid)
+             (%with-terminal-foreground-pgroup pgid
+               (dolist (process processes)
+                 (sb-ext:process-kill process sb-unix:sigcont :pid))
+               (if (eq :stopped (%wait-terminal-processes processes))
+                   (let* ((monitor (shell-context-job-monitor context))
+                          (id (nshell.domain.job-control:monitor-add-background-job
+                               monitor (mapcar #'sb-ext:process-pid processes)
+                               (%string-join
+                                (mapcar (lambda (command)
+                                          (%string-join
+                                           (cons (nshell.domain.parsing:command-node-command command)
+                                                 (%line-command-args command)) " "))
+                                        commands)
+                                " | ")
+                               :pipefail-p (shell-context-pipefail-p context))))
+                     (%store-shell-process-registry-entry context id processes)
+                     (nshell.domain.job-control:suspend-job monitor id nil)
+                     (setf retained-p t)
+                     (values nil (+ 128 sb-unix:sigtstp)
+                             (mapcar (lambda (process)
+                                       (if (eq :stopped (sb-ext:process-status process))
+                                           (+ 128 sb-unix:sigtstp)
+                                           (nshell.infrastructure.acl:process-exit-status-code process)))
+                                     processes)))
+                   (let ((statuses (mapcar #'nshell.infrastructure.acl:process-exit-status-code
+                                           processes)))
+                     (values nil
+                             (if (shell-context-pipefail-p context)
+                                 (or (find-if-not #'zerop statuses) 0)
+                                 (car (last statuses)))
+                             statuses)))))
+        (setf *foreground-job-pgid* nil)
+        (%set-acl-foreground-pgid nil)
+        (unless retained-p
+          (nshell.infrastructure.acl::%abort-pipeline (reverse processes) nil))))))
+
+(defun fg (job-id &optional (job-monitor *job-monitor*) process-registry)
   "Move JOB-ID to the foreground, wait for it, then restore the shell PGID."
   (let ((job (%require-job job-id job-monitor)))
     (when job
@@ -40,12 +113,19 @@
           (unwind-protect
                (progn
                  (%set-acl-foreground-pgid pgid)
-                 (%continue-process-group pgid)
                  (nshell.domain.job-control:foreground-job job-monitor job-id)
                  (%with-terminal-foreground-pgroup
                    pgid
-                   (funcall (symbol-function '%wait-job-pgid)
-                            job job-id job-monitor)))
+                   (%continue-process-group pgid)
+                   (let ((processes (and process-registry
+                                         (%job-process-list
+                                          (gethash job-id process-registry)))))
+                     (if processes
+                         (return-from fg
+                           (%wait-registered-foreground-job
+                            job job-id job-monitor process-registry processes))
+                         (funcall (symbol-function '%wait-job-pgid)
+                                  job job-id job-monitor)))))
             (setf *foreground-job-pgid* nil)
             (%set-acl-foreground-pgid nil)))
         job))))

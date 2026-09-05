@@ -21,7 +21,9 @@
 (defun %execute-clean-command-node-in-context (context clean-command redirects)
   (let* ((command (nshell.domain.parsing:command-node-command clean-command))
          (args (%line-command-args clean-command))
-         (redirect-output-p (nshell.domain.parsing:redirect-output-p redirects)))
+         (redirect-output-p (nshell.domain.parsing:redirect-output-p redirects))
+         (*foreground-terminal-runner* (and (null redirects)
+                                           *foreground-terminal-runner*)))
     (unwind-protect
          (let ((redirect-error
                  (when redirects
@@ -110,7 +112,9 @@
 ;; -- Pipeline node execution --------------------------------------------------
 
 (defun execute-pipeline-node-in-context (context pipeline-node)
-  (let ((commands (nshell.domain.parsing:pipeline-node-commands pipeline-node)))
+  (let ((commands (nshell.domain.parsing:pipeline-node-commands pipeline-node))
+        (terminal-runner *foreground-terminal-runner*)
+        (*foreground-terminal-runner* nil))
     (multiple-value-bind (expanded-commands error resources)
         (%expand-command-nodes-in-context context commands)
       (when error
@@ -140,23 +144,30 @@
             (if (%source-pipeline-required-p context clean-commands)
                 (%execute-source-pipeline-in-context
                  context clean-commands redirects)
-                (let ((output nil)
-                      (exit-code 0)
-                      (pipeline-statuses nil))
-                  (progn
-                    (setf output
-                          (with-output-to-string (*standard-output*)
-                            (multiple-value-bind (status statuses)
-                                (nshell.infrastructure.acl:spawn-pipeline
-                                 clean-commands
-                                 :redirects redirects
-                                 :pipefail-p
-                                 (shell-context-pipefail-p context))
-                              (setf exit-code (or status 0)
-                                    pipeline-statuses
-                                    (or statuses (list exit-code))))))
-                    (%record-pipeline-statuses context pipeline-statuses)
-                    (values output exit-code)))))))))
+                (if terminal-runner
+                    (multiple-value-bind (output status statuses)
+                        (funcall terminal-runner
+                                 (lambda ()
+                                   (%run-terminal-pipeline context clean-commands redirects)))
+                      (%record-pipeline-statuses context statuses)
+                      (values output status))
+                    (let ((output nil)
+                          (exit-code 0)
+                          (pipeline-statuses nil))
+                      (progn
+                        (setf output
+                              (with-output-to-string (*standard-output*)
+                                (multiple-value-bind (status statuses)
+                                    (nshell.infrastructure.acl:spawn-pipeline
+                                     clean-commands
+                                     :redirects redirects
+                                     :pipefail-p
+                                     (shell-context-pipefail-p context))
+                                  (setf exit-code (or status 0)
+                                        pipeline-statuses
+                                        (or statuses (list exit-code))))))
+                        (%record-pipeline-statuses context pipeline-statuses)
+                        (values output exit-code))))))))))
 
 ;; -- Public pipeline API (OS-level) -------------------------------------------
 

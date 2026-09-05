@@ -12,6 +12,7 @@
    :abbreviation-table *abbreviations*
    :function-table *functions*
    :function-source-table *function-sources*
+   :execution-strategy :os-pipes
    :running *running*
    :pipefail-p *pipefail*
    :last-exit-code *last-exit-code*
@@ -36,8 +37,24 @@
         *input-state* (nshell.application:shell-context-input-state context))
   code)
 
+(defun %call-with-cooked-terminal (thunk)
+  (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
+  (nshell.infrastructure.terminal:ansi-disable-bracketed-paste)
+  (finish-output)
+  (nshell.infrastructure.terminal:restore-terminal-mode)
+  (unwind-protect (funcall thunk)
+    (nshell.infrastructure.terminal:enable-raw-mode)
+    (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
+    (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)
+    (finish-output)))
+
 (defun %execute-with-repl-shell-context (thunk)
-  (let ((context (%make-repl-shell-context)))
+  (let ((context (%make-repl-shell-context))
+        (nshell.application::*foreground-terminal-runner*
+          (and *interactive-terminal-installed-p*
+               (interactive-stream-p *standard-input*)
+               (interactive-stream-p *standard-output*)
+               #'%call-with-cooked-terminal)))
     (multiple-value-bind (output code)
         (funcall thunk context)
       (%sync-repl-shell-context context (or code 0))

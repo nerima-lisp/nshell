@@ -1,12 +1,64 @@
 (in-package #:nshell/test)
 (describe "e2e-history-tests"
   (it "e2e-history-persists-across-sessions"
-    (let ((h (history-kit:make-history :capacity 10)))
-      (history-kit:history-add h "cmd1")
-      (history-kit:history-add h "cmd2")
-      (expect 2 :to-equal (history-kit:history-count h))
-      (let ((results (history-kit:history-search h "cmd" :mode :prefix)))
-        (expect 2 :to-equal (length results)))))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "persists history between real nshell processes"
+      (with-temporary-output-file (history-path :prefix "nshell-e2e-session-history")
+        (let* ((program (%absolute-sbcl-executable))
+               (older "printf 'history-older:<%s>\\n' first")
+               (newer "printf 'history-newest:<%s>\\n' second")
+               (arguments
+                 (append
+                  (list "--noinform" "--disable-debugger")
+                  (%asdf-bootstrap-forms
+                   (namestring (asdf:system-source-directory :nshell)))
+                  (list "--eval" "(asdf:load-system :nshell)"
+                        "--eval"
+                        (format nil
+                                "(set (find-symbol ~S ~S) ~S)"
+                                "*HISTORY-FILE-PATH-OVERRIDE*"
+                                "NSHELL.INFRASTRUCTURE.PERSISTENCE" history-path)
+                        "--eval" (%nshell-main-form '("--no-config")))))
+               (first-pid nil))
+          (unless program
+            (skip "requires an absolute SBCL runtime path"))
+          (expect (probe-file history-path) :to-be-falsy)
+          (labels ((await-command (fd marker)
+                     (expect (search marker (%e2e-pty-read-until fd marker))
+                             :to-be-truthy))
+                   (run-session (action)
+                     (let ((pty nil))
+                       (unwind-protect
+                            (progn
+                              (setf pty (nshell.infrastructure.acl:pty-spawn
+                                         program arguments :rows 24 :cols 100))
+                              (let* ((fd (nshell.infrastructure.acl:pty-process-master-fd pty))
+                                     (ready (format nil "~c[?2004h" #\Escape)))
+                                (expect (search ready (%e2e-pty-read-until fd ready))
+                                        :to-be-truthy)
+                                (funcall action pty fd)
+                                (nshell.infrastructure.acl:pty-write fd (string (code-char 4)))
+                                (%assert-pty-child-exit pty)))
+                         (%terminate-pty-process pty)))))
+            (run-session
+             (lambda (pty fd)
+               (setf first-pid (nshell.infrastructure.acl:pty-process-pid pty))
+               (%e2e-pty-write-line fd older)
+               (await-command fd "history-older:<first>")
+               (%e2e-pty-write-line fd newer)
+               (await-command fd "history-newest:<second>")))
+            (let ((nshell.infrastructure.persistence::*history-file-path-override*
+                    history-path))
+              (expect (list older newer) :to-equal
+                      (nshell.infrastructure.persistence:load-history-file)))
+            (run-session
+             (lambda (pty fd)
+               (expect (= first-pid (nshell.infrastructure.acl:pty-process-pid pty))
+                       :to-be-falsy)
+               (nshell.infrastructure.acl:pty-write fd (format nil "~c[A~c" #\Escape #\Return))
+               (await-command fd "history-newest:<second>"))))))))
 
   (it "e2e-history-reverse-search-selects-and-executes-match"
     (let ((history (history-kit:make-history :capacity 10))

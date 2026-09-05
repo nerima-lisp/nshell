@@ -46,6 +46,22 @@ hazard that function's docstring describes."
           do (return status)
         do (sleep delay)))
 
+(defun %job-control-read-until (fd needle &key (timeout-seconds 20))
+  (let ((deadline (+ (get-internal-real-time)
+                     (* timeout-seconds internal-time-units-per-second)))
+        (output ""))
+    (loop
+      (when (search needle output) (return output))
+      (let ((remaining (- deadline (get-internal-real-time))))
+        (unless (plusp remaining)
+          (error "PTY marker ~S not received; output: ~S" needle output))
+        (let ((chunk (pty-test-read-available
+                      fd :timeout-usec
+                      (min 500000 (ceiling (* remaining 1000000)
+                                           internal-time-units-per-second)))))
+          (when chunk
+            (setf output (concatenate 'string output chunk))))))))
+
 (defun %job-control-stop-driver-eval-string (command args)
   "Build the --eval argument for a PTY-spawned SBCL that loads :NSHELL, then
 calls %EXECUTE-EXTERNAL-PIPELINE-STAGE directly on COMMAND/ARGS and reports
@@ -103,6 +119,25 @@ symbol) to reach :NSHELL's own definitions once :NSHELL has actually loaded."
           (list "--eval" (%job-control-stop-driver-eval-string command args))))
 
 (describe "job-control-pty-integration-tests"
+  (it "job-control-marker-wait-handles-quiet-and-flooded-output"
+    (dolist (prefix-count '(0 401))
+      (let ((chunks (append (make-list prefix-count :initial-element "compile-output")
+                            (list "nshell-" "loaded"))))
+        (with-temporary-function
+            ('pty-test-read-available
+             (lambda (fd &key timeout-usec)
+               (declare (ignore fd timeout-usec))
+               (pop chunks)))
+          (expect (search "nshell-loaded" (%job-control-read-until 0 "nshell-loaded"))
+                  :to-be-truthy)
+          (expect chunks :to-be-falsy)))))
+
+  (it "job-control-marker-wait-rejects-expired-deadline"
+    (let ((failed nil))
+      (handler-case (%job-control-read-until 0 "nshell-loaded" :timeout-seconds 0)
+        (error () (setf failed t)))
+      (expect failed :to-be-truthy)))
+
   (it "directly-launched-foreground-command-survives-ctrl-z-without-hanging"
     "A directly-launched (non-fg) foreground external command gets its own
 process group and the terminal's foreground group, so Ctrl-Z stops the child
@@ -129,14 +164,14 @@ exit status, no job registered, and above all no hang: pre-fix, the plain
                       :rows 24
                       :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                 (let ((loaded (pty-test-read-until fd "nshell-loaded" :attempts 400)))
+                 (let ((loaded (%job-control-read-until fd "nshell-loaded")))
                    (if (search "nshell-load-failed" loaded)
-                       (skip (format nil "subprocess could not load :nshell: ~a" loaded))
+                       (error "subprocess could not load :nshell: ~a" loaded)
                        (progn
                          (expect (search "nshell-loaded" loaded) :to-be-truthy)
                          (sleep 0.3)
                          (nshell.infrastructure.acl:pty-write fd (string (code-char 26)))
-                         (let ((output (pty-test-read-until fd "jobs-count=" :attempts 400)))
+                         (let ((output (%job-control-read-until fd "jobs-count=0")))
                            (expect (search "exit-code=0" output) :to-be-truthy)
                            (expect (search "jobs-count=0" output) :to-be-truthy))))))
                (%job-control-pty-wait-child-exit pty))

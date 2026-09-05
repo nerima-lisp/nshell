@@ -13,6 +13,283 @@
         form))
 
 (describe "process-tests"
+  (it "spawn-pipeline-timeout-covers-orphaned-output-writer"
+    (with-temporary-output-file (pid-file :prefix "nshell-pipeline-orphan")
+      (let ((worker nil) (result nil) (failure nil) (joined nil))
+        (unwind-protect
+             (progn
+               (setf worker
+                     (sb-thread:make-thread
+                      (lambda ()
+                        (handler-case
+                            (let ((nshell.infrastructure.acl:*external-command-timeout* 0.2))
+                              (capture-standard-output
+                                (setf result
+                                      (nshell.infrastructure.acl:spawn-pipeline
+                                       (list (nshell.domain.parsing:make-command-node
+                                              "true" nil)
+                                             (nshell.domain.parsing:make-command-node
+                                              "/bin/sh"
+                                              (list "-c" "sleep 30 & printf '%s' \"$!\" > \"$1\""
+                                                    "nshell-test" pid-file)))))))
+                          (error (condition) (setf failure condition))))))
+               (setf joined (sb-thread:join-thread worker :timeout 3 :default :deadline))
+               (expect nil :to-equal failure)
+               (expect (eq :deadline joined) :to-be-null)
+               (expect 124 :to-equal result))
+          (let ((pid (ignore-errors
+                       (parse-integer (host-kit:read-file-string pid-file)))))
+            (when pid (ignore-errors (sb-posix:kill pid sb-unix:sigkill))))
+          (when worker
+            (sb-thread:join-thread worker :timeout 3 :default nil))))))
+
+  (it "spawn-pipeline-captures-stderr-duplicated-before-stdout-file"
+    (with-temporary-output-file (target :prefix "nshell-pipeline-stderr-snapshot")
+      (let ((status nil))
+        (expect "ERR" :to-equal
+                (capture-standard-output
+                  (setf status
+                        (nshell.infrastructure.acl:spawn-pipeline
+                         (list (nshell.domain.parsing:make-command-node
+                                "/bin/sh" '("-c" "printf OUT; printf ERR >&2")))
+                         :redirects (list (list (cons :2>&1 nil) (cons :> target)))))))
+        (expect 0 :to-equal status)
+        (expect "OUT" :to-equal (host-kit:read-file-string target)))))
+
+  (it "spawn-pipeline-reaped-leader-still-terminates-descendants"
+    (let ((processes nil) (child-pid nil))
+      (unwind-protect
+           (progn
+             (setf processes
+                   (nshell.infrastructure.acl:spawn-pipeline-async
+                    (list (nshell.domain.parsing:make-command-node "true" nil)
+                          (nshell.domain.parsing:make-command-node
+                           "/bin/sh"
+                           '("-c" "sleep 30 & printf '%s\\n' \"$!\"; wait")))
+                    :default-output :stream))
+             (expect 2 :to-equal (length processes))
+             (setf child-pid
+                   (parse-integer (read-line (sb-ext:process-output (second processes)))))
+             (sb-ext:process-wait (first processes))
+             (expect :exited :to-equal (sb-ext:process-status (first processes)))
+             (expect (ignore-errors (sb-posix:getpgid
+                                     (sb-ext:process-pid (first processes))))
+                     :to-be-null)
+             (nshell.infrastructure.acl::%terminate-pipeline-processes (reverse processes))
+             (loop repeat 100
+                   while (ignore-errors (sb-posix:kill child-pid 0) t)
+                   do (sleep 0.01))
+             (expect (ignore-errors (sb-posix:kill child-pid 0) t) :to-be-null))
+        (when child-pid (ignore-errors (sb-posix:kill child-pid sb-unix:sigkill)))
+        (nshell.infrastructure.acl::%abort-pipeline (reverse processes) nil))))
+
+  (it "spawn-pipeline-redirect-dup-snapshots-earlier-output"
+    (dolist (combined-p '(nil t))
+      (with-temporary-output-file (first-target :prefix "nshell-pipeline-snapshot-first")
+        (with-temporary-output-file (last-target :prefix "nshell-pipeline-snapshot-last")
+          (expect 0 :to-equal
+                  (nshell.infrastructure.acl:spawn-pipeline
+                   (list (nshell.domain.parsing:make-command-node
+                          "/bin/sh" '("-c" "printf OUT; printf ERR >&2")))
+                   :redirects
+                   (list (append (list (cons (if combined-p :&> :>) first-target))
+                                 (unless combined-p (list (cons :2>&1 nil)))
+                                 (list (cons :> last-target))))))
+          (expect "ERR" :to-equal (host-kit:read-file-string first-target))
+          (expect "OUT" :to-equal (host-kit:read-file-string last-target))))))
+
+  (it "spawn-pipeline-closes-streams-after-command-resolution-error"
+    (with-temporary-output-file (target :prefix "nshell-pipeline-resolution-error")
+      (let ((open-output
+              (symbol-function 'nshell.infrastructure.acl::%open-pipeline-output-redirect))
+            (opened nil))
+        (with-rebound-function
+            (nshell.infrastructure.acl::%open-pipeline-output-redirect
+             (lambda (&rest arguments)
+               (multiple-value-bind (stream streams) (apply open-output arguments)
+                 (push stream opened)
+                 (values stream streams))))
+          (with-rebound-function
+              (nshell.infrastructure.acl::%resolve-external-command
+               (lambda (&rest arguments)
+                 (declare (ignore arguments))
+                 (error "injected command resolution failure")))
+            (expect 127 :to-equal
+                    (nshell.infrastructure.acl:spawn-pipeline
+                     (list (nshell.domain.parsing:make-command-node "true" nil))
+                     :redirects (list (list (cons :> target))))))
+          (expect 1 :to-equal (length opened))
+          (unwind-protect
+               (expect nil :to-equal (open-stream-p (first opened)))
+            (close (first opened)))))))
+
+  (it "spawn-pipeline-internal-fd-wrapper-survives-empty-shell-path"
+    (let ((nshell.infrastructure.acl::*exported-environment* '("PATH="))
+          (status nil))
+      (expect "fd3" :to-equal
+              (capture-standard-output
+                (setf status
+                      (nshell.infrastructure.acl:spawn-pipeline
+                       (list (nshell.domain.parsing:make-command-node
+                              "/bin/sh" '("-c" "printf fd3 >&3")))
+                       :redirects
+                       (list (list (cons :fd-dup
+                                         (nshell.domain.parsing:make-redirect-fd-dup-target
+                                          3 1))))))))
+      (expect 0 :to-equal status)))
+
+  (it "spawn-pipeline-closes-redirect-stream-after-later-open-fails"
+    (with-temporary-output-file (target :prefix "nshell-pipeline-partial-redirect")
+      (let ((open-output
+              (symbol-function 'nshell.infrastructure.acl::%open-pipeline-output-redirect))
+            (opened nil))
+        (with-rebound-function
+            (nshell.infrastructure.acl::%open-pipeline-output-redirect
+             (lambda (&rest arguments)
+               (when opened (error "injected second redirect failure"))
+               (multiple-value-bind (stream streams) (apply open-output arguments)
+                 (push stream opened)
+                 (values stream streams))))
+          (expect 127 :to-equal
+                  (nshell.infrastructure.acl:spawn-pipeline
+                   (list (nshell.domain.parsing:make-command-node "true" nil))
+                   :redirects (list (list (cons :> target) (cons :2> target)))))
+          (expect 1 :to-equal (length opened))
+          (expect nil :to-equal (open-stream-p (first opened)))))))
+
+  (it "spawn-pipeline-cleans-real-partial-launch-and-pipe-descriptors"
+    (dolist (async-p '(nil t))
+      (let ((spawn (symbol-function 'nshell.infrastructure.acl::%run-pipeline-command))
+            (make-pipes (symbol-function 'nshell.infrastructure.acl::%make-pipeline-pipes))
+            (processes nil)
+            (descriptors nil))
+        (with-rebound-function
+            (nshell.infrastructure.acl::%make-pipeline-pipes
+             (lambda (count)
+               (let ((pipes (funcall make-pipes count)))
+                 (setf descriptors (loop for pair in pipes append (copy-list pair)))
+                 pipes)))
+          (with-rebound-function
+              (nshell.infrastructure.acl::%run-pipeline-command
+               (lambda (&rest arguments)
+                 (when processes (error "injected second-stage failure"))
+                 (let ((process (apply spawn arguments)))
+                   (push process processes)
+                   process)))
+            (expect (if async-p nil 127) :to-equal
+                    (funcall (if async-p
+                                 #'nshell.infrastructure.acl:spawn-pipeline-async
+                                 #'nshell.infrastructure.acl:spawn-pipeline)
+                             (loop repeat 3 collect
+                               (nshell.domain.parsing:make-command-node "true" nil)))))
+          (expect 1 :to-equal (length processes))
+          (expect :signaled :to-equal (sb-ext:process-status (first processes)))
+          (expect 4 :to-equal (length descriptors))
+          (dolist (fd descriptors)
+            (expect sb-posix:ebadf :to-equal
+                    (handler-case (sb-posix:fcntl fd sb-posix:f-getfd)
+                      (sb-posix:syscall-error (err)
+                        (sb-posix:syscall-errno err)))))))))
+
+  (it "spawn-pipeline-cleans-stages-on-callback-nonlocal-exit"
+    (let ((spawn (symbol-function 'nshell.infrastructure.acl::%run-pipeline-command))
+          (processes nil))
+      (with-rebound-function
+          (nshell.infrastructure.acl::%run-pipeline-command
+           (lambda (&rest arguments)
+             (let ((process (apply spawn arguments)))
+               (push process processes)
+               process)))
+        (expect :escaped :to-equal
+                (catch 'pipeline-escape
+                  (nshell.infrastructure.acl:spawn-pipeline
+                   (loop repeat 2 collect
+                     (nshell.domain.parsing:make-command-node "true" nil))
+                   :after-spawn (lambda () (throw 'pipeline-escape :escaped)))))
+        (expect 2 :to-equal (length processes))
+        (expect t :to-equal
+                (every (lambda (process)
+                         (eq :signaled (sb-ext:process-status process))) processes)))))
+
+  (it "spawn-pipeline-internal-helper-survives-shell-path-change"
+    (let ((nshell.infrastructure.acl::*exported-environment* '("PATH=/bin:/usr/bin"))
+          (status nil))
+      (expect (format nil "helper-path~%") :to-equal
+              (capture-standard-output
+                (setf status
+                      (nshell.infrastructure.acl:spawn-pipeline
+                       (list (nshell.domain.parsing:make-command-node
+                              "echo" '("helper-path"))
+                             (nshell.domain.parsing:make-command-node "cat" nil))))))
+      (expect 0 :to-equal status)))
+
+  (it "spawn-pipeline-holds-all-stages-in-one-group-before-release"
+    (dolist (async-p '(nil t))
+      (let ((spawn (symbol-function 'nshell.infrastructure.acl::%run-pipeline-command))
+            (processes nil)
+            (observed nil))
+        (with-rebound-function
+            (nshell.infrastructure.acl::%run-pipeline-command
+             (lambda (&rest arguments)
+               (let ((process (apply spawn arguments)))
+                 (when process (push process processes))
+                 process)))
+          (let ((result
+                  (funcall (if async-p
+                               #'nshell.infrastructure.acl:spawn-pipeline-async
+                               #'nshell.infrastructure.acl:spawn-pipeline)
+                           (loop repeat 3 collect
+                             (nshell.domain.parsing:make-command-node "true" nil))
+                           :after-spawn
+                           (lambda ()
+                             (setf observed
+                                   (mapcar (lambda (process)
+                                             (list (sb-ext:process-status process)
+                                                   (sb-posix:getpgid
+                                                    (sb-ext:process-pid process))))
+                                           processes))))))
+            (when async-p
+              (dolist (process result) (sb-ext:process-wait process)))
+            (expect 3 :to-equal (length processes))
+            (expect (make-list 3 :initial-element
+                               (list :stopped
+                                     (sb-ext:process-pid (car (last processes)))))
+                    :to-equal observed)
+            (expect '(0 0 0) :to-equal
+                    (mapcar #'nshell.infrastructure.acl:process-exit-status-code
+                            processes)))))))
+
+  (it "spawn-pipeline-aborts-real-stages-when-after-spawn-fails"
+    (dolist (async-p '(nil t))
+      (let ((spawn (symbol-function 'nshell.infrastructure.acl::%run-pipeline-command))
+            (processes nil)
+            (outputs nil))
+        (with-rebound-function
+            (nshell.infrastructure.acl::%run-pipeline-command
+             (lambda (&rest arguments)
+               (let ((process (apply spawn arguments)))
+                 (when process (push process processes))
+                 (when (sb-ext:process-output process)
+                   (push (sb-ext:process-output process) outputs))
+                 process)))
+          (let ((result
+                  (funcall (if async-p
+                               #'nshell.infrastructure.acl:spawn-pipeline-async
+                               #'nshell.infrastructure.acl:spawn-pipeline)
+                           (loop repeat 2 collect
+                             (nshell.domain.parsing:make-command-node "true" nil))
+                           :default-output :stream
+                           :after-spawn (lambda () (error "injected launch failure")))))
+            (expect (if async-p nil 127) :to-equal result)
+            (expect 2 :to-equal (length processes))
+            (expect nil :to-equal (some #'sb-ext:process-alive-p processes))
+            (expect 1 :to-equal (length outputs))
+            (expect nil :to-equal (some #'open-stream-p outputs))
+            (expect t :to-equal
+                    (every (lambda (process)
+                             (eq :signaled (sb-ext:process-status process)))
+                           processes)))))))
+
   (it "foreground-external-command-timeout-is-nil-by-default-for-noninteractive-output"
     "With *EXTERNAL-COMMAND-TIMEOUT* left at its production default (now NIL),
 %FOREGROUND-EXTERNAL-COMMAND-TIMEOUT must return NIL even when

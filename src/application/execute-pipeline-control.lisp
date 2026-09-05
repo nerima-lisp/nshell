@@ -106,7 +106,8 @@ when an enclosing loop must handle the remaining count."
   (multiple-value-bind (_out condition-code)
       (%execute-condition-in-context context (nshell.domain.parsing:if-node-condition ast))
     (declare (ignore _out))
-    (when *loop-control-signal*
+    (when (or *loop-control-signal*
+              (not (shell-context-running context)))
       (return-from %execute-if-node-in-context
         (values nil condition-code)))
     (cond
@@ -144,6 +145,9 @@ when an enclosing loop must handle the remaining count."
               (%execute-condition-in-context context
                                               (nshell.domain.parsing:while-node-condition ast))
             (declare (ignore _out))
+            (unless (shell-context-running context)
+              (setf code condition-code)
+              (return))
             (%handle-loop-control while-iteration)
             (unless (= 0 condition-code) (return)))
           (%collect-execution-result
@@ -215,12 +219,16 @@ CLAUSES is a list of (predicate handler) pairs; the first matching predicate win
 This encodes the dispatch table as data (separate from the dispatch mechanism),
 following the data/logic separation principle."
     `(defun ,name (,context ,ast)
-       (cond
-         ,@(mapcar (lambda (clause)
-                     `((,(first clause) ,ast)
-                       (,(second clause) ,context ,ast)))
-                   clauses)
-         (t (values (format nil "source: unsupported syntax~%") 2))))))
+       (let ((result
+               (multiple-value-list
+                (cond
+                  ,@(mapcar (lambda (clause)
+                              `((,(first clause) ,ast)
+                                (,(second clause) ,context ,ast)))
+                            clauses)
+                  (t (values (format nil "source: unsupported syntax~%") 2))))))
+         (%record-last-exit-code ,context (second result))
+         (values-list result)))))
 
 (define-ast-dispatcher execute-ast-in-context (context ast)
   (nshell.domain.parsing:command-node-p    execute-command-node-in-context)

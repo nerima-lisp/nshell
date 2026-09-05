@@ -41,7 +41,7 @@ clean, test-driven Common Lisp core and a reproducible Nix build.
   quoted and backslash-escaped exclamation marks kept literal.
 - **External editing** — `Alt-E` opens the current line with the configured
   editor and returns the edited buffer to the prompt.
-- **Reproducible build** — a single statically-dumped SBCL image via Nix;
+- **Reproducible build** — a dumped SBCL image and its process-launch helper via Nix;
   `nix run` and you're in.
 
 ## Where to go next

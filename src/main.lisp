@@ -92,8 +92,7 @@ presentation do not depend on cl-cli's condition hierarchy."
         (%run-interactive
          :config-path config-path
          :load-config-p load-config-p
-         :history-p history-p)
-        0)
+         :history-p history-p))
     (nshell.presentation:run-repl-batch)))
 
 (defun %parsed-startup-options (invocation)

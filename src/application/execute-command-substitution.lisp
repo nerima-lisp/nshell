@@ -6,15 +6,16 @@ Returns its trailing-newline-trimmed output, or NIL on error or timeout."
   (handler-case
       (nshell.domain.parsing:with-parsed-command-line-case (result ast command-string)
         (:complete
-         (flet ((execute-substitution ()
-                  (multiple-value-bind (output exit-code)
-                      (execute-ast-in-context context ast)
-                    (declare (ignore exit-code))
-                    (%trim-command-substitution-output output))))
-           (if *command-substitution-timeout*
-               (sb-ext:with-timeout *command-substitution-timeout*
-                 (execute-substitution))
-               (execute-substitution))))
+         (let ((*foreground-terminal-runner* nil))
+           (flet ((execute-substitution ()
+                    (multiple-value-bind (output exit-code)
+                        (execute-ast-in-context context ast)
+                      (declare (ignore exit-code))
+                      (%trim-command-substitution-output output))))
+             (if *command-substitution-timeout*
+                 (sb-ext:with-timeout *command-substitution-timeout*
+                   (execute-substitution))
+                 (execute-substitution)))))
         (:error nil)
         (:incomplete nil))
     (sb-ext:timeout ()

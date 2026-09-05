@@ -3,6 +3,12 @@
 (defparameter *external-command-timeout* nil
   "Maximum seconds for synchronous external commands. NIL disables the timeout.")
 
+(defun %spawn-terminal-command (command args)
+  (multiple-value-bind (resolved environment) (%prepare-external-command command)
+    (when resolved
+      (%spawn-in-own-process-group resolved args environment *standard-input* t
+                                   :error t))))
+
 (defun process-exit-status-code (proc)
   "Return shell-compatible exit status for an SBCL process."
   (let ((code (sb-ext:process-exit-code proc)))
@@ -50,11 +56,12 @@
      (%join-process-output-copiers ,copiers)))
 
 (defun %wait-process-with-copiers (proc copiers timeout-seconds success-fn timeout-fn)
-  (%with-process-output-copiers (copiers)
-    (if (or (null timeout-seconds)
-            (%wait-process-exit-with-timeout proc timeout-seconds))
-        (progn (sb-ext:process-wait proc) (funcall success-fn))
-        (progn (%terminate-process proc) (funcall timeout-fn)))))
+  (funcall
+   (%with-process-output-copiers (copiers)
+     (if (or (null timeout-seconds)
+             (%wait-process-exit-with-timeout proc timeout-seconds))
+         (progn (sb-ext:process-wait proc) success-fn)
+         (progn (%terminate-process proc) timeout-fn)))))
 
 (defun %wait-process-with-copiers-or-stop (proc copiers success-fn stop-fn)
   "Wait for PROC while allowing a stopped process to be continued."
@@ -64,8 +71,8 @@
         (let ((decision (funcall stop-fn)))
           (unless (eq decision :continue-wait) (return decision))
           (sleep 0.05))
-        (return (%with-process-output-copiers (copiers)
-                  (funcall success-fn))))))
+        (return (funcall (%with-process-output-copiers (copiers)
+                           success-fn))))))
 
 (defun %wait-process-with-output (proc output timeout-seconds timeout-fn)
   (let ((copier (%start-process-output-copier proc output)))

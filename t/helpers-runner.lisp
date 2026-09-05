@@ -30,17 +30,20 @@ environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
     (:available t)
     (:unavailable nil)
     (otherwise
-     (setf *pty-availability*
-           (handler-case
-               (multiple-value-bind (master slave slave-name)
-                   (nshell.infrastructure.acl:open-pty)
-                 (declare (ignore slave-name))
-                 (unwind-protect
-                      :available
-                   (ignore-errors
-                     (nshell.infrastructure.acl:pty-close master slave))))
-             (error () :unavailable)))
-     (eq *pty-availability* :available))))
+     (multiple-value-bind (master slave slave-name)
+         (handler-case (nshell.infrastructure.acl:open-pty)
+           (sb-posix:syscall-error (condition)
+             (if (member (sb-posix:syscall-errno condition)
+                         (list sb-posix:eacces sb-posix:eperm sb-posix:enoent
+                               sb-posix:enodev sb-posix:enxio sb-posix:enosys))
+                 (progn
+                   (setf *pty-availability* :unavailable)
+                   (return-from pty-available-p nil))
+                 (error condition))))
+       (declare (ignore slave-name))
+       (nshell.infrastructure.acl:pty-close master slave)
+       (setf *pty-availability* :available)
+       t))))
 
 (defmacro skip-when-pty-unavailable (reason &body body)
   "Run BODY only when a usable PTY is available outside a hermetic sandbox."

@@ -1,6 +1,38 @@
 (in-package #:nshell/test)
 
 (describe "manage-job-service-tests"
+  (it "registered-foreground-job-keeps-processes-across-stop-and-resume"
+    (let* ((registry (make-hash-table))
+           (monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "pipeline"))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (processes (list '(:status 7) '(:status 0)))
+           (state :stopped))
+      (setf (gethash job-id registry) processes)
+      (with-temporary-functions
+          (('nshell.application::%wait-terminal-processes
+            (lambda (observed)
+              (expect processes :to-be observed)
+              state))
+           ('nshell.infrastructure.acl:process-exit-status-code
+            (lambda (process) (getf process :status))))
+        (multiple-value-bind (result code)
+            (nshell.application::%wait-registered-foreground-job
+             job job-id monitor registry processes)
+          (expect job :to-be result)
+          (expect (+ 128 sb-unix:sigtstp) :to-equal code)
+          (expect processes :to-be (gethash job-id registry))
+          (expect (nshell.domain.execution:job-stopped-p job) :to-be-truthy))
+        (setf state :completed)
+        (nshell.domain.job-control:foreground-job monitor job-id)
+        (multiple-value-bind (result code)
+            (nshell.application::%wait-registered-foreground-job
+             job job-id monitor registry processes)
+          (expect job :to-be result)
+          (expect 0 :to-equal code)
+          (expect (nshell.domain.execution:job-completed-p job) :to-be-truthy)
+          (expect nil :to-be (gethash job-id registry))))))
+
   (it "jobs-returns-current-job-listings"
     "JOBS returns structured listings without writing to standard output."
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))

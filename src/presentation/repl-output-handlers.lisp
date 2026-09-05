@@ -38,9 +38,14 @@ wrapped line's other rows on screen as stale duplicates."
       ,@body)))
 
 (defmacro %set-command-failure-state (exit-code)
-  `(setf *last-exit-code* ,exit-code
-         *last-command-duration-ms* nil
-         *input-state* (make-repl-input-state)))
+  `(progn
+     (setf *last-exit-code* ,exit-code
+           *last-command-duration-ms* nil
+           *input-state* (make-repl-input-state))
+     (dolist (name '("?" "status"))
+       (setf *environment*
+             (nshell.domain.environment:env-set
+              (ensure-environment) name (princ-to-string *last-exit-code*) nil)))))
 
 (defun %elapsed-command-duration-ms (start-time end-time)
   (max 0
@@ -129,6 +134,11 @@ wrapped line's other rows on screen as stale duplicates."
                   (%execute-parse-error result))
                  (:incomplete
                   (%execute-incomplete-command result))))))
+    (nshell.infrastructure.terminal:terminal-mode-operation-failed (condition)
+      (format *error-output* "~%nshell: ~a~%" condition)
+      (%set-command-failure-state 1)
+      (setf *running* nil)
+      nil)
     (error (condition)
            (with-reset-rendered-prompt-state-and-prompt-cont
             (format t "~%nshell error: ~a~%" condition)

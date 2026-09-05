@@ -9,11 +9,6 @@ limit, and a string literal cannot be broken across source lines without
 changing its value.")
 
 (describe "nshell-tests"
-  (it "smoke-test"
-    "Basic sanity check that the test framework and project are loaded correctly."
-    (expect 1 :to-equal 1)
-    (expect "nshell" :to-equal "nshell"))
-
   (it "main-cli-action"
     "The command-line feature should classify flags, commands, and invalid inputs."
     (labels ((parse (args)
@@ -115,15 +110,16 @@ changing its value.")
         ((quote nshell::tty-p) (lambda () t))
       (with-temporary-function
           ((quote nshell.presentation:run-repl)
-           (lambda () (setf repl-called t)))
-        (expect 0 :to-equal (nshell::%run-default-invocation))))
+           (lambda () (setf repl-called t) 43))
+        (expect 43 :to-equal (nshell::%run-default-invocation))))
     (expect repl-called :to-be-truthy))
   (let ((repl-call nil))
     (with-temporary-function
         ((quote nshell.presentation:run-repl)
          (lambda (&rest arguments)
-           (setf repl-call arguments)))
-      (expect 0 :to-equal
+           (setf repl-call arguments)
+           1))
+      (expect 1 :to-equal
               (nshell::%run-default-invocation
                :interactive-p t
                :load-config-p nil

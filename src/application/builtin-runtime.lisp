@@ -1,7 +1,6 @@
 ; Builtin registry, path resolution, and command dispatch.
 (in-package #:nshell.application)
 
-
 (defvar *builtin-registry* (make-hash-table :test #'equal)
   "Registry mapping builtin command names to handler functions.")
 
@@ -62,8 +61,10 @@
              (write-string (princ-to-string item) out))))
 
 (defun %run-external-command-in-context (context command args)
-  (declare (ignore context))
-  (nshell.infrastructure.acl:run-external-capture command args))
+  (if *foreground-terminal-runner*
+      (funcall *foreground-terminal-runner*
+               (lambda () (%run-terminal-command context command args)))
+      (nshell.infrastructure.acl:run-external-capture command args)))
 
 (defun %resolve-command-path-candidates (context command)
   (let* ((filesystem (shell-context-filesystem context))

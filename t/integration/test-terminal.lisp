@@ -248,24 +248,27 @@ never undone leaves SGR mouse reporting on in the user's next shell."
       (expect 1 :to-equal code)))
 
   (it "a-successful-install-runs-the-editor-and-restores-afterwards"
-    "The paired case: install succeeds, the editor runs, restoration still runs
-on the way out, and the session reports success."
-    (let ((restored nil) (edited nil) (code nil))
-      (with-temporary-functions
-          (('nshell.presentation::initialize-repl-state
-            (lambda (&rest ignored)
-              (declare (ignore ignored))
-              nil))
-           ('nshell.presentation::install-interactive-terminal (lambda () t))
-           ('nshell.presentation::restore-interactive-terminal
-            (lambda () (setf restored t)))
-           ('nshell.presentation:trampoline
-            (lambda (thunk) (declare (ignore thunk)) (setf edited t))))
-        (with-output-to-string (*standard-output*)
-          (setf code (nshell.presentation:run-repl))))
-      (expect edited :to-be-truthy)
-      (expect restored :to-be-truthy)
-      (expect 0 :to-equal code))))
+    (dolist (exit-code '(0 23))
+      (let ((restored nil) (edited nil) (code nil)
+            (nshell.presentation::*last-exit-code* 0))
+        (with-temporary-functions
+            (('nshell.presentation::initialize-repl-state
+              (lambda (&rest ignored)
+                (declare (ignore ignored))
+                nil))
+             ('nshell.presentation::install-interactive-terminal (lambda () t))
+             ('nshell.presentation::restore-interactive-terminal
+              (lambda () (setf restored t)))
+             ('nshell.presentation:trampoline
+              (lambda (thunk)
+                (declare (ignore thunk))
+                (setf edited t
+                      nshell.presentation::*last-exit-code* exit-code))))
+          (with-output-to-string (*standard-output*)
+            (setf code (nshell.presentation:run-repl))))
+        (expect edited :to-be-truthy)
+        (expect restored :to-be-truthy)
+        (expect exit-code :to-equal code)))))
 (describe "terminal-lifecycle-seam-tests"
   (it "installs-and-restores-terminal-through-boundary-calls"
     (let ((calls nil)

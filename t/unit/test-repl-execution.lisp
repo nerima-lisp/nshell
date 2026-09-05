@@ -1,6 +1,109 @@
 (in-package #:nshell/test)
 
+(defclass repl-interactive-test-stream
+    (sb-gray:fundamental-character-input-stream
+     sb-gray:fundamental-character-output-stream) ())
+
+(defmethod interactive-stream-p ((stream repl-interactive-test-stream)) t)
+(defmethod sb-gray:stream-write-char ((stream repl-interactive-test-stream) character)
+  character)
+
 (describe "repl-tests"
+  (it "repl-installed-terminal-controls-actual-runner-lifecycle"
+    (dolist (scenario '(:success :install-failure :execution-failure))
+      (with-repl-test-state
+        (let* ((stream (make-instance 'repl-interactive-test-stream))
+               (*standard-input* stream) (*standard-output* stream)
+               (selected nil) (called nil) (restored nil) (caught nil) (code nil))
+          (expect (interactive-stream-p stream) :to-be-truthy)
+          (with-temporary-functions
+              (('nshell.presentation::initialize-repl-state
+                (lambda (&rest ignored) (declare (ignore ignored))))
+               ('nshell.presentation::install-interactive-terminal
+                (lambda () (not (eq scenario :install-failure))))
+               ('nshell.presentation::restore-interactive-terminal
+                (lambda () (setf restored t)))
+               ('nshell.presentation::%call-with-cooked-terminal
+                (lambda (thunk) (setf called t) (funcall thunk)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda ()
+                  (nshell.presentation::%execute-with-repl-shell-context
+                   (lambda (context)
+                     (declare (ignore context))
+                     (setf selected nshell.application::*foreground-terminal-runner*)
+                     (when selected (funcall selected (lambda () nil)))
+                     (when (eq scenario :execution-failure)
+                       (error "injected execution failure"))
+                     (values nil 0)))
+                  nil)))
+            (handler-case (setf code (nshell.presentation:run-repl))
+              (error () (setf caught t))))
+          (expect (not (null selected)) :to-equal (not (eq scenario :install-failure)))
+          (expect called :to-equal (not (eq scenario :install-failure)))
+          (expect restored :to-be-truthy)
+          (expect caught :to-equal (eq scenario :execution-failure))
+          (unless caught
+            (expect code :to-equal (if (eq scenario :install-failure) 1 0)))
+          (expect nshell.presentation::*interactive-terminal-installed-p* :to-be-falsy)))))
+
+  (it "repl-failure-status-is-observed-by-next-command"
+    (dolist (failure '(:parse :runtime))
+      (with-repl-test-state
+        (let ((nshell.presentation::*history-persistence-enabled-p* nil))
+          (capture-standard-output
+            (nshell.presentation::%execute-command-line "true")
+            (ecase failure
+              (:parse
+               (let ((*error-output* *standard-output*))
+                 (nshell.presentation::%execute-command-line "case vanilla")))
+              (:runtime
+               (with-temporary-function
+                   ('nshell.presentation::execute-ast
+                    (lambda (ast) (declare (ignore ast)) (error "execution failed")))
+                 (nshell.presentation::%execute-command-line "true")))))
+          (expect (format nil "status:<~D,~D>" (if (eq failure :parse) 2 1)
+                          (if (eq failure :parse) 2 1))
+                  :to-equal
+                  (string-trim '(#\Newline #\Return)
+                               (capture-standard-output
+                                 (nshell.presentation::%execute-command-line
+                                  "printf 'status:<%s,%s>' $status $?"))))))))
+
+  (it "repl-raw-reentry-failure-stops-editor-and-restores"
+    (with-repl-test-state
+      (let ((restored nil) (reentered nil) (continued nil) (code nil)
+            (nshell.presentation::*history-persistence-enabled-p* nil))
+        (with-temporary-functions
+            (('nshell.presentation::initialize-repl-state
+              (lambda (&rest ignored) (declare (ignore ignored))))
+             ('nshell.presentation::install-interactive-terminal (lambda () t))
+             ('nshell.presentation::restore-interactive-terminal
+              (lambda () (setf restored t)))
+             ('nshell.infrastructure.terminal:restore-terminal-mode (lambda (&optional fd) (declare (ignore fd))))
+             ('nshell.infrastructure.terminal:enable-raw-mode
+              (lambda (&optional fd)
+                (declare (ignore fd))
+                (setf reentered t)
+                (error 'nshell.infrastructure.terminal:terminal-mode-operation-failed
+                       :operation :enable :fd 0 :reason "injected reentry failure")))
+             ('nshell.presentation::execute-ast
+              (lambda (ast)
+                (declare (ignore ast))
+                (nshell.presentation::%call-with-cooked-terminal (lambda () 0))))
+             ('nshell.presentation::render-prompt-cont
+              (lambda ()
+                (let ((next (nshell.presentation::%execute-command-line "true")))
+                  (when next (setf continued t)))
+                nil)))
+          (capture-standard-output
+            (let ((*error-output* *standard-output*))
+              (setf code (nshell.presentation:run-repl)))))
+        (expect reentered :to-be-truthy)
+        (expect continued :to-be-falsy)
+        (expect restored :to-be-truthy)
+        (expect nshell.presentation::*running* :to-be-falsy)
+        (expect 1 :to-equal code))))
+
   (it "repl-state-table-factories-use-their-declared-key-semantics"
     "Name tables compare string keys by content while process tables compare job ids by identity."
     (let ((name-table (nshell.presentation::%make-repl-name-table))

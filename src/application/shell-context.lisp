@@ -5,6 +5,8 @@
 ;;; receive the context instead of constructing dependencies themselves.
 (in-package #:nshell.application)
 
+(defvar *foreground-terminal-runner* nil)
+
 (defstruct (shell-context
             (:constructor %allocate-shell-context
                 (&key history config knowledge-base environment filesystem

@@ -66,14 +66,16 @@ hand the user's next shell a terminal with SGR mouse reporting still on."
    :config-path config-path
    :history-p history-p)
   (unwind-protect
-      (if (install-interactive-terminal)
+      (if (setf *interactive-terminal-installed-p*
+                (install-interactive-terminal))
           (progn
             (with-cps-trampoline (render-prompt-cont))
-            0)
+            *last-exit-code*)
           ;; Raw mode is a precondition for the line editor and could not be
           ;; entered; INSTALL-INTERACTIVE-TERMINAL has already said so on
           ;; stderr. Running the editor against a cooked terminal anyway is the
           ;; one outcome worth avoiding, so end the session instead.
           1)
+    (setf *interactive-terminal-installed-p* nil)
     (restore-interactive-terminal)
     (format t "Goodbye!~%")))

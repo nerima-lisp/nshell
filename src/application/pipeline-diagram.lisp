@@ -1,17 +1,3 @@
-;;; Dataflow diagnostics: render shell pipelines and the job lifecycle through
-;;; cl-dataflow-kit.
-;;;
-;;; nshell already models a pipeline as a linear PIPELINE-PLAN and a job as a
-;;; small state machine embedded in the monitor.  cl-dataflow-kit provides a
-;;; general computation-graph and state-machine toolkit with structural
-;;; validation and deterministic DOT/Mermaid export.  This module bridges the
-;;; two: it translates a pipeline plan into a cl-dataflow-kit graph (gaining free
-;;; acyclicity/wiring validation and visualization) and describes the job
-;;; lifecycle as a cl-dataflow-kit state machine for analysis and diagrams.
-;;;
-;;; Everything here is additive and read-only — no existing execution or job
-;;; path is altered.  The job-lifecycle machine is a *specification*, not a
-;;; runtime enforcer: nshell's own JOB-STATE-TRANSITION remains authoritative.
 (in-package #:nshell.application)
 
 ;;; --- Pipeline plan -> cl-dataflow-kit graph --------------------------------
@@ -83,36 +69,6 @@ Returns NIL for input that is not a plain command or `|`-pipeline."
     (:incomplete nil)
     (:error nil)
     (:empty nil)))
-
-;;; --- Job lifecycle -> cl-dataflow-kit state machine ------------------------
-;;;
-;;; States and events mirror nshell's job model (job.lisp / monitor.lisp).
-;;; cl-dataflow-kit normalizes keyword states/events to upcased strings and matches
-;;; case-insensitively, so nshell's own keywords pass straight through.
-
-(defun job-lifecycle-machine ()
-  "A cl-dataflow-kit state machine describing the nshell job lifecycle.
-Transitions correspond to the monitor's real state changes plus the terminal
-reap step (:completed -> :done)."
-  (cl-dataflow-kit:define-state-machine (:initial-state :created)
-    (:created    :start      :running)
-    (:running    :stop       :stopped)
-    (:stopped    :continue   :running)
-    (:running    :background :background)
-    (:background :foreground :running)
-    (:stopped    :foreground :running)
-    (:running    :exit       :completed)
-    (:stopped    :exit       :completed)
-    (:background :exit       :completed)
-    (:completed  :reap       :done)))
-
-(defun job-lifecycle-analysis ()
-  "Return a plist summarizing the job lifecycle machine's structure."
-  (let ((machine (job-lifecycle-machine)))
-    (list :states (cl-dataflow-kit:state-machine-states machine)
-          :terminal (cl-dataflow-kit:state-machine-terminal-states machine)
-          :unreachable (cl-dataflow-kit:state-machine-unreachable-states machine)
-          :deterministic (cl-dataflow-kit:state-machine-deterministic-p machine))))
 
 ;;; --- `pipeline-graph` builtin ------------------------------------------
 

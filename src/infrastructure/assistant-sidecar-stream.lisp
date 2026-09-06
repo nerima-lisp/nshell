@@ -65,6 +65,7 @@
                (when (eq kind :result)
                  (%assistant-sidecar-complete pending)))))
           (:eof
+           (%assistant-sidecar-mark-dead state :reader-eof)
            (when pending
              (%assistant-sidecar-publish
               pending
@@ -75,6 +76,7 @@
              (%assistant-sidecar-complete pending))
            (return))
           (otherwise
+           (%assistant-sidecar-mark-dead state (list :reader-error message))
            (when pending
              (%assistant-sidecar-publish
               pending
@@ -95,6 +97,7 @@
               (finish-output stream))
             (error "assistant sidecar input stream is unavailable")))
     (error (condition)
+      (%assistant-sidecar-mark-dead state (list :writer-error (princ-to-string condition)))
       (let ((pending (%assistant-sidecar-current-pending state)))
         (when (and pending
                    (eql (assistant-write-item-generation item)
@@ -151,12 +154,16 @@
           (assistant-sidecar-state-reader-thread state) nil
           (assistant-sidecar-state-writer-thread state) nil
           (assistant-sidecar-state-error-thread state) nil
+          (assistant-sidecar-state-dead-p state) nil
+          (assistant-sidecar-state-dead-reason state) nil
           (assistant-sidecar-state-pending state) nil
           (assistant-sidecar-state-write-channel state) nil)
   t))
 
 (defun %assistant-sidecar-start (state)
   (if (and (assistant-sidecar-state-handle state)
+           (assistant-sidecar-state-init-p state)
+           (not (assistant-sidecar-state-dead-p state))
            (nshell.infrastructure.acl:sidecar-alive-p
             (assistant-sidecar-state-handle state)))
       t
@@ -191,6 +198,8 @@
                              (cl-concurrent-kit:make-channel :buffer-size 8)))
                       (setf (assistant-sidecar-state-handle state) handle
                             (assistant-sidecar-state-version state) version
+                            (assistant-sidecar-state-dead-p state) nil
+                            (assistant-sidecar-state-dead-reason state) nil
                             (assistant-sidecar-state-pending state) pending
                             (assistant-sidecar-state-write-channel state)
                               write-channel
@@ -237,12 +246,17 @@
                               nil)))))))))))
 
 (defun %assistant-sidecar-request (state generation payload)
+  (unless (and (assistant-sidecar-state-handle state)
+               (assistant-sidecar-state-init-p state)
+               (not (%assistant-sidecar-dead-p state)))
+    (unless (%assistant-sidecar-start state)
+      (return-from %assistant-sidecar-request nil)))
   (let ((handle (assistant-sidecar-state-handle state))
         (pending (%assistant-sidecar-current-pending state))
         (channel (assistant-sidecar-state-write-channel state)))
     (if (and handle
              (assistant-sidecar-state-init-p state)
-             (nshell.infrastructure.acl:sidecar-alive-p handle)
+             (not (%assistant-sidecar-dead-p state))
              (null pending)
              channel)
         (handler-case

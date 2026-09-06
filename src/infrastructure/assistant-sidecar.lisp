@@ -12,6 +12,8 @@
   reader-thread
   writer-thread
   error-thread
+  dead-p
+  dead-reason
   pending
   write-channel)
 

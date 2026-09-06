@@ -8,7 +8,7 @@
 (defun %assistant-stop-sidecar (handle)
   (funcall (symbol-function 'nshell.infrastructure.acl:stop-sidecar) handle))
 
-(defun %assistant-test-sidecar-script ()
+(defun %assistant-test-sidecar-script (&optional one-shot-p)
   (let ((path (merge-pathnames
                (format nil "nshell-assistant-sidecar-~D.sh" (get-universal-time))
                (uiop:temporary-directory))))
@@ -23,9 +23,11 @@
                   "while IFS= read -r line"
                   "do"
                   "  printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}'"
-                  "  printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"structured_output\":{\"command\":\"pwd\",\"reason\":\"fixture\",\"risk\":\"low\"}}'"
-                  "done"))
-        (write-line line stream)))
+                  "  printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"structured_output\":{\"command\":\"pwd\",\"reason\":\"fixture\",\"risk\":\"low\"}}'"))
+        (write-line line stream))
+      (when one-shot-p
+        (write-line "  exit 0" stream))
+      (write-line "done" stream))
     (sb-posix:chmod (namestring path) #o700)
     path))
 
@@ -178,3 +180,55 @@
                       (nshell.feature.assistant:assistant-model-stop))))
         (when (probe-file script)
           (delete-file script)))))
+
+  (it "respawns-sidecar-after-reader-detects-process-death"
+    (let ((script (%assistant-test-sidecar-script t)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary))
+                  (start (nshell.feature.assistant:assistant-model-start)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status start))
+             (flet ((await-result (generation)
+                      (let ((request
+                              (nshell.feature.assistant:assistant-model-request
+                               generation '(("message" . "hello")))))
+                        (expect :ok :to-be
+                                (nshell.feature.assistant:assistant-boundary-status
+                                 request)))
+                      (let ((result nil))
+                        (loop repeat 100
+                              until result
+                              do (let ((polled
+                                         (nshell.feature.assistant:assistant-model-poll
+                                          generation)))
+                                   (when (eq :event
+                                             (nshell.feature.assistant:assistant-boundary-status
+                                              polled))
+                                     (let ((event
+                                             (nshell.feature.assistant:assistant-boundary-value
+                                              polled)))
+                                       (when (eq :result
+                                                 (nshell.feature.assistant:assistant-model-event-kind
+                                                  event))
+                                         (setf result event))))
+                                   (unless result
+                                     (sleep 0.01))))
+                        (expect :result :to-be
+                                (nshell.feature.assistant:assistant-model-event-kind
+                                 result))
+                        (expect generation :to-be
+                                (nshell.feature.assistant:assistant-model-event-generation
+                                 result)))))
+               (await-result 1)
+               (sleep 0.1)
+               (await-result 2)
+               (expect :ok :to-be
+                       (nshell.feature.assistant:assistant-boundary-status
+                        (nshell.feature.assistant:assistant-model-stop))))
+        (when (probe-file script)
+          (delete-file script))))))

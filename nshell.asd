@@ -61,9 +61,10 @@
    (:module "feature-assistant"
     :pathname "../packages/feature/assistant/src"
     :serial t
-    :components ((:file "package")
-                 (:file "feature")
-                 (:file "domain/layer")
+   :components ((:file "package")
+                (:file "feature")
+                (:file "domain/layer")
+                 (:file "domain/safety")
                  (:file "application/layer")
                  (:file "infrastructure/layer")
                  (:file "presentation/layer")))
@@ -368,6 +369,7 @@
                (:file "support/history")
                (:file "support/matchers")
    (:file "unit/test-package-by-feature")
+   (:file "unit/test-assistant-safety")
    (:file "unit/test-signals")
    (:file "unit/test-execution-domain")
    (:file "unit/test-last-argument")

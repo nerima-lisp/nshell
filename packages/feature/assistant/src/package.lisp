@@ -6,6 +6,24 @@
   (defpackage #:nshell.feature.assistant
     (:documentation
      "The assistant feature's public boundary.
-The initial vertical slice provides only layer markers; later components extend
-this package with assistant use cases and boundaries.")
-    (:use #:cl)))
+The domain values and infrastructure boundaries live here so later layers can
+depend on one stable feature package.")
+    (:use #:cl)
+    (:export
+     #:assistant-safety-rule
+     #:assistant-safety-rule-p
+     #:assistant-safety-rule-name
+     #:assistant-safety-rule-classification
+     #:assistant-safety-rule-command
+     #:assistant-safety-rule-condition
+     #:assistant-safety-rule-reason
+     #:+assistant-safety-rules+
+     #:assistant-safety-result
+     #:assistant-safety-result-p
+     #:assistant-safety-result-classification
+     #:assistant-safety-result-reason
+     #:assistant-safety-result-command
+     #:assistant-safety-result-rule-name
+     #:classify-command
+     #:classify-pipeline
+     #:classify-ast)))

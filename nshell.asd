@@ -61,7 +61,7 @@
    (:module "feature-assistant"
     :pathname "../packages/feature/assistant/src"
     :serial t
-   :components ((:file "package")
+    :components ((:file "package")
                  (:file "feature")
                  (:file "domain/layer")
                  (:file "domain/safety")

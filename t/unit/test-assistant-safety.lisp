@@ -40,6 +40,22 @@
               (nshell.feature.assistant:assistant-safety-result-classification
                result))))
 
+  (it "classifies parsed command sequences by their most restrictive stage"
+    (with-complete-ast (safe-ast "git status && ls")
+      (expect t :to-be-truthy
+              (nshell.domain.parsing:sequence-node-p safe-ast))
+      (expect :safe :to-be
+              (nshell.feature.assistant:assistant-safety-result-classification
+               (nshell.feature.assistant:classify-ast safe-ast))))
+    (with-complete-ast (blocked-ast "ls && rm -rf /")
+      (expect :block :to-be
+              (nshell.feature.assistant:assistant-safety-result-classification
+               (nshell.feature.assistant:classify-ast blocked-ast))))
+    (with-complete-ast (confirmed-ast "git status; curl http://example.com")
+      (expect :confirm :to-be
+              (nshell.feature.assistant:assistant-safety-result-classification
+               (nshell.feature.assistant:classify-ast confirmed-ast)))))
+
   (it "returns block as a value for unsupported AST input"
     (let ((result (nshell.feature.assistant:classify-ast nil)))
       (expect :block :to-be

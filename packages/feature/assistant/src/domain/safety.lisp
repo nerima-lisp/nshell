@@ -133,33 +133,46 @@
     (:block 2)
     (otherwise 2)))
 
+(defun %assistant-most-restrictive-result (results)
+  (if results
+      (reduce (lambda (left right)
+                (if (> (%assistant-classification-rank
+                       (assistant-safety-result-classification right))
+                       (%assistant-classification-rank
+                        (assistant-safety-result-classification left)))
+                    right
+                    left))
+              results)
+      (make-assistant-safety-result
+       :classification :block
+       :reason "an empty compound command cannot be classified safely")))
+
 (defun classify-pipeline (node)
   "Classify a pipeline by its most restrictive stage."
   (if (nshell.domain.parsing:pipeline-node-p node)
-      (let ((results
-              (mapcar #'classify-ast
-                      (nshell.domain.parsing:pipeline-node-commands node))))
-        (if results
-            (reduce (lambda (left right)
-                      (if (> (%assistant-classification-rank
-                             (assistant-safety-result-classification right))
-                             (%assistant-classification-rank
-                              (assistant-safety-result-classification left)))
-                          right
-                          left))
-                    results)
-            (make-assistant-safety-result
-             :classification :block
-             :reason "an empty pipeline cannot be classified safely")))
+      (%assistant-most-restrictive-result
+       (mapcar #'classify-ast
+               (nshell.domain.parsing:pipeline-node-commands node)))
       (make-assistant-safety-result
        :classification :block
        :reason "the value is not a pipeline AST node")))
 
+(defun %assistant-classify-sequence (node)
+  (if (nshell.domain.parsing:sequence-node-p node)
+      (%assistant-most-restrictive-result
+       (mapcar #'classify-ast
+               (nshell.domain.parsing:sequence-node-commands node)))
+      (make-assistant-safety-result
+       :classification :block
+       :reason "the value is not a sequence AST node")))
+
 (defun classify-ast (node)
-  "Classify a command or pipeline AST value without inspecting raw text."
+  "Classify a shell AST value without inspecting raw text."
   (cond
     ((nshell.domain.parsing:command-node-p node) (classify-command node))
     ((nshell.domain.parsing:pipeline-node-p node) (classify-pipeline node))
+    ((nshell.domain.parsing:sequence-node-p node)
+     (%assistant-classify-sequence node))
     (t (make-assistant-safety-result
         :classification :block
         :reason "unsupported AST node"))))

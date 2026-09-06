@@ -21,6 +21,14 @@
                                            "packages/feature/command-line/src/")
               :to-be-truthy)))
 
+  (it "stores the assistant four-layer vertical slice under packages/feature"
+    (let ((root (asdf:system-source-directory :nshell)))
+      (dolist (layer '("packages/feature/assistant/src/domain/"
+                       "packages/feature/assistant/src/application/"
+                       "packages/feature/assistant/src/infrastructure/"
+                       "packages/feature/assistant/src/presentation/"))
+        (expect (%package-directory-present-p root layer) :to-be-truthy))))
+
   (it "keeps all three requested test tiers addressable"
     (let ((root (asdf:system-source-directory :nshell)))
       (dolist (tier '("t/unit/" "t/integration/" "t/e2e/"))

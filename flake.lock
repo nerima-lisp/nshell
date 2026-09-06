@@ -136,6 +136,23 @@
         "type": "github"
       }
     },
+    "cl-json-kit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785923850,
+        "narHash": "sha256-0TBp7mlj0VF2krHZ83tsBtMKoiI38kpm8n56B/Ie37k=",
+        "owner": "nerima-lisp",
+        "repo": "cl-json-kit",
+        "rev": "dace990f643d1dd07639ce57a2559c5143850cce",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nerima-lisp",
+        "ref": "v1.2.0",
+        "repo": "cl-json-kit",
+        "type": "github"
+      }
+    },
     "cl-log-kit": {
       "flake": false,
       "locked": {
@@ -518,6 +535,7 @@
         "cl-date-kit": "cl-date-kit",
         "cl-history-kit": "cl-history-kit",
         "cl-host-kit": "cl-host-kit",
+        "cl-json-kit": "cl-json-kit",
         "cl-log-kit": "cl-log-kit",
         "cl-nix-forge": "cl-nix-forge",
         "cl-parser-kit": "cl-parser-kit",

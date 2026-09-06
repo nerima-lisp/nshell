@@ -32,7 +32,8 @@
                "cl-tty-kit"
                "cl-process-kit"
                "cl-history-kit"
-               "cl-concurrent-kit")
+               "cl-concurrent-kit"
+               "cl-json-kit")
   :pathname "src"
   :serial t
   :components
@@ -57,6 +58,15 @@
                  (:file "domain/options")
                  (:file "application/contract")
                  (:file "presentation/help")))
+   (:module "feature-assistant"
+    :pathname "../packages/feature/assistant/src"
+    :serial t
+    :components ((:file "package")
+                 (:file "feature")
+                 (:file "domain/layer")
+                 (:file "application/layer")
+                 (:file "infrastructure/layer")
+                 (:file "presentation/layer")))
    (:file "util/struct-macros")
    (:file "util/strings")
    (:file "domain/signals/signal")

@@ -43,4 +43,7 @@ depend on one stable feature package.")
      #:assistant-context-environment-names
      #:make-assistant-context
      #:assistant-context-payload
-     #:assemble-assistant-context)))
+     #:assemble-assistant-context
+     #:*assistant-audit-file-path-override*
+     #:assistant-audit-file-path
+     #:append-assistant-audit-entry)))

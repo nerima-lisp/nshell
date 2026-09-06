@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","tools":[],"mcp_servers":[],"model":"fixture","claude_code_version":"fixture"}
+{"type":"assistant","message":{"type":"message","role":"assistant","content":[{"type":"text","text":"partial fixture response"}]}}

@@ -46,4 +46,26 @@ depend on one stable feature package.")
      #:assemble-assistant-context
      #:*assistant-audit-file-path-override*
      #:assistant-audit-file-path
-     #:append-assistant-audit-entry)))
+     #:append-assistant-audit-entry
+     #:*assistant-boundaries*
+     #:make-assistant-boundary-context
+     #:assistant-model-boundary
+     #:assistant-model-boundary-p
+     #:make-assistant-model-boundary
+     #:assistant-boundary-start
+     #:assistant-boundary-request
+     #:assistant-boundary-poll
+     #:assistant-boundary-stop
+     #:assistant-boundary-status
+     #:assistant-boundary-value
+     #:assistant-boundary-message
+     #:assistant-model-start
+     #:assistant-model-request
+     #:assistant-model-poll
+     #:assistant-model-stop
+     #:assistant-model-event
+     #:assistant-model-event-p
+     #:assistant-model-event-generation
+     #:assistant-model-event-kind
+     #:assistant-model-event-payload
+     #:make-assistant-fixture-boundary)))

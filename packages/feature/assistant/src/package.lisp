@@ -30,4 +30,17 @@ depend on one stable feature package.")
      #:+assistant-redacted-token+
      #:redact-text
      #:redact-lines
-     #:redact-payload)))
+     #:redact-payload
+     #:+assistant-default-output-max-bytes+
+     #:assistant-context
+     #:assistant-context-p
+     #:assistant-context-command
+     #:assistant-context-exit
+     #:assistant-context-duration-ms
+     #:assistant-context-cwd
+     #:assistant-context-git-status
+     #:assistant-context-last-output
+     #:assistant-context-environment-names
+     #:make-assistant-context
+     #:assistant-context-payload
+     #:assemble-assistant-context)))

@@ -15,11 +15,12 @@ shift, and ternary operators; brace expansion; command substitution
 `$(...)`/`(...)`; fd redirections `2>`, `2>&1`, `&>`; here-docs `<<`;
 here-strings `<<<`; and function arguments via `$argv` / `$argv[N]`.
 
-**Job control verification** — foreground external commands and pipelines
-support `Ctrl-Z` suspension, `bg` resumption, `fg` terminal handoff, and
-`Ctrl-C` interruption. Directly launched terminal commands use a job-aware
-wait instead of the synchronous capture wait that previously prevented
-suspension. Release evidence on `x86_64-linux` remains outstanding.
+**Job control verification** — local non-sandboxed integration now covers
+foreground external commands and pipelines with `Ctrl-Z` suspension, `bg`
+resumption, `fg` terminal handoff, and `Ctrl-C` interruption. Directly
+launched terminal commands use a job-aware wait instead of the synchronous
+capture wait that previously prevented suspension. Release evidence on
+`x86_64-linux` remains outstanding.
 
 **Command discovery** — extend help-text-driven discovery to cover more
 subcommands and non-curated external tools.

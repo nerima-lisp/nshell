@@ -8,34 +8,35 @@
   started-p
   stopped-p)
 
-(defun %assistant-json-field (object key)
-  (cdr (assoc key object :test #'string=)))
-
 (defun %assistant-event-kind (object)
-  (let ((type (%assistant-json-field object "type"))
-        (subtype (%assistant-json-field object "subtype")))
+  (let ((type (%assistant-object-field object "type"))
+        (subtype (%assistant-object-field object "subtype")))
     (cond
-      ((and (string= type "system") (string= subtype "init")) :system-init)
-      ((string= type "assistant") :assistant)
-      ((string= type "rate_limit_event") :rate-limit-event)
-      ((string= type "result") :result)
+      ((and (equal type "system") (equal subtype "init")) :system-init)
+      ((equal type "assistant") :assistant)
+      ((equal type "rate_limit_event") :rate-limit-event)
+      ((equal type "result") :result)
       (t :unknown))))
 
 (defun %assistant-read-json-value (stream)
-  (handler-case
-      (values (json-kit:read-json stream
-                                  :object-type :alist
-                                  :array-type :list)
-              :value
-              nil)
-    (json-kit:json-parse-error (condition)
-      (let ((text (json-kit:json-parse-error-text condition)))
-        (if (zerop (length (string-trim '(#\Space #\Tab #\Newline #\Return)
-                                        (or text ""))))
-            (values nil :eof nil)
-            (values nil :error (princ-to-string condition)))))
-    (error (condition)
-      (values nil :error (princ-to-string condition)))))
+  (let ((first-char
+          (loop for char = (read-char stream nil :eof)
+                do (cond
+                     ((eq char :eof) (return :eof))
+                     ((find char '(#\Space #\Tab #\Newline #\Return)
+                            :test #'char=))
+                     (t (unread-char char stream)
+                        (return char))))))
+    (if (eq first-char :eof)
+        (values nil :eof nil)
+        (handler-case
+            (values (json-kit:read-json stream
+                                        :object-type :alist
+                                        :array-type :list)
+                    :value
+                    nil)
+          (error (condition)
+            (values nil :error (princ-to-string condition)))))))
 
 (defun %assistant-load-fixture (path)
   (handler-case

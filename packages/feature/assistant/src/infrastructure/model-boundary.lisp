@@ -16,6 +16,23 @@
   poll-fn
   stop-fn)
 
+(defun %assistant-object-field (object key)
+  (cdr (assoc key object :test #'string=)))
+
+(defun %assistant-object-member (object key)
+  (assoc key object :test #'string=))
+
+(defun assistant-system-init-safe-p (payload)
+  (and (listp payload)
+       (let ((tools (%assistant-object-member payload "tools"))
+             (mcp-servers (%assistant-object-member payload "mcp_servers")))
+         (and (equal "system" (%assistant-object-field payload "type"))
+              (equal "init" (%assistant-object-field payload "subtype"))
+              tools
+              mcp-servers
+              (null (cdr tools))
+              (null (cdr mcp-servers))))))
+
 (defun make-assistant-boundary-context (&optional model-boundary)
   (cl-boundary-kit:make-boundary-context :model model-boundary))
 
@@ -69,10 +86,20 @@
    arguments))
 
 (defun assistant-boundary-poll (boundary &rest arguments)
-  (%call-assistant-boundary
-   (and (assistant-model-boundary-p boundary)
-        (assistant-model-boundary-poll-fn boundary))
-   arguments))
+  (let ((function (and (assistant-model-boundary-p boundary)
+                       (assistant-model-boundary-poll-fn boundary))))
+    (if (functionp function)
+        (handler-case
+            (multiple-value-bind (event present-p)
+                (apply function arguments)
+              (if present-p
+                  (%assistant-boundary-result :event :value event)
+                  (%assistant-boundary-result :empty)))
+          (error (condition)
+            (%assistant-boundary-result :error
+                                       :message (princ-to-string condition))))
+        (%assistant-boundary-result :unavailable
+                                   :message "assistant model boundary is unavailable"))))
 
 (defun assistant-boundary-stop (boundary &rest arguments)
   (%call-assistant-boundary

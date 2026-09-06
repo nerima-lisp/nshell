@@ -2,8 +2,11 @@
 
 (defun %assistant-test-fixture-path (name)
   (merge-pathnames
-   (format nil "fixtures/assistant/~a.jsonl" name)
+   (format nil "t/fixtures/assistant/~a.jsonl" name)
    (asdf:system-source-directory (asdf:find-system "nshell/test"))))
+
+(defun %assistant-stop-sidecar (handle)
+  (funcall (symbol-function 'nshell.infrastructure.acl:stop-sidecar) handle))
 
 (describe "assistant-model-boundary-contracts"
   (it "replays-a-sanitized-stream-json-fixture-through-the-injected-boundary"
@@ -44,7 +47,9 @@
                   (nshell.feature.assistant:assistant-model-event-generation result))
           (expect "pwd" :to-equal
                   (cdr (assoc "command"
-                              (nshell.feature.assistant:assistant-model-event-payload result)
+                              (cdr (assoc "structured_output"
+                                          (nshell.feature.assistant:assistant-model-event-payload result)
+                                          :test #'string=))
                               :test #'string=)))))))
 
   (it "marks-a-fixture-without-a-result-as-stream-ended"
@@ -66,3 +71,44 @@
                      (nshell.feature.assistant:assistant-boundary-value polled))
                     kinds))
           (expect :stream-ended :to-be (first kinds)))))))
+
+  (it "accepts-only-an-empty-tool-and-mcp-init"
+    (expect (nshell.feature.assistant:assistant-system-init-safe-p
+             '(("type" . "system")
+               ("subtype" . "init")
+               ("tools")
+               ("mcp_servers")))
+            :to-be-truthy)
+    (expect nil :to-be
+            (nshell.feature.assistant:assistant-system-init-safe-p
+             '(("type" . "system")
+               ("subtype" . "init")
+               ("tools" . ("shell"))
+               ("mcp_servers"))))
+    (expect nil :to-be
+            (nshell.feature.assistant:assistant-system-init-safe-p
+             '(("type" . "system") ("subtype" . "init")))))
+
+  (it "builds-a-sidecar-command-with-strict-mcp-isolation"
+    (let ((arguments (nshell.feature.assistant:assistant-sidecar-command-arguments)))
+      (expect (member "--strict-mcp-config" arguments :test #'string=)
+              :to-be-truthy)
+      (expect nil :to-be (member "--safe-mode" arguments :test #'string=))))
+
+  (it "starts-sidecar-in-its-own-group-without-shell-registration"
+    (let ((foreground-pgid nshell.infrastructure.acl::*foreground-pgid*)
+          (registry-count (hash-table-count nshell.presentation::*proc-registry*)))
+      (multiple-value-bind (handle status)
+          (nshell.infrastructure.acl:spawn-sidecar
+           "/bin/cat" nil :input :stream :output :stream :error :stream)
+        (unwind-protect
+             (progn
+               (expect :started :to-be status)
+               (let ((pid (nshell.infrastructure.acl:sidecar-handle-pgid handle)))
+                 (expect (plusp pid) :to-be-truthy)
+                 (expect pid :to-be (sb-posix:getpgid pid)))
+               (expect foreground-pgid :to-be nshell.infrastructure.acl::*foreground-pgid*)
+               (expect registry-count :to-be
+                       (hash-table-count nshell.presentation::*proc-registry*)))
+          (when handle
+            (%assistant-stop-sidecar handle))))))

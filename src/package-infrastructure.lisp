@@ -44,6 +44,12 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:*external-command-timeout*
             #:run-external #:run-external-capture #:run-external-exec
             #:process-exit-status-code
+            #:sidecar-handle #:sidecar-handle-p #:sidecar-handle-process
+            #:sidecar-handle-pgid #:sidecar-handle-input
+            #:sidecar-handle-output #:sidecar-handle-error
+            #:sidecar-handle-cleanup-state #:spawn-sidecar
+            #:run-sidecar-version #:stop-sidecar #:sidecar-alive-p
+            #:sidecar-exit-status
             #:with-git-runner #:clear-git-status-cache
             #:get-git-status))
 

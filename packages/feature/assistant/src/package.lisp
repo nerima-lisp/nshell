@@ -68,4 +68,7 @@ depend on one stable feature package.")
      #:assistant-model-event-generation
      #:assistant-model-event-kind
      #:assistant-model-event-payload
+     #:assistant-system-init-safe-p
+     #:make-assistant-sidecar-boundary
+     #:assistant-sidecar-command-arguments
      #:make-assistant-fixture-boundary)))

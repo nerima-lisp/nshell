@@ -221,6 +221,7 @@
    (:file "infrastructure/acl/syscall-process")
    (:file "infrastructure/acl/syscall-process-sidecar")
    (:file "infrastructure/assistant-sidecar")
+   (:file "infrastructure/assistant-sidecar-stream")
    (:file "infrastructure/acl/syscall-process-execution")
    (:file "infrastructure/acl/filesystem")
    (:file "infrastructure/acl/syscall-pipeline-streams")

@@ -24,7 +24,9 @@
         "--verbose"
         "--no-session-persistence"
         "--tools" ""
-        "--strict-mcp-config"))
+        "--strict-mcp-config"
+        "--append-system-prompt" (assistant-sidecar-system-prompt)
+        "--json-schema" (assistant-sidecar-json-schema)))
 
 (defun %assistant-sidecar-command (options)
   (or (getf options :command)

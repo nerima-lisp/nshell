@@ -116,6 +116,11 @@
     (let ((arguments (nshell.feature.assistant:assistant-sidecar-command-arguments)))
       (expect (member "--strict-mcp-config" arguments :test #'string=)
               :to-be-truthy)
+      (expect (not (null (member "--append-system-prompt" arguments
+                                 :test #'string=)))
+              :to-be t)
+      (expect (not (null (member "--json-schema" arguments :test #'string=)))
+              :to-be t)
       (expect nil :to-be (member "--safe-mode" arguments :test #'string=))))
 
   (it "starts-sidecar-in-its-own-group-without-shell-registration"

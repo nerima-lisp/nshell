@@ -220,6 +220,7 @@
    (:file "infrastructure/acl/syscall-process-io")
    (:file "infrastructure/acl/syscall-process")
    (:file "infrastructure/acl/syscall-process-sidecar")
+   (:file "infrastructure/assistant-sidecar-prompt")
    (:file "infrastructure/assistant-sidecar")
    (:file "infrastructure/assistant-sidecar-lifecycle")
    (:file "infrastructure/assistant-sidecar-stream")

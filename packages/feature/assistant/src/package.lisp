@@ -26,4 +26,8 @@ depend on one stable feature package.")
      #:assistant-safety-result-rule-name
      #:classify-command
      #:classify-pipeline
-     #:classify-ast)))
+     #:classify-ast
+     #:+assistant-redacted-token+
+     #:redact-text
+     #:redact-lines
+     #:redact-payload)))

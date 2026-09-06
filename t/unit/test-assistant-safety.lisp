@@ -22,6 +22,14 @@
       (expect :safe :to-be (classification (command "git" "status")))
       (expect :safe :to-be (classification (command "grep" "needle" "file")))))
 
+  (it "keeps root-recursive delete ahead of generic delete"
+    (let ((result
+            (nshell.feature.assistant:classify-ast
+             (nshell.domain.parsing:make-command-node "rm" '("-rf" "/")))))
+      (expect :block :to-be
+              (nshell.feature.assistant:assistant-safety-result-classification
+               result))))
+
   (it "uses the most restrictive stage in a pipeline"
     (let* ((safe (nshell.domain.parsing:make-command-node "ls" nil))
            (confirm (nshell.domain.parsing:make-command-node "rm" '("file")))

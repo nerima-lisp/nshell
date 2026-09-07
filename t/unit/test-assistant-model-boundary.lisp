@@ -130,6 +130,19 @@
             (nshell.feature.assistant:assistant-system-init-safe-p
              '(("type" . "system") ("subtype" . "init")))))
 
+  (it "reports-a-failure-status-when-start-or-request-returns-nil"
+    (let ((boundary (nshell.feature.assistant:make-assistant-model-boundary
+                     :start-fn (lambda () nil)
+                     :request-fn (lambda (generation payload) nil)
+                     :poll-fn (lambda (generation) (values nil nil))
+                     :stop-fn (lambda () t))))
+      (expect :unavailable :to-be
+              (nshell.feature.assistant:assistant-boundary-status
+               (nshell.feature.assistant:assistant-boundary-start boundary)))
+      (expect :unavailable :to-be
+              (nshell.feature.assistant:assistant-boundary-status
+               (nshell.feature.assistant:assistant-boundary-request boundary 1 nil)))))
+
   (it "builds-a-sidecar-command-with-strict-mcp-isolation"
     (let ((arguments (nshell.feature.assistant:assistant-sidecar-command-arguments)))
       (expect (member "--strict-mcp-config" arguments :test #'string=)

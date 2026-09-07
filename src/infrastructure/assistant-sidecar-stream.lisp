@@ -303,14 +303,21 @@
 (defun %assistant-sidecar-stop (state)
   (%assistant-sidecar-stop-state state))
 
+(defun %assistant-sidecar-outcome (ok state)
+  (values ok (unless ok (assistant-sidecar-state-disabled-reason state))))
+
 (defun make-assistant-sidecar-boundary (&rest options)
   (let ((state (%make-assistant-sidecar-state
                 (%assistant-sidecar-command options)
                 (%assistant-sidecar-arguments options))))
     (make-assistant-model-boundary
-     :start-fn (lambda () (%assistant-sidecar-start state))
+     :start-fn (lambda ()
+                 (%assistant-sidecar-outcome (%assistant-sidecar-start state)
+                                             state))
      :request-fn (lambda (generation payload)
-                   (%assistant-sidecar-request state generation payload))
+                   (%assistant-sidecar-outcome
+                    (%assistant-sidecar-request state generation payload)
+                    state))
      :poll-fn (lambda (generation)
                 (%assistant-sidecar-poll state generation))
      :stop-fn (lambda () (%assistant-sidecar-stop state)))))

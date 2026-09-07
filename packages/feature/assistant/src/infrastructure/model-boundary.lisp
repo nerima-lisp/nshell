@@ -68,8 +68,14 @@
 (defun %call-assistant-boundary (function arguments)
   (if (functionp function)
       (handler-case
-          (%assistant-boundary-result :ok
-                                     :value (apply function arguments))
+          (multiple-value-bind (value reason)
+              (apply function arguments)
+            (if value
+                (%assistant-boundary-result :ok :value value)
+                (%assistant-boundary-result
+                 :unavailable
+                 :message (or reason
+                              "assistant model boundary rejected the call"))))
         (error (condition)
           (%assistant-boundary-result :error
                                      :message (princ-to-string condition))))

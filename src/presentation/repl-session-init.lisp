@@ -67,6 +67,9 @@ entered during this session."
         *config* (nshell.domain.configuration:default-config)
         *kb* (nshell.domain.completion:make-empty-knowledge-base)
         *input-state* (make-repl-input-state)
+        *assistant-turn-generation* 0
+        *last-assistant-model-event* nil
+        *assistant-model-event-handler* nil
         *completion-rendered-lines* 0
         *prompt-rendered-lines* 0
         *prompt-rendered-cursor-row* 0

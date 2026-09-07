@@ -306,6 +306,7 @@
    (:file "presentation/repl-output")
 	   (:file "presentation/repl-session")
 	   (:file "presentation/repl-batch")
+	   (:file "presentation/repl-assistant-poll")
 	   (:file "presentation/repl")
 	   (:file "main"))
   ;; The three build keys and the :perform below are exempt from the metadata
@@ -409,6 +410,7 @@
     (:file "unit/test-completion-context")
    (:file "unit/test-repl")
    (:file "unit/test-repl-output-transient-panel")
+   (:file "unit/test-repl-assistant-poll")
    (:file "unit/test-repl-completion-data")
    (:file "unit/test-repl-background")
    (:file "unit/test-repl-state")

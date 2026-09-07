@@ -31,12 +31,26 @@
 (defun read-key-cont ()
   (if (nshell.infrastructure.acl:consume-terminal-resize-p)
       (lambda () (render-prompt-cont))
-      (let ((event
-              (%map-rendered-mouse-event-to-buffer
+      (let* ((raw-event
                (nshell.infrastructure.terminal:read-key-event
                 :interrupt-predicate
-                (function nshell.infrastructure.acl:consume-sigint-received-p)))))
+                (lambda ()
+                  (or (when (nshell.infrastructure.acl:consume-sigint-received-p)
+                        t)
+                      (%poll-assistant-model-event)))))
+             (event (unless (nshell.feature.assistant:assistant-model-event-p
+                              raw-event)
+                      (%map-rendered-mouse-event-to-buffer raw-event))))
         (cond
+          ((nshell.feature.assistant:assistant-model-event-p raw-event)
+           (lambda ()
+             (when (eql *assistant-turn-generation*
+                        (nshell.feature.assistant:assistant-model-event-generation
+                         raw-event))
+               (setf *last-assistant-model-event* raw-event)
+               (when (functionp *assistant-model-event-handler*)
+                 (funcall *assistant-model-event-handler* raw-event)))
+             (read-key-cont)))
           (event
            (lambda ()
              (multiple-value-bind (new-state output-event)

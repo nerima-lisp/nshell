@@ -102,22 +102,21 @@
                (return))))
       (setf (pty-process-output-thread process) nil))))
 
-(defun %pty-input-forwarder (process input)
-  (unwind-protect
-       (loop
-         for state = (pty-process-state process)
-         while (member state '(:running :stopped))
-         do (if (eq state :running)
-                (when (listen input)
-                  (let ((character (read-char input nil nil)))
-                    (if character
-                        (ignore-errors
-                          (pty-write (pty-process-master-fd process)
-                                     (string character)))
-                        (return))))
-                (sleep 0.01))
-            (sleep 0.001))
-    (setf (pty-process-input-thread process) nil)))
+(defun %pty-input-forwarder (process)
+  (let ((input (pty-process-input-stream process)))
+    (unwind-protect
+         (loop
+           for state = (pty-process-state process)
+           while (eq state :running)
+           do (when (listen input)
+                (let ((character (read-char input nil nil)))
+                  (if character
+                      (ignore-errors
+                        (pty-write (pty-process-master-fd process)
+                                   (string character)))
+                      (return))))
+              (sleep 0.001))
+      (setf (pty-process-input-thread process) nil))))
 
 (defun %pty-resize-forwarder (process)
   (unwind-protect
@@ -131,16 +130,21 @@
             (sleep 0.01))
     (setf (pty-process-resize-thread process) nil)))
 
+(defun %start-pty-input-forwarder (process)
+  (setf (pty-process-input-thread process)
+        (sb-thread:make-thread
+         (lambda () (%pty-input-forwarder process))
+         :name "nshell PTY input forwarder")))
+
 (defun %start-pty-tee (process input output)
   (setf (pty-process-output-thread process)
         (sb-thread:make-thread
          (lambda () (%pty-output-tee process output))
          :name "nshell PTY output tee")
-        (pty-process-input-thread process)
-        (sb-thread:make-thread
-         (lambda () (%pty-input-forwarder process input))
-         :name "nshell PTY input forwarder")
-        (pty-process-resize-thread process)
+        (pty-process-input-stream process)
+        input)
+  (%start-pty-input-forwarder process)
+  (setf (pty-process-resize-thread process)
         (sb-thread:make-thread
          (lambda () (%pty-resize-forwarder process))
          :name "nshell PTY resize forwarder"))
@@ -206,8 +210,12 @@
 (defun pty-process-continue (process)
   "Continue a stopped PTY process group and resume input forwarding."
   (check-type process pty-process)
+  (%join-pty-thread (pty-process-input-thread process))
+  (setf (pty-process-input-thread process) nil)
   (kill-process (- (pty-process-pgid process)) :sigcont)
   (setf (pty-process-state process) :running)
+  (when (pty-process-input-stream process)
+    (%start-pty-input-forwarder process))
   process)
 
 (defun %spawn-pty-terminal-command (command args)

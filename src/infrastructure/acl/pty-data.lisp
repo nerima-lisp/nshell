@@ -50,6 +50,7 @@
   (state :running)
   exit-status
   output-ring
+  input-stream
   input-thread
   output-thread
   resize-thread

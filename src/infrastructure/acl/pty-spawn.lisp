@@ -5,7 +5,8 @@
       (get-terminal-size)
     (error () (values 24 80))))
 
-(defun %pty-fork-exec (program args environment master-fd slave-name rows cols)
+(defun %pty-fork-exec (program args environment master-fd slave-name rows cols
+                       new-session-p)
   (let ((ready-read nil)
         (ready-write nil)
         (child-pid nil))
@@ -16,7 +17,8 @@
              (let ((pid (sb-posix:fork)))
                (when (zerop pid)
                  (%pty-close-fd ready-read)
-                 (%pty-child-exec program argv envp master-fd slave-name ready-write rows cols))
+                 (%pty-child-exec program argv envp master-fd slave-name ready-write rows cols
+                                  new-session-p))
                (%pty-close-fd ready-write)
                (setf ready-write nil)
                (%wait-for-pty-child-ready ready-read pid)
@@ -50,7 +52,8 @@
   t)
 
 (defun pty-spawn (program args &key (rows 24) (cols 80)
-                              (environment (%get-environment)))
+                              (environment (%get-environment))
+                              (new-session-p t))
   "Spawn PROGRAM with ARGS attached to a newly opened PTY."
   (%validate-pty-spawn-input program args rows cols)
   #-(or darwin linux)
@@ -65,7 +68,7 @@
             (%pty-close-fd slave-fd)
             (setf slave-fd nil)
             (let* ((pid (%pty-fork-exec program args environment master-fd slave-name
-                                        rows cols))
+                                        rows cols new-session-p))
                    (pgid pid))
               (setf master-stream (make-pty-stream master-fd))
               (make-pty-process :pid pid
@@ -213,7 +216,8 @@
     (when resolved
       (multiple-value-bind (rows cols) (%pty-terminal-dimensions)
         (%start-pty-tee
-         (pty-spawn resolved args :rows rows :cols cols :environment environment)
+         (pty-spawn resolved args :rows rows :cols cols :environment environment
+                    :new-session-p nil)
          *standard-input*
          *standard-output*)))))
 

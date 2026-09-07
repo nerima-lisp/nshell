@@ -94,16 +94,20 @@
                          "ioctl(TIOCSWINSZ)"))
       (sb-alien:free-alien winsize))))
 
-(defun %pty-child-exec (program argv envp master-fd slave-name ready-fd rows cols)
+(defun %pty-child-exec (program argv envp master-fd slave-name ready-fd rows cols
+                        new-session-p)
   (handler-case
       (progn
         (%pty-close-fd master-fd)
-        (sb-posix:setsid)
+        (if new-session-p
+            (sb-posix:setsid)
+            (sb-posix:setpgid 0 0))
         (let ((slave-fd (sb-posix:open slave-name (%pty-child-open-flags))))
           (unwind-protect
                (progn
                  (%set-pty-window-size slave-fd rows cols)
-                 (%claim-controlling-terminal slave-fd (sb-posix:getpid))
+                 (when new-session-p
+                   (%claim-controlling-terminal slave-fd (sb-posix:getpid)))
                  (%redirect-pty-slave slave-fd)
                  (%signal-pty-child-ready ready-fd +pty-child-ready-ok+)
                  (setf ready-fd nil)

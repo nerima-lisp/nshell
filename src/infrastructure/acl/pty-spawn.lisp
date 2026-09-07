@@ -163,7 +163,7 @@
 (defun pty-process-status (process)
   "Poll PROCESS and return :RUNNING, :STOPPED, :EXITED, or :SIGNALED."
   (check-type process pty-process)
-  (when (eq (pty-process-state process) :running)
+  (when (member (pty-process-state process) '(:running :stopped))
     (multiple-value-bind (pid state detail)
         (wait-job (pty-process-pid process) :nohang t :untraced t :continued t)
       (declare (ignore pid))

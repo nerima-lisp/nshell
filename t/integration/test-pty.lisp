@@ -90,6 +90,15 @@
       (expect sb-posix:o-noctty :to-equal
               (logand flags sb-posix:o-noctty))))
 
+  (it "pty-output-ring-retains-only-the-bounded-tail"
+    (let* ((ring (nshell.infrastructure.acl::make-pty-ring-buffer 4))
+           (octets (nshell.util:utf-8-octets "abcdef")))
+      (nshell.infrastructure.acl::%pty-ring-append ring octets (length octets))
+      (expect '(99 100 101 102)
+              :to-equal
+              (coerce (nshell.infrastructure.acl::%pty-ring-octets ring)
+                      'list))))
+
   (it "pty-syscall-contract-distinguishes-success-and-failure"
     "Low-level syscall results use NIL or negative integers as failures."
     (expect (nshell.infrastructure.acl::%syscall-failed-p 0) :to-be-falsy)

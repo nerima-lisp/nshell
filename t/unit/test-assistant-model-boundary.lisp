@@ -19,7 +19,7 @@
                   "  printf '%s\\n' 'test-version'"
                   "  exit 0"
                   "fi"
-                  "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[],\"mcp_servers\":[]}'"
+                  "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
                   "while IFS= read -r line"
                   "do"
                   "  printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}'"
@@ -95,19 +95,37 @@
                     kinds))
           (expect :stream-ended :to-be (first kinds)))))))
 
-  (it "accepts-only-an-empty-tool-and-mcp-init"
-    (expect (nshell.feature.assistant:assistant-system-init-safe-p
+  (it "accepts-only-structured-output-tools-and-empty-mcp-servers"
+    (expect t :to-be
+            (nshell.feature.assistant:assistant-system-init-safe-p
              '(("type" . "system")
                ("subtype" . "init")
                ("tools")
-               ("mcp_servers")))
-            :to-be-truthy)
+               ("mcp_servers"))))
+    (expect t :to-be
+            (nshell.feature.assistant:assistant-system-init-safe-p
+             '(("type" . "system")
+               ("subtype" . "init")
+               ("tools" "StructuredOutput")
+               ("mcp_servers"))))
     (expect nil :to-be
             (nshell.feature.assistant:assistant-system-init-safe-p
              '(("type" . "system")
                ("subtype" . "init")
-               ("tools" . ("shell"))
+               ("tools" "StructuredOutput" "Bash")
                ("mcp_servers"))))
+    (expect nil :to-be
+            (nshell.feature.assistant:assistant-system-init-safe-p
+             '(("type" . "system")
+               ("subtype" . "init")
+               ("tools" "Bash")
+               ("mcp_servers"))))
+    (expect nil :to-be
+            (nshell.feature.assistant:assistant-system-init-safe-p
+             '(("type" . "system")
+               ("subtype" . "init")
+               ("tools" "StructuredOutput")
+               ("mcp_servers" "git"))))
     (expect nil :to-be
             (nshell.feature.assistant:assistant-system-init-safe-p
              '(("type" . "system") ("subtype" . "init")))))

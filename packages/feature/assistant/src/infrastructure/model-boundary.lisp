@@ -30,8 +30,11 @@
               (equal "init" (%assistant-object-field payload "subtype"))
               tools
               mcp-servers
-              (null (cdr tools))
-              (null (cdr mcp-servers))))))
+              (listp (cdr tools))
+              (null (cdr mcp-servers))
+              (every (lambda (tool)
+                       (equal "StructuredOutput" tool))
+                     (cdr tools))))))
 
 (defun make-assistant-boundary-context (&optional model-boundary)
   (cl-boundary-kit:make-boundary-context :model model-boundary))

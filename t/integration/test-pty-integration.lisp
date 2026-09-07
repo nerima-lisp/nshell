@@ -178,7 +178,7 @@
                        (nshell.infrastructure.acl:pty-process-wait pty))
                (expect 7
                        :to-equal
-                       (nshell.infrastructure.acl::pty-process-exit-status pty))
+                       (nshell.infrastructure.acl::pty-process-exit-status pty)))
           (pty-test-close-process pty))))))
 
 (describe "pty-low-level-io"
@@ -360,5 +360,5 @@
                             '(:stopped))))
                (expect (null status) :to-be-falsy)
                (expect (second status) :to-be :stopped)))
-          (pty-test-close-process pty)))))))
+        (pty-test-close-process pty))))))
 )

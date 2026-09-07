@@ -6,7 +6,6 @@
 (in-package #:nshell.application)
 
 (defvar *foreground-terminal-runner* nil)
-(defvar *foreground-pty-runner* nil)
 
 (defstruct (shell-context
             (:constructor %allocate-shell-context

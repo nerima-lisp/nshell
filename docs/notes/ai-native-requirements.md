@@ -452,6 +452,8 @@ ask 中は履歴 autosuggestion、abbr 展開、`!!` 系の history expansion �
 10. PTY ランナー: `pty-spawn` (`src/infrastructure/acl/pty-spawn.lisp` 47 行) を子コマンド実行に転用、ウィンドウサイズ伝播、シグナル転送、リングバッファ tee。
 11. ゲート判定: 既存テスト + 手動チェックリスト。通過なら `%spawn-terminal-command` 経路を置換し raw-mode 文書を更新。不通過ならフォールバック経路に切り替え、FR-004 の範囲を縮小して記録。
 
+P1-b 判定: PTY ランナーの ACL 単体・統合テストと、`printf` および停止・再開の直接スモークは通過したが、子コマンド経路のゲートは不通過だった。`e2e-external-job-stop-bg-fg-interrupt` は `PTY job condition timed out; output: ""` で単独再現し、tmux 手動確認でも `sleep 100` に Ctrl-Z を送った後にプロンプトへ戻らず、`fg` と Ctrl-C の後にだけプロンプトへ戻った。Vim は起動・終了できた。SSH は `localhost:22` に接続先がなく判定不能だった。したがって `%spawn-terminal-command` は既存の SBCL プロセス経路に戻し、P1-b のフォールバック範囲を「単純コマンドは従来経路、パイプラインとリダイレクトも従来のバッファ経路」とする。PTY ACL とリングバッファの検証コードは、再試行時の基礎として残す。
+
 **P2 explain と history (P1-a、P1-b に依存)**
 12. history v3 (`file-history.lisp`、読み込み昇格、`⌃R` 絞り込み)。
 13. 失敗印セグメント (`src/domain/prompting/prompt.lisp` のセグメント追加) と explain 要求、Tab で候補投入。

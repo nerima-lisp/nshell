@@ -37,6 +37,8 @@ in its interactive, batch, and script forms.")
             #:trampoline #:with-cps-trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion
              #:render-completions #:apply-completion
+             #:render-transient-panel #:update-transient-panel
+             #:clear-rendered-transient-panel
              #:highlight-line
              #:highlight-span-start #:highlight-span-end
              #:highlight-span-role

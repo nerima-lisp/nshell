@@ -109,6 +109,7 @@
   (unless *running*
     (return-from render-prompt-cont nil))
   (reap-background-jobs)
+  (clear-rendered-transient-panel)
   (clear-rendered-prompt)
   (%ensure-rendered-prompt-origin)
   (let* ((terminal-width (terminal-width))

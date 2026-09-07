@@ -15,6 +15,7 @@
          (nshell.presentation::*kb* (nshell.domain.completion:make-empty-knowledge-base))
          (nshell.presentation::*input-state* nil)
          (nshell.presentation::*completion-rendered-lines* 0)
+         (nshell.presentation::*transient-panel-rendered-lines* 0)
          (nshell.presentation::*prompt-rendered-lines* 0)
          (nshell.presentation::*prompt-rendered-cursor-row* 0)
          (nshell.presentation::*prompt-rendered-terminal-width* 80)

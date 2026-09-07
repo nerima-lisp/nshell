@@ -9,6 +9,7 @@
 (defvar *kb* nil)
 (defvar *input-state* nil)
 (defvar *completion-rendered-lines* 0)
+(defvar *transient-panel-rendered-lines* 0)
 (defvar *prompt-rendered-lines* 0)
 (defvar *prompt-rendered-cursor-row* 0)
 (defvar *prompt-rendered-terminal-width* +default-terminal-width+)

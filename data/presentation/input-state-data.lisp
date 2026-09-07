@@ -13,11 +13,13 @@ vi normal mode. Set from configuration or the NSHELL_VI_MODE environment.")
   "Input reducer modes. :VI-COMMAND is vi normal mode; :VI-VISUAL is vi
 char-wise visual selection mode; :VI-D and :VI-C are transient
 operator-pending states after pressing d or c in normal mode."
-  '(member :insert :search :vi-command :vi-visual :vi-d :vi-c))
+  '(member :insert :search :ask :ask-waiting
+           :vi-command :vi-visual :vi-d :vi-c))
 
 (deftype output-event ()
   "Events emitted by `reduce-input-state' for an outer, effectful REPL loop."
   '(member :redraw :execute :complete :suggest-update :search-start :search-update
+    :ask-start :ask-submit :ask-cancel :ask-cancel-turn
     :history-prev :history-next :insert-last-argument :edit-command
     :clear-screen :none :quit :copy))
 

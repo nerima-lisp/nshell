@@ -27,6 +27,7 @@
   (21 . :ctrl-u)
   (23 . :ctrl-w)
   (25 . :ctrl-y)
+  (29 . :ctrl-right-bracket)
   (31 . :ctrl-underscore)
   (127 . :backspace))
 

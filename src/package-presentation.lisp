@@ -39,6 +39,8 @@ in its interactive, batch, and script forms.")
              #:render-completions #:apply-completion
              #:render-transient-panel #:update-transient-panel
              #:clear-rendered-transient-panel
+             #:+assistant-progress-choice-threshold-ms+
+             #:assistant-progress-lines #:render-assistant-progress-panel
              #:highlight-line
              #:highlight-span-start #:highlight-span-end
              #:highlight-span-role

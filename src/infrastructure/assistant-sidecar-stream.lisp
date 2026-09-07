@@ -132,7 +132,12 @@
 
 (defun %assistant-sidecar-join-thread (thread)
   (when thread
-    (ignore-errors (sb-thread:join-thread thread))))
+    (ignore-errors
+     (sb-thread:join-thread thread :default nil :timeout 0.1))
+    (when (sb-thread:thread-alive-p thread)
+      (ignore-errors (sb-thread:terminate-thread thread))
+      (ignore-errors
+       (sb-thread:join-thread thread :default nil :timeout 0.1)))))
 
 (defun %assistant-sidecar-close-channel (channel)
   (when channel

@@ -42,8 +42,8 @@
 
   (it "classifies parsed command sequences by their most restrictive stage"
     (with-complete-ast (safe-ast "git status && ls")
-      (expect t :to-be-truthy
-              (nshell.domain.parsing:sequence-node-p safe-ast))
+      (expect (nshell.domain.parsing:sequence-node-p safe-ast)
+              :to-be-truthy)
       (expect :safe :to-be
               (nshell.feature.assistant:assistant-safety-result-classification
                (nshell.feature.assistant:classify-ast safe-ast))))

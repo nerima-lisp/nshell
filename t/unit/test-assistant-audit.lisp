@@ -10,28 +10,28 @@
                    path))
              (expect path :to-equal
                      (nshell.feature.assistant:assistant-audit-file-path))
-             (expect t :to-be-truthy
-                     (nshell.feature.assistant:append-assistant-audit-entry
-                      '(("environment" . ("API_TOKEN=secret-value"))
+             (expect (nshell.feature.assistant:append-assistant-audit-entry
+                      `(("environment" . ("API_TOKEN=secret-value"))
                         ("output" .
-                         "ghp_12345678901234567890\n-----BEGIN PRIVATE KEY-----")
+                         ,(format nil "ghp_12345678901234567890~%-----BEGIN PRIVATE KEY-----"))
                         ("path" . "/tmp/private.env"))
                       '(("summary" . "Bearer response-secret-value"))
                       :denylist-paths '("*/private.env")
-                      :denylist-commands '("cat")))
-             (expect t :to-be-truthy
-                     (nshell.feature.assistant:append-assistant-audit-entry
+                      :denylist-commands '("cat"))
+                     :to-be-truthy)
+             (expect (nshell.feature.assistant:append-assistant-audit-entry
                       '(("environment" . ("HOME=/Users/example")))
-                      '(("summary" . "ok"))))
+                      '(("summary" . "ok")))
+                     :to-be-truthy)
              (let ((lines
                      (with-open-file (stream path)
                        (loop for line = (read-line stream nil nil)
                              while line collect line))))
                (expect 2 :to-be (length lines))
-               (expect t :to-be-truthy
-                       (every (lambda (line) (json-kit:parse line)) lines))
+               (expect (every (lambda (line) (json-kit:parse line)) lines)
+                       :to-be-truthy)
                (let ((content (format nil "~{~a~^~%~}" lines)))
-                 (expect t :to-be-truthy (search "API_TOKEN" content))
+                 (expect (search "API_TOKEN" content) :to-be-truthy)
                  (expect nil :to-be (search "secret-value" content))
                  (expect nil :to-be
                          (search "ghp_12345678901234567890" content))

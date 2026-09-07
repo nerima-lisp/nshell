@@ -75,6 +75,11 @@
                nil))
              (%assistant-sidecar-complete pending))
            (return))
+          ((and (eq status :error)
+                (member
+                 (nshell.infrastructure.acl:sidecar-handle-cleanup-state handle)
+                 '(:stopping :stopped)))
+           (return))
           (otherwise
            (%assistant-sidecar-mark-dead state (list :reader-error message))
            (when pending

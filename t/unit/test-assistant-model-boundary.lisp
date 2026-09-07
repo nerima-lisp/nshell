@@ -52,6 +52,12 @@
     (sb-posix:chmod (namestring path) #o700)
     path))
 
+(defun %assistant-test-live-thread-named-p (name)
+  (some (lambda (thread)
+          (and (equal name (sb-thread:thread-name thread))
+               (sb-thread:thread-alive-p thread)))
+        (sb-thread:list-all-threads)))
+
 (describe "assistant-model-boundary-contracts"
   (it "replays-a-sanitized-stream-json-fixture-through-the-injected-boundary"
     (multiple-value-bind (boundary error-message)
@@ -315,6 +321,9 @@
                      (nshell.feature.assistant:assistant-boundary-status start))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
-                      (nshell.feature.assistant:assistant-model-stop))))
+                      (nshell.feature.assistant:assistant-model-stop)))
+             (expect nil :to-be
+                     (%assistant-test-live-thread-named-p
+                      "nshell assistant sidecar reader")))
         (when (probe-file script)
           (delete-file script))))))

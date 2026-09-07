@@ -52,6 +52,7 @@
   output-ring
   input-thread
   output-thread
+  resize-thread
   (finished-p nil))
 
 (defun pty-process-output (process)

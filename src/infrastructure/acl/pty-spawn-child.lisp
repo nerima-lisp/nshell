@@ -38,13 +38,15 @@
   (when vector
     (ignore-errors (sb-alien:free-alien vector))))
 
-(defmacro %with-pty-exec-vectors ((argv envp program args) &body body)
-  `(let ((,argv (%make-c-string-vector (cons ,program ,args)))
-         (,envp (%make-c-string-vector (%get-environment))))
-     (unwind-protect
-          (progn ,@body)
-       (%free-c-string-vector ,argv)
-       (%free-c-string-vector ,envp))))
+(defmacro %with-pty-exec-vectors ((argv envp program args &optional environment)
+                                  &body body)
+  (let ((environment-form (or environment '(%get-environment))))
+    `(let ((,argv (%make-c-string-vector (cons ,program ,args)))
+           (,envp (%make-c-string-vector ,environment-form)))
+       (unwind-protect
+            (progn ,@body)
+         (%free-c-string-vector ,argv)
+         (%free-c-string-vector ,envp)))))
 
 (defun %pty-child-fail ()
   (sb-posix:_exit 127))

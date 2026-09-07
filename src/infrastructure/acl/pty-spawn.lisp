@@ -5,11 +5,11 @@
       (get-terminal-size)
     (error () (values 24 80))))
 
-(defun %pty-fork-exec (program args master-fd slave-name rows cols)
+(defun %pty-fork-exec (program args environment master-fd slave-name rows cols)
   (let ((ready-read nil)
         (ready-write nil)
         (child-pid nil))
-    (%with-pty-exec-vectors (argv envp program args)
+    (%with-pty-exec-vectors (argv envp program args environment)
       (unwind-protect
            (progn
              (multiple-value-setq (ready-read ready-write) (sb-posix:pipe))
@@ -49,7 +49,8 @@
     (error "PTY dimensions must be positive integers: ~S x ~S" rows cols))
   t)
 
-(defun pty-spawn (program args &key (rows 24) (cols 80))
+(defun pty-spawn (program args &key (rows 24) (cols 80)
+                              (environment (%get-environment)))
   "Spawn PROGRAM with ARGS attached to a newly opened PTY."
   (%validate-pty-spawn-input program args rows cols)
   #-(or darwin linux)
@@ -63,19 +64,20 @@
           (progn
             (%pty-close-fd slave-fd)
             (setf slave-fd nil)
-            (let* ((pid (%pty-fork-exec program args master-fd slave-name rows cols))
+            (let* ((pid (%pty-fork-exec program args environment master-fd slave-name
+                                        rows cols))
                    (pgid pid))
               (setf master-stream (make-pty-stream master-fd))
               (make-pty-process :pid pid
                                 :pgid pgid
                                 :master-fd master-fd
                                 :stream master-stream
-                                :output-ring (make-pty-ring-buffer)))
+                                :output-ring (make-pty-ring-buffer))))
         (error (condition)
           (when master-stream
             (ignore-errors (close master-stream)))
           (pty-close master-fd slave-fd)
-          (error condition)))))))
+          (error condition))))))
 
 (defun %pty-output-tee (process output)
   (let ((buffer (make-array 4096 :element-type '(unsigned-byte 8)))
@@ -114,6 +116,18 @@
             (sleep 0.001))
     (setf (pty-process-input-thread process) nil)))
 
+(defun %pty-resize-forwarder (process)
+  (unwind-protect
+       (loop
+         while (member (pty-process-state process) '(:running :stopped))
+         do (when (consume-terminal-resize-p)
+              (multiple-value-bind (rows cols) (%pty-terminal-dimensions)
+                (ignore-errors
+                  (%set-pty-window-size
+                   (pty-process-master-fd process) rows cols))))
+            (sleep 0.01))
+    (setf (pty-process-resize-thread process) nil)))
+
 (defun %start-pty-tee (process input output)
   (setf (pty-process-output-thread process)
         (sb-thread:make-thread
@@ -122,7 +136,11 @@
         (pty-process-input-thread process)
         (sb-thread:make-thread
          (lambda () (%pty-input-forwarder process input))
-         :name "nshell PTY input forwarder"))
+         :name "nshell PTY input forwarder")
+        (pty-process-resize-thread process)
+        (sb-thread:make-thread
+         (lambda () (%pty-resize-forwarder process))
+         :name "nshell PTY resize forwarder"))
   process)
 
 (defun %pty-record-wait-status (process state detail)
@@ -162,6 +180,7 @@
     (setf (pty-process-finished-p process) t)
     (%join-pty-thread (pty-process-output-thread process))
     (%join-pty-thread (pty-process-input-thread process))
+    (%join-pty-thread (pty-process-resize-thread process))
     (when (pty-process-stream process)
       (ignore-errors (close (pty-process-stream process))))
     (pty-close (pty-process-master-fd process) nil))
@@ -191,11 +210,10 @@
 (defun %spawn-pty-terminal-command (command args)
   (multiple-value-bind (resolved environment)
       (%prepare-external-command command)
-    (declare (ignore environment))
     (when resolved
       (multiple-value-bind (rows cols) (%pty-terminal-dimensions)
         (%start-pty-tee
-         (pty-spawn resolved args :rows rows :cols cols)
+         (pty-spawn resolved args :rows rows :cols cols :environment environment)
          *standard-input*
          *standard-output*)))))
 

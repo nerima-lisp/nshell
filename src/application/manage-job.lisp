@@ -35,13 +35,13 @@
     (unless process
       (return-from %run-terminal-command
         (values (format nil "nshell: ~a: command not found~%" command) 127)))
-    (let ((pgid (sb-ext:process-pid process)))
+    (let ((pgid (nshell.infrastructure.acl:process-pid process)))
       (unwind-protect
            (progn
              (setf *foreground-job-pgid* pgid)
              (%set-acl-foreground-pgid pgid)
              (%with-terminal-foreground-pgroup pgid
-               (sb-ext:process-kill process sb-unix:sigcont :pid)
+               (nshell.infrastructure.acl:process-continue process)
                (if (eq :stopped (%wait-terminal-processes (list process)))
                    (let* ((monitor (shell-context-job-monitor context))
                           (id (nshell.domain.job-control:monitor-add-background-job
@@ -116,16 +116,20 @@
                  (nshell.domain.job-control:foreground-job job-monitor job-id)
                  (%with-terminal-foreground-pgroup
                    pgid
-                   (%continue-process-group pgid)
                    (let ((processes (and process-registry
                                          (%job-process-list
                                           (gethash job-id process-registry)))))
                      (if processes
-                         (return-from fg
-                           (%wait-registered-foreground-job
-                            job job-id job-monitor process-registry processes))
-                         (funcall (symbol-function '%wait-job-pgid)
-                                  job job-id job-monitor)))))
+                         (progn
+                           (dolist (process processes)
+                             (nshell.infrastructure.acl:process-continue process))
+                           (return-from fg
+                             (%wait-registered-foreground-job
+                              job job-id job-monitor process-registry processes)))
+                         (progn
+                           (%continue-process-group pgid)
+                           (funcall (symbol-function '%wait-job-pgid)
+                                    job job-id job-monitor))))))
             (setf *foreground-job-pgid* nil)
             (%set-acl-foreground-pgid nil)))
         job))))

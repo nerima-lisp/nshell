@@ -29,12 +29,10 @@
          (let* ((,job-monitor (shell-context-job-monitor context))
                 (,job-id (%resolve-job-id ,job-monitor args :active-only-p t))
                 (,job ,(if (eq operation 'fg)
-                           `(flet ((resume-job ()
-                                     (fg ,job-id ,job-monitor
-                                         (shell-context-process-registry context))))
-                              (if *foreground-terminal-runner*
-                                  (funcall *foreground-terminal-runner* #'resume-job)
-                                  (resume-job)))
+                           `(%run-foreground-job
+                              (lambda ()
+                                (fg ,job-id ,job-monitor
+                                    (shell-context-process-registry context))))
                            `(,operation ,job-id ,job-monitor))))
            (if ,job
                (values nil ,(if (eq operation 'fg)

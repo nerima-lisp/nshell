@@ -35,6 +35,10 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
+            #:pty-process-status #:pty-process-wait #:pty-process-continue
+            #:pty-process-output
+            #:process-pid #:process-status #:process-wait #:process-continue
+            #:process-alive-p
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
             #:current-process-id #:process-stop-signal-p #:process-continue-signal-p
             #:executable-file-p

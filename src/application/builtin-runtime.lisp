@@ -52,6 +52,12 @@
 (defun %builtin-usage (command usage &optional (code 1))
   (values (format nil "~a: usage: ~a~%" command usage) code))
 
+(defun %run-foreground-job (thunk)
+  (cond
+    (*foreground-pty-runner* (funcall *foreground-pty-runner* thunk))
+    (*foreground-terminal-runner* (funcall *foreground-terminal-runner* thunk))
+    (t (funcall thunk))))
+
 (defun %string-join (items separator)
   (with-output-to-string (out)
     (loop for item in items
@@ -61,10 +67,13 @@
              (write-string (princ-to-string item) out))))
 
 (defun %run-external-command-in-context (context command args)
-  (if *foreground-terminal-runner*
-      (funcall *foreground-terminal-runner*
+  (if *foreground-pty-runner*
+      (funcall *foreground-pty-runner*
                (lambda () (%run-terminal-command context command args)))
-      (nshell.infrastructure.acl:run-external-capture command args)))
+      (if *foreground-terminal-runner*
+          (funcall *foreground-terminal-runner*
+               (lambda () (%run-terminal-command context command args)))
+          (nshell.infrastructure.acl:run-external-capture command args))))
 
 (defun %resolve-command-path-candidates (context command)
   (let* ((filesystem (shell-context-filesystem context))

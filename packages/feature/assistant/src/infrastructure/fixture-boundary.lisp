@@ -19,24 +19,24 @@
       (t :unknown))))
 
 (defun %assistant-read-json-value (stream)
-  (let ((first-char
-          (loop for char = (read-char stream nil :eof)
-                do (cond
-                     ((eq char :eof) (return :eof))
-                     ((find char '(#\Space #\Tab #\Newline #\Return)
-                            :test #'char=))
-                     (t (unread-char char stream)
-                        (return char))))))
-    (if (eq first-char :eof)
-        (values nil :eof nil)
-        (handler-case
+  (handler-case
+      (let ((first-char
+              (loop for char = (read-char stream nil :eof)
+                    do (cond
+                         ((eq char :eof) (return :eof))
+                         ((find char '(#\Space #\Tab #\Newline #\Return)
+                                :test #'char=))
+                         (t (unread-char char stream)
+                            (return char))))))
+        (if (eq first-char :eof)
+            (values nil :eof nil)
             (values (json-kit:read-json stream
                                         :object-type :alist
                                         :array-type :list)
                     :value
-                    nil)
-          (error (condition)
-            (values nil :error (princ-to-string condition)))))))
+                    nil)))
+    (error (condition)
+      (values nil :error (princ-to-string condition)))))
 
 (defun %assistant-load-fixture (path)
   (handler-case

@@ -230,3 +230,34 @@
                   (nshell.presentation:input-state-buffer
                    nshell.presentation::*input-state*))
           (expect (search "解釈できない提案" (first panel)) :to-be-truthy))))))
+
+(describe "repl-ask-confirmation-tests"
+  (it "does-not-execute-a-confirm-proposal-before-the-second-enter"
+    (with-repl-test-state
+      (let ((nshell.presentation::*history-persistence-enabled-p* nil)
+            (execute-count 0)
+            (panel nil))
+        (with-repl-input-state (:mode :insert
+                                :buffer "rm file"
+                                :cursor-pos 7)
+          (let ((nshell.presentation::*assistant-command-origin* :proposal)
+                (nshell.presentation::*assistant-command-confirmed-p* nil))
+            (with-temporary-functions
+                (('nshell.presentation::execute-ast
+                  (lambda (ast)
+                    (declare (ignore ast))
+                    (incf execute-count)
+                    0))
+                 ('nshell.presentation::render-transient-panel
+                  (lambda (content &rest arguments)
+                    (declare (ignore arguments))
+                    (setf panel content)))
+                 ('nshell.presentation::render-prompt-cont
+                  (lambda () nil)))
+              (capture-process-output-event :execute)
+              (expect 0 :to-be execute-count)
+              (expect t :to-be
+                      nshell.presentation::*assistant-command-confirmed-p*)
+              (expect (search "confirmation" (first panel)) :to-be-truthy)
+              (capture-process-output-event :execute)
+              (expect 1 :to-be execute-count))))))))

@@ -996,10 +996,43 @@ it."
                       nil
                       (list :resource))))
            ((quote nshell.application::%execute-os-pipeline-with-process-substitutions)
-            (lambda (commands redirects resources pipefail-p)
+           (lambda (commands redirects resources pipefail-p)
               (declare (ignore commands redirects resources pipefail-p))
               (values "os output" 12))))
         (multiple-value-bind (output code)
             (nshell.application::execute-pipeline-node-in-context context pipeline)
           (expect output :to-equal "os output")
           (expect code :to-equal 12))))))
+
+(describe "assistant-execution-gate-tests"
+  (it "blocks-confirmation-proposals-at-ast-dispatch-until-confirmed"
+    (let ((context (nshell.application:make-shell-context))
+          (ast (nshell.domain.parsing:make-command-node
+                "rm" (list "file")))
+          (executed-p nil))
+      (let ((nshell.application::*execution-origin* :proposal)
+            (nshell.application::*execution-confirmed-p* nil))
+        (with-temporary-function
+            ('nshell.application::execute-command-node-in-context
+             (lambda (ignored-context ignored-ast)
+               (declare (ignore ignored-context ignored-ast))
+               (setf executed-p t)
+               (values "executed" 0)))
+          (multiple-value-bind (output code)
+              (nshell.application:execute-ast-in-context context ast)
+            (expect nil :to-be executed-p)
+            (expect 126 :to-equal code)
+            (expect (search "requires confirmation" output) :to-be-truthy))))
+      (let ((nshell.application::*execution-origin* :proposal)
+            (nshell.application::*execution-confirmed-p* t))
+        (with-temporary-function
+            ('nshell.application::execute-command-node-in-context
+             (lambda (ignored-context ignored-ast)
+               (declare (ignore ignored-context ignored-ast))
+               (setf executed-p t)
+               (values "executed" 0)))
+          (multiple-value-bind (output code)
+              (nshell.application:execute-ast-in-context context ast)
+            (expect t :to-be executed-p)
+            (expect "executed" :to-equal output)
+            (expect 0 :to-equal code)))))))

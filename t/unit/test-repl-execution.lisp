@@ -567,3 +567,33 @@ path must be converted from a pathname before being appended."
           (call-repl-execute-ast nil)
         (expect (format nil "nshell: cannot execute~%") :to-equal output)
         (expect 1 :to-equal code)))))
+
+(describe "assistant-history-origin-tests"
+  (it "records-confirmed-assistant-execution-as-a-proposal"
+    (with-repl-test-state
+      (let ((nshell.presentation::*history-persistence-enabled-p* t))
+        (with-repl-input-state (:mode :insert
+                                :buffer "rm file"
+                                :cursor-pos 7)
+          (let ((nshell.presentation::*assistant-command-origin* :proposal)
+                (nshell.presentation::*assistant-command-confirmed-p* t))
+            (with-temporary-functions
+                (('nshell.presentation::execute-ast
+                  (lambda (ast)
+                    (declare (ignore ast))
+                    0))
+                 ('nshell.infrastructure.persistence:append-history-entry
+                  (lambda (text)
+                    (declare (ignore text))))
+                 ('nshell.presentation::render-prompt-cont
+                  (lambda () nil)))
+              (capture-process-output-event :execute)
+              (let* ((entry (first
+                             (history-kit:history-entries
+                              nshell.presentation::*history*)))
+                     (record
+                       (nshell.infrastructure.persistence::history-record-for-entry
+                        nshell.presentation::*history* entry)))
+                (expect :proposal :to-be
+                        (nshell.infrastructure.persistence::history-record-origin
+                         record))))))))))

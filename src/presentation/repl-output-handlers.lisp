@@ -321,7 +321,20 @@ wrapped line's other rows on screen as stale duplicates."
   (with-reset-rendered-prompt-state-and-prompt-cont
     (format t "~%")
     (setf *last-command-duration-ms* nil)
-    (setf *input-state* (make-repl-input-state))))
+      (setf *assistant-command-origin* :typed
+            *assistant-command-confirmed-p* nil)
+      (setf *input-state* (make-repl-input-state))))
+
+(defun %assistant-proposal-confirmation-required-p ()
+  (and (eq *assistant-command-origin* :proposal)
+       (not *assistant-command-confirmed-p*)))
+
+(defun %confirm-assistant-proposal ()
+  (setf *assistant-command-confirmed-p* t)
+  (clear-rendered-transient-panel)
+  (render-transient-panel
+   (list "AI proposal requires confirmation; press Enter again to execute."))
+  (lambda () (render-prompt-cont)))
 
 (defun %execute-complete-command (ast text)
   (with-reset-rendered-prompt-state-and-prompt-cont
@@ -334,7 +347,11 @@ wrapped line's other rows on screen as stale duplicates."
           (cwd (boundary-current-directory))
           (exit-code nil))
       (unwind-protect
-           (setf exit-code (or (execute-ast ast) 0))
+           (let ((nshell.application::*execution-origin*
+                   *assistant-command-origin*)
+                 (nshell.application::*execution-confirmed-p*
+                   *assistant-command-confirmed-p*))
+             (setf exit-code (or (execute-ast ast) 0)))
         (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
           (let ((duration-ms (%elapsed-command-duration-ms
                               start-time
@@ -349,13 +366,15 @@ wrapped line's other rows on screen as stale duplicates."
                    :cwd cwd
                    :exit-code recorded-exit-code
                    :duration-ms duration-ms
-                   :origin :typed)
+                   :origin *assistant-command-origin*)
                 (declare (ignore history))
                 (history-kit:history-reset-navigation *history*)
                 (let ((nshell.infrastructure.persistence::*history-record-to-append*
                         record))
                   (nshell.infrastructure.persistence:append-history-entry text))))))
-    (setf *input-state* (make-repl-input-state))))))
+      (setf *assistant-command-origin* :typed
+            *assistant-command-confirmed-p* nil)
+      (setf *input-state* (make-repl-input-state))))))
 
 (defun %execute-parse-error (result)
   (with-reset-rendered-prompt-state-and-prompt-cont
@@ -379,32 +398,34 @@ wrapped line's other rows on screen as stale duplicates."
   (lambda () (render-prompt-cont)))
 
 (defun %execute-command-line (text)
-  (handler-case
-      (if (string= text "")
-          (%execute-empty-input)
-          (multiple-value-bind (expanded-text expansion-error)
-              (nshell.domain.history:history-expand-line *history* text)
-            (if expansion-error
-                (with-reset-rendered-prompt-state-and-prompt-cont
-                 (format t "~%nshell: ~a~%" expansion-error)
-                 (%set-command-failure-state 2))
-                (nshell.domain.parsing:with-parsed-command-line-case
-                 (result ast expanded-text)
-                 (:complete
-                  (%execute-complete-command ast expanded-text))
-                 (:error
-                  (%execute-parse-error result))
-                 (:incomplete
-                  (%execute-incomplete-command result))))))
-    (nshell.infrastructure.terminal:terminal-mode-operation-failed (condition)
-      (format *error-output* "~%nshell: ~a~%" condition)
-      (%set-command-failure-state 1)
-      (setf *running* nil)
-      nil)
-    (error (condition)
-           (with-reset-rendered-prompt-state-and-prompt-cont
-            (format t "~%nshell error: ~a~%" condition)
-            (%set-command-failure-state 1)))))
+  (if (%assistant-proposal-confirmation-required-p)
+      (%confirm-assistant-proposal)
+      (handler-case
+          (if (string= text "")
+              (%execute-empty-input)
+              (multiple-value-bind (expanded-text expansion-error)
+                  (nshell.domain.history:history-expand-line *history* text)
+                (if expansion-error
+                    (with-reset-rendered-prompt-state-and-prompt-cont
+                     (format t "~%nshell: ~a~%" expansion-error)
+                     (%set-command-failure-state 2))
+                    (nshell.domain.parsing:with-parsed-command-line-case
+                     (result ast expanded-text)
+                     (:complete
+                      (%execute-complete-command ast expanded-text))
+                     (:error
+                      (%execute-parse-error result))
+                     (:incomplete
+                      (%execute-incomplete-command result))))))
+        (nshell.infrastructure.terminal:terminal-mode-operation-failed (condition)
+          (format *error-output* "~%nshell: ~a~%" condition)
+          (%set-command-failure-state 1)
+          (setf *running* nil)
+          nil)
+        (error (condition)
+               (with-reset-rendered-prompt-state-and-prompt-cont
+                (format t "~%nshell error: ~a~%" condition)
+                (%set-command-failure-state 1))))))
 
   (defun %process-execute-output-event ()
     (clear-rendered-completions)

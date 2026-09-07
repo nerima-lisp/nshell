@@ -6,6 +6,9 @@
 (defvar *loop-control-depth* 0
   "Number of active shell loops in the current dynamic execution context.")
 
+(defvar *execution-origin* :typed)
+(defvar *execution-confirmed-p* nil)
+
 ;;; Control flow execution and AST dispatch.
 ;;; This file defines:
 ;;;   - %execute-command-substitution-fields: the bridge from argument expansion
@@ -59,6 +62,26 @@ processes."
                environment "status" (princ-to-string code) nil))
         (setf (shell-context-environment context) environment)))
     code))
+
+(defun %assistant-execution-gate (ast)
+  (when (eq *execution-origin* :proposal)
+    (let ((classification (nshell.feature.assistant:classify-ast ast)))
+      (case (nshell.feature.assistant:assistant-safety-result-classification
+             classification)
+        (:safe nil)
+        (:confirm
+         (unless *execution-confirmed-p*
+           (list
+            (format nil "nshell: AI proposal requires confirmation: ~a~%"
+                    (nshell.feature.assistant:assistant-safety-result-reason
+                     classification))
+            126)))
+        (otherwise
+         (list
+          (format nil "nshell: AI proposal blocked: ~a~%"
+                  (nshell.feature.assistant:assistant-safety-result-reason
+                   classification))
+          126))))))
 
 (defun %consume-loop-control-signal ()
   "Consume one loop level from the pending BREAK or CONTINUE signal.
@@ -220,13 +243,14 @@ This encodes the dispatch table as data (separate from the dispatch mechanism),
 following the data/logic separation principle."
     `(defun ,name (,context ,ast)
        (let ((result
-               (multiple-value-list
-                (cond
-                  ,@(mapcar (lambda (clause)
-                              `((,(first clause) ,ast)
-                                (,(second clause) ,context ,ast)))
-                            clauses)
-                  (t (values (format nil "source: unsupported syntax~%") 2))))))
+               (or (%assistant-execution-gate ,ast)
+                   (multiple-value-list
+                    (cond
+                      ,@(mapcar (lambda (clause)
+                                  `((,(first clause) ,ast)
+                                    (,(second clause) ,context ,ast)))
+                                clauses)
+                      (t (values (format nil "source: unsupported syntax~%") 2)))))))
          (%record-last-exit-code ,context (second result))
          (values-list result)))))
 

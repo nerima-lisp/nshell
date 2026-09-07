@@ -9,6 +9,8 @@
 (defvar *kb* nil)
 (defvar *input-state* nil)
 (defvar *assistant-turn-generation* 0)
+(defvar *assistant-turn-started-at* nil)
+(defvar *assistant-last-cancel-at* nil)
 (defvar *last-assistant-model-event* nil)
 (defvar *assistant-model-event-handler* nil)
 (defvar *completion-rendered-lines* 0)

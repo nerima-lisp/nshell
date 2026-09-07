@@ -28,6 +28,8 @@ in its interactive, batch, and script forms.")
             #:input-state-search-original-buffer
             #:input-state-search-original-cursor
             #:input-state-search-index
+            #:input-state-ask-original-buffer
+            #:input-state-ask-original-cursor
             #:with-normalized-input-state
             #:apply-history-search-results-to-input-state
             #:reduce-input-state #:insert-newline-at-cursor

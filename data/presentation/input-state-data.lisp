@@ -48,6 +48,8 @@ operator-pending states after pressing d or c in normal mode."
                                             (search-original-buffer "")
                                             (search-original-cursor nil)
                                             (search-index 0)
+                                            (ask-original-buffer "")
+                                            (ask-original-cursor nil)
                                             (undo-stack nil)
                                             (redo-stack nil))))
   "Pure line editor state.
@@ -92,5 +94,7 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
   (search-original-buffer "" :type string)
   (search-original-cursor nil :type (or null integer))
   (search-index 0 :type integer)
+  (ask-original-buffer "" :type string)
+  (ask-original-cursor nil :type (or null integer))
   (undo-stack nil :type list)
   (redo-stack nil :type list))

@@ -123,7 +123,17 @@
          (search-query (input-state-search-query *input-state*))
          (search-suffix (when (eq (input-state-mode *input-state*) :search)
                           (format nil " history: ~a" search-query)))
+         (ask-suffix (when (member (input-state-mode *input-state*)
+                                   '(:ask :ask-waiting)
+                                   :test #'eq)
+                      "ask>"))
          (selection-range (%active-mouse-selection-range)))
+    (when ask-suffix
+      (format t " ")
+      (nshell.infrastructure.terminal:ansi-dim)
+      (format t "~a" ask-suffix)
+      (nshell.infrastructure.terminal:ansi-reset-style)
+      (incf prompt-width (1+ (%string-visible-width ask-suffix))))
     (render-edit-buffer text theme
                         :selection-start (first selection-range)
                         :selection-end (second selection-range))

@@ -38,5 +38,7 @@
    (search-original-buffer "")
    (search-original-cursor nil)
    (search-index 0)
+   (ask-original-buffer "")
+   (ask-original-cursor nil)
    (undo-stack nil)
    (redo-stack nil)))

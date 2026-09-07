@@ -6,7 +6,9 @@
   (with-normalized-cleared-completion-state (state state)
     (values (copy-input-state-with state
                                    :mode :ask
-                                   :suggestion nil)
+                                   :suggestion nil
+                                   :ask-original-buffer (input-state-buffer state)
+                                   :ask-original-cursor (input-state-cursor-pos state))
             :ask-start)))
 
 (defun %ask-edit-reduction (reduction)
@@ -27,7 +29,14 @@
   (%ask-edit-reduction (delete-char-at-cursor state)))
 
 (defun %ask-cancel-input (state output)
-  (values (copy-input-state-with state :mode :insert)
+  (values (copy-input-state-with
+           state
+           :buffer (input-state-ask-original-buffer state)
+           :cursor-pos (or (input-state-ask-original-cursor state) 0)
+           :mode :insert
+           :suggestion nil
+           :ask-original-buffer :clear
+           :ask-original-cursor :clear)
           output))
 
 (defun reduce-ask-input-state (state key-event)
@@ -51,4 +60,3 @@
   (if (eq :ctrl-c (nshell.domain.input:key-event-type key-event))
       (values state :ask-cancel-turn)
       (values state :none)))
-

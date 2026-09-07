@@ -68,6 +68,7 @@
                  (:file "domain/redaction")
                  (:file "domain/context")
                  (:file "application/layer")
+                 (:file "application/ask")
                  (:file "infrastructure/layer")
                  (:file "infrastructure/model-boundary")
                  (:file "infrastructure/fixture-boundary")

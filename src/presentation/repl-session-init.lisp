@@ -68,8 +68,13 @@ entered during this session."
         *kb* (nshell.domain.completion:make-empty-knowledge-base)
         *input-state* (make-repl-input-state)
         *assistant-turn-generation* 0
+        *assistant-turn-started-at* nil
+        *assistant-last-cancel-at* nil
         *last-assistant-model-event* nil
         *assistant-model-event-handler* nil
+        nshell.feature.assistant:*assistant-boundaries*
+          (nshell.feature.assistant:make-assistant-boundary-context
+           (nshell.feature.assistant:make-assistant-sidecar-boundary))
         *completion-rendered-lines* 0
         *prompt-rendered-lines* 0
         *prompt-rendered-cursor-row* 0

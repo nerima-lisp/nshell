@@ -21,7 +21,9 @@
   (nshell.presentation::%segments-visible-width
    (current-left-prompt-segments :exit-code exit-code)))
 
-(defun call-render-prompt (&key (exit-code 0) (duration-ms nil) (terminal-width 80) branch)
+(defun call-render-prompt (&key (exit-code 0) (duration-ms nil)
+                                (failure-explain-p nil)
+                                (terminal-width 80) branch)
   "Render the prompt with deterministic prompt state and return output plus values."
   (let ((nshell.domain.prompting:*git-status-resolver*
           (lambda (dir)
@@ -36,14 +38,18 @@
                  (nshell.domain.configuration:default-config)
                  exit-code
                  :last-command-duration-ms duration-ms
+                 :failure-explain-p failure-explain-p
                  :terminal-width terminal-width))))
        results))))
 
-(defun capture-render-prompt (&key (exit-code 0) (duration-ms nil) (terminal-width 80) branch)
+(defun capture-render-prompt (&key (exit-code 0) (duration-ms nil)
+                                   (failure-explain-p nil)
+                                   (terminal-width 80) branch)
   "Render the prompt with a deterministic git resolver and return the output string."
   (multiple-value-bind (output results)
       (call-render-prompt :exit-code exit-code
                           :duration-ms duration-ms
+                          :failure-explain-p failure-explain-p
                           :terminal-width terminal-width
                           :branch branch)
     (declare (ignore results))

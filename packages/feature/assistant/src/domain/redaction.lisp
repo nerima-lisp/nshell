@@ -88,13 +88,38 @@
                         (write-string (subseq text position token-end) output)
                         (setf position token-end)))))
                (t
-                (write-char (char text position) output)
+               (write-char (char text position) output)
                 (incf position))))))
 
-(defun redact-text (text)
+(defun %assistant-replace-all (text needle replacement)
+  (if (or (null text) (null needle) (zerop (length needle)))
+      text
+      (with-output-to-string (output)
+        (loop with start = 0
+              for position = (search needle text :start2 start)
+              do (if position
+                     (progn
+                       (write-string (subseq text start position) output)
+                       (write-string replacement output)
+                       (setf start (+ position (length needle))))
+                     (progn
+                       (write-string (subseq text start) output)
+                       (return)))))))
+
+(defun %assistant-redact-literal-values (text values)
+  (reduce (lambda (result value)
+            (if (and (stringp value) (plusp (length value)))
+                (%assistant-replace-all result value +assistant-redacted-token+)
+                result))
+          values
+          :initial-value text))
+
+(defun redact-text (text &key denylist-values)
   "Redact credential-shaped text without changing host or home paths."
   (if (stringp text)
-      (%assistant-redact-token-stream (%assistant-redact-pem-blocks text))
+      (%assistant-redact-token-stream
+       (%assistant-redact-pem-blocks
+        (%assistant-redact-literal-values text denylist-values)))
       text))
 
 (defun %assistant-whitespace-p (character)
@@ -150,7 +175,7 @@
              (some (lambda (name) (string= name command-name))
                    denylist-commands)))))
 
-(defun redact-lines (text &key denylist-paths denylist-commands)
+(defun redact-lines (text &key denylist-paths denylist-commands denylist-values)
   "Drop denylisted lines and redact token-shaped values in the remaining text."
   (if (stringp text)
       (let ((lines
@@ -160,7 +185,9 @@
                       unless (%assistant-denylisted-line-p
                               line denylist-paths denylist-commands)
                         collect line))))
-        (redact-text (format nil "~{~a~^~%~}" lines)))
+        (redact-text (format nil "~{~a~^~%~}"
+                             lines)
+                     :denylist-values denylist-values))
       text))
 
 (defun %assistant-environment-name (entry)
@@ -202,18 +229,21 @@
                          (stringp (car entry)))))
               value)))
 
-(defun %assistant-redact-value (value key denylist-paths denylist-commands)
+(defun %assistant-redact-value
+    (value key denylist-paths denylist-commands denylist-values)
   (cond
     ((%assistant-environment-key-p key)
      (%assistant-environment-names value))
     ((stringp value)
      (redact-lines value
                    :denylist-paths denylist-paths
-                   :denylist-commands denylist-commands))
+                   :denylist-commands denylist-commands
+                   :denylist-values denylist-values))
     ((vectorp value)
      (map 'vector (lambda (item)
                     (%assistant-redact-value item key denylist-paths
-                                             denylist-commands))
+                                             denylist-commands
+                                             denylist-values))
           value))
     ((%assistant-plist-p value)
      (loop for tail on value by #'cddr
@@ -222,21 +252,26 @@
            append (list item-key
                         (%assistant-redact-value item-value item-key
                                                  denylist-paths
-                                                 denylist-commands))))
+                                                 denylist-commands
+                                                 denylist-values))))
     ((%assistant-alist-p value)
      (mapcar (lambda (entry)
                (cons (car entry)
                      (%assistant-redact-value (cdr entry) (car entry)
                                               denylist-paths
-                                              denylist-commands)))
+                                              denylist-commands
+                                              denylist-values)))
              value))
     ((consp value)
      (mapcar (lambda (item)
                (%assistant-redact-value item key denylist-paths
-                                        denylist-commands))
+                                        denylist-commands
+                                        denylist-values))
              value))
     (t value)))
 
-(defun redact-payload (payload &key denylist-paths denylist-commands)
+(defun redact-payload
+    (payload &key denylist-paths denylist-commands denylist-values)
   "Redact a payload recursively, including environment values and denylisted lines."
-  (%assistant-redact-value payload nil denylist-paths denylist-commands))
+  (%assistant-redact-value payload nil denylist-paths denylist-commands
+                          denylist-values))

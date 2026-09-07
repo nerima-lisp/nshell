@@ -41,6 +41,8 @@ wrapped line's other rows on screen as stale duplicates."
   `(progn
      (setf *last-exit-code* ,exit-code
            *last-command-duration-ms* nil
+           *last-command-output* nil
+           *failure-explain-available-p* (not (zerop ,exit-code))
            *input-state* (make-repl-input-state))
      (dolist (name '("?" "status"))
        (setf *environment*
@@ -86,16 +88,19 @@ wrapped line's other rows on screen as stale duplicates."
           branch))))
 
 (defun %assistant-context ()
-  (nshell.feature.assistant:assemble-assistant-context
-   :command (%assistant-last-command-context)
-   :exit *last-exit-code*
-   :duration-ms *last-command-duration-ms*
-   :cwd (boundary-current-directory)
-   :git-status (%assistant-git-context)
-   :last-output nil
-   :environment-names
-   (mapcar #'nshell.domain.environment:env-binding-name
-           (nshell.domain.environment:env-bindings (ensure-environment)))))
+  (let ((bindings
+          (nshell.domain.environment:env-bindings (ensure-environment))))
+    (nshell.feature.assistant:assemble-assistant-context
+     :command (%assistant-last-command-context)
+     :exit *last-exit-code*
+     :duration-ms *last-command-duration-ms*
+     :cwd (boundary-current-directory)
+     :git-status (%assistant-git-context)
+     :last-output *last-command-output*
+     :environment-names
+     (mapcar #'nshell.domain.environment:env-binding-name bindings)
+     :denylist-values
+     (mapcar #'nshell.domain.environment:env-binding-value bindings))))
 
 (defun %assistant-payload-field (payload key)
   (when (listp payload)
@@ -139,6 +144,151 @@ wrapped line's other rows on screen as stale duplicates."
         (values :parse-error nil
                 (format nil "解釈できない提案: ~a" text)))))
 
+(defun %assistant-explain-text (payload)
+  (labels ((payload-text (value)
+             (cond
+               ((stringp value) value)
+               ((consp value) (object-text value))))
+           (object-text (object)
+             (or (let ((text (%assistant-payload-field object "explanation")))
+                   (and (stringp text) text))
+                 (let ((text (%assistant-payload-field object "answer")))
+                   (and (stringp text) text))
+                 (let ((text (%assistant-payload-field object "text")))
+                   (and (stringp text) text))
+                 (payload-text (%assistant-payload-field object "result"))
+                 (payload-text (%assistant-payload-field object "message"))
+                 (let ((content (%assistant-payload-field object "content")))
+                   (when content
+                     (content-text content)))))
+           (content-text (content)
+             (cond
+               ((stringp content) content)
+               ((consp content)
+                (or (object-text content)
+                    (some #'payload-text content))))))
+    (payload-text payload)))
+
+(defun %assistant-explain-candidate-text (value)
+  (cond
+    ((stringp value) value)
+    ((listp value)
+     (or (let ((command (%assistant-payload-field value "command")))
+           (and (stringp command) command))
+         (let ((text (%assistant-payload-field value "text")))
+           (and (stringp text) text))
+         (let ((command (%assistant-payload-field value "command_line")))
+           (and (stringp command) command))))))
+
+(defun %assistant-explain-candidates (payload)
+  (let* ((structured (%assistant-payload-field payload "structured_output"))
+         (source (or (%assistant-payload-field structured "next_steps")
+                     (%assistant-payload-field structured "next-steps")
+                     (%assistant-payload-field structured "suggestions")
+                     (%assistant-payload-field payload "next_steps")
+                     (%assistant-payload-field payload "next-steps")
+                     (%assistant-payload-field payload "suggestions")))
+         (items (cond
+                  ((null source) nil)
+                  ((stringp source) (list source))
+                  ((and (listp source)
+                        (or (%assistant-payload-field source "command")
+                            (%assistant-payload-field source "text")
+                            (%assistant-payload-field source "command_line")))
+                   (list source))
+                  (t source))))
+    (loop for item in items
+          for text = (%assistant-explain-candidate-text item)
+          when (and text (plusp (length text)))
+            collect text into candidates
+          finally (return (subseq candidates 0 (min 3 (length candidates)))))))
+
+(defun %assistant-explain-panel-lines (text candidates)
+  (append (list (or text "AI 応答に説明がありません"))
+          (when candidates
+            (list "次の一手:"))
+          (loop for candidate in candidates
+                for index from 1
+                collect (format nil "~d. ~a [Tabで載せる]"
+                                index candidate))))
+
+(defun %return-from-explain-with-message (message)
+  (clear-rendered-completions)
+  (clear-rendered-transient-panel)
+  (setf *assistant-model-event-handler* nil
+        *assistant-turn-started-at* nil
+        *assistant-request-kind* nil
+        *assistant-explain-candidates* nil
+        *assistant-explain-candidate-index* 0
+        *input-state* (copy-input-state-with *input-state* :mode :insert))
+  (render-prompt-cont)
+  (render-transient-panel (list message)))
+
+(defun %handle-explain-result (event)
+  (let* ((payload (nshell.feature.assistant:assistant-model-event-payload event))
+         (text (%assistant-explain-text payload))
+         (candidates (%assistant-explain-candidates payload)))
+    (clear-rendered-completions)
+    (clear-rendered-transient-panel)
+    (setf *assistant-model-event-handler* nil
+          *assistant-turn-started-at* nil
+          *assistant-request-kind* nil
+          *assistant-explain-candidates* candidates
+          *assistant-explain-candidate-index* 0
+          *input-state* (copy-input-state-with *input-state* :mode :insert))
+    (render-prompt-cont)
+    (render-transient-panel (%assistant-explain-panel-lines text candidates))))
+
+(defun %handle-explain-model-event (event)
+  (case (nshell.feature.assistant:assistant-model-event-kind event)
+    (:result (%handle-explain-result event))
+    ((:stream-error :rate-limit-event)
+     (%return-from-explain-with-message
+      (%assistant-event-reason event "AI 応答を受け取れませんでした")))
+    (:stream-ended
+     (%return-from-explain-with-message "AI 応答が終了しました"))
+    (otherwise
+     (when *assistant-turn-started-at*
+       (render-assistant-progress-panel *assistant-turn-started-at*)))))
+
+(defun %install-explain-candidate ()
+  (let* ((candidate-count (length *assistant-explain-candidates*))
+         (index (mod *assistant-explain-candidate-index* candidate-count))
+         (candidate (nth index *assistant-explain-candidates*)))
+    (incf *assistant-explain-candidate-index*)
+    (multiple-value-bind (status classification reason)
+        (%assistant-proposal-assessment candidate)
+      (when (eq status :classified)
+        (case (nshell.feature.assistant:assistant-safety-result-classification
+               classification)
+          (:block
+           (render-transient-panel
+            (list (format nil "候補 ~d はブロックされました: ~a"
+                          (1+ index)
+                          (nshell.feature.assistant:assistant-safety-result-reason
+                           classification)))))
+          (otherwise
+           (%install-assistant-proposal candidate)
+           (setf *assistant-command-origin* :proposal
+                 *assistant-command-confirmed-p*
+                   (eq :safe
+                       (nshell.feature.assistant:assistant-safety-result-classification
+                        classification))))))
+      (when (eq status :parse-error)
+        (render-transient-panel (list reason))))))
+
+(defun %process-explain-panel-event (event)
+  (if (eq :tab (nshell.domain.input:key-event-type event))
+      (%install-explain-candidate)
+      (progn
+        (setf *assistant-explain-candidates* nil
+              *assistant-explain-candidate-index* 0)
+        (clear-rendered-transient-panel)
+        (multiple-value-bind (new-state output-event)
+            (reduce-input-state *input-state* event)
+          (setf *input-state* new-state)
+          (process-output-event output-event)))))
+
 (defun %install-assistant-proposal (text)
   (let ((state *input-state*))
     (setf *input-state*
@@ -174,6 +324,9 @@ wrapped line's other rows on screen as stale duplicates."
   (setf *input-state* (make-repl-input-state)
         *assistant-model-event-handler* nil
         *assistant-turn-started-at* nil
+        *assistant-request-kind* nil
+        *assistant-explain-candidates* nil
+        *assistant-explain-candidate-index* 0
         *assistant-command-origin* :typed
         *assistant-command-confirmed-p* nil)
   (reset-rendered-prompt-state)
@@ -181,7 +334,10 @@ wrapped line's other rows on screen as stale duplicates."
 
 (define-output-event-handler %process-ask-start-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (setf *assistant-last-cancel-at* nil))
+    (setf *assistant-last-cancel-at* nil
+          *assistant-request-kind* :ask
+          *assistant-explain-candidates* nil
+          *assistant-explain-candidate-index* 0))
 
 (define-output-event-handler %process-ask-cancel-output-event
     with-cleared-rendered-completions-and-prompt-cont
@@ -193,7 +349,9 @@ wrapped line's other rows on screen as stale duplicates."
           :test #'eq))
 
 (defun %handle-ask-model-event (event)
-  (case (nshell.feature.assistant:assistant-model-event-kind event)
+  (if (eq *assistant-request-kind* :explain)
+      (%handle-explain-model-event event)
+      (case (nshell.feature.assistant:assistant-model-event-kind event)
     (:result
      (let ((proposal
              (%assistant-proposal-text
@@ -241,13 +399,15 @@ wrapped line's other rows on screen as stale duplicates."
       (%assistant-event-reason event "AI 応答を受け取れませんでした")))
     (:stream-ended
      (%return-from-ask-with-message "AI 応答が終了しました"))
-    (otherwise
-     (when *assistant-turn-started-at*
-       (render-assistant-progress-panel *assistant-turn-started-at*)))))
+        (otherwise
+         (when *assistant-turn-started-at*
+           (render-assistant-progress-panel *assistant-turn-started-at*))))))
 
 (defun %process-ask-submit-output-event ()
   (clear-rendered-completions)
-  (let* ((text (input-state-buffer *input-state*))
+  (let* ((text (if (eq *assistant-request-kind* :explain)
+                   "Explain the last failed command and suggest up to three next steps."
+                   (input-state-buffer *input-state*)))
          (generation
            (setf *assistant-turn-generation*
                  (nshell.feature.assistant:next-assistant-turn-generation
@@ -258,6 +418,8 @@ wrapped line's other rows on screen as stale duplicates."
          (payload (nshell.feature.assistant:redact-payload raw-payload))
          (start-result (nshell.feature.assistant:assistant-model-start)))
     (setf *assistant-last-cancel-at* nil)
+    (setf *assistant-explain-candidates* nil
+          *assistant-explain-candidate-index* 0)
     (setf *assistant-turn-started-at* (boundary-monotonic))
     (unless (%assistant-boundary-ok-p start-result)
       (return-from %process-ask-submit-output-event
@@ -303,6 +465,9 @@ wrapped line's other rows on screen as stale duplicates."
     (setf *input-state* (make-repl-input-state)
           *assistant-model-event-handler* nil
           *assistant-turn-started-at* nil
+          *assistant-request-kind* nil
+          *assistant-explain-candidates* nil
+          *assistant-explain-candidate-index* 0
           *assistant-last-cancel-at* (unless repeat-p now))
     (format t "~%nshell: AI turn canceled~%")
     (when (and repeat-p
@@ -321,6 +486,8 @@ wrapped line's other rows on screen as stale duplicates."
   (with-reset-rendered-prompt-state-and-prompt-cont
     (format t "~%")
     (setf *last-command-duration-ms* nil)
+    (setf *last-command-output* nil
+          *failure-explain-available-p* nil)
     (setf *assistant-command-origin* :typed
           *assistant-command-confirmed-p* nil)
     (setf *input-state* (make-repl-input-state))))
@@ -355,13 +522,15 @@ wrapped line's other rows on screen as stale duplicates."
                  (nshell.application::*execution-confirmed-p*
                    *assistant-command-confirmed-p*))
              (setf *command-not-found-command* nil)
+             (setf *last-command-output* nil)
              (setf exit-code (or (execute-ast ast) 0)))
         (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
           (let ((duration-ms (%elapsed-command-duration-ms
                               start-time
                               (boundary-monotonic))))
             (setf *last-exit-code* recorded-exit-code
-                  *last-command-duration-ms* duration-ms)
+                  *last-command-duration-ms* duration-ms
+                  *failure-explain-available-p* (not (zerop recorded-exit-code)))
             (if (and (= recorded-exit-code 127)
                      *command-not-found-command*)
                 (progn

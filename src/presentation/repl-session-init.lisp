@@ -72,6 +72,8 @@ entered during this session."
         *last-exit-code* 0
         *pipefail* nil
         *last-command-duration-ms* nil
+        *last-command-output* nil
+        *failure-explain-available-p* nil
         *history-persistence-enabled-p* history-p
         *history* (history-kit:make-history)
         *config* (nshell.domain.configuration:default-config)
@@ -82,6 +84,9 @@ entered during this session."
         *assistant-last-cancel-at* nil
         *last-assistant-model-event* nil
         *assistant-model-event-handler* nil
+        *assistant-request-kind* nil
+        *assistant-explain-candidates* nil
+        *assistant-explain-candidate-index* 0
         nshell.feature.assistant:*assistant-boundaries*
           (nshell.feature.assistant:make-assistant-boundary-context
            (nshell.feature.assistant:make-assistant-sidecar-boundary))

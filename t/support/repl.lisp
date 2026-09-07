@@ -10,6 +10,9 @@
 (defmacro with-repl-test-state (&body body)
   `(let ((nshell.presentation::*running* t)
          (nshell.presentation::*last-exit-code* 0)
+         (nshell.presentation::*last-command-duration-ms* nil)
+         (nshell.presentation::*last-command-output* nil)
+         (nshell.presentation::*failure-explain-available-p* nil)
          (nshell.presentation::*history* (history-kit:make-history))
          (nshell.presentation::*config* (nshell.domain.configuration:default-config))
          (nshell.presentation::*kb* (nshell.domain.completion:make-empty-knowledge-base))
@@ -19,6 +22,9 @@
          (nshell.presentation::*assistant-last-cancel-at* nil)
          (nshell.presentation::*last-assistant-model-event* nil)
          (nshell.presentation::*assistant-model-event-handler* nil)
+         (nshell.presentation::*assistant-request-kind* nil)
+         (nshell.presentation::*assistant-explain-candidates* nil)
+         (nshell.presentation::*assistant-explain-candidate-index* 0)
          (nshell.presentation::*assistant-command-origin* :typed)
          (nshell.presentation::*assistant-command-confirmed-p* nil)
          (nshell.presentation::*command-not-found-fallback-text* nil)
@@ -96,8 +102,10 @@
 (defmacro with-stable-repl-prompt ((&key (width 4) (text "ns> ")) &body body)
   `(with-temporary-function
        ('nshell.presentation::render-prompt
-        (lambda (config last-exit &key last-command-duration-ms terminal-width)
-          (declare (ignore config last-exit last-command-duration-ms terminal-width))
+        (lambda (config last-exit &key last-command-duration-ms
+                                      failure-explain-p terminal-width)
+          (declare (ignore config last-exit last-command-duration-ms
+                           failure-explain-p terminal-width))
           (format t "~a" ,text)
           ,width))
      ,@body))

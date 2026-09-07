@@ -1,19 +1,21 @@
 (in-package #:nshell.presentation)
 
 (defun execute-ast (ast)
-  (cond
-    ((nshell.domain.parsing:command-node-p ast)
-     (execute-command-node ast))
-    ((or (nshell.domain.parsing:sequence-node-p ast)
-         (nshell.domain.parsing:pipeline-node-p ast)
-         (nshell.domain.parsing:if-node-p ast)
-         (nshell.domain.parsing:for-node-p ast)
-         (nshell.domain.parsing:while-node-p ast)
-         (nshell.domain.parsing:case-node-p ast)
-         (nshell.domain.parsing:begin-end-node-p ast))
-     (nth-value 1
-                (%with-repl-shell-context (context)
-                  (nshell.application:execute-ast-in-context context ast))))
-    (t
-     (format t "nshell: cannot execute~%")
-     1)))
+  (multiple-value-bind (output code)
+      (cond
+        ((nshell.domain.parsing:command-node-p ast)
+         (execute-command-node ast))
+        ((or (nshell.domain.parsing:sequence-node-p ast)
+             (nshell.domain.parsing:pipeline-node-p ast)
+             (nshell.domain.parsing:if-node-p ast)
+             (nshell.domain.parsing:for-node-p ast)
+             (nshell.domain.parsing:while-node-p ast)
+             (nshell.domain.parsing:case-node-p ast)
+             (nshell.domain.parsing:begin-end-node-p ast))
+         (%with-repl-shell-context (context)
+           (nshell.application:execute-ast-in-context context ast)))
+        (t
+         (format t "nshell: cannot execute~%")
+         (values nil 1)))
+    (setf *last-command-output* output)
+    code))

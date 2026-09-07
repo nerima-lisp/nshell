@@ -118,8 +118,9 @@
     (%ensure-rendered-prompt-origin)
     (let* ((terminal-width (terminal-width))
            (prompt-width
-             (render-prompt *config* *last-exit-code*
+           (render-prompt *config* *last-exit-code*
                             :last-command-duration-ms *last-command-duration-ms*
+                            :failure-explain-p *failure-explain-available-p*
                             :terminal-width terminal-width))
            (text (input-state-buffer *input-state*))
            (theme (nshell.domain.configuration:config-theme *config*))

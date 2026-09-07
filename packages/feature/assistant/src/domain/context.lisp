@@ -36,16 +36,18 @@
                      (setf start position)))
             finally (return (subseq text start)))))
 
-(defun %assistant-redacted-context-value (value denylist-paths denylist-commands)
+(defun %assistant-redacted-context-value
+    (value denylist-paths denylist-commands denylist-values)
   (redact-payload value
                   :denylist-paths denylist-paths
-                  :denylist-commands denylist-commands))
+                  :denylist-commands denylist-commands
+                  :denylist-values denylist-values))
 
 (defun assemble-assistant-context
     (&key command exit duration-ms cwd git-status last-output
           (environment-names nil) (last-output-max-bytes
                                    +assistant-default-output-max-bytes+)
-          denylist-paths denylist-commands)
+          denylist-paths denylist-commands denylist-values)
   "Build a redacted assistant context from caller-provided shell values.
 
 No filesystem, environment, process, or git operation occurs here."
@@ -53,21 +55,24 @@ No filesystem, environment, process, or git operation occurs here."
           ;; exclude them from redaction, while token-shaped values are removed.
          (redacted-command
            (%assistant-redacted-context-value command denylist-paths
-                                              denylist-commands))
+                                              denylist-commands
+                                              denylist-values))
          (redacted-git
            (%assistant-redacted-context-value git-status denylist-paths
-                                              denylist-commands))
+                                              denylist-commands
+                                              denylist-values))
          (redacted-output
            (redact-lines last-output
                          :denylist-paths denylist-paths
-                         :denylist-commands denylist-commands))
+                         :denylist-commands denylist-commands
+                         :denylist-values denylist-values))
          (redacted-environment-names
            (%assistant-environment-names environment-names)))
     (make-assistant-context
      :command redacted-command
      :exit exit
      :duration-ms duration-ms
-     :cwd (redact-text cwd)
+     :cwd (redact-text cwd :denylist-values denylist-values)
      :git-status redacted-git
      :last-output (%assistant-tail-bytes redacted-output
                                         last-output-max-bytes)

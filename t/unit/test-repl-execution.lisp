@@ -609,3 +609,31 @@ path must be converted from a pathname before being appended."
                 (nshell.infrastructure.acl::%external-command-not-found-message
                  "missing-command")))
       (expect "missing-command" :to-equal command-seen))))
+
+(describe "failure-explain-lifecycle-tests"
+  (it "keeps-the-explain-mark-only-for-the-latest-failed-command"
+    (with-repl-test-state
+      (let ((exit-code 1)
+            (nshell.presentation::*history-persistence-enabled-p* nil))
+        (with-temporary-functions
+            (('nshell.presentation::execute-ast
+              (lambda (ast)
+                (declare (ignore ast))
+                exit-code))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () nil)))
+          (with-repl-input-state (:mode :insert
+                                  :buffer "false"
+                                  :cursor-pos 5)
+            (capture-process-output-event :execute)
+            (expect 1 :to-be nshell.presentation::*last-exit-code*)
+            (expect t :to-be
+                    nshell.presentation::*failure-explain-available-p*))
+          (setf exit-code 0)
+          (with-repl-input-state (:mode :insert
+                                  :buffer "true"
+                                  :cursor-pos 4)
+            (capture-process-output-event :execute)
+            (expect 0 :to-be nshell.presentation::*last-exit-code*)
+            (expect nil :to-be
+                    nshell.presentation::*failure-explain-available-p*)))))))

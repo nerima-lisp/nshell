@@ -231,6 +231,97 @@
                    nshell.presentation::*input-state*))
           (expect (search "解釈できない提案" (first panel)) :to-be-truthy))))))
 
+(describe "fr-004-explain-panel-contracts"
+  (it "shows-explain-result-in-a-panel-without-replacing-the-edit-buffer"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting
+                              :buffer "keep this input"
+                              :cursor-pos 15)
+        (let ((panel nil))
+          (setf nshell.presentation::*assistant-request-kind* :explain)
+          (with-temporary-functions
+              (('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (nshell.presentation::%handle-ask-model-event
+             (nshell.feature.assistant::make-assistant-model-event
+              1 :result
+              '(("explanation" . "説明本文をここに表示")
+                ("structured_output" .
+                 (("next_steps" . ("ls"))))))))
+          (expect (search "説明本文をここに表示" (first panel)) :to-be-truthy)
+          (expect "keep this input"
+                  :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect nil :to-be
+                  (search "説明本文をここに表示"
+                          (nshell.presentation:input-state-buffer
+                           nshell.presentation::*input-state*)))))))
+
+  (it "gates-tab-candidates-by-classify-ast-and-proposal-origin"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting
+                              :buffer "original input"
+                              :cursor-pos 14)
+        (let ((panel nil)
+              (classification-count 0)
+              (original-classify
+                (symbol-function 'nshell.feature.assistant:classify-ast)))
+          (setf nshell.presentation::*assistant-request-kind* :explain)
+          (with-temporary-functions
+              (('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil))
+               ('nshell.feature.assistant:classify-ast
+                (lambda (ast)
+                  (incf classification-count)
+                  (funcall original-classify ast))))
+            (nshell.presentation::%handle-ask-model-event
+             (nshell.feature.assistant::make-assistant-model-event
+              1 :result
+              '(("explanation" . "説明")
+                ("structured_output" .
+                 (("next_steps" . ("ls" "rm file" "rm -rf /")))))))
+            (nshell.presentation::%process-explain-panel-event
+             (input-key-event :tab))
+            (expect "ls"
+                    :to-equal
+                    (nshell.presentation:input-state-buffer
+                     nshell.presentation::*input-state*))
+            (expect :proposal :to-be
+                    nshell.presentation::*assistant-command-origin*)
+            (expect t :to-be
+                    nshell.presentation::*assistant-command-confirmed-p*)
+            (nshell.presentation::%process-explain-panel-event
+             (input-key-event :tab))
+            (expect "rm file"
+                    :to-equal
+                    (nshell.presentation:input-state-buffer
+                     nshell.presentation::*input-state*))
+            (expect :proposal :to-be
+                    nshell.presentation::*assistant-command-origin*)
+            (expect nil :to-be
+                    nshell.presentation::*assistant-command-confirmed-p*)
+            (nshell.presentation::%process-explain-panel-event
+             (input-key-event :tab))
+            (expect "rm file"
+                    :to-equal
+                    (nshell.presentation:input-state-buffer
+                     nshell.presentation::*input-state*))
+            (expect nil :to-be
+                    (search "rm -rf /"
+                            (nshell.presentation:input-state-buffer
+                             nshell.presentation::*input-state*)))
+            (expect (search "block" (first panel)) :to-be-truthy)
+            (expect 3 :to-be classification-count)))))))
+
 (describe "repl-ask-confirmation-tests"
   (it "does-not-execute-a-confirm-proposal-before-the-second-enter"
     (with-repl-test-state
@@ -329,3 +420,168 @@
                  nshell.presentation::*input-state*))
         (expect nil :to-be
                 (history-kit:history-entries nshell.presentation::*history*)))))))
+
+(describe "repl-explain-tests"
+  (it "uses-one-key-to-submit-explain-and-routes-other-keys-to-editing"
+    (with-repl-test-state
+      (let ((submitted-p nil))
+        (with-repl-input-state (:mode :insert :buffer "" :cursor-pos 0)
+          (setf nshell.presentation::*failure-explain-available-p* t)
+          (with-temporary-functions
+              (('nshell.presentation::%process-ask-submit-output-event
+                (lambda () (setf submitted-p t))))
+            (nshell.presentation::%process-failure-explain-event
+             (input-key-event :ctrl-right-bracket)))
+          (expect submitted-p :to-be-truthy)
+          (expect :explain :to-be nshell.presentation::*assistant-request-kind*)
+          (expect :ask-waiting :to-be
+                  (nshell.presentation:input-state-mode
+                   nshell.presentation::*input-state*)))
+        (with-repl-input-state (:mode :insert :buffer "" :cursor-pos 0)
+          (setf nshell.presentation::*failure-explain-available-p* t)
+          (nshell.presentation::%process-failure-explain-event
+           (input-key-event :char #\x))
+          (expect nil :to-be
+                  nshell.presentation::*failure-explain-available-p*)
+          (expect "x" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))))))
+
+  (it "renders-explain-text-without-replacing-the-edit-buffer"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting
+                              :buffer "keep this"
+                              :cursor-pos 9)
+        (let ((panel nil)
+              (event
+                (nshell.feature.assistant::make-assistant-model-event
+                 1 :result
+                 '(("text" . "The command failed because the file is missing.")
+                   ("next_steps" .
+                    ((("command" . "ls"))
+                     (("command" . "rm -rf /"))))))))
+          (setf nshell.presentation::*assistant-request-kind* :explain)
+          (with-temporary-functions
+              (('nshell.presentation::render-prompt-cont
+                (lambda () nil))
+               ('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content))))
+            (nshell.presentation::%handle-ask-model-event event))
+          (expect "keep this" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect :insert :to-be
+                  (nshell.presentation:input-state-mode
+                   nshell.presentation::*input-state*))
+          (expect (search "The command failed" (first panel)) :to-be-truthy)
+          (expect (search "1. ls" (third panel)) :to-be-truthy)))))
+
+  (it "reads-explain-text-from-content-blocks"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting :buffer "keep" :cursor-pos 4)
+        (let ((panel nil))
+          (setf nshell.presentation::*assistant-request-kind* :explain)
+          (with-temporary-functions
+              (('nshell.presentation::render-prompt-cont
+                (lambda () nil))
+               ('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content))))
+            (nshell.presentation::%handle-ask-model-event
+             (nshell.feature.assistant::make-assistant-model-event
+              1 :result
+              '(("content" . ((("text" . "content block explanation"))))))))
+          (expect (search "content block explanation" (first panel))
+                  :to-be-truthy)))))
+
+  (it "sends-only-redacted-explain-context-to-the-model-and-audit"
+    (with-repl-test-state
+      (repl-test-set-env "API_TOKEN" "secret-value" t)
+      (setf nshell.presentation::*last-exit-code* 7
+            nshell.presentation::*last-command-duration-ms* 42
+            nshell.presentation::*last-command-output*
+              "failed sk-12345678901234567890 secret-value")
+      (add-history-record nshell.presentation::*history*
+                          "deploy sk-12345678901234567890"
+                          :exit-code 7
+                          :duration-ms 42)
+      (with-repl-input-state (:mode :ask-waiting :buffer "" :cursor-pos 0)
+        (with-temporary-output-file (audit-path)
+          (let* ((request-payload nil)
+                (boundary
+                  (nshell.feature.assistant:make-assistant-model-boundary
+                   :start-fn (lambda () t)
+                   :request-fn (lambda (generation payload)
+                                 (declare (ignore generation))
+                                 (setf request-payload payload)
+                                 t)
+                   :poll-fn (lambda (generation)
+                              (declare (ignore generation))
+                              (values nil nil))
+                   :stop-fn (lambda () t))))
+            (setf nshell.presentation::*assistant-request-kind* :explain
+                  nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary))
+            (let ((nshell.feature.assistant:*assistant-audit-file-path-override*
+                    audit-path))
+              (with-temporary-functions
+                  (('nshell.infrastructure.acl:get-git-status
+                    (lambda (directory)
+                      (declare (ignore directory))
+                      (values "main" nil)))
+                   ('nshell.presentation::render-prompt-cont
+                    (lambda () nil))
+                   ('nshell.presentation::render-assistant-progress-panel
+                    (lambda (started-at)
+                      (declare (ignore started-at))
+                      nil)))
+                (nshell.presentation::process-output-event :ask-submit))
+              (let* ((context (cdr (assoc "context" request-payload
+                                           :test #'string=)))
+                     (last-output (cdr (assoc "last-output" context
+                                               :test #'string=)))
+                     (printed (with-output-to-string (stream)
+                                (write request-payload :stream stream)))
+                     (audit (host-kit:read-file-string audit-path)))
+                (expect "failed [REDACTED] [REDACTED]"
+                        :to-equal last-output)
+                (expect nil :to-be (search "secret-value" printed))
+                (expect nil :to-be
+                        (search "sk-12345678901234567890" printed))
+                (expect nil :to-be (search "secret-value" audit))
+                (expect nil :to-be
+                        (search "sk-12345678901234567890" audit)))))))))
+
+  (it "gates-tab-candidates-with-classify-ast-and-rejects-blocked-commands"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :insert :buffer "keep" :cursor-pos 4)
+        (setf nshell.presentation::*assistant-explain-candidates* '("ls")
+              nshell.presentation::*assistant-explain-candidate-index* 0)
+        (with-temporary-function
+            ('nshell.presentation::render-transient-panel
+             (lambda (content &rest arguments)
+               (declare (ignore content arguments))))
+          (nshell.presentation::%process-explain-panel-event
+           (input-key-event :tab)))
+        (expect "ls" :to-equal
+                (nshell.presentation:input-state-buffer
+                 nshell.presentation::*input-state*))
+        (expect :proposal :to-be nshell.presentation::*assistant-command-origin*)
+        (expect t :to-be nshell.presentation::*assistant-command-confirmed-p*))
+      (with-repl-input-state (:mode :insert :buffer "keep" :cursor-pos 4)
+        (setf nshell.presentation::*assistant-explain-candidates* '("rm -rf /")
+              nshell.presentation::*assistant-explain-candidate-index* 0)
+        (with-temporary-function
+            ('nshell.presentation::render-transient-panel
+             (lambda (content &rest arguments)
+               (declare (ignore content arguments))))
+          (nshell.presentation::%process-explain-panel-event
+           (input-key-event :tab)))
+        (expect "keep" :to-equal
+                (nshell.presentation:input-state-buffer
+                 nshell.presentation::*input-state*))
+        (expect :proposal :to-be nshell.presentation::*assistant-command-origin*)))))

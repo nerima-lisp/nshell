@@ -115,12 +115,15 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
           (%emit-right-prompt theme visible-right-segments padding))))))
 
 (defun render-prompt (config last-exit &key (last-command-duration-ms nil)
+                                      (failure-explain-p nil)
                                       (terminal-width (terminal-width)))
   "Render the left prompt with theme colors."
   (let* ((theme (nshell.domain.configuration:config-theme config))
          (pm (%current-prompt-model last-exit last-command-duration-ms))
          (segments (nshell.domain.prompting:render-prompt-model pm))
-         (right-segments (nshell.domain.prompting:render-right-prompt-model pm)))
+         (right-segments
+           (nshell.domain.prompting:render-right-prompt-model
+            pm :failure-explain-p failure-explain-p)))
     (%write-colored-segments *standard-output* theme segments)
     (when right-segments
       (%write-right-prompt theme segments right-segments terminal-width))

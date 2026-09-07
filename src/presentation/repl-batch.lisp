@@ -7,6 +7,8 @@
         *last-exit-code* 0
         *pipefail* nil
         *last-command-duration-ms* nil
+        *last-command-output* nil
+        *failure-explain-available-p* nil
         *prompt-rendered-terminal-width* +default-terminal-width+
         *prompt-rendered-prompt-width* 0
         *prompt-rendered-origin-row* 1

@@ -31,6 +31,27 @@
     (sb-posix:chmod (namestring path) #o700)
     path))
 
+(defun %assistant-test-rejecting-sidecar-script ()
+  (let ((path (merge-pathnames
+               (format nil "nshell-assistant-rejecting-sidecar-~D.sh"
+                       (get-universal-time))
+               (uiop:temporary-directory))))
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (dolist (line
+                '("#!/bin/sh"
+                  "if [ \"$1\" = \"--version\" ]; then"
+                  "  printf '%s\\n' 'test-version'"
+                  "  exit 0"
+                  "fi"
+                  "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"Bash\"],\"mcp_servers\":[]}'"
+                  "while :"
+                  "do"
+                  "  sleep 1"
+                  "done"))
+        (write-line line stream)))
+    (sb-posix:chmod (namestring path) #o700)
+    path))
+
 (describe "assistant-model-boundary-contracts"
   (it "replays-a-sanitized-stream-json-fixture-through-the-injected-boundary"
     (multiple-value-bind (boundary error-message)
@@ -276,5 +297,24 @@
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status
                         (nshell.feature.assistant:assistant-model-stop))))
+        (when (probe-file script)
+          (delete-file script))))))
+
+(describe "assistant-sidecar-reader-stop-race"
+  (it "stops-cleanly-when-init-gate-rejects-a-live-reader"
+    (let ((script (%assistant-test-rejecting-sidecar-script)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary))
+                  (start (nshell.feature.assistant:assistant-model-start)))
+             (expect :unavailable :to-be
+                     (nshell.feature.assistant:assistant-boundary-status start))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-stop))))
         (when (probe-file script)
           (delete-file script))))))

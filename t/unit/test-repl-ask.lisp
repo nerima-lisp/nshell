@@ -3,52 +3,81 @@
 (describe "repl-ask-request-tests"
   (it "starts-the-model-and-sends-the-natural-language-payload"
     (with-repl-test-state
+      (repl-test-set-env "API_TOKEN" "secret-value" t)
+      (add-history-record nshell.presentation::*history*
+                          "printf sk-12345678901234567890"
+                          :exit-code 0
+                          :duration-ms 37)
       (with-repl-input-state (:mode :ask-waiting
                               :buffer "show changed files"
                               :cursor-pos 18)
-        (let* ((start-count 0)
-              (request-generation nil)
-              (request-payload nil)
-              (boundary
-                (nshell.feature.assistant:make-assistant-model-boundary
-                 :start-fn (lambda ()
-                             (incf start-count)
-                             t)
-                 :request-fn (lambda (generation payload)
-                               (setf request-generation generation
-                                     request-payload payload)
-                               t)
-                 :poll-fn (lambda (generation)
-                            (declare (ignore generation))
-                            (values nil nil))
-                 :stop-fn (lambda ()
-                            t))))
-          (setf nshell.feature.assistant:*assistant-boundaries*
-                (nshell.feature.assistant:make-assistant-boundary-context
-                 boundary))
-          (with-temporary-functions
-              (('nshell.presentation::render-prompt-cont
-                (lambda () nil))
-               ('nshell.presentation::render-assistant-progress-panel
-                (lambda (started-at)
-                  (declare (ignore started-at))
-                  nil)))
-            (let ((continuation
-                    (nshell.presentation::process-output-event :ask-submit)))
-              (expect (functionp continuation) :to-be-truthy)
-              (expect 1 :to-be start-count)
-              (expect 1 :to-be request-generation)
-              (expect "user" :to-equal
-                      (cdr (assoc "type" request-payload :test #'string=)))
-              (let ((message (cdr (assoc "message" request-payload
-                                          :test #'string=))))
-                (expect "user" :to-equal
-                        (cdr (assoc "role" message :test #'string=)))
-                (expect "show changed files" :to-equal
-                        (cdr (assoc "content" message :test #'string=))))
-              (expect :ask-waiting :to-be
-                      (nshell.presentation:input-state-mode
-                       nshell.presentation::*input-state*))))))))
+        (with-temporary-output-file (audit-path)
+          (let* ((start-count 0)
+                 (request-generation nil)
+                 (request-payload nil)
+                 (boundary
+                   (nshell.feature.assistant:make-assistant-model-boundary
+                    :start-fn (lambda ()
+                                (incf start-count)
+                                t)
+                    :request-fn (lambda (generation payload)
+                                  (setf request-generation generation
+                                        request-payload payload)
+                                  t)
+                    :poll-fn (lambda (generation)
+                               (declare (ignore generation))
+                               (values nil nil))
+                    :stop-fn (lambda ()
+                               t))))
+            (setf nshell.feature.assistant:*assistant-boundaries*
+                  (nshell.feature.assistant:make-assistant-boundary-context
+                   boundary))
+            (let ((nshell.feature.assistant:*assistant-audit-file-path-override*
+                    audit-path))
+              (with-temporary-functions
+                  (('nshell.infrastructure.acl:get-git-status
+                    (lambda (directory)
+                      (declare (ignore directory))
+                      (values "main" nil)))
+                   ('nshell.presentation::render-prompt-cont
+                    (lambda () nil))
+                   ('nshell.presentation::render-assistant-progress-panel
+                    (lambda (started-at)
+                      (declare (ignore started-at))
+                      nil)))
+                (let ((continuation
+                        (nshell.presentation::process-output-event :ask-submit)))
+                  (expect (functionp continuation) :to-be-truthy)
+                  (expect 1 :to-be start-count)
+                  (expect 1 :to-be request-generation)
+                  (expect "user" :to-equal
+                          (cdr (assoc "type" request-payload :test #'string=)))
+                  (let ((message (cdr (assoc "message" request-payload
+                                              :test #'string=))))
+                    (expect "user" :to-equal
+                            (cdr (assoc "role" message :test #'string=)))
+                    (expect "show changed files" :to-equal
+                            (cdr (assoc "content" message :test #'string=))))
+                  (let* ((context (cdr (assoc "context" request-payload
+                                              :test #'string=)))
+                         (environment-names
+                           (cdr (assoc "environment-names" context
+                                       :test #'string=)))
+                         (printed (with-output-to-string (stream)
+                                    (write request-payload :stream stream)))
+                         (audit (host-kit:read-file-string audit-path)))
+                    (expect (find "API_TOKEN" environment-names
+                                  :test #'string=)
+                            :to-be-truthy)
+                    (expect nil :to-be (search "secret-value" printed))
+                    (expect nil :to-be
+                            (search "sk-12345678901234567890" printed))
+                    (expect nil :to-be (search "secret-value" audit))
+                    (expect nil :to-be
+                            (search "sk-12345678901234567890" audit)))
+                  (expect :ask-waiting :to-be
+                          (nshell.presentation:input-state-mode
+                           nshell.presentation::*input-state*))))))))))
 
   (it "renders-the-ask-suffix-and-includes-it-in-prompt-geometry"
     (with-repl-test-state

@@ -73,6 +73,30 @@ wrapped line's other rows on screen as stale duplicates."
   (or (nshell.feature.assistant:assistant-boundary-message result)
       fallback))
 
+(defun %assistant-last-command-context ()
+  (let ((entry (first (history-kit:history-entries *history*))))
+    (and entry (history-kit:history-entry-text entry))))
+
+(defun %assistant-git-context ()
+  (multiple-value-bind (branch dirty-p)
+      (nshell.infrastructure.acl:get-git-status (boundary-current-directory))
+    (when branch
+      (if dirty-p
+          (format nil "~a dirty" branch)
+          branch))))
+
+(defun %assistant-context ()
+  (nshell.feature.assistant:assemble-assistant-context
+   :command (%assistant-last-command-context)
+   :exit *last-exit-code*
+   :duration-ms *last-command-duration-ms*
+   :cwd (boundary-current-directory)
+   :git-status (%assistant-git-context)
+   :last-output nil
+   :environment-names
+   (mapcar #'nshell.domain.environment:env-binding-name
+           (nshell.domain.environment:env-bindings (ensure-environment)))))
+
 (defun %return-from-ask-with-message (message)
   (clear-rendered-completions)
   (clear-rendered-transient-panel)
@@ -115,7 +139,10 @@ wrapped line's other rows on screen as stale duplicates."
            (setf *assistant-turn-generation*
                  (nshell.feature.assistant:next-assistant-turn-generation
                   *assistant-turn-generation*)))
-         (payload (nshell.feature.assistant:make-assistant-user-payload text))
+         (raw-payload
+           (nshell.feature.assistant:make-assistant-user-payload
+            text :context (%assistant-context)))
+         (payload (nshell.feature.assistant:redact-payload raw-payload))
          (start-result (nshell.feature.assistant:assistant-model-start)))
     (setf *assistant-last-cancel-at* nil)
     (setf *assistant-turn-started-at* (boundary-monotonic))
@@ -125,6 +152,7 @@ wrapped line's other rows on screen as stale duplicates."
          (format nil "AI 未接続: ~a"
                  (%assistant-boundary-failure-message
                   start-result "assistant model boundary is unavailable")))))
+    (nshell.feature.assistant:append-assistant-audit-entry payload nil)
     (let ((request-result
             (nshell.feature.assistant:assistant-model-request
              generation payload)))

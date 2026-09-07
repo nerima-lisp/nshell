@@ -152,7 +152,17 @@
               :to-be t)
       (expect (not (null (member "--json-schema" arguments :test #'string=)))
               :to-be t)
-      (expect nil :to-be (member "--safe-mode" arguments :test #'string=))))
+      (expect nil :to-be (member "--safe-mode" arguments :test #'string=))
+      (let ((effort (member "--effort" arguments :test #'string=)))
+        (expect t :to-be (not (null effort)))
+        (expect "low" :to-be (second effort)))
+      (expect nil :to-be (member "--model" arguments :test #'string=)))
+    (let ((arguments (nshell.feature.assistant:assistant-sidecar-command-arguments
+                      '(:model "sonnet"))))
+      (expect "sonnet" :to-be
+              (second (member "--model" arguments :test #'string=)))
+      (expect "low" :to-be
+              (second (member "--effort" arguments :test #'string=)))))
 
   (it "starts-sidecar-in-its-own-group-without-shell-registration"
     (let ((foreground-pgid nshell.infrastructure.acl::*foreground-pgid*)

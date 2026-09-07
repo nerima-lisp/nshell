@@ -66,6 +66,116 @@ wrapped line's other rows on screen as stale duplicates."
                               :alias-table *aliases*
                               :function-table *functions*))))
 
+(defun %assistant-boundary-ok-p (result)
+  (eq :ok (nshell.feature.assistant:assistant-boundary-status result)))
+
+(defun %assistant-boundary-failure-message (result fallback)
+  (or (nshell.feature.assistant:assistant-boundary-message result)
+      fallback))
+
+(defun %return-from-ask-with-message (message)
+  (clear-rendered-completions)
+  (clear-rendered-transient-panel)
+  (clear-rendered-prompt)
+  (format t "~%nshell: ~a~%" message)
+  (setf *input-state* (make-repl-input-state)
+        *assistant-model-event-handler* nil
+        *assistant-turn-started-at* nil)
+  (reset-rendered-prompt-state)
+  (lambda () (render-prompt-cont)))
+
+(define-output-event-handler %process-ask-start-output-event
+    with-cleared-rendered-completions-and-prompt-cont
+    (setf *assistant-last-cancel-at* nil))
+
+(define-output-event-handler %process-ask-cancel-output-event
+    with-cleared-rendered-completions-and-prompt-cont
+    (refresh-current-input-state-suggestion))
+
+(defun %ask-model-terminal-event-p (event)
+  (member (nshell.feature.assistant:assistant-model-event-kind event)
+          '(:result :stream-ended :stream-error :rate-limit-event)
+          :test #'eq))
+
+(defun %handle-ask-model-event (event)
+  (if (%ask-model-terminal-event-p event)
+      (progn
+        (setf *input-state* (make-repl-input-state)
+              *assistant-model-event-handler* nil
+              *assistant-turn-started-at* nil)
+        (clear-rendered-transient-panel)
+        (render-prompt-cont))
+      (when *assistant-turn-started-at*
+        (render-assistant-progress-panel *assistant-turn-started-at*))))
+
+(defun %process-ask-submit-output-event ()
+  (clear-rendered-completions)
+  (let* ((text (input-state-buffer *input-state*))
+         (generation
+           (setf *assistant-turn-generation*
+                 (nshell.feature.assistant:next-assistant-turn-generation
+                  *assistant-turn-generation*)))
+         (payload (nshell.feature.assistant:make-assistant-user-payload text))
+         (start-result (nshell.feature.assistant:assistant-model-start)))
+    (setf *assistant-last-cancel-at* nil)
+    (setf *assistant-turn-started-at* (boundary-monotonic))
+    (unless (%assistant-boundary-ok-p start-result)
+      (return-from %process-ask-submit-output-event
+        (%return-from-ask-with-message
+         (format nil "AI 未接続: ~a"
+                 (%assistant-boundary-failure-message
+                  start-result "assistant model boundary is unavailable")))))
+    (let ((request-result
+            (nshell.feature.assistant:assistant-model-request
+             generation payload)))
+      (unless (%assistant-boundary-ok-p request-result)
+        (return-from %process-ask-submit-output-event
+          (%return-from-ask-with-message
+           (format nil "AI 要求を送信できません: ~a"
+                   (%assistant-boundary-failure-message
+                    request-result "assistant model request failed")))))
+      (setf *assistant-model-event-handler* #'%handle-ask-model-event)
+      (render-prompt-cont)
+      (render-assistant-progress-panel *assistant-turn-started-at*)
+      (lambda () (read-key-cont)))))
+
+(defun %assistant-cancel-repeat-p (now)
+  (let ((last-cancel-at *assistant-last-cancel-at*))
+    (and last-cancel-at
+         (<= 0 (- now last-cancel-at) +assistant-cancel-window-ticks+))))
+
+(defun %process-ask-cancel-turn-output-event ()
+  (let* ((now (boundary-monotonic))
+         (repeat-p (%assistant-cancel-repeat-p now))
+         (generation
+           (setf *assistant-turn-generation*
+                 (nshell.feature.assistant:next-assistant-turn-generation
+                  *assistant-turn-generation*)))
+         (stop-result (when repeat-p
+                        (nshell.feature.assistant:assistant-model-stop)))
+         (start-result (when repeat-p
+                         (nshell.feature.assistant:assistant-model-start))))
+    (declare (ignore generation))
+    (clear-rendered-completions)
+    (clear-rendered-transient-panel)
+    (clear-rendered-prompt)
+    (setf *input-state* (make-repl-input-state)
+          *assistant-model-event-handler* nil
+          *assistant-turn-started-at* nil
+          *assistant-last-cancel-at* (unless repeat-p now))
+    (format t "~%nshell: AI turn canceled~%")
+    (when (and repeat-p
+               (not (%assistant-boundary-ok-p start-result)))
+      (format t "nshell: AI sidecar restart failed: ~a~%"
+              (%assistant-boundary-failure-message
+               start-result "assistant model boundary is unavailable")))
+    (when (and repeat-p
+               (not (%assistant-boundary-ok-p stop-result)))
+      (format t "nshell: AI sidecar stop failed: ~a~%"
+              (%assistant-boundary-failure-message
+               stop-result "assistant model boundary is unavailable")))
+    (reset-rendered-prompt-state)
+    (lambda () (render-prompt-cont))))
 (defun %execute-empty-input ()
   (with-reset-rendered-prompt-state-and-prompt-cont
     (format t "~%")

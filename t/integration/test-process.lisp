@@ -218,9 +218,10 @@
               (capture-standard-output
                 (setf status
                       (nshell.infrastructure.acl:spawn-pipeline
-                       (list (nshell.domain.parsing:make-command-node
-                              "echo" '("helper-path"))
-                             (nshell.domain.parsing:make-command-node "cat" nil))))))
+                       (list (%process-test-sbcl-command-node
+                              "(write-line \"helper-path\")")
+                             (%process-test-sbcl-command-node
+                              "(write-line (read-line))"))))))
       (expect 0 :to-equal status)))
 
   (it "spawn-pipeline-holds-all-stages-in-one-group-before-release"

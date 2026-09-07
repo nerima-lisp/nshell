@@ -15,6 +15,8 @@
   (* 2 internal-time-units-per-second))
 (defvar *last-assistant-model-event* nil)
 (defvar *assistant-model-event-handler* nil)
+(defvar *assistant-command-origin* :typed)
+(defvar *assistant-command-confirmed-p* nil)
 (defvar *completion-rendered-lines* 0)
 (defvar *transient-panel-rendered-lines* 0)
 (defvar *prompt-rendered-lines* 0)

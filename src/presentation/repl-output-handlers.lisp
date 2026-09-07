@@ -97,6 +97,75 @@ wrapped line's other rows on screen as stale duplicates."
    (mapcar #'nshell.domain.environment:env-binding-name
            (nshell.domain.environment:env-bindings (ensure-environment)))))
 
+(defun %assistant-payload-field (payload key)
+  (when (listp payload)
+    (loop for entry in payload
+          when (and (consp entry)
+                    (stringp (car entry))
+                    (string= key (car entry)))
+            do (return (cdr entry)))))
+
+(defun %assistant-content-proposal-text (content)
+  (cond
+    ((stringp content) content)
+    ((listp content)
+     (or (%assistant-proposal-text content)
+         (some #'%assistant-content-proposal-text content)))))
+
+(defun %assistant-proposal-text (payload)
+  (cond
+    ((null payload) nil)
+    ((stringp payload) payload)
+    ((listp payload)
+     (or (let ((command (%assistant-payload-field payload "command")))
+           (and (stringp command) command))
+         (%assistant-proposal-text
+          (%assistant-payload-field payload "structured_output"))
+         (let ((text (%assistant-payload-field payload "text")))
+           (and (stringp text) text))
+         (%assistant-proposal-text
+          (%assistant-payload-field payload "message"))
+         (%assistant-content-proposal-text
+          (%assistant-payload-field payload "content"))))))
+
+(defun %assistant-proposal-assessment (text)
+  (let ((result (nshell.domain.parsing:parse-command-line text)))
+    (if (nshell.domain.parsing:parse-complete-p result)
+        (values
+         :classified
+         (nshell.feature.assistant:classify-ast
+          (nshell.domain.parsing:parse-result-ast result))
+         nil)
+        (values :parse-error nil
+                (format nil "解釈できない提案: ~a" text)))))
+
+(defun %install-assistant-proposal (text)
+  (let ((state *input-state*))
+    (setf *input-state*
+          (copy-input-state-clearing-completion
+           state
+           :buffer text
+           :cursor-pos (length text)
+           :mode :insert
+           :ask-original-buffer :clear
+           :ask-original-cursor :clear
+           :undo-stack (cons (input-edit-snapshot state)
+                             (input-state-undo-stack state))
+           :redo-stack nil))))
+
+(defun %assistant-proposal-panel (classification reason)
+  (render-transient-panel
+   (list (format nil "AI proposal [~(~a~)]: ~a"
+                 classification reason))))
+
+(defun %assistant-event-reason (event fallback)
+  (let ((payload (nshell.feature.assistant:assistant-model-event-payload event)))
+    (or (and (listp payload)
+             (or (%assistant-payload-field payload "message")
+                 (%assistant-payload-field payload "reason")
+                 (%assistant-payload-field payload "error")))
+        fallback)))
+
 (defun %return-from-ask-with-message (message)
   (clear-rendered-completions)
   (clear-rendered-transient-panel)
@@ -104,7 +173,9 @@ wrapped line's other rows on screen as stale duplicates."
   (format t "~%nshell: ~a~%" message)
   (setf *input-state* (make-repl-input-state)
         *assistant-model-event-handler* nil
-        *assistant-turn-started-at* nil)
+        *assistant-turn-started-at* nil
+        *assistant-command-origin* :typed
+        *assistant-command-confirmed-p* nil)
   (reset-rendered-prompt-state)
   (lambda () (render-prompt-cont)))
 
@@ -122,15 +193,57 @@ wrapped line's other rows on screen as stale duplicates."
           :test #'eq))
 
 (defun %handle-ask-model-event (event)
-  (if (%ask-model-terminal-event-p event)
-      (progn
-        (setf *input-state* (make-repl-input-state)
-              *assistant-model-event-handler* nil
-              *assistant-turn-started-at* nil)
-        (clear-rendered-transient-panel)
-        (render-prompt-cont))
-      (when *assistant-turn-started-at*
-        (render-assistant-progress-panel *assistant-turn-started-at*))))
+  (case (nshell.feature.assistant:assistant-model-event-kind event)
+    (:result
+     (let ((proposal
+             (%assistant-proposal-text
+              (nshell.feature.assistant:assistant-model-event-payload event))))
+       (if (or (null proposal) (zerop (length proposal)))
+           (%return-from-ask-with-message "AI 応答に提案がありません")
+           (multiple-value-bind (status classification reason)
+               (%assistant-proposal-assessment proposal)
+             (setf *assistant-model-event-handler* nil
+                   *assistant-turn-started-at* nil)
+             (clear-rendered-transient-panel)
+             (if (eq status :parse-error)
+                 (progn
+                   (setf *input-state* (make-repl-input-state)
+                         *assistant-command-origin* :typed
+                         *assistant-command-confirmed-p* nil)
+                   (render-transient-panel (list reason))
+                   (render-prompt-cont))
+                 (case (nshell.feature.assistant:assistant-safety-result-classification
+                        classification)
+                   (:block
+                    (setf *input-state* (make-repl-input-state)
+                          *assistant-command-origin* :typed
+                          *assistant-command-confirmed-p* nil)
+                    (%assistant-proposal-panel
+                     :block
+                     (nshell.feature.assistant:assistant-safety-result-reason
+                      classification))
+                    (render-prompt-cont))
+                   (otherwise
+                    (%install-assistant-proposal proposal)
+                    (setf *assistant-command-origin* :proposal
+                          *assistant-command-confirmed-p*
+                            (eq :safe
+                                (nshell.feature.assistant:assistant-safety-result-classification
+                                 classification)))
+                    (%assistant-proposal-panel
+                     (nshell.feature.assistant:assistant-safety-result-classification
+                      classification)
+                     (nshell.feature.assistant:assistant-safety-result-reason
+                      classification))
+                    (render-prompt-cont))))))))
+    ((:stream-error :rate-limit-event)
+     (%return-from-ask-with-message
+      (%assistant-event-reason event "AI 応答を受け取れませんでした")))
+    (:stream-ended
+     (%return-from-ask-with-message "AI 応答が終了しました"))
+    (otherwise
+     (when *assistant-turn-started-at*
+       (render-assistant-progress-panel *assistant-turn-started-at*)))))
 
 (defun %process-ask-submit-output-event ()
   (clear-rendered-completions)

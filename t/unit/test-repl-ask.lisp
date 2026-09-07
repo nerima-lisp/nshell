@@ -116,3 +116,117 @@
                   nshell.presentation::*assistant-model-event-handler*)
           (expect nil :to-be
                   nshell.presentation::*assistant-turn-started-at*))))))
+
+(describe "repl-ask-proposal-tests"
+  (it "installs-a-safe-result-and-keeps-one-undo-step"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting
+                              :buffer "question"
+                              :cursor-pos 8)
+        (let ((event
+                (nshell.feature.assistant::make-assistant-model-event
+                 1 :result
+                  '(("structured_output" .
+                     (("command" . "ls"))))))
+              (panel nil))
+          (with-temporary-functions
+              (('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (nshell.presentation::%handle-ask-model-event event))
+          (expect :insert :to-be
+                  (nshell.presentation:input-state-mode
+                   nshell.presentation::*input-state*))
+          (expect "ls" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect :proposal :to-be
+                  nshell.presentation::*assistant-command-origin*)
+          (expect t :to-be
+                  nshell.presentation::*assistant-command-confirmed-p*)
+          (multiple-value-bind (restored output)
+              (nshell.presentation::undo-input-state
+               nshell.presentation::*input-state*)
+            (declare (ignore output))
+            (expect "question" :to-equal
+                    (nshell.presentation:input-state-buffer restored)))
+          (expect (search "safe" (first panel)) :to-be-truthy)))))
+
+  (it "installs-a-confirm-result-without-marking-it-confirmed"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting
+                              :buffer "question"
+                              :cursor-pos 8)
+        (let ((event
+                (nshell.feature.assistant::make-assistant-model-event
+                 1 :result
+                  '(("structured_output" .
+                     (("command" . "rm file"))))))
+              (panel nil))
+          (with-temporary-functions
+              (('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (nshell.presentation::%handle-ask-model-event event))
+          (expect "rm file" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect nil :to-be
+                  nshell.presentation::*assistant-command-confirmed-p*)
+          (expect (search "confirm" (first panel)) :to-be-truthy)))))
+
+  (it "does-not-install-a-blocked-result-in-the-buffer"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting
+                              :buffer "question"
+                              :cursor-pos 8)
+        (let ((event
+                (nshell.feature.assistant::make-assistant-model-event
+                 1 :result
+                  '(("structured_output" .
+                     (("command" . "rm -rf /"))))))
+              (panel nil))
+          (with-temporary-functions
+              (('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (nshell.presentation::%handle-ask-model-event event))
+          (expect "" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect :typed :to-be
+                  nshell.presentation::*assistant-command-origin*)
+          (expect (search "block" (first panel)) :to-be-truthy)))))
+
+  (it "does-not-install-a-parse-error-result-in-the-buffer"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting
+                              :buffer "question"
+                              :cursor-pos 8)
+        (let ((event
+                (nshell.feature.assistant::make-assistant-model-event
+                 1 :result
+                  '(("structured_output" .
+                     (("command" . "unterminated '"))))))
+              (panel nil))
+          (with-temporary-functions
+              (('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (nshell.presentation::%handle-ask-model-event event))
+          (expect "" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect (search "解釈できない提案" (first panel)) :to-be-truthy))))))

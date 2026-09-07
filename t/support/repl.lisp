@@ -19,6 +19,8 @@
          (nshell.presentation::*assistant-last-cancel-at* nil)
          (nshell.presentation::*last-assistant-model-event* nil)
          (nshell.presentation::*assistant-model-event-handler* nil)
+         (nshell.presentation::*assistant-command-origin* :typed)
+         (nshell.presentation::*assistant-command-confirmed-p* nil)
          (nshell.feature.assistant:*assistant-boundaries* nil)
          (nshell.presentation::*completion-rendered-lines* 0)
          (nshell.presentation::*transient-panel-rendered-lines* 0)

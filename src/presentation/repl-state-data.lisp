@@ -11,6 +11,8 @@
 (defvar *assistant-turn-generation* 0)
 (defvar *assistant-turn-started-at* nil)
 (defvar *assistant-last-cancel-at* nil)
+(defconstant +assistant-cancel-window-ticks+
+  (* 2 internal-time-units-per-second))
 (defvar *last-assistant-model-event* nil)
 (defvar *assistant-model-event-handler* nil)
 (defvar *completion-rendered-lines* 0)

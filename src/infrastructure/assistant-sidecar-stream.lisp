@@ -138,6 +138,18 @@
   (when channel
     (ignore-errors (cl-concurrent-kit:close-channel channel))))
 
+(defun %assistant-sidecar-discard-pending (state pending)
+  (when (%assistant-sidecar-clear-pending state pending)
+    (loop
+      (multiple-value-bind (event present-p closed-p)
+          (cl-concurrent-kit:try-recv
+           (assistant-pending-cell-events pending))
+        (declare (ignore event closed-p))
+        (unless present-p
+          (return))))
+    (%assistant-sidecar-close-channel
+     (assistant-pending-cell-events pending))))
+
 (defun %assistant-sidecar-stop-state (state)
   (let ((pending (%assistant-sidecar-current-pending state))
         (write-channel (assistant-sidecar-state-write-channel state))
@@ -303,7 +315,10 @@
             (%assistant-sidecar-close-channel
              (assistant-pending-cell-events pending)))
           (values event present-p))
-        (values nil nil))))
+        (progn
+          (when pending
+            (%assistant-sidecar-discard-pending state pending))
+          (values nil nil)))))
 
 (defun %assistant-sidecar-stop (state)
   (%assistant-sidecar-stop-state state))

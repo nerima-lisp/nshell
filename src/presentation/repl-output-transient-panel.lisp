@@ -1,6 +1,9 @@
 ;;; REPL transient output region
 (in-package #:nshell.presentation)
 
+(defvar *transient-panel-content* nil)
+(defvar *preserve-transient-panel-on-next-prompt-p* nil)
+
 (defun %transient-output-row-offset ()
   (max 0
        (- (1- *prompt-rendered-lines*)
@@ -35,12 +38,13 @@
       (nshell.infrastructure.terminal:ansi-restore-cursor))))
 
 (defun reset-rendered-transient-panel-state ()
-  (setf *transient-panel-rendered-lines* 0))
+  (setf *transient-panel-rendered-lines* 0
+        *transient-panel-content* nil))
 
 (defun clear-rendered-transient-panel ()
   (when (plusp *transient-panel-rendered-lines*)
-    (%clear-rendered-transient-output *transient-panel-rendered-lines*)
-    (reset-rendered-transient-panel-state)))
+    (%clear-rendered-transient-output *transient-panel-rendered-lines*))
+  (reset-rendered-transient-panel-state))
 
 (defun %transient-panel-lines (content)
   (labels ((split-line (line)
@@ -100,6 +104,7 @@
 
 (defun render-transient-panel (content &key (terminal-width (terminal-width)))
   (clear-rendered-transient-panel)
+  (setf *transient-panel-content* content)
   (let* ((lines (%transient-panel-lines content))
          (terminal-rows (%transient-panel-terminal-rows))
          (max-rows (max 0 (- terminal-rows *prompt-rendered-lines* 1)))

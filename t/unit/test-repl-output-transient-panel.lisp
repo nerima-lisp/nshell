@@ -69,4 +69,25 @@
                       (nshell.presentation::render-prompt-cont))))
               (expect (search "PROMPT> " output) :to-be-truthy)
               (expect 0 :to-equal
+                      nshell.presentation::*transient-panel-rendered-lines*)))))))
+
+  (it "redraws-the-panel-after-a-terminal-resize"
+    (with-repl-test-state
+      (with-stable-repl-prompt (:text "PROMPT> " :width 8)
+        (with-fixed-terminal-size (24 30)
+          (with-repl-input-state (:buffer "" :cursor-pos 0)
+            (setf nshell.presentation::*prompt-rendered-lines* 1)
+            (capture-standard-output
+              (nshell.presentation:render-transient-panel '("resized")))
+            (let ((output
+                    (with-temporary-function
+                        ('nshell.infrastructure.acl:consume-terminal-resize-p
+                         (lambda () t))
+                      (capture-standard-output
+                        (let ((continuation
+                                (nshell.presentation::read-key-cont)))
+                          (funcall continuation))))))
+              (expect (search "PROMPT> " output) :to-be-truthy)
+              (expect (search "resized" output) :to-be-truthy)
+              (expect 3 :to-equal
                       nshell.presentation::*transient-panel-rendered-lines*))))))))

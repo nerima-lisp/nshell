@@ -2,6 +2,17 @@
 ;;; fish-inspired UX with trampoline-driven continuations
 (in-package #:nshell.presentation)
 
+(defun %render-prompt-after-terminal-resize ()
+  (let ((*preserve-transient-panel-on-next-prompt-p* t))
+    (render-prompt-cont)))
+
+(defun %assistant-repeat-cancel-event-p (event)
+  (let ((last-cancel-at *assistant-last-cancel-at*)
+        (now (boundary-monotonic)))
+    (and (eq :ctrl-c (nshell.domain.input:key-event-type event))
+         last-cancel-at
+         (<= 0 (- now last-cancel-at) +assistant-cancel-window-ticks+))))
+
 (defun %map-rendered-mouse-event-to-buffer (event)
   (let ((data (and *input-state*
                    (nshell.domain.input:key-event-p event)
@@ -30,7 +41,7 @@
 
 (defun read-key-cont ()
   (if (nshell.infrastructure.acl:consume-terminal-resize-p)
-      (lambda () (render-prompt-cont))
+      (lambda () (%render-prompt-after-terminal-resize))
       (let* ((raw-event
                (nshell.infrastructure.terminal:read-key-event
                 :interrupt-predicate
@@ -51,6 +62,8 @@
                (when (functionp *assistant-model-event-handler*)
                  (funcall *assistant-model-event-handler* raw-event)))
              (read-key-cont)))
+          ((%assistant-repeat-cancel-event-p event)
+           (lambda () (process-output-event :ask-cancel-turn)))
           (event
            (lambda ()
              (multiple-value-bind (new-state output-event)
@@ -58,7 +71,7 @@
                (setf *input-state* new-state)
                (process-output-event output-event))))
           ((nshell.infrastructure.acl:consume-terminal-resize-p)
-           (lambda () (render-prompt-cont)))
+           (lambda () (%render-prompt-after-terminal-resize)))
           (t
            (setf *running* nil)
            nil)))))

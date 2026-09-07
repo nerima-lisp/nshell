@@ -87,3 +87,77 @@
                        (setf first-p nil)
                        event)))))
             (expect event :to-be read-event)))))))
+
+(describe "repl-assistant-cancel-tests"
+  (it "keeps-the-sidecar-on-the-first-cancel-and-restarts-it-on-the-second"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting
+                              :buffer "question"
+                              :cursor-pos 8)
+        (let ((clock 0)
+              (start-count 0)
+              (stop-count 0)
+              (boundary
+                (nshell.feature.assistant:make-assistant-model-boundary
+                 :start-fn (lambda () (incf start-count) t)
+                 :request-fn (lambda (generation payload)
+                               (declare (ignore generation payload))
+                               t)
+                 :poll-fn (lambda (generation)
+                            (declare (ignore generation))
+                            (values nil nil))
+                 :stop-fn (lambda () (incf stop-count) t))))
+          (setf nshell.feature.assistant:*assistant-boundaries*
+                (nshell.feature.assistant:make-assistant-boundary-context
+                 boundary))
+          (with-temporary-functions
+              (('nshell.presentation::boundary-monotonic
+                (lambda () clock))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (let ((continuation
+                    (nshell.presentation::process-output-event
+                     :ask-cancel-turn)))
+              (when continuation (funcall continuation)))
+            (expect 0 :to-be stop-count)
+            (expect 0 :to-be start-count)
+            (expect 2 :to-be nshell.presentation::*assistant-turn-generation*)
+            (expect 0 :to-be nshell.presentation::*assistant-last-cancel-at*)
+            (setf clock internal-time-units-per-second)
+            (let ((continuation
+                    (nshell.presentation::process-output-event
+                     :ask-cancel-turn)))
+              (when continuation (funcall continuation)))
+            (expect 1 :to-be stop-count)
+            (expect 1 :to-be start-count)
+            (expect 3 :to-be nshell.presentation::*assistant-turn-generation*)
+            (expect :insert :to-be
+                    (nshell.presentation:input-state-mode
+                     nshell.presentation::*input-state*))
+            (expect nil :to-be nshell.presentation::*assistant-last-cancel-at*))))))
+
+  (it "recognizes-the-second-control-c-as-a-cancel-turn-event"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :insert :buffer "" :cursor-pos 0)
+        (setf nshell.presentation::*assistant-last-cancel-at* 0)
+        (with-temporary-functions
+            (('nshell.presentation::boundary-monotonic
+              (lambda () internal-time-units-per-second))
+             ('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.feature.assistant:assistant-model-poll
+              (lambda (generation)
+                (declare (ignore generation))
+                (list :status :empty)))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                (input-key-event :ctrl-c)))
+             ('nshell.presentation::process-output-event
+              (lambda (output-event)
+                (expect :ask-cancel-turn :to-be output-event)))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () nil)))
+          (let ((continuation (nshell.presentation::read-key-cont)))
+            (expect t :to-be-truthy (functionp continuation))
+            (funcall continuation)))))))

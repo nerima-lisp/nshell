@@ -22,6 +22,8 @@
          (nshell.feature.assistant:*assistant-boundaries* nil)
          (nshell.presentation::*completion-rendered-lines* 0)
          (nshell.presentation::*transient-panel-rendered-lines* 0)
+         (nshell.presentation::*transient-panel-content* nil)
+         (nshell.presentation::*preserve-transient-panel-on-next-prompt-p* nil)
          (nshell.presentation::*prompt-rendered-lines* 0)
          (nshell.presentation::*prompt-rendered-cursor-row* 0)
          (nshell.presentation::*prompt-rendered-terminal-width* 80)

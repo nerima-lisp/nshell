@@ -189,21 +189,32 @@ wrapped line's other rows on screen as stale duplicates."
     ;; Time the command through the clock boundary (real clock == monotonic
     ;; get-internal-real-time), so a fake clock makes duration deterministic.
     (let ((start-time (boundary-monotonic))
+          (timestamp (get-universal-time))
+          (cwd (boundary-current-directory))
           (exit-code nil))
       (unwind-protect
            (setf exit-code (or (execute-ast ast) 0))
         (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
-          (setf *last-exit-code* recorded-exit-code
-                *last-command-duration-ms*
-                (%elapsed-command-duration-ms
-                 start-time
-                 (boundary-monotonic)))
-          (when *history-persistence-enabled-p*
-            (history-kit:history-add *history* text
-                                     :exit-code recorded-exit-code)
-            (history-kit:history-reset-navigation *history*)
-            (nshell.infrastructure.persistence:append-history-entry text))))
-    (setf *input-state* (make-repl-input-state)))))
+          (let ((duration-ms (%elapsed-command-duration-ms
+                              start-time
+                              (boundary-monotonic))))
+            (setf *last-exit-code* recorded-exit-code
+                  *last-command-duration-ms* duration-ms)
+            (when *history-persistence-enabled-p*
+              (multiple-value-bind (history record)
+                  (nshell.infrastructure.persistence::history-record-add
+                   *history* text
+                   :timestamp timestamp
+                   :cwd cwd
+                   :exit-code recorded-exit-code
+                   :duration-ms duration-ms
+                   :origin :typed)
+                (declare (ignore history))
+                (history-kit:history-reset-navigation *history*)
+                (let ((nshell.infrastructure.persistence::*history-record-to-append*
+                        record))
+                  (nshell.infrastructure.persistence:append-history-entry text))))))
+    (setf *input-state* (make-repl-input-state))))))
 
 (defun %execute-parse-error (result)
   (with-reset-rendered-prompt-state-and-prompt-cont

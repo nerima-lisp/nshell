@@ -14,7 +14,9 @@
              (nshell.infrastructure.persistence:append-history-entry "test command")
              (let ((loaded (nshell.infrastructure.persistence:load-history-file)))
                (expect (consp loaded) :to-be-truthy)
-               (expect "test command" :to-equal (first loaded))))
+               (expect "test command" :to-equal
+                       (nshell.infrastructure.persistence::history-record-text
+                        (first loaded)))))
         ;; Cleanup
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
         (when (probe-file test-path) (delete-file test-path)))))
@@ -30,8 +32,83 @@
                    (pathname test-path))
              (when (probe-file test-path) (delete-file test-path))
              (nshell.infrastructure.persistence:append-history-entry command)
-             (expect (list command) :to-equal
-                     (nshell.infrastructure.persistence:load-history-file)))
+             (expect (list command)
+                     :to-equal
+                     (mapcar #'nshell.infrastructure.persistence::history-record-text
+                             (nshell.infrastructure.persistence:load-history-file))))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (when (probe-file test-path) (delete-file test-path)))))
+
+  (it "file-history-v2-load-promotes-missing-fields-to-nil"
+    "A legacy v2 frame loads as a record without invented metadata."
+    (let* ((test-path (format nil "/tmp/nshell-test-history-v2-~d.lisp"
+                              (random 1000000)))
+           (command "printf 'legacy%s' command"))
+      (unwind-protect
+           (progn
+             (setf nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+             (when (probe-file test-path) (delete-file test-path))
+             (with-open-file (stream test-path :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+               (format stream "~a~d~%~a~%"
+                       nshell.infrastructure.persistence::+history-record-v2-prefix+
+                       (length command)
+                       command))
+             (let ((record (first
+                            (nshell.infrastructure.persistence:load-history-file))))
+               (expect command :to-equal
+                       (nshell.infrastructure.persistence::history-record-text record))
+               (dolist (value (list
+                               (nshell.infrastructure.persistence::history-record-timestamp
+                                record)
+                               (nshell.infrastructure.persistence::history-record-cwd record)
+                               (nshell.infrastructure.persistence::history-record-exit-code
+                                record)
+                               (nshell.infrastructure.persistence::history-record-duration-ms
+                                record)
+                               (nshell.infrastructure.persistence::history-record-origin record)))
+                 (expect value :to-be-null))))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (when (probe-file test-path) (delete-file test-path)))))
+
+  (it "file-history-v3-round-trip-preserves-metadata"
+    "A v3 frame preserves every metadata field and the multiline text."
+    (let* ((test-path (format nil "/tmp/nshell-test-history-v3-~d.lisp"
+                              (random 1000000)))
+           (command (format nil "for item~%  echo $item~%done")))
+      (unwind-protect
+           (progn
+             (setf nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+             (when (probe-file test-path) (delete-file test-path))
+             (nshell.infrastructure.persistence:append-history-entry
+              command
+              :timestamp 123
+              :cwd "/tmp/nshell-history"
+              :exit-code 7
+              :duration-ms 42
+              :origin :agent)
+             (with-open-file (stream test-path :direction :input)
+               (expect nshell.infrastructure.persistence::+history-record-v3-prefix+
+                       :to-equal (subseq (read-line stream)
+                                         0
+                                         (length nshell.infrastructure.persistence::+history-record-v3-prefix+))))
+             (let ((record (first
+                            (nshell.infrastructure.persistence:load-history-file))))
+               (expect command :to-equal
+                       (nshell.infrastructure.persistence::history-record-text record))
+               (expect 123 :to-equal
+                       (nshell.infrastructure.persistence::history-record-timestamp record))
+               (expect "/tmp/nshell-history" :to-equal
+                       (nshell.infrastructure.persistence::history-record-cwd record))
+               (expect 7 :to-equal
+                       (nshell.infrastructure.persistence::history-record-exit-code record))
+               (expect 42 :to-equal
+                       (nshell.infrastructure.persistence::history-record-duration-ms record))
+               (expect :agent :to-equal
+                       (nshell.infrastructure.persistence::history-record-origin record))))
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
         (when (probe-file test-path) (delete-file test-path)))))
 
@@ -81,8 +158,10 @@ one seam over."
              (when (probe-file test-path) (delete-file test-path))
              (nshell.infrastructure.persistence:append-history-entry "older")
              (nshell.infrastructure.persistence:append-history-entry "newer")
-             (expect (list "older" "newer") :to-equal
-                     (nshell.infrastructure.persistence:load-history-file)))
+             (expect (list "older" "newer")
+                     :to-equal
+                     (mapcar #'nshell.infrastructure.persistence::history-record-text
+                             (nshell.infrastructure.persistence:load-history-file))))
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
         (when (probe-file test-path) (delete-file test-path)))))
 

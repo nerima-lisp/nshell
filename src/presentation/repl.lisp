@@ -9,7 +9,8 @@
 (defun %assistant-repeat-cancel-event-p (event)
   (let ((last-cancel-at *assistant-last-cancel-at*)
         (now (boundary-monotonic)))
-    (and (eq :ctrl-c (nshell.domain.input:key-event-type event))
+    (and (nshell.domain.input:key-event-p event)
+         (eq :ctrl-c (nshell.domain.input:key-event-type event))
          last-cancel-at
          (<= 0 (- now last-cancel-at) +assistant-cancel-window-ticks+))))
 
@@ -66,6 +67,7 @@
            (lambda () (process-output-event :ask-cancel-turn)))
           (event
            (lambda ()
+             (setf *assistant-last-cancel-at* nil)
              (multiple-value-bind (new-state output-event)
                  (reduce-input-state *input-state* event)
                (setf *input-state* new-state)

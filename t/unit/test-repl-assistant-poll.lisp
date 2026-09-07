@@ -94,7 +94,7 @@
       (with-repl-input-state (:mode :ask-waiting
                               :buffer "question"
                               :cursor-pos 8)
-        (let ((clock 0)
+        (let* ((clock 0)
               (start-count 0)
               (stop-count 0)
               (boundary
@@ -121,7 +121,7 @@
               (when continuation (funcall continuation)))
             (expect 0 :to-be stop-count)
             (expect 0 :to-be start-count)
-            (expect 2 :to-be nshell.presentation::*assistant-turn-generation*)
+            (expect 1 :to-be nshell.presentation::*assistant-turn-generation*)
             (expect 0 :to-be nshell.presentation::*assistant-last-cancel-at*)
             (setf clock internal-time-units-per-second)
             (let ((continuation
@@ -130,7 +130,7 @@
               (when continuation (funcall continuation)))
             (expect 1 :to-be stop-count)
             (expect 1 :to-be start-count)
-            (expect 3 :to-be nshell.presentation::*assistant-turn-generation*)
+            (expect 2 :to-be nshell.presentation::*assistant-turn-generation*)
             (expect :insert :to-be
                     (nshell.presentation:input-state-mode
                      nshell.presentation::*input-state*))
@@ -159,5 +159,5 @@
              ('nshell.presentation::render-prompt-cont
               (lambda () nil)))
           (let ((continuation (nshell.presentation::read-key-cont)))
-            (expect t :to-be-truthy (functionp continuation))
+            (expect (functionp continuation) :to-be-truthy)
             (funcall continuation)))))))

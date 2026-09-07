@@ -254,6 +254,35 @@
         (when (probe-file script)
           (delete-file script)))))
 
+  (it "discards-a-stale-sidecar-pending-before-the-next-request"
+    (let ((script (%assistant-test-sidecar-script)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       1 '(("message" . "stale")))))
+             (expect :empty :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-poll 2)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       2 '(("message" . "fresh")))))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-stop))))
+        (when (probe-file script)
+          (delete-file script)))))
+
   (it "respawns-sidecar-after-reader-detects-process-death"
     (let ((script (%assistant-test-sidecar-script t)))
       (unwind-protect

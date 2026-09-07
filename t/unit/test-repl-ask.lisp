@@ -6,7 +6,7 @@
       (with-repl-input-state (:mode :ask-waiting
                               :buffer "show changed files"
                               :cursor-pos 18)
-        (let ((start-count 0)
+        (let* ((start-count 0)
               (request-generation nil)
               (request-payload nil)
               (boundary
@@ -35,7 +35,7 @@
                   nil)))
             (let ((continuation
                     (nshell.presentation::process-output-event :ask-submit)))
-              (expect t :to-be-truthy (functionp continuation))
+              (expect (functionp continuation) :to-be-truthy)
               (expect 1 :to-be start-count)
               (expect 1 :to-be request-generation)
               (expect "user" :to-equal
@@ -49,6 +49,20 @@
               (expect :ask-waiting :to-be
                       (nshell.presentation:input-state-mode
                        nshell.presentation::*input-state*))))))))
+
+  (it "renders-the-ask-suffix-and-includes-it-in-prompt-geometry"
+    (with-repl-test-state
+      (with-stable-repl-prompt (:text "PROMPT> " :width 8)
+        (with-fixed-terminal-size (24 80)
+          (with-repl-input-state (:mode :ask
+                                  :buffer "hello"
+                                  :cursor-pos 5)
+            (let ((output
+                    (capture-standard-output
+                      (nshell.presentation::render-prompt-cont))))
+              (expect (search "ask>" output) :to-be-truthy)
+              (expect 13 :to-be
+                      nshell.presentation::*prompt-rendered-prompt-width*)))))))
 
   (it "returns-to-insert-mode-after-a-terminal-model-event"
     (with-repl-test-state

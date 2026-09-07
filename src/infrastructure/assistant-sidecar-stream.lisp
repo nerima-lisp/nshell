@@ -310,7 +310,8 @@
           (when (and present-p
                      (assistant-model-event-p event)
                      (member (assistant-model-event-kind event)
-                             '(:result :stream-ended :stream-error)))
+                             '(:result :stream-ended :stream-error
+                               :rate-limit-event)))
             (%assistant-sidecar-clear-pending state pending)
             (%assistant-sidecar-close-channel
              (assistant-pending-cell-events pending)))

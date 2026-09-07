@@ -17,6 +17,8 @@
 (defvar *assistant-model-event-handler* nil)
 (defvar *assistant-command-origin* :typed)
 (defvar *assistant-command-confirmed-p* nil)
+(defvar *command-not-found-fallback-text* nil)
+(defvar *command-not-found-command* nil)
 (defvar *completion-rendered-lines* 0)
 (defvar *transient-panel-rendered-lines* 0)
 (defvar *prompt-rendered-lines* 0)

@@ -45,7 +45,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:child-status #:child-status-p #:child-status-pid #:child-status-status
             #:reap-children #:get-terminal-size
             #:terminal-size-unavailable #:terminal-size-unavailable-fd
-            #:*external-command-timeout*
+            #:*external-command-timeout* #:*command-not-found-hook*
             #:run-external #:run-external-capture #:run-external-exec
             #:process-exit-status-code
             #:sidecar-handle #:sidecar-handle-p #:sidecar-handle-process

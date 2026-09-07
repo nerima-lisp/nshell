@@ -40,6 +40,31 @@
               event))
         event)))
 
+(defun %process-command-not-found-fallback-event (event)
+  (let ((text *command-not-found-fallback-text*))
+    (setf *command-not-found-fallback-text* nil
+          *command-not-found-command* nil
+          *preserve-transient-panel-on-next-prompt-p* nil
+          *transient-panel-content* nil)
+    (if (eq :ctrl-right-bracket
+            (nshell.domain.input:key-event-type event))
+        (progn
+          (clear-rendered-transient-panel)
+          (setf *assistant-command-origin* :typed
+                *assistant-command-confirmed-p* nil
+                *input-state*
+                  (copy-input-state-with
+                   (make-repl-input-state :buffer text)
+                   :mode :ask-waiting))
+          (process-output-event :ask-submit))
+        (progn
+          (clear-rendered-transient-panel)
+          (setf *input-state* (make-repl-input-state))
+          (multiple-value-bind (new-state output-event)
+              (reduce-input-state *input-state* event)
+            (setf *input-state* new-state)
+            (process-output-event output-event))))))
+
 (defun read-key-cont ()
   (if (nshell.infrastructure.acl:consume-terminal-resize-p)
       (lambda () (%render-prompt-after-terminal-resize))
@@ -63,6 +88,8 @@
                (when (functionp *assistant-model-event-handler*)
                  (funcall *assistant-model-event-handler* raw-event)))
              (read-key-cont)))
+          ((and event *command-not-found-fallback-text*)
+           (lambda () (%process-command-not-found-fallback-event event)))
           ((%assistant-repeat-cancel-event-p event)
            (lambda () (process-output-event :ask-cancel-turn)))
           (event

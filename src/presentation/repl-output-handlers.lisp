@@ -321,9 +321,9 @@ wrapped line's other rows on screen as stale duplicates."
   (with-reset-rendered-prompt-state-and-prompt-cont
     (format t "~%")
     (setf *last-command-duration-ms* nil)
-      (setf *assistant-command-origin* :typed
-            *assistant-command-confirmed-p* nil)
-      (setf *input-state* (make-repl-input-state))))
+    (setf *assistant-command-origin* :typed
+          *assistant-command-confirmed-p* nil)
+    (setf *input-state* (make-repl-input-state))))
 
 (defun %assistant-proposal-confirmation-required-p ()
   (and (eq *assistant-command-origin* :proposal)
@@ -347,10 +347,14 @@ wrapped line's other rows on screen as stale duplicates."
           (cwd (boundary-current-directory))
           (exit-code nil))
       (unwind-protect
-           (let ((nshell.application::*execution-origin*
+           (let ((nshell.infrastructure.acl:*command-not-found-hook*
+                   (lambda (command)
+                     (setf *command-not-found-command* command)))
+                 (nshell.application::*execution-origin*
                    *assistant-command-origin*)
                  (nshell.application::*execution-confirmed-p*
                    *assistant-command-confirmed-p*))
+             (setf *command-not-found-command* nil)
              (setf exit-code (or (execute-ast ast) 0)))
         (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
           (let ((duration-ms (%elapsed-command-duration-ms
@@ -358,20 +362,29 @@ wrapped line's other rows on screen as stale duplicates."
                               (boundary-monotonic))))
             (setf *last-exit-code* recorded-exit-code
                   *last-command-duration-ms* duration-ms)
-            (when *history-persistence-enabled-p*
-              (multiple-value-bind (history record)
-                  (nshell.infrastructure.persistence::history-record-add
-                   *history* text
-                   :timestamp timestamp
-                   :cwd cwd
-                   :exit-code recorded-exit-code
-                   :duration-ms duration-ms
-                   :origin *assistant-command-origin*)
-                (declare (ignore history))
-                (history-kit:history-reset-navigation *history*)
-                (let ((nshell.infrastructure.persistence::*history-record-to-append*
-                        record))
-                  (nshell.infrastructure.persistence:append-history-entry text))))))
+            (if (and (= recorded-exit-code 127)
+                     *command-not-found-command*)
+                (progn
+                  (format t "nshell: ~a: command not found~%"
+                          *command-not-found-command*)
+                  (setf *command-not-found-fallback-text* text
+                        *preserve-transient-panel-on-next-prompt-p* t
+                        *transient-panel-content* '("⌃] で AI に聞く")))
+                (when *history-persistence-enabled-p*
+                  (multiple-value-bind (history record)
+                      (nshell.infrastructure.persistence::history-record-add
+                       *history* text
+                       :timestamp timestamp
+                       :cwd cwd
+                       :exit-code recorded-exit-code
+                       :duration-ms duration-ms
+                       :origin *assistant-command-origin*)
+                    (declare (ignore history))
+                    (history-kit:history-reset-navigation *history*)
+                    (let ((nshell.infrastructure.persistence::*history-record-to-append*
+                            record))
+                      (nshell.infrastructure.persistence:append-history-entry text)))))
+            (setf *command-not-found-command* nil)))
       (setf *assistant-command-origin* :typed
             *assistant-command-confirmed-p* nil)
       (setf *input-state* (make-repl-input-state))))))

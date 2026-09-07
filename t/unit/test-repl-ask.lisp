@@ -261,3 +261,71 @@
               (expect (search "confirmation" (first panel)) :to-be-truthy)
               (capture-process-output-event :execute)
               (expect 1 :to-be execute-count))))))))
+
+(describe "command-not-found-fallback-tests"
+  (it "sends-the-missing-command-line-to-ask-with-one-key"
+    (with-repl-test-state
+      (with-temporary-output-file (audit-path)
+        (let* ((start-count 0)
+               (request-payload nil)
+               (boundary
+                 (nshell.feature.assistant:make-assistant-model-boundary
+                  :start-fn (lambda () (incf start-count) t)
+                  :request-fn (lambda (generation payload)
+                                (declare (ignore generation))
+                                (setf request-payload payload)
+                                t)
+                  :poll-fn (lambda (generation)
+                             (declare (ignore generation))
+                             (values nil nil))
+                  :stop-fn (lambda () t))))
+          (setf nshell.feature.assistant:*assistant-boundaries*
+                (nshell.feature.assistant:make-assistant-boundary-context
+                 boundary)
+                nshell.presentation::*command-not-found-fallback-text*
+                  "mystery command")
+          (let ((nshell.feature.assistant:*assistant-audit-file-path-override*
+                  audit-path))
+            (with-temporary-functions
+                (('nshell.infrastructure.acl:get-git-status
+                  (lambda (directory)
+                    (declare (ignore directory))
+                    (values nil nil)))
+                 ('nshell.presentation::render-prompt-cont
+                  (lambda () nil))
+                 ('nshell.presentation::render-assistant-progress-panel
+                 (lambda (started-at)
+                    (declare (ignore started-at))
+                    nil)))
+              (let ((event (input-key-event :ctrl-right-bracket)))
+                (nshell.presentation::%process-command-not-found-fallback-event
+                 event)))
+            (let ((message (cdr (assoc "message" request-payload
+                                       :test #'string=))))
+              (expect "mystery command" :to-equal
+                      (cdr (assoc "content" message :test #'string=))))
+            (expect nil :to-be
+                    nshell.presentation::*command-not-found-fallback-text*)
+            (expect :ask-waiting :to-be
+                    (nshell.presentation:input-state-mode
+                     nshell.presentation::*input-state*)) )))))
+
+  (it "clears-the-fallback-and-does-not-record-the-line-for-other-keys"
+    (with-repl-test-state
+      (setf nshell.presentation::*command-not-found-fallback-text*
+              "mystery command")
+      (with-repl-input-state (:buffer "" :cursor-pos 0)
+        (with-temporary-functions
+            (('nshell.presentation::refresh-current-input-state-suggestion
+              (lambda (&optional text)
+                (declare (ignore text))
+                nil)))
+          (nshell.presentation::%process-command-not-found-fallback-event
+           (input-key-event :char #\x))
+        (expect nil :to-be
+                nshell.presentation::*command-not-found-fallback-text*)
+        (expect "x" :to-equal
+                (nshell.presentation:input-state-buffer
+                 nshell.presentation::*input-state*))
+        (expect nil :to-be
+                (history-kit:history-entries nshell.presentation::*history*)))))))

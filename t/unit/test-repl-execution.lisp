@@ -597,3 +597,15 @@ path must be converted from a pathname before being appended."
                 (expect :proposal :to-be
                         (nshell.infrastructure.persistence::history-record-origin
                          record))))))))))
+
+(describe "command-resolution-fallback-tests"
+  (it "notifies-the-command-not-found-hook-at-the-resolution-message"
+    (let ((command-seen nil))
+      (let ((nshell.infrastructure.acl:*command-not-found-hook*
+              (lambda (command)
+                (setf command-seen command))))
+        (expect (format nil "nshell: missing-command: command not found~%")
+                :to-equal
+                (nshell.infrastructure.acl::%external-command-not-found-message
+                 "missing-command")))
+      (expect "missing-command" :to-equal command-seen))))

@@ -21,6 +21,8 @@
          (nshell.presentation::*assistant-model-event-handler* nil)
          (nshell.presentation::*assistant-command-origin* :typed)
          (nshell.presentation::*assistant-command-confirmed-p* nil)
+         (nshell.presentation::*command-not-found-fallback-text* nil)
+         (nshell.presentation::*command-not-found-command* nil)
          (nshell.feature.assistant:*assistant-boundaries* nil)
          (nshell.presentation::*completion-rendered-lines* 0)
          (nshell.presentation::*transient-panel-rendered-lines* 0)

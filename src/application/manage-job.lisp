@@ -34,7 +34,9 @@
   (let ((process (nshell.infrastructure.acl::%spawn-terminal-command command args)))
     (unless process
       (return-from %run-terminal-command
-        (values (format nil "nshell: ~a: command not found~%" command) 127)))
+        (values
+         (nshell.infrastructure.acl::%external-command-not-found-message command)
+         127)))
     (let ((pgid (nshell.infrastructure.acl:process-pid process)))
       (unwind-protect
            (progn

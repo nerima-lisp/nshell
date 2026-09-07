@@ -1,9 +1,13 @@
 (in-package #:nshell.infrastructure.acl)
 
+(defvar *command-not-found-hook* nil)
+
 (defun %external-command-timeout-message (command timeout-seconds)
   (format nil "nshell: ~a: timed out after ~a seconds~%" command timeout-seconds))
 
 (defun %external-command-not-found-message (command)
+  (when (functionp *command-not-found-hook*)
+    (ignore-errors (funcall *command-not-found-hook* command)))
   (format nil "nshell: ~a: command not found~%" command))
 
 (defun %environment-value (name environment)

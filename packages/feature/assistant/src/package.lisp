@@ -44,9 +44,29 @@ depend on one stable feature package.")
      #:make-assistant-context
      #:assistant-context-payload
      #:assemble-assistant-context
+     #:assistant-usage
+     #:assistant-usage-p
+     #:assistant-usage-turns
+     #:assistant-usage-input-tokens
+     #:assistant-usage-output-tokens
+     #:assistant-usage-total-cost-usd
+     #:assistant-usage-last-rate-limit-status
+     #:*assistant-usage*
+     #:reset-assistant-usage
+     #:record-assistant-result-usage
+     #:record-assistant-rate-limit
+     #:assistant-usage-short-text
+     #:*assistant-settings*
+     #:assistant-setting-value
+     #:assistant-setting-explicit-p
+     #:set-assistant-setting
+     #:reset-assistant-settings
+     #:assistant-setting-list
+     #:assistant-setting-environment-name
      #:*assistant-audit-file-path-override*
      #:assistant-audit-file-path
      #:append-assistant-audit-entry
+     #:assistant-audit-tail
      #:*assistant-boundaries*
      #:make-assistant-boundary-context
      #:assistant-model-boundary
@@ -59,6 +79,7 @@ depend on one stable feature package.")
      #:assistant-boundary-status
      #:assistant-boundary-value
      #:assistant-boundary-message
+     #:assistant-boundary-status-snapshot
      #:assistant-model-start
      #:assistant-model-request
      #:assistant-model-poll

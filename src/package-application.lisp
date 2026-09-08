@@ -13,6 +13,7 @@ permitted to know both the domain and infrastructure.")
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
             #:*agent-start-handler*
+            #:*ai-reset-handler*
             #:make-shell-context #:shell-context-p
             #:shell-context-history #:shell-context-config
             #:shell-context-knowledge-base #:shell-context-environment

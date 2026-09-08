@@ -10,11 +10,12 @@
 
 (defstruct (assistant-model-boundary
             (:constructor %make-assistant-model-boundary
-                (start-fn request-fn poll-fn stop-fn)))
+                (start-fn request-fn poll-fn stop-fn status-fn)))
   start-fn
   request-fn
   poll-fn
-  stop-fn)
+  stop-fn
+  status-fn)
 
 (defun %assistant-object-field (object key)
   (cdr (assoc key object :test #'string=)))
@@ -45,7 +46,8 @@
      (getf options :start-fn)
      (getf options :request-fn)
      (getf options :poll-fn)
-     (getf options :stop-fn))))
+     (getf options :stop-fn)
+     (getf options :status-fn))))
 
 (defun assistant-model-boundary ()
   (and *assistant-boundaries*
@@ -64,6 +66,18 @@
 
 (defun assistant-boundary-message (result)
   (getf result :message))
+
+(defun assistant-boundary-status-snapshot (boundary)
+  (let ((function (and (assistant-model-boundary-p boundary)
+                       (assistant-model-boundary-status-fn boundary))))
+    (if (functionp function)
+        (handler-case
+            (funcall function)
+          (error (condition)
+            (list :state :unavailable
+                  :reason (princ-to-string condition))))
+        (list :state :unknown
+              :reason "assistant model boundary status is unavailable"))))
 
 (defun %call-assistant-boundary (function arguments)
   (if (functionp function)

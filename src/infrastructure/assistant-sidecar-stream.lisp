@@ -202,7 +202,8 @@
               (multiple-value-bind (handle spawn-status)
                   (nshell.infrastructure.acl:spawn-sidecar
                    (assistant-sidecar-state-command state)
-                   (assistant-sidecar-state-arguments state)
+                   (or (assistant-sidecar-state-arguments state)
+                       (assistant-sidecar-command-arguments))
                    :input :stream
                    :output :stream
                    :error :stream)
@@ -346,4 +347,5 @@
                     state))
      :poll-fn (lambda (generation)
                 (%assistant-sidecar-poll state generation))
-     :stop-fn (lambda () (%assistant-sidecar-stop state)))))
+     :stop-fn (lambda () (%assistant-sidecar-stop state))
+     :status-fn (lambda () (%assistant-sidecar-status state)))))

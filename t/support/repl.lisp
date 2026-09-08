@@ -29,6 +29,7 @@
          (nshell.presentation::*assistant-command-confirmed-p* nil)
          (nshell.presentation::*agent-session* nil)
          (nshell.application:*agent-start-handler* nil)
+         (nshell.application:*ai-reset-handler* nil)
          (nshell.presentation::*command-not-found-fallback-text* nil)
          (nshell.presentation::*command-not-found-command* nil)
          (nshell.feature.assistant:*assistant-boundaries* nil)
@@ -46,7 +47,13 @@
          (nshell.presentation::*interactive-terminal-installed-p* nil)
          (nshell.presentation::*environment* (nshell.domain.environment:make-environment)))
      (nshell.presentation::with-fresh-repl-state-tables
-       ,@body)))
+       (unwind-protect
+            (progn
+              (nshell.feature.assistant:reset-assistant-usage)
+              (nshell.feature.assistant:reset-assistant-settings)
+              ,@body)
+         (nshell.feature.assistant:reset-assistant-usage)
+         (nshell.feature.assistant:reset-assistant-settings)))))
 
 (defun repl-test-set-env (name value &optional exported)
   (setf nshell.presentation::*environment*

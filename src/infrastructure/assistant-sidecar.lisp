@@ -22,11 +22,37 @@
 
 (defun %assistant-sidecar-model (options)
   (or (%assistant-sidecar-nonempty-string (getf options :model))
+      (%assistant-sidecar-nonempty-string
+       (assistant-setting-value :model))
       (%assistant-sidecar-nonempty-string (uiop:getenv "NSHELL_AI_MODEL"))))
 
 (defun %assistant-sidecar-effort (options)
   (or (%assistant-sidecar-nonempty-string (getf options :effort))
+      (%assistant-sidecar-nonempty-string
+       (assistant-setting-value :effort))
       "low"))
+
+(defun %assistant-sidecar-status (state)
+  (cond
+    ((and (assistant-sidecar-state-handle state)
+          (assistant-sidecar-state-init-p state)
+          (not (%assistant-sidecar-dead-p state)))
+     (list :state :running
+           :version (assistant-sidecar-state-version state)))
+    ((assistant-sidecar-state-disabled-reason state)
+     (list :state :unavailable
+           :version (assistant-sidecar-state-version state)
+           :reason (princ-to-string
+                    (assistant-sidecar-state-disabled-reason state))))
+    ((assistant-sidecar-state-dead-p state)
+     (list :state :unavailable
+           :version (assistant-sidecar-state-version state)
+           :reason (princ-to-string
+                    (or (assistant-sidecar-state-dead-reason state)
+                        "assistant sidecar stopped"))))
+    (t
+     (list :state :not-started
+           :version (assistant-sidecar-state-version state)))))
 
 (defun assistant-sidecar-command-arguments (&optional options)
   (let ((arguments
@@ -52,5 +78,4 @@
       "claude"))
 
 (defun %assistant-sidecar-arguments (options)
-  (or (getf options :arguments)
-      (assistant-sidecar-command-arguments options)))
+  (getf options :arguments))

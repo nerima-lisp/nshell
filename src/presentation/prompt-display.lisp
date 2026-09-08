@@ -68,6 +68,7 @@ it and treats a negative WIDTH as 0."
     (:exit-error :prompt-error)
     (:literal :normal)
     (:git :prompt-path)
+    (:assistant :comment)
     (:duration :comment)
     (:time :comment)
     (t :normal)))
@@ -122,8 +123,15 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
          (pm (%current-prompt-model last-exit last-command-duration-ms))
          (segments (nshell.domain.prompting:render-prompt-model pm))
          (right-segments
-           (nshell.domain.prompting:render-right-prompt-model
-            pm :failure-explain-p failure-explain-p)))
+           (append
+            (nshell.domain.prompting:render-right-prompt-model
+             pm :failure-explain-p failure-explain-p)
+            (list
+             (nshell.domain.prompting:make-prompt-segment " " :literal)
+             (nshell.domain.prompting:make-prompt-segment
+              (format nil "AI ~a"
+                      (nshell.feature.assistant:assistant-usage-short-text))
+              :assistant)))))
     (%write-colored-segments *standard-output* theme segments)
     (when right-segments
       (%write-right-prompt theme segments right-segments terminal-width))

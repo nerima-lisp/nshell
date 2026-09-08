@@ -19,11 +19,13 @@
          (elapsed-ms (%assistant-progress-elapsed-ms started-at now))
          (elapsed-seconds (floor elapsed-ms 1000)))
     (list
-     (if (>= elapsed-ms +assistant-progress-choice-threshold-ms+)
-         (format nil
-                 "thinking… ~Ds · ⌃C cancel · まだ待つ / 諦める"
-                 elapsed-seconds)
-         (format nil "thinking… ~Ds · ⌃C cancel" elapsed-seconds)))))
+     (format nil "~a · AI usage: ~a"
+             (if (>= elapsed-ms +assistant-progress-choice-threshold-ms+)
+                 (format nil
+                         "thinking… ~Ds · ⌃C cancel · まだ待つ / 諦める"
+                         elapsed-seconds)
+                 (format nil "thinking… ~Ds · ⌃C cancel" elapsed-seconds))
+             (nshell.feature.assistant:assistant-usage-short-text)))))
 
 (defun render-assistant-progress-panel
     (started-at &key current-time (terminal-width (terminal-width)))

@@ -120,16 +120,22 @@
       (agent-session-max-steps session)))
 
 (defun %agent-max-steps-value (value)
-  (when (and (stringp value) (plusp (length value)))
-    (handler-case
-        (let ((number (parse-integer value :junk-allowed nil)))
-          (and (plusp number) number))
-      (error () nil))))
+  (cond
+    ((and (integerp value) (plusp value)) value)
+    ((and (stringp value) (plusp (length value)))
+     (handler-case
+         (let ((number (parse-integer value :junk-allowed nil)))
+           (and (plusp number) number))
+       (error () nil)))))
 
 (defun agent-max-steps-from-context (context)
-  (or (%agent-max-steps-value
-       (and (shell-context-environment context)
-            (nshell.domain.environment:env-get
-             (shell-context-environment context)
-             "NSHELL_AI_MAX_STEPS")))
-      +agent-default-max-steps+))
+  (if (nshell.feature.assistant:assistant-setting-explicit-p :max-steps)
+      (or (%agent-max-steps-value
+           (nshell.feature.assistant:assistant-setting-value :max-steps))
+          +agent-default-max-steps+)
+      (or (%agent-max-steps-value
+           (and (shell-context-environment context)
+                (nshell.domain.environment:env-get
+                 (shell-context-environment context)
+                 "NSHELL_AI_MAX_STEPS")))
+          +agent-default-max-steps+)))

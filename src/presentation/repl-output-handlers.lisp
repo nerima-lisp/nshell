@@ -314,6 +314,13 @@ wrapped line's other rows on screen as stale duplicates."
              (or (%assistant-payload-field payload "message")
                  (%assistant-payload-field payload "reason")
                  (%assistant-payload-field payload "error")))
+        (and (eq :rate-limit-event
+                 (nshell.feature.assistant:assistant-model-event-kind event))
+             (let ((info (%assistant-payload-field payload "rate_limit_info")))
+               (when (listp info)
+                 (let ((status (%assistant-payload-field info "status")))
+                   (and status
+                        (format nil "AI rate limit: ~a" status))))))
         fallback)))
 
 (defun %return-from-ask-with-message (message)
@@ -352,13 +359,20 @@ wrapped line's other rows on screen as stale duplicates."
           :test #'eq))
 
 (defun %handle-ask-model-event (event)
-  (cond
+  (let ((kind (nshell.feature.assistant:assistant-model-event-kind event))
+        (payload (nshell.feature.assistant:assistant-model-event-payload event)))
+    (case kind
+      (:result
+       (nshell.feature.assistant:record-assistant-result-usage payload))
+      (:rate-limit-event
+       (nshell.feature.assistant:record-assistant-rate-limit payload)))
+    (cond
     ((eq *assistant-request-kind* :agent)
      (%handle-agent-model-event event))
     ((eq *assistant-request-kind* :explain)
      (%handle-explain-model-event event))
     (t
-     (case (nshell.feature.assistant:assistant-model-event-kind event)
+     (case kind
        (:result
         (let ((proposal
                 (%assistant-proposal-text
@@ -409,7 +423,7 @@ wrapped line's other rows on screen as stale duplicates."
         (%return-from-ask-with-message "AI 応答が終了しました"))
        (otherwise
         (when *assistant-turn-started-at*
-          (render-assistant-progress-panel *assistant-turn-started-at*)))))))
+          (render-assistant-progress-panel *assistant-turn-started-at*))))))))
 
 (defun %process-ask-submit-output-event ()
   (clear-rendered-completions)

@@ -89,6 +89,7 @@ entered during this session."
         *assistant-explain-candidate-index* 0
         *agent-session* nil
         nshell.application:*agent-start-handler* #'start-agent-session
+        nshell.application:*ai-reset-handler* #'reset-ai-session
         nshell.feature.assistant:*assistant-boundaries*
           (nshell.feature.assistant:make-assistant-boundary-context
            (nshell.feature.assistant:make-assistant-sidecar-boundary))
@@ -105,6 +106,8 @@ entered during this session."
                        (nshell.domain.environment:make-default-environment)
                        (nshell.infrastructure.acl:current-environment-entries)
                        #'nshell.infrastructure.acl:current-working-directory))
+  (nshell.feature.assistant:reset-assistant-usage)
+  (nshell.feature.assistant:reset-assistant-settings)
   (%reset-repl-state-tables)
   (setf *vi-mode-enabled*
         (%vi-mode-flag-enabled-p

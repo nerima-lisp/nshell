@@ -11,6 +11,7 @@
         *failure-explain-available-p* nil
         *agent-session* nil
         nshell.application:*agent-start-handler* nil
+        nshell.application:*ai-reset-handler* nil
         *prompt-rendered-terminal-width* +default-terminal-width+
         *prompt-rendered-prompt-width* 0
         *prompt-rendered-origin-row* 1
@@ -21,6 +22,8 @@
                        (nshell.domain.environment:make-default-environment)
                        (nshell.infrastructure.acl:current-environment-entries)
                        #'nshell.infrastructure.acl:current-working-directory))
+  (nshell.feature.assistant:reset-assistant-usage)
+  (nshell.feature.assistant:reset-assistant-settings)
   (%reset-repl-state-tables))
 
 (defun %run-batch-source-lines (lines)

@@ -22,6 +22,24 @@
   (or *assistant-audit-file-path-override*
       (%assistant-default-audit-file-path)))
 
+(defun assistant-audit-tail (count)
+  (if (not (and (integerp count) (plusp count)))
+      (values nil nil)
+      (handler-case
+      (let ((path (assistant-audit-file-path)))
+        (if (probe-file path)
+            (with-open-file (stream path :direction :input)
+              (let ((lines nil))
+                (loop for line = (read-line stream nil nil)
+                      while line
+                      do (push line lines)
+                         (when (> (length lines) count)
+                           (setf lines (butlast lines))))
+                (values (nreverse lines) t)))
+            (values nil nil)))
+        (error ()
+          (values nil nil)))))
+
 (defun %assistant-json-key (key)
   (cond ((stringp key) key)
         ((symbolp key) (string-downcase (symbol-name key)))

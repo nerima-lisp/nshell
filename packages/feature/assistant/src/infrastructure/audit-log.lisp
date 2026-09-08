@@ -3,20 +3,7 @@
 (defvar *assistant-audit-file-path-override* nil)
 
 (defun %assistant-default-audit-file-path ()
-  (let* ((xdg-state-home (uiop:getenv "XDG_STATE_HOME"))
-         ;; Existing persistence resolves user files from USER-HOMEDIR-PATHNAME.
-         ;; XDG_STATE_HOME is preferred when supplied; the fallback keeps the
-         ;; audit file in nshell's existing home-based state directory.
-         (base-directory
-           (if (and xdg-state-home (plusp (length xdg-state-home)))
-               (pathname xdg-state-home)
-               (user-homedir-pathname)))
-         (relative-path
-           (if (and xdg-state-home (plusp (length xdg-state-home)))
-               "nshell/ai-audit.jsonl"
-               ".nshell/ai-audit.jsonl")))
-    (merge-pathnames relative-path
-                     (uiop:ensure-directory-pathname base-directory))))
+  (assistant-state-file-path "ai-audit.jsonl"))
 
 (defun assistant-audit-file-path ()
   (or *assistant-audit-file-path-override*

@@ -611,8 +611,23 @@ wrapped line's other rows on screen as stale duplicates."
                       (history-kit:history-reset-navigation *history*)
                       (let ((nshell.infrastructure.persistence::*history-record-to-append*
                               record))
-                        (nshell.infrastructure.persistence:append-history-entry text)))))))
-            (setf *command-not-found-command* nil)))
+                        (nshell.infrastructure.persistence:append-history-entry text))))))
+            (setf *last-command-text* text
+                  *assistant-pending-transcript*
+                    (list :session-id *assistant-session-id*
+                          :timestamp timestamp
+                          :cwd cwd
+                          :text text
+                          :exit recorded-exit-code
+                          :duration-ms duration-ms
+                          :origin *assistant-command-origin*
+                          :output-head *last-command-output*
+                          :denylist-values
+                          (mapcar
+                           #'nshell.domain.environment:env-binding-value
+                           (nshell.domain.environment:env-bindings
+                            (ensure-environment)))))
+            (setf *command-not-found-command* nil))))
       (unless *agent-session*
         (setf *assistant-command-origin* :typed
               *assistant-command-confirmed-p* nil)

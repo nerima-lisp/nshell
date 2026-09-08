@@ -113,6 +113,7 @@
     (unless *running*
       (return-from render-prompt-cont nil))
     (reap-background-jobs)
+    (%export-prompt-state)
     (clear-rendered-transient-panel)
     (clear-rendered-prompt)
     (%ensure-rendered-prompt-origin)

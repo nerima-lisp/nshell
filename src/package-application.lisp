@@ -37,6 +37,7 @@ permitted to know both the domain and infrastructure.")
             #:job-listing #:job-listing-p
             #:job-listing-id #:job-listing-status #:job-listing-command
             #:format-job-listing
+            #:export-assistant-transcript #:export-assistant-snapshot
             #:fg #:bg #:jobs #:disown #:wait-for-job
             #:history-suggestion #:search-history-use-case
             #:interactive-history-search-use-case

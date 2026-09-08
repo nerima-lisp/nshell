@@ -4,6 +4,15 @@
 (defparameter *history-persistence-enabled-p* t
   "Whether interactive commands are loaded from and appended to history.")
 
+(defvar *assistant-session-sequence* 0)
+
+(defun %new-assistant-session-id ()
+  (format nil "~d-~d-~d-~d"
+          (get-universal-time)
+          (get-internal-real-time)
+          (nshell.infrastructure.acl:current-process-id)
+          (incf *assistant-session-sequence*)))
+
 (defun %config-source-name (path)
   (if path
       (namestring (pathname path))
@@ -73,6 +82,7 @@ entered during this session."
         *pipefail* nil
         *last-command-duration-ms* nil
         *last-command-output* nil
+        *last-command-text* nil
         *failure-explain-available-p* nil
         *history-persistence-enabled-p* history-p
         *history* (history-kit:make-history)
@@ -88,6 +98,8 @@ entered during this session."
         *assistant-explain-candidates* nil
         *assistant-explain-candidate-index* 0
         *agent-session* nil
+        *assistant-session-id* (%new-assistant-session-id)
+        *assistant-pending-transcript* nil
         nshell.application:*agent-start-handler* #'start-agent-session
         nshell.application:*ai-reset-handler* #'reset-ai-session
         nshell.feature.assistant:*assistant-boundaries*

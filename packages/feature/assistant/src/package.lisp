@@ -44,6 +44,15 @@ depend on one stable feature package.")
      #:make-assistant-context
      #:assistant-context-payload
      #:assemble-assistant-context
+     #:+assistant-default-transcript-output-max-lines+
+     #:assistant-transcript-entry
+     #:assistant-transcript-entry-p
+     #:make-assistant-transcript-entry
+     #:assistant-transcript-entry-payload
+     #:assistant-snapshot
+     #:assistant-snapshot-p
+     #:make-assistant-snapshot
+     #:assistant-snapshot-payload
      #:assistant-usage
      #:assistant-usage-p
      #:assistant-usage-turns
@@ -63,6 +72,13 @@ depend on one stable feature package.")
      #:reset-assistant-settings
      #:assistant-setting-list
      #:assistant-setting-environment-name
+     #:*assistant-state-directory-path-override*
+     #:assistant-state-directory-path
+     #:assistant-state-file-path
+     #:assistant-transcript-file-path
+     #:assistant-snapshot-file-path
+     #:append-assistant-transcript-entry
+     #:write-assistant-snapshot
      #:*assistant-audit-file-path-override*
      #:assistant-audit-file-path
      #:append-assistant-audit-entry

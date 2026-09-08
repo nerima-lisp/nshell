@@ -57,6 +57,12 @@
                                 "hello"
                                 0))
 
+  (it "e2e-main-agent-rejects-noninteractive-execution"
+    "The -c path rejects agent before any interactive model boundary can start."
+    (%assert-nshell-main-result '("-c" "agent run tests")
+                                "agent: interactive terminal required"
+                                2))
+
   (it "e2e-main-command-exposes-trailing-argv"
     "Command-mode arguments after -c are exposed as $argv."
     (%assert-nshell-main-result '("-c" "echo first=$argv[1]; echo second=$argv[2]; echo all=$argv"

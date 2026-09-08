@@ -27,6 +27,8 @@
          (nshell.presentation::*assistant-explain-candidate-index* 0)
          (nshell.presentation::*assistant-command-origin* :typed)
          (nshell.presentation::*assistant-command-confirmed-p* nil)
+         (nshell.presentation::*agent-session* nil)
+         (nshell.application:*agent-start-handler* nil)
          (nshell.presentation::*command-not-found-fallback-text* nil)
          (nshell.presentation::*command-not-found-command* nil)
          (nshell.feature.assistant:*assistant-boundaries* nil)

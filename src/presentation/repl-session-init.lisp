@@ -87,6 +87,8 @@ entered during this session."
         *assistant-request-kind* nil
         *assistant-explain-candidates* nil
         *assistant-explain-candidate-index* 0
+        *agent-session* nil
+        nshell.application:*agent-start-handler* #'start-agent-session
         nshell.feature.assistant:*assistant-boundaries*
           (nshell.feature.assistant:make-assistant-boundary-context
            (nshell.feature.assistant:make-assistant-sidecar-boundary))

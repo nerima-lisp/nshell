@@ -21,6 +21,7 @@
 (defvar *assistant-explain-candidate-index* 0)
 (defvar *assistant-command-origin* :typed)
 (defvar *assistant-command-confirmed-p* nil)
+(defvar *agent-session* nil)
 (defvar *command-not-found-fallback-text* nil)
 (defvar *command-not-found-command* nil)
 (defvar *failure-explain-available-p* nil)

@@ -317,6 +317,9 @@ wrapped line's other rows on screen as stale duplicates."
         fallback)))
 
 (defun %return-from-ask-with-message (message)
+  (when (eq *assistant-request-kind* :agent)
+    (return-from %return-from-ask-with-message
+      (%finish-agent-session message)))
   (clear-rendered-completions)
   (clear-rendered-transient-panel)
   (clear-rendered-prompt)
@@ -349,59 +352,64 @@ wrapped line's other rows on screen as stale duplicates."
           :test #'eq))
 
 (defun %handle-ask-model-event (event)
-  (if (eq *assistant-request-kind* :explain)
-      (%handle-explain-model-event event)
-      (case (nshell.feature.assistant:assistant-model-event-kind event)
-    (:result
-     (let ((proposal
-             (%assistant-proposal-text
-              (nshell.feature.assistant:assistant-model-event-payload event))))
-       (if (or (null proposal) (zerop (length proposal)))
-           (%return-from-ask-with-message "AI 応答に提案がありません")
-           (multiple-value-bind (status classification reason)
-               (%assistant-proposal-assessment proposal)
-             (setf *assistant-model-event-handler* nil
-                   *assistant-turn-started-at* nil)
-             (clear-rendered-transient-panel)
-             (if (eq status :parse-error)
-                 (progn
-                   (setf *input-state* (make-repl-input-state)
-                         *assistant-command-origin* :typed
-                         *assistant-command-confirmed-p* nil)
-                   (render-transient-panel (list reason))
-                   (render-prompt-cont))
-                 (case (nshell.feature.assistant:assistant-safety-result-classification
-                        classification)
-                   (:block
-                    (setf *input-state* (make-repl-input-state)
-                          *assistant-command-origin* :typed
-                          *assistant-command-confirmed-p* nil)
-                    (%assistant-proposal-panel
-                     :block
-                     (nshell.feature.assistant:assistant-safety-result-reason
-                      classification))
-                    (render-prompt-cont))
-                   (otherwise
-                    (%install-assistant-proposal proposal)
-                    (setf *assistant-command-origin* :proposal
-                          *assistant-command-confirmed-p*
-                            (eq :safe
-                                (nshell.feature.assistant:assistant-safety-result-classification
-                                 classification)))
-                    (%assistant-proposal-panel
-                     (nshell.feature.assistant:assistant-safety-result-classification
-                      classification)
-                     (nshell.feature.assistant:assistant-safety-result-reason
-                      classification))
-                    (render-prompt-cont))))))))
-    ((:stream-error :rate-limit-event)
-     (%return-from-ask-with-message
-      (%assistant-event-reason event "AI 応答を受け取れませんでした")))
-    (:stream-ended
-     (%return-from-ask-with-message "AI 応答が終了しました"))
-        (otherwise
-         (when *assistant-turn-started-at*
-           (render-assistant-progress-panel *assistant-turn-started-at*))))))
+  (cond
+    ((eq *assistant-request-kind* :agent)
+     (%handle-agent-model-event event))
+    ((eq *assistant-request-kind* :explain)
+     (%handle-explain-model-event event))
+    (t
+     (case (nshell.feature.assistant:assistant-model-event-kind event)
+       (:result
+        (let ((proposal
+                (%assistant-proposal-text
+                 (nshell.feature.assistant:assistant-model-event-payload event))))
+          (if (or (null proposal) (zerop (length proposal)))
+              (%return-from-ask-with-message "AI 応答に提案がありません")
+              (multiple-value-bind (status classification reason)
+                  (%assistant-proposal-assessment proposal)
+                (setf *assistant-model-event-handler* nil
+                      *assistant-turn-started-at* nil)
+                (clear-rendered-transient-panel)
+                (if (eq status :parse-error)
+                    (progn
+                      (setf *input-state* (make-repl-input-state)
+                            *assistant-command-origin* :typed
+                            *assistant-command-confirmed-p* nil)
+                      (render-transient-panel (list reason))
+                      (render-prompt-cont))
+                    (case
+                        (nshell.feature.assistant:assistant-safety-result-classification
+                         classification)
+                      (:block
+                       (setf *input-state* (make-repl-input-state)
+                             *assistant-command-origin* :typed
+                             *assistant-command-confirmed-p* nil)
+                       (%assistant-proposal-panel
+                        :block
+                        (nshell.feature.assistant:assistant-safety-result-reason
+                         classification))
+                       (render-prompt-cont))
+                      (otherwise
+                       (%install-assistant-proposal proposal)
+                       (setf *assistant-command-origin* :proposal
+                             *assistant-command-confirmed-p*
+                               (eq :safe
+                                   (nshell.feature.assistant:assistant-safety-result-classification
+                                    classification)))
+                       (%assistant-proposal-panel
+                        (nshell.feature.assistant:assistant-safety-result-classification
+                         classification)
+                        (nshell.feature.assistant:assistant-safety-result-reason
+                         classification))
+                       (render-prompt-cont))))))))
+       ((:stream-error :rate-limit-event)
+        (%return-from-ask-with-message
+         (%assistant-event-reason event "AI 応答を受け取れませんでした")))
+       (:stream-ended
+        (%return-from-ask-with-message "AI 応答が終了しました"))
+       (otherwise
+        (when *assistant-turn-started-at*
+          (render-assistant-progress-panel *assistant-turn-started-at*)))))))
 
 (defun %process-ask-submit-output-event ()
   (clear-rendered-completions)
@@ -448,40 +456,66 @@ wrapped line's other rows on screen as stale duplicates."
          (<= 0 (- now last-cancel-at) +assistant-cancel-window-ticks+))))
 
 (defun %process-ask-cancel-turn-output-event ()
-  (let* ((now (boundary-monotonic))
-         (repeat-p (%assistant-cancel-repeat-p now))
-         (generation
-           (setf *assistant-turn-generation*
-                 (nshell.feature.assistant:next-assistant-turn-generation
-                  *assistant-turn-generation*)))
-         (stop-result (when repeat-p
-                        (nshell.feature.assistant:assistant-model-stop)))
-         (start-result (when repeat-p
-                         (nshell.feature.assistant:assistant-model-start))))
-    (declare (ignore generation))
-    (clear-rendered-completions)
-    (clear-rendered-transient-panel)
-    (clear-rendered-prompt)
-    (setf *input-state* (make-repl-input-state)
-          *assistant-model-event-handler* nil
-          *assistant-turn-started-at* nil
-          *assistant-request-kind* nil
-          *assistant-explain-candidates* nil
-          *assistant-explain-candidate-index* 0
-          *assistant-last-cancel-at* (unless repeat-p now))
-    (format t "~%nshell: AI turn canceled~%")
-    (when (and repeat-p
-               (not (%assistant-boundary-ok-p start-result)))
-      (format t "nshell: AI sidecar restart failed: ~a~%"
-              (%assistant-boundary-failure-message
-               start-result "assistant model boundary is unavailable")))
-    (when (and repeat-p
-               (not (%assistant-boundary-ok-p stop-result)))
-      (format t "nshell: AI sidecar stop failed: ~a~%"
-              (%assistant-boundary-failure-message
-               stop-result "assistant model boundary is unavailable")))
-    (reset-rendered-prompt-state)
-    (lambda () (render-prompt-cont))))
+  (cond
+    ((eq *assistant-request-kind* :agent)
+     (let* ((now (boundary-monotonic))
+            (repeat-p (%assistant-cancel-repeat-p now))
+            (generation
+              (setf *assistant-turn-generation*
+                    (nshell.feature.assistant:next-assistant-turn-generation
+                     *assistant-turn-generation*)))
+            (stop-result (when repeat-p
+                           (nshell.feature.assistant:assistant-model-stop)))
+            (start-result (when repeat-p
+                            (nshell.feature.assistant:assistant-model-start))))
+       (declare (ignore generation))
+       (setf *assistant-last-cancel-at* (unless repeat-p now))
+       (%finish-agent-session "canceled")
+       (when (and repeat-p
+                  (not (%assistant-boundary-ok-p start-result)))
+         (format t "nshell: AI sidecar restart failed: ~a~%"
+                 (%assistant-boundary-failure-message
+                  start-result "assistant model boundary is unavailable")))
+       (when (and repeat-p
+                  (not (%assistant-boundary-ok-p stop-result)))
+         (format t "nshell: AI sidecar stop failed: ~a~%"
+                 (%assistant-boundary-failure-message
+                  stop-result "assistant model boundary is unavailable")))))
+    (t
+     (let* ((now (boundary-monotonic))
+            (repeat-p (%assistant-cancel-repeat-p now))
+            (generation
+              (setf *assistant-turn-generation*
+                    (nshell.feature.assistant:next-assistant-turn-generation
+                     *assistant-turn-generation*)))
+            (stop-result (when repeat-p
+                           (nshell.feature.assistant:assistant-model-stop)))
+            (start-result (when repeat-p
+                            (nshell.feature.assistant:assistant-model-start))))
+       (declare (ignore generation))
+       (clear-rendered-completions)
+       (clear-rendered-transient-panel)
+       (clear-rendered-prompt)
+       (setf *input-state* (make-repl-input-state)
+             *assistant-model-event-handler* nil
+             *assistant-turn-started-at* nil
+             *assistant-request-kind* nil
+             *assistant-explain-candidates* nil
+             *assistant-explain-candidate-index* 0
+             *assistant-last-cancel-at* (unless repeat-p now))
+       (format t "~%nshell: AI turn canceled~%")
+       (when (and repeat-p
+                  (not (%assistant-boundary-ok-p start-result)))
+         (format t "nshell: AI sidecar restart failed: ~a~%"
+                 (%assistant-boundary-failure-message
+                  start-result "assistant model boundary is unavailable")))
+       (when (and repeat-p
+                  (not (%assistant-boundary-ok-p stop-result)))
+         (format t "nshell: AI sidecar stop failed: ~a~%"
+                 (%assistant-boundary-failure-message
+                  stop-result "assistant model boundary is unavailable")))
+       (reset-rendered-prompt-state)
+       (lambda () (render-prompt-cont))))))
 (defun %execute-empty-input ()
   (with-reset-rendered-prompt-state-and-prompt-cont
     (format t "~%")
@@ -532,31 +566,43 @@ wrapped line's other rows on screen as stale duplicates."
                   *last-command-duration-ms* duration-ms
                   *failure-explain-available-p* (not (zerop recorded-exit-code)))
             (if (and (= recorded-exit-code 127)
-                     *command-not-found-command*)
+                     *command-not-found-command*
+                     (not *agent-session*))
                 (progn
                   (format t "nshell: ~a: command not found~%"
                           *command-not-found-command*)
                   (setf *command-not-found-fallback-text* text
                         *preserve-transient-panel-on-next-prompt-p* t
                         *transient-panel-content* '("⌃] で AI に聞く")))
-                (when *history-persistence-enabled-p*
-                  (multiple-value-bind (history record)
-                      (nshell.infrastructure.persistence::history-record-add
-                       *history* text
-                       :timestamp timestamp
-                       :cwd cwd
-                       :exit-code recorded-exit-code
-                       :duration-ms duration-ms
-                       :origin *assistant-command-origin*)
-                    (declare (ignore history))
-                    (history-kit:history-reset-navigation *history*)
-                    (let ((nshell.infrastructure.persistence::*history-record-to-append*
-                            record))
-                      (nshell.infrastructure.persistence:append-history-entry text)))))
+                (progn
+                  (when (and *agent-session*
+                             (= recorded-exit-code 127)
+                             *command-not-found-command*)
+                    (setf *last-command-output*
+                          (or *last-command-output*
+                              (format nil "nshell: ~a: command not found~%"
+                                      *command-not-found-command*))
+                          *command-not-found-fallback-text* nil)
+                    (write-string *last-command-output*))
+                  (when *history-persistence-enabled-p*
+                    (multiple-value-bind (history record)
+                        (nshell.infrastructure.persistence::history-record-add
+                         *history* text
+                         :timestamp timestamp
+                         :cwd cwd
+                         :exit-code recorded-exit-code
+                         :duration-ms duration-ms
+                         :origin *assistant-command-origin*)
+                      (declare (ignore history))
+                      (history-kit:history-reset-navigation *history*)
+                      (let ((nshell.infrastructure.persistence::*history-record-to-append*
+                              record))
+                        (nshell.infrastructure.persistence:append-history-entry text)))))))
             (setf *command-not-found-command* nil)))
-      (setf *assistant-command-origin* :typed
-            *assistant-command-confirmed-p* nil)
-      (setf *input-state* (make-repl-input-state))))))
+      (unless *agent-session*
+        (setf *assistant-command-origin* :typed
+              *assistant-command-confirmed-p* nil)
+        (setf *input-state* (make-repl-input-state))))))
 
 (defun %execute-parse-error (result)
   (with-reset-rendered-prompt-state-and-prompt-cont

@@ -64,11 +64,16 @@ processes."
     code))
 
 (defun %assistant-execution-gate (ast)
-  (when (eq *execution-origin* :proposal)
-    (let ((classification (nshell.feature.assistant:classify-ast ast)))
+  (when (member *execution-origin* '(:proposal :agent) :test #'eq)
+    (let ((classification (nshell.feature.assistant:classify-ast ast))
+          (agent-p (eq *execution-origin* :agent)))
       (case (nshell.feature.assistant:assistant-safety-result-classification
              classification)
-        (:safe nil)
+        (:safe
+         (when (and agent-p (not *execution-confirmed-p*))
+           (list
+            "nshell: AI proposal requires approval before execution~%"
+            126)))
         (:confirm
          (unless *execution-confirmed-p*
            (list

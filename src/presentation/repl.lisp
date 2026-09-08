@@ -118,6 +118,15 @@
            (lambda () (%process-failure-explain-event event)))
           ((and event *assistant-explain-candidates*)
            (lambda () (%process-explain-panel-event event)))
+          ((and event
+                (eq *assistant-request-kind* :agent)
+                (functionp *assistant-model-event-handler*))
+           (lambda ()
+             (if (eq :ctrl-c (nshell.domain.input:key-event-type event))
+                 (process-output-event :ask-cancel-turn)
+                 (read-key-cont))))
+          ((and event *agent-session*)
+           (lambda () (%process-agent-panel-event event)))
           ((%assistant-repeat-cancel-event-p event)
            (lambda () (process-output-event :ask-cancel-turn)))
           (event

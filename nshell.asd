@@ -68,6 +68,7 @@
                  (:file "domain/redaction")
                  (:file "domain/context")
                  (:file "domain/export")
+                 (:file "domain/mcp")
                  (:file "domain/usage")
                  (:file "application/layer")
                  (:file "application/ask")
@@ -78,6 +79,7 @@
                  (:file "infrastructure/state-path")
                  (:file "infrastructure/audit-log")
                  (:file "infrastructure/state-export")
+                 (:file "infrastructure/mcp-server")
                  (:file "presentation/layer")))
    (:file "util/struct-macros")
    (:file "util/strings")
@@ -516,6 +518,7 @@
    (:file "integration/test-file-config")
    (:file "integration/test-file-history")
    (:file "integration/test-assistant-export")
+   (:file "integration/test-assistant-mcp")
    (:file "integration/test-package-topology")
    (:file "e2e/test-smoke")
    (:file "e2e/test-smoke-script")
@@ -526,6 +529,7 @@
    (:file "e2e/test-signals")
    (:file "e2e/test-job-control")
    (:file "e2e/test-package-route")
+   (:file "e2e/test-assistant-mcp")
    (:file "perf/test-startup")
    ;; Appended rather than inserted next to helpers-runner: :serial t makes the
    ;; order load order, and every existing entry must keep its position.

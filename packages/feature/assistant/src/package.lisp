@@ -53,6 +53,11 @@ depend on one stable feature package.")
      #:assistant-snapshot-p
      #:make-assistant-snapshot
      #:assistant-snapshot-payload
+     #:+assistant-mcp-protocol-version+
+     #:+assistant-mcp-default-transcript-tail-lines+
+     #:+assistant-mcp-max-transcript-tail-lines+
+     #:assistant-mcp-request-state-options
+     #:assistant-mcp-handle-request
      #:assistant-usage
      #:assistant-usage-p
      #:assistant-usage-turns
@@ -83,6 +88,7 @@ depend on one stable feature package.")
      #:assistant-audit-file-path
      #:append-assistant-audit-entry
      #:assistant-audit-tail
+     #:run-assistant-mcp-server
      #:*assistant-boundaries*
      #:make-assistant-boundary-context
      #:assistant-model-boundary

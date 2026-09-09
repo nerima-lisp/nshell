@@ -31,6 +31,33 @@ Run it with `nshell greet.nsh World`. Multiline blocks (`function`, `if`, `for`,
 `while`, `switch`, `begin`/`end`), comments, and a `#!` shebang all work;
 arguments after the script name arrive as `$argv`.
 
+## Use the assistant
+
+Start an interactive assistant task from a terminal:
+
+```sh
+agent "inspect the current job state"
+```
+
+The `agent` builtin is interactive-only. Proposed shell commands are shown for
+review and require pressing Enter again before execution.
+
+Inspect assistant state and configure the session with `ai`:
+
+```sh
+ai status
+ai set effort medium
+ai set model 'model-name'
+ai set max-steps 20
+ai set budget 1.50
+ai log 10
+ai reset
+```
+
+`ai set` changes the current session. The corresponding environment variables
+are `NSHELL_AI_EFFORT`, `NSHELL_AI_MODEL`, `NSHELL_AI_MAX_STEPS`, and
+`NSHELL_AI_BUDGET_USD`.
+
 ## Run the test suite
 
 The hermetic gate CI uses, covering both suites plus formatting and docs:

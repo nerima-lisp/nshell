@@ -3,7 +3,7 @@
 Run `help` inside nshell for per-command detail, and `type NAME` to check
 whether a name resolves to a builtin, a function, or an external program.
 
-`alias`, `abbr`, `bg`, `break`, `cd`, `command`, `complete`, `contains`,
+`agent`, `ai`, `alias`, `abbr`, `bg`, `break`, `cd`, `command`, `complete`, `contains`,
 `continue`, `count`, `disown`, `echo`, `eval`, `exec`, `exit`, `export`,
 `false`, `fg`, `function`, `help`, `history`, `jobs`, `kill`, `not`,
 `pipeline-graph`, `printf`, `pwd`, `read`, `seq`, `set`, `source`, `string`,
@@ -14,6 +14,14 @@ whether a name resolves to a builtin, a function, or an external program.
 **`abbr`** registers an abbreviation that expands inline as you type, so
 history records the expanded command. Prefer it to `alias` when you want the
 short form only while typing.
+
+**`ai`** controls the assistant session. `ai status` shows sidecar state and
+usage, `ai reset` clears the conversation, `ai log [N]` shows recent audit
+entries, and `ai set KEY VALUE` changes `effort`, `model`, `max-steps`, or
+`budget`.
+
+**`agent`** starts an interactive assistant task. It requires a terminal, and
+proposed commands require confirmation before execution.
 
 **`pipeline-graph`** renders a typed pipeline as a Graphviz DOT graph, or a
 Mermaid flowchart with `--mermaid`, without executing it. Quote the pipeline so

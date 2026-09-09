@@ -34,6 +34,15 @@ know where the slice is stored. ASDF loads the package modules before the
 shared `src/<DDD>` components, preserving the dependency direction while
 making the vertical boundary explicit.
 
+## Assistant feature
+
+The assistant is a vertical feature under
+`packages/feature/assistant/src/<DDD>/`. Its application layer assembles
+context and tracks settings and usage, while the infrastructure layer isolates
+the model-sidecar boundary and audit state. Domain checks classify proposed
+commands and redact sensitive payloads before the REPL approval gate allows a
+proposal to execute.
+
 Tests follow the same observable boundaries: `t/unit/` checks feature policy
 and contracts, `t/integration/` checks the source topology, and `t/e2e/`
 checks that the `src/main` route exposes the feature's user-facing behavior.

@@ -4,6 +4,15 @@
 (defparameter *history-persistence-enabled-p* t
   "Whether interactive commands are loaded from and appended to history.")
 
+(defvar *assistant-session-sequence* 0)
+
+(defun %new-assistant-session-id ()
+  (format nil "~d-~d-~d-~d"
+          (get-universal-time)
+          (get-internal-real-time)
+          (nshell.infrastructure.acl:current-process-id)
+          (incf *assistant-session-sequence*)))
+
 (defun %config-source-name (path)
   (if path
       (namestring (pathname path))
@@ -42,8 +51,18 @@ as the newest entry, so adding oldest-to-last makes the last (newest) file
 entry the newest entry in HISTORY too. Do not reverse the loaded list here --
 that would hand HISTORY-ADD the newest entry first, burying it under every
 older entry added afterward and inverting recall order."
-  (dolist (entry (nshell.infrastructure.persistence:load-history-file))
-    (history-kit:history-add history entry)))
+  (dolist (record (nshell.infrastructure.persistence:load-history-file))
+    (nshell.infrastructure.persistence::history-record-add
+     history
+     (nshell.infrastructure.persistence::history-record-text record)
+     :timestamp
+     (nshell.infrastructure.persistence::history-record-timestamp record)
+     :cwd (nshell.infrastructure.persistence::history-record-cwd record)
+     :exit-code
+     (nshell.infrastructure.persistence::history-record-exit-code record)
+     :duration-ms
+     (nshell.infrastructure.persistence::history-record-duration-ms record)
+     :origin (nshell.infrastructure.persistence::history-record-origin record))))
 
 (defun %vi-mode-flag-enabled-p (flag)
   (and flag
@@ -62,11 +81,30 @@ entered during this session."
         *last-exit-code* 0
         *pipefail* nil
         *last-command-duration-ms* nil
+        *last-command-output* nil
+        *last-command-text* nil
+        *failure-explain-available-p* nil
         *history-persistence-enabled-p* history-p
         *history* (history-kit:make-history)
         *config* (nshell.domain.configuration:default-config)
         *kb* (nshell.domain.completion:make-empty-knowledge-base)
         *input-state* (make-repl-input-state)
+        *assistant-turn-generation* 0
+        *assistant-turn-started-at* nil
+        *assistant-last-cancel-at* nil
+        *last-assistant-model-event* nil
+        *assistant-model-event-handler* nil
+        *assistant-request-kind* nil
+        *assistant-explain-candidates* nil
+        *assistant-explain-candidate-index* 0
+        *agent-session* nil
+        *assistant-session-id* (%new-assistant-session-id)
+        *assistant-pending-transcript* nil
+        nshell.application:*agent-start-handler* #'start-agent-session
+        nshell.application:*ai-reset-handler* #'reset-ai-session
+        nshell.feature.assistant:*assistant-boundaries*
+          (nshell.feature.assistant:make-assistant-boundary-context
+           (nshell.feature.assistant:make-assistant-sidecar-boundary))
         *completion-rendered-lines* 0
         *prompt-rendered-lines* 0
         *prompt-rendered-cursor-row* 0
@@ -80,6 +118,8 @@ entered during this session."
                        (nshell.domain.environment:make-default-environment)
                        (nshell.infrastructure.acl:current-environment-entries)
                        #'nshell.infrastructure.acl:current-working-directory))
+  (nshell.feature.assistant:reset-assistant-usage)
+  (nshell.feature.assistant:reset-assistant-settings)
   (%reset-repl-state-tables)
   (setf *vi-mode-enabled*
         (%vi-mode-flag-enabled-p

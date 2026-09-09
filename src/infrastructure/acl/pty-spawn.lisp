@@ -1,17 +1,24 @@
 (in-package #:nshell.infrastructure.acl)
 
-(defun %pty-fork-exec (program args master-fd slave-name rows cols)
+(defun %pty-terminal-dimensions ()
+  (handler-case
+      (get-terminal-size)
+    (error () (values 24 80))))
+
+(defun %pty-fork-exec (program args environment master-fd slave-name rows cols
+                       new-session-p)
   (let ((ready-read nil)
         (ready-write nil)
         (child-pid nil))
-    (%with-pty-exec-vectors (argv envp program args)
+    (%with-pty-exec-vectors (argv envp program args environment)
       (unwind-protect
            (progn
              (multiple-value-setq (ready-read ready-write) (sb-posix:pipe))
              (let ((pid (sb-posix:fork)))
                (when (zerop pid)
                  (%pty-close-fd ready-read)
-                 (%pty-child-exec program argv envp master-fd slave-name ready-write rows cols))
+                 (%pty-child-exec program argv envp master-fd slave-name ready-write rows cols
+                                  new-session-p))
                (%pty-close-fd ready-write)
                (setf ready-write nil)
                (%wait-for-pty-child-ready ready-read pid)
@@ -44,7 +51,9 @@
     (error "PTY dimensions must be positive integers: ~S x ~S" rows cols))
   t)
 
-(defun pty-spawn (program args &key (rows 24) (cols 80))
+(defun pty-spawn (program args &key (rows 24) (cols 80)
+                              (environment (%get-environment))
+                              (new-session-p t))
   "Spawn PROGRAM with ARGS attached to a newly opened PTY."
   (%validate-pty-spawn-input program args rows cols)
   #-(or darwin linux)
@@ -58,18 +67,167 @@
           (progn
             (%pty-close-fd slave-fd)
             (setf slave-fd nil)
-            (let* ((pid (%pty-fork-exec program args master-fd slave-name rows cols))
+            (let* ((pid (%pty-fork-exec program args environment master-fd slave-name
+                                        rows cols new-session-p))
                    (pgid pid))
               (setf master-stream (make-pty-stream master-fd))
               (make-pty-process :pid pid
                                 :pgid pgid
                                 :master-fd master-fd
-                                :stream master-stream)))
+                                :stream master-stream
+                                :output-ring (make-pty-ring-buffer))))
         (error (condition)
           (when master-stream
             (ignore-errors (close master-stream)))
           (pty-close master-fd slave-fd)
           (error condition))))))
+
+(defun %pty-output-tee (process output)
+  (let ((buffer (make-array 4096 :element-type '(unsigned-byte 8)))
+        (fd (pty-process-master-fd process)))
+    (unwind-protect
+         (loop
+           (handler-case
+               (let ((count (pty-read fd buffer (length buffer))))
+                 (when (zerop count)
+                   (return))
+                 (%pty-ring-append (pty-process-output-ring process)
+                                   buffer
+                                   count)
+                 (write-string
+                  (sb-ext:octets-to-string (subseq buffer 0 count))
+                  output)
+                 (finish-output output))
+             (error ()
+               (return))))
+      (setf (pty-process-output-thread process) nil))))
+
+(defun %pty-input-forwarder (process)
+  (let ((input (pty-process-input-stream process)))
+    (unwind-protect
+         (loop
+           for state = (pty-process-state process)
+           while (eq state :running)
+           do (when (listen input)
+                (let ((character (read-char input nil nil)))
+                  (if character
+                      (ignore-errors
+                        (pty-write (pty-process-master-fd process)
+                                   (string character)))
+                      (return))))
+              (sleep 0.001))
+      (setf (pty-process-input-thread process) nil))))
+
+(defun %pty-resize-forwarder (process)
+  (unwind-protect
+       (loop
+         while (member (pty-process-state process) '(:running :stopped))
+         do (when (consume-terminal-resize-p)
+              (multiple-value-bind (rows cols) (%pty-terminal-dimensions)
+                (ignore-errors
+                  (%set-pty-window-size
+                   (pty-process-master-fd process) rows cols))))
+            (sleep 0.01))
+    (setf (pty-process-resize-thread process) nil)))
+
+(defun %start-pty-input-forwarder (process)
+  (setf (pty-process-input-thread process)
+        (sb-thread:make-thread
+         (lambda () (%pty-input-forwarder process))
+         :name "nshell PTY input forwarder")))
+
+(defun %start-pty-tee (process input output)
+  (setf (pty-process-output-thread process)
+        (sb-thread:make-thread
+         (lambda () (%pty-output-tee process output))
+         :name "nshell PTY output tee")
+        (pty-process-input-stream process)
+        input)
+  (%start-pty-input-forwarder process)
+  (setf (pty-process-resize-thread process)
+        (sb-thread:make-thread
+         (lambda () (%pty-resize-forwarder process))
+         :name "nshell PTY resize forwarder"))
+  process)
+
+(defun %pty-record-wait-status (process state detail)
+  (case state
+    (:stopped
+     (setf (pty-process-state process) :stopped))
+    (:continued
+     (setf (pty-process-state process) :running))
+    (:exited
+     (setf (pty-process-state process) :exited
+           (pty-process-exit-status process) detail))
+    (:signaled
+     (setf (pty-process-state process) :signaled
+           (pty-process-exit-status process) (+ 128 detail)))
+    (:no-child
+     (setf (pty-process-state process) :exited
+           (pty-process-exit-status process) 0)))
+  (pty-process-state process))
+
+(defun pty-process-status (process)
+  "Poll PROCESS and return :RUNNING, :STOPPED, :EXITED, or :SIGNALED."
+  (check-type process pty-process)
+  (when (member (pty-process-state process) '(:running :stopped))
+    (multiple-value-bind (pid state detail)
+        (wait-job (pty-process-pid process) :nohang t :untraced t :continued t)
+      (declare (ignore pid))
+      (unless (eq state :running)
+        (%pty-record-wait-status process state detail))))
+  (pty-process-state process))
+
+(defun %join-pty-thread (thread)
+  (when thread
+    (ignore-errors (sb-thread:join-thread thread))))
+
+(defun %finish-pty-process (process)
+  (unless (pty-process-finished-p process)
+    (setf (pty-process-finished-p process) t)
+    (%join-pty-thread (pty-process-output-thread process))
+    (%join-pty-thread (pty-process-input-thread process))
+    (%join-pty-thread (pty-process-resize-thread process))
+    (when (pty-process-stream process)
+      (ignore-errors (close (pty-process-stream process))))
+    (pty-close (pty-process-master-fd process) nil))
+  process)
+
+(defun pty-process-wait (process)
+  "Wait until PROCESS exits or stops, preserving a stop for `fg`."
+  (check-type process pty-process)
+  (loop
+    for current = (pty-process-status process)
+    when (member current '(:stopped :exited :signaled))
+      do (when (member current '(:exited :signaled))
+           (%finish-pty-process process))
+         (return current)
+    do (multiple-value-bind (pid state detail)
+           (wait-job (pty-process-pid process) :untraced t :continued t)
+         (declare (ignore pid))
+         (%pty-record-wait-status process state detail))))
+
+(defun pty-process-continue (process)
+  "Continue a stopped PTY process group and resume input forwarding."
+  (check-type process pty-process)
+  (%join-pty-thread (pty-process-input-thread process))
+  (setf (pty-process-input-thread process) nil)
+  (kill-process (- (pty-process-pgid process)) :sigcont)
+  (setf (pty-process-state process) :running)
+  (when (pty-process-input-stream process)
+    (%start-pty-input-forwarder process))
+  process)
+
+(defun %spawn-pty-terminal-command (command args)
+  (multiple-value-bind (resolved environment)
+      (%prepare-external-command command)
+    (when resolved
+      (multiple-value-bind (rows cols) (%pty-terminal-dimensions)
+        (%start-pty-tee
+         (pty-spawn resolved args :rows rows :cols cols :environment environment
+                    :new-session-p nil)
+         *standard-input*
+         *standard-output*)))))
 
 (defmacro with-pty ((master-stream slave-stream &optional slave-name) &body body)
   "Open a PTY pair, bind MASTER-STREAM and SLAVE-STREAM, and ensure cleanup."

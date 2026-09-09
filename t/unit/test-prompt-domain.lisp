@@ -134,6 +134,40 @@
           (expect "main" :to-equal branch)
           (expect (null dirty-p) :to-be-falsy)))
       (expect 2 :to-equal (length calls)))))
+
+(describe "fr-004-prompt-explain-marker-contracts"
+  (it "marks-only-a-nonzero-exit-and-clears-after-a-success"
+    (let ((nshell.domain.prompting:*git-status-resolver*
+            (lambda (directory)
+              (declare (ignore directory))
+              (values nil nil)))
+          (nshell.domain.prompting:*prompt-time-resolver*
+            (lambda () nil)))
+      (let* ((failed
+               (nshell.domain.prompting:make-prompt-model
+                :hostname "h" :cwd "/repo/" :exit-code 7))
+             (succeeded
+               (nshell.domain.prompting:make-prompt-model
+                :hostname "h" :cwd "/repo/" :exit-code 0))
+             (failed-with-explain
+               (nshell.domain.prompting:render-right-prompt-model
+                failed :failure-explain-p t))
+             (failed-without-explain
+               (nshell.domain.prompting:render-right-prompt-model
+                failed :failure-explain-p nil))
+             (succeeded-after-failure
+               (nshell.domain.prompting:render-right-prompt-model
+                succeeded :failure-explain-p t)))
+        (expect "[7 · ?]"
+                :to-equal
+                (nshell.domain.prompting:prompt-segment-text
+                 (first failed-with-explain)))
+        (expect "[7]"
+                :to-equal
+                (nshell.domain.prompting:prompt-segment-text
+                 (first failed-without-explain)))
+        (expect nil :to-be succeeded-after-failure)))))
+
 (describe "git-status-edge-tests"
   (it "normalizes-git-output-at-the-boundary"
     "Git command output loses trailing line-oriented whitespace before classification."
@@ -232,3 +266,24 @@
            '("rev-parse" "--abbrev-ref" "HEAD"))
         (expect "" :to-equal output)
         (expect (plusp code) :to-be-truthy)))))
+
+(describe "prompt-failure-explain-segment-tests"
+  (it "shows-the-explain-affordance-only-for-an-active-failure"
+    (let ((nshell.domain.prompting:*git-status-resolver*
+            (lambda (directory)
+              (declare (ignore directory))
+              (values nil nil))))
+      (let ((pm (nshell.domain.prompting:make-prompt-model
+                 :hostname "h" :cwd "/repo/" :exit-code 1)))
+        (expect "[1 · ?]"
+                :to-equal
+                (nshell.domain.prompting:prompt-segment-text
+                 (first
+                  (nshell.domain.prompting:render-right-prompt-model
+                   pm :failure-explain-p t))))
+        (expect "[1]"
+                :to-equal
+                (nshell.domain.prompting:prompt-segment-text
+                 (first
+                  (nshell.domain.prompting:render-right-prompt-model
+                   pm :failure-explain-p nil))))))))

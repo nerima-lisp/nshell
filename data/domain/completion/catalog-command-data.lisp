@@ -51,6 +51,12 @@
          :description "manage abbreviations"
          :flags '("-a" "--add" "-p" "--position" "command" "anywhere"
                   "-e" "--erase" "-q" "--query" "-l" "--list" "-s" "--show"))
+   (list :command "agent"
+         :synopsis "agent TASK"
+         :description "run approved AI steps")
+   (list :command "ai"
+         :synopsis "ai status|reset|log [N]|set [KEY VALUE]"
+         :description "inspect and configure AI")
    (list :command "complete"
          ;; Assembled: longer than 100 columns, and a string literal cannot be
          ;; split across source lines without changing its value.

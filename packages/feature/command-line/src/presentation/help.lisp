@@ -19,6 +19,7 @@
   (format stream "      --no-config    Do not load the interactive startup file.~%")
   (format stream "      --config PATH  Load PATH instead of ~~/.nshellrc.~%")
   (format stream "      --no-history   Do not read or write interactive history.~%")
+  (format stream "      --mcp          Run the stdio MCP server.~%")
   (format stream "  -h, --help         Show usage and exit.~%")
   (format stream "  -V, --version      Show version and exit.~%"))
 

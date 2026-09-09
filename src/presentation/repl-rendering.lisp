@@ -106,54 +106,74 @@
         (format t "~C" #\Return))))
 
 (defun render-prompt-cont ()
-  (unless *running*
-    (return-from render-prompt-cont nil))
-  (reap-background-jobs)
-  (clear-rendered-prompt)
-  (%ensure-rendered-prompt-origin)
-  (let* ((terminal-width (terminal-width))
-         (prompt-width
+  (let ((transient-panel-content
+          (when *preserve-transient-panel-on-next-prompt-p*
+            *transient-panel-content*)))
+    (setf *preserve-transient-panel-on-next-prompt-p* nil)
+    (unless *running*
+      (return-from render-prompt-cont nil))
+    (reap-background-jobs)
+    (%export-prompt-state)
+    (clear-rendered-transient-panel)
+    (clear-rendered-prompt)
+    (%ensure-rendered-prompt-origin)
+    (let* ((terminal-width (terminal-width))
+           (prompt-width
            (render-prompt *config* *last-exit-code*
-                          :last-command-duration-ms *last-command-duration-ms*
-                          :terminal-width terminal-width))
-         (text (input-state-buffer *input-state*))
-         (theme (nshell.domain.configuration:config-theme *config*))
-         (suggestion (input-state-suggestion *input-state*))
-         (search-query (input-state-search-query *input-state*))
-         (search-suffix (when (eq (input-state-mode *input-state*) :search)
-                          (format nil " history: ~a" search-query)))
-         (selection-range (%active-mouse-selection-range)))
-    (render-edit-buffer text theme
-                        :selection-start (first selection-range)
-                        :selection-end (second selection-range))
-    (when (and suggestion (> (length suggestion) 0))
-      (nshell.infrastructure.terminal:ansi-dim)
-      (format t "~a" suggestion)
-      (nshell.infrastructure.terminal:ansi-reset-style))
-    (when search-suffix
-      (format t " ")
-      (nshell.infrastructure.terminal:ansi-dim)
-      (format t "history: ~a" search-query)
-      (nshell.infrastructure.terminal:ansi-reset-style))
-    (%move-cursor-to-rendered-position text
-                                       (input-state-cursor-pos *input-state*)
-                                       prompt-width
-                                       suggestion
-                                       search-suffix
-                                       :terminal-width terminal-width)
-    (let ((cursor-position
-            (%rendered-buffer-position text
-                                       (input-state-cursor-pos *input-state*)
-                                       prompt-width
-                                       :terminal-width terminal-width)))
-      (setf *prompt-rendered-lines*
-            (%rendered-buffer-line-count text
-                                         :suggestion suggestion
-                                         :search-suffix search-suffix
-                                         :terminal-width terminal-width
-                                         :prompt-width prompt-width)
-            *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
-            *prompt-rendered-terminal-width* terminal-width
-            *prompt-rendered-prompt-width* prompt-width))
-  (finish-output)
-  (lambda () (read-key-cont))))
+                            :last-command-duration-ms *last-command-duration-ms*
+                            :failure-explain-p *failure-explain-available-p*
+                            :terminal-width terminal-width))
+           (text (input-state-buffer *input-state*))
+           (theme (nshell.domain.configuration:config-theme *config*))
+           (suggestion (input-state-suggestion *input-state*))
+           (search-query (input-state-search-query *input-state*))
+           (search-suffix (when (eq (input-state-mode *input-state*) :search)
+                            (format nil " history: ~a" search-query)))
+           (ask-suffix (when (member (input-state-mode *input-state*)
+                                     '(:ask :ask-waiting)
+                                     :test #'eq)
+                        "ask>"))
+           (selection-range (%active-mouse-selection-range)))
+      (when ask-suffix
+        (format t " ")
+        (nshell.infrastructure.terminal:ansi-dim)
+        (format t "~a" ask-suffix)
+        (nshell.infrastructure.terminal:ansi-reset-style)
+        (incf prompt-width (1+ (%string-visible-width ask-suffix))))
+      (render-edit-buffer text theme
+                          :selection-start (first selection-range)
+                          :selection-end (second selection-range))
+      (when (and suggestion (> (length suggestion) 0))
+        (nshell.infrastructure.terminal:ansi-dim)
+        (format t "~a" suggestion)
+        (nshell.infrastructure.terminal:ansi-reset-style))
+      (when search-suffix
+        (format t " ")
+        (nshell.infrastructure.terminal:ansi-dim)
+        (format t "history: ~a" search-query)
+        (nshell.infrastructure.terminal:ansi-reset-style))
+      (%move-cursor-to-rendered-position text
+                                         (input-state-cursor-pos *input-state*)
+                                         prompt-width
+                                         suggestion
+                                         search-suffix
+                                         :terminal-width terminal-width)
+      (let ((cursor-position
+              (%rendered-buffer-position text
+                                         (input-state-cursor-pos *input-state*)
+                                         prompt-width
+                                         :terminal-width terminal-width)))
+        (setf *prompt-rendered-lines*
+              (%rendered-buffer-line-count text
+                                           :suggestion suggestion
+                                           :search-suffix search-suffix
+                                           :terminal-width terminal-width
+                                           :prompt-width prompt-width)
+              *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
+              *prompt-rendered-terminal-width* terminal-width
+              *prompt-rendered-prompt-width* prompt-width)))
+    (when transient-panel-content
+      (render-transient-panel transient-panel-content
+                              :terminal-width (terminal-width)))
+    (finish-output)
+    (lambda () (read-key-cont))))

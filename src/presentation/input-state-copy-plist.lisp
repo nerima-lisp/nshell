@@ -172,6 +172,8 @@ current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
                                            search-original-cursor
                                            search-index-supplied-p
                                            search-index
+                                           ask-original-buffer
+                                           ask-original-cursor
                                            undo-stack-supplied-p
                                            undo-stack
                                            redo-stack-supplied-p
@@ -191,4 +193,14 @@ current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
                              (input-state-copy-optional-value-override
                               search-original-cursor)
                              (input-state-search-original-cursor state)))
+   (list
+    :ask-original-buffer (input-state-copy-override-resolve
+                          (input-state-copy-optional-value-override
+                           ask-original-buffer)
+                          (input-state-ask-original-buffer state)
+                          :clear-value "")
+    :ask-original-cursor (input-state-copy-override-resolve
+                          (input-state-copy-optional-value-override
+                           ask-original-cursor)
+                          (input-state-ask-original-cursor state)))
    (%input-state-copy-supplied-args state search-index undo-stack redo-stack)))

@@ -9,12 +9,42 @@
       (%spawn-in-own-process-group resolved args environment *standard-input* t
                                    :error t))))
 
+(defun process-pid (process)
+  (if (pty-process-p process)
+      (pty-process-pid process)
+      (sb-ext:process-pid process)))
+
+(defun process-status (process)
+  (if (pty-process-p process)
+      (pty-process-status process)
+      (sb-ext:process-status process)))
+
+(defun process-wait (process)
+  (if (pty-process-p process)
+      (pty-process-wait process)
+      (sb-ext:process-wait process)))
+
+(defun process-continue (process)
+  (if (pty-process-p process)
+      (pty-process-continue process)
+      (sb-ext:process-kill process sb-unix:sigcont :pid)))
+
+(defun process-alive-p (process)
+  (if (pty-process-p process)
+      (member (pty-process-status process) '(:running :stopped))
+      (sb-ext:process-alive-p process)))
+
 (defun process-exit-status-code (proc)
   "Return shell-compatible exit status for an SBCL process."
-  (let ((code (sb-ext:process-exit-code proc)))
-    (if (and code (eq (sb-ext:process-status proc) :signaled))
-        (+ 128 code)
-        (or code 0))))
+  (if (pty-process-p proc)
+      (progn
+        (unless (member (pty-process-status proc) '(:exited :signaled))
+          (pty-process-wait proc))
+        (or (pty-process-exit-status proc) 0))
+      (let ((code (sb-ext:process-exit-code proc)))
+        (if (and code (eq (sb-ext:process-status proc) :signaled))
+            (+ 128 code)
+            (or code 0)))))
 
 (defun %wait-process-exit-with-timeout (proc timeout-seconds)
   (let ((deadline (+ (get-internal-real-time)

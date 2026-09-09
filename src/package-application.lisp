@@ -12,6 +12,8 @@ permitted to know both the domain and infrastructure.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
+            #:*agent-start-handler*
+            #:*ai-reset-handler*
             #:make-shell-context #:shell-context-p
             #:shell-context-history #:shell-context-config
             #:shell-context-knowledge-base #:shell-context-environment
@@ -35,7 +37,23 @@ permitted to know both the domain and infrastructure.")
             #:job-listing #:job-listing-p
             #:job-listing-id #:job-listing-status #:job-listing-command
             #:format-job-listing
+            #:export-assistant-transcript #:export-assistant-snapshot
             #:fg #:bg #:jobs #:disown #:wait-for-job
             #:history-suggestion #:search-history-use-case
-            #:interactive-history-search-use-case))
+            #:interactive-history-search-use-case
+            #:+agent-default-max-steps+
+            #:agent-step #:agent-step-p #:make-agent-step
+            #:agent-step-text #:agent-step-ast #:agent-step-classification
+            #:agent-step-status #:agent-step-reason #:agent-step-output
+            #:agent-step-exit-code #:agent-step-executable-p
+            #:agent-step-blocked-p
+            #:agent-session #:agent-session-p #:make-agent-session
+            #:agent-session-task #:agent-session-max-steps
+            #:agent-session-steps-used #:agent-session-completed-steps
+            #:agent-session-current-step #:agent-session-state
+            #:agent-session-stop-reason
+            #:agent-session-propose-step #:agent-session-reclassify-step
+            #:agent-session-record-step #:agent-session-skip-step
+            #:agent-session-stop #:agent-session-limit-reached-p
+            #:agent-max-steps-from-context))
 )

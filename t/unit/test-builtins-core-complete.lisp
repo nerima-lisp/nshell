@@ -134,12 +134,12 @@
         ('("search" "--exact" "--case-sensitive" "Git status") :code 0
          :output (format nil "Git status~%"))
         ('("search") :code 1
-         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]~%"))
+         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE]~%"))
         ('("delete" "docker" "ps") :code 0 :output (format nil "1~%"))
         ('("delete") :code 1
-         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]~%"))
+         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE]~%"))
         ('("size") :code 0 :output (format nil "4~%"))
         ('("clear") :code 0 :output-null t)
         ('("bogus") :code 1
-         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]~%")))
+         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE]~%")))
       (expect 0 :to-equal (history-kit:history-count history)))))

@@ -156,6 +156,31 @@
 
 )
 
+(describe "pty-process-lifecycle-tests"
+  (it "pty-process-wait-observes-stop-then-continue"
+    "The process adapter must resume polling after fg sends SIGCONT."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (let ((pty nil))
+        (unwind-protect
+             (progn
+               (setf pty
+                     (nshell.infrastructure.acl:pty-spawn
+                      "/bin/sh" '("-c" "kill -STOP $$; exit 7")))
+               (expect :stopped
+                       :to-be
+                       (nshell.infrastructure.acl:pty-process-wait pty))
+               (nshell.infrastructure.acl:pty-process-continue pty)
+               (expect :exited
+                       :to-be
+                       (nshell.infrastructure.acl:pty-process-wait pty))
+               (expect 7
+                       :to-equal
+                       (nshell.infrastructure.acl::pty-process-exit-status pty)))
+          (pty-test-close-process pty))))))
+
 (describe "pty-low-level-io"
   (it "reports failed reads and writes"
     (let ((buffer (make-array 1 :element-type '(unsigned-byte 8))))

@@ -109,6 +109,10 @@
       url = "github:nerima-lisp/cl-concurrent-kit/v0.6.1";
       flake = false;
     };
+    cl-json-kit = {
+      url = "github:nerima-lisp/cl-json-kit/v1.2.0";
+      flake = false;
+    };
     cl-date-kit = {
       url = "github:nerima-lisp/cl-date-kit/v1.0.0";
       flake = false;
@@ -139,6 +143,7 @@
       cl-history-kit,
       cl-codec-kit,
       cl-concurrent-kit,
+      cl-json-kit,
       cl-date-kit,
       treefmt-nix,
     }:
@@ -261,6 +266,10 @@
               clDateKit
             ];
           };
+          clJsonKit = sibling {
+            name = "cl-json-kit";
+            source = cl-json-kit;
+          };
           clLogKit = sibling {
             name = "cl-log-kit";
             source = cl-log-kit;
@@ -357,6 +366,7 @@
             cp ${cl-codec-kit}/LICENSE "$out/LICENSES/CL-CODEC-KIT-LICENSE"
             cp ${cl-date-kit}/LICENSE "$out/LICENSES/CL-DATE-KIT-LICENSE"
             cp ${cl-concurrent-kit}/LICENSE "$out/LICENSES/CL-CONCURRENT-KIT-LICENSE"
+            cp ${cl-json-kit}/LICENSE "$out/LICENSES/CL-JSON-KIT-LICENSE"
             cp ${./man/nshell.1} "$out/share/man/man1/nshell.1"
           '';
         });
@@ -534,6 +544,7 @@
           clCodecKit
           clConcurrentKit
           clDateKit
+          clJsonKit
         ];
 
       # cl-weave is a dependency of `nshell/test` and `nshell/weave` only (see

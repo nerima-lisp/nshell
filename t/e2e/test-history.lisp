@@ -51,14 +51,61 @@
                (await-command fd "history-newest:<second>")))
             (let ((nshell.infrastructure.persistence::*history-file-path-override*
                     history-path))
-              (expect (list older newer) :to-equal
-                      (nshell.infrastructure.persistence:load-history-file)))
+              (expect (list older newer)
+                      :to-equal
+                      (mapcar #'nshell.infrastructure.persistence::history-record-text
+                              (nshell.infrastructure.persistence:load-history-file))))
             (run-session
              (lambda (pty fd)
                (expect (= first-pid (nshell.infrastructure.acl:pty-process-pid pty))
                        :to-be-falsy)
                (nshell.infrastructure.acl:pty-write fd (format nil "~c[A~c" #\Escape #\Return))
                (await-command fd "history-newest:<second>"))))))))
+
+  (it "e2e-history-builtin-filters-failed-records"
+    (let* ((history (history-kit:make-history :capacity 10))
+           (context (make-test-builtins-context)))
+      (add-history-record history "git status" :timestamp 10 :cwd "/tmp/one"
+                          :exit-code 0 :duration-ms 3 :origin :typed)
+      (add-history-record history "git deploy" :timestamp 11 :cwd "/tmp/two"
+                          :exit-code 7 :duration-ms 8 :origin :agent)
+      (setf (nshell.application:shell-context-history context) history)
+      (multiple-value-bind (output code)
+          (call-builtin context "history" '("--failed"))
+        (expect 0 :to-equal code)
+        (expect (format nil "git deploy~%") :to-equal output)
+        (expect (search "git status" output) :to-be-falsy))
+      (multiple-value-bind (output code)
+          (call-builtin context "history" '("search" "--origin" "agent" "deploy"))
+        (expect 0 :to-equal code)
+        (expect (format nil "git deploy~%") :to-equal output))))
+
+  (it "e2e-history-reverse-search-filters-failed-records"
+    (with-repl-test-state
+      (let ((history (history-kit:make-history :capacity 10)))
+        (add-history-record history "git status" :exit-code 0 :origin :typed)
+        (add-history-record history "git deploy" :exit-code 7 :origin :agent)
+        (setf nshell.presentation::*history* history)
+        (with-repl-input-state ()
+          (multiple-value-bind (searching output)
+              (nshell.presentation:reduce-input-state
+               nshell.presentation::*input-state*
+               (input-key-event :ctrl-r))
+            (expect :search-start :to-be output)
+            (setf nshell.presentation::*input-state* searching)
+            (capture-process-output-event output))
+          (dolist (ch (coerce "status:failed git" 'list))
+            (multiple-value-bind (updated output)
+                (nshell.presentation:reduce-input-state
+                 nshell.presentation::*input-state*
+                 (input-key-event :char ch))
+              (expect :search-update :to-be output)
+              (setf nshell.presentation::*input-state* updated)
+              (capture-process-output-event output)))
+          (expect "git deploy"
+                  :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))))))
 
   (it "e2e-history-reverse-search-selects-and-executes-match"
     (let ((history (history-kit:make-history :capacity 10))

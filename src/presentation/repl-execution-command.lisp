@@ -25,8 +25,7 @@
                         *aliases*))
          (cmd (nshell.domain.parsing:command-node-command expanded-ast)))
     (%reap-background-jobs-for-command cmd)
-    (nth-value 1
-               (%with-repl-shell-context (context)
-                 (nshell.application:execute-ast-in-context
-                  context
-                  expanded-ast)))))
+    (%with-repl-shell-context (context)
+      (nshell.application:execute-ast-in-context
+       context
+       expanded-ast))))

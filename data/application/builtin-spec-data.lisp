@@ -7,6 +7,8 @@
 (defparameter +builtin-registry-specs+
   '(("alias" . %builtin-alias)
     ("abbr" . %builtin-abbr)
+    ("agent" . %builtin-agent)
+    ("ai" . %builtin-ai)
     ("bg" . %builtin-bg)
     ("break" . %builtin-break)
     ("cd" . %builtin-cd)

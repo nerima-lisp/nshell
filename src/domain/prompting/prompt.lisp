@@ -128,7 +128,7 @@
                   (make-prompt-segment " " :literal))))
     segs))
 
-(defun render-right-prompt-model (pm)
+(defun render-right-prompt-model (pm &key failure-explain-p)
   "Convert prompt model right segments to prompt segments."
   (let ((segs (prompt-model-right-segments pm)))
     (if segs
@@ -144,7 +144,12 @@
           (when (and ec (not (zerop ec)))
             (when result
               (push (make-prompt-segment " " :literal) result))
-            (push (make-prompt-segment (format nil "[~d]" ec) :exit-error) result))
+            (push (make-prompt-segment
+                   (if failure-explain-p
+                       (format nil "[~d · ?]" ec)
+                       (format nil "[~d]" ec))
+                   :exit-error)
+                  result))
           (when duration
             (when result
               (push (make-prompt-segment " " :literal) result))

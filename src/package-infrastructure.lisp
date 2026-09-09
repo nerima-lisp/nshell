@@ -35,15 +35,25 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream
+            #:pty-process-status #:pty-process-wait #:pty-process-continue
+            #:pty-process-output
+            #:process-pid #:process-status #:process-wait #:process-continue
+            #:process-alive-p
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
             #:current-process-id #:process-stop-signal-p #:process-continue-signal-p
             #:executable-file-p
             #:child-status #:child-status-p #:child-status-pid #:child-status-status
             #:reap-children #:get-terminal-size
             #:terminal-size-unavailable #:terminal-size-unavailable-fd
-            #:*external-command-timeout*
+            #:*external-command-timeout* #:*command-not-found-hook*
             #:run-external #:run-external-capture #:run-external-exec
             #:process-exit-status-code
+            #:sidecar-handle #:sidecar-handle-p #:sidecar-handle-process
+            #:sidecar-handle-pgid #:sidecar-handle-input
+            #:sidecar-handle-output #:sidecar-handle-error
+            #:sidecar-handle-cleanup-state #:spawn-sidecar
+            #:run-sidecar-version #:stop-sidecar #:sidecar-alive-p
+            #:sidecar-exit-status
             #:with-git-runner #:clear-git-status-cache
             #:get-git-status))
 

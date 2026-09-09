@@ -76,6 +76,7 @@
     (:delete (%make-input-dispatch-action :delete))
     (:ctrl-c (%make-input-dispatch-action :clear-input))
     (:ctrl-d (%make-input-dispatch-action :delete-or-quit))
+    (:ctrl-right-bracket (%make-input-dispatch-action :start-ask))
     ((:ctrl-r :ctrl-s) (%make-input-dispatch-action :start-history-search))
     ((:ctrl-f :right) (%make-input-dispatch-action :accept-suggestion))
     (:escape (%make-input-dispatch-action :escape))
@@ -142,6 +143,7 @@
       (:clear-input (from (clear-input-state state)))
       (:delete-or-quit (from (%delete-or-quit-input-state state)))
       (:start-history-search (from (%start-history-search state)))
+      (:start-ask (from (%start-ask-input-state state)))
       (:accept-suggestion (from (accept-suggestion-at-eol state)))
       (:escape (from (%escape-input-state state)))
       (:redraw-clearing-completion

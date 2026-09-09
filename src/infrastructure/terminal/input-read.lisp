@@ -145,14 +145,18 @@ The terminator is consumed and not included in the returned text."
   "Read and decode one terminal key event from standard input.
 When INTERRUPT-PREDICATE is supplied, poll the stream so a pending signal can
 be converted into a Ctrl-C key event without leaving the main loop blocked in
-READ-CHAR."
+READ-CHAR.  A predicate may return a decoded event to deliver it through the
+same polling path."
   (if (null interrupt-predicate)
       (let ((ch (read-char *standard-input* nil nil)))
         (when ch
           (decode-character-key ch)))
       (loop
-        when (funcall interrupt-predicate)
-          return (make-key-event :ctrl-c)
+        for interrupt = (funcall interrupt-predicate)
+        when interrupt
+          return (if (eq t interrupt)
+                     (make-key-event :ctrl-c)
+                     interrupt)
         when (listen *standard-input*)
           return (let ((ch (read-char *standard-input* nil nil)))
                    (when ch

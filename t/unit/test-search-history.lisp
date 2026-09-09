@@ -68,6 +68,28 @@ git status")
               (incf matching)))
           (expect 2 :to-equal matching)))))
 
+  (it "search-history-use-case-filters-failed-records"
+    "The search use case can restrict results to nonzero exit codes."
+    (let ((history (history-kit:make-history)))
+      (add-history-record history "git status" :exit-code 0 :origin :typed)
+      (add-history-record history "git deploy" :exit-code 7 :origin :agent)
+      (expect '("git deploy")
+              :to-equal
+              (mapcar #'history-kit:history-entry-text
+                      (nshell.application:search-history-use-case
+                       history "git" :contains :exit-code :failed)))))
+
+  (it "interactive-history-search-filters-failed-records"
+    "Ctrl-R query tokens can restrict matches by exit status."
+    (let ((history (history-kit:make-history)))
+      (add-history-record history "git status" :exit-code 0 :origin :typed)
+      (add-history-record history "git deploy" :exit-code 7 :origin :agent)
+      (expect '("git deploy")
+              :to-equal
+              (history-kit:history-entry-texts
+               (nshell.application:interactive-history-search-use-case
+                history "status:failed git")))))
+
   (it "interactive-history-search-prefers-line-prefix-before-contains"
     "Interactive reverse search ranks command-line starts before incidental substrings."
     (with-history (history "echo setup

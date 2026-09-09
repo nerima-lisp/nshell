@@ -40,6 +40,7 @@
                                       search-query search-original-buffer
                                       search-original-cursor
                                       (search-index nil search-index-supplied-p)
+                                      ask-original-buffer ask-original-cursor
                                       (undo-stack nil undo-stack-supplied-p)
                                       (redo-stack nil redo-stack-supplied-p))
   (let* ((new-buffer (or buffer (input-state-buffer state)))
@@ -72,6 +73,7 @@
              state
              search-query search-original-buffer search-original-cursor
              search-index-supplied-p search-index
+             ask-original-buffer ask-original-cursor
              undo-stack-supplied-p undo-stack
              redo-stack-supplied-p redo-stack)))))
 

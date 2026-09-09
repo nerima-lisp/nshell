@@ -24,6 +24,8 @@ result representation."
                         :description "Show usage and exit.")
     (cl-cli:make-option :key :show-version :name "version" :short #\V :kind :flag
                         :description "Show version and exit.")
+    (cl-cli:make-option :key :mcp :name "mcp" :kind :flag
+                        :description "Run the stdio MCP server.")
     (cl-cli:make-option :key :interactive :name "interactive" :short #\i :kind :flag
                         :description "Force the interactive line editor.")
     (cl-cli:make-option :key :no-config :name "no-config" :kind :flag
@@ -113,6 +115,8 @@ presentation do not depend on cl-cli's condition hierarchy."
      (%print-usage) 0)
     ((cl-cli:option-value invocation :show-version)
      (%print-version) 0)
+    ((cl-cli:option-value invocation :mcp)
+     (nshell.feature.assistant:run-assistant-mcp-server))
     (t
      (multiple-value-bind (interactive-p no-config-p config-path no-history-p)
          (%parsed-startup-options invocation)

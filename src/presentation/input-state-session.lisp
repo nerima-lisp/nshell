@@ -48,6 +48,8 @@
   (multiple-value-bind (new-state output)
       (case (input-state-mode state)
         (:search (reduce-search-input-state state key-event))
+        (:ask (reduce-ask-input-state state key-event))
+        (:ask-waiting (reduce-ask-waiting-input-state state key-event))
         ((:vi-command :vi-visual :vi-d :vi-c)
          (reduce-vi-input-state state key-event))
         (t (reduce-insert-input-state state key-event)))

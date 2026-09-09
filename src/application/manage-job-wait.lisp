@@ -2,7 +2,7 @@
 
 (defun %wait-terminal-processes (processes)
   (loop
-    for states = (mapcar #'sb-ext:process-status processes)
+    for states = (mapcar #'nshell.infrastructure.acl:process-status processes)
     when (every (lambda (state) (member state '(:exited :signaled))) states)
       return :completed
     when (and (member :stopped states)
@@ -132,7 +132,7 @@ exit status when the reaper has already completed the domain job."
 (defun %wait-job-processes (processes)
   (dolist (process processes)
     (when process
-      (sb-ext:process-wait process)))
+      (nshell.infrastructure.acl:process-wait process)))
   processes)
 
 (defun %job-process-list (entry)

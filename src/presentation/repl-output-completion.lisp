@@ -5,34 +5,11 @@
   (setf *completion-rendered-lines* 0))
 
 (defun %render-completions-below-prompt (candidates &key selected-index)
-  (nshell.infrastructure.terminal:ansi-save-cursor)
-  (unwind-protect
-       (progn
-         (let ((rows (max 0
-                          (- (1- *prompt-rendered-lines*)
-                             *prompt-rendered-cursor-row*))))
-           (when (plusp rows)
-             (nshell.infrastructure.terminal:ansi-cursor-down rows)))
-         (render-completions candidates :selected-index selected-index))
-    (nshell.infrastructure.terminal:ansi-restore-cursor)))
+  (%render-transient-output-below-prompt
+   (lambda ()
+     (render-completions candidates :selected-index selected-index))))
 
 (defun clear-rendered-completions ()
   (when (> *completion-rendered-lines* 0)
-    (nshell.infrastructure.terminal:ansi-save-cursor)
-    (unwind-protect
-         (progn
-           (let ((rows (+ (max 0
-                               (- (1- *prompt-rendered-lines*)
-                                  *prompt-rendered-cursor-row*))
-                          *completion-rendered-lines*
-                          1)))
-             (when (plusp rows)
-               (nshell.infrastructure.terminal:ansi-cursor-down rows)))
-            (format t "~C" #\Return)
-            (nshell.infrastructure.terminal:ansi-clear-line)
-            (loop repeat *completion-rendered-lines*
-                 do
-             (format t "~C[A" #\Esc)
-             (nshell.infrastructure.terminal:ansi-clear-line)))
-      (nshell.infrastructure.terminal:ansi-restore-cursor))
+    (%clear-rendered-transient-output *completion-rendered-lines*)
     (reset-rendered-completion-state)))

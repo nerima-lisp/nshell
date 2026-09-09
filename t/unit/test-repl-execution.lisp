@@ -567,3 +567,73 @@ path must be converted from a pathname before being appended."
           (call-repl-execute-ast nil)
         (expect (format nil "nshell: cannot execute~%") :to-equal output)
         (expect 1 :to-equal code)))))
+
+(describe "assistant-history-origin-tests"
+  (it "records-confirmed-assistant-execution-as-a-proposal"
+    (with-repl-test-state
+      (let ((nshell.presentation::*history-persistence-enabled-p* t))
+        (with-repl-input-state (:mode :insert
+                                :buffer "rm file"
+                                :cursor-pos 7)
+          (let ((nshell.presentation::*assistant-command-origin* :proposal)
+                (nshell.presentation::*assistant-command-confirmed-p* t))
+            (with-temporary-functions
+                (('nshell.presentation::execute-ast
+                  (lambda (ast)
+                    (declare (ignore ast))
+                    0))
+                 ('nshell.infrastructure.persistence:append-history-entry
+                  (lambda (text)
+                    (declare (ignore text))))
+                 ('nshell.presentation::render-prompt-cont
+                  (lambda () nil)))
+              (capture-process-output-event :execute)
+              (let* ((entry (first
+                             (history-kit:history-entries
+                              nshell.presentation::*history*)))
+                     (record
+                       (nshell.infrastructure.persistence::history-record-for-entry
+                        nshell.presentation::*history* entry)))
+                (expect :proposal :to-be
+                        (nshell.infrastructure.persistence::history-record-origin
+                         record))))))))))
+
+(describe "command-resolution-fallback-tests"
+  (it "notifies-the-command-not-found-hook-at-the-resolution-message"
+    (let ((command-seen nil))
+      (let ((nshell.infrastructure.acl:*command-not-found-hook*
+              (lambda (command)
+                (setf command-seen command))))
+        (expect (format nil "nshell: missing-command: command not found~%")
+                :to-equal
+                (nshell.infrastructure.acl::%external-command-not-found-message
+                 "missing-command")))
+      (expect "missing-command" :to-equal command-seen))))
+
+(describe "failure-explain-lifecycle-tests"
+  (it "keeps-the-explain-mark-only-for-the-latest-failed-command"
+    (with-repl-test-state
+      (let ((exit-code 1)
+            (nshell.presentation::*history-persistence-enabled-p* nil))
+        (with-temporary-functions
+            (('nshell.presentation::execute-ast
+              (lambda (ast)
+                (declare (ignore ast))
+                exit-code))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () nil)))
+          (with-repl-input-state (:mode :insert
+                                  :buffer "false"
+                                  :cursor-pos 5)
+            (capture-process-output-event :execute)
+            (expect 1 :to-be nshell.presentation::*last-exit-code*)
+            (expect t :to-be
+                    nshell.presentation::*failure-explain-available-p*))
+          (setf exit-code 0)
+          (with-repl-input-state (:mode :insert
+                                  :buffer "true"
+                                  :cursor-pos 4)
+            (capture-process-output-event :execute)
+            (expect 0 :to-be nshell.presentation::*last-exit-code*)
+            (expect nil :to-be
+                    nshell.presentation::*failure-explain-available-p*)))))))

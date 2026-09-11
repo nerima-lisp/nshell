@@ -215,7 +215,7 @@
                          (pty-test-read-until
                           (nshell.infrastructure.acl:pty-process-master-fd pty)
                           "pty-ready")) :to-be-truthy))
-        (pty-test-close-process pty))))
+        (pty-test-close-process pty)))))
 
   (it "pty-spawn-cleans-up-when-child-exec-fails"
     "A failed exec is reported after the PTY descriptors and child are cleaned up."
@@ -361,4 +361,4 @@
                (expect (null status) :to-be-falsy)
                (expect (second status) :to-be :stopped)))
         (pty-test-close-process pty))))))
-)
+

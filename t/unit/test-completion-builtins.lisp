@@ -547,7 +547,7 @@
                 :filesystem *completion-test-filesystem*))))
         (expect '("src/module/" "src/main.lisp") :to-equal slash-texts)
         (expect '(".env") :to-equal dot-texts)
-        (expect '("~config") :to-equal tilde-texts)))
+        (expect '("~config") :to-equal tilde-texts))))
 
   (it "complete-source-targets-from-filesystem"
     (with-test-file-filesystem
@@ -618,4 +618,4 @@
         (expect "graphical history browser" :to-equal
           (nshell.domain.completion:candidate-description (second candidates))))))
 )
-)
+

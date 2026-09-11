@@ -190,7 +190,7 @@
                          "nshell-"
                          filesystem))))
                  (expect expected :to-equal texts)))
-          (nshell.domain.completion::%invalidate-path-command-cache))))
+          (nshell.domain.completion::%invalidate-path-command-cache)))))
 
   (it "path-command-directory-mapper-preserves-order-at-parallel-boundary"
     (flet ((mapped (directories)
@@ -224,4 +224,4 @@
           (declare (ignore ast))
           (expect (nshell.domain.parsing:parse-complete-p result) :to-be-truthy)
           (expect (null (nshell.domain.parsing:parse-result-ast result)) :to-be-falsy))))))
-)
+

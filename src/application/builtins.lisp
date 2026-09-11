@@ -31,8 +31,8 @@ NAME resolved to a builtin or an executable, NIL when it was not found."
 (defun %builtin-type-mode (options)
   (cond
     ((%type-options-query-p options) :query)
-    ((%type-options-path-p options) :path)
     ((%type-options-force-path-p options) :force-path)
+    ((%type-options-path-p options) :path)
     ((%type-options-type-p options) :type)
     (t :default)))
 

@@ -128,9 +128,11 @@ far edge of the terminal. They default to exactly today's layout:
 {exit} {duration} {time} {ai}
 ```
 
-`prompt` (or `prompt show`) prints both active format strings. `prompt left
-FORMAT` and `prompt right FORMAT` install a new one -- `FORMAT` is the rest
-of the line, so no quoting is needed:
+`prompt` (or `prompt show`) prints both active format strings, quoted, so a
+trailing space is visible and the line can be pasted back. `prompt left FORMAT`
+and `prompt right FORMAT` install a new one. `FORMAT` is the remaining
+arguments joined with single spaces, so quote it when the exact spacing
+matters, as it does for the trailing space the default format ends with:
 
 ```
 $ prompt left '{user}@{host} {path}{git} $ '

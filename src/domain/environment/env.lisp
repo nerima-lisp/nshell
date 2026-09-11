@@ -243,6 +243,22 @@ its current value."
 until it is popped."
   (%allocate-environment (cons (make-hash-table :test #'equal) (%environment-scopes env))))
 
+(defun env-push-call-scope (env)
+  "Return ENV as a called function sees it: one new empty scope over the global
+one, with the caller's locals dropped. A caller's `set -l' must not reach the
+function it calls, and `set -lx' must not reach that function's subprocesses."
+  (%allocate-environment
+   (list (make-hash-table :test #'equal)
+         (first (last (%environment-scopes env))))))
+
+(defun env-restore-scopes (env source)
+  "Return ENV's innermost-scope contents discarded and SOURCE's scope chain
+restored, keeping any write the callee made to the global scope."
+  (let ((scopes (%environment-scopes env))
+        (outer (%environment-scopes source)))
+    (%allocate-environment
+     (append (butlast outer) (last scopes)))))
+
 (defun env-pop-scope (env)
   "Return ENV with its innermost scope removed. A single-scope ENV is
 returned unchanged, since the outermost (global) scope is never popped."

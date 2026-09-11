@@ -218,18 +218,27 @@
   (cdr (assoc command nshell.domain.completion:+command-path-builtin-specs+
               :test #'string=)))
 
-(defun %execute-function-command-in-context (context function-body args)
-  ;; Expose the call arguments to the function body as $argv / $argv[N].
-  ;; The pushed scope is popped via unwind-protect (not %update-shell-environment,
-  ;; not yet loaded at this point in the ASDF build) so a `return` or a signalled
-  ;; error inside the body cannot leak it into the caller's scope.
-  (let ((nshell.domain.expansion:*positional-args* args))
+(defun %call-with-function-scope (context thunk)
+  "Run THUNK with a function-call scope: the callee sees its own locals and the
+global scope, never the caller's locals, and the caller's chain comes back
+afterwards with any global write the callee made."
+  (let ((caller (shell-context-environment context)))
     (setf (shell-context-environment context)
-          (nshell.domain.environment:env-push-scope (shell-context-environment context)))
-    (unwind-protect
-        (%source-lines context function-body)
+          (nshell.domain.environment:env-push-call-scope caller))
+    (unwind-protect (funcall thunk)
       (setf (shell-context-environment context)
-            (nshell.domain.environment:env-pop-scope (shell-context-environment context))))))
+            (nshell.domain.environment:env-restore-scopes
+             (shell-context-environment context) caller)))))
+
+(defun %execute-function-command-in-context (context function-body args)
+  ;; Expose the call arguments to the function body as $argv / $argv[N]. The
+  ;; call scope is restored via unwind-protect (not %update-shell-environment,
+  ;; which is not yet loaded at this point in the ASDF build) so a `return` or a
+  ;; signalled error inside the body cannot leak a local into the caller.
+  (let ((nshell.domain.expansion:*positional-args* args))
+    (%call-with-function-scope
+     context
+     (lambda () (%source-lines context function-body)))))
 
 (defun %execute-command-by-name-in-context (context command args)
   (multiple-value-bind (function-body function-present-p)

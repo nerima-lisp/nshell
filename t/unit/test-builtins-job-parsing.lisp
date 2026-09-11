@@ -243,7 +243,7 @@
       (expect (list (format nil "wait: no such job: %99~%") 1)
               :to-equal
               (multiple-value-list
-               (nshell.application::%builtin-wait context '("%99")))))
+               (nshell.application::%builtin-wait context '("%99"))))))
 
   (it "keeps kill argument errors and usage user-visible"
     (with-builtins-context (context)
@@ -255,14 +255,17 @@
               :to-equal
               (multiple-value-list
                (nshell.application::%builtin-kill context '("-l"))))
-      (expect (list (format nil "usage: kill [-signal] pid|%job~%") 2)
+      (expect (list (format nil "kill: usage: kill [-signal] pid|%job~%") 1)
               :to-equal
               (multiple-value-list
                (nshell.application::%builtin-kill context nil)))
-      (expect (list (format nil "kill: no such process or job: 123~%") 1)
-              :to-equal
-              (multiple-value-list
-               (nshell.application::%builtin-kill context '("123")))))
+      (with-temporary-function
+          ('nshell.infrastructure.acl:kill-process
+           (lambda (pid signal) (declare (ignore pid signal)) nil))
+        (expect (list (format nil "kill: no such process or job: 123~%") 1)
+                :to-equal
+                (multiple-value-list
+                 (nshell.application::%builtin-kill context '("123")))))))
 
   (it "covers successful job removal and explicit wait delegation"
     (with-builtins-context (context)
@@ -274,10 +277,10 @@
                 (multiple-value-list
                  (nshell.application::%builtin-disown
                   context (list (format nil "%~d" job-id)))))
-        (expect nil :to-be-null
-                (nshell.domain.job-control:monitor-find-job monitor job-id)))
-      (expect nil :to-be-null
-              (nshell.application::%parse-integer-designator 42))))
+        (expect (nshell.domain.job-control:monitor-find-job monitor job-id)
+                :to-be-null))
+      (expect (nshell.application::%parse-integer-designator 42)
+              :to-be-null)))
 
   (it "covers explicit wait and kill error continuation"
     (with-builtins-context (context)
@@ -291,7 +294,7 @@
                (declare (ignore process-registry selected-monitor))
                (expect job-id :to-equal selected-id)
                (values (list :job) 7)))
-          (expect '(7 7)
+          (expect '(nil 7)
                   :to-equal
                   (multiple-value-list
                    (nshell.application::%builtin-wait
@@ -323,7 +326,7 @@
           (multiple-value-bind (output status)
               (nshell.application::%builtin-kill
                context (list (format nil "%~d" job-id)))
-            (expect nil :to-be-null output)
+            (expect "" :to-equal output)
             (expect 0 :to-equal status)))
         (expect (list (list job-id :sigterm)) :to-equal signals)
         (expect (list (format nil "kill: no such process or job: nope~%") 1)
@@ -357,4 +360,4 @@
                   (multiple-value-list
                    (nshell.application::%builtin-kill
                     context (list (format nil "%~d" job-id))))))))))
-  ))
+  

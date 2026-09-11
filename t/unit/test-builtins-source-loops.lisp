@@ -117,7 +117,7 @@
                                         "end"))
             (expect 0 :to-equal code)
             (expect (format nil "body~%body~%") :to-equal output)
-            (expect '("condition" "body" "condition" "body" "condition") :to-equal (nreverse calls))))))
+            (expect '("condition" "body" "condition" "body" "condition") :to-equal (nreverse calls)))))))
 
   (it "source-while-returns-last-body-status"
     "source while returns the last executed body status, not the failing condition status."
@@ -287,4 +287,4 @@
          :unknown-ast)
       (expect (stringp output) :to-be-truthy)
       (expect 2 :to-equal code)))
-)
+

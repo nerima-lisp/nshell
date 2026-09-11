@@ -42,8 +42,10 @@
 
   (it "ai-status-does-not-start-the-sidecar-in-a-batch-session"
     (with-repl-test-state
-      (let ((started-p nil)
-            (boundary
+      ;; LET* so the start-fn closure captures this binding rather than a free
+      ;; variable: with a parallel LET the assertion below could never fail.
+      (let* ((started-p nil)
+             (boundary
               (nshell.feature.assistant:make-assistant-model-boundary
                :start-fn (lambda () (setf started-p t) t)
                :request-fn (lambda (generation payload)
@@ -52,7 +54,7 @@
                :poll-fn (lambda (generation)
                           (declare (ignore generation))
                           (values nil nil))
-               :stop-fn (lambda () t))))
+                :stop-fn (lambda () t))))
         (setf nshell.feature.assistant:*assistant-boundaries*
               (nshell.feature.assistant:make-assistant-boundary-context
                boundary))

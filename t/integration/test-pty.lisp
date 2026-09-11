@@ -385,7 +385,7 @@
         (nshell.infrastructure.acl:pty-write slave (string->octets (line "slave-to-master")))
         (let ((count (nshell.infrastructure.acl:pty-read master from-slave 64)))
           (expect (plusp count) :to-be-truthy)
-          (expect (search "slave-to-master" (octets->string from-slave count)) :to-be-truthy)))))
+          (expect (search "slave-to-master" (octets->string from-slave count)) :to-be-truthy))))))
 
   (it "pty-close-is-idempotent-for-shared-descriptor"
     "PTY cleanup does not close a descriptor twice when both slots share it."
@@ -432,7 +432,7 @@
     (skip-when-pty-unavailable "requires a usable PTY"
       (nshell.infrastructure.acl:with-pty (master slave)
         (expect (streamp master) :to-be-truthy)
-        (expect (streamp slave) :to-be-truthy)))))
+        (expect (streamp slave) :to-be-truthy))))
 
 (describe "pty-cleanup-tests"
   (it "with-pty-closes-streams-when-body-signals"

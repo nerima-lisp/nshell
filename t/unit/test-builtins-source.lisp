@@ -343,3 +343,30 @@ running the definition's body as top-level commands."
       (expect '(nil) :to-equal (split "function f; echo hi; end"))
       (expect '(nil) :to-equal (split "echo plain"))
       (expect '(nil) :to-equal (split "echo \"function f\"")))))
+
+(describe "source-multiline-function-definition-tests"
+  (it "a-definition-after-a-newline-separated-statement-is-still-read-whole"
+    "The submitted buffer separates commands with newlines, not only semicolons,
+so the definition scanner has to treat a newline as a command boundary."
+    (expect (nshell.application:function-definition-line-p
+             (format nil "echo pre~%function greet~%echo hi~%end"))
+            :to-be-truthy)
+    (expect (nshell.application:function-definition-line-p
+             (format nil "echo one~%echo two"))
+            :to-be-falsy))
+
+  (it "the-split-treats-a-newline-like-a-semicolon"
+    (flet ((split (line)
+             (multiple-value-list
+              (nshell.application::source-line-function-split line))))
+      (expect (list "echo pre" (format nil "function f~%end"))
+              :to-equal (split (format nil "echo pre~%function f~%end")))))
+
+  (it "a-newline-separated-definition-defines-the-function"
+    (with-builtins-context (context)
+      (multiple-value-bind (output code)
+          (nshell.application:source-lines
+           context
+           (list "echo pre" "function greet" "echo hello" "end" "greet"))
+        (expect 0 :to-equal code)
+        (expect (format nil "pre~%hello~%") :to-equal output)))))

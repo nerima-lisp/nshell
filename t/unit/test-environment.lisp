@@ -420,9 +420,10 @@ value leak through; ENV-BINDINGS likewise reports the name once."
           :key #'nshell.domain.environment:env-binding-name
           :test #'string=))))
   (it
-    "a-nested-pushed-scope-does-not-see-a-sibling-scope-s-local-variable"
-    "Two independently pushed scopes (nested function calls) each keep their
-own local bindings, invisible to each other once either is popped."
+    "a-nested-pushed-scope-shadows-and-restores-an-enclosing-local"
+    "A scope pushed over another one reads through to it and stops doing so
+once it is popped. This is the block-nesting primitive; a function call uses
+ENV-PUSH-CALL-SCOPE instead, which does not read through."
     (let* ((outer (nshell.domain.environment:make-environment))
            (level1 (nshell.domain.environment:env-set-values
                      (nshell.domain.environment:env-push-scope outer)
@@ -443,6 +444,52 @@ own local bindings, invisible to each other once either is popped."
         (nshell.domain.environment:env-get
           (nshell.domain.environment:env-pop-scope level2)
           "A"))))
+
+  (it
+    "a-call-scope-hides-the-callers-locals-but-keeps-the-global-scope"
+    "A called function must not see the caller's local variables, including a
+locally exported one, and must still see and write the global scope."
+    (let* ((global (nshell.domain.environment:env-set-values
+                     (nshell.domain.environment:make-environment)
+                     "SHARED" '("global") t))
+           (caller (nshell.domain.environment:env-set-values
+                     (nshell.domain.environment:env-push-call-scope global)
+                     "SECRET" '("local") t :scope :local))
+           (callee (nshell.domain.environment:env-push-call-scope caller)))
+      (expect (nshell.domain.environment:env-defined-p callee "SECRET")
+              :to-be-falsy)
+      (expect "global" :to-equal
+              (nshell.domain.environment:env-get callee "SHARED"))
+      (expect (member "SECRET=local"
+                      (mapcar (lambda (entry)
+                                (format nil "~a=~a"
+                                        (nshell.domain.environment:env-entry-name entry)
+                                        (nshell.domain.environment:env-entry-value entry)))
+                              (nshell.domain.environment:env-list callee))
+                      :test #'string=)
+              :to-be-falsy)
+      (expect (member "SHARED=global"
+                      (mapcar (lambda (entry)
+                                (format nil "~a=~a"
+                                        (nshell.domain.environment:env-entry-name entry)
+                                        (nshell.domain.environment:env-entry-value entry)))
+                              (nshell.domain.environment:env-list callee))
+                      :test #'string=)
+              :to-be-truthy)))
+
+  (it
+    "restoring-scopes-keeps-a-callees-global-write-and-drops-its-locals"
+    (let* ((caller (nshell.domain.environment:env-push-scope
+                     (nshell.domain.environment:make-environment)))
+           (callee (nshell.domain.environment:env-set-values
+                     (nshell.domain.environment:env-set-values
+                       (nshell.domain.environment:env-push-call-scope caller)
+                       "LOCAL" '("x") nil :scope :local)
+                     "GLOBAL" '("y") nil :scope :global))
+           (restored (nshell.domain.environment:env-restore-scopes callee caller)))
+      (expect (nshell.domain.environment:env-defined-p restored "LOCAL")
+              :to-be-falsy)
+      (expect "y" :to-equal (nshell.domain.environment:env-get restored "GLOBAL"))))
   (it
     "env-pop-scope-on-a-single-scope-environment-is-a-no-op"
     "Popping never removes the outermost (global) scope, so a mismatched pop

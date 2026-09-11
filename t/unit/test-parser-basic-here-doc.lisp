@@ -53,7 +53,7 @@
       (expect (fboundp 'nshell.domain.parsing::copy-%here-doc-body) :to-be-falsy)
       (expect (format nil "one~%") :to-equal (nshell.domain.parsing::%here-doc-body-body body))
       (expect 8 :to-equal (nshell.domain.parsing::%here-doc-body-next-position body))
-      (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body) :to-be-falsy))
+      (expect (nshell.domain.parsing::%here-doc-body-missing-delimiter-p body) :to-be-falsy)))
   (it "parser-here-doc-body-strips-leading-tabs-for-tabbed-delimiter"
     "Tabbed here-document bodies normalize leading tabs before delimiter matching."
     (let ((body (nshell.domain.parsing::%consume-here-doc-body
@@ -82,7 +82,7 @@
       (expect "" :to-equal (nshell.domain.parsing::%here-doc-body-body empty-body))
       (expect 0 :to-equal (nshell.domain.parsing::%here-doc-body-next-position empty-body))
       (expect t :to-be (nshell.domain.parsing::%here-doc-body-missing-delimiter-p empty-body))
-      (expect (list (format nil "one~%"))
+      (expect (list (format nil "one~%") "two")
               :to-equal (nshell.domain.parsing::%here-doc-consumption-bodies partial))
       (expect t :to-be (nshell.domain.parsing::%here-doc-consumption-incomplete-p partial))))
 
@@ -217,4 +217,4 @@
       (expect (fboundp 'nshell.domain.parsing::copy-%here-doc-target-body-cursor) :to-be-falsy)
       (expect "first" :to-equal (nshell.domain.parsing::%here-doc-target-body-cursor-body cursor))
       (expect '("second") :to-equal (nshell.domain.parsing::%here-doc-target-body-cursor-remaining-bodies
-                  cursor))))))
+                  cursor)))))

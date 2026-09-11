@@ -15,7 +15,7 @@
               (nshell.architecture:feature-layer-path feature :domain))
        (expect "packages/feature/command-line/src/presentation" :to-equal
                (nshell.architecture:feature-layer-path :command-line
-                                                       :presentation)))
+                                                       :presentation))))
 
   (it "keeps command-line policy independent from the parser implementation"
     (expect (nshell.feature.command-line:flag-argument-p "--help")
@@ -39,7 +39,7 @@
                    :zzz :root "z" :layers '(:application))))
       (declare (ignore first second))
       (unwind-protect
-           (expect '(:aaa :command-line :zzz) :to-equal
+           (expect '(:aaa :assistant :command-line :zzz) :to-equal
                    (mapcar #'nshell.architecture:feature-descriptor-name
                            (nshell.architecture:all-features)))
         (remhash :aaa nshell.architecture::*feature-registry*)
@@ -87,7 +87,7 @@
                         :bad-layer :root "x" :layers '(domain))
                        nil)
               (error () t))
-              :to-be-truthy))))
+              :to-be-truthy)))
 
   (it "accepts descriptors directly and validates requested layers"
     (let ((feature (nshell.architecture:register-feature

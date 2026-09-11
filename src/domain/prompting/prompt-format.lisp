@@ -8,8 +8,10 @@
 (define-condition invalid-prompt-format (error)
   ((segment :initarg :segment :reader invalid-prompt-format-segment))
   (:report (lambda (condition stream)
-             (format stream "Unknown prompt segment: {~a}"
-                     (invalid-prompt-format-segment condition)))))
+             (let ((segment (invalid-prompt-format-segment condition)))
+               (if (eq segment :unterminated)
+                   (format stream "Unterminated { in prompt format")
+                   (format stream "Unknown prompt segment: {~a}" segment))))))
 
 (defparameter +default-left-prompt-format+ "{path} {git} {status} ")
 (defparameter +default-right-prompt-format+ "{exit} {duration} {time} {ai}")
@@ -115,8 +117,7 @@ unrecognized or unterminated one signals INVALID-PROMPT-FORMAT."
                    ((char= char #\{)
                     (let ((close (position #\} format :start index)))
                       (unless close
-                        (error 'invalid-prompt-format
-                               :segment (subseq format (1+ index))))
+                        (error 'invalid-prompt-format :segment :unterminated))
                       (let ((name (subseq format (1+ index) close)))
                         (unless (assoc name *prompt-format-segment-resolvers*
                                        :test #'string=)

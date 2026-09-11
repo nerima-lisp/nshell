@@ -369,10 +369,10 @@
              (let ((value (nth-value 3
                             (nshell.application::%parse-kill-arguments args))))
                (if (listp value) (first value) value))))
-      (expect "kill: option requires an argument -- signal~%"
+      (expect (format nil "kill: option requires an argument -- signal~%")
               :to-equal (message "-s"))
-      (expect "kill: invalid signal~%" :to-equal (message "--signal=NOPE"))
-      (expect "kill: invalid signal~%" :to-equal (message "-s" "NOPE"))
+      (expect (format nil "kill: invalid signal~%") :to-equal (message "--signal=NOPE"))
+      (expect (format nil "kill: invalid signal~%") :to-equal (message "-s" "NOPE"))
       (expect (format nil "kill: unknown option: -NOPE~%")
               :to-equal (message "-NOPE"))))
 
@@ -414,7 +414,7 @@
            (lambda (pid signal)
              (push (list pid signal) signals)
              0))
-        (expect t :to-be
+        (expect 0 :to-be
                 (nshell.application::%kill-one-target monitor "4322" :sigterm))
         (expect t :to-be
                 (nshell.application::%kill-one-target

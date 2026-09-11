@@ -306,7 +306,7 @@ terminal without waiting out the real (30s) default."
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (expect "" :to-equal stdout)))
-  (progn
+  (progn)
   (it "e2e-main-status-variable-follows-last-command"
     "$status mirrors the most recent command exit code."
     (multiple-value-bind (stdout stderr exit-code)
@@ -533,4 +533,4 @@ terminal without waiting out the real (30s) default."
     (%assert-nshell-main-result '("--unknown")
                                 nil
                                 1
-                                :expected-error +main-usage-line+)))
+                                :expected-error +main-usage-line+))

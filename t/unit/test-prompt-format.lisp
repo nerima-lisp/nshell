@@ -217,3 +217,26 @@ status stay separated by exactly one space."
     (with-builtins-context (context)
       (assert-builtin-call (context "prompt" '("left"))
         :code 1 :contains '("usage")))))
+
+(describe "prompt-format-error-reporting-tests"
+  (it "an-unterminated-brace-reports-a-syntax-error-not-an-unknown-segment"
+    (expect :unterminated
+            :to-be
+            (handler-case
+                (progn (nshell.domain.prompting:parse-prompt-format "{path") :none)
+              (nshell.domain.prompting:invalid-prompt-format (condition)
+                (nshell.domain.prompting:invalid-prompt-format-segment condition))))
+    (expect "bogus"
+            :to-equal
+            (handler-case
+                (progn (nshell.domain.prompting:parse-prompt-format "{bogus}") :none)
+              (nshell.domain.prompting:invalid-prompt-format (condition)
+                (nshell.domain.prompting:invalid-prompt-format-segment condition)))))
+
+  (it "prompt-show-quotes-each-format-so-a-trailing-space-is-visible"
+    (with-builtins-context (context)
+      (let ((nshell.application:*prompt-format-query-handler*
+              (lambda () (values "{path} " "{time}"))))
+        (assert-builtin-call (context "prompt" nil)
+          :code 0
+          :contains (list "left:  '{path} '" "right: '{time}'"))))))

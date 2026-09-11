@@ -154,8 +154,7 @@
        t)
       ((let ((pid (%parse-integer-designator target)))
          (when pid
-           (nshell.infrastructure.acl:kill-process pid signal)
-           t)))
+           (nshell.infrastructure.acl:kill-process pid signal))))
       (t nil))))
 (defun %kill-list-output ()
   (format nil "~{~a~^ ~}~%"
@@ -185,5 +184,5 @@
                 (error (condition)
                   (setf code 1)
                   (format out "kill: ~a: ~a~%"
-                          target condition))))
-          code)))))))
+                          target condition)))))
+          code))))))

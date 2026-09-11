@@ -63,7 +63,7 @@
       (expect "line-2" :to-equal (aref lines 0))
       (expect "line-3" :to-equal (aref lines 1))
       (expect (search "line-2" content) :to-be-truthy)
-      (expect nil :to-be (search "line-1" content)))
+      (expect nil :to-be (search "line-1" content))))
 
   (it "reports-missing-files-as-normal-tool-data"
     (host-kit:with-temporary-directory (directory)
@@ -116,4 +116,4 @@
                (%assistant-mcp-test-field method-response "error") "code"))
       (expect -32602 :to-equal
               (%assistant-mcp-test-field
-               (%assistant-mcp-test-field tool-response "error") "code")))))
+               (%assistant-mcp-test-field tool-response "error") "code"))))

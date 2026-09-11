@@ -151,7 +151,7 @@ git status --short")
                         history
                         input
                         :knowledge-base kb
-                        :filesystem *completion-test-filesystem*)))))
+                        :filesystem *completion-test-filesystem*))))))
 
   (it "autosuggest-keeps-double-quoted-literal-backslash-prefix"
     (let ((history (history-kit:make-history))
@@ -233,4 +233,4 @@ git status --short")
   (it "accept-suggestion-appends-suggestion-to-input"
     "accept-suggestion concatenates current input with the tab-suggestion suffix."
     (expect "git checkout" :to-equal (nshell.presentation:accept-suggestion "git " "checkout"))
-    (expect "git " :to-equal (nshell.presentation:accept-suggestion "git " ""))))
+    (expect "git " :to-equal (nshell.presentation:accept-suggestion "git " "")))

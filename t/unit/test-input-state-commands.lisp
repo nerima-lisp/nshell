@@ -348,7 +348,7 @@
                  extended))
         (expect 4 :to-equal
                 (nshell.presentation::input-state-mouse-selection-end
-                 extended)))))
+                 extended))))))
 
   (it "input-state-edit-clears-mouse-selection"
     "Ordinary editing should clear a transient mouse selection before insertion."
@@ -645,4 +645,4 @@
         :alt-t
         (list (input-state :buffer "" :cursor-pos 0)
               (input-state :buffer "one" :cursor-pos 3)
-              (input-state :buffer "one " :cursor-pos 4)))))
+              (input-state :buffer "one " :cursor-pos 4))))

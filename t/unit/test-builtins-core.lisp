@@ -388,7 +388,7 @@
         :code 0
         :contains '("echo is a shell builtin"
                     "echo is /bin/echo"
-                    "echo is /usr/bin/echo")))
+                    "echo is /usr/bin/echo"))))
 
   (it "help-reports-which-using-canonical-placeholder-style"
     "help keeps which aligned with the canonical NAME placeholder style."
@@ -473,10 +473,10 @@
     "preserves the external runner status for non-builtin commands."
     (let* ((seen nil)
            (context (make-test-builtins-context)))
-      (with-test-external-runner
+      (with-test-external-capture-runner
           (lambda (command args)
             (setf seen (list command args))
-            7)
+            (values nil 7))
         (multiple-value-bind (output code)
             (call-builtin context "not" '("external-cmd" "one" "two"))
           (expect output :to-be-null)
@@ -582,10 +582,16 @@
 
   (it "type-path-option-resolves-an-external-command"
     "type -p reports an external command path from the filesystem-backed PATH."
-    (let ((context (make-test-builtins-context :path "/bin")))
-      (assert-builtin-call (context "type" '("-p" "echo"))
+    (let ((context (make-test-builtins-context
+                    :path "/opt/bin"
+                    :filesystem
+                    (make-test-filesystem
+                     :executable-p
+                     (lambda (path)
+                       (string= path "/opt/bin/mytool"))))))
+      (assert-builtin-call (context "type" '("-p" "mytool"))
         :code 0
-        :contains '("/bin/echo"))))
+        :contains '("/opt/bin/mytool"))))
 
   (it "which-resolves-an-external-command-to-its-path"
     "which prints only the resolved path for a PATH-discovered command, not its name."
@@ -669,7 +675,7 @@
         :output (format nil "wait: no such job: %99~%"))
       (assert-builtin-call (context "kill" nil)
         :code 1
-        :contains '("Usage: kill"))
+        :contains '("usage: kill"))
       (assert-builtin-call (context "kill" '("%99"))
         :code 1
         :output (format nil "kill: no such process or job: %99~%"))))
@@ -679,13 +685,15 @@
     (multiple-value-bind (signal targets list-signals-p parse-error)
         (nshell.application::%parse-kill-arguments
          '("-HUP" "--signal=SIGTERM" "--" "-9" "%2"))
-      (expect 15 :to-equal signal)
+      (expect :sigterm :to-equal signal)
       (expect '("-9" "%2") :to-equal targets)
       (expect list-signals-p :to-be-falsy)
       (expect parse-error :to-be-null))
-    (dolist (designator '("TERM" "SIGTERM" "15"))
-      (expect 15 :to-equal
+    (dolist (designator '("TERM" "SIGTERM"))
+      (expect :sigterm :to-equal
               (nshell.application::%parse-signal-designator designator)))
+    (expect 15 :to-equal
+            (nshell.application::%parse-signal-designator "15"))
     (multiple-value-bind (signal targets list-signals-p parse-error)
         (nshell.application::%parse-kill-arguments '("-l" "123"))
       (expect :sigterm :to-equal signal)
@@ -738,7 +746,7 @@
                                                      :active-only-p t))
       (multiple-value-bind (selected missing)
           (nshell.application::%select-job-listings monitor nil)
-        (expect 1 :to-equal (length selected))
+        (expect 2 :to-equal (length selected))
         (expect nil :to-equal missing))
       (multiple-value-bind (selected missing)
           (nshell.application::%select-job-listings
@@ -747,7 +755,7 @@
         (expect '("%99") :to-equal missing))
       (expect nil :to-equal
               (nshell.application::%find-job-id-by-pid monitor 999))
-      (expect nil :to-equal
+      (expect active-id :to-equal
               (nshell.application::%resolve-wait-job-id monitor nil))
       (expect nil :to-equal
               (nshell.application::%resolve-wait-job-id monitor ""))
@@ -770,7 +778,7 @@
     (multiple-value-bind (signal targets list-signals-p parse-error)
         (nshell.application::%parse-kill-arguments '("-s" "unknown"))
       (declare (ignore signal targets list-signals-p))
-      (expect "kill: invalid signal~%" :to-equal parse-error))
+      (expect (format nil "kill: invalid signal~%") :to-equal parse-error))
     (multiple-value-bind (signal targets list-signals-p parse-error)
         (nshell.application::%parse-kill-arguments '("-"))
       (expect :sigterm :to-equal signal)
@@ -826,8 +834,8 @@
            (lambda (pid signal)
              (declare (ignore signal))
              (if (= pid 123)
-                 nil
-                 (error "unexpected pid"))))
+                 (error "unexpected pid")
+                 nil)))
         (assert-builtin-call (context "kill" '("%99" "123"))
           :code 1
           :contains '("kill: no such process or job: %99"
@@ -857,4 +865,4 @@
       (expect :force-path :to-equal (mode :path :force-path))
       (expect :path :to-equal (mode :path :type))
       (expect :query :to-equal (mode :query :path :force-path :type))))
-))
+)

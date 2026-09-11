@@ -54,14 +54,16 @@
         (segment-start 0))
     (flet ((collect (end)
              (let* ((text (subseq line segment-start end))
-                    (trimmed (string-left-trim '(#\Space #\Tab) text)))
+                    (trimmed (string-left-trim '(#\Space #\Tab #\Newline #\Return)
+                                               text)))
                (when (plusp (length trimmed))
                  (push (cons (+ segment-start (- (length text) (length trimmed)))
-                             (string-right-trim '(#\Space #\Tab) trimmed))
+                             (string-right-trim '(#\Space #\Tab #\Newline #\Return)
+                                                trimmed))
                        segments)))))
       (dolist (token tokens)
         (when (member (nshell.domain.parsing:token-type token)
-                      '(:semicolon :ampersand)
+                      '(:semicolon :ampersand :newline)
                       :test #'eq)
           (collect (nshell.domain.parsing:token-start token))
           (setf segment-start (nshell.domain.parsing:token-end token))))
@@ -77,7 +79,7 @@ NIL. The prefix keeps its own separators, so a trailing `&' still backgrounds."
                                (%function-start-p (cdr segment))))
                         (%source-line-segment-offsets line))))
     (when entry
-      (let ((prefix (string-right-trim '(#\Space #\Tab #\;)
+      (let ((prefix (string-right-trim '(#\Space #\Tab #\Newline #\Return #\;)
                                        (subseq line 0 (car entry)))))
         (when (plusp (length prefix))
           (values prefix (subseq line (car entry))))))))
@@ -88,7 +90,7 @@ NIL. The prefix keeps its own separators, so a trailing `&' still backgrounds."
     (let ((words nil))
       (dolist (token tokens)
         (let ((type (nshell.domain.parsing:token-type token)))
-          (when (member type '(:semicolon :ampersand :pipe :and :or)
+          (when (member type '(:semicolon :ampersand :pipe :and :or :newline)
                         :test #'eq)
             (return))
           (when (eq type :word)
@@ -99,11 +101,12 @@ NIL. The prefix keeps its own separators, so a trailing `&' still backgrounds."
           (second words))))))
 
 (defun function-definition-line-p (line)
-  "True when any command on LINE opens a function definition, so the whole block
-has to reach the source reader rather than the AST executor. A line may open one
-after something else has run, as in `echo pre; function f; echo hi; end'."
-  (some (lambda (segment) (%function-start-p segment))
-        (%source-line-segments line)))
+  "True when any command in LINE opens a function definition, so the whole block
+has to reach the source reader rather than the AST executor. LINE may be a
+submitted multi-line buffer, and the definition may open after something else
+has run, as in `echo pre; function f; echo hi; end'."
+  (some (lambda (segment) (%function-start-p (cdr segment)))
+        (%source-line-segment-offsets line)))
 
 (defun %source-definition-line-depth-delta (line)
   (let ((tokens (nshell.domain.parsing:tokenization-result-tokens

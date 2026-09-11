@@ -20,9 +20,11 @@ left prompt, without installing it.")
   (%builtin-usage "prompt" "prompt [show|left FORMAT|right FORMAT|reset|preview FORMAT]"))
 
 (defun %prompt-invalid-format-output (condition)
-  (values (format nil "prompt: unknown segment {~a}~%"
-                  (nshell.domain.prompting:invalid-prompt-format-segment condition))
-          2))
+  (let ((segment (nshell.domain.prompting:invalid-prompt-format-segment condition)))
+    (values (if (eq segment :unterminated)
+                (format nil "prompt: unterminated { in format~%")
+                (format nil "prompt: unknown segment {~a}~%" segment))
+            2)))
 
 (defun %prompt-show-output ()
   (multiple-value-bind (left right)
@@ -30,7 +32,7 @@ left prompt, without installing it.")
           (funcall *prompt-format-query-handler*)
           (values nshell.domain.prompting:+default-left-prompt-format+
                   nshell.domain.prompting:+default-right-prompt-format+))
-    (format nil "left:  ~a~%right: ~a~%" left right)))
+    (format nil "left:  '~a'~%right: '~a'~%" left right)))
 
 (defun %prompt-set (side value)
   (handler-case

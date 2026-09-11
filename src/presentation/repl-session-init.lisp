@@ -13,6 +13,26 @@
           (nshell.infrastructure.acl:current-process-id)
           (incf *assistant-session-sequence*)))
 
+(defun session-greeting-text ()
+  "The greeting line for this session, or NIL for silence. NSHELL_GREETING
+names it; an unset variable keeps the version banner, which is how a first
+session learns what it is running, and an empty one turns it off. Read after
+the startup file has run, so a line in ~/.nshellrc decides it."
+  (let ((greeting (nshell.domain.environment:env-get (ensure-environment)
+                                                     "NSHELL_GREETING")))
+    (cond
+      ((null greeting)
+       (with-output-to-string (stream)
+         (nshell.feature.command-line:print-version stream)))
+      ((string= greeting "") nil)
+      (t (format nil "~a~%" greeting)))))
+
+(defun print-session-greeting ()
+  (let ((greeting (session-greeting-text)))
+    (when greeting
+      (write-string greeting)
+      (finish-output))))
+
 (defun %config-source-name (path)
   (if path
       (namestring (pathname path))
@@ -125,7 +145,11 @@ entered during this session."
   (nshell.infrastructure.terminal:reset-terminal-color-depth)
   (setf nshell.domain.prompting:*git-status-resolver*
         (function nshell.infrastructure.acl:get-git-status)
-        nshell.application:*theme-apply-handler* (function apply-repl-theme))
+        nshell.application:*theme-apply-handler* (function apply-repl-theme)
+        nshell.application:*bind-table-handler* (function bind-dispatch-handler)
+        nshell.application:*prompt-format-apply-handler* (function apply-prompt-format)
+        nshell.application:*prompt-format-query-handler* (function current-prompt-format)
+        nshell.application:*prompt-preview-handler* (function preview-prompt-format))
   (setf *vi-mode-enabled*
         (%vi-mode-flag-enabled-p
          (nshell.infrastructure.acl:current-environment-value "NSHELL_VI_MODE")))

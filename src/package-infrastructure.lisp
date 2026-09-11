@@ -89,6 +89,7 @@ line editor has a single place to import them from.")
             #:ansi-enable-bracketed-paste #:ansi-disable-bracketed-paste
             #:ansi-enable-sgr-mouse #:ansi-disable-sgr-mouse
             #:ansi-enable-alternate-screen #:ansi-disable-alternate-screen
+            #:ansi-set-vi-mode-cursor-shape
             #:ansi-request-cursor-position
             #:ansi-copy-to-clipboard
             #:copy-to-clipboard

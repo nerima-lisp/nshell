@@ -3,12 +3,12 @@
 Run `help` inside nshell for per-command detail, and `type NAME` to check
 whether a name resolves to a builtin, a function, or an external program.
 
-`agent`, `ai`, `alias`, `abbr`, `and`, `bg`, `break`, `builtin`, `cd`, `command`,
+`agent`, `ai`, `alias`, `abbr`, `and`, `bg`, `bind`, `break`, `builtin`, `cd`, `command`,
 `complete`, `contains`, `continue`, `count`, `dirs`, `disown`, `echo`, `eval`,
 `exec`, `exit`, `export`, `false`, `fg`, `function`, `functions`, `help`,
 `history`, `jobs`, `kill`, `math`, `nextd`, `not`, `or`, `pipeline-graph`,
-`popd`, `prevd`, `printf`, `pushd`, `pwd`, `read`, `seq`, `set`, `source`,
-`string`, `test`, `theme`, `true`, `type`, `unset`, `wait`, `which`.
+`popd`, `prevd`, `printf`, `prompt`, `pushd`, `pwd`, `read`, `seq`, `set`,
+`source`, `string`, `test`, `theme`, `true`, `type`, `unset`, `wait`, `which`.
 
 ## Notes on a few of them
 
@@ -29,10 +29,22 @@ Mermaid flowchart with `--mermaid`, without executing it. Quote the pipeline so
 the shell passes it as one argument — see
 [Recipes](../guide/recipes.md#draw-a-pipeline-without-running-it).
 
+**`bind`** lists, sets, erases, or resets key bindings: `bind` alone lists
+every binding, `bind KEY` shows one, `bind KEY ACTION` rebinds a key, `bind -e
+KEY` erases a binding (the key then does nothing), and `bind --reset` restores
+every default. See
+[Customizing key bindings](../guide/customization.md#customizing-key-bindings).
+
 **`theme`** picks or tunes the color theme: `theme list` shows the presets,
 `theme use NAME` switches to one, `theme set ROLE SPEC` overrides a single
 role, and `theme show` prints the active theme. See
-[Customizing colors](../guide/customization.md).
+[Customizing colors](../guide/customization.md#customizing-colors).
+
+**`prompt`** picks the prompt's layout: `prompt show` prints the active left
+and right format strings, `prompt left FORMAT`/`prompt right FORMAT` install
+one, `prompt preview FORMAT` renders a format without installing it, and
+`prompt reset` restores the defaults. See
+[Customizing the prompt](../guide/customization.md#customizing-the-prompt).
 
 **`string`** is the fish-style string toolkit (`string upper`, `string split`,
 and friends) rather than a single-purpose command.

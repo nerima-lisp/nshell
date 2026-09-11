@@ -175,6 +175,15 @@
            (:256 (list (if foreground-p 38 48) 5 (cl-tty-kit:rgb-to-256 r g b)))
            (:16 (list (%named-color-sgr (%rgb-to-basic-16 r g b) foreground-p)))))))))
 
+(defun ansi-set-vi-mode-cursor-shape (insert-mode-p &optional (stream *standard-output*))
+  "Emit the DECSCUSR sequence for a steady bar cursor when INSERT-MODE-P, or a
+steady block cursor otherwise. Callers gate this on vi mode being enabled and
+the terminal being interactive; this function always emits."
+  (write-string
+   (cl-tty-kit:ansi-set-cursor-style
+    (if insert-mode-p :steady-bar :steady-block))
+   stream))
+
 (defun ansi-style-sequence (&key foreground background bold dim italic
                               underline reverse (depth (terminal-color-depth)))
   "Return the SGR sequence for the given attributes, or \"\" when nothing is

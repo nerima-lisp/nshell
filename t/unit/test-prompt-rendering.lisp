@@ -111,3 +111,53 @@
     "There is nothing to cut when the path is only a leader and one component."
     (expect "~" :to-equal (nshell.presentation::%display-cwd "~/" 10))
     (expect "/" :to-equal (nshell.presentation::%display-cwd "/" 10))))
+
+(describe "prompt-custom-format-rendering-tests"
+  (it "renders-a-custom-left-format-in-place-of-the-built-in-layout"
+    "{user} and {host} are separate colored segments, so each is checked on
+its own rather than as one contiguous substring across the ANSI codes
+%WRITE-COLORED-SEGMENTS emits between them."
+    (let ((output (capture-render-prompt :terminal-width 80
+                                         :left-format "{user}@{host} $ "
+                                         :remote-session-p t :user "alice")))
+      (expect (search "alice" output) :to-be-truthy)
+      (expect (search "test-host" output) :to-be-truthy)
+      (expect (search "$" output) :to-be-truthy)))
+
+  (it "returns-the-custom-left-formats-visible-width"
+    "RENDER-PROMPT's left-width return value still reflects whichever layout
+(built-in or a custom format) actually rendered."
+    (multiple-value-bind (output results)
+        (call-render-prompt :terminal-width 80 :left-format "ab> ")
+      (declare (ignore output))
+      (expect 4 :to-equal (first results))))
+
+  (it "renders-a-custom-right-format-in-place-of-the-built-in-layout"
+    (let ((nshell.domain.prompting:*prompt-time-resolver* (lambda () "12:34")))
+      (let ((output (capture-render-prompt
+                     :terminal-width (+ (current-left-prompt-width) 12)
+                     :right-format "{time}")))
+        (expect (search "12:34" output) :to-be-truthy))))
+
+  (it "an-unset-left-format-falls-back-to-nshell-prompt-from-the-environment"
+    (with-prompt-format-environment '(("NSHELL_PROMPT" . "ab> "))
+      (multiple-value-bind (output results)
+          (call-render-prompt :terminal-width 80)
+        (declare (ignore output))
+        (expect 4 :to-equal (first results)))))
+
+  (it "an-installed-left-format-override-wins-over-nshell-prompt"
+    "The rc file's `prompt left ...` runs after startup env pickup, so an
+installed override must take precedence over NSHELL_PROMPT."
+    (with-prompt-format-environment '(("NSHELL_PROMPT" . "should-not-render"))
+      (multiple-value-bind (output results)
+          (call-render-prompt :terminal-width 80 :left-format "ab> ")
+        (declare (ignore output))
+        (expect 4 :to-equal (first results)))))
+
+  (it "an-unset-right-format-falls-back-to-nshell-right-prompt-from-the-environment"
+    (with-prompt-format-environment '(("NSHELL_RIGHT_PROMPT" . "{time}"))
+      (let ((nshell.domain.prompting:*prompt-time-resolver* (lambda () "12:34")))
+        (let ((output (capture-render-prompt
+                       :terminal-width (+ (current-left-prompt-width) 12))))
+          (expect (search "12:34" output) :to-be-truthy))))))

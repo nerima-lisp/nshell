@@ -92,6 +92,14 @@
          :synopsis "theme [show|list|use NAME|set ROLE SPEC|reset]"
          :description "pick or tune the color theme"
          :flags '("show" "list" "use" "set" "reset"))
+   (list :command "prompt"
+         :synopsis "prompt [show|left FORMAT|right FORMAT|reset|preview FORMAT]"
+         :description "customize the prompt format"
+         :flags '("show" "left" "right" "reset" "preview"))
+   (list :command "bind"
+         :synopsis "bind [-e KEY] [--reset] [KEY [ACTION]]"
+         :description "list, set, erase, or reset key bindings"
+         :flags '("-e" "--reset"))
    (list :command "complete"
          ;; Assembled: longer than 100 columns, and a string literal cannot be
          ;; split across source lines without changing its value.

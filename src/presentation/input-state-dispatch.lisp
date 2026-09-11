@@ -62,6 +62,27 @@
                  (input-state-cursor-pos state)
                  0)))
 
+(defun %input-dispatch-name-string (keyword)
+  (string-downcase (symbol-name keyword)))
+
+(defun %input-dispatch-key-type-for-name (name)
+  (find name (mapcar #'car +default-input-dispatch-bindings+)
+        :key #'%input-dispatch-name-string :test #'string-equal))
+
+(defun %input-dispatch-action-name-for-string (name)
+  (find name (mapcar #'first +input-dispatch-action-table+)
+        :key #'%input-dispatch-name-string :test #'string-equal))
+
+(defun %input-dispatch-action-for-name (action-name)
+  (let ((row (assoc action-name +input-dispatch-action-table+)))
+    (if row
+        (%make-input-dispatch-action (second row) (third row))
+        (%make-input-dispatch-action :none))))
+
+(defun input-dispatch-binding-action-name (key-type)
+  "Return the action name bound to KEY-TYPE, or :NONE when unbound."
+  (or (gethash key-type *input-dispatch-bindings*) :none))
+
 (defun input-dispatch-action-for-key-event (key-event)
   (case (nshell.domain.input:key-event-type key-event)
     (:char (let ((ch (nshell.domain.input:key-event-char key-event)))
@@ -69,60 +90,80 @@
                  (%make-input-dispatch-action :insert-char ch)
                  (%make-input-dispatch-action :none))))
     (:paste (%make-input-dispatch-action :paste key-event))
-    (:enter (%make-input-dispatch-action :enter))
-    (:tab (%make-input-dispatch-action :cycle-completion 1))
-    (:shift-tab (%make-input-dispatch-action :cycle-completion -1))
-    (:backspace (%make-input-dispatch-action :backspace))
-    (:delete (%make-input-dispatch-action :delete))
-    (:ctrl-c (%make-input-dispatch-action :clear-input))
-    (:ctrl-d (%make-input-dispatch-action :delete-or-quit))
-    (:ctrl-right-bracket (%make-input-dispatch-action :start-ask))
-    ((:ctrl-r :ctrl-s) (%make-input-dispatch-action :start-history-search))
-    ((:ctrl-f :right) (%make-input-dispatch-action :accept-suggestion))
-    (:escape (%make-input-dispatch-action :escape))
-    (:ctrl-g (%make-input-dispatch-action :redraw-clearing-completion))
-    ((:ctrl-b :left) (%make-input-dispatch-action :move-cursor -1))
-    ((:ctrl-a :home) (%make-input-dispatch-action :move-cursor-absolute 0))
-    ((:ctrl-e :end) (%make-input-dispatch-action
-                     :move-eol-or-accept-suggestion))
-    (:ctrl-k (%make-input-dispatch-action :kill-to-eol))
-    (:ctrl-l (%make-input-dispatch-action :emit :clear-screen))
-    (:alt-e (%make-input-dispatch-action :emit :edit-command))
-    ((:ctrl-n :down :page-down) (%make-input-dispatch-action
-                                 :emit
-                                 :history-next))
-    ((:ctrl-p :up :page-up) (%make-input-dispatch-action
-                             :emit
-                             :history-prev))
-    (:ctrl-t (%make-input-dispatch-action :transpose-chars))
-    (:ctrl-u (%make-input-dispatch-action :kill-to-bol))
-    (:ctrl-w (%make-input-dispatch-action :backward-kill-word))
-    (:ctrl-y (%make-input-dispatch-action :yank-last-kill))
-    (:ctrl-underscore (%make-input-dispatch-action :undo))
-    (:alt-r (%make-input-dispatch-action :redo))
-    (:alt-dot (%make-input-dispatch-action :emit :insert-last-argument))
-    (:alt-c (%make-input-dispatch-action :capitalize-word))
-    (:alt-l (%make-input-dispatch-action :downcase-word))
-    (:alt-t (%make-input-dispatch-action :transpose-words))
-    (:alt-u (%make-input-dispatch-action :upcase-word))
-    (:alt-y (%make-input-dispatch-action :cycle-last-yank))
-    ((:alt-left :ctrl-left :alt-b) (%make-input-dispatch-action
-                                    :move-word-left))
-    ((:alt-right :ctrl-right :alt-f) (%make-input-dispatch-action
-                                      :accept-suggestion-word))
-    (:alt-backspace (%make-input-dispatch-action :backward-kill-word))
-    (:alt-d (%make-input-dispatch-action :forward-kill-word))
-    (:alt-s (%make-input-dispatch-action :toggle-sudo-prefix))
     (:mouse (%mouse-input-dispatch-action key-event))
-    ((:shift-up :shift-down :shift-left :shift-right
-      :alt-up :alt-down :ctrl-up :ctrl-down
-      :shift-alt-up :shift-alt-down :shift-alt-left :shift-alt-right
-      :shift-ctrl-up :shift-ctrl-down :shift-ctrl-left :shift-ctrl-right
-      :alt-ctrl-up :alt-ctrl-down :alt-ctrl-left :alt-ctrl-right
-      :shift-alt-ctrl-up :shift-alt-ctrl-down :shift-alt-ctrl-left
-      :shift-alt-ctrl-right)
-     (%make-input-dispatch-action :redraw))
-    (otherwise (%make-input-dispatch-action :none))))
+    (otherwise
+     (%input-dispatch-action-for-name
+      (input-dispatch-binding-action-name
+       (nshell.domain.input:key-event-type key-event))))))
+
+(defun input-dispatch-bindings-listing ()
+  "Return an alist of (KEY-NAME . ACTION-NAME) strings, sorted by key name,
+for every bindable key-event type."
+  (sort (mapcar (lambda (key-type)
+                  (cons (%input-dispatch-name-string key-type)
+                        (%input-dispatch-name-string
+                         (input-dispatch-binding-action-name key-type))))
+                (mapcar #'car +default-input-dispatch-bindings+))
+        #'string< :key #'car))
+
+(defun input-dispatch-valid-key-names ()
+  (sort (mapcar #'%input-dispatch-name-string
+                (mapcar #'car +default-input-dispatch-bindings+))
+        #'string<))
+
+(defun input-dispatch-valid-action-names ()
+  (mapcar (lambda (row) (%input-dispatch-name-string (first row)))
+          +input-dispatch-action-table+))
+
+(defun input-dispatch-get-binding (key-name)
+  "Return the action name bound to KEY-NAME and T, or NIL and NIL when
+KEY-NAME does not name a bindable key."
+  (let ((key-type (%input-dispatch-key-type-for-name key-name)))
+    (if key-type
+        (values (%input-dispatch-name-string
+                 (input-dispatch-binding-action-name key-type))
+                t)
+        (values nil nil))))
+
+(defun input-dispatch-set-binding (key-name action-name)
+  "Rebind KEY-NAME to ACTION-NAME. Returns :OK, :UNKNOWN-KEY, or
+:UNKNOWN-ACTION."
+  (let ((key-type (%input-dispatch-key-type-for-name key-name))
+        (action (%input-dispatch-action-name-for-string action-name)))
+    (cond
+      ((null key-type) :unknown-key)
+      ((null action) :unknown-action)
+      (t (setf (gethash key-type *input-dispatch-bindings*) action)
+         :ok))))
+
+(defun input-dispatch-erase-binding (key-name)
+  "Erase KEY-NAME's binding, so it dispatches :NONE. Returns :OK or
+:UNKNOWN-KEY."
+  (let ((key-type (%input-dispatch-key-type-for-name key-name)))
+    (if key-type
+        (progn (remhash key-type *input-dispatch-bindings*) :ok)
+        :unknown-key)))
+
+(defun input-dispatch-reset-bindings ()
+  (clrhash *input-dispatch-bindings*)
+  (dolist (entry +default-input-dispatch-bindings+)
+    (setf (gethash (car entry) *input-dispatch-bindings*) (cdr entry)))
+  :ok)
+
+(defun bind-dispatch-handler (operation &rest args)
+  "Implements the BIND builtin's protocol against *INPUT-DISPATCH-BINDINGS*.
+OPERATION is :LIST, :GET, :SET, :ERASE, :RESET, :VALID-KEYS, or
+:VALID-ACTIONS; NSHELL.APPLICATION:*BIND-TABLE-HANDLER* is set to this
+function so the application layer can reach it without depending on the
+presentation package."
+  (ecase operation
+    (:list (input-dispatch-bindings-listing))
+    (:get (input-dispatch-get-binding (first args)))
+    (:set (input-dispatch-set-binding (first args) (second args)))
+    (:erase (input-dispatch-erase-binding (first args)))
+    (:reset (input-dispatch-reset-bindings))
+    (:valid-keys (input-dispatch-valid-key-names))
+    (:valid-actions (input-dispatch-valid-action-names))))
 
 (defun input-dispatch-transition-for-action (state action)
   (macrolet ((from (reduction)

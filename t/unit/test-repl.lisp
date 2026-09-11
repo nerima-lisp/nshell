@@ -272,3 +272,33 @@
           (expect (search "nshell: forced execution failure" script-error)
                   :to-be-truthy)))))
 )
+
+(describe "session-greeting-tests"
+  (it "an-unset-greeting-keeps-the-version-banner"
+    (with-repl-test-state
+      (setf nshell.presentation::*environment*
+            (nshell.domain.environment:make-environment))
+      (expect (search "nshell v" (nshell.presentation::session-greeting-text))
+              :to-be-truthy)))
+
+  (it "an-empty-greeting-starts-the-session-silently"
+    (with-repl-test-state
+      (setf nshell.presentation::*environment*
+            (nshell.domain.environment:env-set
+             (nshell.domain.environment:make-environment)
+             "NSHELL_GREETING" "" t))
+      (expect (nshell.presentation::session-greeting-text) :to-be-null)
+      (expect "" :to-equal
+              (capture-standard-output
+                (nshell.presentation::print-session-greeting)))))
+
+  (it "a-configured-greeting-replaces-the-banner"
+    (with-repl-test-state
+      (setf nshell.presentation::*environment*
+            (nshell.domain.environment:env-set
+             (nshell.domain.environment:make-environment)
+             "NSHELL_GREETING" "welcome back" t))
+      (expect (format nil "welcome back~%")
+              :to-equal
+              (capture-standard-output
+                (nshell.presentation::print-session-greeting))))))

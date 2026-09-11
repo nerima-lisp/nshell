@@ -44,10 +44,12 @@ turns red before you run it), existing paths are underlined, and a dimmed
 completion of the most recent matching history entry trails the cursor. Press
 `→` or `Ctrl-F` to accept it. A mistyped command gets a `did you mean`
 suggestion, `FOO=bar cmd` exports `FOO` for that one command, and `theme list`
-shows the color presets (see [Customizing colors](guide/customization.md)).
+shows the color presets. The prompt layout, the colors, and the key
+bindings are all configurable; see [Customization](guide/customization.md).
 
 Set `NSHELL_GREETING` to replace the startup banner with your own line, or to
-the empty string to start silently.
+the empty string to start silently. It is read after `~/.nshellrc` runs, so
+`set -x NSHELL_GREETING ""` in that file works.
 
 ### One-off command
 

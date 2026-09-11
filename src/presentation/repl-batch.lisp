@@ -15,12 +15,21 @@
         *assistant-pending-transcript* nil
         nshell.application:*agent-start-handler* nil
         nshell.application:*ai-reset-handler* nil
+        ;; A script inspects and sets the same shell state an interactive
+        ;; session does, so the handlers the builtins reach through are
+        ;; installed here too.
+        nshell.application:*theme-apply-handler* (function apply-repl-theme)
+        nshell.application:*bind-table-handler* (function bind-dispatch-handler)
+        nshell.application:*prompt-format-apply-handler* (function apply-prompt-format)
+        nshell.application:*prompt-format-query-handler* (function current-prompt-format)
+        nshell.application:*prompt-preview-handler* (function preview-prompt-format)
         *prompt-rendered-terminal-width* +default-terminal-width+
         *prompt-rendered-prompt-width* 0
         *prompt-rendered-origin-row* 1
         *prompt-rendered-origin-column* 1
         *prompt-rendered-origin-known-p* t
         *interactive-terminal-installed-p* nil
+        *config* (nshell.domain.configuration:default-config)
         *kb* (seed-repl-completion-knowledge-base
               (nshell.domain.completion:make-empty-knowledge-base))
         *environment* (nshell.application:seed-shell-status-environment

@@ -143,7 +143,7 @@
            nil)))))
 
 ;; REPL Entry
-(defun run-repl (&key (load-config-p t) config-path (history-p t))
+(defun run-repl (&key (load-config-p t) config-path (history-p t) greeting-p)
   "Run the interactive REPL and return the process exit code.
 
 LOAD-CONFIG-P, CONFIG-PATH, and HISTORY-P make startup persistence explicit
@@ -158,6 +158,8 @@ hand the user's next shell a terminal with SGR mouse reporting still on."
    :load-config-p load-config-p
    :config-path config-path
    :history-p history-p)
+  (when greeting-p
+    (print-session-greeting))
   (unwind-protect
       (if (setf *interactive-terminal-installed-p*
                 (install-interactive-terminal))

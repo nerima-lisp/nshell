@@ -26,7 +26,7 @@ shell to another palette is one `theme use` away, and a role you dislike is one
 `theme set` away. Colors are written once in truecolor and downsampled at the
 terminal boundary, so the same theme renders on a 256-color or 16-color
 terminal and disappears entirely under `NO_COLOR`. See
-[Customizing colors](customization.md).
+[Customization](customization.md).
 
 ## Highlighting answers a question before you press Enter
 

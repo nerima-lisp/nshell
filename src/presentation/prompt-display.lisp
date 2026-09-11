@@ -1,5 +1,12 @@
 (in-package #:nshell.presentation)
 
+;; PREVIEW-PROMPT-FORMAT reads the live session's exit code, duration, and
+;; config; REPL-STATE-DATA.LISP, which DEFVARs them, loads after this file in
+;; the ASDF serial order, so they need a forward SPECIAL declaration here to
+;; avoid an undefined-variable warning.
+(declaim (special *last-exit-code* *last-command-duration-ms*
+                  *failure-explain-available-p* *config*))
+
 (defconstant +path-shorten-threshold-width+ 40
   "A cwd wider than this many columns is shortened fish-style regardless of
 the terminal width.")
@@ -132,9 +139,12 @@ it and treats a negative WIDTH as 0."
                                kind)))))))
 
 (defun segment-kind->role (kind)
-  "Map prompt segment kind to highlight role for theme lookup."
+  "Map prompt segment kind to highlight role for theme lookup. :USER and
+:JOBS (the {user} and {jobs} format segments) have no dedicated role yet and
+borrow the closest existing one."
   (case kind
     (:host :prompt-host)
+    (:user :prompt-host)
     (:path :prompt-path)
     (:exit :prompt-ok)
     (:exit-error :prompt-error)
@@ -144,6 +154,7 @@ it and treats a negative WIDTH as 0."
     (:assistant :prompt-assistant)
     (:duration :prompt-duration)
     (:time :prompt-time)
+    (:jobs :prompt-time)
     (t :normal)))
 
 (defparameter *prompt-remote-session-p*
@@ -215,12 +226,20 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
         (when (> padding 0)
           (%emit-right-prompt theme visible-right-segments padding))))))
 
-(defun %assistant-usage-segment ()
+(defun %assistant-usage-text ()
+  "The {ai} format-segment text, or NIL before the assistant's first turn."
   (when (plusp (nshell.feature.assistant:assistant-usage-turns
                 nshell.feature.assistant:*assistant-usage*))
-    (nshell.domain.prompting:make-prompt-segment
-     (format nil "AI ~a" (nshell.feature.assistant:assistant-usage-short-text))
-     :assistant)))
+    (format nil "AI ~a" (nshell.feature.assistant:assistant-usage-short-text))))
+
+(defun %assistant-usage-segment ()
+  (let ((text (%assistant-usage-text)))
+    (when text
+      (nshell.domain.prompting:make-prompt-segment text :assistant))))
+
+(defun %background-jobs-count ()
+  "The {jobs} format-segment count: the shell's currently tracked jobs."
+  (length (nshell.application:jobs)))
 
 (defun %right-prompt-segments (pm failure-explain-p)
   (let* ((base (nshell.domain.prompting:render-right-prompt-model
@@ -232,16 +251,81 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
                 (list assistant))
         base)))
 
+(defparameter *prompt-left-format* nil
+  "NIL to render the built-in left-prompt layout, or a format string (see
+nshell.domain.prompting:render-prompt-format) installed by the PROMPT
+builtin, overriding both this and NSHELL_PROMPT.")
+
+(defparameter *prompt-right-format* nil
+  "As *PROMPT-LEFT-FORMAT*, for the right prompt and NSHELL_RIGHT_PROMPT.")
+
+(defparameter *prompt-format-environment-reader*
+  (lambda (variable) (nshell.infrastructure.acl:current-environment-value variable))
+  "Function of one environment-variable NAME returning its value or NIL. A
+hook, like *PROMPT-REMOTE-SESSION-P*, so tests can force NSHELL_PROMPT /
+NSHELL_RIGHT_PROMPT without depending on the real process environment.")
+
+(defun %prompt-format-from-environment (variable)
+  (let ((value (funcall *prompt-format-environment-reader* variable)))
+    (and value (plusp (length value)) value)))
+
+(defun %effective-prompt-format (override variable)
+  "OVERRIDE (set by the PROMPT builtin) wins; otherwise fall back to the
+named environment variable, read once per render since neither changes
+mid-session. NIL from both means \"use the built-in layout\"."
+  (or override (%prompt-format-from-environment variable)))
+
+(defun %format-segments (format pm failure-explain-p)
+  (nshell.domain.prompting:render-prompt-format
+   format pm
+   :failure-explain-p failure-explain-p
+   :jobs-count (%background-jobs-count)
+   :assistant-text (%assistant-usage-text)))
+
+(defun apply-prompt-format (side value)
+  "Install VALUE (a format string, or NIL to restore the default layout) as
+the live session's prompt format for SIDE (:LEFT or :RIGHT)."
+  (ecase side
+    (:left (setf *prompt-left-format* value))
+    (:right (setf *prompt-right-format* value)))
+  value)
+
+(defun current-prompt-format ()
+  "Return the session's active left and right prompt format text: an
+installed override, else the matching environment variable, else the
+documented default string."
+  (values (or (%effective-prompt-format *prompt-left-format* "NSHELL_PROMPT")
+              nshell.domain.prompting:+default-left-prompt-format+)
+          (or (%effective-prompt-format *prompt-right-format* "NSHELL_RIGHT_PROMPT")
+              nshell.domain.prompting:+default-right-prompt-format+)))
+
+(defun preview-prompt-format (format)
+  "Render FORMAT once against the live session state as a left prompt and
+return the resulting text, without installing it as the active format."
+  (let* ((pm (%current-prompt-model *last-exit-code* *last-command-duration-ms*))
+         (theme (nshell.domain.configuration:config-theme *config*)))
+    (%colored-segments-string
+     theme
+     (%format-segments format pm *failure-explain-available-p*))))
+
 (defun render-prompt (config last-exit &key (last-command-duration-ms nil)
                                       (failure-explain-p nil)
                                       (terminal-width (terminal-width))
                                       (window-title-p nil))
   "Render the left prompt with theme colors, and the terminal window title
-when WINDOW-TITLE-P."
+when WINDOW-TITLE-P. *PROMPT-LEFT-FORMAT*/*PROMPT-RIGHT-FORMAT* (or
+NSHELL_PROMPT/NSHELL_RIGHT_PROMPT) replace the built-in layout on whichever
+side names a format."
   (let* ((theme (nshell.domain.configuration:config-theme config))
          (pm (%current-prompt-model last-exit last-command-duration-ms terminal-width))
-         (segments (nshell.domain.prompting:render-prompt-model pm))
-         (right-segments (%right-prompt-segments pm failure-explain-p)))
+         (left-format (%effective-prompt-format *prompt-left-format* "NSHELL_PROMPT"))
+         (right-format (%effective-prompt-format *prompt-right-format* "NSHELL_RIGHT_PROMPT"))
+         (segments (if left-format
+                       (%format-segments left-format pm failure-explain-p)
+                       (nshell.domain.prompting:render-prompt-model pm)))
+         (right-segments (if right-format
+                             (%format-segments right-format pm failure-explain-p)
+                             (%right-prompt-segments pm failure-explain-p))))
     (when window-title-p
       (write-string (cl-tty-kit:ansi-set-window-title
                      (nshell.domain.prompting:prompt-model-cwd pm))))

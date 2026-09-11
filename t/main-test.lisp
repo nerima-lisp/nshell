@@ -105,14 +105,15 @@ changing its value.")
                                   (nshell::%parse-cli-arguments
                                    (list "--interactive" "-c" "echo no"))))))))
       (expect (search "--interactive cannot be combined" error-output) :to-be-truthy))
-  (let ((repl-called nil))
+  (let ((repl-call :uncalled))
     (with-temporary-function
         ((quote nshell::tty-p) (lambda () t))
       (with-temporary-function
           ((quote nshell.presentation:run-repl)
-           (lambda () (setf repl-called t) 43))
+           (lambda (&rest arguments) (setf repl-call arguments) 43))
         (expect 43 :to-equal (nshell::%run-default-invocation))))
-    (expect repl-called :to-be-truthy))
+    (expect '(:load-config-p t :config-path nil :history-p t :greeting-p t)
+            :to-equal repl-call))
   (let ((repl-call nil))
     (with-temporary-function
         ((quote nshell.presentation:run-repl)
@@ -125,7 +126,8 @@ changing its value.")
                :load-config-p nil
                :config-path "custom.rc"
                :history-p nil)))
-    (expect '(:load-config-p nil :config-path "custom.rc" :history-p nil)
+    (expect '(:load-config-p nil :config-path "custom.rc" :history-p nil
+              :greeting-p nil)
             :to-equal repl-call))
   (let ((batch-called nil))
     (with-temporary-function
@@ -184,26 +186,3 @@ changing its value.")
       (expect (search "Fatal error: dispatch failed" error-output)
               :to-be-truthy))))
 )
-
-(describe "startup-greeting-tests"
-  (it "greeting-defaults-to-the-version-banner"
-    (with-rebound-function (nshell.infrastructure.acl:current-environment-value
-                            (lambda (name) (declare (ignore name)) nil))
-      (expect (search "nshell v"
-                      (with-output-to-string (stream)
-                        (nshell::%print-greeting stream)))
-              :to-be-truthy)))
-
-  (it "an-empty-greeting-starts-the-session-silently"
-    (with-rebound-function (nshell.infrastructure.acl:current-environment-value
-                            (lambda (name) (declare (ignore name)) ""))
-      (expect "" :to-equal (with-output-to-string (stream)
-                             (nshell::%print-greeting stream)))))
-
-  (it "a-configured-greeting-replaces-the-banner"
-    (with-rebound-function (nshell.infrastructure.acl:current-environment-value
-                            (lambda (name) (declare (ignore name)) "welcome back"))
-      (expect (format nil "welcome back~%")
-              :to-equal
-              (with-output-to-string (stream)
-                (nshell::%print-greeting stream))))))

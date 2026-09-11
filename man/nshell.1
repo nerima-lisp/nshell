@@ -94,6 +94,13 @@ for history.
 Press \fBM\-e\fR (\fBAlt\-E\fR) to open the current line in the external editor
 selected by \fBNSHELL_EDITOR\fR, \fBVISUAL\fR, or \fBEDITOR\fR, falling back to
 \fBvi\fR; the edited line is returned to the prompt without being executed.
+.PP
+The
+.B bind
+builtin lists, sets, erases, and resets these bindings; run
+.B bind
+with no arguments to see the current table. In vi mode, the cursor changes
+shape with the mode: a block in normal mode, a bar while inserting.
 .SH EXPANSIONS
 .B nshell
 performs, in order, brace expansion (\fB{a,b}\fR, \fB{1..5}\fR), tilde
@@ -132,6 +139,7 @@ provides the following builtins:
 .BR abbr ,
 .BR and ,
 .BR bg ,
+.BR bind ,
 .BR break ,
 .BR builtin ,
 .BR cd ,
@@ -163,6 +171,7 @@ provides the following builtins:
 .BR popd ,
 .BR prevd ,
 .BR printf ,
+.BR prompt ,
 .BR pushd ,
 .BR pwd ,
 .BR read ,
@@ -187,7 +196,23 @@ When set to a non-empty value, enables vi key bindings (see KEY BINDINGS).
 .TP
 .B NSHELL_GREETING
 Printed at interactive startup in place of the version banner. An empty value
-starts the session silently.
+starts the session silently. Read after the startup file runs, so
+.I ~/.nshellrc
+can set it.
+.TP
+.B NSHELL_PROMPT
+Sets the left prompt's format string at session start (see
+.B prompt
+under BUILTINS). A
+.B prompt left
+line in
+.B ~/.nshellrc
+overrides it.
+.TP
+.B NSHELL_RIGHT_PROMPT
+As
+.BR NSHELL_PROMPT ,
+for the right prompt.
 .TP
 .B NO_COLOR
 When set to any value, disables colored output.

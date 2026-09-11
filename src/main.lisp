@@ -69,25 +69,15 @@ presentation do not depend on cl-cli's condition hierarchy."
   (format *error-output* "Fatal error: ~a~%" error)
   1)
 
-(defun %run-interactive (&key config-path load-config-p history-p)
+(defun %run-interactive (&key config-path load-config-p history-p greeting-p)
   "Run the interactive entry point while preserving the no-option call path."
-  (if (and load-config-p (null config-path) history-p)
+  (if (and load-config-p (null config-path) history-p (not greeting-p))
       (nshell.presentation:run-repl)
       (nshell.presentation:run-repl
        :load-config-p load-config-p
        :config-path config-path
-       :history-p history-p)))
-
-(defun %print-greeting (&optional (stream *standard-output*))
-  "Print NSHELL_GREETING, if it names anything. An unset variable prints the
-version banner, which is how a first-time session learns what it is running;
-setting it to the empty string is how a daily session turns that off."
-  (let ((greeting (nshell.infrastructure.acl:current-environment-value
-                   "NSHELL_GREETING")))
-    (cond
-      ((null greeting) (%print-version stream))
-      ((string= greeting ""))
-      (t (format stream "~a~%" greeting)))))
+       :history-p history-p
+       :greeting-p greeting-p)))
 
 (defun %run-default-invocation (&key (interactive-p nil)
                                      (load-config-p t)
@@ -95,17 +85,17 @@ setting it to the empty string is how a daily session turns that off."
                                      (history-p t))
   "Dispatch nshell's default invocation and explicit startup policy."
   (if (or interactive-p (tty-p))
-      (progn
-        (when (and (tty-p)
-                   (not interactive-p)
-                   load-config-p
-                   (null config-path)
-                   history-p)
-          (%print-greeting))
-        (%run-interactive
-         :config-path config-path
-         :load-config-p load-config-p
-         :history-p history-p))
+      (%run-interactive
+       :config-path config-path
+       :load-config-p load-config-p
+       :history-p history-p
+       ;; A plain interactive start greets; an explicitly configured one
+       ;; (-i, --config, --no-config, --no-history) stays quiet, as before.
+       :greeting-p (and (tty-p)
+                        (not interactive-p)
+                        load-config-p
+                        (null config-path)
+                        history-p))
     (nshell.presentation:run-repl-batch)))
 
 (defun %parsed-startup-options (invocation)

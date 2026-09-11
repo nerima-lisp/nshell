@@ -15,6 +15,10 @@ permitted to know both the domain and infrastructure.")
             #:*agent-start-handler*
             #:*ai-reset-handler*
             #:*theme-apply-handler*
+            #:*bind-table-handler*
+            #:*prompt-format-apply-handler*
+            #:*prompt-format-query-handler*
+            #:*prompt-preview-handler*
             #:make-shell-context #:shell-context-p
             #:shell-context-history #:shell-context-config
             #:shell-context-knowledge-base #:shell-context-environment

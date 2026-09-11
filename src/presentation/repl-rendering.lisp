@@ -171,5 +171,8 @@
                               :terminal-width (terminal-width)))
     (when (eq (input-state-mode *input-state*) :search)
       (render-current-history-search-panel))
+    (when (and *vi-mode-enabled* *interactive-terminal-installed-p*)
+      (nshell.infrastructure.terminal:ansi-set-vi-mode-cursor-shape
+       (eq (input-state-mode *input-state*) :insert)))
     (finish-output)
     (lambda () (read-key-cont))))

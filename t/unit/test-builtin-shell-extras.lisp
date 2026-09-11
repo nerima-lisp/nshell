@@ -295,6 +295,12 @@ read $status and call complete -C without an interactive session."
       (expect "0" :to-equal
               (nshell.domain.environment:env-get nshell.presentation::*environment* "?"))
       (expect (nshell.domain.completion:kb-command-present-p nshell.presentation::*kb* "echo")
+              :to-be-truthy)
+      (expect (nshell.domain.configuration:config-p nshell.presentation::*config*)
+              :to-be-truthy)
+      (expect (functionp nshell.application:*theme-apply-handler*) :to-be-truthy)
+      (expect (functionp nshell.application:*bind-table-handler*) :to-be-truthy)
+      (expect (functionp nshell.application:*prompt-format-apply-handler*)
               :to-be-truthy))))
 
 (describe "directory-listing-cache-tests"

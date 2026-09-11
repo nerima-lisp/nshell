@@ -10,6 +10,10 @@ theme use tokyo-night
 # so a color plus flags does not need quoting.
 theme set prompt-git-dirty yellow --bold
 
+# Customize the prompt layout. FORMAT is the rest of the line, so no quoting
+# is needed. `prompt reset` restores the defaults.
+prompt left '{user}@{host} {path}{git} $ '
+
 # Start silently instead of printing the version banner.
 set -x NSHELL_GREETING ""
 

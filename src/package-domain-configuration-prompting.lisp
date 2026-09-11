@@ -37,4 +37,7 @@ status and the clock arrive through the *GIT-STATUS-RESOLVER* and
              #:make-prompt-segment #:prompt-segment-text
              #:prompt-segment-kind #:*git-status-resolver*
              #:*prompt-time-resolver*
-             #:render-prompt-model #:render-right-prompt-model)))
+             #:render-prompt-model #:render-right-prompt-model
+             #:parse-prompt-format #:render-prompt-format
+             #:invalid-prompt-format #:invalid-prompt-format-segment
+             #:+default-left-prompt-format+ #:+default-right-prompt-format+)))

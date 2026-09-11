@@ -8,10 +8,19 @@
                           (getf spec ,key)))))
 
   (defmacro define-string-line-builtin (name transform)
+    "Define a string subcommand that takes only positional text arguments.
+Leading arguments starting with `-' are rejected as unknown options, since
+none of these subcommands defines any flag of its own."
     `(defun ,name (context args)
        (declare (ignore context))
-       (values (%string-emit-lines args :transform ,transform)
-               (if args 0 1)))))
+       (multiple-value-bind (remaining error)
+           (%string-parse-option-stream args "string" nil nil
+                                        (%string-flag-option-handler (name remaining))
+                                        (%string-integer-option-handler (name parsed next-remaining)))
+         (if error
+             (values error 1)
+             (values (%string-emit-lines remaining :transform ,transform)
+                     (if remaining 0 1)))))))
 
 (define-plist-accessors
   (%builtin-string-spec-name :name)
@@ -98,6 +107,14 @@ an error string). BODY runs with both variables in scope."
     (error ()
       (values nil (format nil "string: invalid integer for ~a: ~a~%" option value)))))
 
+(defun %string-option-spec-type (spec)
+  (or (getf spec :type) :integer))
+
+(defun %string-parse-option-spec-value (option value spec)
+  (if (eq (%string-option-spec-type spec) :string)
+      (values value nil)
+      (%string-parse-integer-option option value)))
+
 (defun %string-resolve-attached-value (option short long short-prefix-length long-prefix-length)
   "Return the integer text attached inline to OPTION (e.g. -N5 or --width=5), or NIL."
   (cond
@@ -121,7 +138,7 @@ an error string). BODY runs with both variables in scope."
          (separate-value (and (null attached-value) (second remaining))))
     (labels ((parse-value (value next-remaining)
                (multiple-value-bind (parsed error)
-                   (%string-parse-integer-option option value)
+                   (%string-parse-option-spec-value option value spec)
                  (if error
                      (values nil remaining error)
                      (values parsed next-remaining nil)))))
@@ -129,7 +146,11 @@ an error string). BODY runs with both variables in scope."
         (attached-value  (parse-value attached-value (rest remaining)))
         (separate-value  (parse-value separate-value (cddr remaining)))
         (t (values nil remaining
-                   (%required-argument-error "string" option "an integer")))))))
+                   (%required-argument-error
+                    "string" option
+                    (if (eq (%string-option-spec-type spec) :string)
+                        "a value"
+                        "an integer"))))))))
 
 (defun %string-option-argument-p (option)
   (%builtin-option-like-p option))

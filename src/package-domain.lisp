@@ -124,6 +124,7 @@ from an old one. Process values are supplied explicitly by infrastructure.")
            #:make-default-environment #:inject-os-environment
            #:env-get #:env-get-values #:env-set #:env-set-values
            #:env-defined-p #:env-exported-p #:env-unset #:env-export
+           #:env-push-scope #:env-pop-scope
            #:env-assign-default! #:env-binding-name #:env-binding-value
            #:env-binding-values #:env-binding-exported-p
            #:env-bindings #:env-entry-p

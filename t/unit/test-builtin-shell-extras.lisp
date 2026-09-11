@@ -353,3 +353,116 @@ unchanged directory must come from the cache."
           (nshell.infrastructure.acl::cached-subdirectories "/tmp/")
           (nshell.infrastructure.acl::cached-subdirectories "/tmp/")
           (expect 2 :to-equal reads))))))
+
+(describe "builtin-set-scope-tests"
+  (it "set-rejects-universal-variables"
+    "set -U/--universal is not supported and must not be silently accepted."
+    (with-builtins-context (context)
+      (assert-builtin-cases (context "set")
+        (("-U" "X" "1")
+         :code 2
+         :output (format nil "set: universal variables are not supported~%"))
+        (("--universal" "X" "1")
+         :code 2
+         :output (format nil "set: universal variables are not supported~%")))
+      (expect (nshell.domain.environment:env-defined-p
+               (nshell.application:shell-context-environment context) "X")
+              :to-be-falsy)))
+
+  (it "set-l-and-set-g-report-usage-without-a-name"
+    "-l, -g, and -lx require a name the same way -x already does."
+    (with-builtins-context (context)
+      (assert-builtin-cases (context "set")
+        (("-l") :code 1 :contains '("set: usage:"))
+        (("-g") :code 1 :contains '("set: usage:"))
+        (("-lx") :code 1 :contains '("set: usage:"))
+        (("-gx") :code 1 :contains '("set: usage:")))))
+
+  (it "a-local-variable-set-inside-a-function-does-not-leak-to-the-caller"
+    "set -l inside a function call disappears once the call returns."
+    (with-builtins-context (context)
+      (setf (gethash "f" (nshell.application:shell-context-function-table context))
+            '("set -l y 1" "echo $y"))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-command-by-name-in-context context "f" nil)
+        (expect (format nil "1~%") :to-equal output)
+        (expect 0 :to-equal code))
+      (expect (nshell.domain.environment:env-defined-p
+               (nshell.application:shell-context-environment context) "y")
+              :to-be-falsy)))
+
+  (it "a-plain-set-inside-a-function-updates-the-caller-s-existing-variable"
+    "With no scope flag, set finds a name already visible in the caller and
+updates it there, so the change is still visible after the call returns."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "set" '("Y" "1")) :code 0 :output-null t)
+      (setf (gethash "f" (nshell.application:shell-context-function-table context))
+            '("set Y 2"))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-command-by-name-in-context context "f" nil)
+        (expect "" :to-equal output)
+        (expect 0 :to-equal code))
+      (expect "2" :to-equal
+              (nshell.domain.environment:env-get
+               (nshell.application:shell-context-environment context) "Y"))))
+
+  (it "set-g-inside-a-function-reaches-the-caller-s-global-scope"
+    "set -g always targets the outermost scope, creating a variable that
+outlives the call even though it was never visible to the caller before."
+    (with-builtins-context (context)
+      (setf (gethash "f" (nshell.application:shell-context-function-table context))
+            '("set -g Z 9"))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-command-by-name-in-context context "f" nil)
+        (expect "" :to-equal output)
+        (expect 0 :to-equal code))
+      (expect "9" :to-equal
+              (nshell.domain.environment:env-get
+               (nshell.application:shell-context-environment context) "Z"))))
+
+  (it "set-lx-exports-a-local-variable-only-for-the-duration-of-the-call"
+    "-lx combines local scope with export; the exported binding shows up in
+a bare `set` listing during the call and is gone once it returns."
+    (with-builtins-context (context)
+      (setf (gethash "f" (nshell.application:shell-context-function-table context))
+            '("set -lx K v" "set"))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-command-by-name-in-context context "f" nil)
+        (expect 0 :to-equal code)
+        (expect (search "set -x K v" output) :to-be-truthy))
+      (expect (nshell.domain.environment:env-defined-p
+               (nshell.application:shell-context-environment context) "K")
+              :to-be-falsy)))
+
+  (it "a-local-shadow-wins-for-reads-and-for-set-e-reveals-the-outer-value"
+    "A function-local binding shadows a caller variable of the same name;
+erasing the local one with set -e reveals the shadowed outer value again."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "set" '("N" "outer")) :code 0 :output-null t)
+      (setf (gethash "f" (nshell.application:shell-context-function-table context))
+            '("set -l N inner" "echo $N" "set -e N" "echo $N"))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-command-by-name-in-context context "f" nil)
+        (expect (format nil "inner~%outer~%") :to-equal output)
+        (expect 0 :to-equal code))
+      (expect "outer" :to-equal
+              (nshell.domain.environment:env-get
+               (nshell.application:shell-context-environment context) "N"))))
+
+  (it "a-nested-function-call-gets-its-own-scope"
+    "An inner function's local variable does not shadow the outer function's
+variable of the same name, and the inner call's own set -g still reaches all
+the way to the top-level environment."
+    (with-builtins-context (context)
+      (let ((table (nshell.application:shell-context-function-table context)))
+        (setf (gethash "inner" table)
+              '("set -l a inner-local" "set -g shared g-value"))
+        (setf (gethash "outer" table)
+              '("set -l a outer-local" "inner" "echo $a")))
+      (multiple-value-bind (output code)
+          (nshell.application::%execute-command-by-name-in-context context "outer" nil)
+        (expect (format nil "outer-local~%") :to-equal output)
+        (expect 0 :to-equal code))
+      (let ((environment (nshell.application:shell-context-environment context)))
+        (expect (nshell.domain.environment:env-defined-p environment "a") :to-be-falsy)
+        (expect "g-value" :to-equal (nshell.domain.environment:env-get environment "shared"))))))

@@ -132,6 +132,20 @@ backslash remain literal.
 Fish-style control flow is available: \fBif\fR, \fBfor\fR, \fBwhile\fR,
 \fBswitch\fR, \fBbegin\fR/\fBend\fR, and user-defined \fBfunction\fRs. A
 function's arguments are available as \fB$argv\fR and indexed \fB$argv[N]\fR.
+Each function call gets its own local variable scope: a plain
+.B set
+.I name value
+inside a function creates a variable that disappears when the function
+returns, unless
+.I name
+is already visible in an enclosing scope, in which case it is updated there
+instead.
+.B set \-l/\-\-local
+forces a new local variable, and
+.B set \-g/\-\-global
+always targets the outermost scope, however deep the current call nesting is;
+.B set \-U/\-\-universal
+is rejected, since nshell has no universal-variable store.
 .SH BUILTINS
 .B nshell
 provides the following builtins:

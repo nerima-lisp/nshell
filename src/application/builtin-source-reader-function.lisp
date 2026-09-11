@@ -46,6 +46,42 @@
                   (push segment segments)))
               (return (nreverse segments))))))
 
+(defun %source-line-segment-offsets (line)
+  "The commands on LINE as (OFFSET . TEXT) pairs, offset into LINE."
+  (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
+                 (nshell.domain.parsing:tokenize line)))
+        (segments nil)
+        (segment-start 0))
+    (flet ((collect (end)
+             (let* ((text (subseq line segment-start end))
+                    (trimmed (string-left-trim '(#\Space #\Tab) text)))
+               (when (plusp (length trimmed))
+                 (push (cons (+ segment-start (- (length text) (length trimmed)))
+                             (string-right-trim '(#\Space #\Tab) trimmed))
+                       segments)))))
+      (dolist (token tokens)
+        (when (member (nshell.domain.parsing:token-type token)
+                      '(:semicolon :ampersand)
+                      :test #'eq)
+          (collect (nshell.domain.parsing:token-start token))
+          (setf segment-start (nshell.domain.parsing:token-end token))))
+      (collect (length line)))
+    (nreverse segments)))
+
+(defun source-line-function-split (line)
+  "When LINE runs something before opening a function definition, return the
+text before the definition and the text from the definition onward; otherwise
+NIL. The prefix keeps its own separators, so a trailing `&' still backgrounds."
+  (let ((entry (find-if (lambda (segment)
+                          (and (plusp (car segment))
+                               (%function-start-p (cdr segment))))
+                        (%source-line-segment-offsets line))))
+    (when entry
+      (let ((prefix (string-right-trim '(#\Space #\Tab #\;)
+                                       (subseq line 0 (car entry)))))
+        (when (plusp (length prefix))
+          (values prefix (subseq line (car entry))))))))
+
 (defun %function-start-p (line)
   (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
                  (nshell.domain.parsing:tokenize line))))
@@ -61,6 +97,13 @@
         (when (and (>= (length words) 2)
                    (string= (first words) "function"))
           (second words))))))
+
+(defun function-definition-line-p (line)
+  "True when any command on LINE opens a function definition, so the whole block
+has to reach the source reader rather than the AST executor. A line may open one
+after something else has run, as in `echo pre; function f; echo hi; end'."
+  (some (lambda (segment) (%function-start-p segment))
+        (%source-line-segments line)))
 
 (defun %source-definition-line-depth-delta (line)
   (let ((tokens (nshell.domain.parsing:tokenization-result-tokens

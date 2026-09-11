@@ -322,3 +322,152 @@
       (expect "/imported" :to-equal (nshell.domain.environment:env-get result "PWD"))
       (expect (nshell.domain.environment:env-exported-p result "PWD") :to-be-truthy)
       (expect "/base" :to-equal (nshell.domain.environment:env-get base "PWD")))))
+
+(describe
+  "environment-scope-tests"
+  (it
+    "env-push-scope-then-pop-discards-a-local-variable"
+    "A variable set with :scope :local in a pushed scope disappears once that
+scope is popped, the domain equivalent of a function-local `set -l`."
+    (let* ((outer (nshell.domain.environment:make-environment))
+           (pushed (nshell.domain.environment:env-push-scope outer))
+           (with-local
+             (nshell.domain.environment:env-set-values
+               pushed "Y" '("1") nil :scope :local))
+           (popped (nshell.domain.environment:env-pop-scope with-local)))
+      (expect "1" :to-equal (nshell.domain.environment:env-get with-local "Y"))
+      (expect (nshell.domain.environment:env-defined-p popped "Y") :to-be-falsy)))
+  (it
+    "a-plain-set-in-a-pushed-scope-updates-an-existing-outer-binding"
+    "With SCOPE NIL (the fish default), a write finds a name already visible
+in an outer scope and updates it there instead of shadowing it locally, so
+the change survives popping the inner scope."
+    (let* ((outer (nshell.domain.environment:env-set
+                    (nshell.domain.environment:make-environment) "Y" "1" nil))
+           (pushed (nshell.domain.environment:env-push-scope outer))
+           (updated (nshell.domain.environment:env-set-values pushed "Y" '("2") nil))
+           (popped (nshell.domain.environment:env-pop-scope updated)))
+      (expect "2" :to-equal (nshell.domain.environment:env-get updated "Y"))
+      (expect "2" :to-equal (nshell.domain.environment:env-get popped "Y"))))
+  (it
+    "env-set-with-global-scope-always-targets-the-outermost-scope"
+    "SCOPE :GLOBAL (fish's `set -g`) reaches past every pushed local scope to
+the original outermost one, however many scopes are pushed."
+    (let* ((outer (nshell.domain.environment:make-environment))
+           (level1 (nshell.domain.environment:env-push-scope outer))
+           (level2 (nshell.domain.environment:env-push-scope level1))
+           (updated
+             (nshell.domain.environment:env-set-values
+               level2 "Z" '("global-value") nil :scope :global))
+           (popped-once (nshell.domain.environment:env-pop-scope updated))
+           (popped-twice (nshell.domain.environment:env-pop-scope popped-once)))
+      (expect "global-value" :to-equal (nshell.domain.environment:env-get updated "Z"))
+      (expect "global-value" :to-equal (nshell.domain.environment:env-get popped-once "Z"))
+      (expect "global-value" :to-equal (nshell.domain.environment:env-get popped-twice "Z"))))
+  (it
+    "a-local-scope-can-also-be-exported"
+    "SCOPE :LOCAL combined with EXPORTED T (fish's `set -lx`) creates a local
+variable that appears in ENV-LIST until its scope is popped."
+    (let* ((outer (nshell.domain.environment:make-environment))
+           (pushed (nshell.domain.environment:env-push-scope outer))
+           (with-local
+             (nshell.domain.environment:env-set-values
+               pushed "K" '("v") t :scope :local)))
+      (expect (nshell.domain.environment:env-exported-p with-local "K") :to-be-truthy)
+      (expect
+        "v"
+        :to-equal
+        (env-entry-value (nshell.domain.environment:env-list with-local) "K"))
+      (expect
+        (nshell.domain.environment:env-defined-p
+          (nshell.domain.environment:env-pop-scope with-local)
+          "K")
+        :to-be-falsy)))
+  (it
+    "an-inner-scope-shadows-an-outer-binding-for-reads-and-erase"
+    "A local binding of a name already defined outward hides the outer value
+for ENV-GET; erasing it (`set -e`) removes only the inner binding, so the
+outer one reappears."
+    (let* ((outer (nshell.domain.environment:env-set
+                    (nshell.domain.environment:make-environment) "N" "outer" nil))
+           (pushed (nshell.domain.environment:env-push-scope outer))
+           (shadowed
+             (nshell.domain.environment:env-set-values
+               pushed "N" '("inner") nil :scope :local)))
+      (expect "inner" :to-equal (nshell.domain.environment:env-get shadowed "N"))
+      (let ((erased (nshell.domain.environment:env-unset shadowed "N")))
+        (expect "outer" :to-equal (nshell.domain.environment:env-get erased "N")))))
+  (it
+    "env-list-shows-only-the-innermost-binding-of-a-shadowed-name"
+    "An unexported local binding hides an exported outer one entirely from
+ENV-LIST, the set handed to child processes, rather than letting the outer
+value leak through; ENV-BINDINGS likewise reports the name once."
+    (let* ((outer (nshell.domain.environment:env-set
+                    (nshell.domain.environment:make-environment) "M" "outer" t))
+           (pushed (nshell.domain.environment:env-push-scope outer))
+           (shadowed
+             (nshell.domain.environment:env-set-values
+               pushed "M" '("inner") nil :scope :local)))
+      (expect
+        (env-entry-value (nshell.domain.environment:env-list shadowed) "M")
+        :to-be-null)
+      (expect
+        1
+        :to-equal
+        (count
+          "M"
+          (nshell.domain.environment:env-bindings shadowed)
+          :key #'nshell.domain.environment:env-binding-name
+          :test #'string=))))
+  (it
+    "a-nested-pushed-scope-does-not-see-a-sibling-scope-s-local-variable"
+    "Two independently pushed scopes (nested function calls) each keep their
+own local bindings, invisible to each other once either is popped."
+    (let* ((outer (nshell.domain.environment:make-environment))
+           (level1 (nshell.domain.environment:env-set-values
+                     (nshell.domain.environment:env-push-scope outer)
+                     "A" '("level1") nil :scope :local))
+           (level2 (nshell.domain.environment:env-set-values
+                     (nshell.domain.environment:env-push-scope level1)
+                     "B" '("level2") nil :scope :local)))
+      (expect "level1" :to-equal (nshell.domain.environment:env-get level2 "A"))
+      (expect "level2" :to-equal (nshell.domain.environment:env-get level2 "B"))
+      (expect
+        (nshell.domain.environment:env-defined-p
+          (nshell.domain.environment:env-pop-scope level2)
+          "B")
+        :to-be-falsy)
+      (expect
+        "level1"
+        :to-equal
+        (nshell.domain.environment:env-get
+          (nshell.domain.environment:env-pop-scope level2)
+          "A"))))
+  (it
+    "env-pop-scope-on-a-single-scope-environment-is-a-no-op"
+    "Popping never removes the outermost (global) scope, so a mismatched pop
+at the top level leaves the environment unchanged instead of signalling."
+    (let* ((env (nshell.domain.environment:env-set
+                  (nshell.domain.environment:make-environment) "SOLE" "v" nil))
+           (popped (nshell.domain.environment:env-pop-scope env)))
+      (expect "v" :to-equal (nshell.domain.environment:env-get popped "SOLE"))))
+  (it
+    "env-assign-default-updates-an-existing-outer-binding-from-a-pushed-scope"
+    "${NAME:=word} follows the same fish-default scope resolution as a plain
+set: it updates an outer binding in place rather than shadowing it locally,
+so the assignment is still visible after the local scope is popped."
+    (let* ((outer (nshell.domain.environment:env-set
+                    (nshell.domain.environment:make-environment) "D" "" t))
+           (pushed (nshell.domain.environment:env-push-scope outer)))
+      (expect
+        "filled"
+        :to-equal
+        (nshell.domain.environment:env-assign-default! pushed "D" "filled"))
+      (expect "filled" :to-equal (nshell.domain.environment:env-get pushed "D"))
+      (expect (nshell.domain.environment:env-exported-p pushed "D") :to-be-truthy)
+      (expect
+        "filled"
+        :to-equal
+        (nshell.domain.environment:env-get
+          (nshell.domain.environment:env-pop-scope pushed)
+          "D")))))

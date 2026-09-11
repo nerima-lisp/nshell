@@ -15,6 +15,7 @@ permitted to know both the domain and infrastructure.")
             #:*agent-start-handler*
             #:*ai-reset-handler*
             #:*theme-apply-handler*
+            #:function-definition-line-p
             #:*bind-table-handler*
             #:*prompt-format-apply-handler*
             #:*prompt-format-query-handler*

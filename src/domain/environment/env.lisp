@@ -71,38 +71,85 @@ The scalar string view is derived from VALUES on demand."
   (%allocate-env-entry name value))
 
 (defstruct (environment
-    (:constructor %allocate-environment (vars))
+    (:constructor %allocate-environment (scopes))
     (:conc-name %environment-)
-    (:copier nil)) "A collection of shell environment variables keyed by name."
-  (vars (make-hash-table :test #'equal) :type hash-table :read-only t))
+    (:copier nil))
+  "A collection of shell environment variables organized as a scope chain.
+SCOPES is a list of variable hash-tables, innermost (current) scope first; a
+name lookup walks the list outward and a plain write updates whichever scope
+already defines the name, following fish's function-scoping rules."
+  (scopes (list (make-hash-table :test #'equal)) :type list :read-only t))
 
 (defun make-environment ()
-  "Create an empty environment."
-  (%allocate-environment (make-hash-table :test #'equal)))
+  "Create an empty environment with a single scope."
+  (%allocate-environment (list (make-hash-table :test #'equal))))
 
-(defun %copy-env-var-table (env)
-  "Return a shallow copy of ENV's variable table."
+(defun %copy-hash-table (table)
+  "Return a shallow copy of TABLE."
   (let ((copy (make-hash-table :test #'equal)))
     (maphash
       (lambda (name var)
         (setf (gethash name copy) var))
-      (%environment-vars env))
+      table)
     copy))
 
-(defun env-set-values (env name values exported)
-  "Return ENV updated with NAME set to VALUES.
-The structured VALUES list is the source of truth; scalar accessors derive
-their result by joining VALUES with spaces."
-  (check-type name string)
-  (let ((vars (%copy-env-var-table env)))
-    (setf (gethash name vars) (%make-env-var-with-invariants name values exported))
-    (%allocate-environment vars)))
+(defun %copy-environment-scopes (scopes)
+  "Return a fresh list of shallow copies of each table in SCOPES."
+  (mapcar #'%copy-hash-table scopes))
 
-(defun env-set (env name value exported)
+(defun %environment-find-var (env name)
+  "Return the env-var record for NAME from the innermost scope defining it,
+or NIL when NAME is not defined in any scope of ENV."
+  (dolist (scope (%environment-scopes env))
+    (multiple-value-bind (var found) (gethash name scope)
+      (when found (return-from %environment-find-var var))))
+  nil)
+
+(defun %environment-scope-index (scopes name)
+  "Return the index in SCOPES of the innermost scope defining NAME, or NIL."
+  (position-if (lambda (table) (nth-value 1 (gethash name table))) scopes))
+
+(defun %environment-visible-vars (env)
+  "Return an alist of (NAME . VAR) for every name visible in ENV, using the
+innermost scope's binding for a name shadowed by an outer scope."
+  (let ((seen (make-hash-table :test #'equal))
+        (result nil))
+    (dolist (scope (%environment-scopes env) result)
+      (maphash
+        (lambda (name var)
+          (unless (gethash name seen)
+            (setf (gethash name seen) t)
+            (push (cons name var) result)))
+        scope))))
+
+(defun %environment-write-index (scopes name scope)
+  "Return the SCOPES index a write for NAME under keyword SCOPE targets.
+:LOCAL always targets the innermost scope, :GLOBAL always targets the
+outermost one, and NIL (the fish default) targets the innermost scope
+already defining NAME, falling back to the innermost scope for a new name."
+  (case scope
+    (:local 0)
+    (:global (1- (length scopes)))
+    (t (or (%environment-scope-index scopes name) 0))))
+
+(defun env-set-values (env name values exported &key scope)
+  "Return ENV updated with NAME set to VALUES in the scope SCOPE selects.
+The structured VALUES list is the source of truth; scalar accessors derive
+their result by joining VALUES with spaces. SCOPE is :LOCAL, :GLOBAL, or NIL
+for the fish default described at %ENVIRONMENT-WRITE-INDEX."
+  (check-type name string)
+  (let* ((copied (%copy-environment-scopes (%environment-scopes env)))
+         (index (%environment-write-index copied name scope))
+         (table (nth index copied)))
+    (setf (gethash name table) (%make-env-var-with-invariants name values exported))
+    (%allocate-environment copied)))
+
+(defun env-set (env name value exported &key scope)
   "Return ENV updated with NAME set to scalar VALUE.
-EXPORTED controls whether the variable appears in ENV-LIST."
+EXPORTED controls whether the variable appears in ENV-LIST; SCOPE is as in
+ENV-SET-VALUES."
   (check-type value string)
-  (env-set-values env name (list value) exported))
+  (env-set-values env name (list value) exported :scope scope))
 
 (defun %make-default-environment-var-table ()
   "Return a new variable table seeded with fallback environment values."
@@ -118,27 +165,27 @@ EXPORTED controls whether the variable appears in ENV-LIST."
 (defun make-default-environment ()
   "Create a default environment with fallback values.
 Pure domain function - callers should provide OS values via inject-os-environment."
-  (%allocate-environment (%make-default-environment-var-table)))
+  (%allocate-environment (list (%make-default-environment-var-table))))
 
 (defun env-get (env name)
   "Return the value of NAME in ENV, or NIL when it is not defined."
-  (let ((var (gethash name (%environment-vars env))))
+  (let ((var (%environment-find-var env name)))
     (when var
       (%env-var-value var))))
 
 (defun env-get-values (env name)
   "Return the structured values of NAME in ENV, or NIL when it is not defined."
-  (let ((var (gethash name (%environment-vars env))))
+  (let ((var (%environment-find-var env name)))
     (when var
       (copy-list (%env-var-values var)))))
 
 (defun env-defined-p (env name)
-  "Return true when NAME is defined in ENV."
-  (nth-value 1 (gethash name (%environment-vars env))))
+  "Return true when NAME is defined in any scope of ENV."
+  (not (null (%environment-find-var env name))))
 
 (defun env-exported-p (env name)
-  "Return true when NAME is defined and exported in ENV."
-  (let ((var (gethash name (%environment-vars env))))
+  "Return true when NAME is defined and exported in its innermost scope."
+  (let ((var (%environment-find-var env name)))
     (and var (%env-var-exported-p var))))
 
 (defun %inject-os-environment-entry (vars entry)
@@ -149,70 +196,97 @@ Pure domain function - callers should provide OS values via inject-os-environmen
         (setf (gethash name vars) (%make-env-var-with-invariants name (list value) t))))))
 
 (defun %inject-os-environment-entries (env entries getcwd)
-  (let ((vars (%copy-env-var-table env)))
+  (let* ((scopes (%copy-environment-scopes (%environment-scopes env)))
+         (global (car (last scopes))))
     (dolist (entry entries)
-      (%inject-os-environment-entry vars entry))
+      (%inject-os-environment-entry global entry))
     (let ((pwd
           (handler-case (namestring (funcall getcwd))
             (error ()
-              (let ((var (gethash "PWD" vars)))
+              (let ((var (gethash "PWD" global)))
                 (and var (%env-var-value var)))))))
-      (setf (gethash "PWD" vars) (%make-env-var-with-invariants "PWD" (list pwd) t)))
-    (%allocate-environment vars)))
+      (setf (gethash "PWD" global) (%make-env-var-with-invariants "PWD" (list pwd) t)))
+    (%allocate-environment scopes)))
 
 (defun inject-os-environment (env entries getcwd)
   "Return ENV with ENTRIES and GETCWD supplied by the infrastructure boundary.
-ENTRIES contains \"KEY=VALUE\" strings and GETCWD is a zero-argument function."
+ENTRIES contains \"KEY=VALUE\" strings and GETCWD is a zero-argument function.
+Injection always lands in ENV's outermost (global) scope."
   (check-type entries list)
   (check-type getcwd function)
   (%inject-os-environment-entries env entries getcwd))
 
 (defun env-unset (env name)
-  "Return ENV without NAME."
+  "Return ENV without NAME, removing it from whichever scope currently
+defines it (innermost first), so a shadowed outer binding reappears."
   (check-type name string)
-  (let ((vars (%copy-env-var-table env)))
-    (remhash name vars)
-    (%allocate-environment vars)))
+  (let* ((copied (%copy-environment-scopes (%environment-scopes env)))
+         (index (%environment-scope-index copied name)))
+    (when index
+      (remhash name (nth index copied)))
+    (%allocate-environment copied)))
 
 (defun env-export (env name)
-  "Return ENV with NAME marked exported, preserving its current value."
+  "Return ENV with NAME marked exported in its innermost scope, preserving
+its current value."
   (check-type name string)
-  (let* ((vars (%copy-env-var-table env))
-         (var (gethash name vars)))
-    (when var
-      (setf (gethash name vars) (%make-env-var-with-invariants name (%env-var-values var) t)))
-    (%allocate-environment vars)))
+  (let* ((copied (%copy-environment-scopes (%environment-scopes env)))
+         (index (%environment-scope-index copied name)))
+    (when index
+      (let* ((table (nth index copied))
+             (var (gethash name table)))
+        (setf (gethash name table) (%make-env-var-with-invariants name (%env-var-values var) t))))
+    (%allocate-environment copied)))
+
+(defun env-push-scope (env)
+  "Return ENV with a new, empty scope innermost, shadowing existing bindings
+until it is popped."
+  (%allocate-environment (cons (make-hash-table :test #'equal) (%environment-scopes env))))
+
+(defun env-pop-scope (env)
+  "Return ENV with its innermost scope removed. A single-scope ENV is
+returned unchanged, since the outermost (global) scope is never popped."
+  (let ((scopes (%environment-scopes env)))
+    (if (rest scopes)
+        (%allocate-environment (rest scopes))
+        env)))
 
 (defun env-assign-default! (env name value)
   "Assign VALUE to NAME inside ENV, preserving NAME's export state.
-This operation is intentionally destructive for parameter expansion assignments,
-which apply to the active shell environment object."
+This operation is intentionally destructive for parameter expansion
+assignments, which apply to the active shell environment object. NAME is
+assigned in whichever scope already defines it, or in the innermost scope
+when it is not yet defined anywhere, matching ENV-SET-VALUES's fish default."
   (check-type name string)
   (check-type value string)
-  (let ((exported (env-exported-p env name)))
-    (setf (gethash name (%environment-vars env)) (%make-env-var-with-invariants name (list value) exported)))
+  (let* ((scopes (%environment-scopes env))
+         (index (%environment-write-index scopes name nil))
+         (table (nth index scopes))
+         (exported (let ((var (gethash name table))) (and var (%env-var-exported-p var)))))
+    (setf (gethash name table) (%make-env-var-with-invariants name (list value) exported)))
   value)
 
 (defun env-bindings (env)
-  "Return all variables in ENV as read-only projections sorted by name."
+  "Return every visible variable in ENV as read-only projections sorted by
+name, using the innermost scope's binding for a shadowed name."
   (let ((bindings nil))
-    (maphash
-      (lambda (name var)
+    (dolist (pair (%environment-visible-vars env))
+      (let ((name (car pair)) (var (cdr pair)))
         (push
           (%make-env-binding-with-invariants
             name
             (%env-var-values var)
             (%env-var-exported-p var))
-          bindings))
-      (%environment-vars env))
+          bindings)))
     (sort bindings #'string< :key #'env-binding-name)))
 
 (defun env-list (env)
-  "Return exported variables in ENV as ENV-ENTRY values sorted by name."
+  "Return exported variables in ENV as ENV-ENTRY values sorted by name.
+Every scope contributes, with an inner scope's binding of a name shadowing an
+outer scope's, whether or not the inner one is itself exported."
   (let ((entries nil))
-    (maphash
-      (lambda (name var)
+    (dolist (pair (%environment-visible-vars env))
+      (let ((name (car pair)) (var (cdr pair)))
         (when (%env-var-exported-p var)
-          (push (%make-env-entry-with-invariants name (%env-var-value var)) entries)))
-      (%environment-vars env))
+          (push (%make-env-entry-with-invariants name (%env-var-value var)) entries))))
     (sort entries #'string< :key #'env-entry-name)))

@@ -53,34 +53,77 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
 
 (define-string-line-builtin %builtin-string-upper #'string-upcase)
 
+(defun %string-no-op-flags (remaining builtin)
+  "Parse REMAINING for leading options, rejecting all of them: for
+subcommands that define no flags of their own."
+  (%string-parse-option-stream
+    remaining builtin nil nil
+    (%string-flag-option-handler (name remaining))
+    (%string-integer-option-handler (name parsed next-remaining))))
+
 (define-builtin %builtin-string-join (context args) ()
-  (if (rest args) (values (format nil "~a~%" (%string-join (rest args) (first args))) 0)
-    (%builtin-string-usage)))
+  (multiple-value-bind (remaining error) (%string-no-op-flags args "string")
+    (cond
+      (error (values error 1))
+      ((rest remaining) (values (format nil "~a~%" (%string-join (rest remaining) (first remaining))) 0))
+      (t (%builtin-string-usage)))))
+
+(defun %string-split-full (separator string)
+  (if (%string-empty-p separator) (map 'list #'string string)
+    (let ((start 0)
+          (parts nil)
+          (separator-length (length separator)))
+      (loop for pos = (search separator string :start2 start)
+            do (push (subseq string start pos) parts)
+            while pos
+            do (setf start (+ pos separator-length)))
+      (nreverse parts))))
+
+(defun %string-collapse-split-parts (parts max-splits from-right-p separator)
+  "Merge the pieces beyond MAX-SPLITS back together with SEPARATOR, from the
+left or the right, so the caller sees at most MAX-SPLITS+1 fields."
+  (if (or (null max-splits) (<= (1- (length parts)) max-splits)) parts
+    (if from-right-p
+        (cons (%string-join (subseq parts 0 (- (length parts) max-splits)) separator)
+              (last parts max-splits))
+      (append (subseq parts 0 max-splits)
+              (list (%string-join (nthcdr max-splits parts) separator))))))
 
 (define-builtin %builtin-string-split (context args) ()
-  (if (rest args) (labels ((split-on (separator string)
-               (cond
-            ((%string-empty-p separator) (map 'list #'string string))
-            (t
-              (let ((start 0)
-                    (parts nil)
-                    (separator-length (length separator)))
-                (loop for pos = (search separator string :start2 start)
-                      do (push (subseq string start pos) parts)
-                      while pos
-                      do (setf start (+ pos separator-length)))
-                (nreverse parts))))))
-      (values
-        (%string-emit-lines
-          (loop for text in (rest args)
-                append (split-on (first args) text)))
-        0))
-    (%builtin-string-usage)))
+  (let ((max-splits nil)
+        (right-p nil))
+    (with-string-options
+      (remaining
+        error
+        args
+        "string"
+        +string-split-flag-option-specs+
+        +string-split-integer-option-specs+
+        (%string-flag-option-handler
+          (name remaining)
+          (right
+            (setf right-p t)))
+        (%string-integer-option-handler
+          (name parsed next-remaining)
+          (max
+            (setf max-splits parsed))))
+      (when error
+        (return-from %builtin-string-split (values error 1)))
+      (if (rest remaining)
+          (values
+            (%string-emit-lines
+              (loop for text in (rest remaining)
+                    append (%string-collapse-split-parts
+                             (%string-split-full (first remaining) text)
+                             max-splits right-p (first remaining))))
+            0)
+        (%builtin-string-usage)))))
 
 (defun %parse-string-flags (remaining builtin flag-specs)
   (let ((quiet-p nil)
         (all-p nil)
-        (ignore-case-p nil))
+        (ignore-case-p nil)
+        (regex-p nil))
     (with-string-options
       (remaining
         error
@@ -95,14 +138,23 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
           (all
             (setf all-p t))
           (ignore-case
-            (setf ignore-case-p t)))
+            (setf ignore-case-p t))
+          (regex
+            (setf regex-p t)))
         (%string-integer-option-handler (name parsed next-remaining)))
-      (values quiet-p all-p ignore-case-p remaining error))))
+      (values quiet-p all-p ignore-case-p regex-p remaining error))))
 
-(defun %string-pattern-builtin (args flag-specs required-args collector)
-  (multiple-value-bind (quiet-p all-p ignore-case-p remaining error) (%parse-string-flags args "string" flag-specs)
+(defun %string-pattern-builtin (args flag-specs required-args regex-error-builtin collector)
+  (multiple-value-bind (quiet-p all-p ignore-case-p regex-p remaining error)
+      (%parse-string-flags args "string" flag-specs)
     (when error
       (return-from %string-pattern-builtin (values error 1)))
+    (when regex-p
+      (return-from %string-pattern-builtin
+        (values
+          (format nil "~a: -r requires regular expressions, which this build does not provide~%"
+                  regex-error-builtin)
+          2)))
     (if (< (length remaining) required-args) (%builtin-string-usage)
       (funcall collector quiet-p all-p ignore-case-p remaining))))
 
@@ -111,6 +163,7 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
     args
     +string-replace-flag-option-specs+
     3
+    "string replace"
     (lambda (quiet-p all-p ignore-case-p remaining)
       (let ((pattern (first remaining))
             (replacement (second remaining))
@@ -133,6 +186,7 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
     args
     +string-match-flag-option-specs+
     2
+    "string match"
     (lambda (quiet-p all-p ignore-case-p remaining)
       (declare (ignore all-p))
       (let ((pattern (first remaining))
@@ -207,10 +261,44 @@ Blank lines are dropped unless ALLOW-EMPTY-P or PRESERVE-NEWLINES-P."
                   (write-char #\Newline out)))))
           0)))))
 
-(define-string-line-builtin
-  %builtin-string-trim
-  (lambda (text)
-    (string-trim '(#\Space #\Tab #\Newline #\Return) text)))
+(defun %string-trim-char-bag (chars)
+  (if chars (coerce chars 'list)
+    '(#\Space #\Tab #\Newline #\Return)))
+
+(defun %string-trim-line (text left-p right-p chars)
+  (let ((bag (%string-trim-char-bag chars)))
+    (cond
+      ((and left-p (not right-p)) (string-left-trim bag text))
+      ((and right-p (not left-p)) (string-right-trim bag text))
+      (t (string-trim bag text)))))
+
+(define-builtin %builtin-string-trim (context args) ()
+  (let ((left-p nil)
+        (right-p nil)
+        (chars nil))
+    (with-string-options
+      (remaining
+        error
+        args
+        "string"
+        +string-trim-flag-option-specs+
+        +string-trim-value-option-specs+
+        (%string-flag-option-handler
+          (name remaining)
+          (left
+            (setf left-p t))
+          (right
+            (setf right-p t)))
+        (%string-integer-option-handler
+          (name parsed next-remaining)
+          (chars
+            (setf chars parsed))))
+      (when error
+        (return-from %builtin-string-trim (values error 1)))
+      (values
+        (%string-emit-lines remaining
+          :transform (lambda (text) (%string-trim-line text left-p right-p chars)))
+        (if remaining 0 1)))))
 
 (define-builtin %builtin-string-dispatch (context args) ()
   (let* ((subcommand (first args))

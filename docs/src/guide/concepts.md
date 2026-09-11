@@ -118,3 +118,17 @@ normal-mode motions, counts, operators (`dd`, `cw`, …), char-wise visual
 selection with yank/delete/change, and insert/append. It is the same reducer
 with a different key dispatch table, so undo, kill-ring, and completion behave
 identically in both modes.
+
+## A function call gets its own variable scope
+
+Calling a function pushes an empty scope onto the environment and pops it
+when the call returns, so a plain `set NAME VALUE` inside a function creates a
+variable that disappears at the end of the call, unless `NAME` was already
+visible in an enclosing scope, in which case it updates that binding in place
+instead. `set -l` forces a new local variable even when an outer one of the
+same name exists; `set -g` always reaches past every local scope to the
+outermost one. Reading a name walks the scope chain from innermost outward,
+so a local variable shadows a global of the same name for the rest of that
+call. This is fish's scoping model, and nshell's environment stores it as an
+ordered list of scopes rather than a single table, so shadowing and cleanup
+fall out of list structure instead of a bookkeeping pass.

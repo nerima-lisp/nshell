@@ -228,6 +228,132 @@
          :code 0
          :output (format nil "bcde~%")))))
 
+  (it "string-builtin-length-lower-upper-reject-unknown-options"
+    "string length/lower/upper take only positional text and reject any option."
+    (with-builtins-context (context)
+      (assert-string-builtin-cases (context)
+        ('("length" "--bogus" "x")
+         :code 1
+         :contains '("unknown option --bogus"))
+        ('("lower" "-q" "Hi")
+         :code 1
+         :contains '("unknown option -q"))
+        ('("upper" "--bogus" "hi")
+         :code 1
+         :contains '("unknown option --bogus"))
+        ('("length" "--" "-x")
+         :code 0
+         :output (format nil "2~%"))
+        ('("length" "-")
+         :code 0
+         :output (format nil "1~%")))))
+
+  (it "string-builtin-join-rejects-unknown-options-and-handles-dashes"
+    "string join rejects an unrecognized option and needs -- to pass a dash-led separator."
+    (with-builtins-context (context)
+      (assert-string-builtin-cases (context)
+        ('("join" "--bogus" "," "a" "b")
+         :code 1
+         :contains '("unknown option --bogus"))
+        ('("join" "-" "a" "b")
+         :code 0
+         :output (format nil "a-b~%"))
+        ('("join" "--" "-x" "a" "b")
+         :code 0
+         :output (format nil "a-xb~%")))))
+
+  (it "string-builtin-split-supports-max-and-right-and-rejects-unknown-options"
+    "string split -m/--max and -r/--right, and no longer swallows an unknown option as the separator."
+    (with-builtins-context (context)
+      (assert-string-builtin-cases (context)
+        ('("split" "-m1" "," "a,b,c")
+         :code 0
+         :output (format nil "a~%b,c~%"))
+        ('("split" "--max" "1" "," "a,b,c")
+         :code 0
+         :output (format nil "a~%b,c~%"))
+        ('("split" "-r" "-m1" "/" "usr/local/bin")
+         :code 0
+         :output (format nil "usr/local~%bin~%"))
+        ('("split" "-r" "," "a,b,c")
+         :code 0
+         :output (format nil "a~%b~%c~%"))
+        ('("split" "--" "-," "a-,b")
+         :code 0
+         :output (format nil "a~%b~%"))
+        ('("split" "-" "a-b")
+         :code 0
+         :output (format nil "a~%b~%"))
+        ('("split" "--bogus" "," "a,b,c")
+         :code 1
+         :contains '("unknown option --bogus")))))
+
+  (it "string-builtin-trim-supports-left-right-chars-and-rejects-unknown-options"
+    "string trim gains -l/-r/-c and rejects any option it does not define."
+    (with-builtins-context (context)
+      (assert-string-builtin-cases (context)
+        ('("trim" "-l" "  hi  ")
+         :code 0
+         :output (format nil "hi  ~%"))
+        ('("trim" "-r" "  hi  ")
+         :code 0
+         :output (format nil "  hi~%"))
+        ('("trim" "-c" "xy" "xyhixy")
+         :code 0
+         :output (format nil "hi~%"))
+        ('("trim" "-cxy" "xyhixy")
+         :code 0
+         :output (format nil "hi~%"))
+        ('("trim" "--chars=xy" "xyhixy")
+         :code 0
+         :output (format nil "hi~%"))
+        ('("trim" "-l" "-c" "xy" "xyhixy")
+         :code 0
+         :output (format nil "hixy~%"))
+        ('("trim" "--" "-hi-")
+         :code 0
+         :output (format nil "-hi-~%"))
+        ('("trim" "-")
+         :code 0
+         :output (format nil "-~%"))
+        ('("trim" "--bogus" "x")
+         :code 1
+         :contains '("unknown option --bogus")))))
+
+  (it "string-builtin-lone-dash-stays-positional-for-every-subcommand"
+    "A single '-' argument is never treated as an option, for every string subcommand."
+    (with-builtins-context (context)
+      (assert-string-builtin-cases (context)
+        ('("collect" "-")
+         :code 0
+         :output (format nil "-~%"))
+        ('("replace" "-" "X" "-")
+         :code 0
+         :output (format nil "X~%"))
+        ('("match" "-" "-")
+         :code 0
+         :output (format nil "-~%"))
+        ('("repeat" "-")
+         :code 0
+         :output (format nil "-~%"))
+        ('("sub" "-")
+         :code 0
+         :output (format nil "-~%")))))
+
+  (it "string-builtin-match-and-replace-report-missing-regex-support"
+    "string match/replace -r fails with a regex-support error instead of a silent literal match."
+    (with-builtins-context (context)
+      (assert-string-builtin-cases (context)
+        ('("match" "-r" "a.b" "aXb")
+         :code 2
+         :contains '("string match: -r requires regular expressions, which this build does not provide"))
+        ('("match" "--regex" "a.b" "aXb")
+         :code 2
+         :contains '("string match: -r requires regular expressions, which this build does not provide"))
+        ('("replace" "-r" "a.b" "X" "aXb")
+         :code 2
+         :contains '("string replace: -r requires regular expressions, which this build does not provide")))))
+
   (it "string-prefix-p-tests-leading-substring"
     "string-prefix-p returns true only when prefix is a leading substring of string."
     (flet ((pre (prefix string)

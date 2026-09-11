@@ -319,3 +319,27 @@
           (nshell.application::%execute-source-line context "if true")
         (expect 2 :to-equal code)
         (expect (search "source: parse error:" output) :to-be-truthy)))))
+
+(describe "source-mid-line-function-definition-tests"
+  (it "a-definition-after-another-command-on-one-line-runs-whole"
+    "`echo pre; function f; echo hi; end; f' must define and call f rather than
+running the definition's body as top-level commands."
+    (with-builtins-context (context)
+      (multiple-value-bind (output code)
+          (nshell.application:source-lines
+           context
+           (list "echo pre; function f; echo hi; end; f"))
+        (expect 0 :to-equal code)
+        (expect (format nil "pre~%hi~%") :to-equal output))))
+
+  (it "the-split-keeps-the-prefix-and-its-separators"
+    (flet ((split (line)
+             (multiple-value-list
+              (nshell.application::source-line-function-split line))))
+      (expect '("echo pre" "function f; echo hi; end")
+              :to-equal (split "echo pre; function f; echo hi; end"))
+      (expect '("sleep 1 &" "function f; end")
+              :to-equal (split "sleep 1 & function f; end"))
+      (expect '(nil) :to-equal (split "function f; echo hi; end"))
+      (expect '(nil) :to-equal (split "echo plain"))
+      (expect '(nil) :to-equal (split "echo \"function f\"")))))

@@ -47,7 +47,14 @@ one, `prompt preview FORMAT` renders a format without installing it, and
 [Customizing the prompt](../guide/customization.md#customizing-the-prompt).
 
 **`string`** is the fish-style string toolkit (`string upper`, `string split`,
-and friends) rather than a single-purpose command.
+and friends) rather than a single-purpose command. Every subcommand rejects an
+option it does not define instead of silently treating it as data; `--` ends
+option parsing and a lone `-` is a literal argument. `string split` supports
+`-m`/`--max N` (split at most N times, leaving the remainder in the last
+field) and `-r`/`--right` (split from the right); `string trim` supports
+`-l`/`--left`, `-r`/`--right`, and `-c`/`--chars CHARS`. `string match -r` and
+`string replace -r` report that this build has no regex engine rather than
+falling back to a literal match.
 
 **`complete`** registers completion metadata for a command, feeding the same
 knowledge base the built-in command catalog uses. `complete -C LINE` is the
@@ -76,6 +83,16 @@ append-only history of every directory visited via `cd`, `pushd`, or `popd`.
 NAME` prints its reconstructed definition, noting the source file when the
 function came from one; `functions -e NAME` erases it. **`builtin` NAME**
 runs a builtin directly, bypassing any function or alias of the same name.
+
+**`set`** manages shell variables: bare `set` lists everything currently
+visible, `set -x NAME VALUE...` exports, `set -e NAME` erases, and `set -q
+NAME` tests whether a name is defined. `-l`/`--local` and `-g`/`--global`
+pick the scope explicitly and combine with `-x` (`-lx`, `-gx`); with neither
+flag, `set` updates a name already visible in an enclosing scope in place and
+otherwise creates a new local one. Every function call gets its own local
+scope, popped when the call returns, so a local variable set inside one
+disappears at the end of that call. `-U`/`--universal` is rejected (exit 2);
+nshell has no universal-variable store.
 
 **`disown`** removes a job from the shell's job table so it survives exit,
 complementing `jobs`, `fg`, and `bg`. With no argument it acts on the

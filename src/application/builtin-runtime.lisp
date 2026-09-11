@@ -220,8 +220,16 @@
 
 (defun %execute-function-command-in-context (context function-body args)
   ;; Expose the call arguments to the function body as $argv / $argv[N].
+  ;; The pushed scope is popped via unwind-protect (not %update-shell-environment,
+  ;; not yet loaded at this point in the ASDF build) so a `return` or a signalled
+  ;; error inside the body cannot leak it into the caller's scope.
   (let ((nshell.domain.expansion:*positional-args* args))
-    (%source-lines context function-body)))
+    (setf (shell-context-environment context)
+          (nshell.domain.environment:env-push-scope (shell-context-environment context)))
+    (unwind-protect
+        (%source-lines context function-body)
+      (setf (shell-context-environment context)
+            (nshell.domain.environment:env-pop-scope (shell-context-environment context))))))
 
 (defun %execute-command-by-name-in-context (context command args)
   (multiple-value-bind (function-body function-present-p)

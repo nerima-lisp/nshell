@@ -76,4 +76,23 @@
                                  "-l" (write-to-string requested-length)
                                  "--" word))
            (and (= code expected-code)
-                (= (length output) (1+ expected-length)))))) :to-be-truthy)))
+                (= (length output) (1+ expected-length)))))) :to-be-truthy))
+
+  (it "pbt-string-split-max-collapses-generated-fields-and-preserves-text"
+    "string split -m keeps at most max+1 fields, in either direction, and rejoining reproduces the input."
+    (expect (assert-string-builtin-property (context)
+        ((word-count (gen-in-range 2 5))
+         (max-splits (gen-in-range 0 6))
+         (from-right (gen-in-range 0 1)))
+      (let* ((words (loop repeat word-count
+                           collect (funcall (gen-shell-word :min-length 1 :max-length 6))))
+             (joined (nshell.application::%string-join words "|"))
+             (call-args (append (list "split" "-m" (write-to-string max-splits))
+                                 (if (plusp from-right) (list "-r") nil)
+                                 (list "|" joined))))
+        (multiple-value-bind (output code)
+            (call-string-builtin context call-args)
+          (let ((fields (nshell.application::%string-collect-lines (list output) nil t)))
+            (and (= code 0)
+                 (= (length fields) (min word-count (1+ max-splits)))
+                 (string= joined (nshell.application::%string-join fields "|"))))))) :to-be-truthy)))

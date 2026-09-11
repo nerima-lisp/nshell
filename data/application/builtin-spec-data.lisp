@@ -93,11 +93,37 @@
 (defparameter +string-replace-flag-option-specs+
   '((:name quiet :short "-q" :long "--quiet")
     (:name all :short "-a" :long "--all")
-    (:name ignore-case :short "-i" :long "--ignore-case")))
+    (:name ignore-case :short "-i" :long "--ignore-case")
+    (:name regex :short "-r" :long "--regex")))
 
 (defparameter +string-match-flag-option-specs+
   '((:name quiet :short "-q" :long "--quiet")
-    (:name ignore-case :short "-i" :long "--ignore-case")))
+    (:name ignore-case :short "-i" :long "--ignore-case")
+    (:name regex :short "-r" :long "--regex")))
+
+(defparameter +string-split-flag-option-specs+
+  '((:name right :short "-r" :long "--right")))
+
+(defparameter +string-split-integer-option-specs+
+  '((:name max
+       :short "-m"
+       :long "--max"
+       :kind :prefixed
+       :short-prefix-length 2
+       :long-prefix-length 6)))
+
+(defparameter +string-trim-flag-option-specs+
+  '((:name left :short "-l" :long "--left")
+    (:name right :short "-r" :long "--right")))
+
+(defparameter +string-trim-value-option-specs+
+  '((:name chars
+       :short "-c"
+       :long "--chars"
+       :kind :prefixed
+       :short-prefix-length 2
+       :long-prefix-length 8
+       :type :string)))
 
 (defparameter +string-collect-flag-option-specs+
   '((:name allow-empty :short "--allow-empty" :long "--allow-empty")

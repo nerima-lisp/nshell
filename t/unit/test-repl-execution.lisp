@@ -637,3 +637,47 @@ path must be converted from a pathname before being appended."
             (expect 0 :to-be nshell.presentation::*last-exit-code*)
             (expect nil :to-be
                     nshell.presentation::*failure-explain-available-p*)))))))
+
+(describe "function-definition-submission-tests"
+  (it "an-unterminated-function-header-reads-as-incomplete-input"
+    "Typing `function greet' and pressing Enter must continue the line, the way
+an unterminated for-loop already does."
+    (expect :incomplete :to-be
+            (nshell.domain.parsing:parse-result-state
+             (nshell.domain.parsing:parse-command-line "function greet")))
+    (expect :incomplete :to-be
+            (nshell.domain.parsing:parse-result-state
+             (nshell.domain.parsing:parse-command-line
+              (format nil "function greet~%echo hi"))))
+    (expect :complete :to-be
+            (nshell.domain.parsing:parse-result-state
+             (nshell.domain.parsing:parse-command-line
+              (format nil "function greet~%echo hi~%end"))))
+    (expect :complete :to-be
+            (nshell.domain.parsing:parse-result-state
+             (nshell.domain.parsing:parse-command-line
+              "function greet; echo hi; end"))))
+
+  (it "a-function-definition-runs-through-the-source-reader"
+    "The AST executor cannot run a function body, so the submitted text goes to
+the source reader instead."
+    (with-repl-test-state
+      (let ((request (nshell.presentation::make-source-text-request
+                      (format nil "function greet~%echo hello~%end"))))
+        (expect '("function greet" "echo hello" "end")
+                :to-equal
+                (nshell.presentation::source-text-request-lines request))
+        (nshell.presentation::execute-ast request)
+        (expect (nth-value 1 (gethash "greet" nshell.presentation::*functions*))
+                :to-be-truthy))))
+
+  (it "a-plain-command-is-not-mistaken-for-a-definition"
+    (expect (nshell.application:function-definition-line-p "function greet")
+            :to-be-truthy)
+    (expect (nshell.application:function-definition-line-p "functional-thing x")
+            :to-be-falsy)
+    (expect (nshell.application:function-definition-line-p "echo function greet")
+            :to-be-falsy)
+    (expect (nshell.application:function-definition-line-p
+             "echo pre; function greet; echo hi; end")
+            :to-be-truthy)))

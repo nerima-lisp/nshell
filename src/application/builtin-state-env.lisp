@@ -42,7 +42,7 @@
 (defun %set-usage ()
   (%builtin-usage
    "set"
-   "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name... | set [-o|+o] pipefail"))
+   "set [-x|--export] [-l|--local|-g|--global] name value... | set [-e|--erase] name... | set [-q|--query] name... | set [-o|+o] pipefail"))
 
 (defun %set-export-option-p (arg)
   (%builtin-option-p arg '("-x" "--export")))
@@ -52,6 +52,21 @@
 
 (defun %set-query-option-p (arg)
   (%builtin-option-p arg '("-q" "--query")))
+
+(defun %set-local-option-p (arg)
+  (%builtin-option-p arg '("-l" "--local")))
+
+(defun %set-global-option-p (arg)
+  (%builtin-option-p arg '("-g" "--global")))
+
+(defun %set-local-export-option-p (arg)
+  (%builtin-option-p arg '("-lx")))
+
+(defun %set-global-export-option-p (arg)
+  (%builtin-option-p arg '("-gx")))
+
+(defun %set-universal-option-p (arg)
+  (%builtin-option-p arg '("-U" "--universal")))
 
 (defun %format-set-variable (var)
   (format nil "set ~:[~;-x ~]~a ~a~%"
@@ -79,6 +94,48 @@
                                   (second args)
                                   (cddr args)
                                   t)
+       (values nil 0))
+      ((%set-universal-option-p (first args))
+       (values (format nil "set: universal variables are not supported~%") 2))
+      ((%set-local-export-option-p (first args))
+       (unless (second args)
+         (return-from %builtin-set (values (%set-usage) 1)))
+       (%update-shell-environment context
+                                  #'nshell.domain.environment:env-set-values
+                                  (second args)
+                                  (cddr args)
+                                  t
+                                  :scope :local)
+       (values nil 0))
+      ((%set-global-export-option-p (first args))
+       (unless (second args)
+         (return-from %builtin-set (values (%set-usage) 1)))
+       (%update-shell-environment context
+                                  #'nshell.domain.environment:env-set-values
+                                  (second args)
+                                  (cddr args)
+                                  t
+                                  :scope :global)
+       (values nil 0))
+      ((%set-local-option-p (first args))
+       (unless (second args)
+         (return-from %builtin-set (values (%set-usage) 1)))
+       (%update-shell-environment context
+                                  #'nshell.domain.environment:env-set-values
+                                  (second args)
+                                  (cddr args)
+                                  nil
+                                  :scope :local)
+       (values nil 0))
+      ((%set-global-option-p (first args))
+       (unless (second args)
+         (return-from %builtin-set (values (%set-usage) 1)))
+       (%update-shell-environment context
+                                  #'nshell.domain.environment:env-set-values
+                                  (second args)
+                                  (cddr args)
+                                  nil
+                                  :scope :global)
        (values nil 0))
       ((%set-erase-option-p (first args))
        (with-set-name-argument "-e"

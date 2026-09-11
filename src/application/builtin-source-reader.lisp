@@ -151,6 +151,13 @@ which are skipped rather than parsed."
           do (cond
                ;; Skip blank lines and whole-line comments / shebangs.
                ((%comment-or-blank-source-line-p line) nil)
+               ;; A definition that opens after another command on the same
+               ;; line: run what came first, then read the definition whole.
+               ((and (not (%function-start-p line))
+                     (source-line-function-split line))
+                (multiple-value-bind (prefix definition)
+                    (source-line-function-split line)
+                  (setf remaining (list* prefix definition remaining))))
                ((%function-start-p line)
                 (let ((step (%source-lines-handle-function-start
                              context line remaining source-path output)))

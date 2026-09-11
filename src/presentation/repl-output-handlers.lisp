@@ -672,7 +672,12 @@ wrapped line's other rows on screen as stale duplicates."
                     (nshell.domain.parsing:with-parsed-command-line-case
                      (result ast expanded-text)
                      (:complete
-                      (%execute-complete-command ast expanded-text))
+                      (%execute-complete-command
+                       (if (nshell.application:function-definition-line-p
+                            expanded-text)
+                           (make-source-text-request expanded-text)
+                           ast)
+                       expanded-text))
                      (:error
                       (%execute-parse-error result))
                      (:incomplete

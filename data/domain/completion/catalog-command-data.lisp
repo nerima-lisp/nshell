@@ -63,9 +63,10 @@
          :description "remove job from job list")
    (list :command "set"
          :synopsis
-         "set [-x|--export] name value... | set [-e|--erase] name... | set [-q|--query] name..."
+         "set [-x|--export] [-l|--local|-g|--global] name value... | set [-e|--erase] name... | set [-q|--query] name..."
          :description "manage variables"
-         :flags '("-x" "--export" "-e" "--erase" "-q" "--query"))
+         :flags '("-x" "--export" "-l" "--local" "-g" "--global"
+                  "-e" "--erase" "-q" "--query"))
    (list :command "export"
          :synopsis "export name[=value] ..."
          :description "export variable to environment")
@@ -139,7 +140,8 @@
                   "match" "repeat" "sub" "trim" "-a" "--all" "-q" "--quiet"
                   "-i" "--ignore-case" "--allow-empty" "-N" "--no-newline"
                   "-n" "--count" "-m" "--max" "-s" "--start" "-l" "--length"
-                  "-e" "--end" "--"))
+                  "--left" "-e" "--end" "-r" "--right" "--regex" "-c" "--chars"
+                  "--"))
    (list :command "source"
          :synopsis "source file"
          :description "execute commands from file")

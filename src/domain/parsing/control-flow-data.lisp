@@ -7,6 +7,12 @@
 (defparameter +control-flow-block-keywords+
   '("if" "for" "while" "case" "switch" "begin"))
 
+(defparameter +definition-block-keywords+ '("function")
+  "Words that open a block closed by `end' but are not grouped into an AST node:
+a function definition is assembled from source lines, not parsed into a node, so
+this list stays out of +CONTROL-FLOW-KEYWORDS+ and only the block analysis below
+consults it.")
+
 (defparameter +control-flow-grouper-specs+
   '(("if" . %group-control-flow-if)
     ("for" . %group-control-flow-for)
@@ -30,6 +36,14 @@
 
 (defun %block-opening-keyword-p (keyword)
   (not (null (member keyword +control-flow-block-keywords+ :test #'string=))))
+
+(defun %definition-opening-command-p (node)
+  "True when NODE is a definition header, such as `function NAME', which `end'
+closes."
+  (and (command-node-p node)
+       (not (null (member (command-node-command node)
+                          +definition-block-keywords+
+                          :test #'string=)))))
 
 (define-value-struct %control-flow-header-args-value
     ((first nil)
@@ -111,6 +125,10 @@
 (defun %control-flow-stack-transition (stack cmd)
   (let ((keyword (%command-keyword cmd)))
     (cond
+      ((%definition-opening-command-p cmd)
+       (%make-control-flow-stack-transition
+        (%push-control-flow-frame stack (command-node-command cmd))
+        nil))
       ((and keyword
             (string= keyword "case")
             (%case-within-switch-p keyword stack))

@@ -190,7 +190,7 @@
       (setf (nshell.application:shell-context-execution-strategy context) :os-pipes)
       (with-temporary-function
           ('nshell.infrastructure.acl:spawn-pipeline
-           (lambda (commands &key redirects pipefail-p)
+           (lambda (commands &key redirects pipefail-p &allow-other-keys)
              (declare (ignore pipefail-p))
              (setf called t
                    command-count (length commands)

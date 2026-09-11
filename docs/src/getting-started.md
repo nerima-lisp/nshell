@@ -35,10 +35,19 @@ commands above.
 
 ## First commands
 
-Start nshell and type as you would in any shell. The distinguishing behaviour
-shows up while typing: commands and paths colorize live, and a dimmed
+Start nshell and type as you would in any shell. The prompt shows the
+working directory, the git branch (with `*` when the tree is dirty), and a
+`❯` that turns red after a failing command; the last exit code and any
+command that took a second or more appear on the right. The distinguishing
+behaviour shows up while typing: commands colorize live (an unknown command
+turns red before you run it), existing paths are underlined, and a dimmed
 completion of the most recent matching history entry trails the cursor. Press
-`→` or `Ctrl-F` to accept it.
+`→` or `Ctrl-F` to accept it. A mistyped command gets a `did you mean`
+suggestion, `FOO=bar cmd` exports `FOO` for that one command, and `theme list`
+shows the color presets (see [Customizing colors](guide/customization.md)).
+
+Set `NSHELL_GREETING` to replace the startup banner with your own line, or to
+the empty string to start silently.
 
 ### One-off command
 

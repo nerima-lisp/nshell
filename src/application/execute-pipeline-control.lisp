@@ -63,6 +63,20 @@ processes."
         (setf (shell-context-environment context) environment)))
     code))
 
+(defun seed-shell-status-environment (environment)
+  "Return ENVIRONMENT with \"?\" and \"status\" seeded to \"0\".
+
+A freshly built environment (session start, before any command has run) has
+neither binding, so unlike every later point in the session -- where
+%RECORD-LAST-EXIT-CODE keeps both current -- $status expands to the empty
+string rather than fish's guaranteed \"0\". Call this once, on the initial
+environment, to close that gap; every command afterward keeps it current on
+its own."
+  (when environment
+    (setf environment (nshell.domain.environment:env-set environment "?" "0" nil))
+    (setf environment (nshell.domain.environment:env-set environment "status" "0" nil)))
+  environment)
+
 (defun %assistant-execution-gate (ast)
   (when (member *execution-origin* '(:proposal :agent) :test #'eq)
     (let ((classification (nshell.feature.assistant:classify-ast ast))

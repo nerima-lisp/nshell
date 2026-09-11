@@ -1,6 +1,6 @@
 (in-package #:nshell.infrastructure.acl)
 
-(defparameter *git-command-timeout* 3
+(defparameter *git-command-timeout* 1
   "Seconds a git prompt probe may run before it is abandoned. The prompt must
 never block on a slow, networked, or hung repository, so branch/status queries
 are bounded well below *EXTERNAL-COMMAND-TIMEOUT*; on timeout the segment simply
@@ -57,7 +57,7 @@ Delegates to *GIT-RUNNER* when one is bound."
           branch)))))
 
 (defun %git-dirty-uncached (dir)
-  (multiple-value-bind (out code) (%run-git dir '("status" "--porcelain"))
+  (multiple-value-bind (out code) (%run-git dir '("status" "--porcelain" "--untracked-files=no"))
     (and (zerop code) (> (length (%trim-newline out)) 0))))
 
 (defun get-git-status (dir)

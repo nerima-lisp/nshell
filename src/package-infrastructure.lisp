@@ -12,9 +12,11 @@ tests rebind these boundary functions when they need deterministic behavior.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
+           #:external-command-environment
            #:current-environment-entries #:current-environment-value
            #:current-working-directory
            #:map-path-command-directories #:make-host-filesystem
+           #:clear-directory-listing-cache
            #:spawn-pipeline #:spawn-pipeline-async #:wait-job
            #:spawn-process-substitution
            #:process-substitution-resource-p
@@ -77,6 +79,8 @@ line editor has a single place to import them from.")
             #:terminal-mode-operation-failed-reason
             #:ansi-clear-screen #:ansi-clear-line #:ansi-move-cursor
             #:ansi-color-code
+            #:ansi-style-sequence #:terminal-color-depth
+            #:reset-terminal-color-depth #:*terminal-color-depth*
             #:ansi-cursor-up #:ansi-cursor-down
             #:ansi-cursor-forward #:ansi-cursor-back #:ansi-cursor-column
             #:ansi-dim #:ansi-reverse #:ansi-reset-style

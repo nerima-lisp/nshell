@@ -23,6 +23,27 @@
              (= (length (nshell.presentation:input-state-buffer applied))
                 (nshell.presentation:input-state-cursor-pos applied))))))
 
+  (it "pbt-input-state-history-search-selection-clamps-without-wrapping"
+    "An out-of-range search-index selects the nearest boundary match rather than wrapping to the other end."
+    (check-property (:trials 50)
+        ((first-line (gen-prompt-text :min-length 1 :max-length 16)
+                     #'shrink-prompt-text)
+         (second-line (gen-prompt-text :min-length 1 :max-length 16)
+                      #'shrink-prompt-text)
+         (over-index (gen-in-range 2 40) nil)
+         (under-index (gen-in-range -40 -1) nil))
+      (let ((results (list first-line second-line)))
+        (flet ((buffer-for (index)
+                 (nshell.presentation:input-state-buffer
+                  (nshell.presentation:apply-history-search-results-to-input-state
+                   (history-search-state
+                    :query "q"
+                    :original-buffer "original"
+                    :index index)
+                   results))))
+          (and (string= second-line (buffer-for over-index))
+               (string= first-line (buffer-for under-index)))))))
+
   (it "pbt-input-state-history-search-ctrl-l-preserves-session-state"
     "Ctrl-L in reverse search must only request a redraw and preserve the active search session."
     (check-property (:trials 50)

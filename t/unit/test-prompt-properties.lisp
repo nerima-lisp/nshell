@@ -1,6 +1,6 @@
 (in-package #:nshell/test)
 
-(describe "prompt-tests"
+(describe "prompt-property-tests"
   (it "pbt-prompt-truncation-never-exceeds-width"
     "Generated prompt segments truncated to a terminal width never exceed that width."
     (check-property (:trials 50)

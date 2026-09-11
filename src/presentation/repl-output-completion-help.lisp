@@ -157,12 +157,13 @@
          (nshell.domain.completion:completion-context-argument-words context)
          (nshell.domain.completion:completion-context-argument-prefix context)))
       (let ((candidates (when (> (length text) 0)
-                          (nshell.domain.completion:complete
-                           *kb* text
-                           :path completion-path
-                           :filesystem filesystem
-                           :alias-table *aliases*
-                           :function-table *functions*))))
+                          (apply #'nshell.domain.completion:complete
+                                 *kb* text
+                                 :path completion-path
+                                 :filesystem filesystem
+                                 :alias-table *aliases*
+                                 :function-table *functions*
+                                 (repl-completion-environment-arguments)))))
         (if candidates
             (multiple-value-bind (extended-state extended-p)
                 (maybe-extend-completion-common-prefix state candidates)

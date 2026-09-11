@@ -1,6 +1,12 @@
 
 (in-package #:nshell.application)
 
+(defvar *pipeline-stage-environments* nil
+  "NIL, or one exported-environment string list per pipeline stage, in source
+order. Bound while a pipeline whose stages carry their own prefix assignments
+spawns, so a stage's assignment reaches that stage's process alone.")
+
+
 ;; -- Internal vs external dispatch -------------------------------------------
 
 (defun %shell-internal-command-p (context command-node)
@@ -78,12 +84,12 @@
           (%finish-process-substitution-resources resources)
           (%abort-process-substitution-resources resources)))))
 
-(defun execute-command-node-in-context (context command-node)
+(defun %execute-plain-command-node-in-context (context command-node)
   (multiple-value-bind (expanded error resources)
       (%expand-command-node-in-context context command-node)
     (when error
       (%abort-process-substitution-resources resources)
-      (return-from execute-command-node-in-context (values error 127)))
+      (return-from %execute-plain-command-node-in-context (values error 127)))
     (let* ((redirect-split (%extract-command-redirects expanded))
            (clean-command
              (nshell.domain.parsing:command-redirect-split-result-clean-command
@@ -111,15 +117,14 @@
 
 ;; -- Pipeline node execution --------------------------------------------------
 
-(defun execute-pipeline-node-in-context (context pipeline-node)
-  (let ((commands (nshell.domain.parsing:pipeline-node-commands pipeline-node))
-        (terminal-runner *foreground-terminal-runner*)
+(defun %execute-plain-pipeline-node-in-context (context commands)
+  (let ((terminal-runner *foreground-terminal-runner*)
         (*foreground-terminal-runner* nil))
     (multiple-value-bind (expanded-commands error resources)
         (%expand-command-nodes-in-context context commands)
       (when error
         (%abort-process-substitution-resources resources)
-        (return-from execute-pipeline-node-in-context (values error 127)))
+        (return-from %execute-plain-pipeline-node-in-context (values error 127)))
       (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
              (clean-commands
               (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
@@ -161,6 +166,8 @@
                                     (nshell.infrastructure.acl:spawn-pipeline
                                      clean-commands
                                      :redirects redirects
+                                     :stage-environments
+                                     *pipeline-stage-environments*
                                      :pipefail-p
                                      (shell-context-pipefail-p context))
                                   (setf exit-code (or status 0)
@@ -213,3 +220,162 @@
 
 (defun execute-pipeline-use-case (pipeline &key filesystem)
   (or (execute-pipeline pipeline :filesystem filesystem) 0))
+
+;; -- Prefix assignments and the exported environment --------------------------
+;;
+;; `FOO=bar cmd` exports FOO for that one command; a bare `FOO=bar` sets the
+;; shell variable. Child processes always read the context's exported
+;; variables, so a script's `export` reaches the commands after it even when
+;; no interactive session syncs the environment.
+
+;; The ACL file holding this special is an ASDF component that loads after this
+;; one, so name it as special here rather than compiling a free reference.
+(declaim (special nshell.infrastructure.acl:*exported-environment*))
+
+(defun %context-exported-environment-strings (context)
+  (mapcar (lambda (entry)
+            (format nil "~a=~a"
+                    (nshell.domain.environment:env-entry-name entry)
+                    (nshell.domain.environment:env-entry-value entry)))
+          (nshell.domain.environment:env-list (shell-context-environment context))))
+
+(defun %sync-context-exports (context)
+  ;; A global rather than a dynamic binding: the foreground terminal runner
+  ;; spawns the pipeline from another thread, which sees only global values.
+  (setf nshell.infrastructure.acl:*exported-environment*
+        (%context-exported-environment-strings context)))
+
+(defmacro %with-context-exports ((context) &body body)
+  `(progn
+     (%sync-context-exports ,context)
+     ,@body))
+
+(defun %prefix-assignment-arg-p (arg)
+  (and (null (nshell.domain.parsing:arg-quote-style arg))
+       (nshell.domain.parsing:shell-assignment-word-p
+        (nshell.domain.parsing:arg-value arg))))
+
+(defun %assignment-word-binding (context word)
+  (let* ((equals (position #\= word))
+         (name (subseq word 0 equals))
+         (fields (%expand-source-arg-in-context
+                  context
+                  (nshell.domain.parsing:make-command-arg (subseq word (1+ equals))))))
+    (cons name (format nil "~{~a~^ ~}" fields))))
+
+(defun %command-node-from-arg (arg rest-args span)
+  (let ((typed (and (nshell.domain.parsing::command-arg-p arg) arg)))
+    (nshell.domain.parsing:make-command-node
+     (nshell.domain.parsing:arg-value arg)
+     rest-args
+     span
+     (nshell.domain.parsing:arg-quote-style arg)
+     (and typed (nshell.domain.parsing:command-arg-fragments typed)))))
+
+(defun %split-prefix-assignments (context command-node)
+  "Return (values ASSIGNMENTS NODE): the leading NAME=VALUE words of
+COMMAND-NODE as (NAME . EXPANDED-VALUE) pairs, and the node that remains, or
+NIL when the line was assignments only."
+  (let ((command (nshell.domain.parsing:command-node-command command-node)))
+    (if (or (nshell.domain.parsing:command-node-command-quote-style command-node)
+            (not (nshell.domain.parsing:shell-assignment-word-p command)))
+        (values nil command-node)
+        (let ((assignments (list (%assignment-word-binding context command)))
+              (args (nshell.domain.parsing:command-node-args command-node)))
+          (loop while (and args (%prefix-assignment-arg-p (first args)))
+                do (push (%assignment-word-binding context (nshell.domain.parsing:arg-value (pop args)))
+                         assignments))
+          (values (nreverse assignments)
+                  (and args
+                       (%command-node-from-arg (first args) (rest args)
+                                               (nshell.domain.parsing::ast-node-span command-node))))))))
+
+(defun %assign-shell-variables (context assignments)
+  (dolist (assignment assignments (values nil 0))
+    (let ((environment (shell-context-environment context)))
+      (setf (shell-context-environment context)
+            (nshell.domain.environment:env-set
+             environment (car assignment) (cdr assignment)
+             (nshell.domain.environment:env-exported-p environment (car assignment)))))))
+
+(defun %call-with-prefix-assignments (context assignments thunk)
+  (let ((saved (shell-context-environment context)))
+    (setf (shell-context-environment context)
+          (reduce (lambda (environment assignment)
+                    (nshell.domain.environment:env-set
+                     environment (car assignment) (cdr assignment) t))
+                  assignments
+                  :initial-value saved))
+    (unwind-protect (funcall thunk)
+      (setf (shell-context-environment context) saved)
+      (%sync-context-exports context))))
+
+(defun execute-command-node-in-context (context command-node)
+  (multiple-value-bind (assignments node)
+      (%split-prefix-assignments context command-node)
+    (flet ((run ()
+             (%with-context-exports (context)
+               (%execute-plain-command-node-in-context context node))))
+      (cond
+        ((null assignments) (run))
+        ((null node) (%assign-shell-variables context assignments))
+        (t (%call-with-prefix-assignments context assignments #'run))))))
+
+(defun %environment-with-assignments (environment assignments)
+  (reduce (lambda (environment assignment)
+            (nshell.domain.environment:env-set
+             environment (car assignment) (cdr assignment) t))
+          assignments
+          :initial-value environment))
+
+(defun %stage-environment-strings (context assignments)
+  "The exported environment one pipeline stage sees: the session's exports plus
+that stage's own prefix assignments, and nothing from a sibling stage."
+  (when assignments
+    (let ((saved (shell-context-environment context)))
+      (unwind-protect
+           (progn
+             (setf (shell-context-environment context)
+                   (%environment-with-assignments saved assignments))
+             (%context-exported-environment-strings context))
+        (setf (shell-context-environment context) saved)))))
+
+(defun %split-pipeline-stages (context pipeline-node)
+  "Return (values STAGES ASSIGNMENT-ONLY): the pipeline's stages as
+(NODE . ASSIGNMENTS) pairs carrying each stage's own prefix assignments, plus
+the assignments of any stage that named no command."
+  (let ((stages '())
+        (assignment-only '()))
+    (dolist (command (nshell.domain.parsing:pipeline-node-commands pipeline-node))
+      (multiple-value-bind (stage-assignments node)
+          (%split-prefix-assignments context command)
+        (if node
+            (push (cons node stage-assignments) stages)
+            (setf assignment-only (append assignment-only stage-assignments)))))
+    (values (nreverse stages) assignment-only)))
+
+(defun execute-pipeline-node-in-context (context pipeline-node)
+  (multiple-value-bind (stages assignment-only)
+      (%split-pipeline-stages context pipeline-node)
+    (let* ((commands (mapcar #'car stages))
+           (stage-assignments (mapcar #'cdr stages)))
+      (when assignment-only
+        (%assign-shell-variables context assignment-only))
+      (flet ((run ()
+               (%with-context-exports (context)
+                 (%execute-plain-pipeline-node-in-context context commands))))
+        (cond
+          ((null commands) (values nil 0))
+          ((notany #'identity stage-assignments) (run))
+          ;; A builtin or function stage runs in this process, so its assignment
+          ;; can only be scoped by the shared context environment; the OS path
+          ;; takes each stage's own environment to its own spawn instead.
+          ((%source-pipeline-required-p context commands)
+           (%call-with-prefix-assignments
+            context (apply #'append stage-assignments) #'run))
+          (t
+           (let ((*pipeline-stage-environments*
+                   (mapcar (lambda (assignments)
+                             (%stage-environment-strings context assignments))
+                           stage-assignments)))
+             (run))))))))

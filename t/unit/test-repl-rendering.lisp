@@ -267,4 +267,22 @@
               (expect (search "git" output) :to-be-truthy)
               (expect nshell.presentation::*completion-rendered-lines*
                       :to-be-greater-than 0)))))))
+
+  (it "repl-render-prompt-colors-autosuggestion-with-theme"
+    "Autosuggestion text should carry the theme's autosuggestion role bytes."
+    (with-repl-test-state
+      (let ((nshell.infrastructure.terminal:*terminal-color-depth* :truecolor))
+        (with-stable-repl-prompt ()
+          (with-fixed-terminal-size (24 80)
+            (with-repl-render-state (:buffer "echo h"
+                                     :cursor-pos 6
+                                     :suggestion "ello world")
+              (let ((output (capture-standard-output
+                              (nshell.presentation::render-prompt-cont))))
+                (expect (search (concatenate 'string
+                                              (esc-sequence "[38;2;108;108;108m")
+                                              "ello world"
+                                              (esc-sequence "[0m"))
+                                output)
+                        :to-be-truthy))))))))
 )

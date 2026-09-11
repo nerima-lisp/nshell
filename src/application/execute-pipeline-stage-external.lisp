@@ -145,6 +145,8 @@ dropping Ctrl-Z for waits that cannot observe a stop."
                                                 :stream)
                                      :wait nil
                                      :search t
+                                     :environment
+                                     (nshell.infrastructure.acl:external-command-environment)
                                      :preserve-fds preserve-fds)))
                       (setf process-started t)
                       (%release-process-substitution-resources

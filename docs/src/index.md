@@ -17,21 +17,28 @@ clean, test-driven Common Lisp core and a reproducible Nix build.
 
 ## Highlights
 
-- **Syntax highlighting** as you type — commands, strings, operators, and paths
-  are colorized live.
+- **Syntax highlighting** as you type — a command that would fail with
+  `command not found` is red before you run it, existing paths are underlined,
+  and strings, variables, keywords, and operators each get their own color.
 - **Autosuggestions** from your history, fish-style, accepted with `→` /
   `Ctrl-F`.
 - **Abbreviations** (`abbr`) that expand inline as you type — keep your muscle
   memory, type less.
 - **Context-aware completion** — a knowledge base of commands and flags plus
-  filesystem completion, with common-prefix `Tab` extension and a candidate
-  menu.
+  filesystem completion, git branches, environment variables, and
+  directory-only completion for `cd`, in a colored candidate menu with
+  common-prefix `Tab` extension.
 - **Rich line editing** — Emacs keybindings, kill-ring and yank, multi-level
-  undo/redo, multiline editing, and incremental history search (`Ctrl-R`).
+  undo/redo, multiline editing, and a `Ctrl-R` history picker that lists
+  matches under the prompt.
 - **Vi key bindings** (optional, `NSHELL_VI_MODE=1`) — normal-mode motions,
   counts, operators (`dd`, `cw`, …), visual selection, and insert/append.
-- **Configurable prompt** — hostname, working directory, git branch and dirty
-  status, command duration, and exit code, with theming.
+- **Themes** — one named palette drives the prompt, the highlighter, and the
+  completion menu; ten presets ship with the shell, `theme use` switches live,
+  and colors downsample to 256- or 16-color terminals.
+- **A prompt that reports** — working directory, git branch and dirty marker,
+  a prompt character that turns red after a failure, and, on the right, the
+  failing exit code plus the duration of anything slower than a second.
 - **Job control** — background jobs (`&`), `jobs`, `fg`, `bg`, `disown`.
 - **Pipelines and redirection** — `|`, `>`, `>>`, `<`, `<<`, `<<<`, logical
   `&&` / `||`, and command sequencing.

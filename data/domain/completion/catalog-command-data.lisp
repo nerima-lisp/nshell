@@ -15,6 +15,37 @@
    (list :command "cd"
          :synopsis "cd [dir]"
          :description "change directory")
+   (list :command "pushd"
+         :synopsis "pushd dir"
+         :description "push directory onto the stack and change to it")
+   (list :command "popd"
+         :synopsis "popd"
+         :description "pop the directory stack and change to it")
+   (list :command "dirs"
+         :synopsis "dirs"
+         :description "print the directory stack")
+   (list :command "prevd"
+         :synopsis "prevd [N]"
+         :description "go to a previously visited directory")
+   (list :command "nextd"
+         :synopsis "nextd [N]"
+         :description "undo a prevd")
+   (list :command "math"
+         :synopsis "math EXPRESSION"
+         :description "evaluate an arithmetic expression")
+   (list :command "functions"
+         :synopsis "functions [-e] [NAME]"
+         :description "list, show, or erase functions"
+         :flags '("-e" "--erase"))
+   (list :command "builtin"
+         :synopsis "builtin NAME [args...]"
+         :description "run a builtin, bypassing functions and aliases")
+   (list :command "and"
+         :synopsis "and command [args...]"
+         :description "run command if the previous status was success")
+   (list :command "or"
+         :synopsis "or command [args...]"
+         :description "run command if the previous status was failure")
    (list :command "exit"
          :synopsis "exit"
          :description "exit the shell")
@@ -57,16 +88,21 @@
    (list :command "ai"
          :synopsis "ai status|reset|log [N]|set [KEY VALUE]"
          :description "inspect and configure AI")
+   (list :command "theme"
+         :synopsis "theme [show|list|use NAME|set ROLE SPEC|reset]"
+         :description "pick or tune the color theme"
+         :flags '("show" "list" "use" "set" "reset"))
    (list :command "complete"
          ;; Assembled: longer than 100 columns, and a string literal cannot be
          ;; split across source lines without changing its value.
          :synopsis (concatenate 'string
                                 "complete -c command [-f flag ...] [-l option ...]"
-                                " [-s option ...] [-a arguments] [-d description] [-e]")
+                                " [-s option ...] [-a arguments] [-d description] [-e]"
+                                " | complete -C line")
          :description "define completions"
          :flags '("-c" "--command" "-f" "--flag" "-l" "--long-option"
                   "-s" "--short-option" "-a" "--arguments" "-d" "--description"
-                  "-e" "--erase"))
+                  "-e" "--erase" "-C" "--do-complete"))
    (list :command "type"
          :synopsis "type [OPTIONS] NAME [...]"
          :description "show command type"

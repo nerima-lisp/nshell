@@ -1,6 +1,6 @@
 (in-package #:nshell/test)
 
-(describe "prompt-tests"
+(describe "prompt-truncation-tests"
   (it "right-prompt-truncates-to-available-width"
     "Right prompt truncation uses visible segment width."
     (let* ((segments (list (nshell.domain.prompting:make-prompt-segment "abcdef" :git)

@@ -95,13 +95,35 @@
   :public-accessors nil
   :constructor %make-file-completion-query)
 
-(defun %file-completion-query-from-prefix (prefix include-files include-directories)
+(defun %tilde-prefixed-directory-p (directory-prefix)
+  "Return true when DIRECTORY-PREFIX names a path relative to the home
+directory, i.e. it starts with ~."
+  (and (plusp (length directory-prefix))
+       (char= (char directory-prefix 0) #\~)))
+
+(defun %expand-tilde-directory-prefix (directory-prefix home-directory)
+  "Return the directory DIRECTORY-PREFIX names for LISTING purposes, with a
+leading ~ expanded against HOME-DIRECTORY. DIRECTORY-PREFIX itself is left
+untouched elsewhere so a completed candidate's text keeps the ~/ the user
+typed, the same convention a directory candidate already relies on by
+carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
+  (if (and (%tilde-prefixed-directory-p directory-prefix)
+           (stringp home-directory)
+           (plusp (length home-directory)))
+      (concatenate 'string
+                   (%trim-trailing-path-separators home-directory)
+                   (subseq directory-prefix 1))
+      directory-prefix))
+
+(defun %file-completion-query-from-prefix
+    (prefix include-files include-directories &key home-directory)
   (multiple-value-bind (directory-prefix name-prefix)
       (%split-file-completion-prefix prefix)
     (%make-file-completion-query
      directory-prefix
      name-prefix
-     (%file-completion-directory-pathname directory-prefix)
+     (%file-completion-directory-pathname
+      (%expand-tilde-directory-prefix directory-prefix home-directory))
      include-files
      include-directories)))
 
@@ -131,7 +153,7 @@
            (%file-completion-entry-candidate entry kind query)))))
 
 (defun %file-candidates-from-directory
-    (filesystem prefix &key (include-files t) (include-directories t))
+    (filesystem prefix &key (include-files t) (include-directories t) home-directory)
   "Return filesystem completion candidates matching PREFIX."
   (let* ((directory-files-fn
            (and (nshell.domain.filesystem:filesystem-p filesystem)
@@ -142,7 +164,8 @@
          (query (%file-completion-query-from-prefix
                  prefix
                  include-files
-                 include-directories))
+                 include-directories
+                 :home-directory home-directory))
         (candidates (%make-empty-filesystem-candidate-set)))
     (when (%file-completion-query-include-directories query)
       (setf candidates (%add-file-completion-entries
@@ -166,12 +189,17 @@
       (and (plusp (length prefix))
            (find (char prefix 0) '(#\. #\~) :test #'char=))))
 
+(defparameter +directory-only-completion-commands+ '("cd" "pushd" "popd" "rmdir")
+  "Commands whose path argument may only name a directory.")
+
 (defun completion-filesystem-mode (context)
   "Return the filesystem completion mode implied by CONTEXT."
   (cond
     ((completion-context-redirection-target-p context) :files-and-directories)
     ((completion-context-command-position-p context) nil)
-    ((string= (completion-context-command context) "cd") :directories)
+    ((member (completion-context-command context) +directory-only-completion-commands+
+             :test #'string=)
+     :directories)
     ((member (completion-context-command context) '("source" ".") :test #'string=)
      :files-and-directories)
     ((%path-like-completion-prefix-p
@@ -180,25 +208,29 @@
     (t nil)))
 
 (progn
-  (defun filesystem-candidates-for-mode (mode prefix filesystem)
+  (defun filesystem-candidates-for-mode (mode prefix filesystem &key home-directory)
     "Return filesystem candidates for MODE and PREFIX."
     (ecase mode
       (:directories
        (%file-candidates-from-directory filesystem prefix
                                         :include-files nil
-                                        :include-directories t))
+                                        :include-directories t
+                                        :home-directory home-directory))
       (:files-and-directories
        (%file-candidates-from-directory filesystem prefix
                                         :include-files t
-                                        :include-directories t))))
-  (defun filesystem-candidates-for-value-kind (kind prefix filesystem)
+                                        :include-directories t
+                                        :home-directory home-directory))))
+  (defun filesystem-candidates-for-value-kind (kind prefix filesystem &key home-directory)
     "Return filesystem candidates matching the value kind implied by an option."
     (ecase kind
       (:directory
        (%file-candidates-from-directory filesystem prefix
                                         :include-files nil
-                                        :include-directories t))
+                                        :include-directories t
+                                        :home-directory home-directory))
       (:file
        (%file-candidates-from-directory filesystem prefix
                                         :include-files t
-                                        :include-directories nil)))))
+                                        :include-directories nil
+                                        :home-directory home-directory)))))

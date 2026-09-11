@@ -209,27 +209,36 @@
     (:none
      (values state :none))))
 
-(defun %history-search-matched-state (state text)
+(defun %history-search-matched-state (state text index)
   (copy-input-state-clearing-completion
    state
    :buffer text
    :cursor-pos (length text)
-   :search-index (input-state-search-index state)))
+   :search-index index))
+
+(defun %history-search-clamp-index (index match-count)
+  "Clamp INDEX into [0, MATCH-COUNT) rather than wrapping, so repeated
+selection movement past either end holds at that end's match."
+  (max 0 (min index (1- match-count))))
 
 (defun apply-history-search-results-to-input-state (state result-texts)
   "Apply history RESULT-TEXTS to STATE while preserving pure reducer semantics.
 
-  RESULT-TEXTS must be strings, newest first. SEARCH-INDEX selects among them
-with wraparound so repeated Ctrl-R can cycle through older matches."
+  RESULT-TEXTS must be strings, newest first. SEARCH-INDEX selects among them,
+clamped to the oldest or newest match so repeated selection movement past
+either end holds there instead of wrapping. The clamped index is written back
+into the returned state so the next selection move starts from it."
   (with-normalized-cleared-completion-state (state state)
     (let ((matches (remove-if-not #'stringp result-texts)))
       (cond
         ((not (eq (input-state-mode state) :search))
          state)
         (matches
-         (let* ((index (mod (input-state-search-index state) (length matches)))
+         (let* ((index (%history-search-clamp-index
+                        (input-state-search-index state)
+                        (length matches)))
                 (text (nth index matches)))
-           (%history-search-matched-state state text)))
+           (%history-search-matched-state state text index)))
         (t
          (%history-search-original-state state))))))
 

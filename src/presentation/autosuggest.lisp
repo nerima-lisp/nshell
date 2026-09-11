@@ -17,17 +17,28 @@
 (defun completion-suggestion
     (knowledge-base input &key path
                               (filesystem (nshell.infrastructure.acl:make-host-filesystem))
-                              alias-table function-table)
+                              alias-table function-table
+                              variable-names directory home-directory)
   (when (and knowledge-base
              (not (nshell.domain.parsing:shell-input-blank-p input)))
     (ignore-errors
         (let* ((prefix (autosuggest-token-prefix input))
-               (candidates (nshell.domain.completion:complete knowledge-base
-                                                              input
-                                                              :path path
-                                                              :filesystem filesystem
-                                                              :alias-table alias-table
-                                                              :function-table function-table))
+               ;; A suggestion is accepted by typing the rest of the word, so a
+               ;; substring-only candidate must not become one.
+               (candidates (remove-if-not
+                            (lambda (candidate)
+                              (nshell.domain.completion:candidate-prefix-match-p
+                               prefix candidate))
+                            (nshell.domain.completion:complete
+                             knowledge-base
+                             input
+                             :path path
+                             :filesystem filesystem
+                             :alias-table alias-table
+                             :function-table function-table
+                             :variable-names variable-names
+                             :directory directory
+                             :home-directory home-directory)))
                (text (if (or (null candidates)
                              (some (lambda (candidate)
                                      (member (nshell.domain.completion:candidate-kind candidate)
@@ -63,7 +74,8 @@
 (defun compute-suggestion
     (history input &key knowledge-base path
                               (filesystem (nshell.infrastructure.acl:make-host-filesystem))
-                              alias-table function-table)
+                              alias-table function-table
+                              variable-names directory home-directory)
   (unless (nshell.domain.parsing:shell-input-blank-p input)
     (or (nshell.application:history-suggestion history input)
         (completion-suggestion knowledge-base
@@ -71,7 +83,10 @@
                                :path path
                                :filesystem filesystem
                                :alias-table alias-table
-                               :function-table function-table))))
+                               :function-table function-table
+                               :variable-names variable-names
+                               :directory directory
+                               :home-directory home-directory))))
 
 (defun accept-suggestion (input suggestion)
   (concatenate 'string input suggestion))

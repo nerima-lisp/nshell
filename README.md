@@ -32,10 +32,14 @@ dimmed completion of the most recent matching history entry trails the cursor �
 press `→` or `Ctrl-F` to accept it:
 
 ```
-~/src/nshell> git com                    # "mit -m " suggested from history
-~/src/nshell> string upper hello
+~/src/nshell main ❯ git com               # "mit -m " suggested from history
+~/src/nshell main ❯ string upper hello
 HELLO
 ```
+
+Colors come from a theme; run `theme list` to see the built-in presets and
+`theme use dracula` (or any other name from that list) to switch, live, with
+no restart needed.
 
 Interactive history expansion supports `!!`, `!$`, `!-N`, `!?text?`, and
 `!prefix`; exclamation marks inside single quotes or preceded by a backslash

@@ -111,3 +111,83 @@
   (let ((map '(("00FF00" . 2) ("00AFFF" . 4) ("FF0000" . 1) ("FFFF00" . 3)
                ("FFA500" . 3) ("555555" . 8) ("737373" . 8) ("FFFFFF" . 7))))
     (or (cdr (assoc color map :test #'string=)) 7)))
+
+;;; Color depth. Detected once from the process environment and cached; tests
+;;; and session start rebind or reset it.
+(defvar *terminal-color-depth* nil
+  "NIL until detected, then :TRUECOLOR, :256, :16, or :NONE.")
+
+(defun %environment-string (name)
+  (let ((value (host-kit:getenv name)))
+    (and value (plusp (length value)) value)))
+
+(defun %detect-terminal-color-depth ()
+  (let ((colorterm (%environment-string "COLORTERM"))
+        (term (%environment-string "TERM")))
+    (cond
+      ((%environment-string "NO_COLOR") :none)
+      ((and term (string-equal term "dumb")) :none)
+      ((and colorterm
+            (member colorterm '("truecolor" "24bit") :test #'string-equal))
+       :truecolor)
+      ((and term (search "direct" term)) :truecolor)
+      ((and term (search "256color" term)) :256)
+      (t :16))))
+
+(defun reset-terminal-color-depth ()
+  (setf *terminal-color-depth* nil))
+
+(defun terminal-color-depth ()
+  (or *terminal-color-depth*
+      (setf *terminal-color-depth* (%detect-terminal-color-depth))))
+
+(defun %named-color-sgr (index foreground-p)
+  ;; 0-7 are the classic 30-37/40-47 codes; 8-15 the bright 90-97/100-107 ones.
+  (if (< index 8)
+      (+ (if foreground-p 30 40) index)
+      (+ (if foreground-p 82 92) index)))
+
+(defun %rgb-to-basic-16 (r g b)
+  ;; Nearest-distance mapping sends every pastel to white or gray, so pick the
+  ;; palette slot by hue and reserve the grays for low-saturation colors.
+  (multiple-value-bind (hue saturation value) (cl-tty-kit:rgb-to-hsv r g b)
+    (if (< saturation 30)
+        (cond ((< value 25) 0)
+              ((< value 60) 8)
+              ((< value 90) 7)
+              (t 15))
+        (let ((base (cond ((or (< hue 30) (>= hue 330)) 1)
+                          ((< hue 75) 3)
+                          ((< hue 165) 2)
+                          ((< hue 195) 6)
+                          ((< hue 255) 4)
+                          (t 5))))
+          (if (>= value 60) (+ base 8) base)))))
+
+(defun %color-sgr-codes (color foreground-p depth)
+  (when (and color (not (eq depth :none)))
+    (ecase (first color)
+      (:named (list (%named-color-sgr (second color) foreground-p)))
+      (:rgb
+       (destructuring-bind (r g b) (rest color)
+         (ecase depth
+           (:truecolor (list (if foreground-p 38 48) 2 r g b))
+           (:256 (list (if foreground-p 38 48) 5 (cl-tty-kit:rgb-to-256 r g b)))
+           (:16 (list (%named-color-sgr (%rgb-to-basic-16 r g b) foreground-p)))))))))
+
+(defun ansi-style-sequence (&key foreground background bold dim italic
+                              underline reverse (depth (terminal-color-depth)))
+  "Return the SGR sequence for the given attributes, or \"\" when nothing is
+set. FOREGROUND and BACKGROUND are NIL, (:RGB R G B), or (:NAMED INDEX); RGB
+values are downsampled to DEPTH, and a DEPTH of :NONE drops colors while
+keeping the modifiers."
+  (let ((codes (append (when bold '(1))
+                       (when dim '(2))
+                       (when italic '(3))
+                       (when underline '(4))
+                       (when reverse '(7))
+                       (%color-sgr-codes foreground t depth)
+                       (%color-sgr-codes background nil depth))))
+    (if codes
+        (apply #'cl-tty-kit:ansi-sgr codes)
+        "")))

@@ -29,6 +29,11 @@ Set by the REPL from the current shell environment.")
   "Return the current process working directory as a pathname or string."
   (host-kit:getcwd))
 
+(defun external-command-environment ()
+  "The environment a child process should receive: the shell's exported
+variables when it has any, otherwise this process's own environment."
+  (%get-environment))
+
 (defun %get-environment ()
   "Return the environment list for subprocess execution. When the shell has
 exported variables, use them; otherwise inherit the real process environment so

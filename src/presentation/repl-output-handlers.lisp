@@ -60,13 +60,14 @@ wrapped line's other rows on screen as stale duplicates."
           (nshell.domain.environment:env-get (ensure-environment) "PATH"))
         (filesystem (nshell.infrastructure.acl:make-host-filesystem)))
     (setf (input-state-suggestion *input-state*)
-          (compute-suggestion *history*
-                              text
-                              :knowledge-base *kb*
-                              :path completion-path
-                              :filesystem filesystem
-                              :alias-table *aliases*
-                              :function-table *functions*))))
+          (apply #'compute-suggestion *history*
+                 text
+                 :knowledge-base *kb*
+                 :path completion-path
+                 :filesystem filesystem
+                 :alias-table *aliases*
+                 :function-table *functions*
+                 (repl-completion-environment-arguments)))))
 
 (defun %assistant-boundary-ok-p (result)
   (eq :ok (nshell.feature.assistant:assistant-boundary-status result)))
@@ -583,8 +584,10 @@ wrapped line's other rows on screen as stale duplicates."
                      *command-not-found-command*
                      (not *agent-session*))
                 (progn
-                  (format t "nshell: ~a: command not found~%"
-                          *command-not-found-command*)
+                  (let ((corrections (%repl-command-corrections
+                                      *command-not-found-command*)))
+                    (when corrections
+                      (format t "nshell: did you mean: ~{~a~^, ~}?~%" corrections)))
                   (setf *command-not-found-fallback-text* text
                         *preserve-transient-panel-on-next-prompt-p* t
                         *transient-panel-content* '("⌃] で AI に聞く")))
@@ -686,6 +689,7 @@ wrapped line's other rows on screen as stale duplicates."
 
   (defun %process-execute-output-event ()
     (clear-rendered-completions)
+    (clear-rendered-search-results)
     (%execute-command-line (input-state-buffer *input-state*)))
 
   (define-output-event-handler %process-complete-output-event

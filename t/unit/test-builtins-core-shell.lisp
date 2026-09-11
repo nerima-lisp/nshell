@@ -434,6 +434,13 @@
       (expect "a,b,c" :to-equal (join '("a" "b" "c") ","))
       (expect "a b" :to-equal (join '("a" "b") " "))))
 
+  (it "everyday-shell-builtins-are-registered"
+    "math, the directory stack, functions/builtin, and and/or all resolve
+through the same registry the rest of the builtins use."
+    (dolist (name '("math" "dirs" "pushd" "popd" "prevd" "nextd"
+                    "functions" "builtin" "and" "or"))
+      (expect (nshell.application:lookup-builtin name) :to-be-truthy)))
+
   (it "builtin-option-helpers-cover-common-cli-flag-shape"
     "Builtin option helpers centralize string flag matching and option token detection."
     (expect (nshell.application::%builtin-option-p "-q" '("-q" "--query")) :to-be-truthy)

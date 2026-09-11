@@ -101,7 +101,7 @@
 (defun %spawn-pipeline-stage (cmd-node stage-redirects prev-pipe next-pipe redirect-streams
                               &key (default-input t)
                                 (default-output :stream)
-                                preserve-fds pgid)
+                                preserve-fds pgid stage-environment)
   (let* ((wrapper-p
           (nshell.domain.parsing:redirects-require-shell-wrapper-p
            stage-redirects))
@@ -119,7 +119,7 @@
            (let* ((cmd (nshell.domain.parsing:command-node-command cmd-node))
                   (args (mapcar #'nshell.domain.parsing:arg-value
                                 (nshell.domain.parsing:command-node-args cmd-node)))
-                  (environment (%get-environment))
+                  (environment (or stage-environment (%get-environment)))
                   (resolved-cmd (%resolve-external-command cmd environment))
                   (wrapper-cmd (and wrapper-p
                                     resolved-cmd

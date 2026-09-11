@@ -1,5 +1,6 @@
 ;;; Prompt model - pure data structure for prompt rendering
-;;; fish-inspired: left prompt + right prompt with git/exit/duration/time info
+;;; fish-inspired: left prompt (host/path/git/exit char) + right prompt
+;;; (failed exit code/duration/time/assistant usage).
 (in-package #:nshell.domain.prompting)
 
 (defparameter *git-status-resolver*
@@ -21,6 +22,8 @@
      (directory nil :type (or null string))
      (exit-code 0 :type (or null integer))
      (duration-ms nil :type (or null integer))
+     (remote-session-p nil)
+     (user nil :type (or null string))
      (segments nil :type list :copy :list)
      (right-segments nil :type list :copy :list))
   :documentation "Pure data model for rendering a shell prompt."
@@ -47,6 +50,11 @@
       (error "~a must be NIL or an integer: ~s" field-name value)))
   value)
 
+(defun %ensure-boolean (value field-name)
+  (unless (member value '(t nil))
+    (error "~a must be T or NIL: ~s" field-name value))
+  value)
+
 (defun %ensure-keyword (value field-name)
   (unless (keywordp value)
     (error "~a must be a keyword: ~s" field-name value))
@@ -62,6 +70,8 @@
                                directory
                                (exit-code 0)
                                duration-ms
+                               remote-session-p
+                               user
                                segments
                                right-segments)
   (%make-prompt-model
@@ -70,6 +80,8 @@
    :directory (%ensure-optional-string directory "DIRECTORY")
    :exit-code (%ensure-optional-integer exit-code "EXIT-CODE")
    :duration-ms (%ensure-optional-integer duration-ms "DURATION-MS")
+   :remote-session-p (%ensure-boolean remote-session-p "REMOTE-SESSION-P")
+   :user (%ensure-optional-string user "USER")
    :segments (copy-list (%ensure-list segments "SEGMENTS"))
    :right-segments (copy-list (%ensure-list right-segments "RIGHT-SEGMENTS"))))
 
@@ -89,61 +101,73 @@
        (if dirty-p
            (concatenate 'string branch "*")
            branch)
-       :git))))
+       (if dirty-p :git-dirty :git)))))
+
+(defun %host-segment (pm)
+  (when (prompt-model-remote-session-p pm)
+    (make-prompt-segment
+     (if (prompt-model-user pm)
+         (format nil "~a@~a " (prompt-model-user pm) (prompt-model-hostname pm))
+         (format nil "~a " (prompt-model-hostname pm)))
+     :host)))
+
+(defun %prompt-exit-segment (pm)
+  (make-prompt-segment
+   "❯"
+   (if (and (prompt-model-exit-code pm)
+            (not (zerop (prompt-model-exit-code pm))))
+       :exit-error
+       :exit)))
 
 (defun %prompt-time-segment ()
   (let ((text (funcall *prompt-time-resolver*)))
     (when text
       (make-prompt-segment text :time))))
 
+(defun %prompt-duration-text (duration-ms)
+  (let ((total-seconds (floor duration-ms 1000)))
+    (cond
+      ((< total-seconds 60) (format nil "~,1fs" (/ duration-ms 1000.0)))
+      ((< total-seconds 3600)
+       (format nil "~dm ~ds" (floor total-seconds 60) (mod total-seconds 60)))
+      (t
+       (format nil "~dh ~dm" (floor total-seconds 3600) (mod (floor total-seconds 60) 60))))))
+
 (defun %prompt-duration-segment (pm)
   (let ((duration-ms (prompt-model-duration-ms pm)))
-    (when (and duration-ms (plusp duration-ms))
-      (make-prompt-segment
-       (if (< duration-ms 1000)
-           (format nil "~dms" duration-ms)
-           (format nil "~,2fs" (/ duration-ms 1000.0)))
-       :duration))))
-
-(defun %render-right-segment (pm seg)
-  (case (prompt-segment-kind seg)
-    (:git
-     (%git-status-segment pm))
-    (t seg)))
+    (when (and duration-ms (>= duration-ms 1000))
+      (make-prompt-segment (%prompt-duration-text duration-ms) :duration))))
 
 (defun render-prompt-model (pm)
-  "Convert a prompt model into left prompt segments."
+  "Convert a prompt model into left prompt segments: an optional remote-session
+host segment, the path, an optional git segment, and the exit-status prompt
+character."
   (let ((segs (prompt-model-segments pm)))
-    (when (null segs)
-      (setf segs
-            (list (make-prompt-segment (prompt-model-hostname pm) :host)
-                  (make-prompt-segment " " :literal)
-                  (make-prompt-segment (prompt-model-cwd pm) :path)
-                  (make-prompt-segment " " :literal)
-                  (make-prompt-segment
-                   (if (and (prompt-model-exit-code pm)
-                            (not (zerop (prompt-model-exit-code pm))))
-                       "✗" ">")
-                    :exit)
-                  (make-prompt-segment " " :literal))))
-    segs))
+    (if segs
+        segs
+        (let ((result nil)
+              (host (%host-segment pm))
+              (git (%git-status-segment pm)))
+          (when host (push host result))
+          (push (make-prompt-segment (prompt-model-cwd pm) :path) result)
+          (when git
+            (push (make-prompt-segment " " :literal) result)
+            (push git result))
+          (push (make-prompt-segment " " :literal) result)
+          (push (%prompt-exit-segment pm) result)
+          (push (make-prompt-segment " " :literal) result)
+          (nreverse result)))))
 
 (defun render-right-prompt-model (pm &key failure-explain-p)
-  "Convert prompt model right segments to prompt segments."
+  "Convert prompt model right segments to prompt segments: a non-zero exit
+code, the last command duration, and the time."
   (let ((segs (prompt-model-right-segments pm)))
     (if segs
-        (remove nil (mapcar (lambda (seg)
-                              (%render-right-segment pm seg))
-                            segs))
+        segs
         (let ((result nil)
-              (git (%git-status-segment pm))
               (ec (prompt-model-exit-code pm))
-               (duration (%prompt-duration-segment pm)))
-          (when git
-            (push git result))
+              (duration (%prompt-duration-segment pm)))
           (when (and ec (not (zerop ec)))
-            (when result
-              (push (make-prompt-segment " " :literal) result))
             (push (make-prompt-segment
                    (if failure-explain-p
                        (format nil "[~d · ?]" ec)

@@ -60,7 +60,8 @@
 
 (defun %run-terminal-pipeline (context commands redirects)
   (let ((processes (nshell.infrastructure.acl:spawn-pipeline-async
-                    commands :redirects redirects :start-p nil)))
+                    commands :redirects redirects :start-p nil
+                    :stage-environments *pipeline-stage-environments*)))
     (unless processes
       (return-from %run-terminal-pipeline (values nil 127 (list 127))))
     (let ((pgid (sb-ext:process-pid (first processes)))

@@ -2,7 +2,7 @@
 
 (defun %pipeline-spawn-loop (commands pipes redirects redirect-streams
                              &key (default-input t) default-output preserve-fds
-                               after-spawn error-sentinel)
+                               after-spawn error-sentinel stage-environments)
   "Iterate over COMMANDS, spawning each as a pipeline stage connected via PIPES.
 Returns (values procs pgid redirect-streams error-p) where ERROR-P is the
 value of ERROR-SENTINEL when a spawn fails, or NIL on success.
@@ -32,7 +32,9 @@ ERROR-SENTINEL is stored as the error indicator on failure."
                                                    :default-input default-input
                                                    :default-output default-output
                                                    :preserve-fds preserve-fds
-                                                   :pgid pgid)
+                                                   :pgid pgid
+                                                   :stage-environment
+                                                   (nth index stage-environments))
                           (setf redirect-streams updated-streams)
                           (if proc
                               (progn

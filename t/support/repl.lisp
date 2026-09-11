@@ -115,9 +115,10 @@
   `(with-temporary-function
        ('nshell.presentation::render-prompt
         (lambda (config last-exit &key last-command-duration-ms
-                                      failure-explain-p terminal-width)
+                                      failure-explain-p terminal-width
+                                      window-title-p)
           (declare (ignore config last-exit last-command-duration-ms
-                           failure-explain-p terminal-width))
+                           failure-explain-p terminal-width window-title-p))
           (format t "~a" ,text)
           ,width))
      ,@body))

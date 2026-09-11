@@ -184,3 +184,26 @@ changing its value.")
       (expect (search "Fatal error: dispatch failed" error-output)
               :to-be-truthy))))
 )
+
+(describe "startup-greeting-tests"
+  (it "greeting-defaults-to-the-version-banner"
+    (with-rebound-function (nshell.infrastructure.acl:current-environment-value
+                            (lambda (name) (declare (ignore name)) nil))
+      (expect (search "nshell v"
+                      (with-output-to-string (stream)
+                        (nshell::%print-greeting stream)))
+              :to-be-truthy)))
+
+  (it "an-empty-greeting-starts-the-session-silently"
+    (with-rebound-function (nshell.infrastructure.acl:current-environment-value
+                            (lambda (name) (declare (ignore name)) ""))
+      (expect "" :to-equal (with-output-to-string (stream)
+                             (nshell::%print-greeting stream)))))
+
+  (it "a-configured-greeting-replaces-the-banner"
+    (with-rebound-function (nshell.infrastructure.acl:current-environment-value
+                            (lambda (name) (declare (ignore name)) "welcome back"))
+      (expect (format nil "welcome back~%")
+              :to-equal
+              (with-output-to-string (stream)
+                (nshell::%print-greeting stream))))))

@@ -123,15 +123,20 @@
           (prefix (completion-common-prefix candidates)))
       (if (null prefix)
           (values state nil)
-          (let ((context (%completion-token-context buffer cursor)))
+          (let ((context (%completion-token-context buffer cursor))
+                (variable-p (every (lambda (candidate)
+                                     (eq (%candidate-kind candidate) :variable))
+                                   candidates)))
             (if (%completion-prefix-extends-token-p prefix context)
                 (multiple-value-bind (new-buffer new-cursor)
                     (%completion-replace-token
                      buffer
                      context
-                     (%completion-insertion-text
-                      prefix
-                      :quote-context (completion-token-context-quote-context context)))
+                     (if variable-p
+                         prefix
+                         (%completion-insertion-text
+                          prefix
+                          :quote-context (completion-token-context-quote-context context))))
                   (values (copy-input-state-clearing-completion
                            state
                            :buffer new-buffer
@@ -141,7 +146,12 @@
 
 (defun apply-completion (input candidate &key (cursor (length input)))
   (let* ((context (%completion-token-context input cursor))
-         (text (%completion-insertion-text
-                (%candidate-text candidate)
-                :quote-context (completion-token-context-quote-context context))))
+         (raw (%candidate-text candidate))
+         ;; A variable candidate carries its own $ sigil and braces, which the
+         ;; shell must still read as an expansion after insertion.
+         (text (if (eq (%candidate-kind candidate) :variable)
+                   raw
+                   (%completion-insertion-text
+                    raw
+                    :quote-context (completion-token-context-quote-context context)))))
     (%completion-replace-token input context text)))

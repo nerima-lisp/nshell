@@ -1,0 +1,19 @@
+# Example ~/.nshellrc. This is a plain nshell script sourced once at
+# startup, before the first prompt is drawn; copy what you want into your
+# own ~/.nshellrc.
+
+# Switch the whole shell (syntax highlighting, prompt, completion menu) to
+# one of the built-in presets. Run `theme list` to see every preset name.
+theme use tokyo-night
+
+# Override a single role in the active theme. SPEC is the rest of the line,
+# so a color plus flags does not need quoting.
+theme set prompt-git-dirty yellow --bold
+
+# Start silently instead of printing the version banner.
+set -x NSHELL_GREETING ""
+
+abbr -a g git
+abbr -a gco git checkout
+
+set -x EDITOR nvim

@@ -21,10 +21,13 @@
         *prompt-rendered-origin-column* 1
         *prompt-rendered-origin-known-p* t
         *interactive-terminal-installed-p* nil
-        *environment* (nshell.domain.environment:inject-os-environment
-                       (nshell.domain.environment:make-default-environment)
-                       (nshell.infrastructure.acl:current-environment-entries)
-                       #'nshell.infrastructure.acl:current-working-directory))
+        *kb* (seed-repl-completion-knowledge-base
+              (nshell.domain.completion:make-empty-knowledge-base))
+        *environment* (nshell.application:seed-shell-status-environment
+                       (nshell.domain.environment:inject-os-environment
+                        (nshell.domain.environment:make-default-environment)
+                        (nshell.infrastructure.acl:current-environment-entries)
+                        (function nshell.infrastructure.acl:current-working-directory))))
   (nshell.feature.assistant:reset-assistant-usage)
   (nshell.feature.assistant:reset-assistant-settings)
   (%reset-repl-state-tables))

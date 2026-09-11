@@ -12,23 +12,83 @@
       (expect 80 :to-equal (nshell.presentation::terminal-width))))
 
   (it "completion-rendering-highlights-selected-candidate"
+    (let ((nshell.infrastructure.terminal:*terminal-color-depth* :truecolor))
+      (let* ((candidates (list (nshell.domain.completion:make-candidate
+                                "status"
+                                :kind :command
+                                :description "show working tree status")
+                               (nshell.domain.completion:make-candidate
+                                "stash"
+                                :kind :command
+                                :description "store local modifications")))
+             (output (capture-standard-output
+                       (nshell.presentation:render-completions
+                        candidates
+                        :selected-index 1
+                        :theme (nshell.domain.configuration:default-theme)))))
+        (expect (search (concatenate 'string
+                                      "λ "
+                                      (esc-sequence "[38;2;95;175;255m")
+                                      "status"
+                                      (esc-sequence "[0m"))
+                        output)
+                :to-be-truthy)
+        (expect (search (concatenate 'string
+                                      (esc-sequence "[38;2;128;128;128m")
+                                      "show working tree status"
+                                      (esc-sequence "[0m"))
+                        output)
+                :to-be-truthy)
+        (expect (search (format nil "~C[7mλ stash  store local modifications" #\Esc)
+                    output) :to-be-truthy)
+        (expect (search (format nil "modifications  ~C[0m" #\Esc)
+                    output) :to-be-truthy))))
+
+  (it "completion-rendering-colors-command-text-with-theme"
+    (let ((nshell.infrastructure.terminal:*terminal-color-depth* :truecolor))
+      (let* ((candidates (list (nshell.domain.completion:make-candidate
+                                "ls" :kind :command)))
+             (output (capture-standard-output
+                       (nshell.presentation:render-completions
+                        candidates
+                        :terminal-width 80
+                        :theme (nshell.domain.configuration:default-theme)))))
+        (expect (search (concatenate 'string
+                                      (esc-sequence "[38;2;95;175;255m")
+                                      "ls"
+                                      (esc-sequence "[0m"))
+                        output)
+                :to-be-truthy))))
+
+  (it "completion-rendering-colors-description-with-theme"
+    (let ((nshell.infrastructure.terminal:*terminal-color-depth* :truecolor))
+      (let* ((candidates (list (nshell.domain.completion:make-candidate
+                                "ls" :kind :command :description "list files")))
+             (output (capture-standard-output
+                       (nshell.presentation:render-completions
+                        candidates
+                        :terminal-width 80
+                        :theme (nshell.domain.configuration:default-theme)))))
+        (expect (search (concatenate 'string
+                                      (esc-sequence "[38;2;128;128;128m")
+                                      "list files"
+                                      (esc-sequence "[0m"))
+                        output)
+                :to-be-truthy))))
+
+  (it "completion-rendering-appends-trailing-slash-to-directory-candidates"
     (let* ((candidates (list (nshell.domain.completion:make-candidate
-                              "status"
-                              :kind :command
-                              :description "show working tree status")
+                              "beta" :kind :directory)
                              (nshell.domain.completion:make-candidate
-                              "stash"
-                              :kind :command
-                              :description "store local modifications")))
+                              "gamma/" :kind :directory)))
            (output (capture-standard-output
                      (nshell.presentation:render-completions
                       candidates
-                      :selected-index 1))))
-      (expect (search "λ status  show working tree status" output) :to-be-truthy)
-      (expect (search (format nil "~C[7mλ stash  store local modifications" #\Esc)
-                  output) :to-be-truthy)
-      (expect (search (format nil "modifications  ~C[0m" #\Esc)
-                  output) :to-be-truthy)))
+                      :terminal-width 80
+                      :theme (nshell.domain.configuration:find-theme-preset "mono")))))
+      (expect (search "beta/" output) :to-be-truthy)
+      (expect (search "gamma//" output) :to-be-falsy)
+      (expect (search "gamma/" output) :to-be-truthy)))
 
   (it "completion-render-line-count-uses-rendered-column-layout"
     (expect 0 :to-equal (nshell.presentation::completion-render-line-count nil
@@ -72,8 +132,15 @@
            (output (capture-standard-output
                      (nshell.presentation:render-completions
                       candidates
-                      :terminal-width 80))))
-      (expect (search "/ directory" output) :to-be-truthy)
+                      :terminal-width 80
+                      :theme (nshell.domain.configuration:find-theme-preset "mono")))))
+      (expect (search (concatenate 'string
+                                    "/ "
+                                    (esc-sequence "[1m")
+                                    "directory/"
+                                    (esc-sequence "[0m"))
+                      output)
+              :to-be-truthy)
       (expect (search "- --option" output) :to-be-truthy)
       (expect (search "$  VARIABLE" output) :to-be-truthy)
       (expect (search "· unknown" output) :to-be-truthy)))
@@ -364,3 +431,30 @@
       (expect '("cat bar" 7) :to-equal (splice "cat foo" 4 7 "bar"))
       ;; single-quoted closed: keep surrounding quotes; cursor = start + 1(quote) + 3(bar) = 8
       (expect '("cat 'bar'" 8) :to-equal (splice "cat 'foo'" 4 9 "bar" :ctx :single)))))
+
+(describe "completion-variable-insertion-tests"
+  (it "variable-candidates-insert-their-sigil-unescaped"
+    "A $VAR candidate must stay an expansion after insertion, not a literal."
+    (let ((candidate (nshell.domain.completion:make-candidate
+                      "$HOME" :kind :variable :description "/home/tester")))
+      (expect "echo $HOME"
+              :to-equal
+              (nshell.presentation:apply-completion "echo $HO" candidate))))
+
+  (it "non-variable-candidates-keep-shell-escaping"
+    (let ((candidate (nshell.domain.completion:make-candidate
+                      "my file.txt" :kind :file)))
+      (expect "cat my\\ file.txt"
+              :to-equal
+              (nshell.presentation:apply-completion "cat my" candidate))))
+
+  (it "variable-common-prefix-extension-keeps-the-sigil-unescaped"
+    (let* ((state (input-state :buffer "echo $X" :cursor-pos 7))
+           (candidates (list (nshell.domain.completion:make-candidate
+                              "$XDG_CACHE" :kind :variable)
+                             (nshell.domain.completion:make-candidate
+                              "$XDG_CONFIG" :kind :variable))))
+      (multiple-value-bind (new-state extended-p)
+          (nshell.presentation::maybe-extend-completion-common-prefix state candidates)
+        (expect extended-p :to-be-truthy)
+        (expect "echo $XDG_C" :to-equal (nshell.presentation:input-state-buffer new-state))))))

@@ -40,6 +40,7 @@ exported predicates below are goals callers may query directly.")
              #:completion-context-argument-prefix
              #:completion-context-argument-words
              #:completion-context-command-position-p
+             #:candidate-prefix-match-p
              #:completion-context-redirection-target-p
              #:filesystem-candidates-for-value-kind
              #:command-path-candidates)))

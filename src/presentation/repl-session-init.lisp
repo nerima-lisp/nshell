@@ -114,13 +114,18 @@ entered during this session."
         *prompt-rendered-origin-column* 1
         *prompt-rendered-origin-known-p* nil
         *interactive-terminal-installed-p* nil
-        *environment* (nshell.domain.environment:inject-os-environment
-                       (nshell.domain.environment:make-default-environment)
-                       (nshell.infrastructure.acl:current-environment-entries)
-                       #'nshell.infrastructure.acl:current-working-directory))
+        *environment* (nshell.application:seed-shell-status-environment
+                       (nshell.domain.environment:inject-os-environment
+                        (nshell.domain.environment:make-default-environment)
+                        (nshell.infrastructure.acl:current-environment-entries)
+                        (function nshell.infrastructure.acl:current-working-directory))))
   (nshell.feature.assistant:reset-assistant-usage)
   (nshell.feature.assistant:reset-assistant-settings)
   (%reset-repl-state-tables)
+  (nshell.infrastructure.terminal:reset-terminal-color-depth)
+  (setf nshell.domain.prompting:*git-status-resolver*
+        (function nshell.infrastructure.acl:get-git-status)
+        nshell.application:*theme-apply-handler* (function apply-repl-theme))
   (setf *vi-mode-enabled*
         (%vi-mode-flag-enabled-p
          (nshell.infrastructure.acl:current-environment-value "NSHELL_VI_MODE")))

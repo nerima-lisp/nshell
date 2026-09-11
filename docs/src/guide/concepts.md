@@ -16,6 +16,28 @@ recomputed from scratch whenever it is cheaper than diffing.
 The REPL that drives the reducer is a continuation-passing trampoline loop,
 which keeps the interactive core deterministic and unit-testable.
 
+## Color is a theme, not a pile of escape codes
+
+Every colored thing nshell draws (the prompt, the command line as you type, the
+completion menu) reads its style from one theme: a mapping from a named role to
+a fish-style style spec such as `5fafff --bold` or `gray --italics`. Nothing in
+the rendering code carries a hardcoded escape sequence, so switching the whole
+shell to another palette is one `theme use` away, and a role you dislike is one
+`theme set` away. Colors are written once in truecolor and downsampled at the
+terminal boundary, so the same theme renders on a 256-color or 16-color
+terminal and disappears entirely under `NO_COLOR`. See
+[Customizing colors](customization.md).
+
+## Highlighting answers a question before you press Enter
+
+The syntax highlighter is not a lexer painting tokens by shape. It resolves the
+command word against the same sources the executor will use: shell keywords,
+the builtin registry, functions, aliases, abbreviations, then PATH. A command
+that will fail with `command not found` is therefore red while you are still
+typing it, an existing path is underlined, and a variable reference is colored
+as one. When a command does fail that way, nshell proposes the names one edit
+away from what you typed.
+
 ## Completion is a knowledge base, not a table
 
 Completion candidates come from a logic knowledge base compiled into a
@@ -38,7 +60,10 @@ behaviour: it costs nothing when you ignore it, and it is faster than reverse
 search when the command is recent.
 
 `Ctrl-R` opens incremental reverse search for the cases where a prefix is not
-what you remember.
+what you remember. It draws the matching history entries under the prompt with
+the matched text highlighted; `Ctrl-R` and `Ctrl-S` (or the arrow keys) move
+the selection, Enter runs the selected entry, and Escape puts back the line you
+were typing.
 
 ## History expansion is explicit
 
@@ -61,6 +86,16 @@ while leaving history honest and greppable.
 the first non-empty value among `NSHELL_EDITOR`, `VISUAL`, and `EDITOR`, or
 `vi`. After a successful exit, the edited file replaces the current buffer;
 the command is not executed until the normal submit key is pressed.
+
+## The prompt states what the last command did
+
+The left prompt carries the working directory (shortened fish-style when the
+terminal is narrow) and the git branch with a `*` when the tree is dirty. The
+prompt character is green after a success and red after a failure, so the last
+result is visible without reading anything. The right prompt adds the failing
+exit code, the wall-clock duration of any command that took a second or more,
+and the time it finished. Everything on the right is omitted when it has
+nothing to say, which keeps a fast, successful command on a quiet line.
 
 ## Layers, and what is allowed to do I/O
 

@@ -75,6 +75,13 @@ motion (\fBC\-a\fR, \fBC\-e\fR, \fBM\-f\fR, \fBM\-b\fR), editing (\fBC\-k\fR,
 \fBC\-u\fR, \fBC\-w\fR, \fBC\-y\fR), undo (\fBC\-_\fR), incremental history
 search (\fBC\-r\fR), and autosuggestion acceptance (\fBRight\fR, \fBC\-f\fR).
 .PP
+\fBC\-r\fR lists the matching history entries under the prompt.
+\fBC\-r\fR/\fBC\-s\fR and the arrow keys move the selection,
+.B Enter
+runs the selected entry, and
+.B ESC
+restores the line that was being typed.
+.PP
 Setting the environment variable
 .B NSHELL_VI_MODE
 to a non-empty value (other than 0/false/no) enables vi key bindings: press
@@ -123,14 +130,17 @@ function's arguments are available as \fB$argv\fR and indexed \fB$argv[N]\fR.
 provides the following builtins:
 .BR alias ,
 .BR abbr ,
+.BR and ,
 .BR bg ,
 .BR break ,
+.BR builtin ,
 .BR cd ,
 .BR command ,
 .BR complete ,
 .BR contains ,
 .BR continue ,
 .BR count ,
+.BR dirs ,
 .BR disown ,
 .BR echo ,
 .BR eval ,
@@ -140,13 +150,20 @@ provides the following builtins:
 .BR false ,
 .BR fg ,
 .BR function ,
+.BR functions ,
 .BR help ,
 .BR history ,
 .BR jobs ,
 .BR kill ,
+.BR math ,
+.BR nextd ,
 .BR not ,
+.BR or ,
 .BR pipeline\-graph ,
+.BR popd ,
+.BR prevd ,
 .BR printf ,
+.BR pushd ,
 .BR pwd ,
 .BR read ,
 .BR seq ,
@@ -154,6 +171,7 @@ provides the following builtins:
 .BR source ,
 .BR string ,
 .BR test ,
+.BR theme ,
 .BR true ,
 .BR type ,
 .BR unset ,
@@ -166,6 +184,20 @@ inside the shell for details.
 .TP
 .B NSHELL_VI_MODE
 When set to a non-empty value, enables vi key bindings (see KEY BINDINGS).
+.TP
+.B NSHELL_GREETING
+Printed at interactive startup in place of the version banner. An empty value
+starts the session silently.
+.TP
+.B NO_COLOR
+When set to any value, disables colored output.
+.TP
+.B COLORTERM
+Set to
+.B truecolor
+or
+.B 24bit
+to select 24-bit color; otherwise the depth is read from TERM.
 .TP
 .B HOME
 Used for tilde expansion.

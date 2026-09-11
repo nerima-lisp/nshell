@@ -30,7 +30,7 @@
                         line-length))
                   (segment (subseq line local-start local-end)))
              (if selected-p
-                 (format t "~C[7m~a~C[27m" #\Esc segment #\Esc)
+                 (%write-styled segment :selection theme)
                  (handler-case
                      (format t "~a"
                              (highlight->ansi (highlight-line segment) segment theme))
@@ -46,7 +46,8 @@
         until done
         do (let ((newline-pos (position #\Newline text :start start)))
              (unless first-line
-               (format t "~%> "))
+               (format t "~%")
+               (%write-styled "> " :prompt-continuation theme))
              (let ((line (subseq text start (or newline-pos (length text)))))
                (%render-edit-buffer-line line absolute-start theme
                                          selection-start selection-end))
@@ -63,6 +64,9 @@
         *prompt-rendered-prompt-width* 0))
 
 (defun reset-rendered-prompt-state ()
+  ;; A new prompt cycle starts here, after a command ran; per-keystroke redraws
+  ;; reuse the git probe so typing never forks git.
+  (nshell.infrastructure.acl:clear-git-status-cache)
   (%reset-rendered-prompt-geometry)
   (setf *prompt-rendered-origin-row* 1
         *prompt-rendered-origin-column* 1
@@ -115,6 +119,7 @@
     (reap-background-jobs)
     (%export-prompt-state)
     (clear-rendered-transient-panel)
+    (clear-rendered-search-results)
     (clear-rendered-prompt)
     (%ensure-rendered-prompt-origin)
     (let* ((terminal-width (terminal-width))
@@ -122,13 +127,11 @@
            (render-prompt *config* *last-exit-code*
                             :last-command-duration-ms *last-command-duration-ms*
                             :failure-explain-p *failure-explain-available-p*
-                            :terminal-width terminal-width))
+                            :terminal-width terminal-width
+                            :window-title-p *interactive-terminal-installed-p*))
            (text (input-state-buffer *input-state*))
            (theme (nshell.domain.configuration:config-theme *config*))
            (suggestion (input-state-suggestion *input-state*))
-           (search-query (input-state-search-query *input-state*))
-           (search-suffix (when (eq (input-state-mode *input-state*) :search)
-                            (format nil " history: ~a" search-query)))
            (ask-suffix (when (member (input-state-mode *input-state*)
                                      '(:ask :ask-waiting)
                                      :test #'eq)
@@ -136,27 +139,18 @@
            (selection-range (%active-mouse-selection-range)))
       (when ask-suffix
         (format t " ")
-        (nshell.infrastructure.terminal:ansi-dim)
-        (format t "~a" ask-suffix)
-        (nshell.infrastructure.terminal:ansi-reset-style)
+        (%write-styled ask-suffix :prompt-assistant theme)
         (incf prompt-width (1+ (%string-visible-width ask-suffix))))
       (render-edit-buffer text theme
                           :selection-start (first selection-range)
                           :selection-end (second selection-range))
       (when (and suggestion (> (length suggestion) 0))
-        (nshell.infrastructure.terminal:ansi-dim)
-        (format t "~a" suggestion)
-        (nshell.infrastructure.terminal:ansi-reset-style))
-      (when search-suffix
-        (format t " ")
-        (nshell.infrastructure.terminal:ansi-dim)
-        (format t "history: ~a" search-query)
-        (nshell.infrastructure.terminal:ansi-reset-style))
+        (%write-styled suggestion :autosuggestion theme))
       (%move-cursor-to-rendered-position text
                                          (input-state-cursor-pos *input-state*)
                                          prompt-width
                                          suggestion
-                                         search-suffix
+                                         nil
                                          :terminal-width terminal-width)
       (let ((cursor-position
               (%rendered-buffer-position text
@@ -166,7 +160,7 @@
         (setf *prompt-rendered-lines*
               (%rendered-buffer-line-count text
                                            :suggestion suggestion
-                                           :search-suffix search-suffix
+                                           :search-suffix nil
                                            :terminal-width terminal-width
                                            :prompt-width prompt-width)
               *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
@@ -175,5 +169,7 @@
     (when transient-panel-content
       (render-transient-panel transient-panel-content
                               :terminal-width (terminal-width)))
+    (when (eq (input-state-mode *input-state*) :search)
+      (render-current-history-search-panel))
     (finish-output)
     (lambda () (read-key-cont))))

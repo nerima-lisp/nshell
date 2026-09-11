@@ -1,6 +1,6 @@
 (in-package #:nshell/test)
 
-(describe "prompt-tests"
+(describe "prompt-domain-tests"
   (it "prompt-constructors-and-accessors-are-public"
     (let ((pm (nshell.domain.prompting:make-prompt-model
                :hostname "h"
@@ -52,39 +52,43 @@
     (expect (lambda () (nshell.domain.prompting:make-prompt-segment 42 :host)) :to-throw 'error)
     (expect (lambda () (nshell.domain.prompting:make-prompt-segment "x" 'host)) :to-throw 'error))
 
-  (it "git-segment-resolves-branch-and-dirty-marker"
-    "A :git segment is resolved through the domain git status resolver."
+  (it "git-segment-resolves-branch-and-dirty-marker-on-the-left-prompt"
+    "A dirty repository's branch resolves through the domain git status resolver
+onto the left prompt, after the path."
     (let ((nshell.domain.prompting:*git-status-resolver*
             (lambda (dir)
               (expect "/repo/" :to-equal dir)
               (values "main" t))))
       (let* ((pm (nshell.domain.prompting:make-prompt-model
                   :hostname "h"
-                  :cwd "/repo/"
-                  :directory "/repo/"
-                  :right-segments (list (nshell.domain.prompting:make-prompt-segment "" :git))))
-             (result (nshell.domain.prompting:render-right-prompt-model pm)))
-        (expect "main*" :to-equal (nshell.domain.prompting:prompt-segment-text (first result)))
-        (expect :git :to-be (nshell.domain.prompting:prompt-segment-kind (first result))))))
+                  :cwd "/repo"
+                  :directory "/repo/"))
+             (result (nshell.domain.prompting:render-prompt-model pm))
+             (git (find-if (lambda (seg)
+                            (member (nshell.domain.prompting:prompt-segment-kind seg)
+                                    '(:git :git-dirty)))
+                           result)))
+        (expect "main*" :to-equal (nshell.domain.prompting:prompt-segment-text git))
+        (expect :git-dirty :to-be (nshell.domain.prompting:prompt-segment-kind git)))))
 
-  (it "default-right-prompt-includes-git-and-exit-code"
-    "Default right prompt displays git status and non-zero exit code."
+  (it "default-right-prompt-includes-only-a-nonzero-exit-code"
+    "Git status no longer appears on the right prompt; it moved to the left."
     (let ((nshell.domain.prompting:*git-status-resolver*
             (lambda (dir)
               (declare (ignore dir))
-              (values "feature" nil))))
+              (values "feature" nil)))
+          (nshell.domain.prompting:*prompt-time-resolver*
+            (lambda () nil)))
       (let* ((pm (nshell.domain.prompting:make-prompt-model
                   :hostname "h" :cwd "/repo/" :directory "/repo/" :exit-code 2))
              (result (nshell.domain.prompting:render-right-prompt-model pm)))
-        (expect "feature" :to-equal (nshell.domain.prompting:prompt-segment-text (first result)))
-        (expect :git :to-be (nshell.domain.prompting:prompt-segment-kind (first result)))
-        (expect " " :to-equal (nshell.domain.prompting:prompt-segment-text (second result)))
-        (expect :literal :to-be (nshell.domain.prompting:prompt-segment-kind (second result)))
-        (expect "[2]" :to-equal (nshell.domain.prompting:prompt-segment-text (third result)))
-        (expect :exit-error :to-be (nshell.domain.prompting:prompt-segment-kind (third result))))))
+        (expect 1 :to-equal (length result))
+        (expect "[2]" :to-equal (nshell.domain.prompting:prompt-segment-text (first result)))
+        (expect :exit-error :to-be (nshell.domain.prompting:prompt-segment-kind (first result))))))
 
-  (it "default-right-prompt-appends-duration-and-time"
-    "Default right prompt includes duration and time segments after status information."
+  (it "default-right-prompt-appends-duration-and-time-after-the-exit-code"
+    "Default right prompt includes duration (shown from one second up) and time
+after a non-zero exit code; git no longer appears here."
     (let ((nshell.domain.prompting:*git-status-resolver*
             (lambda (dir)
               (declare (ignore dir))
@@ -97,23 +101,19 @@
                   :cwd "/repo/"
                   :directory "/repo/"
                   :exit-code 2
-                  :duration-ms 123))
+                  :duration-ms 1234))
              (result (nshell.domain.prompting:render-right-prompt-model pm)))
-        (expect 7 :to-equal (length result))
-        (expect "feature" :to-equal (nshell.domain.prompting:prompt-segment-text (first result)))
-        (expect :git :to-be (nshell.domain.prompting:prompt-segment-kind (first result)))
+        (expect 5 :to-equal (length result))
+        (expect "[2]" :to-equal (nshell.domain.prompting:prompt-segment-text (first result)))
+        (expect :exit-error :to-be (nshell.domain.prompting:prompt-segment-kind (first result)))
         (expect " " :to-equal (nshell.domain.prompting:prompt-segment-text (second result)))
         (expect :literal :to-be (nshell.domain.prompting:prompt-segment-kind (second result)))
-        (expect "[2]" :to-equal (nshell.domain.prompting:prompt-segment-text (third result)))
-        (expect :exit-error :to-be (nshell.domain.prompting:prompt-segment-kind (third result)))
+        (expect "1.2s" :to-equal (nshell.domain.prompting:prompt-segment-text (third result)))
+        (expect :duration :to-be (nshell.domain.prompting:prompt-segment-kind (third result)))
         (expect " " :to-equal (nshell.domain.prompting:prompt-segment-text (fourth result)))
         (expect :literal :to-be (nshell.domain.prompting:prompt-segment-kind (fourth result)))
-        (expect "123ms" :to-equal (nshell.domain.prompting:prompt-segment-text (fifth result)))
-        (expect :duration :to-be (nshell.domain.prompting:prompt-segment-kind (fifth result)))
-        (expect " " :to-equal (nshell.domain.prompting:prompt-segment-text (sixth result)))
-        (expect :literal :to-be (nshell.domain.prompting:prompt-segment-kind (sixth result)))
-        (expect "12:34" :to-equal (nshell.domain.prompting:prompt-segment-text (seventh result)))
-        (expect :time :to-be (nshell.domain.prompting:prompt-segment-kind (seventh result))))))
+        (expect "12:34" :to-equal (nshell.domain.prompting:prompt-segment-text (fifth result)))
+        (expect :time :to-be (nshell.domain.prompting:prompt-segment-kind (fifth result))))))
 
   (it "git-status-uses-runner-and-cache"
     "Git status is executed through the injected runner and cached per directory."

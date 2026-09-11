@@ -82,8 +82,9 @@
             (expect 2 :to-equal nshell.presentation::*prompt-rendered-lines*)
             (expect 0 :to-equal nshell.presentation::*prompt-rendered-cursor-row*))))))
 
-  (it "repl-render-prompt-tracks-search-suffix-render-state"
-    "Search mode redraw should account for the rendered history suffix in both cursor math and line counts."
+  (it "repl-render-prompt-tracks-search-panel-render-state"
+    "Search mode draws the query in a panel below the prompt, leaving the prompt
+line's own geometry unchanged."
     (with-repl-test-state
       (with-stable-repl-prompt ()
         (with-fixed-terminal-size (24 10)
@@ -97,10 +98,10 @@
             (let ((output (capture-standard-output
                             (nshell.presentation::render-prompt-cont))))
               (expect (search "history: git" output) :to-be-truthy)
-              (expect (search (esc-sequence "[1A") output) :to-be-truthy)
-              (expect (search (esc-sequence "[8G") output) :to-be-truthy)
-              (expect 2 :to-equal nshell.presentation::*prompt-rendered-lines*)
-              (expect 0 :to-equal nshell.presentation::*prompt-rendered-cursor-row*)))))))
+              (expect 1 :to-equal nshell.presentation::*prompt-rendered-lines*)
+              (expect 0 :to-equal nshell.presentation::*prompt-rendered-cursor-row*)
+              (expect (plusp nshell.presentation::*search-rendered-lines*)
+                      :to-be-truthy)))))))
 
   (it "repl-rendered-position-includes-wrapped-suggestion-and-search-suffix"
     "Cursor restoration should include both wrapped autosuggestion text and the history suffix."
@@ -180,6 +181,24 @@
                   nshell.presentation::*config*)
                  :selection-start 1
                  :selection-end 4))))
-        (expect (search (format nil "~C[7mbcd~C[27m" #\Esc #\Esc)
+        (expect (search (format nil "~C[7mbcd~C[0m" #\Esc #\Esc)
                         output)
                 :to-be-truthy))))
+
+  (it "repl-render-edit-buffer-styles-continuation-prompt"
+    "A second logical line should style its continuation prompt with the theme's role."
+    (with-repl-test-state
+      (let ((nshell.infrastructure.terminal:*terminal-color-depth* :truecolor))
+        (let ((output
+                (capture-standard-output
+                  (nshell.presentation::render-edit-buffer
+                   (format nil "one~%two")
+                   (nshell.domain.configuration:config-theme
+                    nshell.presentation::*config*)))))
+          (expect (search (esc-sequence "[38;2;128;128;128m") output) :to-be-truthy)
+          (expect (search (concatenate 'string
+                                        (esc-sequence "[38;2;128;128;128m")
+                                        "> "
+                                        (esc-sequence "[0m"))
+                          output)
+                  :to-be-truthy)))))

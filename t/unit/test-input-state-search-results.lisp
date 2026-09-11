@@ -54,6 +54,42 @@
         (is-search-session-cleared finished)
         (expect :execute :to-be output))))
 
+  (it "input-state-history-search-enter-executes-navigated-selection-not-the-first-match"
+    "Enter after moving the selection with Ctrl-R accepts the currently selected match, not the newest one."
+    (let* ((state (history-search-state
+                   :query "git"
+                   :original-buffer "g"
+                   :index 0))
+           (matches '("git status" "git log" "git commit"))
+           (selected (nshell.presentation:apply-history-search-results-to-input-state
+                      state matches)))
+      (expect "git status" :to-equal (nshell.presentation:input-state-buffer selected))
+      (with-reduced-input-state (moved) (reduce-once selected :ctrl-r)
+        (let ((applied (nshell.presentation:apply-history-search-results-to-input-state
+                        moved matches)))
+          (expect "git log" :to-equal (nshell.presentation:input-state-buffer applied))
+          (with-reduced-input-state (finished output) (reduce-once applied :enter)
+            (expect "git log" :to-equal (nshell.presentation:input-state-buffer finished))
+            (is-search-session-cleared finished)
+            (expect :execute :to-be output))))))
+
+  (it "input-state-history-search-escape-restores-original-buffer-after-navigating-selection"
+    "Escape restores the pre-search buffer even after Ctrl-R moved the selection away from the newest match."
+    (let* ((state (history-search-state
+                   :buffer "git"
+                   :query "git"
+                   :original-buffer "git"
+                   :index 0))
+           (matches '("git status" "git log")))
+      (with-reduced-input-state (moved) (reduce-once state :ctrl-r)
+        (let ((applied (nshell.presentation:apply-history-search-results-to-input-state
+                        moved matches)))
+          (expect "git log" :to-equal (nshell.presentation:input-state-buffer applied))
+          (with-reduced-input-state (restored output) (reduce-once applied :ctrl-g)
+            (expect "git" :to-equal (nshell.presentation:input-state-buffer restored))
+            (is-search-session-cleared restored)
+            (expect :suggest-update :to-be output))))))
+
   (it "input-state-history-search-right-accepts-selected-buffer-for-editing"
     (let ((state (history-search-state
                   :buffer "git status"

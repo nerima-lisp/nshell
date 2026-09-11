@@ -5,7 +5,8 @@
                                   (default-output :stream)
                                   preserve-fds
                                   (pipefail-p nil)
-                                  after-spawn)
+                                  after-spawn
+                                  stage-environments)
   "Execute COMMANDS connected by OS-level pipes and return status values.
 
 The first value is the pipeline exit code.  The second value is a list of
@@ -21,6 +22,7 @@ per-stage exit codes in source order."
                 :default-output default-output
                 :preserve-fds preserve-fds
                 :after-spawn after-spawn
+                :stage-environments stage-environments
                 :error-sentinel 127)
              (setf redirect-streams updated-streams owned-procs procs)
              (multiple-value-prog1
@@ -39,7 +41,8 @@ per-stage exit codes in source order."
                                         (default-output t)
                                         (start-p t)
                                         preserve-fds
-                                        after-spawn)
+                                        after-spawn
+                                        stage-environments)
   "Execute COMMANDS connected by OS-level pipes asynchronously."
   (multiple-value-bind (redirects pipes)
       (%prepare-pipeline commands redirects)
@@ -52,6 +55,7 @@ per-stage exit codes in source order."
                 :default-output default-output
                 :preserve-fds preserve-fds
                 :after-spawn after-spawn
+                :stage-environments stage-environments
                 :error-sentinel t)
              (setf redirect-streams updated-streams owned-procs procs)
              (multiple-value-prog1

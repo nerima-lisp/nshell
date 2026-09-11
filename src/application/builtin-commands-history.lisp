@@ -148,12 +148,14 @@
       entries))
 
 (defun %history-list (history &optional filter)
-  (values (%history-format-entries
-           (reverse (%history-filter-entries
-                     history
-                     (history-kit:history-entries history)
-                     filter)))
-          0))
+  (if (null history)
+      (values nil 0)
+      (values (%history-format-entries
+               (reverse (%history-filter-entries
+                         history
+                         (history-kit:history-entries history)
+                         filter)))
+              0)))
 
 (defun %history-search (history args)
   (multiple-value-bind (filter remaining invalid)
@@ -162,37 +164,43 @@
         (values (%history-usage) 1)
         (multiple-value-bind (mode case-sensitive query-parts)
             (%history-search-options remaining)
-          (if (or query-parts filter)
-              (values
-               (%history-format-entries
-                (%history-filter-entries
-                 history
-                 (if query-parts
-                     (history-kit:history-search
-                      history (%string-join query-parts " ")
-                      :mode mode
-                      :case-sensitive case-sensitive
-                      :smartcase (not case-sensitive))
-                     (history-kit:history-entries history))
-                 filter))
-               0)
-              (values (%history-usage) 1))))))
+          (cond
+            ((not (or query-parts filter))
+             (values (%history-usage) 1))
+            ((null history)
+             (values nil 0))
+            (t
+             (values
+              (%history-format-entries
+               (%history-filter-entries
+                history
+                (if query-parts
+                    (history-kit:history-search
+                     history (%string-join query-parts " ")
+                     :mode mode
+                     :case-sensitive case-sensitive
+                     :smartcase (not case-sensitive))
+                    (history-kit:history-entries history))
+                filter))
+              0)))))))
 
 (defun %history-delete (history args)
-  (if args
-      (let ((deleted (history-kit:history-delete
-                      history (%string-join args " "))))
-        (values (format nil "~d~%" deleted) 0))
-      (values (%history-usage) 1)))
+  (cond
+    ((null args) (values (%history-usage) 1))
+    ((null history) (values (format nil "~d~%" 0) 0))
+    (t (values (format nil "~d~%" (history-kit:history-delete
+                                    history (%string-join args " ")))
+               0))))
 
 (defun %history-clear (history args)
   (declare (ignore args))
-  (history-kit:history-clear history)
+  (when history
+    (history-kit:history-clear history))
   (values nil 0))
 
 (defun %history-size (history args)
   (declare (ignore args))
-  (values (format nil "~d~%" (history-kit:history-count history)) 0))
+  (values (format nil "~d~%" (if history (history-kit:history-count history) 0)) 0))
 
 (define-builtin %builtin-history (context args) ()
   (let ((history (shell-context-history context)))

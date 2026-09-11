@@ -101,7 +101,7 @@
               (values (format nil "~a~%" command) 0))
           (with-temporary-function
               ('nshell.infrastructure.acl:spawn-pipeline-async
-               (lambda (commands &key redirects)
+               (lambda (commands &key redirects &allow-other-keys)
                  (setf spawned (list (mapcar #'nshell.domain.parsing:command-node-command
                                              commands)
                                      redirects))
@@ -163,7 +163,7 @@
               (values (format nil "~a~%" command) 0))
           (with-temporary-function
               ('nshell.infrastructure.acl:spawn-pipeline-async
-               (lambda (commands &key redirects)
+               (lambda (commands &key redirects &allow-other-keys)
                  (declare (ignore redirects))
                  (expect '("first" "second") :to-equal
                          (mapcar #'nshell.domain.parsing:command-node-command

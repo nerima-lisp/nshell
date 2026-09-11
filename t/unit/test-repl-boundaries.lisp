@@ -16,7 +16,7 @@ reflects the injected values instead of the real machine."
              (cl-boundary-kit:make-boundary-context :host-info host :working-dir wd)))
       (let ((pm (nshell.presentation::%current-prompt-model 0 nil)))
         (expect "ci-box" :to-equal (nshell.domain.prompting:prompt-model-hostname pm))
-        (expect "/home/tester/proj/" :to-equal
+        (expect "/home/tester/proj" :to-equal
                 (nshell.domain.prompting:prompt-model-cwd pm)))))
 
   (it "prompt-hostname-falls-back-to-localhost"

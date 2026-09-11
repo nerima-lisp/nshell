@@ -319,7 +319,8 @@
         (expect "git" :to-equal (nshell.presentation:input-state-buffer new-state))
         (expect :search-update :to-be output))))
 
-  (it "input-state-history-search-cycles-and-applies-results"
+  (it "input-state-history-search-selection-clamps-at-oldest-match"
+    "Repeated Ctrl-R past the oldest match holds the selection there instead of wrapping to the newest."
     (let* ((state (history-search-state
                    :query "git"
                    :original-buffer "g"
@@ -338,16 +339,44 @@
       (with-reduced-input-state (older older-output) (reduce-once applied :ctrl-r)
         (expect 2 :to-equal (nshell.presentation:input-state-search-index older))
         (expect :search-update :to-be older-output)
-        (let ((wrapped
+        (let ((clamped
                 (nshell.presentation:apply-history-search-results-to-input-state
                  older matches)))
-          (expect "git status" :to-equal (nshell.presentation:input-state-buffer wrapped))))
+          (expect "git log" :to-equal (nshell.presentation:input-state-buffer clamped))
+          (expect 1 :to-equal (nshell.presentation:input-state-search-index clamped))))
       (with-reduced-input-state (older older-output) (reduce-once applied :ctrl-p)
         (expect 2 :to-equal (nshell.presentation:input-state-search-index older))
         (expect :search-update :to-be older-output))
       (with-reduced-input-state (newer newer-output) (reduce-once applied :ctrl-n)
         (expect 0 :to-equal (nshell.presentation:input-state-search-index newer))
         (expect :search-update :to-be newer-output))))
+
+  (it "input-state-history-search-selection-clamps-at-newest-match"
+    "Repeated Ctrl-S past the newest match holds the selection at the first match instead of wrapping to the oldest."
+    (let* ((state (history-search-state
+                   :query "git"
+                   :original-buffer "g"
+                   :index 0))
+           (matches '("git status" "git log" "git commit")))
+      (with-reduced-input-state (newer newer-output) (reduce-once state :ctrl-s)
+        (expect -1 :to-equal (nshell.presentation:input-state-search-index newer))
+        (expect :search-update :to-be newer-output)
+        (let ((clamped
+                (nshell.presentation:apply-history-search-results-to-input-state
+                 newer matches)))
+          (expect "git status" :to-equal (nshell.presentation:input-state-buffer clamped))
+          (expect 0 :to-equal (nshell.presentation:input-state-search-index clamped))
+          (with-reduced-input-state (newer-again newer-again-output)
+              (reduce-once clamped :ctrl-s)
+            (expect -1 :to-equal (nshell.presentation:input-state-search-index newer-again))
+            (expect :search-update :to-be newer-again-output)
+            (let ((clamped-again
+                    (nshell.presentation:apply-history-search-results-to-input-state
+                     newer-again matches)))
+              (expect "git status" :to-equal
+                      (nshell.presentation:input-state-buffer clamped-again))
+              (expect 0 :to-equal
+                      (nshell.presentation:input-state-search-index clamped-again))))))))
 
   (it "input-state-history-search-ignores-non-string-results"
     (let ((state (history-search-state

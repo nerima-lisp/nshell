@@ -78,6 +78,17 @@ presentation do not depend on cl-cli's condition hierarchy."
        :config-path config-path
        :history-p history-p)))
 
+(defun %print-greeting (&optional (stream *standard-output*))
+  "Print NSHELL_GREETING, if it names anything. An unset variable prints the
+version banner, which is how a first-time session learns what it is running;
+setting it to the empty string is how a daily session turns that off."
+  (let ((greeting (nshell.infrastructure.acl:current-environment-value
+                   "NSHELL_GREETING")))
+    (cond
+      ((null greeting) (%print-version stream))
+      ((string= greeting ""))
+      (t (format stream "~a~%" greeting)))))
+
 (defun %run-default-invocation (&key (interactive-p nil)
                                      (load-config-p t)
                                      config-path
@@ -90,7 +101,7 @@ presentation do not depend on cl-cli's condition hierarchy."
                    load-config-p
                    (null config-path)
                    history-p)
-          (%print-version))
+          (%print-greeting))
         (%run-interactive
          :config-path config-path
          :load-config-p load-config-p

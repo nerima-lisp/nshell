@@ -11,7 +11,16 @@ nshell.infrastructure.persistence's job.")
     (:export #:make-theme #:theme-color #:theme-name #:theme-set-color
              #:theme-p #:config-p
              #:make-config #:config-theme
-             #:default-theme #:default-config))
+             #:default-theme #:default-config
+             #:make-theme-from-entries #:theme-style #:theme-roles
+             #:theme-entries #:theme-rename
+             #:theme-preset-names #:find-theme-preset
+             #:parse-style-spec #:parse-style-color #:valid-style-spec-p
+             #:invalid-style-spec #:invalid-style-spec-spec
+             #:invalid-style-spec-reason
+             #:text-style #:text-style-p #:text-style-foreground
+             #:text-style-background #:text-style-bold #:text-style-dim
+             #:text-style-italic #:text-style-underline #:text-style-reverse))
 
   (defpackage #:nshell.domain.prompting
     (:documentation

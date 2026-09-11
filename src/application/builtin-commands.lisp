@@ -55,6 +55,7 @@
             (host-kit:chdir target)
             (let ((new-cwd (host-kit:getcwd)))
               (%update-directory-environment context environment old-cwd new-cwd)
+              (%directory-stack-record-cd old-cwd new-cwd)
               (values (%cd-output args new-cwd) 0))))
     (error (condition)
       (values (format nil "cd: ~a~%" condition) 1))))

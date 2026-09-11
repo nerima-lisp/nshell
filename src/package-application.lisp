@@ -14,6 +14,7 @@ permitted to know both the domain and infrastructure.")
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
             #:*agent-start-handler*
             #:*ai-reset-handler*
+            #:*theme-apply-handler*
             #:make-shell-context #:shell-context-p
             #:shell-context-history #:shell-context-config
             #:shell-context-knowledge-base #:shell-context-environment
@@ -28,6 +29,7 @@ permitted to know both the domain and infrastructure.")
             #:shell-context-terminal-cols
             #:lookup-builtin
             #:resolve-command-path
+            #:seed-shell-status-environment
             #:collect-source-lines #:source-lines
             #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
             #:execute-command-node-in-context

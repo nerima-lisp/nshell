@@ -902,7 +902,7 @@ it."
               (declare (ignore resource))
               19))
            ((quote nshell.infrastructure.acl:spawn-pipeline)
-            (lambda (commands &key redirects pipefail-p preserve-fds after-spawn)
+            (lambda (commands &key redirects pipefail-p preserve-fds after-spawn &allow-other-keys)
               (setf captured
                     (list commands redirects pipefail-p preserve-fds))
               (funcall after-spawn)
@@ -932,7 +932,7 @@ it."
               (declare (ignore resource))
               19))
            ((quote nshell.infrastructure.acl:spawn-pipeline)
-            (lambda (commands &key redirects pipefail-p preserve-fds after-spawn)
+            (lambda (commands &key redirects pipefail-p preserve-fds after-spawn &allow-other-keys)
               (declare (ignore commands redirects pipefail-p preserve-fds after-spawn))
               (error "spawn failed")))
            ((quote nshell.infrastructure.acl:close-process-substitution)
@@ -1036,3 +1036,168 @@ it."
             (expect t :to-be executed-p)
             (expect "executed" :to-equal output)
             (expect 0 :to-equal code)))))))
+
+(describe "prefix-assignment-tests"
+  (it "bare-assignment-sets-a-shell-variable"
+    (let ((context (make-test-builtins-context)))
+      (multiple-value-bind (output code)
+          (nshell.application::execute-command-node-in-context
+           context (nshell.domain.parsing:make-command-node "FOO=bar" nil))
+        (expect output :to-be-null)
+        (expect 0 :to-equal code))
+      (let ((environment (nshell.application:shell-context-environment context)))
+        (expect "bar" :to-equal (nshell.domain.environment:env-get environment "FOO"))
+        (expect (nshell.domain.environment:env-exported-p environment "FOO") :to-be-falsy))))
+
+  (it "prefix-assignment-exports-only-for-that-command"
+    (let ((context (make-test-builtins-context))
+          (seen nil))
+      (with-temporary-functions
+          (((quote nshell.application::%execute-plain-command-node-in-context)
+            (lambda (inner-context node)
+              (setf seen
+                    (list (nshell.domain.parsing:command-node-command node)
+                          (nshell.domain.parsing:command-node-arg-values node)
+                          (nshell.domain.environment:env-get
+                           (nshell.application:shell-context-environment inner-context)
+                           "FOO")
+                          (member "FOO=bar"
+                                  nshell.infrastructure.acl:*exported-environment*
+                                  :test #'string=)))
+              (values "" 0))))
+        (nshell.application::execute-command-node-in-context
+         context (nshell.domain.parsing:make-command-node "FOO=bar" (list "echo" "x"))))
+      (expect "echo" :to-equal (first seen))
+      (expect '("x") :to-equal (second seen))
+      (expect "bar" :to-equal (third seen))
+      (expect (fourth seen) :to-be-truthy)
+      (expect (nshell.domain.environment:env-defined-p
+               (nshell.application:shell-context-environment context) "FOO")
+              :to-be-falsy)))
+
+  (it "prefix-assignment-value-is-expanded-before-the-command-runs"
+    (let ((context (make-test-builtins-context)))
+      (setf (nshell.application:shell-context-environment context)
+            (nshell.domain.environment:env-set
+             (nshell.application:shell-context-environment context) "BASE" "/opt" nil))
+      (multiple-value-bind (output code)
+          (nshell.application::execute-command-node-in-context
+           context (nshell.domain.parsing:make-command-node "DIR=$BASE/x" (list "echo" "$DIR")))
+        (expect 0 :to-equal code)
+        (expect (format nil "/opt/x~%") :to-equal output))))
+
+  (it "child-processes-receive-the-context-exports"
+    (let ((context (make-test-builtins-context))
+          (seen :unset))
+      (setf (nshell.application:shell-context-environment context)
+            (nshell.domain.environment:env-set
+             (nshell.application:shell-context-environment context) "EXPORTED_ONE" "1" t))
+      (with-temporary-functions
+          (((quote nshell.application::%execute-plain-command-node-in-context)
+            (lambda (inner-context node)
+              (declare (ignore inner-context node))
+              (setf seen nshell.infrastructure.acl:*exported-environment*)
+              (values "" 0))))
+        (nshell.application::execute-command-node-in-context
+         context (nshell.domain.parsing:make-command-node "true" nil)))
+      (expect (member "EXPORTED_ONE=1" seen :test #'string=) :to-be-truthy))))
+
+(describe "pipeline-prefix-assignment-tests"
+  (it "each-stage-sees-only-its-own-prefix-assignment"
+    "A prefix assignment on one stage must not reach a sibling stage's process."
+    (let ((context (make-test-builtins-context))
+          (seen nil))
+      (setf (nshell.application:shell-context-execution-strategy context) :os-pipes)
+      (with-temporary-functions
+          (((quote nshell.application::%execute-plain-pipeline-node-in-context)
+            (lambda (inner-context commands)
+              (declare (ignore inner-context))
+              (setf seen (list (mapcar #'nshell.domain.parsing:command-node-command commands)
+                               nshell.application::*pipeline-stage-environments*))
+              (values "" 0))))
+        (nshell.application::execute-pipeline-node-in-context
+         context
+         (nshell.domain.parsing:make-pipeline-node
+          (list (nshell.domain.parsing:make-command-node "SECRET=1" (list "curl" "host"))
+                (nshell.domain.parsing:make-command-node "AUTH=2" (list "upload"))))))
+      (expect '("curl" "upload") :to-equal (first seen))
+      (let ((environments (second seen)))
+        (expect 2 :to-equal (length environments))
+        (expect (member "SECRET=1" (first environments) :test #'string=) :to-be-truthy)
+        (expect (member "AUTH=2" (first environments) :test #'string=) :to-be-falsy)
+        (expect (member "AUTH=2" (second environments) :test #'string=) :to-be-truthy)
+        (expect (member "SECRET=1" (second environments) :test #'string=) :to-be-falsy))))
+
+  (it "a-stage-without-assignments-keeps-the-session-environment"
+    (let ((context (make-test-builtins-context))
+          (seen :unset))
+      (setf (nshell.application:shell-context-execution-strategy context) :os-pipes)
+      (with-temporary-functions
+          (((quote nshell.application::%execute-plain-pipeline-node-in-context)
+            (lambda (inner-context commands)
+              (declare (ignore inner-context commands))
+              (setf seen nshell.application::*pipeline-stage-environments*)
+              (values "" 0))))
+        (nshell.application::execute-pipeline-node-in-context
+         context
+         (nshell.domain.parsing:make-pipeline-node
+          (list (nshell.domain.parsing:make-command-node "cat" nil)
+                (nshell.domain.parsing:make-command-node "FOO=1" (list "wc"))))))
+      (expect (first seen) :to-be-null)
+      (expect (member "FOO=1" (second seen) :test #'string=) :to-be-truthy)))
+
+  (it "an-assignment-only-stage-sets-a-variable-instead-of-running-a-command"
+    "FOO=bar | wc must not try to run FOO=bar as a command."
+    (let ((context (make-test-builtins-context))
+          (commands-seen nil))
+      (with-temporary-functions
+          (((quote nshell.application::%execute-plain-pipeline-node-in-context)
+            (lambda (inner-context commands)
+              (declare (ignore inner-context))
+              (setf commands-seen
+                    (mapcar #'nshell.domain.parsing:command-node-command commands))
+              (values "" 0))))
+        (nshell.application::execute-pipeline-node-in-context
+         context
+         (nshell.domain.parsing:make-pipeline-node
+          (list (nshell.domain.parsing:make-command-node "FOO=bar" nil)
+                (nshell.domain.parsing:make-command-node "wc" nil)))))
+      (expect '("wc") :to-equal commands-seen)
+      (expect "bar" :to-equal
+              (nshell.domain.environment:env-get
+               (nshell.application:shell-context-environment context) "FOO"))))
+
+  (it "an-internal-stage-assignment-falls-back-to-the-shared-environment"
+    "A builtin stage runs in this process, so its assignment is applied to the
+context environment for the pipeline instead of a per-stage environment."
+    (let ((context (make-test-builtins-context))
+          (seen :unset))
+      (with-temporary-functions
+          (((quote nshell.application::%execute-plain-pipeline-node-in-context)
+            (lambda (inner-context commands)
+              (declare (ignore commands))
+              (setf seen (nshell.domain.environment:env-get
+                          (nshell.application:shell-context-environment inner-context)
+                          "FOO"))
+              (values "" 0))))
+        (nshell.application::execute-pipeline-node-in-context
+         context
+         (nshell.domain.parsing:make-pipeline-node
+          (list (nshell.domain.parsing:make-command-node "FOO=bar" (list "echo" "x"))
+                (nshell.domain.parsing:make-command-node "cat" nil)))))
+      (expect "bar" :to-equal seen)
+      (expect (nshell.domain.environment:env-defined-p
+               (nshell.application:shell-context-environment context) "FOO")
+              :to-be-falsy))))
+
+(describe "external-stage-environment-tests"
+  (it "an-in-process-pipeline-stage-spawns-with-the-shell-environment"
+    "A pipeline that contains a builtin runs its external stages in this
+process; those children still need the shell's exported variables."
+    (let ((nshell.infrastructure.acl:*exported-environment* '("FOO=bar")))
+      (expect '("FOO=bar")
+              :to-equal
+              (nshell.infrastructure.acl:external-command-environment)))
+    (let ((nshell.infrastructure.acl:*exported-environment* nil))
+      (expect (nshell.infrastructure.acl:external-command-environment)
+              :to-be-truthy))))

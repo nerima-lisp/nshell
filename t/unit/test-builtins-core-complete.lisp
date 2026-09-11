@@ -100,6 +100,18 @@
        :code 1
        :contains (list "complete: usage:"))))
 
+  (it "complete-C-sees-commands-registered-by-complete-c"
+    "The `-c` write path and the `-C` scriptable read path share one knowledge
+base: a command registered via -c shows up as a -C candidate."
+    (with-builtins-context (context)
+      (assert-builtin-call (context "complete"
+                                 '("-c" "deploy" "-f" "--dry-run" "-d" "release service"))
+        :code 0
+        :output-null t)
+      (multiple-value-bind (output code) (call-builtin context "complete" '("-C" "dep"))
+        (expect 0 :to-equal code)
+        (expect (search "deploy" output) :to-be-truthy))))
+
   (it "function-builtin-stores-and-manages-inline-body"
     "function builtin stores inline fish-style bodies and exposes management operations."
     (with-builtins-context (context)

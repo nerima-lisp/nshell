@@ -53,6 +53,7 @@ nav:
   - Getting started: getting-started.md
   - Guide:
       - Core concepts: guide/concepts.md
+      - Customizing colors: guide/customization.md
       - Recipes: guide/recipes.md
   - Reference:
       - Built-in commands: reference/builtins.md

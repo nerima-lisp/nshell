@@ -48,7 +48,9 @@
                         (member name '("nshell" "asdf" "uiop" "sb-posix")
                                 :test #'string-equal))
                       (runtime-dependency-closure "nshell")))
-           (runtime (mapcar #'symbol-name +nshell-runtime-dependencies+)))
+           (runtime (mapcar (lambda (system)
+                              (string-downcase (symbol-name system)))
+                            +nshell-runtime-dependencies+)))
       (expect (sort (copy-seq runtime) #'string-lessp)
               :to-equal
               (sort (copy-seq closure) #'string-lessp))))

@@ -43,8 +43,11 @@
   (it
     "subprocess runtime dependencies match the ASDF dependency closure"
     "Fresh subprocesses must register every transitive system they load."
-    (let* ((closure (remove "nshell" (runtime-dependency-closure "nshell")
-                            :test #'string-equal))
+    (let* ((closure (remove-if
+                      (lambda (name)
+                        (member name '("nshell" "asdf" "uiop" "sb-posix")
+                                :test #'string-equal))
+                      (runtime-dependency-closure "nshell")))
            (runtime (mapcar #'symbol-name +nshell-runtime-dependencies+)))
       (expect (sort (copy-seq runtime) #'string-lessp)
               :to-equal

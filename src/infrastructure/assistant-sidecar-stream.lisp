@@ -383,7 +383,7 @@
                 (%make-assistant-pending-cell
                  0
                  (cl-concurrent-kit:make-channel :buffer-size 128)
-                 (cl-concurrent-kit:make-promise)))
+                 (cl-concurrent-kit:make-promise))))
           (%assistant-sidecar-set-pending state pending)
           (let ((thread (sb-thread:make-thread
                          (lambda ()

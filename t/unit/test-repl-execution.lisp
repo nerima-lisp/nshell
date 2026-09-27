@@ -671,6 +671,29 @@ the source reader instead."
         (expect (nth-value 1 (gethash "greet" nshell.presentation::*functions*))
                 :to-be-truthy))))
 
+  (it "repl-submit-buffers-a-multiline-function-before-executing-it"
+    "A function header entered on its own line must remain pending until `end'."
+    (with-repl-test-state
+      (with-stable-repl-prompt ()
+        (with-fixed-terminal-size (24 80)
+          (with-repl-input-state (:buffer "function greet" :cursor-pos 14)
+            (capture-process-output-event :execute)
+            (expect (format nil "function greet~%  ")
+                    :to-equal
+                    (nshell.presentation:input-state-buffer
+                     nshell.presentation::*input-state*)))
+          (setf nshell.presentation::*input-state*
+                (nshell.presentation::make-repl-input-state
+                 :buffer (format nil "function greet~%  echo hello~%end")))
+          (capture-process-output-event :execute)
+          (expect '(("  echo hello"))
+                  :to-equal
+                  (list (gethash "greet" nshell.presentation::*functions*)))
+          (setf nshell.presentation::*input-state*
+                (nshell.presentation::make-repl-input-state :buffer "greet"))
+          (expect (search "hello" (capture-process-output-event :execute))
+                  :to-be-truthy)))))
+
   (it "a-plain-command-is-not-mistaken-for-a-definition"
     (expect (nshell.application:function-definition-line-p "function greet")
             :to-be-truthy)

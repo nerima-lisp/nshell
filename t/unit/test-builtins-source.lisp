@@ -362,6 +362,17 @@ so the definition scanner has to treat a newline as a command boundary."
       (expect (list "echo pre" (format nil "function f~%end"))
               :to-equal (split (format nil "echo pre~%function f~%end")))))
 
+  (it "a-single-source-line-with-newlines-keeps-the-definition-whole"
+    "The segment scanner used by inline function consumption must preserve a
+function body when source input arrives as one multiline string."
+    (with-builtins-context (context)
+      (multiple-value-bind (output code)
+          (nshell.application:source-lines
+           context
+           (list (format nil "echo pre~%function greet~%echo hello~%end~%greet")))
+        (expect 0 :to-equal code)
+        (expect (format nil "pre~%hello~%") :to-equal output))))
+
   (it "a-newline-separated-definition-defines-the-function"
     (with-builtins-context (context)
       (multiple-value-bind (output code)

@@ -84,6 +84,12 @@
                                 "hi World"
                                 0))
 
+  (it "e2e-main-command-supports-inline-function-definition-after-prefix-command"
+    "The -c path executes a prefix command before a same-line function block."
+    (%assert-nshell-main-result '("-c" "echo hi; function f; echo hi; end; f")
+                                (format nil "hi~%hi")
+                                0))
+
   (it "e2e-main-command-supports-inline-control-flow"
     "The -c command path supports inline source-reader control-flow forms."
     (multiple-value-bind (stdout stderr exit-code)

@@ -436,6 +436,8 @@
               mkdir -p $out/bin $out/libexec $out/lib
               cp -R ${delivery}/README.md ${delivery}/LICENSE ${delivery}/LICENSES ${delivery}/share $out/
               chmod -R u+w $out/LICENSES
+              mkdir -p $out/lib/sbcl
+              cp ${pkgs.sbcl}/lib/sbcl/sbcl.core $out/lib/sbcl/sbcl.core
 
               cp ${builtImage} $out/libexec/nshell
               cp ${spawnHelperFor ctx}/bin/cl-process-kit-spawn $out/libexec/cl-process-kit-spawn
@@ -496,6 +498,7 @@
                 *) program=nshell ;;
               esac
               export PATH="$root/bin:$PATH"
+              export SBCL_HOME="$root/lib/sbcl"
               exec "$root/lib/ld-linux-x86-64.so.2" \
                 --library-path "$root/lib" --argv0 "$0" \
                 "$root/libexec/$program" "$@"
@@ -651,6 +654,10 @@
             };
             program = "${testApp}/bin/nshell-test";
           };
+
+          checks.default = ctx.generated.checks.default.overrideAttrs (previous: {
+            nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.coreutils ];
+          });
 
           # The generated shell, plus the aliases this repository's loop is
           # written in terms of. Appended to the preset's own shellHook rather

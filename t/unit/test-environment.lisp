@@ -1,5 +1,16 @@
 (in-package #:nshell/test)
 
+(defun runtime-dependency-closure (system-name)
+  (labels ((visit (name seen)
+             (if (member name seen :test #'string-equal)
+                 seen
+                 (let ((system (asdf:find-system name)))
+                   (reduce (lambda (names dependency)
+                             (visit dependency names))
+                           (asdf:system-depends-on system)
+                           :initial-value (cons name seen))))))
+    (visit system-name nil)))
+
 (defun env-entry-value (entries name)
   (let ((entry
         (find
@@ -14,6 +25,15 @@
 
 (describe
   "environment-tests"
+  (it
+    "subprocess runtime dependencies match the ASDF dependency closure"
+    "Fresh subprocesses must register every transitive system they load."
+    (let* ((closure (remove "nshell" (runtime-dependency-closure "nshell")
+                            :test #'string-equal))
+           (runtime (mapcar #'symbol-name +nshell-runtime-dependencies+)))
+      (expect (sort (copy-seq runtime) #'string-lessp)
+              :to-equal
+              (sort (copy-seq closure) #'string-lessp))))
   (it
     "env-set-and-get-roundtrip"
     "Variables set in an environment can be retrieved."

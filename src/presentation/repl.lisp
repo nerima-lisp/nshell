@@ -131,6 +131,9 @@
            (lambda () (process-output-event :ask-cancel-turn)))
           (event
            (lambda ()
+             (when *rerun-confirmation-pending-p*
+               (setf *rerun-confirmation-pending-p* nil)
+               (clear-rendered-transient-panel))
              (setf *assistant-last-cancel-at* nil)
              (multiple-value-bind (new-state output-event)
                  (reduce-input-state *input-state* event)

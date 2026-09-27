@@ -657,6 +657,26 @@ wrapped line's other rows on screen as stale duplicates."
     (setf *input-state* continued-state))
   (lambda () (render-prompt-cont)))
 
+(defun %process-rerun-last-command-output-event ()
+  (cond
+    ((null *last-command-text*)
+     (with-cleared-rendered-completions-and-prompt-cont
+       (render-transient-panel '("No previous command to capture."))))
+    ((not *rerun-confirmation-pending-p*)
+     (with-cleared-rendered-completions-and-prompt-cont
+       (setf *rerun-confirmation-pending-p* t)
+       (render-transient-panel
+        '("Capture and rerun the previous command? Press Ctrl-X again to confirm."))))
+    (t
+     (setf *rerun-confirmation-pending-p* nil)
+     (clear-rendered-transient-panel)
+     (setf *input-state*
+           (make-repl-input-state
+            :buffer *last-command-text*
+            :cursor-pos (length *last-command-text*)))
+     (let ((*capture-command-output-p* t))
+       (%process-execute-output-event)))))
+
 (defun %execute-command-line (text)
   (if (%assistant-proposal-confirmation-required-p)
       (%confirm-assistant-proposal)

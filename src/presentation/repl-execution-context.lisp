@@ -34,10 +34,7 @@
         *running* (nshell.application:shell-context-running context)
         *pipefail* (nshell.application:shell-context-pipefail-p context)
         *last-exit-code* code
-        *input-state* (nshell.application:shell-context-input-state context)
-        *last-command-output*
-          (or (nshell.application:shell-context-last-command-output context)
-              *last-command-output*))
+        *input-state* (nshell.application:shell-context-input-state context))
   code)
 
 (defun %call-with-cooked-terminal (thunk)
@@ -54,7 +51,8 @@
 (defun %execute-with-repl-shell-context (thunk)
   (let ((context (%make-repl-shell-context))
         (nshell.application::*foreground-terminal-runner*
-          (and *interactive-terminal-installed-p*
+          (and (not *capture-command-output-p*)
+               *interactive-terminal-installed-p*
                (interactive-stream-p *standard-input*)
                (interactive-stream-p *standard-output*)
                #'%call-with-cooked-terminal)))

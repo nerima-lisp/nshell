@@ -4,7 +4,10 @@
 
 The PTY candidate did not pass the production gate and is not connected to the
 foreground command path. The fallback remains active while the PTY/ring-buffer
-implementation is retained for a later retry.
+implementation is retained for a later retry. FR-010 is completed through the
+safe fallback alternative: press `Ctrl-X` twice to confirm a one-key rerun of
+the previous command in output-capture mode, after which the captured output is
+available to the AI context.
 
 ## Root cause
 
@@ -23,9 +26,9 @@ no prompt after `sleep 100` plus Ctrl-Z (`docs/notes/ai-native-requirements.md:4
 The retry candidate changes the PTY child to `:new-session-p t` and can be
 invoked by the foreground PTY runner. It also adds a
 shell-context field to carry `pty-process-output` into the existing
-`last-output` explain context. The candidate compiled through the Nix build's
-compile phase and is currently enabled in this worktree; the full check phase
-timed out, so no production-readiness claim is made.
+`last-output` explain context. That retry candidate compiled through the Nix
+build's compile phase, but the production route was then disabled again after
+the tmux failures below.
 
 ## Gate evidence
 
@@ -69,4 +72,5 @@ evidence for the PTY harness but do not replace the named e2e/integration gate.
 
 Before declaring the PTY foreground execution production-ready, complete the
 non-sandboxed suite, the Linux integration job, and the exact tmux checklist with
-a usable command path while preserving the assertions.
+a usable command path while preserving the assertions. The fallback alternative
+does not claim that the PTY foreground route is production-ready.

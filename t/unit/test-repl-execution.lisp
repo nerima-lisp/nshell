@@ -9,6 +9,30 @@
   character)
 
 (describe "repl-tests"
+  (it "rerun-last-command-requires-confirmation-and-captures-output"
+    (with-repl-test-state
+      (setf nshell.presentation::*last-command-text* "printf captured")
+      (with-repl-input-state (:buffer "")
+        (let ((calls 0)
+              (captured nil))
+          (with-temporary-function
+              ('nshell.presentation::%process-execute-output-event
+               (lambda ()
+                 (incf calls)
+                 (setf captured nshell.presentation::*capture-command-output-p*)
+                 nil))
+            (capture-standard-output
+              (nshell.presentation::process-output-event :rerun-last-command))
+            (expect t :to-equal
+                    nshell.presentation::*rerun-confirmation-pending-p*)
+            (expect 0 :to-equal calls)
+            (capture-standard-output
+              (nshell.presentation::process-output-event :rerun-last-command))
+            (expect 1 :to-equal calls)
+            (expect t :to-equal captured)
+            (expect nil :to-equal
+                    nshell.presentation::*rerun-confirmation-pending-p*))))))
+
   (it "repl-installed-terminal-controls-actual-runner-lifecycle"
     (dolist (scenario '(:success :install-failure :execution-failure))
       (with-repl-test-state
@@ -637,22 +661,6 @@ path must be converted from a pathname before being appended."
             (expect 0 :to-be nshell.presentation::*last-exit-code*)
             (expect nil :to-be
                     nshell.presentation::*failure-explain-available-p*)))))))
-
-(describe "pty-output-context-tests"
-  (it "syncs-retained-pty-output-into-the-explain-source"
-    (with-repl-test-state
-      (let ((context (nshell.application:make-shell-context
-                      :last-command-output "failed sk-12345678901234567890")))
-        (nshell.presentation::%sync-repl-shell-context context 1)
-        (expect "failed sk-12345678901234567890"
-                :to-equal nshell.presentation::*last-command-output*)
-        (let ((assistant-context
-                (nshell.feature.assistant:assemble-assistant-context
-                 :last-output nshell.presentation::*last-command-output*)))
-          (expect "failed [REDACTED]"
-                  :to-equal
-                  (nshell.feature.assistant:assistant-context-last-output
-                   assistant-context)))))))
 
 (describe "function-definition-submission-tests"
   (it "an-unterminated-function-header-reads-as-incomplete-input"

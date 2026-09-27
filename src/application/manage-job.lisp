@@ -43,20 +43,18 @@
              (setf *foreground-job-pgid* pgid)
              (%set-acl-foreground-pgid pgid)
              (%with-terminal-foreground-pgroup pgid
-               (let ((stopped-p (eq :stopped (%wait-terminal-processes (list process))))
-                     (output (nshell.infrastructure.acl:pty-process-output process)))
-                 (setf (shell-context-last-command-output context) output)
-                 (if stopped-p
-                     (let* ((monitor (shell-context-job-monitor context))
-                            (id (nshell.domain.job-control:monitor-add-background-job
-                                 monitor (list pgid)
-                                 (%string-join (cons command args) " ")
-                                 :pipefail-p (shell-context-pipefail-p context))))
-                       (%store-shell-process-registry-entry context id process)
-                       (nshell.domain.job-control:suspend-job monitor id nil)
-                       (values nil (+ 128 sb-unix:sigtstp)))
-                     (values nil (nshell.infrastructure.acl:process-exit-status-code
-                                  process))))))
+               (nshell.infrastructure.acl:process-continue process)
+               (if (eq :stopped (%wait-terminal-processes (list process)))
+                   (let* ((monitor (shell-context-job-monitor context))
+                          (id (nshell.domain.job-control:monitor-add-background-job
+                               monitor (list pgid)
+                               (%string-join (cons command args) " ")
+                               :pipefail-p (shell-context-pipefail-p context))))
+                     (%store-shell-process-registry-entry context id process)
+                     (nshell.domain.job-control:suspend-job monitor id nil)
+                     (values nil (+ 128 sb-unix:sigtstp)))
+                   (values nil (nshell.infrastructure.acl:process-exit-status-code
+                                process)))))
         (setf *foreground-job-pgid* nil)
         (%set-acl-foreground-pgid nil)))))
 

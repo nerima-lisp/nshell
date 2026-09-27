@@ -446,14 +446,21 @@
               cp $out/libexec/nshell $out/libexec/nshell-interp
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 $out/libexec/nshell-interp
-              read -r interp_offset_hex interp_size_hex <<EOF
+              read -r target_offset_hex target_size_hex <<EOF
               $(readelf -lW $out/libexec/nshell | awk '$1 == "INTERP" { print $2, $5 }')
               EOF
-              interp_offset=$((interp_offset_hex))
-              interp_size=$((interp_size_hex))
-              test -n "$interp_offset" -a -n "$interp_size"
+              read -r source_offset_hex source_size_hex <<EOF
+              $(readelf -lW $out/libexec/nshell-interp | awk '$1 == "INTERP" { print $2, $5 }')
+              EOF
+              target_offset=$((target_offset_hex))
+              target_size=$((target_size_hex))
+              source_offset=$((source_offset_hex))
+              source_size=$((source_size_hex))
+              test -n "$target_offset" -a -n "$target_size" \
+                -a -n "$source_offset" -a -n "$source_size"
               dd if=$out/libexec/nshell-interp of=$out/libexec/nshell \
-                bs=1 seek="$interp_offset" count="$interp_size" conv=notrunc status=none
+                bs=1 skip="$source_offset" seek="$target_offset" \
+                count="$target_size" conv=notrunc status=none
               rm $out/libexec/nshell-interp
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 --set-rpath '$ORIGIN/../lib' $out/libexec/cl-process-kit-spawn

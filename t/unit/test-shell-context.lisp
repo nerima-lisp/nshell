@@ -155,4 +155,18 @@
             :to-be-null)
     (setf (nshell.application:shell-context-running context) t)
     (expect context :to-be (nshell.application::%stop-shell-context context))
-    (expect (nshell.application:shell-context-running context) :to-be-falsy))))
+    (expect (nshell.application:shell-context-running context) :to-be-falsy)))
+
+  (it "shell-context-stops-the-assistant-before-ending-even-when-stop-fails"
+    "A model-stop failure must not leave the application context running."
+    (let ((context (make-test-shell-context :running t))
+          (stop-calls 0))
+      (with-temporary-function
+          ('nshell.feature.assistant:assistant-model-stop
+           (lambda ()
+             (incf stop-calls)
+             (error "forced model stop failure")))
+        (expect context :to-be
+                (nshell.application::%stop-shell-context context)))
+      (expect 1 :to-equal stop-calls)
+      (expect (nshell.application:shell-context-running context) :to-be-falsy))))

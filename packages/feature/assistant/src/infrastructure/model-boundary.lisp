@@ -76,7 +76,7 @@
           (error (condition)
             (list :state :unavailable
                   :reason (princ-to-string condition))))
-        (list :state :unknown
+        (list :state :unavailable
               :reason "assistant model boundary status is unavailable"))))
 
 (defun %call-assistant-boundary (function arguments)

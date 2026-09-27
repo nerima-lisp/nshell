@@ -70,6 +70,50 @@
               (expect (search "non-interactive" output) :to-be-truthy)
               (expect nil :to-be started-p)))))))
 
+  (it "ai-status-uses-the-model-status-and-formats-environment-disablement"
+    (with-repl-test-state
+      (let ((status-called-p nil))
+        (with-builtins-context (context)
+          (with-temporary-functions
+              (('nshell.infrastructure.terminal:interactive-terminal-p
+                (lambda (&optional fd)
+                  (declare (ignore fd))
+                  t))
+               ('nshell.feature.assistant:assistant-model-status
+                (lambda ()
+                  (setf status-called-p t)
+                  '(:state :unavailable
+                    :version "test-version"
+                    :reason :disabled-by-environment))))
+            (multiple-value-bind (output code)
+                (call-builtin context "ai" '("status"))
+              (expect 0 :to-equal code)
+              (expect t :to-be status-called-p)
+              (expect (search "Claude version: test-version" output)
+                      :to-be-truthy)
+              (expect (search "Reason: NSHELL_AI_DISABLE is set" output)
+                      :to-be-truthy)))))))
+
+  (it "ai-status-formats-string-environment-disablement"
+    (with-repl-test-state
+      (with-builtins-context (context)
+        (with-temporary-function
+            ('nshell.infrastructure.terminal:interactive-terminal-p
+             (lambda (&optional fd)
+               (declare (ignore fd))
+               t))
+          (with-temporary-function
+              ('nshell.feature.assistant:assistant-model-status
+               (lambda ()
+                 '(:state :unavailable
+                   :version nil
+                   :reason ":DISABLED-BY-ENVIRONMENT")))
+            (multiple-value-bind (output code)
+                (call-builtin context "ai" '("status"))
+              (expect 0 :to-equal code)
+              (expect (search "Reason: NSHELL_AI_DISABLE is set" output)
+                      :to-be-truthy)))))))
+
   (it "ai-set-overrides-the-effective-environment-setting"
     (with-repl-test-state
       (let* ((name "NSHELL_AI_MAX_STEPS")

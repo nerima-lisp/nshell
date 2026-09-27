@@ -177,6 +177,7 @@ hand the user's next shell a terminal with SGR mouse reporting still on."
           ;; one outcome worth avoiding, so end the session instead.
           1)
     (setf *interactive-terminal-installed-p* nil)
-    (ignore-errors (nshell.feature.assistant:assistant-model-stop))
-    (restore-interactive-terminal)
+    (unwind-protect
+         (ignore-errors (nshell.feature.assistant:assistant-model-stop))
+      (restore-interactive-terminal))
     (format t "Goodbye!~%")))

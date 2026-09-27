@@ -178,6 +178,38 @@
       (assert-builtin-call (context "exit" nil) :code 0 :output-null t)
       (expect (nshell.application:shell-context-running context) :to-be-falsy)))
 
+  (it "exit-stops-the-assistant-and-still-ends-on-stop-failure"
+    "exit must request model shutdown without allowing its failure to escape."
+    (with-builtins-context (context)
+      (let ((stop-calls 0))
+        (with-temporary-function
+            ('nshell.feature.assistant:assistant-model-stop
+             (lambda ()
+               (incf stop-calls)
+               (error "forced model stop failure")))
+          (assert-builtin-call (context "exit" nil) :code 0 :output-null t))
+        (expect 1 :to-equal stop-calls)
+        (expect (nshell.application:shell-context-running context) :to-be-falsy))))
+
+  (it "exec-stops-the-assistant-before-replacing-the-process"
+    "exec requests model shutdown before handing control to the external process."
+    (with-builtins-context (context)
+      (let ((stop-calls 0)
+            (exec-call nil))
+        (with-temporary-functions
+            (('nshell.feature.assistant:assistant-model-stop
+              (lambda ()
+                (incf stop-calls)
+                (error "forced model stop failure")))
+             ('nshell.application::%exec-and-exit
+              (lambda (command args)
+                (setf exec-call (list command args))
+                :unreachable))
+          (expect :unreachable :to-be
+                  (call-builtin context "exec" '("echo" "hello"))))
+        (expect 1 :to-equal stop-calls)
+        (expect '("echo" ("hello")) :to-equal exec-call))))
+
   (it "exit-accepts-an-explicit-status-and-stores-it"
     "exit CODE returns CODE modulo 256 and records the shell-visible status."
     (with-builtins-context (context)
@@ -865,4 +897,5 @@
       (expect :force-path :to-equal (mode :path :force-path))
       (expect :path :to-equal (mode :path :type))
       (expect :query :to-equal (mode :query :path :force-path :type))))
+)
 )

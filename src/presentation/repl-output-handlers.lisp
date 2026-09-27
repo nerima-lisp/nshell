@@ -493,13 +493,16 @@ wrapped line's other rows on screen as stale duplicates."
 (defun %process-ask-cancel-turn-output-event ()
   (cond
     ((eq *assistant-request-kind* :agent)
-     (let* ((now (boundary-monotonic))
-            (repeat-p (%assistant-cancel-repeat-p now))
+    (let* ((now (boundary-monotonic))
+           (repeat-p (%assistant-cancel-repeat-p now))
+            (starting-p (eq :starting
+                            (getf (nshell.feature.assistant:assistant-model-status)
+                                  :state)))
             (generation
               (setf *assistant-turn-generation*
                     (nshell.feature.assistant:next-assistant-turn-generation
                      *assistant-turn-generation*)))
-            (stop-result (when repeat-p
+            (stop-result (when (or repeat-p starting-p)
                            (nshell.feature.assistant:assistant-model-stop)))
             (start-result (when repeat-p
                             (nshell.feature.assistant:assistant-model-start))))
@@ -519,11 +522,14 @@ wrapped line's other rows on screen as stale duplicates."
     (t
      (let* ((now (boundary-monotonic))
             (repeat-p (%assistant-cancel-repeat-p now))
+            (starting-p (eq :starting
+                            (getf (nshell.feature.assistant:assistant-model-status)
+                                  :state)))
             (generation
               (setf *assistant-turn-generation*
                     (nshell.feature.assistant:next-assistant-turn-generation
                      *assistant-turn-generation*)))
-            (stop-result (when repeat-p
+            (stop-result (when (or repeat-p starting-p)
                            (nshell.feature.assistant:assistant-model-stop)))
             (start-result (when repeat-p
                             (nshell.feature.assistant:assistant-model-start))))

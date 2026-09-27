@@ -158,7 +158,7 @@
                     (nshell.feature.assistant:assistant-boundary-status event-result))
             (expect :stream-error :to-be
                     (nshell.feature.assistant:assistant-model-event-kind
-                     (nshell.feature.assistant:assistant-boundary-value event-result)))))))))
+                     (nshell.feature.assistant:assistant-boundary-value event-result))))))))
 
   (it "accepts-only-structured-output-tools-and-empty-mcp-servers"
     (expect t :to-be
@@ -243,7 +243,10 @@
                        (nshell.feature.assistant:assistant-boundary-status result))
                (expect :unavailable :to-be
                        (getf (nshell.feature.assistant:assistant-model-status)
-                             :state))))
+                             :state))
+               (expect "NSHELL_AI_DISABLE is set" :to-equal
+                       (getf (nshell.feature.assistant:assistant-model-status)
+                             :reason))))
         (if old-value
             (sb-posix:setenv "NSHELL_AI_DISABLE" old-value 1)
             (sb-posix:unsetenv "NSHELL_AI_DISABLE")))))

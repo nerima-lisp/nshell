@@ -81,9 +81,9 @@
                       (sidecar-handle-process handle)))
       nil))
 
-(defun run-sidecar-version (command)
+(defun run-sidecar-version-cancellable (command cancelled-p)
   (unless command
-    (return-from run-sidecar-version (values nil :disabled)))
+    (return-from run-sidecar-version-cancellable (values nil :disabled)))
   (multiple-value-bind (handle status)
       (spawn-sidecar command '("--version")
                       :input nil :output :stream :error :output)
@@ -112,9 +112,14 @@
               (timed-out-p nil))
           (loop while (sb-ext:process-alive-p
                        (sidecar-handle-process handle))
-                do (if (>= (get-internal-real-time) deadline)
-                       (progn (setf timed-out-p t) (return))
-                       (sleep 0.01)))
+                do (cond
+                     ((and cancelled-p (funcall cancelled-p))
+                      (setf timed-out-p t)
+                      (return))
+                     ((>= (get-internal-real-time) deadline)
+                      (setf timed-out-p t)
+                      (return))
+                     (t (sleep 0.01))))
           (unless timed-out-p
             (ignore-errors (sb-ext:process-wait (sidecar-handle-process handle))))
           (when timed-out-p
@@ -129,3 +134,6 @@
                   (cond (timed-out-p :timeout)
                         ((zerop (or exit-status 1)) :ok)
                         (t :version-failed))))))))
+
+(defun run-sidecar-version (command)
+  (run-sidecar-version-cancellable command nil))

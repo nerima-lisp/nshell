@@ -49,8 +49,11 @@
     ((assistant-sidecar-state-disabled-reason state)
      (list :state :unavailable
            :version (assistant-sidecar-state-version state)
-           :reason (princ-to-string
-                    (assistant-sidecar-state-disabled-reason state))))
+           :reason (if (eq :disabled-by-environment
+                           (assistant-sidecar-state-disabled-reason state))
+                       "NSHELL_AI_DISABLE is set"
+                       (princ-to-string
+                        (assistant-sidecar-state-disabled-reason state)))))
     ((assistant-sidecar-state-dead-p state)
      (list :state :dead
            :version (assistant-sidecar-state-version state)

@@ -40,6 +40,12 @@
               event))
         event)))
 
+(defun %transient-panel-expand-event-p (event)
+  (and (transient-panel-displayed-p)
+       (nshell.domain.input:key-event-p event)
+       (eq :char (nshell.domain.input:key-event-type event))
+       (char= #\v (nshell.domain.input:key-event-char event))))
+
 (defun %process-failure-explain-event (event)
   (setf *failure-explain-available-p* nil)
   (if (eq :ctrl-right-bracket
@@ -118,6 +124,11 @@
            (lambda () (%process-failure-explain-event event)))
           ((and event *assistant-explain-candidates*)
            (lambda () (%process-explain-panel-event event)))
+          ((and event (%transient-panel-expand-event-p event))
+           (lambda ()
+             (commit-transient-panel-to-scrollback)
+             (reset-rendered-prompt-state)
+             (render-prompt-cont)))
           ((and event
                 (eq *assistant-request-kind* :agent)
                 (functionp *assistant-model-event-handler*))

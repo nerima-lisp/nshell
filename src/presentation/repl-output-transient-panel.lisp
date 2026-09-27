@@ -102,6 +102,17 @@
                  (make-string padding :initial-element #\Space)
                  " │")))
 
+(defun %render-transient-panel-lines (lines width)
+  (format t "~C~%" #\Return)
+  (format t "~a~%"
+          (%transient-panel-border #\┌ #\┐ width))
+  (dolist (line lines)
+    (format t "~a~%"
+            (%transient-panel-line line width)))
+  (format t "~a~%"
+          (%transient-panel-border #\└ #\┘ width))
+  (+ 2 (length lines)))
+
 (defun render-transient-panel (content &key (terminal-width (terminal-width)))
   (clear-rendered-transient-panel)
   (setf *transient-panel-content* content)
@@ -114,16 +125,26 @@
       (setf *transient-panel-rendered-lines*
             (%render-transient-output-below-prompt
              (lambda ()
-               (format t "~C~%" #\Return)
-               (format t "~a~%"
-                       (%transient-panel-border #\┌ #\┐ width))
-               (dolist (line visible-lines)
-                 (format t "~a~%"
-                         (%transient-panel-line line width)))
-               (format t "~a~%"
-                       (%transient-panel-border #\└ #\┘ width))
-               (+ 2 (length visible-lines))))))
+               (%render-transient-panel-lines visible-lines width)))))
     *transient-panel-rendered-lines*))
+
+(defun transient-panel-displayed-p ()
+  (plusp *transient-panel-rendered-lines*))
+
+(defun commit-transient-panel-to-scrollback (&key (terminal-width (terminal-width)))
+  "Commit the complete transient panel contents as ordinary terminal output.
+
+The panel and prompt are erased before the complete content is emitted
+without the height limit, making the result ordinary terminal output rather
+than another transient redraw."
+  (when (and (transient-panel-displayed-p)
+             *transient-panel-content*)
+    (let ((lines (%transient-panel-lines *transient-panel-content*)))
+      (clear-rendered-transient-panel)
+      (clear-rendered-prompt)
+      (%render-transient-panel-lines lines (max 2 terminal-width))
+      (reset-rendered-transient-panel-state)
+      t)))
 
 (defun update-transient-panel (content &key (terminal-width (terminal-width)))
   (render-transient-panel content :terminal-width terminal-width))

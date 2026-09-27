@@ -64,6 +64,24 @@
     (let ((output (capture-render-prompt :terminal-width 80)))
       (expect (search "AI " output) :to-be-falsy)))
 
+  (it "render-prompt-shows-the-current-ai-sidecar-status"
+    (let ((nshell.feature.assistant:*assistant-boundaries*
+            (nshell.feature.assistant:make-assistant-boundary-context
+             (nshell.feature.assistant:make-assistant-model-boundary
+              :status-fn (lambda () (list :state :running))))))
+      (let ((output (capture-render-prompt :terminal-width 200)))
+        (expect (search "AI connected" output) :to-be-truthy))))
+
+  (it "prompt-ai-status-distinguishes-incompatible-sidecars"
+    (let ((nshell.feature.assistant:*assistant-boundaries*
+            (nshell.feature.assistant:make-assistant-boundary-context
+             (nshell.feature.assistant:make-assistant-model-boundary
+              :status-fn (lambda ()
+                           (list :state :unavailable
+                                 :reason '(:version :unsupported)))))))
+      (expect "AI incompatible" :to-equal
+              (nshell.presentation::%assistant-status-text))))
+
   (it "render-prompt-shows-the-ai-usage-segment-after-a-turn"
     "The AI segment appears in the right prompt once ASSISTANT-USAGE-TURNS is positive."
     (unwind-protect

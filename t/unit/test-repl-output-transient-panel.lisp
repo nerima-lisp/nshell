@@ -91,3 +91,37 @@
               (expect (search "resized" output) :to-be-truthy)
               (expect 3 :to-equal
                       nshell.presentation::*transient-panel-rendered-lines*))))))))
+
+  (it "commits-the-complete-panel-to-scrollback"
+    (with-repl-test-state
+      (with-stable-repl-prompt (:text "PROMPT> " :width 8)
+        (with-fixed-terminal-size (5 30)
+          (setf nshell.presentation::*prompt-rendered-lines* 1)
+          (capture-standard-output
+            (nshell.presentation:render-transient-panel
+             '("first" "second" "third" "fourth")))
+          (let ((output
+                  (capture-standard-output
+                    (expect (nshell.presentation::transient-panel-displayed-p)
+                            :to-be-truthy)
+                    (expect (nshell.presentation::commit-transient-panel-to-scrollback
+                             :terminal-width 30)
+                            :to-be-truthy))))
+            (expect (search "first" output) :to-be-truthy)
+            (expect (search "second" output) :to-be-truthy)
+            (expect (search "third" output) :to-be-truthy)
+            (expect (search "fourth" output) :to-be-truthy)
+            (expect 0 :to-equal
+                    nshell.presentation::*transient-panel-rendered-lines*)
+            (expect nil :to-be
+                    nshell.presentation::*transient-panel-content*)))))
+
+  (it "does-not-commit-when-the-panel-is-not-displayed"
+    (with-repl-test-state
+      (let ((output
+              (capture-standard-output
+                (expect (nshell.presentation::commit-transient-panel-to-scrollback)
+                        :to-be-falsy))))
+        (expect "" :to-equal output)
+        (expect 0 :to-equal
+                nshell.presentation::*transient-panel-rendered-lines*)))))

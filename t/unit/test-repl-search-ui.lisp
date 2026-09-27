@@ -88,6 +88,31 @@
                       :terminal-width 80 :theme theme))))
       (expect (search (format nil "~%  beta~%") output) :to-be-truthy)))
 
+  (it "render-search-results-shows-origin-and-failure-badges-with-theme-roles"
+    (let ((nshell.infrastructure.terminal:*terminal-color-depth* :truecolor))
+      (let* ((theme (nshell.domain.configuration:default-theme))
+             (assistant-prefix
+               (nshell.presentation::theme-color->ansi theme :prompt-assistant))
+             (error-prefix
+               (nshell.presentation::theme-color->ansi theme :prompt-error))
+             (output (capture-standard-output
+                       (nshell.presentation::render-search-results
+                        "deploy"
+                        '((:text "deploy production" :origin :proposal :exit-code 7))
+                        0 :terminal-width 80 :theme theme))))
+        (expect (search "[proposal]" output) :to-be-truthy)
+        (expect (search "[exit 7]" output) :to-be-truthy)
+        (expect (search assistant-prefix output) :to-be-truthy)
+        (expect (search error-prefix output) :to-be-truthy))))
+
+  (it "render-search-results-makes-history-filters-discoverable"
+    (let ((output (capture-standard-output
+                    (nshell.presentation::render-search-results
+                     "" nil 0 :terminal-width 120
+                     :theme (nshell.domain.configuration:default-theme)))))
+      (expect (search "status:failed" output) :to-be-truthy)
+      (expect (search "origin:typed|proposal|agent" output) :to-be-truthy)))
+
   (it "render-search-results-truncates-rows-to-terminal-width"
     (let* ((theme (nshell.domain.configuration:default-theme))
            (output (capture-standard-output

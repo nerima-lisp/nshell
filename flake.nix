@@ -435,6 +435,7 @@
             ''
               mkdir -p $out/bin $out/libexec $out/lib
               cp -R ${delivery}/README.md ${delivery}/LICENSE ${delivery}/LICENSES ${delivery}/share $out/
+              chmod -R u+w $out/LICENSES
 
               cp ${builtImage} $out/libexec/nshell
               cp ${spawnHelperFor ctx}/bin/cl-process-kit-spawn $out/libexec/cl-process-kit-spawn
@@ -556,7 +557,10 @@
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
 
       packageArgs = ctx: {
-        nativeBuildInputs = [ (spawnHelperFor ctx) ctx.pkgs.coreutils ];
+        nativeBuildInputs = [
+          (spawnHelperFor ctx)
+          ctx.pkgs.coreutils
+        ];
       };
 
       # Drives the test checks from this one number, so the contributor-facing

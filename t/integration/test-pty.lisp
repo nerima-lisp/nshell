@@ -244,7 +244,7 @@
     (skip "PTY tests are only supported on Darwin and Linux"))
 
   (it "pty-ready-pipe-reports-read-boundaries"
-    "Readiness failures distinguish an invalid descriptor from EOF."
+      "Readiness failures distinguish an invalid descriptor from orderly EOF."
     #+(or darwin linux)
     (progn
       (expect (lambda ()
@@ -255,9 +255,8 @@
              (progn
                (nshell.infrastructure.acl::%pty-close-fd write-fd)
                (setf write-fd nil)
-               (expect (lambda ()
-                         (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
-                       :to-throw 'error))
+               (expect :eof :to-equal
+                       (nshell.infrastructure.acl::%pty-read-ready-byte read-fd)))
           (nshell.infrastructure.acl::%pty-close-fd read-fd)
           (nshell.infrastructure.acl::%pty-close-fd write-fd))))
     #-(or darwin linux)

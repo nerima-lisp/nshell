@@ -204,7 +204,7 @@
              ('nshell.application::%exec-and-exit
               (lambda (command args)
                 (setf exec-call (list command args))
-                :unreachable))
+                :unreachable)))
           (expect :unreachable :to-be
                   (call-builtin context "exec" '("echo" "hello"))))
         (expect 1 :to-equal stop-calls)
@@ -897,5 +897,4 @@
       (expect :force-path :to-equal (mode :path :force-path))
       (expect :path :to-equal (mode :path :type))
       (expect :query :to-equal (mode :query :path :force-path :type))))
-)
 )

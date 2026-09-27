@@ -84,15 +84,7 @@
 (defun %wait-for-pty-child-ready (fd pid)
   (let ((byte (%pty-read-ready-byte fd)))
     (cond
-      ((eq byte :eof)
-       (loop
-         (multiple-value-bind (child-pid state)
-             (wait-job pid :nohang t)
-           (declare (ignore child-pid))
-           (case state
-             (:interrupted)
-             (:running (return))
-             (otherwise (error "PTY child exited before exec"))))))
+      ((eq byte :eof))
       ((= byte +pty-child-ready-ok+))
       (t
        (ignore-errors (sb-posix:waitpid pid 0))

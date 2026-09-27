@@ -1,19 +1,22 @@
 (in-package #:nshell/test)
 
 (defun runtime-dependency-closure (system-name)
-  (labels ((visit (name seen)
-             (let ((dependency-name (if (consp name)
-                                        (if (keywordp (first name))
-                                            (second name)
-                                            (first name))
-                                        name)))
-               (if (member dependency-name seen :test #'string-equal)
-                   seen
-                   (let ((system (asdf:find-system dependency-name)))
-                   (reduce (lambda (names dependency)
-                             (visit dependency names))
+  (labels ((dependency-names (name)
+             (cond
+               ((and (consp name) (keywordp (first name)))
+                (list (second name)))
+               ((and (consp name) (every #'stringp name)) name)
+               ((consp name) (list (first name)))
+               (t (list name))))
+           (visit (name seen)
+             (reduce #'visit-one (dependency-names name) :initial-value seen))
+           (visit-one (dependency-name seen)
+             (if (member dependency-name seen :test #'string-equal)
+                 seen
+                 (let ((system (asdf:find-system dependency-name)))
+                   (reduce #'visit
                            (asdf:system-depends-on system)
-                           :initial-value (cons dependency-name seen)))))))
+                           :initial-value (cons dependency-name seen))))))
     (visit system-name nil)))
 
 (defun env-entry-value (entries name)

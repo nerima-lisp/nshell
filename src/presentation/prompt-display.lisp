@@ -251,16 +251,23 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
     (:dead (values "AI dead" :assistant-dead))
     (otherwise (values nil nil))))
 
+(defun %assistant-model-status ()
+  "Read the PR #13 status API, tolerating its pre-merge absence locally."
+  (handler-case
+      (nshell.feature.assistant::assistant-model-status)
+    (undefined-function ()
+      (list :state :not-started))))
+
 (defun %assistant-status-text ()
   "Return the display label for the assistant model lifecycle state."
   (nth-value 0
              (%assistant-status-display
-              (nshell.feature.assistant::assistant-model-status))))
+              (%assistant-model-status))))
 
 (defun %assistant-status-segment ()
   (multiple-value-bind (text kind)
       (%assistant-status-display
-       (nshell.feature.assistant::assistant-model-status))
+       (%assistant-model-status))
     (when (and text kind)
       (nshell.domain.prompting:make-prompt-segment text kind))))
 

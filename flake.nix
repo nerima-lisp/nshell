@@ -446,9 +446,12 @@
               cp $out/libexec/nshell $out/libexec/nshell-interp
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 $out/libexec/nshell-interp
-              perl -0777 -pi -e \
-                's{/nix/store/[^\0]*-ld-linux-x86-64\.so\.2\0}{"/lib64/ld-linux-x86-64.so.2" . ("\0" x (length($&) - length("/lib64/ld-linux-x86-64.so.2")))}e' \
-                $out/libexec/nshell
+              read -r interp_offset interp_size <<EOF
+              $(readelf -lW $out/libexec/nshell | awk '$1 == "INTERP" { print $2, $5 }')
+              EOF
+              test -n "$interp_offset" -a -n "$interp_size"
+              dd if=$out/libexec/nshell-interp of=$out/libexec/nshell \
+                bs=1 seek="$interp_offset" count="$interp_size" conv=notrunc status=none
               rm $out/libexec/nshell-interp
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 --set-rpath '$ORIGIN/../lib' $out/libexec/cl-process-kit-spawn

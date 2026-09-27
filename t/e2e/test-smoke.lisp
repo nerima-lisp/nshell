@@ -203,7 +203,7 @@ terminal without waiting out the real (30s) default."
       (unwind-protect
            (progn
              (setf pty
-                   (nshell.infrastructure.acl:pty-spawn
+                   (%e2e-pty-spawn
                     program (%nshell-main-pty-arguments) :rows 24 :cols 100))
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
                (%e2e-pty-await-ready fd)
@@ -224,7 +224,7 @@ terminal without waiting out the real (30s) default."
     (unwind-protect
          (progn
            (setf pty
-                 (nshell.infrastructure.acl:pty-spawn
+                 (%e2e-pty-spawn
                   (%resolve-real-external-executable "sh")
                   (append (list "-c" wrapper "terminal-check"
                                 (%absolute-sbcl-executable) "--noinform" "--disable-debugger")
@@ -349,7 +349,7 @@ terminal without waiting out the real (30s) default."
         (unwind-protect
              (progn
                (setf pty
-                     (nshell.infrastructure.acl:pty-spawn
+                     (%e2e-pty-spawn
                       program
                       (%nshell-main-pty-arguments)
                       :rows 24
@@ -384,7 +384,7 @@ terminal without waiting out the real (30s) default."
           (skip "requires an absolute SBCL runtime path"))
         (unwind-protect
              (progn
-               (setf pty (nshell.infrastructure.acl:pty-spawn
+               (setf pty (%e2e-pty-spawn
                           program (%nshell-main-pty-arguments) :rows 24 :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
                  (%e2e-pty-await-ready fd)
@@ -412,7 +412,7 @@ terminal without waiting out the real (30s) default."
         (unwind-protect
              (progn
                (setf pty
-                     (nshell.infrastructure.acl:pty-spawn
+                     (%e2e-pty-spawn
                       program
                       (%nshell-main-pty-arguments)
                       :rows 24
@@ -442,7 +442,7 @@ terminal without waiting out the real (30s) default."
         (unwind-protect
              (progn
                (setf pty
-                     (nshell.infrastructure.acl:pty-spawn
+                     (%e2e-pty-spawn
                       program
                       (%nshell-main-pty-arguments)
                       :rows 24
@@ -477,7 +477,7 @@ terminal without waiting out the real (30s) default."
         (unwind-protect
              (progn
                (setf pty
-                     (nshell.infrastructure.acl:pty-spawn
+                     (%e2e-pty-spawn
                       program
                       (%nshell-main-pty-arguments)
                       :rows 24
@@ -512,7 +512,7 @@ terminal without waiting out the real (30s) default."
       (unwind-protect
            (progn
              (setf pty
-                   (nshell.infrastructure.acl:pty-spawn
+                   (%e2e-pty-spawn
                     program
                     (%nshell-main-pty-arguments-with-timeout 0.5)
                     :rows 24

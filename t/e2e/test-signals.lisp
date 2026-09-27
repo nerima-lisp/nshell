@@ -13,7 +13,7 @@
         (unwind-protect
              (progn
                (setf pty
-                     (nshell.infrastructure.acl:pty-spawn
+                     (%e2e-pty-spawn
                       program (%nshell-main-pty-arguments) :rows 24 :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
                  (%e2e-pty-await-ready fd)

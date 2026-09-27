@@ -20,7 +20,9 @@
                              dependencies)))
                      (asdf:system-depends-on system)
                      :initial-value (cons name seen))))))
-    (visit system-name nil)))
+    (mapcan (lambda (name)
+              (if (listp name) name (list name)))
+            (visit system-name nil))))
 
 (defun env-entry-value (entries name)
   (let ((entry

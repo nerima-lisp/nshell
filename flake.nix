@@ -443,7 +443,8 @@
               # core. Patch only PT_INTERP through a temporary patchelf copy,
               # preserving the delivered image byte-for-byte otherwise.
               cp $out/libexec/nshell $out/libexec/nshell-interp
-              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
+              interpreter=/lib64/ld-linux-x86-64.so.2
+              patchelf --set-interpreter "$interpreter" \
                 $out/libexec/nshell-interp
               read -r target_offset_hex target_size_hex <<EOF
               $(readelf -lW $out/libexec/nshell | awk '$1 == "INTERP" { print $2, $5 }')
@@ -457,11 +458,16 @@
               source_size=$((source_size_hex))
               test -n "$target_offset" -a -n "$target_size" \
                 -a -n "$source_offset" -a -n "$source_size"
+              interpreter_size=$(printf '%s' "$interpreter" | wc -c)
+              test $((interpreter_size + 1)) -le "$target_size" || {
+                echo "PT_INTERP segment is too small for $interpreter" >&2
+                exit 1
+              }
               dd if=$out/libexec/nshell-interp of=$out/libexec/nshell \
                 bs=1 skip="$source_offset" seek="$target_offset" \
                 count="$target_size" conv=notrunc status=none
               rm $out/libexec/nshell-interp
-              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
+              patchelf --set-interpreter "$interpreter" \
                 --set-rpath '$ORIGIN/../lib' $out/libexec/cl-process-kit-spawn
               cp -L ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $out/lib/
               printf '%s\n' $out/libexec/nshell $out/libexec/cl-process-kit-spawn > $out/.elf-queue

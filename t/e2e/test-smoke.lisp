@@ -153,6 +153,10 @@ terminal without waiting out the real (30s) default."
 (defun %e2e-pty-write-line (fd line)
   (nshell.infrastructure.acl:pty-write fd (format nil "~A~%" line)))
 
+(defparameter +e2e-pty-cold-start-timeout+ 45.0
+  "Allow the first real-process PTY test to compile the fresh child image.
+The regular read timeout remains short for command-response assertions.")
+
 (defun %e2e-pty-await-ready (fd)
   (%e2e-pty-write-line fd "printf 'pty-%s\\n' e2e-ready")
   (expect (search "pty-e2e-ready"
@@ -235,7 +239,8 @@ terminal without waiting out the real (30s) default."
                   :rows 24 :cols 100))
            (let ((output (%e2e-pty-read-until
                           (nshell.infrastructure.acl:pty-process-master-fd pty)
-                          "batch-termios:<unchanged>")))
+                          "batch-termios:<unchanged>"
+                          :timeout +e2e-pty-cold-start-timeout+)))
              (expect (search "batch-termios:<unchanged>" output) :to-be-truthy))
            (%assert-pty-child-exit pty))
       (%terminate-pty-process pty))))

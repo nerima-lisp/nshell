@@ -22,7 +22,10 @@
                  (nshell.infrastructure.acl:pty-write fd (string (code-char 3)))
                  (%e2e-pty-write-line fd "printf 'prompt-recovered:<%s>\\n' yes")
                  (expect (search "prompt-recovered:<yes>"
-                                 (%e2e-pty-read-until fd "prompt-recovered:<yes>"))
+                                 (%e2e-pty-read-until
+                                  fd
+                                  "prompt-recovered:<yes>"
+                                  :timeout +e2e-pty-cold-start-timeout+))
                          :to-be-truthy)
                  (%e2e-pty-write-line fd "exit")
                  (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)

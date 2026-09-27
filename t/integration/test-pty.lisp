@@ -301,6 +301,30 @@
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux"))
 
+  (it "pty-ready-pipe-rejects-child-that-exits-before-exec"
+    "EOF is not readiness when the child has already exited."
+    #+(or darwin linux)
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (let ((pid (sb-posix:fork)))
+        (if (zerop pid)
+            (progn
+              (nshell.infrastructure.acl::%pty-close-fd read-fd)
+              (nshell.infrastructure.acl::%pty-close-fd write-fd)
+              (sb-posix:_exit 127))
+            (unwind-protect
+                 (progn
+                   (nshell.infrastructure.acl::%pty-close-fd write-fd)
+                   (setf write-fd nil)
+                   (sb-posix:waitpid pid 0)
+                   (expect (lambda ()
+                             (nshell.infrastructure.acl::%wait-for-pty-child-ready
+                              read-fd pid))
+                           :to-throw 'error))
+              (nshell.infrastructure.acl::%pty-close-fd read-fd)
+              nil))))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
   (it "pty-child-ready-signal-closes-invalid-descriptors"
     "The child readiness signal remains cleanup-safe after a write failure."
     #+(or darwin linux)

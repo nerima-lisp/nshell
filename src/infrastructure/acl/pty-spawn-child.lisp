@@ -83,10 +83,20 @@
 
 (defun %wait-for-pty-child-ready (fd pid)
   (let ((byte (%pty-read-ready-byte fd)))
-    (unless (or (eq byte :eof)
-                (= byte +pty-child-ready-ok+))
-      (ignore-errors (sb-posix:waitpid pid 0))
-      (error "PTY child setup failed")))
+    (cond
+      ((eq byte :eof)
+       (loop
+         (multiple-value-bind (child-pid state)
+             (wait-job pid :nohang t)
+           (declare (ignore child-pid))
+           (case state
+             (:interrupted)
+             (:running (return))
+             (otherwise (error "PTY child exited before exec"))))))
+      ((= byte +pty-child-ready-ok+))
+      (t
+       (ignore-errors (sb-posix:waitpid pid 0))
+       (error "PTY child setup failed"))))
   t)
 
 (defun %set-pty-window-size (slave-fd rows cols)

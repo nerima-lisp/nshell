@@ -516,7 +516,7 @@
               esac
               export PATH="$root/bin:$PATH"
               exec "$root/lib/ld-linux-x86-64.so.2" \
-                --library-path "$root/lib" --argv0 "$0" \
+                --library-path "$root/lib" --argv0 "$root/libexec/$program" \
                 "$root/libexec/$program" "$@"
               EOF
               cp $out/bin/nshell $out/bin/cl-process-kit-spawn

@@ -65,6 +65,13 @@
                (sb-thread:thread-alive-p thread)))
         (sb-thread:list-all-threads)))
 
+(defun %assistant-test-await-state (state &optional (limit 240))
+  (loop repeat limit
+        for status = (nshell.feature.assistant:assistant-model-status)
+        do (if (eq state (getf status :state))
+               (return status)
+               (sleep 0.05))))
+
 (describe "assistant-model-boundary-contracts"
   (it "replays-a-sanitized-stream-json-fixture-through-the-injected-boundary"
     (with-temporary-output-file (fixture-path :prefix "nshell-assistant-fixture-")
@@ -252,19 +259,22 @@
             (sb-posix:unsetenv "NSHELL_AI_DISABLE")))))
 
   (it "times-out-a-sidecar-that-hangs-during-version-probe"
-    (let ((script (%assistant-test-hanging-version-sidecar-script))
-          (started-at (get-internal-real-time)))
+    (let ((script (%assistant-test-hanging-version-sidecar-script)))
       (unwind-protect
            (let* ((boundary (nshell.feature.assistant:make-assistant-sidecar-boundary
                              :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
                     (nshell.feature.assistant:make-assistant-boundary-context boundary))
                   (result (nshell.feature.assistant:assistant-model-start))
-                  (elapsed (/ (- (get-internal-real-time) started-at)
-                              (float internal-time-units-per-second))))
-             (expect :unavailable :to-be
+                  (status nil))
+             (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status result))
-             (expect t :to-be (< elapsed 12)))
+             (setf status (%assistant-test-await-state :unavailable))
+             (expect :unavailable :to-be (getf status :state))
+             (expect t :to-be (stringp (getf status :reason)))
+             (expect nil :to-be
+                     (search (string #\Newline) (getf status :reason)))
+             (nshell.feature.assistant:assistant-model-stop))
         (when (probe-file script)
           (delete-file script)))))
 
@@ -300,6 +310,8 @@
                      (nshell.feature.assistant:assistant-boundary-status start))
              (expect t :to-be
                      (nshell.feature.assistant:assistant-boundary-value start))
+             (expect :ready :to-be
+                     (getf (%assistant-test-await-state :ready) :state))
              (let ((request
                      (nshell.feature.assistant:assistant-model-request
                       7 '(("message" . "hello")))))
@@ -372,6 +384,8 @@
                   (start (nshell.feature.assistant:assistant-model-start)))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status start))
+             (expect :ready :to-be
+                     (getf (%assistant-test-await-state :ready) :state))
              (flet ((await-result (generation)
                       (let ((request
                               (nshell.feature.assistant:assistant-model-request
@@ -423,8 +437,10 @@
                     (nshell.feature.assistant:make-assistant-boundary-context
                      boundary))
                   (start (nshell.feature.assistant:assistant-model-start)))
-             (expect :unavailable :to-be
+             (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status start))
+             (expect :unavailable :to-be
+                     (getf (%assistant-test-await-state :unavailable) :state))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-stop)))

@@ -89,8 +89,8 @@
                       :input nil :output :stream :error :output)
     (if (null handle)
         (values nil status)
-        (let ((version nil)
-              (reader
+        (let* ((version nil)
+               (reader
                 (sb-thread:make-thread
                  (lambda ()
                    (setf version

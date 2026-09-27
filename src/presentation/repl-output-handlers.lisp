@@ -493,11 +493,11 @@ wrapped line's other rows on screen as stale duplicates."
 (defun %process-ask-cancel-turn-output-event ()
   (cond
     ((eq *assistant-request-kind* :agent)
-    (let* ((now (boundary-monotonic))
-           (repeat-p (%assistant-cancel-repeat-p now))
-            (starting-p (eq :starting
-                            (getf (nshell.feature.assistant:assistant-model-status)
-                                  :state)))
+      (let* ((now (boundary-monotonic))
+             (repeat-p (%assistant-cancel-repeat-p now))
+             (starting-p (eq :starting
+                             (getf (nshell.feature.assistant:assistant-model-status)
+                                   :state)))
             (generation
               (setf *assistant-turn-generation*
                     (nshell.feature.assistant:next-assistant-turn-generation

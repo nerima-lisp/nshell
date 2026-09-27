@@ -8,9 +8,9 @@
                           "printf sk-12345678901234567890"
                           :exit-code 0
                           :duration-ms 37)
-      (with-repl-input-state (:mode :ask-waiting
-                              :buffer "show changed files"
-                              :cursor-pos 18)
+        (with-repl-input-state (:mode :ask-waiting
+                              :buffer "show secret-value"
+                              :cursor-pos 17)
         (with-temporary-output-file (audit-path)
           (let* ((start-count 0)
                  (request-generation nil)
@@ -56,8 +56,8 @@
                                               :test #'string=))))
                     (expect "user" :to-equal
                             (cdr (assoc "role" message :test #'string=)))
-                    (expect "show changed files" :to-equal
-                            (cdr (assoc "content" message :test #'string=))))
+                            (expect "show [REDACTED]" :to-equal
+                                    (cdr (assoc "content" message :test #'string=))))
                   (let* ((context (cdr (assoc "context" request-payload
                                               :test #'string=)))
                          (environment-names
@@ -503,7 +503,8 @@
       (setf nshell.presentation::*last-exit-code* 7
             nshell.presentation::*last-command-duration-ms* 42
             nshell.presentation::*last-command-output*
-              "failed sk-12345678901234567890 secret-value")
+              (format nil
+                      "failed sk-12345678901234567890 secret-value~%cat /tmp/private.env~%visible"))
       (add-history-record nshell.presentation::*history*
                           "deploy sk-12345678901234567890"
                           :exit-code 7
@@ -547,11 +548,12 @@
                      (printed (with-output-to-string (stream)
                                 (write request-payload :stream stream)))
                      (audit (host-kit:read-file-string audit-path)))
-                (expect "failed [REDACTED] [REDACTED]"
+                (expect (format nil "failed [REDACTED] [REDACTED]~%visible")
                         :to-equal last-output)
                 (expect nil :to-be (search "secret-value" printed))
                 (expect nil :to-be
                         (search "sk-12345678901234567890" printed))
+                (expect nil :to-be (search "/tmp/private.env" printed))
                 (expect nil :to-be (search "secret-value" audit))
                 (expect nil :to-be
                         (search "sk-12345678901234567890" audit)))))))))

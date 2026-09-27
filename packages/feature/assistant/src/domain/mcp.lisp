@@ -1,6 +1,8 @@
 (in-package #:nshell.feature.assistant)
 
 (defparameter +assistant-mcp-protocol-version+ "2024-11-05")
+(defparameter +assistant-mcp-supported-protocol-versions+
+  '("2024-11-05"))
 (defparameter +assistant-mcp-default-transcript-tail-lines+ 50)
 (defparameter +assistant-mcp-max-transcript-tail-lines+ 200)
 
@@ -131,8 +133,14 @@
     (cond
       ((not session-entry)
        (values nil nil "session_id is required"))
-      ((not (and (stringp session-id) (plusp (length session-id))))
-       (values nil nil "session_id must be a non-empty string"))
+      ((not (and (stringp session-id)
+                 (plusp (length session-id))
+                 (every (lambda (character)
+                          (or (alphanumericp character)
+                              (find character "._-" :test #'char=)))
+                        session-id)))
+       (values nil nil
+               "session_id must contain only letters, digits, '.', '_' or '-'"))
       ((not (integerp tail-lines))
        (values nil nil "tail_lines must be an integer"))
       ((not (plusp tail-lines))
@@ -142,9 +150,17 @@
                (min tail-lines +assistant-mcp-max-transcript-tail-lines+)
                nil)))))
 
-(defun %assistant-mcp-initialize-result ()
+(defun %assistant-mcp-negotiate-protocol-version (requested-version)
+  (if (and (stringp requested-version)
+           (member requested-version +assistant-mcp-supported-protocol-versions+
+                   :test #'string=))
+      requested-version
+      +assistant-mcp-protocol-version+))
+
+(defun %assistant-mcp-initialize-result (requested-version)
    (%assistant-mcp-object
-   (cons "protocolVersion" +assistant-mcp-protocol-version+)
+   (cons "protocolVersion"
+         (%assistant-mcp-negotiate-protocol-version requested-version))
    (cons "capabilities" (%assistant-mcp-object
                           (cons "tools" (%assistant-mcp-object
                                          (cons "listChanged" nil)))))
@@ -173,7 +189,12 @@
              (let ((payload (%assistant-mcp-object
                              (cons "error" error-message))))
                (%assistant-mcp-tool-result payload error-message t))
-             (let ((payload
+             (if (not (member session-id session-ids :test #'string=))
+                 (let ((message "unknown session_id"))
+                   (%assistant-mcp-tool-result
+                    (%assistant-mcp-object (cons "error" message))
+                    message t))
+                 (let ((payload
                      (%assistant-mcp-state-content
                       snapshot-present-p snapshot-content session-id
                       (and transcript-present-p
@@ -183,17 +204,17 @@
                           transcript-lines
                           nil)
                       tail-lines)))
-               (%assistant-mcp-tool-result
-                payload
-                (%assistant-mcp-state-text
-                 snapshot-present-p snapshot-content session-id
-                 (and transcript-present-p
-                      (string= session-id transcript-session-id))
-                 (if (and transcript-present-p
+                   (%assistant-mcp-tool-result
+                    payload
+                    (%assistant-mcp-state-text
+                     snapshot-present-p snapshot-content session-id
+                     (and transcript-present-p
                           (string= session-id transcript-session-id))
-                     transcript-lines
-                     nil)
-                 tail-lines))))))
+                     (if (and transcript-present-p
+                              (string= session-id transcript-session-id))
+                         transcript-lines
+                         nil)
+                     tail-lines)))))))
       (t
        (%assistant-mcp-error-response
         (%assistant-mcp-field request "id")
@@ -216,7 +237,11 @@
       ((string= method "notifications/initialized") nil)
       ((not id-entry) nil)
       ((string= method "initialize")
-       (%assistant-mcp-response id (%assistant-mcp-initialize-result)))
+       (%assistant-mcp-response
+        id
+        (%assistant-mcp-initialize-result
+         (%assistant-mcp-field
+          (%assistant-mcp-field request "params") "protocolVersion"))))
       ((string= method "ping")
        (%assistant-mcp-response id (%assistant-mcp-object (cons "ok" t))))
       ((string= method "tools/list")

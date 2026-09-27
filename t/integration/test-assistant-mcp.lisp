@@ -65,7 +65,7 @@
       (expect (search "line-2" content) :to-be-truthy)
       (expect nil :to-be (search "line-1" content))))
 
-  (it "reports-missing-files-as-normal-tool-data"
+  (it "rejects unknown transcript sessions"
     (host-kit:with-temporary-directory (directory)
       (let ((state-directory (merge-pathnames "state/" directory)))
         (let ((nshell.feature.assistant:*assistant-state-directory-path-override*
@@ -77,15 +77,10 @@
                  (result (%assistant-mcp-test-field response "result"))
                  (structured
                    (%assistant-mcp-test-field result "structuredContent")))
-            (expect nil :to-be (%assistant-mcp-test-field result "isError"))
-            (expect nil :to-be
-                    (%assistant-mcp-test-field
-                     (%assistant-mcp-test-field structured "snapshot")
-                     "available"))
-            (expect nil :to-be
-                    (%assistant-mcp-test-field
-                     (%assistant-mcp-test-field structured "transcript")
-                     "available"))))))))
+            (expect t :to-equal (%assistant-mcp-test-field result "isError"))
+            (expect "unknown session_id"
+                    :to-equal
+                    (%assistant-mcp-test-field structured "error")))))))
 
   (it "validates-and-bounds-tail-line-options"
     (multiple-value-bind (session-id tail-lines error-message)
@@ -104,6 +99,25 @@
       (expect nil :to-be tail-lines)
       (expect error-message :to-be-truthy)))
 
+  (it "rejects unsafe session identifiers"
+    (multiple-value-bind (session-id tail-lines error-message)
+        (nshell.feature.assistant:assistant-mcp-request-state-options
+         (%assistant-mcp-test-request
+          "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"read_state\",\"arguments\":{\"session_id\":\"../secret\"}}}"))
+      (expect nil :to-be session-id)
+      (expect nil :to-be tail-lines)
+      (expect error-message :to-be-truthy)))
+
+  (it "negotiates the requested supported protocol version"
+    (let ((response
+            (%assistant-mcp-test-response
+             "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}")))
+      (expect nshell.feature.assistant:+assistant-mcp-protocol-version+
+              :to-equal
+              (%assistant-mcp-test-field
+               (%assistant-mcp-test-field response "result")
+               "protocolVersion"))))
+
   (it "returns-json-rpc-errors-for-unknown-methods-and-tools"
     (let ((method-response
             (%assistant-mcp-test-response
@@ -117,3 +131,4 @@
       (expect -32602 :to-equal
               (%assistant-mcp-test-field
                (%assistant-mcp-test-field tool-response "error") "code"))))
+)

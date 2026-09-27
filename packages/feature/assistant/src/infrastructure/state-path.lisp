@@ -15,5 +15,16 @@
    (or *assistant-state-directory-path-override*
        (%assistant-default-state-directory-path))))
 
+(defun %assistant-ensure-secure-state-directory (path)
+  (let ((directory
+          (make-pathname :name nil :type nil :defaults (pathname path))))
+    (ensure-directories-exist directory)
+    (sb-posix:chmod (namestring directory) #o700))
+  path)
+
+(defun %assistant-secure-state-file (path)
+  (sb-posix:chmod (namestring path) #o600)
+  path)
+
 (defun assistant-state-file-path (name)
   (merge-pathnames name (assistant-state-directory-path)))

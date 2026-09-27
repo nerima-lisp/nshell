@@ -278,7 +278,8 @@
   (it "redacts-agent-step-output-before-request-and-audit"
     (with-repl-test-state
       (setf *agent-test-request-payload* nil)
-      (setf nshell.presentation::*last-command-output* "ghp_agent-secret-token")
+      (setf nshell.presentation::*last-command-output*
+              (format nil "cat /tmp/private.env~%ghp_agent-secret-token"))
       (repl-test-set-env "AGENT_SECRET" "agent-environment-secret" t)
       (with-repl-input-state (:mode :ask-waiting :buffer "continue" :cursor-pos 8)
         (with-temporary-output-file (audit-path)
@@ -314,6 +315,9 @@
               (let ((audit (uiop:read-file-string audit-path)))
                 (expect nil :to-be
                         (search "ghp_agent-secret-token"
+                                (princ-to-string *agent-test-request-payload*)))
+                (expect nil :to-be
+                        (search "/tmp/private.env"
                                 (princ-to-string *agent-test-request-payload*)))
                 (expect nil :to-be
                         (search "agent-environment-secret"

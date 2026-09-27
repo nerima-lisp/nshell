@@ -100,6 +100,10 @@ wrapped line's other rows on screen as stale duplicates."
      :last-output *last-command-output*
      :environment-names
      (mapcar #'nshell.domain.environment:env-binding-name bindings)
+     :denylist-paths
+     nshell.feature.assistant:+assistant-default-denylist-paths+
+     :denylist-commands
+     nshell.feature.assistant:+assistant-default-denylist-commands+
      :denylist-values
      (mapcar #'nshell.domain.environment:env-binding-value bindings))))
 
@@ -438,7 +442,17 @@ wrapped line's other rows on screen as stale duplicates."
          (raw-payload
            (nshell.feature.assistant:make-assistant-user-payload
             text :context (%assistant-context)))
-         (payload (nshell.feature.assistant:redact-payload raw-payload))
+         (payload
+           (nshell.feature.assistant:redact-payload
+            raw-payload
+            :denylist-paths
+            nshell.feature.assistant:+assistant-default-denylist-paths+
+            :denylist-commands
+            nshell.feature.assistant:+assistant-default-denylist-commands+
+            :denylist-values
+            (mapcar #'nshell.domain.environment:env-binding-value
+                    (nshell.domain.environment:env-bindings
+                     (ensure-environment)))))
          (start-result (nshell.feature.assistant:assistant-model-start)))
     (setf *assistant-last-cancel-at* nil)
     (setf *assistant-explain-candidates* nil
@@ -450,7 +464,13 @@ wrapped line's other rows on screen as stale duplicates."
          (format nil "AI 未接続: ~a"
                  (%assistant-boundary-failure-message
                   start-result "assistant model boundary is unavailable")))))
-    (nshell.feature.assistant:append-assistant-audit-entry payload nil)
+    (nshell.feature.assistant:append-assistant-audit-entry
+     payload nil
+     :denylist-paths nshell.feature.assistant:+assistant-default-denylist-paths+
+     :denylist-commands nshell.feature.assistant:+assistant-default-denylist-commands+
+     :denylist-values
+     (mapcar #'nshell.domain.environment:env-binding-value
+             (nshell.domain.environment:env-bindings (ensure-environment))))
     (let ((request-result
             (nshell.feature.assistant:assistant-model-request
              generation payload)))
@@ -625,6 +645,10 @@ wrapped line's other rows on screen as stale duplicates."
                           :duration-ms duration-ms
                           :origin *assistant-command-origin*
                           :output-head *last-command-output*
+                          :denylist-paths
+                          nshell.feature.assistant:+assistant-default-denylist-paths+
+                          :denylist-commands
+                          nshell.feature.assistant:+assistant-default-denylist-commands+
                           :denylist-values
                           (mapcar
                            #'nshell.domain.environment:env-binding-value

@@ -2,6 +2,16 @@
 
 (defparameter +assistant-redacted-token+ "[REDACTED]")
 
+(defparameter +assistant-default-denylist-paths+
+  '("~/.ssh/**" "*/.ssh/*" "~/.aws/**" "*/.aws/*"
+    "~/.config/gh/**" "*/.config/gh/*" "~/.netrc" "*/.netrc"
+    "~/.gnupg/**" "*/.gnupg/*" "*/*.pem" "*/*.key" "*/.env*" "*.env")
+  "Built-in paths whose command and output lines must not reach the assistant.")
+
+(defparameter +assistant-default-denylist-commands+
+  '("pass" "gpg" "ssh-add" "op" "aws configure" "gh auth token" "security")
+  "Built-in commands whose command and output lines must not reach the assistant.")
+
 (defparameter +assistant-known-token-prefixes+
   '("sk-" "ghp_" "AKIA" "xox")
   "Known credential prefixes that require token-shaped redaction.")
@@ -15,7 +25,13 @@
   (and (<= (+ position (length prefix)) (length text))
        (string= prefix text
                 :start2 position
-                :end2 (+ position (length prefix)))))
+       :end2 (+ position (length prefix)))))
+
+(defun %assistant-bearer-prefix-at-p (text position)
+  (and (<= (+ position (length "Bearer ")) (length text))
+       (string-equal "Bearer " text
+                     :start2 position
+                     :end2 (+ position (length "Bearer ")))))
 
 (defun %assistant-redact-pem-blocks (text)
   (with-output-to-string (output)
@@ -42,7 +58,7 @@
     (loop with position = 0
           while (< position (length text))
           do (cond
-               ((%assistant-prefix-at-p "Bearer " text position)
+               ((%assistant-bearer-prefix-at-p text position)
                 (let ((token-start (+ position (length "Bearer "))))
                   (if (and (< token-start (length text))
                            (%assistant-token-char-p (char text token-start)))
@@ -68,13 +84,17 @@
                   (loop while (and (< token-end (length text))
                                     (%assistant-token-char-p (char text token-end)))
                         do (incf token-end))
-                  (if (>= (- token-end (+ position (length prefix))) 20)
+                  (let ((suffix-length
+                          (- token-end (+ position (length prefix)))))
+                    (if (or (and (string= prefix "AKIA") (= suffix-length 16))
+                            (and (not (string= prefix "AKIA"))
+                                 (>= suffix-length 20)))
                       (progn
                         (write-string +assistant-redacted-token+ output)
                         (setf position token-end))
                       (progn
                         (write-char (char text position) output)
-                        (incf position)))))
+                        (incf position))))))
                ((%assistant-token-char-p (char text position))
                 (let ((token-end position))
                   (loop while (and (< token-end (length text))
@@ -172,10 +192,15 @@
                          (search pattern line))))
               denylist-paths)
         (and command-name
-             (some (lambda (name) (string= name command-name))
+             (some (lambda (name)
+                     (or (string= name command-name)
+                         (search name line :test #'char-equal)))
                    denylist-commands)))))
 
-(defun redact-lines (text &key denylist-paths denylist-commands denylist-values)
+(defun redact-lines
+    (text &key (denylist-paths +assistant-default-denylist-paths+)
+              (denylist-commands +assistant-default-denylist-commands+)
+              denylist-values)
   "Drop denylisted lines and redact token-shaped values in the remaining text."
   (if (stringp text)
       (let ((lines
@@ -271,7 +296,9 @@
     (t value)))
 
 (defun redact-payload
-    (payload &key denylist-paths denylist-commands denylist-values)
+    (payload &key (denylist-paths +assistant-default-denylist-paths+)
+                    (denylist-commands +assistant-default-denylist-commands+)
+                    denylist-values)
   "Redact a payload recursively, including environment values and denylisted lines."
   (%assistant-redact-value payload nil denylist-paths denylist-commands
                           denylist-values))

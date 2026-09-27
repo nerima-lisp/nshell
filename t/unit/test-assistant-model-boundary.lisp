@@ -418,7 +418,8 @@
                                 (nshell.feature.assistant:assistant-model-event-generation
                                  result)))))
                (await-result 1)
-               (sleep 0.1)
+               (expect :dead :to-be
+                       (getf (%assistant-test-await-state :dead) :state))
                (await-result 2)
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status

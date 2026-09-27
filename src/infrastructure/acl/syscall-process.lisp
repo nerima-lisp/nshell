@@ -80,7 +80,7 @@
         (terminate sb-unix:sigkill)
         (%wait-process-exit-with-timeout proc 0.5)
         (unless (sb-ext:process-alive-p proc)
-          (ignore-errors (sb-ext:process-wait proc))))))
+          (ignore-errors (sb-ext:process-wait proc)))))))
 
 (defmacro %with-process-output-copiers ((copiers) &body body)
   "Run BODY while guaranteeing that process output COPIERS are joined."

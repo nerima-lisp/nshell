@@ -102,7 +102,7 @@
             (expect expected-role :to-equal
                     (nshell.presentation::segment-kind->role expected-kind))
             (expect (nshell.domain.configuration:theme-style theme expected-role)
-                    :to-be-truthy)))))))
+                    :to-be-truthy))))))
 
   (it "render-prompt-shows-the-ai-usage-segment-after-a-turn"
     "The AI segment appears in the right prompt once ASSISTANT-USAGE-TURNS is positive."

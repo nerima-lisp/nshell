@@ -7,6 +7,7 @@
 
 (defconstant +pty-child-ready-ok+ 0)
 (defconstant +pty-child-ready-error+ 1)
+(defconstant +fd-cloexec+ 1)
 
 (defun %pty-close-fd (fd)
   (when fd
@@ -15,7 +16,7 @@
 (defun %pty-set-close-on-exec (fd)
   (let ((flags (sb-posix:fcntl fd sb-posix:f-getfd)))
     (sb-posix:fcntl fd sb-posix:f-setfd
-                    (logior flags sb-posix:fd-cloexec))))
+                    (logior flags +fd-cloexec+))))
 
 (defun %pty-child-open-flags ()
   sb-posix:o-rdwr)

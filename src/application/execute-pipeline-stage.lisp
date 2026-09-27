@@ -65,6 +65,11 @@
       (return-from
        %materialize-process-substitution-in-context
        (values nil nil (%process-substitution-error "the command is incomplete"))))
+    (let ((gate (%assistant-execution-gate context ast)))
+      (when gate
+        (return-from
+         %materialize-process-substitution-in-context
+         (values nil nil (%process-substitution-error (first gate))))))
     (let ((commands (%process-substitution-inner-commands ast)))
       (unless (and
                commands

@@ -35,7 +35,11 @@
     (list
      (format nil "agent · step ~d/~d" step-number max-steps)
      (format nil "> ~a" (nshell.application:agent-step-text step))
-     (format nil "~a~@[ · ~a~]"
+     (format nil "~@[auto · ~]~a~@[ · ~a~]"
+             (and (nshell.application:agent-step-classification step)
+                  (eq :safe
+                      (nshell.feature.assistant:assistant-safety-result-classification
+                       (nshell.application:agent-step-classification step))))
              (%agent-classification-label step)
              (and (nshell.application:agent-step-classification step)
                   (nshell.feature.assistant:assistant-safety-result-reason
@@ -99,12 +103,15 @@
     (%execute-complete-command
      (nshell.application:agent-step-ast step)
      (nshell.application:agent-step-text step))
-    (nshell.infrastructure.acl:consume-sigint-received-p)
-    (nshell.application:agent-session-record-step
-     session *last-command-output* *last-exit-code*)
-    (if (nshell.application:agent-session-limit-reached-p session)
-        (%finish-agent-session "maximum step count reached")
-        (%agent-start-next-request))))
+    (let ((interrupted-p
+            (nshell.infrastructure.acl:consume-sigint-received-p)))
+      (nshell.application:agent-session-record-step
+       session *last-command-output* *last-exit-code*)
+      (if (or interrupted-p
+            (nshell.application:agent-session-limit-reached-p session))
+          (%finish-agent-session (if interrupted-p "canceled"
+                                     "maximum step count reached"))
+          (%agent-start-next-request)))))
 
 (defun %agent-skip-current-step ()
   (let ((session *agent-session*))
@@ -193,9 +200,17 @@
            (if (nshell.application:agent-session-propose-step
                 *agent-session* proposal)
                (progn
-                 (setf *input-state*
-                       (make-repl-input-state :buffer proposal))
-                 (%render-agent-step-panel))
+                 (let ((step (nshell.application:agent-session-current-step
+                              *agent-session*)))
+                   (when (nshell.application:agent-step-ast step)
+                     (setf *input-state*
+                           (make-repl-input-state :buffer proposal)))
+                   (%render-agent-step-panel)
+                   (when (and (nshell.application:agent-step-classification step)
+                              (eq :safe
+                                  (nshell.feature.assistant:assistant-safety-result-classification
+                                   (nshell.application:agent-step-classification step))))
+                     (%agent-execute-current-step))))
                (%finish-agent-session "maximum step count reached")))))
     ((:stream-error :rate-limit-event)
      (%finish-agent-session

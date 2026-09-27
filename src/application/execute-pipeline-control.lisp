@@ -8,6 +8,7 @@
 
 (defvar *execution-origin* :typed)
 (defvar *execution-confirmed-p* nil)
+(defvar *execution-gate-parent-kind* nil)
 
 ;;; Control flow execution and AST dispatch.
 ;;; This file defines:
@@ -77,30 +78,94 @@ its own."
     (setf environment (nshell.domain.environment:env-set environment "status" "0" nil)))
   environment)
 
-(defun %assistant-execution-gate (ast)
+(defun %assistant-effective-ast-for-gate (context ast)
+  (cond
+    ((nshell.domain.parsing:command-node-p ast)
+     (multiple-value-bind (function-body function-p)
+         (gethash (nshell.domain.parsing:command-node-command ast)
+                  (shell-context-function-table context))
+       (cond
+         (function-p
+          (let ((results nil))
+            (dolist (line function-body)
+              (let ((parsed (nshell.domain.parsing:parse-command-line line)))
+                (if (nshell.domain.parsing:parse-complete-p parsed)
+                    (push (nshell.feature.assistant:classify-ast
+                           (nshell.domain.parsing:parse-result-ast parsed))
+                          results)
+                    (return-from %assistant-effective-ast-for-gate nil))))
+            (or (find-if (lambda (result)
+                           (eq :block
+                               (nshell.feature.assistant:assistant-safety-result-classification
+                                result)))
+                         results)
+                (find-if (lambda (result)
+                           (eq :confirm
+                               (nshell.feature.assistant:assistant-safety-result-classification
+                                result)))
+                         results)
+                (first results))))
+         (t
+          (nshell.application:expand-command-alias-node
+           ast (shell-context-alias-table context))))))
+    (t ast)))
+
+(defun %assistant-execution-gate (context ast)
   (when (member *execution-origin* '(:proposal :agent) :test #'eq)
-    (let ((classification (nshell.feature.assistant:classify-ast ast))
-          (agent-p (eq *execution-origin* :agent)))
-      (case (nshell.feature.assistant:assistant-safety-result-classification
-             classification)
-        (:safe
-         (when (and agent-p (not *execution-confirmed-p*))
+    (labels ((rank (value)
+               (case (nshell.feature.assistant:assistant-safety-result-classification value)
+                 (:safe 0)
+                 (:confirm 1)
+                 (:block 2)
+                 (otherwise 2)))
+             (classify-effective (value)
+               (if (or (nshell.domain.parsing:pipeline-node-p value)
+                       (nshell.domain.parsing:sequence-node-p value))
+                   (reduce (lambda (left right)
+                             (if (> (rank right) (rank left)) right left))
+                           (mapcar #'classify-effective
+                                   (if (nshell.domain.parsing:pipeline-node-p value)
+                                       (nshell.domain.parsing:pipeline-node-commands value)
+                                       (nshell.domain.parsing:sequence-node-commands value))))
+                   (let ((effective (%assistant-effective-ast-for-gate context value)))
+                     (if (nshell.feature.assistant:assistant-safety-result-p effective)
+                         effective
+                         (nshell.feature.assistant:classify-ast effective))))))
+      (let* ((classification (classify-effective ast))
+             (agent-p (eq *execution-origin* :agent))
+             (confirmed-p (and *execution-confirmed-p*
+                               (or (null *execution-gate-parent-kind*)
+                                   (member *execution-gate-parent-kind*
+                                           '(:sequence :pipeline)
+                                           :test #'eq)))))
+        (case (nshell.feature.assistant:assistant-safety-result-classification
+               classification)
+          (:safe
+           (when (and agent-p (not confirmed-p))
+             (list
+              "nshell: AI proposal requires approval before execution~%"
+              126)))
+          (:confirm
+           (unless confirmed-p
+             (list
+              (format nil "nshell: AI proposal requires confirmation: ~a~%"
+                      (nshell.feature.assistant:assistant-safety-result-reason
+                       classification))
+              126)))
+          (otherwise
            (list
-            "nshell: AI proposal requires approval before execution~%"
-            126)))
-        (:confirm
-         (unless *execution-confirmed-p*
-           (list
-            (format nil "nshell: AI proposal requires confirmation: ~a~%"
+            (format nil "nshell: AI proposal blocked: ~a~%"
                     (nshell.feature.assistant:assistant-safety-result-reason
                      classification))
-            126)))
-        (otherwise
-         (list
-          (format nil "nshell: AI proposal blocked: ~a~%"
-                  (nshell.feature.assistant:assistant-safety-result-reason
-                   classification))
-          126))))))
+            126)))))))
+
+(defun %assistant-gated-command-dispatch (context command args thunk)
+  (let ((gate (%assistant-execution-gate
+               context
+               (nshell.domain.parsing:make-command-node command args))))
+    (if gate
+        (values (first gate) (second gate))
+        (funcall thunk))))
 
 (defun %consume-loop-control-signal ()
   "Consume one loop level from the pending BREAK or CONTINUE signal.
@@ -262,12 +327,18 @@ This encodes the dispatch table as data (separate from the dispatch mechanism),
 following the data/logic separation principle."
     `(defun ,name (,context ,ast)
        (let ((result
-               (or (%assistant-execution-gate ,ast)
+          (or (%assistant-execution-gate ,context ,ast)
                    (multiple-value-list
                     (cond
                       ,@(mapcar (lambda (clause)
-                                  `((,(first clause) ,ast)
-                                    (,(second clause) ,context ,ast)))
+                                    `((,(first clause) ,ast)
+                                    (let ((*execution-gate-parent-kind*
+                                            (cond
+                                              ((nshell.domain.parsing:sequence-node-p ,ast) :sequence)
+                                              ((nshell.domain.parsing:pipeline-node-p ,ast) :pipeline)
+                                              ((nshell.domain.parsing:command-node-p ,ast) :command)
+                                              (t :other))))
+                                      (,(second clause) ,context ,ast))))
                                 clauses)
                       (t (values (format nil "source: unsupported syntax~%") 2)))))))
          (%record-last-exit-code ,context (second result))

@@ -15,7 +15,10 @@
 (define-builtin %builtin-and (context args) ()
   (if args
       (if (zerop (shell-context-last-exit-code context))
-          (%execute-command-by-name-in-context context (first args) (rest args))
+          (%assistant-gated-command-dispatch
+           context (first args) (rest args)
+           (lambda ()
+             (%execute-command-by-name-in-context context (first args) (rest args))))
           (values nil (shell-context-last-exit-code context)))
       (%builtin-usage "and" "and command [args...]" 2)))
 
@@ -23,7 +26,10 @@
   (if args
       (if (zerop (shell-context-last-exit-code context))
           (values nil (shell-context-last-exit-code context))
-          (%execute-command-by-name-in-context context (first args) (rest args)))
+          (%assistant-gated-command-dispatch
+           context (first args) (rest args)
+           (lambda ()
+             (%execute-command-by-name-in-context context (first args) (rest args)))))
       (%builtin-usage "or" "or command [args...]" 2)))
 
 ;;; `functions` (fish's function inspector, distinct from the singular
@@ -69,5 +75,7 @@
       (%builtin-usage "builtin" "builtin NAME [args...]" 2)
       (let ((handler (lookup-builtin (first args))))
         (if handler
-            (funcall handler context (rest args))
+            (%assistant-gated-command-dispatch
+             context (first args) (rest args)
+             (lambda () (funcall handler context (rest args))))
             (values (format nil "builtin: ~a: not a builtin~%" (first args)) 1)))))

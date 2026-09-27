@@ -4,7 +4,7 @@
   (nshell.domain.environment:inject-os-environment
    (nshell.domain.environment:make-default-environment)
    (nshell.infrastructure.acl:current-environment-entries)
-   (nshell.infrastructure.acl:current-working-directory)))
+   #'nshell.infrastructure.acl:current-working-directory))
 
 (defun make-test-shell-context (&key
                                   (history (history-kit:make-history))

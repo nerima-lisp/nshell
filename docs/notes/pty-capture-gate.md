@@ -2,11 +2,9 @@
 
 ## Result
 
-The candidate is connected to the production foreground command path, but this
-retry remains unverified. The local Nix check reached the test runner and timed
-out at the 1800 second cl-nix-forge limit before producing a test summary. The
-non-sandboxed suite and the required tmux checklist still need completion before
-this can be reported as a passed gate.
+The PTY candidate did not pass the production gate and is not connected to the
+foreground command path. The fallback remains active while the PTY/ring-buffer
+implementation is retained for a later retry.
 
 ## Root cause
 
@@ -22,8 +20,8 @@ and `%wait-terminal-processes` waited indefinitely (`src/application/manage-job-
 This matches the original failure: `PTY job condition timed out; output: ""` and
 no prompt after `sleep 100` plus Ctrl-Z (`docs/notes/ai-native-requirements.md:462`).
 
-The retry candidate changes the PTY child to `:new-session-p t` and routes
-`%spawn-terminal-command` through `%spawn-pty-terminal-command`. It also adds a
+The retry candidate changes the PTY child to `:new-session-p t` and can be
+invoked by the foreground PTY runner. It also adds a
 shell-context field to carry `pty-process-output` into the existing
 `last-output` explain context. The candidate compiled through the Nix build's
 compile phase and is currently enabled in this worktree; the full check phase
@@ -60,11 +58,12 @@ evidence for the PTY harness but do not replace the named e2e/integration gate.
 - `nix develop -c sbcl --script run-tests.lisp`: started separately after the
   sandbox timeout; no summary was available when this note was updated.
 - PTY e2e/integration CI: not run in this macOS session.
-- Manual tmux checklist first attempt: PTY input/output, resize, `cat`, and
+- Manual tmux checklist: PTY input/output, resize, `cat`, and
   shell usability worked, but direct foreground execution exposed a
   `PTY-PROCESS` type error because the production spawn wrapper had not yet
-  been connected to the PTY runner. The wrapper was corrected in this retry;
-  the checklist must be rerun before a pass claim.
+  been connected to the PTY runner. The wrapper was corrected in the retry,
+  but Ctrl-Z/fg recovery still failed, so the production route was restored to
+  the fallback.
 
 ## Follow-up blocker
 

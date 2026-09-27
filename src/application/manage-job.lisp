@@ -31,7 +31,7 @@
             (or ,previous (%shell-process-group-id))))))))
 
 (defun %run-terminal-command (context command args)
-  (let ((process (nshell.infrastructure.acl::%spawn-pty-terminal-command command args)))
+  (let ((process (nshell.infrastructure.acl::%spawn-terminal-command command args)))
     (unless process
       (return-from %run-terminal-command
         (values
@@ -41,7 +41,6 @@
       (unwind-protect
            (progn
              (setf *foreground-job-pgid* pgid)
-             (setf nshell.infrastructure.acl::*foreground-pty-p* t)
              (%set-acl-foreground-pgid pgid)
              (%with-terminal-foreground-pgroup pgid
                (let ((stopped-p (eq :stopped (%wait-terminal-processes (list process))))
@@ -59,7 +58,6 @@
                      (values nil (nshell.infrastructure.acl:process-exit-status-code
                                   process))))))
         (setf *foreground-job-pgid* nil)
-        (setf nshell.infrastructure.acl::*foreground-pty-p* nil)
         (%set-acl-foreground-pgid nil)))))
 
 (defun %run-terminal-pipeline (context commands redirects)
@@ -127,7 +125,7 @@
                                          (%job-process-list
                                           (gethash job-id process-registry)))))
                      (if processes
-                         (let ((nshell.infrastructure.acl::*foreground-pty-p* t))
+                         (progn
                            (dolist (process processes)
                              (nshell.infrastructure.acl:process-continue process))
                            (return-from fg

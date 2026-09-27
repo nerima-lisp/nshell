@@ -9,7 +9,6 @@
 (defvar *terminal-resized* nil)
 (defvar *children-changed* nil)
 (defvar *sigint-received* nil)
-(defvar *foreground-pty-p* nil)
 
 (defun os-signal->domain (os-signal)
   (let ((sig-map `((:sigint . ,sb-unix:sigint)
@@ -98,13 +97,10 @@
 (defun shell-sigtstp-handler (signal info context)
   "Ignore SIGTSTP while a foreground child runs, otherwise suspend the shell."
   (declare (ignore signal info context))
-  (when (and (%foreground-process-group-target)
-             (not *foreground-pty-p*))
-    ;; A non-PTY foreground child is registered behind a wait that cannot
-    ;; observe a stop (the synchronous pipe path treats a stopped child as
-    ;; still running). Forwarding SIGTSTP there would wedge that wait. PTY
-    ;; foreground commands opt into forwarding because their wait observes
-    ;; WUNTRACED and the PTY process group is the job-control unit.
+  (when (%foreground-process-group-target)
+    ;; A foreground child is registered behind a wait that cannot observe a
+    ;; stop. Forwarding SIGTSTP there would wedge that wait, so Ctrl-Z is
+    ;; deliberately dropped on this synchronous fallback path.
     (return-from shell-sigtstp-handler))
   (unless (%signal-foreground-process-group sb-unix:sigtstp)
     ;; Swallowed deliberately, and -- unlike the REPL's cleanup path, which

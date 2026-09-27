@@ -12,9 +12,10 @@
 ;;; full cfmakeraw-style mode -- and two of the extra bits are load-bearing for
 ;;; a shell:
 ;;;
-;;;   ISIG   nshell leaves it SET in line-editor raw mode.  The foreground
-;;;          terminal runner temporarily restores cooked mode, then hands the
-;;;          terminal to the child's process group.  ISIG is what makes
+;;;   ISIG   nshell leaves it SET.  enable-raw-mode is called once per session
+;;;          (repl-session.lisp) and stays in effect while a foreground child
+;;;          runs; manage-job.lisp hands the terminal to the child's process
+;;;          group but never returns the tty to cooked mode.  ISIG is what makes
 ;;;          the kernel turn ^C/^Z into SIGINT/SIGTSTP for that foreground
 ;;;          group, which is how `sleep 100` gets interrupted and how the
 ;;;          shell-sigtstp-handler / fg / bg job-control path is driven at all.

@@ -143,7 +143,6 @@ than another transient redraw."
       (clear-rendered-transient-panel)
       (clear-rendered-prompt)
       (%render-transient-panel-lines lines (max 2 terminal-width))
-      (reset-rendered-transient-panel-state)
       t)))
 
 (defun update-transient-panel (content &key (terminal-width (terminal-width)))

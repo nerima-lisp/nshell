@@ -152,6 +152,11 @@ borrow the closest existing one."
     (:git :prompt-git)
     (:git-dirty :prompt-git-dirty)
     (:assistant :prompt-assistant)
+    (:assistant-not-started :prompt-time)
+    (:assistant-starting :prompt-duration)
+    (:assistant-ready :prompt-ok)
+    (:assistant-unavailable :prompt-error)
+    (:assistant-dead :prompt-error)
     (:duration :prompt-duration)
     (:time :prompt-time)
     (:jobs :prompt-time)
@@ -237,43 +242,27 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
     (when text
       (nshell.domain.prompting:make-prompt-segment text :assistant))))
 
+(defun %assistant-status-display (status)
+  (case (getf status :state)
+    (:not-started (values "AI not started" :assistant-not-started))
+    (:starting (values "AI starting" :assistant-starting))
+    (:ready (values "AI ready" :assistant-ready))
+    (:unavailable (values "AI unavailable" :assistant-unavailable))
+    (:dead (values "AI dead" :assistant-dead))
+    (otherwise (values nil nil))))
+
 (defun %assistant-status-text ()
-  "Return a status label from the current assistant boundary without starting it."
-  (let* ((boundary (nshell.feature.assistant:assistant-model-boundary))
-         (snapshot (and boundary
-                        (ignore-errors
-                          (nshell.feature.assistant:assistant-boundary-status-snapshot
-                           boundary))))
-         (state (getf snapshot :state))
-         (reason (getf snapshot :reason)))
-    (case state
-      ((:running :connected) "AI connected")
-      (:dead "AI dead")
-      (:incompatible "AI incompatible")
-      (:unavailable
-       (cond
-         ((or (and (consp reason) (eq :version (first reason)))
-              (and (stringp reason)
-                   (or (search "incompat" (string-downcase reason))
-                       (search "version" (string-downcase reason)))))
-          "AI incompatible")
-         ((or (and (consp reason)
-                   (member (first reason) '(:reader-eof :reader-error :writer-error)
-                           :test #'eq))
-              (and (stringp reason)
-                   (or (search "dead" (string-downcase reason))
-                       (search "stopped" (string-downcase reason))
-                       (search "eof" (string-downcase reason)))))
-          "AI dead")
-         (t "AI unavailable")))
-      (:not-started "AI unavailable")
-      (:unknown "AI unavailable")
-      (otherwise nil))))
+  "Return the display label for the assistant model lifecycle state."
+  (nth-value 0
+             (%assistant-status-display
+              (nshell.feature.assistant::assistant-model-status))))
 
 (defun %assistant-status-segment ()
-  (let ((text (%assistant-status-text)))
-    (when text
-      (nshell.domain.prompting:make-prompt-segment text :assistant))))
+  (multiple-value-bind (text kind)
+      (%assistant-status-display
+       (nshell.feature.assistant::assistant-model-status))
+    (when (and text kind)
+      (nshell.domain.prompting:make-prompt-segment text kind))))
 
 (defun %background-jobs-count ()
   "The {jobs} format-segment count: the shell's currently tracked jobs."

@@ -120,15 +120,18 @@
              (read-key-cont)))
           ((and event *command-not-found-fallback-text*)
            (lambda () (%process-command-not-found-fallback-event event)))
-          ((and event *failure-explain-available-p*)
-           (lambda () (%process-failure-explain-event event)))
-          ((and event *assistant-explain-candidates*)
-           (lambda () (%process-explain-panel-event event)))
+          ;; A displayed transient panel owns `v` regardless of the panel's
+          ;; semantic payload.  Keep this before candidate and agent routing so
+          ;; the key cannot mutate their state instead of committing the panel.
           ((and event (%transient-panel-expand-event-p event))
            (lambda ()
              (commit-transient-panel-to-scrollback)
              (reset-rendered-prompt-state)
              (render-prompt-cont)))
+          ((and event *failure-explain-available-p*)
+           (lambda () (%process-failure-explain-event event)))
+          ((and event *assistant-explain-candidates*)
+           (lambda () (%process-explain-panel-event event)))
           ((and event
                 (eq *assistant-request-kind* :agent)
                 (functionp *assistant-model-event-handler*))

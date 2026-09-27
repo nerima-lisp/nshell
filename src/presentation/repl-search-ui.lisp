@@ -94,7 +94,10 @@ lines written, for the caller to clear on the next redraw."
          (visible-matches
            (subseq matches 0 (min +history-search-max-visible-matches+ count))))
     (format t "~%")
-    (%write-styled (%search-header-text query count) :comment theme)
+    (%write-styled
+     (%truncate-string-to-width (%search-header-text query count)
+                                terminal-width)
+     :comment theme)
     (format t "~%")
     (loop for match in visible-matches
           for index from 0

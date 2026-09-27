@@ -116,6 +116,25 @@
             (expect nil :to-be
                     nshell.presentation::*transient-panel-content*)))))
 
+  (it "resets-transient-panel-state-on-commit-only-once"
+    (with-repl-test-state
+      (with-stable-repl-prompt (:text "PROMPT> " :width 8)
+        (with-fixed-terminal-size (5 30)
+          (setf nshell.presentation::*prompt-rendered-lines* 1)
+          (capture-standard-output
+            (nshell.presentation:render-transient-panel '("first")))
+          (let ((reset-count 0))
+            (with-temporary-function
+                ('nshell.presentation::reset-rendered-transient-panel-state
+                 (lambda ()
+                   (incf reset-count)
+                   (setf nshell.presentation::*transient-panel-rendered-lines* 0
+                         nshell.presentation::*transient-panel-content* nil)))
+              (capture-standard-output
+                (nshell.presentation::commit-transient-panel-to-scrollback
+                 :terminal-width 30)))
+            (expect 1 :to-equal reset-count)))))
+
   (it "does-not-commit-when-the-panel-is-not-displayed"
     (with-repl-test-state
       (let ((output

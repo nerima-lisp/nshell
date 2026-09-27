@@ -121,6 +121,22 @@
                       :terminal-width 10 :theme theme))))
       (expect (search "git status --long-flag-name-here" output) :to-be-falsy)))
 
+  (it "render-search-results-truncates-the-header-at-width-40-and-80"
+    (dolist (width '(40 80))
+      (let* ((theme (nshell.domain.configuration:default-theme))
+             (header (nshell.presentation::%search-header-text
+                      "git" 1))
+             (output (capture-standard-output
+                       (nshell.presentation::render-search-results
+                        "git" '("git status") 0
+                        :terminal-width width :theme theme))))
+        (expect (search (nshell.presentation::%truncate-string-to-width
+                         header width)
+                        output)
+                :to-be-truthy)
+        (expect 3 :to-equal
+                (count #\Newline output)))))
+
   (it "render-search-results-limits-to-eight-visible-matches"
     (let* ((theme (nshell.domain.configuration:default-theme))
            (matches (loop for i from 1 to 12 collect (format nil "git cmd~d" i))))

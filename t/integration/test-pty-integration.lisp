@@ -117,9 +117,8 @@
       (expect nshell.infrastructure.acl::+pty-child-ready-ok+
               :to-equal
               (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
-      (expect (lambda ()
-                (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
-              :to-throw 'error)))
+      (expect :eof :to-equal
+              (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))))
 
   (it "accepts nil when closing an optional file descriptor"
     "Cleanup paths may receive no descriptor after a partial PTY setup."
@@ -131,9 +130,8 @@
     (with-readiness-pipe (read-fd write-fd)
       (nshell.infrastructure.acl::%pty-close-fd write-fd)
       (setf write-fd nil)
-      (expect (lambda ()
-                (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
-              :to-throw 'error)))
+      (expect :eof :to-equal
+              (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))))
 
   (it "rejects a readiness read when the descriptor is invalid"
     "A syscall failure must remain distinct from an orderly pipe close."
@@ -361,4 +359,3 @@
                (expect (null status) :to-be-falsy)
                (expect (second status) :to-be :stopped)))
         (pty-test-close-process pty))))))
-

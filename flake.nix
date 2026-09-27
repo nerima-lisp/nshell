@@ -435,12 +435,39 @@
             ''
               mkdir -p $out/bin $out/libexec $out/lib
               cp -R ${delivery}/README.md ${delivery}/LICENSE ${delivery}/LICENSES ${delivery}/share $out/
-
+              chmod -R u+w $out
               cp ${builtImage} $out/libexec/nshell
               cp ${spawnHelperFor ctx}/bin/cl-process-kit-spawn $out/libexec/cl-process-kit-spawn
-              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
-                --set-rpath '$ORIGIN/../lib' $out/libexec/nshell
-              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
+              chmod u+w $out/libexec/nshell $out/libexec/cl-process-kit-spawn
+              # patchelf rewrites the ELF layout and discards SBCL's appended
+              # core. Patch only PT_INTERP through a temporary patchelf copy,
+              # preserving the delivered image byte-for-byte otherwise.
+              cp $out/libexec/nshell $out/libexec/nshell-interp
+              interpreter=/lib64/ld-linux-x86-64.so.2
+              patchelf --set-interpreter "$interpreter" \
+                $out/libexec/nshell-interp
+              read -r target_offset_hex target_size_hex <<EOF
+              $(readelf -lW $out/libexec/nshell | awk '$1 == "INTERP" { print $2, $5 }')
+              EOF
+              read -r source_offset_hex source_size_hex <<EOF
+              $(readelf -lW $out/libexec/nshell-interp | awk '$1 == "INTERP" { print $2, $5 }')
+              EOF
+              target_offset=$((target_offset_hex))
+              target_size=$((target_size_hex))
+              source_offset=$((source_offset_hex))
+              source_size=$((source_size_hex))
+              test -n "$target_offset" -a -n "$target_size" \
+                -a -n "$source_offset" -a -n "$source_size"
+              interpreter_size=$(printf '%s' "$interpreter" | wc -c)
+              test $((interpreter_size + 1)) -le "$target_size" || {
+                echo "PT_INTERP segment is too small for $interpreter" >&2
+                exit 1
+              }
+              dd if=$out/libexec/nshell-interp of=$out/libexec/nshell \
+                bs=1 skip="$source_offset" seek="$target_offset" \
+                count="$target_size" conv=notrunc status=none
+              rm $out/libexec/nshell-interp
+              patchelf --set-interpreter "$interpreter" \
                 --set-rpath '$ORIGIN/../lib' $out/libexec/cl-process-kit-spawn
               cp -L ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $out/lib/
               printf '%s\n' $out/libexec/nshell $out/libexec/cl-process-kit-spawn > $out/.elf-queue
@@ -495,7 +522,7 @@
               esac
               export PATH="$root/bin:$PATH"
               exec "$root/lib/ld-linux-x86-64.so.2" \
-                --library-path "$root/lib" --argv0 "$0" \
+                --library-path "$root/lib" --argv0 "$root/libexec/$program" \
                 "$root/libexec/$program" "$@"
               EOF
               cp $out/bin/nshell $out/bin/cl-process-kit-spawn
@@ -555,7 +582,10 @@
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
 
       packageArgs = ctx: {
-        nativeBuildInputs = [ (spawnHelperFor ctx) ];
+        nativeBuildInputs = [
+          (spawnHelperFor ctx)
+          ctx.pkgs.coreutils
+        ];
       };
 
       # Drives the test checks from this one number, so the contributor-facing
@@ -646,6 +676,10 @@
             };
             program = "${testApp}/bin/nshell-test";
           };
+
+          checks.default = ctx.generated.checks.default.overrideAttrs (previous: {
+            nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.coreutils ];
+          });
 
           # The generated shell, plus the aliases this repository's loop is
           # written in terms of. Appended to the preset's own shellHook rather

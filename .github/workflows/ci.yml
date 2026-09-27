@@ -82,6 +82,12 @@ jobs:
           cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
       - name: Run full test suite in a dev shell (non-sandboxed)
+        env:
+          HOME: ${{ runner.temp }}/nshell-home
+          XDG_CACHE_HOME: ${{ runner.temp }}/nshell-cache
+          XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-config
+          XDG_STATE_HOME: ${{ runner.temp }}/nshell-state
+          NSHELL_AI_COMMAND: /nonexistent
         run: nix develop -c sbcl --script run-tests.lisp
 
   coverage:
@@ -102,6 +108,12 @@ jobs:
           cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
       - name: Generate source coverage report
+        env:
+          HOME: ${{ runner.temp }}/nshell-home
+          XDG_CACHE_HOME: ${{ runner.temp }}/nshell-cache
+          XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-config
+          XDG_STATE_HOME: ${{ runner.temp }}/nshell-state
+          NSHELL_AI_COMMAND: /nonexistent
         run: |
           coverage_dir="$RUNNER_TEMP/nshell-coverage"
           mkdir -p "$coverage_dir"

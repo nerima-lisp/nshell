@@ -7,6 +7,11 @@
 
 (in-package #:nshell/test)
 
+(cl-weave:around-each (next)
+  "Keep subprocess exports from one test from changing the next test's PATH."
+  (let ((nshell.infrastructure.acl:*exported-environment* nil))
+    (funcall next)))
+
 (defun in-hermetic-sandbox-p ()
   "True in hermetic Nix builds, not in impure nix develop shells.
 Real OS process and PTY integration tests are skipped only when the surrounding

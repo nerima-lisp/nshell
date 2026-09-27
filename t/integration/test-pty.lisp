@@ -244,7 +244,7 @@
     (skip "PTY tests are only supported on Darwin and Linux"))
 
   (it "pty-ready-pipe-reports-read-boundaries"
-    "Readiness failures distinguish an invalid descriptor from EOF."
+      "Readiness failures distinguish an invalid descriptor from orderly EOF."
     #+(or darwin linux)
     (progn
       (expect (lambda ()
@@ -255,9 +255,8 @@
              (progn
                (nshell.infrastructure.acl::%pty-close-fd write-fd)
                (setf write-fd nil)
-               (expect (lambda ()
-                         (nshell.infrastructure.acl::%pty-read-ready-byte read-fd))
-                       :to-throw 'error))
+               (expect :eof :to-equal
+                       (nshell.infrastructure.acl::%pty-read-ready-byte read-fd)))
           (nshell.infrastructure.acl::%pty-close-fd read-fd)
           (nshell.infrastructure.acl::%pty-close-fd write-fd))))
     #-(or darwin linux)
@@ -267,19 +266,26 @@
     "The parent rejects a readiness byte that reports child setup failure."
     #+(or darwin linux)
     (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
-      (unwind-protect
-           (progn
-             (expect (nshell.infrastructure.acl::%pty-write-ready-byte
-                      write-fd
-                      nshell.infrastructure.acl::+pty-child-ready-error+)
-                     :to-be-truthy)
-             (expect (lambda ()
-                       (nshell.infrastructure.acl::%wait-for-pty-child-ready
-                        read-fd
-                        -1))
-                     :to-throw 'error))
-        (nshell.infrastructure.acl::%pty-close-fd read-fd)
-        (nshell.infrastructure.acl::%pty-close-fd write-fd)))
+      (let ((pid (sb-posix:fork)))
+        (if (zerop pid)
+            (progn
+              (nshell.infrastructure.acl::%pty-close-fd read-fd)
+              (nshell.infrastructure.acl::%pty-write-ready-byte
+               write-fd
+               nshell.infrastructure.acl::+pty-child-ready-error+)
+              (nshell.infrastructure.acl::%pty-close-fd write-fd)
+              (sb-posix:_exit 127))
+            (unwind-protect
+                 (progn
+                   (nshell.infrastructure.acl::%pty-close-fd write-fd)
+                   (setf write-fd nil)
+                   (expect (lambda ()
+                             (nshell.infrastructure.acl::%wait-for-pty-child-ready
+                              read-fd
+                              pid))
+                           :to-throw 'error))
+              (nshell.infrastructure.acl::%pty-close-fd read-fd)
+              (nshell.infrastructure.acl::%pty-close-fd write-fd)))))
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux"))
 
@@ -299,6 +305,18 @@
                       -1)))
         (nshell.infrastructure.acl::%pty-close-fd read-fd)
         (nshell.infrastructure.acl::%pty-close-fd write-fd)))
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux"))
+
+  (it "pty-ready-pipe-accepts-exec-that-exits-immediately"
+    "EOF after exec is readiness even when the child exits immediately."
+    #+(or darwin linux)
+    (let ((process (nshell.infrastructure.acl:pty-spawn
+                    "/bin/sh" '("-c" "exit 7"))))
+      (expect :exited :to-equal
+              (nshell.infrastructure.acl:pty-process-wait process))
+      (expect 7 :to-equal
+              (nshell.infrastructure.acl::pty-process-exit-status process)))
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux"))
 

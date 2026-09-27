@@ -1,10 +1,16 @@
 (in-package #:nshell/test)
 
+(defun %test-default-environment ()
+  (nshell.domain.environment:inject-os-environment
+   (nshell.domain.environment:make-default-environment)
+   (nshell.infrastructure.acl:current-environment-entries)
+   #'nshell.infrastructure.acl:current-working-directory))
+
 (defun make-test-shell-context (&key
                                   (history (history-kit:make-history))
                                   (config (nshell.domain.configuration:default-config))
                                   (knowledge-base (nshell.domain.completion:make-empty-knowledge-base))
-                                  (environment (nshell.domain.environment:make-default-environment))
+                                  (environment (%test-default-environment))
                                   (job-monitor (nshell.domain.job-control:make-job-monitor))
                                   (alias-table (make-hash-table :test #'equal))
                                   (abbreviation-table (make-hash-table :test #'equal))

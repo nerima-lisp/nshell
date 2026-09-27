@@ -13,16 +13,30 @@
         (unwind-protect
              (progn
                (setf pty
-                     (nshell.infrastructure.acl:pty-spawn
-                      program (%nshell-main-pty-arguments) :rows 24 :cols 100))
+                     (%e2e-pty-spawn
+                     program (%nshell-main-pty-arguments)
+                     :environment
+                     (cons "NSHELL_PROMPT=pty-signal-ready>"
+                           (%e2e-child-environment))
+                     :rows 24 :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
                  (%e2e-pty-await-ready fd)
                  (nshell.infrastructure.acl:pty-write fd "exit 91")
                  (expect (search "91" (%e2e-pty-read-until fd "91")) :to-be-truthy)
                  (nshell.infrastructure.acl:pty-write fd (string (code-char 3)))
+                 (expect (search "pty-signal-ready>"
+                                 (%e2e-pty-read-until fd "pty-signal-ready>"))
+                         :to-be-truthy)
+                 (%e2e-pty-write-line fd ":")
+                 (expect (search "pty-signal-ready>"
+                                 (%e2e-pty-read-until fd "pty-signal-ready>"))
+                         :to-be-truthy)
                  (%e2e-pty-write-line fd "printf 'prompt-recovered:<%s>\\n' yes")
                  (expect (search "prompt-recovered:<yes>"
-                                 (%e2e-pty-read-until fd "prompt-recovered:<yes>"))
+                                 (%e2e-pty-read-until
+                                  fd
+                                  "prompt-recovered:<yes>"
+                                  :timeout 15.0))
                          :to-be-truthy)
                  (%e2e-pty-write-line fd "exit")
                  (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)

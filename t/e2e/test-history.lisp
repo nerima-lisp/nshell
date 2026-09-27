@@ -32,7 +32,7 @@
                      (let ((pty nil))
                        (unwind-protect
                             (progn
-                              (setf pty (nshell.infrastructure.acl:pty-spawn
+                              (setf pty (%e2e-pty-spawn
                                          program arguments :rows 24 :cols 100))
                               (let* ((fd (nshell.infrastructure.acl:pty-process-master-fd pty))
                                      (ready (format nil "~c[?2004h" #\Escape)))

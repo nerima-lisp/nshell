@@ -435,15 +435,11 @@
             ''
               mkdir -p $out/bin $out/libexec $out/lib
               cp -R ${delivery}/README.md ${delivery}/LICENSE ${delivery}/LICENSES ${delivery}/share $out/
-              chmod -R u+w $out/LICENSES
-              mkdir -p $out/lib/sbcl
-              cp ${pkgs.sbcl}/lib/sbcl/sbcl.core $out/lib/sbcl/sbcl.core
+              chmod -R u+w $out
 
               cp ${builtImage} $out/libexec/nshell
               cp ${spawnHelperFor ctx}/bin/cl-process-kit-spawn $out/libexec/cl-process-kit-spawn
               chmod u+w $out/libexec/nshell $out/libexec/cl-process-kit-spawn
-              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
-                --set-rpath '$ORIGIN/../lib' $out/libexec/nshell
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 --set-rpath '$ORIGIN/../lib' $out/libexec/cl-process-kit-spawn
               cp -L ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $out/lib/
@@ -498,7 +494,6 @@
                 *) program=nshell ;;
               esac
               export PATH="$root/bin:$PATH"
-              export SBCL_HOME="$root/lib/sbcl"
               exec "$root/lib/ld-linux-x86-64.so.2" \
                 --library-path "$root/lib" --argv0 "$0" \
                 "$root/libexec/$program" "$@"

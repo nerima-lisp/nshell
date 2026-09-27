@@ -39,5 +39,8 @@ under test and can change startup, source lookup, or persistent state.")
 
 (defun %e2e-pty-spawn (program args &rest keys)
   "Spawn an E2E PTY without inheriting the test runner's environment."
-  (apply #'nshell.infrastructure.acl:pty-spawn
-         program args :environment (%e2e-child-environment) keys))
+  (let ((environment (or (getf keys :environment)
+                         (%e2e-child-environment))))
+    (remf keys :environment)
+    (apply #'nshell.infrastructure.acl:pty-spawn
+           program args :environment environment keys)))

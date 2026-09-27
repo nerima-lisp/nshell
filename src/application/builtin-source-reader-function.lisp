@@ -24,27 +24,13 @@
      (stop-p nil :type boolean)))
 
 (defun %source-line-segments (line)
-  (let ((tokens (nshell.domain.parsing:tokenization-result-tokens
-                 (nshell.domain.parsing:tokenize line))))
-    (let ((segments nil)
-          (segment-start 0))
-      (loop for token in tokens
-            do (when (member (nshell.domain.parsing:token-type token)
-                             '(:semicolon :ampersand)
-                             :test #'eq)
-                 (let ((segment (string-trim '(#\Space #\Tab)
-                                             (subseq line
-                                                     segment-start
-                                                     (nshell.domain.parsing:token-start token)))))
-                   (when (plusp (length segment))
-                     (push segment segments)))
-                 (setf segment-start (nshell.domain.parsing:token-end token)))
-            finally
-              (let ((segment (string-trim '(#\Space #\Tab)
-                                          (subseq line segment-start))))
-                (when (plusp (length segment))
-                  (push segment segments)))
-              (return (nreverse segments))))))
+  "Return command segments in LINE using the same offsets as definition scans.
+
+  Keeping this projection on the offset scanner is important for a submitted
+  multiline function: a newline is a command boundary just like a semicolon.
+  The source reader must never pass the function's `end' to the ordinary AST
+  executor as part of a preceding command."
+  (mapcar #'cdr (%source-line-segment-offsets line)))
 
 (defun %source-line-segment-offsets (line)
   "The commands on LINE as (OFFSET . TEXT) pairs, offset into LINE."

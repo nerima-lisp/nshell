@@ -440,6 +440,18 @@
               cp ${builtImage} $out/libexec/nshell
               cp ${spawnHelperFor ctx}/bin/cl-process-kit-spawn $out/libexec/cl-process-kit-spawn
               chmod u+w $out/libexec/nshell $out/libexec/cl-process-kit-spawn
+              # patchelf rewrites the ELF layout and discards SBCL's appended
+              # core. Patch only PT_INTERP through a temporary patchelf copy,
+              # preserving the delivered image byte-for-byte otherwise.
+              cp $out/libexec/nshell $out/libexec/nshell-interp
+              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
+                $out/libexec/nshell-interp
+              read -r interp_offset interp_size <<EOF
+              $(readelf -lW $out/libexec/nshell | awk '/ INTERP / { getline; print $1, $4 }')
+              EOF
+              dd if=$out/libexec/nshell-interp of=$out/libexec/nshell \
+                bs=1 seek="$interp_offset" count="$interp_size" conv=notrunc status=none
+              rm $out/libexec/nshell-interp
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 --set-rpath '$ORIGIN/../lib' $out/libexec/cl-process-kit-spawn
               cp -L ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $out/lib/

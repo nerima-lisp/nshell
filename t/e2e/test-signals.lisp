@@ -27,6 +27,10 @@
                  (expect (search "pty-signal-ready>"
                                  (%e2e-pty-read-until fd "pty-signal-ready>"))
                          :to-be-truthy)
+                 (%e2e-pty-write-line fd ":")
+                 (expect (search "pty-signal-ready>"
+                                 (%e2e-pty-read-until fd "pty-signal-ready>"))
+                         :to-be-truthy)
                  (%e2e-pty-write-line fd "printf 'prompt-recovered:<%s>\\n' yes")
                  (expect (search "prompt-recovered:<yes>"
                                  (%e2e-pty-read-until

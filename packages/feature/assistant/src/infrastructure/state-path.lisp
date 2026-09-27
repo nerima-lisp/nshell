@@ -38,13 +38,24 @@
   path)
 
 (defun %assistant-open-state-output-stream (path flags)
-  (let ((fd (sb-posix:open (namestring path)
-                           (logior flags sb-posix:o-wronly
-                                   sb-posix:o-creat)
-                           #o600)))
+  (multiple-value-bind (fd created-p)
+      (handler-case
+          (values (sb-posix:open (namestring path)
+                                 (logior flags sb-posix:o-wronly
+                                         sb-posix:o-creat
+                                         sb-posix:o-excl)
+                                 #o600)
+                  t)
+        (sb-posix:syscall-error (condition)
+          (if (= (sb-posix:syscall-errno condition) sb-posix:eexist)
+              (values (sb-posix:open (namestring path)
+                                     (logior flags sb-posix:o-wronly))
+                      nil)
+              (error condition))))
     (handler-case
         (progn
-          (sb-posix:fchmod fd #o600)
+          (unless created-p
+            (sb-posix:fchmod fd #o600))
           (sb-sys:make-fd-stream fd
                                  :output t
                                  :element-type 'character

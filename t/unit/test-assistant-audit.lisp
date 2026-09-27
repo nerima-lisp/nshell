@@ -13,7 +13,7 @@
 (describe "assistant-audit-tail-boundaries"
   (it "handles zero, exact, short, and excessive counts"
     (with-temporary-output-file (path :prefix "nshell-assistant-audit-tail-")
-      (%write-assistant-audit-test-file path "one\ntwo\nthree")
+      (%write-assistant-audit-test-file path (format nil "one~%two~%three"))
       (let ((nshell.feature.assistant:*assistant-audit-file-path-override* path))
         (multiple-value-bind (lines present-p)
             (%assistant-audit-test-lines 0)
@@ -32,11 +32,20 @@
 
   (it "does not add a phantom line for a trailing newline"
     (with-temporary-output-file (path :prefix "nshell-assistant-audit-tail-")
-      (%write-assistant-audit-test-file path "one\ntwo\n")
+      (%write-assistant-audit-test-file path (format nil "one~%two~%"))
       (let ((nshell.feature.assistant:*assistant-audit-file-path-override* path))
         (expect '("one" "two")
                 :to-equal (first (multiple-value-list
                                   (%assistant-audit-test-lines 3)))))))
+
+  (it "returns no lines for an empty file"
+    (with-temporary-output-file (path :prefix "nshell-assistant-audit-tail-")
+      (%write-assistant-audit-test-file path "")
+      (let ((nshell.feature.assistant:*assistant-audit-file-path-override* path))
+        (multiple-value-bind (lines present-p)
+            (%assistant-audit-test-lines 3)
+          (expect nil :to-equal lines)
+          (expect t :to-be present-p)))))
 
   (it "keeps long lines intact when selecting the tail"
     (with-temporary-output-file (path :prefix "nshell-assistant-audit-tail-")

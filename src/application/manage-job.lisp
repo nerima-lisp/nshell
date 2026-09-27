@@ -31,7 +31,7 @@
             (or ,previous (%shell-process-group-id))))))))
 
 (defun %run-terminal-command (context command args)
-  (let ((process (nshell.infrastructure.acl::%spawn-terminal-command command args)))
+  (let ((process (nshell.infrastructure.acl::%spawn-pty-terminal-command command args)))
     (unless process
       (return-from %run-terminal-command
         (values

@@ -133,7 +133,7 @@
               (capture-standard-output
                 (nshell.presentation::commit-transient-panel-to-scrollback
                  :terminal-width 30)))
-            (expect 1 :to-equal reset-count)))))
+            (expect 1 :to-equal reset-count))))))
 
   (it "does-not-commit-when-the-panel-is-not-displayed"
     (with-repl-test-state

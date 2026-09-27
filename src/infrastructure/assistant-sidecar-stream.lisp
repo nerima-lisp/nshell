@@ -392,7 +392,7 @@
                              (%assistant-sidecar-set-start-thread state nil)))
                          :name "nshell assistant sidecar startup")))
             (%assistant-sidecar-set-start-thread state thread))
-          t))))))
+          t)))))
 
 (defun %assistant-sidecar-request (state generation payload)
   (unless (and (assistant-sidecar-state-handle state)

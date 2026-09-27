@@ -2,18 +2,18 @@
 
 (defun runtime-dependency-closure (system-name)
   (labels ((visit (name seen)
-             (if (member name seen :test #'string-equal)
-                 seen
-                 (let* ((dependency-name (if (consp name)
-                                             (if (keywordp (first name))
-                                                 (second name)
-                                                 (first name))
-                                             name))
-                        (system (asdf:find-system dependency-name)))
+             (let ((dependency-name (if (consp name)
+                                        (if (keywordp (first name))
+                                            (second name)
+                                            (first name))
+                                        name)))
+               (if (member dependency-name seen :test #'string-equal)
+                   seen
+                   (let ((system (asdf:find-system dependency-name)))
                    (reduce (lambda (names dependency)
                              (visit dependency names))
                            (asdf:system-depends-on system)
-                           :initial-value (cons dependency-name seen))))))
+                           :initial-value (cons dependency-name seen)))))))
     (visit system-name nil)))
 
 (defun env-entry-value (entries name)

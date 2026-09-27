@@ -4,7 +4,11 @@
   (labels ((visit (name seen)
              (if (member name seen :test #'string-equal)
                  seen
-                 (let* ((dependency-name (if (consp name) (first name) name))
+                 (let* ((dependency-name (if (consp name)
+                                             (if (keywordp (first name))
+                                                 (second name)
+                                                 (first name))
+                                             name))
                         (system (asdf:find-system dependency-name)))
                    (reduce (lambda (names dependency)
                              (visit dependency names))

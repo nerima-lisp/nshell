@@ -446,9 +446,11 @@
               cp $out/libexec/nshell $out/libexec/nshell-interp
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 $out/libexec/nshell-interp
-              read -r interp_offset interp_size <<EOF
+              read -r interp_offset_hex interp_size_hex <<EOF
               $(readelf -lW $out/libexec/nshell | awk '$1 == "INTERP" { print $2, $5 }')
               EOF
+              interp_offset=$((interp_offset_hex))
+              interp_size=$((interp_size_hex))
               test -n "$interp_offset" -a -n "$interp_size"
               dd if=$out/libexec/nshell-interp of=$out/libexec/nshell \
                 bs=1 seek="$interp_offset" count="$interp_size" conv=notrunc status=none

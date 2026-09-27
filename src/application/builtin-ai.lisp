@@ -19,7 +19,10 @@
     (with-output-to-string (stream)
       (format stream "AI sidecar: ~a~%"
               (case state
+                (:ready "ready")
                 (:running "running")
+                (:starting "starting")
+                (:dead "dead; waiting for respawn")
                 (:not-started "not started")
                 (:unavailable "unavailable")
                 (otherwise "unknown")))

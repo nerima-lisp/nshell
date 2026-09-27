@@ -106,5 +106,6 @@
   (gethash job-id (shell-context-process-registry context)))
 
 (defun %stop-shell-context (context)
+  (ignore-errors (nshell.feature.assistant:assistant-model-stop))
   (setf (shell-context-running context) nil)
   context)

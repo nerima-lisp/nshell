@@ -149,3 +149,7 @@
   (apply #'assistant-boundary-stop
          (assistant-model-boundary)
          arguments))
+
+(defun assistant-model-status ()
+  "Return the public sidecar lifecycle snapshot for presentation consumers."
+  (assistant-boundary-status-snapshot (assistant-model-boundary)))

@@ -1,5 +1,34 @@
 (in-package #:nshell.feature.assistant)
 
+(defun %assistant-event-kind (object)
+  (let ((type (%assistant-object-field object "type"))
+        (subtype (%assistant-object-field object "subtype")))
+    (cond
+      ((and (equal type "system") (equal subtype "init")) :system-init)
+      ((equal type "assistant") :assistant)
+      ((equal type "rate_limit_event") :rate-limit-event)
+      ((equal type "result") :result)
+      (t :unknown))))
+
+(defun %assistant-read-json-value (stream)
+  (handler-case
+      (let ((first-char
+              (loop for char = (read-char stream nil :eof)
+                    do (cond
+                         ((eq char :eof) (return :eof))
+                         ((find char '(#\Space #\Tab #\Newline #\Return)
+                                :test #'char=))
+                         (t (unread-char char stream)
+                            (return char))))))
+        (if (eq first-char :eof)
+            (values nil :eof nil)
+            (values (json-kit:read-json stream
+                                        :object-type :alist
+                                        :array-type :list)
+                    :value nil)))
+    (error (condition)
+      (values nil :error (princ-to-string condition)))))
+
 (defstruct (assistant-pending-cell
             (:constructor %make-assistant-pending-cell
                 (generation events completion)))
@@ -56,14 +85,22 @@
         (case status
           (:value
            (when pending
-             (let* ((kind (%assistant-event-kind object))
-                    (event (make-assistant-model-event
-                            (assistant-pending-cell-generation pending)
-                            kind
-                            object)))
-               (%assistant-sidecar-publish pending event)
-               (when (eq kind :result)
-                 (%assistant-sidecar-complete pending)))))
+             (let ((kind (%assistant-event-kind object)))
+               (if (eq kind :unknown)
+                   (progn
+                     (%assistant-sidecar-publish
+                      pending
+                      (%assistant-sidecar-error-event
+                       (assistant-pending-cell-generation pending)
+                       "assistant sidecar returned an unknown event"))
+                     (%assistant-sidecar-complete pending))
+                   (let ((event (make-assistant-model-event
+                                 (assistant-pending-cell-generation pending)
+                                 kind
+                                 object)))
+                     (%assistant-sidecar-publish pending event)
+                     (when (eq kind :result)
+                       (%assistant-sidecar-complete pending)))))))
           (:eof
            (%assistant-sidecar-mark-dead state :reader-eof)
            (when pending
@@ -176,28 +213,37 @@
           (assistant-sidecar-state-reader-thread state) nil
           (assistant-sidecar-state-writer-thread state) nil
           (assistant-sidecar-state-error-thread state) nil
-          (assistant-sidecar-state-dead-p state) nil
-          (assistant-sidecar-state-dead-reason state) nil
           (assistant-sidecar-state-pending state) nil
           (assistant-sidecar-state-write-channel state) nil)
   t))
 
 (defun %assistant-sidecar-start (state)
-  (if (and (assistant-sidecar-state-handle state)
+  (if (null (assistant-sidecar-state-command state))
+      (progn
+        (setf (assistant-sidecar-state-starting-p state) nil
+              (assistant-sidecar-state-disabled-reason state)
+              :disabled-by-environment)
+        nil)
+      (if (and (assistant-sidecar-state-handle state)
            (assistant-sidecar-state-init-p state)
            (not (assistant-sidecar-state-dead-p state))
            (nshell.infrastructure.acl:sidecar-alive-p
             (assistant-sidecar-state-handle state)))
       t
-      (progn
+          (progn
+        (setf (assistant-sidecar-state-starting-p state) t
+              (assistant-sidecar-state-disabled-reason state) nil)
         (%assistant-sidecar-stop-state state)
+        (setf (assistant-sidecar-state-dead-p state) nil
+              (assistant-sidecar-state-dead-reason state) nil)
         (multiple-value-bind (version version-status)
             (nshell.infrastructure.acl:run-sidecar-version
              (assistant-sidecar-state-command state))
           (if (not (eq :ok version-status))
               (progn
-                (setf (assistant-sidecar-state-disabled-reason state)
-                      (list :version version-status))
+                (setf (assistant-sidecar-state-starting-p state) nil
+                      (assistant-sidecar-state-disabled-reason state)
+                        (list :version version-status))
                 nil)
               (multiple-value-bind (handle spawn-status)
                   (nshell.infrastructure.acl:spawn-sidecar
@@ -209,6 +255,7 @@
                    :error :stream)
                 (if (null handle)
                     (progn
+                      (setf (assistant-sidecar-state-starting-p state) nil)
                       (setf (assistant-sidecar-state-disabled-reason state)
                             (list :spawn spawn-status))
                       nil)
@@ -245,8 +292,17 @@
                                    handle)))
                                :name "nshell assistant sidecar error reader"))
                       (multiple-value-bind (init present-p)
-                          (cl-concurrent-kit:recv
-                           (assistant-pending-cell-events pending))
+                          (loop with deadline = (+ (get-internal-real-time)
+                                                   (round (* +assistant-sidecar-handshake-timeout-seconds+
+                                                             internal-time-units-per-second)))
+                                do (multiple-value-bind (event present-p closed-p)
+                                       (cl-concurrent-kit:try-recv
+                                        (assistant-pending-cell-events pending))
+                                     (declare (ignore closed-p))
+                                     (when present-p (return (values event t)))
+                                     (when (>= (get-internal-real-time) deadline)
+                                       (return (values nil nil)))
+                                     (sleep 0.01)))
                         (if (and present-p
                                  (assistant-model-event-p init)
                                  (eq :system-init
@@ -254,7 +310,8 @@
                                  (assistant-system-init-safe-p
                                   (assistant-model-event-payload init)))
                             (progn
-                              (setf (assistant-sidecar-state-init-p state) t
+                              (setf (assistant-sidecar-state-starting-p state) nil
+                                    (assistant-sidecar-state-init-p state) t
                                     (assistant-sidecar-state-disabled-reason state)
                                       nil)
                               (%assistant-sidecar-complete pending)
@@ -263,10 +320,14 @@
                                (assistant-pending-cell-events pending))
                               t)
                             (progn
-                              (setf (assistant-sidecar-state-disabled-reason state)
-                                    :mcp-isolation-failed)
+                              (setf (assistant-sidecar-state-starting-p state) nil
+                                    (assistant-sidecar-state-disabled-reason state)
+                                      (if present-p
+                                          :mcp-isolation-failed
+                                          (list :handshake-timeout
+                                                +assistant-sidecar-handshake-timeout-seconds+)))
                               (%assistant-sidecar-stop-state state)
-                              nil)))))))))))
+                              nil))))))))))))))
 
 (defun %assistant-sidecar-request (state generation payload)
   (unless (and (assistant-sidecar-state-handle state)

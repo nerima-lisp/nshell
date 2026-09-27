@@ -111,6 +111,7 @@ depend on one stable feature package.")
      #:assistant-model-request
      #:assistant-model-poll
      #:assistant-model-stop
+     #:assistant-model-status
      #:assistant-model-event
      #:assistant-model-event-p
      #:assistant-model-event-generation

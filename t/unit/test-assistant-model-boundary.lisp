@@ -47,6 +47,18 @@
     (sb-posix:chmod (namestring path) #o700)
     path))
 
+(defun %assistant-test-hanging-version-sidecar-script ()
+  (let ((path (merge-pathnames
+               (format nil "nshell-assistant-hanging-version-~D.sh"
+                       (get-universal-time))
+               (uiop:temporary-directory))))
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (dolist (line '("#!/bin/sh"
+                      "while :; do sleep 1; done"))
+        (write-line line stream)))
+    (sb-posix:chmod (namestring path) #o700)
+    path))
+
 (defun %assistant-test-live-thread-named-p (name)
   (some (lambda (thread)
           (and (equal name (sb-thread:thread-name thread))
@@ -127,6 +139,27 @@
                       kinds))
             (expect :stream-ended :to-be (first kinds))))))))
 
+  (it "terminates-an-unknown-fixture-event"
+    (with-temporary-output-file (fixture-path :prefix "nshell-assistant-unknown-")
+      (write-test-lines
+       fixture-path
+       '("{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[],\"mcp_servers\":[]}"
+         "{\"type\":\"future_event\"}"))
+      (multiple-value-bind (boundary error-message)
+          (nshell.feature.assistant:make-assistant-fixture-boundary fixture-path)
+        (expect nil :to-be error-message)
+        (let ((nshell.feature.assistant:*assistant-boundaries*
+                (nshell.feature.assistant:make-assistant-boundary-context boundary)))
+          (nshell.feature.assistant:assistant-model-start)
+          (nshell.feature.assistant:assistant-model-poll 0)
+          (nshell.feature.assistant:assistant-model-request 1 nil)
+          (let ((event-result (nshell.feature.assistant:assistant-model-poll 1)))
+            (expect :event :to-be
+                    (nshell.feature.assistant:assistant-boundary-status event-result))
+            (expect :stream-error :to-be
+                    (nshell.feature.assistant:assistant-model-event-kind
+                     (nshell.feature.assistant:assistant-boundary-value event-result)))))))))
+
   (it "accepts-only-structured-output-tools-and-empty-mcp-servers"
     (expect t :to-be
             (nshell.feature.assistant:assistant-system-init-safe-p
@@ -195,6 +228,42 @@
               (second (member "--model" arguments :test #'string=)))
       (expect "low" :to-equal
               (second (member "--effort" arguments :test #'string=)))))
+
+  (it "disables-sidecar-when-requested-by-environment"
+    (let ((old-value (host-kit:getenv "NSHELL_AI_DISABLE")))
+      (unwind-protect
+           (progn
+             (sb-posix:setenv "NSHELL_AI_DISABLE" "1" 1)
+             (let* ((boundary (nshell.feature.assistant:make-assistant-sidecar-boundary
+                               :command "/bin/false"))
+                    (nshell.feature.assistant:*assistant-boundaries*
+                      (nshell.feature.assistant:make-assistant-boundary-context boundary))
+                    (result (nshell.feature.assistant:assistant-model-start)))
+               (expect :unavailable :to-be
+                       (nshell.feature.assistant:assistant-boundary-status result))
+               (expect :unavailable :to-be
+                       (getf (nshell.feature.assistant:assistant-model-status)
+                             :state))))
+        (if old-value
+            (sb-posix:setenv "NSHELL_AI_DISABLE" old-value 1)
+            (sb-posix:unsetenv "NSHELL_AI_DISABLE")))))
+
+  (it "times-out-a-sidecar-that-hangs-during-version-probe"
+    (let ((script (%assistant-test-hanging-version-sidecar-script))
+          (started-at (get-internal-real-time)))
+      (unwind-protect
+           (let* ((boundary (nshell.feature.assistant:make-assistant-sidecar-boundary
+                             :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context boundary))
+                  (result (nshell.feature.assistant:assistant-model-start))
+                  (elapsed (/ (- (get-internal-real-time) started-at)
+                              (float internal-time-units-per-second))))
+             (expect :unavailable :to-be
+                     (nshell.feature.assistant:assistant-boundary-status result))
+             (expect t :to-be (< elapsed 12)))
+        (when (probe-file script)
+          (delete-file script)))))
 
   (it "starts-sidecar-in-its-own-group-without-shell-registration"
     (let ((foreground-pgid nshell.infrastructure.acl::*foreground-pgid*)

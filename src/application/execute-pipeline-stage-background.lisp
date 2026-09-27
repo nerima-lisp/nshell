@@ -37,13 +37,21 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
       (error
        (%abort-process-substitution-resources resources)
        (values error 127))
-      (resources
-       (%abort-process-substitution-resources resources)
-       (values
-        (%process-substitution-error
-         "is not supported in background jobs")
-        127))
       (t
+       (let ((gate (%assistant-gate-expanded-node
+                    context (nshell.domain.parsing:make-pipeline-node
+                             expanded-commands))))
+         (when gate
+           (%abort-process-substitution-resources resources)
+           (return-from %spawn-background-pipeline-in-context
+             (values (first gate) (second gate)))))
+       (when resources
+         (%abort-process-substitution-resources resources)
+         (return-from %spawn-background-pipeline-in-context
+           (values
+            (%process-substitution-error
+             "is not supported in background jobs")
+            127)))
        (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
               (clean-commands
                 (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
@@ -68,13 +76,19 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
       (error
        (%abort-process-substitution-resources resources)
        (values error 127))
-      (resources
-       (%abort-process-substitution-resources resources)
-       (values
-        (%process-substitution-error
-         "is not supported in background jobs")
-        127))
       (t
+       (let ((gate (%assistant-gate-expanded-node context expanded-command)))
+         (when gate
+           (%abort-process-substitution-resources resources)
+           (return-from %spawn-background-command-in-context
+             (values (first gate) (second gate)))))
+       (when resources
+         (%abort-process-substitution-resources resources)
+         (return-from %spawn-background-command-in-context
+           (values
+            (%process-substitution-error
+             "is not supported in background jobs")
+            127)))
        (let* ((redirect-split (%extract-command-redirects expanded-command))
               (clean-command
                 (nshell.domain.parsing:command-redirect-split-result-clean-command

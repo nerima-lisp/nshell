@@ -340,7 +340,8 @@ following the data/logic separation principle."
                                               (t :other))))
                                       (,(second clause) ,context ,ast))))
                                 clauses)
-                      (t (values (format nil "source: unsupported syntax~%") 2)))))))
+                      ;; Unknown control nodes are blocked by default.
+                      (t (values (format nil "source: unsupported syntax (blocked by default)~%") 2)))))))
          (%record-last-exit-code ,context (second result))
          (values-list result)))))
 

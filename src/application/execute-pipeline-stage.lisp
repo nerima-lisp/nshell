@@ -26,6 +26,11 @@
 (defun %process-substitution-error (message)
   (format nil "nshell: process substitution: ~a~%" message))
 
+(defun %assistant-gate-expanded-node (context node)
+  "Re-check an expanded node immediately before dispatch for AI execution."
+  (let ((*execution-gate-parent-kind* nil))
+    (%assistant-execution-gate context node)))
+
 (defun %process-substitution-inner-commands (ast)
   (cond
     ((nshell.domain.parsing:command-node-p ast)
@@ -99,6 +104,16 @@
           (return-from
            %materialize-process-substitution-in-context
            (values nil nil error)))
+        (let ((gate (%assistant-gate-expanded-node context
+                                                   (if (= (length expanded-commands) 1)
+                                                       (first expanded-commands)
+                                                       (nshell.domain.parsing:make-pipeline-node
+                                                        expanded-commands)))))
+          (when gate
+            (%abort-process-substitution-resources nested-resources)
+            (return-from
+             %materialize-process-substitution-in-context
+             (values nil nil (%process-substitution-error (first gate))))))
         (when (some
                (lambda (command)
                  (%shell-internal-command-p context command))

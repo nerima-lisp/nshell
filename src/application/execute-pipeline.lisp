@@ -87,10 +87,15 @@ spawns, so a stage's assignment reaches that stage's process alone.")
 (defun %execute-plain-command-node-in-context (context command-node)
   (multiple-value-bind (expanded error resources)
       (%expand-command-node-in-context context command-node)
-    (when error
-      (%abort-process-substitution-resources resources)
-      (return-from %execute-plain-command-node-in-context (values error 127)))
-    (let* ((redirect-split (%extract-command-redirects expanded))
+      (when error
+        (%abort-process-substitution-resources resources)
+        (return-from %execute-plain-command-node-in-context (values error 127)))
+      (let ((gate (%assistant-gate-expanded-node context expanded)))
+        (when gate
+          (%abort-process-substitution-resources resources)
+          (return-from %execute-plain-command-node-in-context
+            (values (first gate) (second gate)))))
+      (let* ((redirect-split (%extract-command-redirects expanded))
            (clean-command
              (nshell.domain.parsing:command-redirect-split-result-clean-command
               redirect-split))
@@ -125,6 +130,13 @@ spawns, so a stage's assignment reaches that stage's process alone.")
       (when error
         (%abort-process-substitution-resources resources)
         (return-from %execute-plain-pipeline-node-in-context (values error 127)))
+      (let ((gate (%assistant-gate-expanded-node
+                   context (nshell.domain.parsing:make-pipeline-node
+                            expanded-commands))))
+        (when gate
+          (%abort-process-substitution-resources resources)
+          (return-from %execute-plain-pipeline-node-in-context
+            (values (first gate) (second gate)))))
       (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
              (clean-commands
               (nshell.domain.parsing:command-list-redirect-split-result-clean-commands

@@ -69,12 +69,7 @@
     :command "cat"
     :condition :always
     :reason "searching text does not write to the filesystem")
-   (make-assistant-safety-rule
-    :name :safe-git-status
-    :classification :safe
-    :command "git"
-    :condition '(:subcommand-equals "status")
-    :reason "git status only reads repository state"))
+   )
   "Static AST safety rules, ordered from specific dangerous cases to safe cases.")
 
 (defparameter +assistant-safe-command-names+
@@ -112,17 +107,37 @@
                    args)))
            +assistant-safety-rules+))
 
+(defun %assistant-unsafe-argument-reason (command args)
+  (cond
+    ((or (search "`" command)
+         (some (lambda (arg) (search "`" arg)) args))
+     "backtick command substitution requires confirmation")
+    ((some (lambda (arg) (search ">" arg)) args)
+     "output redirection or process substitution requires confirmation")
+    ((and (string= command "find")
+          (some (lambda (arg)
+                  (or (member arg '("-delete" "-exec" "-ok" "-execdir" "-okdir")
+                              :test #'string=)
+                      (some (lambda (prefix)
+                              (%assistant-string-prefix-p prefix arg))
+                            '("-fprint" "-fprintf" "-fls"))))
+                args))
+     (if (some (lambda (arg)
+                 (member arg '("-exec" "-ok" "-execdir" "-okdir")
+                         :test #'string=))
+               args)
+         "find actions can execute commands and require confirmation"
+         "find actions can write files and require confirmation"))
+    ((and (string= command "rg")
+          (some (lambda (arg)
+                  (or (%assistant-string-prefix-p "--pre" arg)
+                      (string= arg "--search-zip")))
+                args))
+     "ripgrep can execute external preprocessors and requires confirmation")
+    (t nil)))
+
 (defun %assistant-unsafe-argument-p (command args)
-  (or (some (lambda (arg)
-              (or (search ">" arg)
-                  (search ">(" arg)))
-            args)
-      (and (string= command "find")
-           (some (lambda (arg)
-                   (member arg '("-delete" "-exec" "-ok" "-execdir")
-                           :test #'string=))
-                 args))
-      nil))
+  (not (null (%assistant-unsafe-argument-reason command args))))
 
 (defun %assistant-parenthesized-substitution-texts (value marker)
   (let ((results nil)
@@ -145,10 +160,10 @@
                 (setf start position))
               (return (nreverse (cons :incomplete results)))))))))
 
-(defun %assistant-command-substitution-result (args)
+(defun %assistant-command-substitution-result (command args)
   (let ((results nil))
-    (dolist (arg args)
-      (dolist (marker '("$(" "<(" ">("))
+    (dolist (arg (cons command args))
+      (dolist (marker '("$(" "<(" ">(" "("))
         (dolist (text (%assistant-parenthesized-substitution-texts arg marker))
           (push (if (eq text :incomplete)
                     (make-assistant-safety-result
@@ -188,11 +203,32 @@
         (t (values nil nil))))))
 
 (defun %assistant-safe-git-command-p (args)
-  (or (member (first args) '("status" "log" "diff" "show") :test #'string=)
-      (and (string= (first args) "branch")
-           (member "--list" (rest args) :test #'string=))
-      (and (string= (first args) "remote")
-           (member "-v" (rest args) :test #'string=))))
+  (let ((subcommand (first args)))
+    (and (member subcommand '("log" "show" "branch" "remote")
+                 :test #'string=)
+         (every
+          (lambda (arg)
+            (or (not (%assistant-string-prefix-p "-" arg))
+                (member arg
+                        (cond
+                          ((string= subcommand "log")
+                           '("--oneline" "--decorate" "--stat" "--name-only"
+                             "--name-status" "--graph" "--all" "--follow"
+                             "--no-merges" "-p" "-n" "--"))
+                          ((string= subcommand "show")
+                           '("--stat" "--patch" "-p" "--name-only"
+                             "--name-status" "--pretty" "--format"
+                             "--no-patch" "--"))
+                          ((string= subcommand "branch") '("--list" "-l" "--"))
+                          ((string= subcommand "remote") '("-v" "--verbose" "--")))
+                        :test #'string=)
+                (some (lambda (prefix)
+                        (%assistant-string-prefix-p prefix arg))
+                      (cond
+                        ((string= subcommand "log") '("--pretty=" "--format="))
+                        ((string= subcommand "show") '("--pretty=" "--format="))
+                        (t nil)))))
+          (rest args)))))
 
 (defun %assistant-parse-and-classify-text (text)
   (let ((parsed (nshell.domain.parsing:parse-command-line text)))
@@ -233,7 +269,7 @@
       (let* ((command (nshell.domain.parsing:command-node-command node))
              (args (nshell.domain.parsing:command-node-arg-values node))
              (rule (%assistant-rule-for command args))
-             (substitution-result (%assistant-command-substitution-result args)))
+             (substitution-result (%assistant-command-substitution-result command args)))
         (cond
           ((and substitution-result
                 (eq :block
@@ -247,7 +283,13 @@
            (make-assistant-safety-result
             :classification :confirm
             :command command
-            :reason "output redirection, process substitution, or value disclosure requires confirmation"))
+            :reason (%assistant-unsafe-argument-reason command args)))
+          ((and (string= command "git")
+                (not (%assistant-safe-git-command-p args)))
+           (make-assistant-safety-result
+            :classification :confirm
+            :command command
+            :reason "writing, external command execution, or configuration injection requires confirmation"))
           ((or (member command +assistant-safe-command-names+ :test #'string=)
                (and (string= command "git")
                     (%assistant-safe-git-command-p args)))

@@ -12,6 +12,11 @@
   (when fd
     (ignore-errors (sb-posix:close fd))))
 
+(defun %pty-set-close-on-exec (fd)
+  (let ((flags (sb-posix:fcntl fd sb-posix:f-getfd)))
+    (sb-posix:fcntl fd sb-posix:f-setfd
+                    (logior flags sb-posix:fd-cloexec))))
+
 (defun %pty-child-open-flags ()
   sb-posix:o-rdwr)
 
@@ -67,7 +72,7 @@
         (cond
           ((null count) (error "PTY child readiness read failed with errno ~d"
                                (sb-unix::get-errno)))
-          ((zerop count) (error "PTY child closed readiness pipe before setup completed"))
+          ((zerop count) :eof)
           (t (aref buffer 0)))))))
 
 (defun %signal-pty-child-ready (fd byte)
@@ -77,7 +82,8 @@
 
 (defun %wait-for-pty-child-ready (fd pid)
   (let ((byte (%pty-read-ready-byte fd)))
-    (unless (= byte +pty-child-ready-ok+)
+    (unless (or (eq byte :eof)
+                (= byte +pty-child-ready-ok+))
       (ignore-errors (sb-posix:waitpid pid 0))
       (error "PTY child setup failed")))
   t)
@@ -105,16 +111,17 @@
         (let ((slave-fd (sb-posix:open slave-name (%pty-child-open-flags))))
           (unwind-protect
                (progn
+                 (%pty-set-close-on-exec ready-fd)
                  (%set-pty-window-size slave-fd rows cols)
                  (when new-session-p
                    (%claim-controlling-terminal slave-fd (sb-posix:getpid)))
                  (%redirect-pty-slave slave-fd)
-                 (%signal-pty-child-ready ready-fd +pty-child-ready-ok+)
-                 (setf ready-fd nil)
                  (when (> slave-fd 2)
                    (sb-posix:close slave-fd)
                    (setf slave-fd nil))
                  (%execve program argv envp)
+                 (%signal-pty-child-ready ready-fd +pty-child-ready-error+)
+                 (setf ready-fd nil)
                  (%pty-child-fail))
             (when slave-fd (%pty-close-fd slave-fd)))))
     (error ()

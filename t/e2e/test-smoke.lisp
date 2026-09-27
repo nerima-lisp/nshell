@@ -206,7 +206,7 @@ terminal without waiting out the real (30s) default."
                    (nshell.infrastructure.acl:pty-spawn
                     program (%nshell-main-pty-arguments) :rows 24 :cols 100))
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-               (expect (search ">" (%e2e-pty-read-until fd ">")) :to-be-truthy)
+               (%e2e-pty-await-ready fd)
                (when command
                  (%e2e-pty-write-line fd command))
                (if exit-command

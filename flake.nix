@@ -438,6 +438,7 @@
 
               cp ${builtImage} $out/libexec/nshell
               cp ${spawnHelperFor ctx}/bin/cl-process-kit-spawn $out/libexec/cl-process-kit-spawn
+              chmod u+w $out/libexec/nshell $out/libexec/cl-process-kit-spawn
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
                 --set-rpath '$ORIGIN/../lib' $out/libexec/nshell
               patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 \
@@ -555,7 +556,7 @@
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
 
       packageArgs = ctx: {
-        nativeBuildInputs = [ (spawnHelperFor ctx) ];
+        nativeBuildInputs = [ (spawnHelperFor ctx) ctx.pkgs.coreutils ];
       };
 
       # Drives the test checks from this one number, so the contributor-facing

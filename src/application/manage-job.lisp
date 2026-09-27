@@ -44,7 +44,6 @@
              (setf nshell.infrastructure.acl::*foreground-pty-p* t)
              (%set-acl-foreground-pgid pgid)
              (%with-terminal-foreground-pgroup pgid
-               (nshell.infrastructure.acl:process-continue process)
                (let ((stopped-p (eq :stopped (%wait-terminal-processes (list process))))
                      (output (nshell.infrastructure.acl:pty-process-output process)))
                  (setf (shell-context-last-command-output context) output)

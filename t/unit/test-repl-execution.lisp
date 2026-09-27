@@ -638,6 +638,22 @@ path must be converted from a pathname before being appended."
             (expect nil :to-be
                     nshell.presentation::*failure-explain-available-p*)))))))
 
+(describe "pty-output-context-tests"
+  (it "syncs-retained-pty-output-into-the-explain-source"
+    (with-repl-test-state
+      (let ((context (nshell.application:make-shell-context
+                      :last-command-output "failed sk-12345678901234567890")))
+        (nshell.presentation::%sync-repl-shell-context context 1)
+        (expect "failed sk-12345678901234567890"
+                :to-equal nshell.presentation::*last-command-output*)
+        (let ((assistant-context
+                (nshell.feature.assistant:assemble-assistant-context
+                 :last-output nshell.presentation::*last-command-output*)))
+          (expect "failed [REDACTED]"
+                  :to-equal
+                  (nshell.feature.assistant:assistant-context-last-output
+                   assistant-context)))))))
+
 (describe "function-definition-submission-tests"
   (it "an-unterminated-function-header-reads-as-incomplete-input"
     "Typing `function greet' and pressing Enter must continue the line, the way

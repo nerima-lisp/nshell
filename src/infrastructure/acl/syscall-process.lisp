@@ -3,11 +3,10 @@
 (defparameter *external-command-timeout* nil
   "Maximum seconds for synchronous external commands. NIL disables the timeout.")
 
+(declaim (ftype function %spawn-pty-terminal-command))
+
 (defun %spawn-terminal-command (command args)
-  (multiple-value-bind (resolved environment) (%prepare-external-command command)
-    (when resolved
-      (%spawn-in-own-process-group resolved args environment *standard-input* t
-                                   :error t))))
+  (%spawn-pty-terminal-command command args))
 
 (defun process-pid (process)
   (if (pty-process-p process)

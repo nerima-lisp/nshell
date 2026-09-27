@@ -2,9 +2,11 @@
 
 ## Result
 
-The gate did not pass in this retry. The production foreground command path remains
-on the pre-existing SBCL process fallback. The PTY implementation and ring buffer
-remain available for a later retry.
+The candidate is connected to the production foreground command path, but this
+retry remains unverified. The local Nix check reached the test runner and timed
+out at the 1800 second cl-nix-forge limit before producing a test summary. The
+non-sandboxed suite and the required tmux checklist still need completion before
+this can be reported as a passed gate.
 
 ## Root cause
 
@@ -20,11 +22,12 @@ and `%wait-terminal-processes` waited indefinitely (`src/application/manage-job-
 This matches the original failure: `PTY job condition timed out; output: ""` and
 no prompt after `sleep 100` plus Ctrl-Z (`docs/notes/ai-native-requirements.md:462`).
 
-The retry candidate changed the PTY child to `:new-session-p t`. It also added a
+The retry candidate changes the PTY child to `:new-session-p t` and routes
+`%spawn-terminal-command` through `%spawn-pty-terminal-command`. It also adds a
 shell-context field to carry `pty-process-output` into the existing
 `last-output` explain context. The candidate compiled through the Nix build's
-compile phase, but the full check phase did not complete, so it was reverted and
-was not enabled as the production path.
+compile phase and is currently enabled in this worktree; the full check phase
+timed out, so no production-readiness claim is made.
 
 ## Gate evidence
 
@@ -51,13 +54,20 @@ evidence for the PTY harness but do not replace the named e2e/integration gate.
 - `git log -1 --oneline`: verified `d46e1f7`, equal to `origin/main`.
 - `git diff --check`: passed after restoring the fallback.
 - `nix build --no-link -L .#checks.aarch64-darwin.default`: candidate compile
-  phase reached `checkPhase`, but the check phase produced no output for several
-  minutes and was interrupted. Exit status: 130. No `0 failed` summary was
-  obtained.
+  phase completed and `checkPhase` ran, but cl-nix-forge terminated the test
+  runner at its 1800 second limit. Exit status: 1 (underlying builder exit 124).
+  No `0 failed` summary was obtained.
+- `nix develop -c sbcl --script run-tests.lisp`: started separately after the
+  sandbox timeout; no summary was available when this note was updated.
 - PTY e2e/integration CI: not run in this macOS session.
+- Manual tmux checklist first attempt: PTY input/output, resize, `cat`, and
+  shell usability worked, but direct foreground execution exposed a
+  `PTY-PROCESS` type error because the production spawn wrapper had not yet
+  been connected to the PTY runner. The wrapper was corrected in this retry;
+  the checklist must be rerun before a pass claim.
 
 ## Follow-up blocker
 
-Before enabling PTY foreground execution, rerun the complete Nix checks and the
-non-sandboxed Linux integration job, then repeat the exact tmux checklist with a
-usable command path while preserving the assertions.
+Before declaring the PTY foreground execution production-ready, complete the
+non-sandboxed suite, the Linux integration job, and the exact tmux checklist with
+a usable command path while preserving the assertions.

@@ -31,7 +31,7 @@ permitted to know both the domain and infrastructure.")
             #:shell-context-running
             #:shell-context-last-exit-code #:shell-context-input-state
             #:shell-context-job-processes #:shell-context-terminal-rows
-            #:shell-context-terminal-cols
+            #:shell-context-terminal-cols #:shell-context-last-command-output
             #:lookup-builtin
             #:resolve-command-path
             #:seed-shell-status-environment

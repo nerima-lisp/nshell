@@ -225,7 +225,7 @@
       (multiple-value-bind (rows cols) (%pty-terminal-dimensions)
         (%start-pty-tee
          (pty-spawn resolved args :rows rows :cols cols :environment environment
-                    :new-session-p nil)
+                    :new-session-p t)
          *standard-input*
          *standard-output*)))))
 

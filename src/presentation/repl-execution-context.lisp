@@ -34,7 +34,10 @@
         *running* (nshell.application:shell-context-running context)
         *pipefail* (nshell.application:shell-context-pipefail-p context)
         *last-exit-code* code
-        *input-state* (nshell.application:shell-context-input-state context))
+        *input-state* (nshell.application:shell-context-input-state context)
+        *last-command-output*
+          (or (nshell.application:shell-context-last-command-output context)
+              *last-command-output*))
   code)
 
 (defun %call-with-cooked-terminal (thunk)

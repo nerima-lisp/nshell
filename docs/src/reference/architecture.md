@@ -89,10 +89,12 @@ layer where it fits the domain-driven design:
   `ioctl(TIOCGWINSZ)` window-size query behind
   `nshell.infrastructure.acl:get-terminal-size`. Raw mode is deliberately *not*
   taken from the kit: `cl-tty-kit:enable-raw-mode` is a full cfmakeraw-style
-  mode that also clears `ISIG` and `OPOST`, while nshell holds raw mode for the
-  whole session — including while a foreground child runs — and needs the
-  terminal driver to keep turning `^C`/`^Z` into signals for that child and to
-  keep mapping LF to CR-LF. See the commentary in
+  mode that also clears `ISIG` and `OPOST`. nshell uses its own raw mode for
+  line editing, then temporarily restores cooked mode before a foreground
+  terminal command or external editor and enables raw mode again afterward.
+  The foreground PTY child owns the terminal process group while it runs, so
+  the terminal driver delivers `^C`/`^Z` as signals to that child and keeps
+  mapping LF to CR-LF. See the commentary in
   `src/infrastructure/terminal/raw-mode.lisp`.
 - **[cl-process-kit](https://github.com/nerima-lisp/cl-process-kit)** — backs
   timeout-guarded process launch, escalating SIGTERM to SIGKILL across a

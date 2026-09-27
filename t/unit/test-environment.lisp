@@ -1,7 +1,11 @@
 (in-package #:nshell/test)
 
 (defun runtime-dependency-closure (system-name)
-  (labels ((dependency-name (spec)
+  (labels ((flatten-names (names)
+             (if (and (consp names) (listp (first names)))
+                 (mapcan #'flatten-names names)
+                 names))
+           (dependency-name (spec)
              (cond
                ((stringp spec) spec)
                ((symbolp spec) (symbol-name spec))
@@ -20,9 +24,7 @@
                              dependencies)))
                      (asdf:system-depends-on system)
                      :initial-value (cons name seen))))))
-    (mapcan (lambda (name)
-              (if (listp name) name (list name)))
-            (visit system-name nil))))
+    (flatten-names (visit system-name nil))))
 
 (defun env-entry-value (entries name)
   (let ((entry

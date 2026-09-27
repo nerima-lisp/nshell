@@ -18,18 +18,11 @@
       (let ((path (assistant-audit-file-path)))
         (if (probe-file path)
             (with-open-file (stream path :direction :input)
-              (let ((end (file-position stream :end))
-                    (starts (list (file-position stream :end))))
-                (loop for position downfrom (1- end) to 0
-                      while (< (length starts) (1+ count))
-                      do (file-position stream position)
-                         (when (char= (read-char stream) #\Newline)
-                           (push (1+ position) starts)))
-                (file-position stream (or (car starts) 0))
-                (let ((lines nil))
-                  (loop for line = (read-line stream nil nil)
-                        while line do (push line lines))
-                  (values (last (nreverse lines) count) t))))
+              (let ((lines nil))
+                (loop for line = (read-line stream nil :eof)
+                      until (eq line :eof)
+                      do (push line lines))
+                (values (last (nreverse lines) count) t)))
             (values nil nil)))
         (error ()
           (values nil nil)))))
@@ -103,17 +96,15 @@ change shell execution control flow."
                                           (assistant-state-directory-path))))
             (when (probe-file rotated) (delete-file rotated))
             (uiop:rename-file-overwriting-target path rotated)))
-        (with-open-file (stream path
-                                :direction :output
-                                :if-exists :append
-                                :if-does-not-exist :create)
+        (with-open-stream
+            (stream (%assistant-open-state-output-stream
+                     path sb-posix:o-append))
           (write-line (json-kit:stringify
                        (%assistant-audit-record payload response-summary
                                                 denylist-paths
                                                 denylist-commands
                                                 denylist-values))
                       stream))
-        (%assistant-secure-state-file path)
         t)
     ;; Existing persistence treats an unavailable optional state file as a
     ;; non-fatal condition. Keep the audit boundary best-effort for the same

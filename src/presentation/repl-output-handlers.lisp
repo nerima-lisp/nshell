@@ -466,8 +466,6 @@ wrapped line's other rows on screen as stale duplicates."
                   start-result "assistant model boundary is unavailable")))))
     (nshell.feature.assistant:append-assistant-audit-entry
      payload nil
-     :denylist-paths nshell.feature.assistant:+assistant-default-denylist-paths+
-     :denylist-commands nshell.feature.assistant:+assistant-default-denylist-commands+
      :denylist-values
      (mapcar #'nshell.domain.environment:env-binding-value
              (nshell.domain.environment:env-bindings (ensure-environment))))

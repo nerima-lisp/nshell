@@ -52,3 +52,22 @@
       (expect nil :to-be (search "secret-environment-value" printed))
       (expect nil :to-be (search "/tmp/private.env" printed))
       (expect (search "visible output" printed) :to-be-truthy)))
+
+  (it "matches denylisted commands at shell command boundaries"
+    (dolist (case '( ("op read" . "")
+                     ("echo x | op read" . "")
+                     ("echo ok; op read" . "")
+                     ("echo ok && op read" . "")
+                     ("echo $(op read)" . "")
+                     ("sudo -E pass show" . "")
+                     ("env -- gh auth token" . "")
+                     ("command -- gpg --list" . "")
+                     ("echo top" . "echo top")
+                     ("echo stop" . "echo stop")
+                     ("echo option" . "echo option")))
+      (expect (cdr case) :to-equal
+              (nshell.feature.assistant:redact-lines
+               (car case)
+               :denylist-paths nil
+               :denylist-commands
+               '("pass" "gpg" "op" "gh auth token")))))

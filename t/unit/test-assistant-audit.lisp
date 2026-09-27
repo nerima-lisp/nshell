@@ -1,5 +1,54 @@
 (in-package #:nshell/test)
 
+(defun %write-assistant-audit-test-file (path content)
+  (with-open-file (stream path :direction :output :if-exists :supersede
+                                :if-does-not-exist :create)
+    (write-string content stream)))
+
+(defun %assistant-audit-test-lines (count)
+  (multiple-value-bind (lines present-p)
+      (nshell.feature.assistant:assistant-audit-tail count)
+    (values lines present-p)))
+
+(describe "assistant-audit-tail-boundaries"
+  (it "handles zero, exact, short, and excessive counts"
+    (with-temporary-output-file (path :prefix "nshell-assistant-audit-tail-")
+      (%write-assistant-audit-test-file path "one\ntwo\nthree")
+      (let ((nshell.feature.assistant:*assistant-audit-file-path-override* path))
+        (multiple-value-bind (lines present-p)
+            (%assistant-audit-test-lines 0)
+          (expect nil :to-equal lines)
+          (expect nil :to-be present-p))
+        (multiple-value-bind (lines present-p)
+            (%assistant-audit-test-lines 1)
+          (expect '("three") :to-equal lines)
+          (expect t :to-be present-p))
+        (expect '("one" "two" "three")
+                :to-equal (first (multiple-value-list
+                                  (%assistant-audit-test-lines 3))))
+        (expect '("one" "two" "three")
+                :to-equal (first (multiple-value-list
+                                  (%assistant-audit-test-lines 10)))))))
+
+  (it "does not add a phantom line for a trailing newline"
+    (with-temporary-output-file (path :prefix "nshell-assistant-audit-tail-")
+      (%write-assistant-audit-test-file path "one\ntwo\n")
+      (let ((nshell.feature.assistant:*assistant-audit-file-path-override* path))
+        (expect '("one" "two")
+                :to-equal (first (multiple-value-list
+                                  (%assistant-audit-test-lines 3)))))))
+
+  (it "keeps long lines intact when selecting the tail"
+    (with-temporary-output-file (path :prefix "nshell-assistant-audit-tail-")
+      (let ((long-line (make-string 16384 :initial-element #\x)))
+        (%write-assistant-audit-test-file
+         path (format nil "first~%~a~%last" long-line))
+        (let ((nshell.feature.assistant:*assistant-audit-file-path-override* path))
+          (multiple-value-bind (lines present-p)
+              (%assistant-audit-test-lines 2)
+            (expect (list long-line "last") :to-equal lines)
+            (expect t :to-be present-p)))))))
+
 (describe "assistant-audit-log-contracts"
   (it "appends JSONL after applying the same redaction to payload and response"
     (let ((path (merge-pathnames
@@ -8,6 +57,8 @@
       (unwind-protect
            (let ((nshell.feature.assistant:*assistant-audit-file-path-override*
                    path))
+             (host-kit:write-file-string "" path)
+             (sb-posix:chmod (namestring path) #o644)
              (expect path :to-equal
                      (nshell.feature.assistant:assistant-audit-file-path))
              (expect (nshell.feature.assistant:append-assistant-audit-entry
@@ -37,6 +88,10 @@
                          (search "ghp_12345678901234567890" content))
                  (expect nil :to-be (search "PRIVATE KEY" content))
                  (expect nil :to-be (search "/tmp/private.env" content))
-                 (expect nil :to-be (search "response-secret-value" content)))))
+                 (expect nil :to-be (search "response-secret-value" content))))
+             (expect #o600
+                     :to-equal
+                     (logand (sb-posix:stat-mode
+                              (sb-posix:stat path)) #o777)))
         (when (probe-file path)
           (delete-file path))))))

@@ -23,16 +23,14 @@
   (handler-case
       (let ((path (assistant-transcript-file-path session-id)))
         (%assistant-ensure-secure-state-directory path)
-        (with-open-file (stream path
-                                :direction :output
-                                :if-exists :append
-                                :if-does-not-exist :create)
+        (with-open-stream
+            (stream (%assistant-open-state-output-stream
+                     path sb-posix:o-append))
           (write-line
            (json-kit:stringify
             (%assistant-json-value
              (assistant-transcript-entry-payload entry)))
            stream))
-        (%assistant-secure-state-file path)
         (%assistant-prune-transcripts)
         t)
     (error () nil)))
@@ -44,17 +42,14 @@
                (assistant-state-file-path
                 (format nil "snapshot.json.tmp.~a" (gensym)))))
         (%assistant-ensure-secure-state-directory path)
-        (with-open-file (stream temporary-path
-                                :direction :output
-                                :if-exists :error
-                                :if-does-not-exist :create)
+        (with-open-stream
+            (stream (%assistant-open-state-output-stream
+                     temporary-path sb-posix:o-excl))
           (write-string
            (json-kit:stringify
             (%assistant-json-value (assistant-snapshot-payload snapshot)))
            stream)
           (terpri stream))
-        (%assistant-secure-state-file temporary-path)
         (uiop:rename-file-overwriting-target temporary-path path)
-        (%assistant-secure-state-file path)
         t)
     (error () nil)))

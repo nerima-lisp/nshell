@@ -27,7 +27,10 @@
                         :terminal-width 80 :theme theme))))
         (expect (search (concatenate 'string
                                      prefix
-                                     "history: git  (1 matches)"
+                                     (nshell.presentation::%truncate-string-to-width
+                                      (nshell.presentation::%search-header-text
+                                       "git" 1)
+                                      80)
                                      (esc-sequence "[0m"))
                         output)
                 :to-be-truthy))))

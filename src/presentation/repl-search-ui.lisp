@@ -67,7 +67,10 @@ when QUERY does not occur in TEXT."
                                    "")))
          (text-visible (concatenate 'string marker visible-text)))
     (if selected-p
-        (%write-styled visible :completion-selected theme)
+        (progn
+          (%write-styled text-visible :completion-selected theme)
+          (dolist (badge badges)
+            (%write-styled (first badge) (second badge) theme)))
         (let* ((marker-length (length marker))
                (match-start (history-search-match-start visible-text query))
                (row-start (and match-start (+ marker-length match-start)))

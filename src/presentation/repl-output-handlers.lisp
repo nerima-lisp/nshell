@@ -730,9 +730,6 @@ wrapped line's other rows on screen as stale duplicates."
              (nshell.domain.parsing:begin-end-node-body ast)))
     (t nil)))
 
-(defun %rerun-command-names (ast)
-  (mapcar #'car (%rerun-command-details ast)))
-
 (defun %rerun-command-assessment (text)
   (let ((result (nshell.domain.parsing:parse-command-line text)))
     (if (nshell.domain.parsing:parse-complete-p result)

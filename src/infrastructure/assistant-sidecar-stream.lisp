@@ -107,10 +107,9 @@
            (when pending
              (%assistant-sidecar-publish
               pending
-              (make-assistant-model-event
+              (%assistant-sidecar-error-event
                (assistant-pending-cell-generation pending)
-               :stream-ended
-               nil))
+               "assistant sidecar process exited before the pending request completed"))
              (%assistant-sidecar-complete pending))
            (return))
           (otherwise
@@ -194,12 +193,25 @@
     (%assistant-sidecar-close-channel
      (assistant-pending-cell-events pending))))
 
+(defun %assistant-sidecar-drain-pending-events (pending)
+  (loop
+    (multiple-value-bind (event present-p closed-p)
+        (cl-concurrent-kit:try-recv
+         (assistant-pending-cell-events pending))
+      (declare (ignore event closed-p))
+      (unless present-p
+        (return)))))
+
 (defun %assistant-sidecar-retire-pending (state pending)
   (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
     (push pending (assistant-sidecar-state-retired-pending state))))
 
 (defun %assistant-sidecar-terminate-pending (state pending reason)
   (when (and pending (%assistant-sidecar-clear-pending state pending))
+    ;; A dead sidecar may have queued ordinary response events immediately
+    ;; before EOF.  They must not hide the terminal failure that explains why
+    ;; respawn replaced this pending request.
+    (%assistant-sidecar-drain-pending-events pending)
     (%assistant-sidecar-publish
      pending
      (%assistant-sidecar-error-event
@@ -461,6 +473,10 @@
                (not (%assistant-sidecar-dead-p state)))
       (unless (%assistant-sidecar-start state)
         (return-from %assistant-sidecar-request nil)))
+    ;; START may replace a dead handle asynchronously.  Refresh the snapshot
+    ;; before deciding whether this request belongs to the startup queue.
+    (setf handle (%assistant-sidecar-handle state)
+          init-p (%assistant-sidecar-init-p state))
     (let ((pending (%assistant-sidecar-current-pending state)))
     (when (and pending (%assistant-sidecar-starting-p state))
       (handler-case

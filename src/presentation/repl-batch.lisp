@@ -9,6 +9,8 @@
         *last-command-duration-ms* nil
         *last-command-output* nil
         *last-command-text* nil
+        *history* (history-kit:make-history)
+        *history-persistence-enabled-p* nil
         *capture-command-output-p* nil
         *rerun-confirmation-pending-p* nil
         *rerun-command-assessment* nil

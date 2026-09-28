@@ -14,6 +14,7 @@
          (nshell.presentation::*last-command-output* nil)
          (nshell.presentation::*last-command-text* nil)
          (nshell.presentation::*capture-command-output-p* nil)
+         (nshell.presentation::*history-persistence-enabled-p* t)
          (nshell.presentation::*rerun-confirmation-pending-p* nil)
          (nshell.presentation::*rerun-command-assessment* nil)
          (nshell.presentation::*failure-explain-available-p* nil)

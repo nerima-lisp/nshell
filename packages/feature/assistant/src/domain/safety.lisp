@@ -57,18 +57,6 @@
     :command "curl"
     :condition :always
     :reason "network retrieval requires confirmation before it can feed a shell")
-   (make-assistant-safety-rule
-    :name :safe-list
-    :classification :safe
-    :command "pwd"
-    :condition :always
-    :reason "listing files does not write to the filesystem")
-   (make-assistant-safety-rule
-    :name :safe-search
-    :classification :safe
-    :command "cat"
-    :condition :always
-    :reason "searching text does not write to the filesystem")
    )
   "Static AST safety rules, ordered from specific dangerous cases to safe cases.")
 
@@ -99,9 +87,14 @@
      (and (first args) (string= (second condition) (first args))))
     (t nil)))
 
+(defun %assistant-command-basename (command)
+  (let ((separator (position (code-char 47) command :from-end t)))
+    (if separator (subseq command (1+ separator)) command)))
+
 (defun %assistant-rule-for (command args)
   (find-if (lambda (rule)
-             (and (string= command (assistant-safety-rule-command rule))
+             (and (string= (%assistant-command-basename command)
+                           (assistant-safety-rule-command rule))
                   (%assistant-condition-p
                    (assistant-safety-rule-condition rule)
                    args)))
@@ -146,19 +139,23 @@
       (let ((opening (search marker value :start2 start)))
         (unless opening
           (return (nreverse results)))
-        (let ((depth 1)
-              (position (+ opening (length marker))))
-          (loop while (and (< position (length value)) (plusp depth))
-                do (let ((character (char value position)))
-                     (cond
-                       ((char= character (code-char 40)) (incf depth))
-                       ((char= character (code-char 41)) (decf depth)))
-                     (incf position)))
-          (if (zerop depth)
-              (progn
-                (push (subseq value (+ opening (length marker)) (1- position)) results)
-                (setf start position))
-              (return (nreverse (cons :incomplete results)))))))))
+        (if (and (string= marker "(")
+                 (plusp opening)
+                 (find (char value (1- opening)) "$<>"))
+            (setf start (1+ opening))
+            (let ((depth 1)
+                  (position (+ opening (length marker))))
+              (loop while (and (< position (length value)) (plusp depth))
+                    do (let ((character (char value position)))
+                         (cond
+                           ((char= character (code-char 40)) (incf depth))
+                           ((char= character (code-char 41)) (decf depth)))
+                         (incf position)))
+              (if (zerop depth)
+                  (progn
+                    (push (subseq value (+ opening (length marker)) (1- position)) results)
+                    (setf start position))
+                  (return (nreverse (cons :incomplete results))))))))))
 
 (defun %assistant-command-substitution-result (command args)
   (let ((results nil))

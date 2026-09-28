@@ -24,6 +24,16 @@
       (expect :confirm :to-be (classification (command "git" "status")))
       (expect :safe :to-be (classification (command "grep" "needle" "file")))))
 
+  (it "matches named rules by command basename"
+    (dolist (case '( ("/bin/rm -rf /" :block)
+                     ("/usr/bin/rm -rf ~" :block)
+                     ("git push" :confirm)
+                     ("/usr/bin/git push" :confirm)))
+      (with-complete-ast (ast (first case))
+        (expect (second case) :to-be
+                (nshell.feature.assistant:assistant-safety-result-classification
+                 (nshell.feature.assistant:classify-ast ast))))))
+
   (it "keeps root-recursive delete ahead of generic delete"
     (let ((result
             (nshell.feature.assistant:classify-ast

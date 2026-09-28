@@ -478,7 +478,7 @@
                 (%assistant-sidecar-write-item
                  state
                  (%make-assistant-write-item generation line)))
-              (return-from %assistant-sidecar-request t))))
+              (return-from %assistant-sidecar-request t)))
         (error () (return-from %assistant-sidecar-request nil))))
     (if (and handle
              (%assistant-sidecar-init-p state)

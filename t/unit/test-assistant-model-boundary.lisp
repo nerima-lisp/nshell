@@ -421,9 +421,10 @@
                         (expect :ok :to-be
                                 (nshell.feature.assistant:assistant-boundary-status
                                  request)))
-                      (let ((result nil))
+                      (let ((result nil)
+                            (failure nil))
                         (loop repeat 1200
-                              until result
+                              until (or result failure)
                               do (let ((polled
                                          (nshell.feature.assistant:assistant-model-poll
                                           generation)))
@@ -442,17 +443,23 @@
                                            ((member kind
                                                     '(:stream-error :stream-ended
                                                       :rate-limit-event))
-                                            (error
-                                             "assistant model ended before result: ~A"
-                                             (%assistant-test-terminal-event-description
-                                              event)))))))
-                                   (unless result
+                                            (setf failure
+                                                  (format nil
+                                                          "assistant model ended before result: ~A"
+                                                          (%assistant-test-terminal-event-description
+                                                           event)))))))
+                                   (unless (or result failure)
                                      (sleep 0.01))))
-                        (unless result
-                          (error "assistant model result did not arrive: no event received"))
-                        (expect generation :to-be
-                                (nshell.feature.assistant:assistant-model-event-generation
-                                 result)))))
+                        (cond
+                          (failure
+                           (expect nil :to-be failure))
+                          (result
+                           (expect generation :to-be
+                                   (nshell.feature.assistant:assistant-model-event-generation
+                                    result)))
+                          (t
+                           (expect nil :to-be
+                                   "assistant model result did not arrive: no event received"))))))
                (await-result 1)
                (expect :dead :to-be
                        (getf (%assistant-test-await-state :dead) :state))

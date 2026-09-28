@@ -420,6 +420,11 @@
                (await-result 1)
                (expect :dead :to-be
                        (getf (%assistant-test-await-state :dead) :state))
+               (expect :ok :to-be
+                       (nshell.feature.assistant:assistant-boundary-status
+                        (nshell.feature.assistant:assistant-model-start)))
+               (expect :ready :to-be
+                       (getf (%assistant-test-await-state :ready) :state))
                (await-result 2)
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status

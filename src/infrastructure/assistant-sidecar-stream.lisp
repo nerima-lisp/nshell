@@ -355,7 +355,7 @@
                                (>= (get-internal-real-time) deadline))
                       (return))
                     (sleep 0.01)))
-                (if (and (%assistant-sidecar-generation-current-p
+                    (if (and (%assistant-sidecar-generation-current-p
                           state startup-generation)
                          (%assistant-sidecar-init-p state))
                     (progn
@@ -368,9 +368,11 @@
                         (assistant-pending-cell-generation pending)
                         :system-init nil))
                       (let ((payload
-                              (shiftf
-                               (assistant-pending-cell-request-payload pending)
-                               nil)))
+                              (sb-thread:with-mutex
+                                  ((assistant-sidecar-state-lock state))
+                                (shiftf
+                                 (assistant-pending-cell-request-payload pending)
+                                 nil))))
                         (when payload
                           (cl-concurrent-kit:try-send
                            write-channel
@@ -444,8 +446,18 @@
           (let ((line (json-kit:stringify (json-kit:alist->json-object payload))))
             (unless (json-kit:parse line :object-type :alist)
               (return-from %assistant-sidecar-request nil))
-            (setf (assistant-pending-cell-generation pending) generation
-                  (assistant-pending-cell-request-payload pending) line)
+            (let ((send-now-p nil))
+              (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                (setf (assistant-pending-cell-generation pending) generation
+                      (assistant-pending-cell-request-payload pending) line)
+                (when (and (assistant-sidecar-state-init-p state)
+                           (not (assistant-sidecar-state-starting-p state)))
+                  (setf (assistant-pending-cell-request-payload pending) nil
+                        send-now-p t)))
+              (when send-now-p
+                (cl-concurrent-kit:try-send
+                 channel
+                 (%make-assistant-write-item generation line))))
             (return-from %assistant-sidecar-request t))
         (error () (return-from %assistant-sidecar-request nil))))
     (when (and pending

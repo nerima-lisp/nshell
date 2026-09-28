@@ -61,6 +61,19 @@
           (expect nil :to-equal
                   nshell.presentation::*rerun-confirmation-pending-p*)))))
 
+  (it "rerun-last-command-detects-interactive-command-forms"
+    (dolist (case '(("/usr/bin/vim x" . t)
+                    ("sudo vim x" . t)
+                    ("env TERM=xterm less x" . t)
+                    ("true && vim x" . t)
+                    ("python" . t)
+                    ("python script.py" . nil)
+                    ("ls" . nil)))
+      (let ((assessment
+              (nshell.presentation::%rerun-command-assessment (car case))))
+        (expect (cdr case) :to-equal
+                (not (null (getf assessment :interactive-command)))))))
+
   (it "rerun-last-command-cancel-clears-confirmation-on-other-input"
     (with-repl-test-state
       (setf nshell.presentation::*last-command-text* "git push")

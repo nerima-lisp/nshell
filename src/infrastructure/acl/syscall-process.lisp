@@ -65,10 +65,13 @@
     (let ((pid (sb-ext:process-pid proc)))
       (flet ((terminate (signal)
                (let* ((alive-p (ignore-errors (sb-ext:process-alive-p proc)))
+                      (status (ignore-errors (sb-ext:process-status proc)))
+                      (signalable-p (and alive-p
+                                         (member status '(:running :stopped))))
                       (actual-pgid (and (integerp pid) (plusp pid)
                                         (ignore-errors (sb-posix:getpgid pid))))
                       (owns-process-group-p
-                        (and alive-p
+                        (and signalable-p
                              (or (null expected-pgid)
                                  (eql expected-pgid actual-pgid))
                              (integerp actual-pgid)
@@ -76,11 +79,11 @@
                  ;; Signal the process group only when this process created
                  ;; it; otherwise a timeout could kill the shell's own
                  ;; foreground group or an unrelated group reused by the OS.
-                 ;; Recheck liveness before every signal so SIGKILL cannot
-                 ;; target a later process generation after SIGTERM exits it.
+                 ;; Recheck status before every signal so SIGKILL cannot target
+                 ;; a later process generation after SIGTERM exits this one.
                  (if owns-process-group-p
                      (ignore-errors (%send-process-group-signal pid signal))
-                     (when alive-p
+                     (when signalable-p
                        (ignore-errors (sb-ext:process-kill proc signal)))))))
         (terminate sb-unix:sigterm)
         (%wait-process-exit-with-timeout proc 0.5)

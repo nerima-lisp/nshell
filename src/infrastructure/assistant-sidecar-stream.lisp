@@ -529,7 +529,8 @@
              (assistant-pending-cell-events pending)))
           (values event present-p))
         (progn
-          (when pending
+          (when (and pending
+                     (not (%assistant-sidecar-starting-p state)))
             (%assistant-sidecar-discard-pending state pending))
           (values nil nil)))))
 

@@ -65,7 +65,19 @@
                       (search "ghp_12345678901234567890" transcript))
               (expect nil :to-be (search "PRIVATE KEY" transcript))
               (expect nil :to-be (search "/tmp/private.env" transcript))
-              (expect nil :to-be (search "secret-value" snapshot)))))))))
+              (expect nil :to-be (search "secret-value" snapshot))
+              (expect #o700
+                      :to-equal
+                      (logand (sb-posix:stat-mode
+                               (sb-posix:stat state-directory)) #o777))
+              (expect #o600
+                      :to-equal
+                      (logand (sb-posix:stat-mode
+                               (sb-posix:stat transcript-path)) #o777))
+              (expect #o600
+                      :to-equal
+                      (logand (sb-posix:stat-mode
+                               (sb-posix:stat snapshot-path)) #o777))))))))
 
   (it "does not create state files for batch or script execution"
     (host-kit:with-temporary-directory (directory)
@@ -82,3 +94,4 @@
           (expect nil :to-be
                   (probe-file
                    (merge-pathnames "snapshot.json" state-directory))))))))
+)

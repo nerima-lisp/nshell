@@ -47,7 +47,9 @@
     (&key command exit duration-ms cwd git-status last-output
           (environment-names nil) (last-output-max-bytes
                                    +assistant-default-output-max-bytes+)
-          denylist-paths denylist-commands denylist-values)
+          (denylist-paths +assistant-default-denylist-paths+)
+          (denylist-commands +assistant-default-denylist-commands+)
+          denylist-values)
   "Build a redacted assistant context from caller-provided shell values.
 
 No filesystem, environment, process, or git operation occurs here."

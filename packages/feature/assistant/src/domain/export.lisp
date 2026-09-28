@@ -62,7 +62,9 @@
 
 (defun make-assistant-transcript-entry
     (&key timestamp cwd text exit duration-ms origin output-head git
-          denylist-paths denylist-commands denylist-values)
+          (denylist-paths +assistant-default-denylist-paths+)
+          (denylist-commands +assistant-default-denylist-commands+)
+          denylist-values)
   (let ((payload
           (list (cons "timestamp" timestamp)
                 (cons "cwd" (redact-text cwd :denylist-values denylist-values))
@@ -87,7 +89,9 @@
 
 (defun make-assistant-snapshot
     (&key cwd git jobs last env-names session-id ai
-          denylist-paths denylist-commands denylist-values)
+          (denylist-paths +assistant-default-denylist-paths+)
+          (denylist-commands +assistant-default-denylist-commands+)
+          denylist-values)
   (let ((payload
           (list (cons "cwd" (redact-text cwd :denylist-values denylist-values))
                 (cons "git" (%assistant-export-git git denylist-values))

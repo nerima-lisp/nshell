@@ -23,4 +23,8 @@
                        :exit *last-exit-code*
                        :duration-ms *last-command-duration-ms*))
          :env-names environment-names
+         :denylist-paths
+         nshell.feature.assistant:+assistant-default-denylist-paths+
+         :denylist-commands
+         nshell.feature.assistant:+assistant-default-denylist-commands+
          :denylist-values environment-values)))))

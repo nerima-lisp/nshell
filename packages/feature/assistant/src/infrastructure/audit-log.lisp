@@ -2,6 +2,8 @@
 
 (defvar *assistant-audit-file-path-override* nil)
 
+(defparameter +assistant-audit-max-bytes+ (* 10 1024 1024))
+
 (defun %assistant-default-audit-file-path ()
   (assistant-state-file-path "ai-audit.jsonl"))
 
@@ -17,12 +19,10 @@
         (if (probe-file path)
             (with-open-file (stream path :direction :input)
               (let ((lines nil))
-                (loop for line = (read-line stream nil nil)
-                      while line
-                      do (push line lines)
-                         (when (> (length lines) count)
-                           (setf lines (butlast lines))))
-                (values (nreverse lines) t)))
+                (loop for line = (read-line stream nil :eof)
+                      until (eq line :eof)
+                      do (push line lines))
+                (values (last (nreverse lines) count) t)))
             (values nil nil)))
         (error ()
           (values nil nil)))))
@@ -61,36 +61,49 @@
     (t value)))
 
 (defun %assistant-audit-record (payload response-summary denylist-paths
-                                denylist-commands)
+                                denylist-commands denylist-values)
   (let ((redacted-payload
           (redact-payload payload
                           :denylist-paths denylist-paths
-                          :denylist-commands denylist-commands))
+                          :denylist-commands denylist-commands
+                          :denylist-values denylist-values))
         (redacted-response
           (redact-payload response-summary
                           :denylist-paths denylist-paths
-                          :denylist-commands denylist-commands)))
+                          :denylist-commands denylist-commands
+                          :denylist-values denylist-values)))
     (json-kit:alist->json-object
      (list (cons "payload" (%assistant-json-value redacted-payload))
            (cons "response-summary" (%assistant-json-value redacted-response))))))
 
 (defun append-assistant-audit-entry
-    (payload response-summary &key denylist-paths denylist-commands)
+    (payload response-summary
+     &key (denylist-paths +assistant-default-denylist-paths+)
+          (denylist-commands +assistant-default-denylist-commands+)
+          denylist-values)
   "Append one redacted payload and response summary as a JSONL entry.
 
 Return NIL when serialization or persistence fails so audit failure cannot
 change shell execution control flow."
   (handler-case
       (let ((path (assistant-audit-file-path)))
-        (ensure-directories-exist path)
-        (with-open-file (stream path
-                                :direction :output
-                                :if-exists :append
-                                :if-does-not-exist :create)
+        (%assistant-ensure-secure-state-directory path)
+        (when (and (probe-file path)
+                   (>= (with-open-file (stream path :direction :input)
+                         (file-length stream))
+                       +assistant-audit-max-bytes+))
+          (let ((rotated (merge-pathnames "ai-audit.jsonl.1"
+                                          (assistant-state-directory-path))))
+            (when (probe-file rotated) (delete-file rotated))
+            (uiop:rename-file-overwriting-target path rotated)))
+        (with-open-stream
+            (stream (%assistant-open-state-output-stream
+                     path sb-posix:o-append))
           (write-line (json-kit:stringify
                        (%assistant-audit-record payload response-summary
                                                 denylist-paths
-                                                denylist-commands))
+                                                denylist-commands
+                                                denylist-values))
                       stream))
         t)
     ;; Existing persistence treats an unavailable optional state file as a

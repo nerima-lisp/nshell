@@ -28,6 +28,8 @@ depend on one stable feature package.")
      #:classify-pipeline
      #:classify-ast
      #:+assistant-redacted-token+
+     #:+assistant-default-denylist-paths+
+     #:+assistant-default-denylist-commands+
      #:redact-text
      #:redact-lines
      #:redact-payload
@@ -88,6 +90,8 @@ depend on one stable feature package.")
      #:assistant-audit-file-path
      #:append-assistant-audit-entry
      #:assistant-audit-tail
+     #:+assistant-audit-max-bytes+
+     #:+assistant-max-transcript-sessions+
      #:run-assistant-mcp-server
      #:*assistant-boundaries*
      #:make-assistant-boundary-context

@@ -62,7 +62,12 @@
                (>= (length name) (length prefix))
                (string= prefix name :end2 (length prefix))
                (> (length name) (length prefix)))
-      (subseq name (length prefix)))))
+      (let ((session-id (subseq name (length prefix))))
+        (when (every (lambda (character)
+                       (or (alphanumericp character)
+                           (find character "._-" :test #'char=)))
+                     session-id)
+          session-id)))))
 
 (defun %assistant-mcp-session-ids ()
   (handler-case
@@ -113,10 +118,11 @@
           (assistant-mcp-request-state-options request)
         (declare (ignore tail-lines error-message))
         (when session-id
-          (setf transcript-session-id session-id)
-          (multiple-value-setq (transcript-lines transcript-present-p)
-            (%assistant-mcp-read-transcript-tail
-             session-id +assistant-mcp-max-transcript-tail-lines+)))))
+          (when (member session-id session-ids :test #'string=)
+            (setf transcript-session-id session-id)
+            (multiple-value-setq (transcript-lines transcript-present-p)
+              (%assistant-mcp-read-transcript-tail
+               session-id +assistant-mcp-max-transcript-tail-lines+))))))
     (assistant-mcp-handle-request
      request
      :session-ids session-ids

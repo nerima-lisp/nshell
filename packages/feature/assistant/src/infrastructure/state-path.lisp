@@ -43,13 +43,15 @@
           (values (sb-posix:open (namestring path)
                                  (logior flags sb-posix:o-wronly
                                          sb-posix:o-creat
-                                         sb-posix:o-excl)
+                                         sb-posix:o-excl
+                                         sb-posix:o-nofollow)
                                  #o600)
                   t)
         (sb-posix:syscall-error (condition)
           (if (= (sb-posix:syscall-errno condition) sb-posix:eexist)
               (values (sb-posix:open (namestring path)
-                                     (logior flags sb-posix:o-wronly))
+                                     (logior flags sb-posix:o-wronly
+                                             sb-posix:o-nofollow))
                       nil)
               (error condition))))
     (handler-case

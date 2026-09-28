@@ -59,6 +59,31 @@
             (expect t :to-be present-p)))))))
 
 (describe "assistant-audit-log-contracts"
+  (it "does not write through an audit file symlink"
+    (host-kit:with-temporary-directory (directory)
+      (let ((target (merge-pathnames "audit-target.jsonl" directory))
+            (path (merge-pathnames "ai-audit.jsonl" directory)))
+        (unwind-protect
+             (progn
+               (host-kit:write-file-string "unchanged\n" target)
+               (sb-posix:symlink (namestring target) (namestring path))
+               (let ((nshell.feature.assistant:*assistant-audit-file-path-override*
+                       path))
+                 (expect nil :to-be
+                         (nshell.feature.assistant:append-assistant-audit-entry
+                          '(("command" . "printf safe"))
+                          '(("summary" . "safe")))))
+               (expect "unchanged\n" :to-equal
+                       (host-kit:read-file-string target))
+               (expect #o120000
+                       :to-equal
+                       (logand (sb-posix:stat-mode (sb-posix:lstat path))
+                               #o170000)))
+          (when (probe-file path)
+            (delete-file path))
+          (when (probe-file target)
+            (delete-file target))))))
+
   (it "appends JSONL after applying the same redaction to payload and response"
     (let ((path (merge-pathnames
                  (format nil "nshell-assistant-audit-~a.jsonl" (gensym))

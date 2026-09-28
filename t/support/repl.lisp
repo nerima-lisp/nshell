@@ -15,6 +15,7 @@
          (nshell.presentation::*last-command-text* nil)
          (nshell.presentation::*capture-command-output-p* nil)
          (nshell.presentation::*rerun-confirmation-pending-p* nil)
+         (nshell.presentation::*rerun-command-assessment* nil)
          (nshell.presentation::*failure-explain-available-p* nil)
          (nshell.presentation::*history* (history-kit:make-history))
          (nshell.presentation::*config* (nshell.domain.configuration:default-config))

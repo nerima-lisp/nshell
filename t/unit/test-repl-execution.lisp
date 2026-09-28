@@ -33,6 +33,59 @@
             (expect nil :to-equal
                     nshell.presentation::*rerun-confirmation-pending-p*))))))
 
+  (it "rerun-last-command-shows-safety-and-command-before-confirming"
+    (with-repl-test-state
+      (setf nshell.presentation::*last-command-text* "git push")
+      (with-repl-input-state (:buffer "")
+        (capture-standard-output
+          (nshell.presentation::process-output-event :rerun-last-command))
+        (expect t :to-equal
+                nshell.presentation::*rerun-confirmation-pending-p*)
+        (let ((panel
+                (nshell.presentation::%rerun-panel-lines
+                 nshell.presentation::*rerun-command-assessment*)))
+          (expect (search "git push" (princ-to-string panel)) :to-be-truthy)
+          (expect (search "confirmation" (princ-to-string panel)) :to-be-truthy)))))
+
+  (it "rerun-last-command-rejects-interactive-commands"
+    (with-repl-test-state
+      (setf nshell.presentation::*last-command-text* "vim README.md")
+      (with-repl-input-state (:buffer "")
+        (let ((calls 0))
+          (with-temporary-function
+              ('nshell.presentation::%process-execute-output-event
+               (lambda () (incf calls)))
+            (nshell.presentation::process-output-event :rerun-last-command)
+            (nshell.presentation::process-output-event :rerun-last-command))
+          (expect 0 :to-be calls)
+          (expect nil :to-equal
+                  nshell.presentation::*rerun-confirmation-pending-p*)))))
+
+  (it "rerun-last-command-cancel-clears-confirmation-on-other-input"
+    (with-repl-test-state
+      (setf nshell.presentation::*last-command-text* "git push")
+      (with-repl-input-state (:buffer "")
+        (capture-standard-output
+          (nshell.presentation::process-output-event :rerun-last-command))
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.infrastructure.acl:consume-sigint-received-p
+              (lambda () nil))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                (input-key-event :char #\x)))
+             ('nshell.presentation::render-prompt-cont (lambda () nil)))
+          (let ((continuation (nshell.presentation::read-key-cont)))
+            (funcall continuation))
+          (expect nil :to-equal
+                  nshell.presentation::*rerun-confirmation-pending-p*)
+          (expect nil :to-equal nshell.presentation::*rerun-command-assessment*)
+          (expect "x" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))))))
+
   (it "repl-installed-terminal-controls-actual-runner-lifecycle"
     (dolist (scenario '(:success :install-failure :execution-failure))
       (with-repl-test-state

@@ -211,7 +211,9 @@ wrapped line's other rows on screen as stale duplicates."
           (loop for candidate in candidates
                 for index from 1
                 collect (format nil "~d. ~a [Tabで載せる]"
-                                index candidate))))
+                                index candidate))
+          (list "出力を捕捉して再確認するには Ctrl-X を押してください。"
+                "（対話型・安全でないコマンドは再実行できません。）")))
 
 (defun %return-from-explain-with-message (message)
   (clear-rendered-completions)
@@ -657,25 +659,89 @@ wrapped line's other rows on screen as stale duplicates."
     (setf *input-state* continued-state))
   (lambda () (render-prompt-cont)))
 
+(defparameter +rerun-interactive-command-names+
+  '("vim" "less" "more" "ssh")
+  "Commands that require a live terminal and cannot use the capture runner.")
+
+(defun %rerun-command-names (ast)
+  (cond
+    ((nshell.domain.parsing:command-node-p ast)
+     (list (nshell.domain.parsing:command-node-command ast)))
+    ((nshell.domain.parsing:pipeline-node-p ast)
+     (mapcan #'%rerun-command-names
+             (nshell.domain.parsing:pipeline-node-commands ast)))
+    ((nshell.domain.parsing:sequence-node-p ast)
+     (mapcan #'%rerun-command-names
+             (nshell.domain.parsing:sequence-node-commands ast)))
+    (t nil)))
+
+(defun %rerun-command-assessment (text)
+  (let ((result (nshell.domain.parsing:parse-command-line text)))
+    (if (nshell.domain.parsing:parse-complete-p result)
+        (let* ((ast (nshell.domain.parsing:parse-result-ast result))
+               (classification (nshell.feature.assistant:classify-ast ast))
+               (interactive-command
+                 (find-if (lambda (command)
+                            (member command +rerun-interactive-command-names+
+                                    :test #'string-equal))
+                          (%rerun-command-names ast))))
+          (list :classification
+                (nshell.feature.assistant:assistant-safety-result-classification
+                 classification)
+                :reason
+                (if interactive-command
+                    (format nil "~a requires a live terminal" interactive-command)
+                    (nshell.feature.assistant:assistant-safety-result-reason
+                     classification))
+                :interactive-command interactive-command))
+        (list :classification :block
+              :reason "the previous command cannot be parsed safely"
+              :interactive-command nil))))
+
+(defun %rerun-panel-lines (assessment)
+  (list (format nil "Capture and rerun: ~a" *last-command-text*)
+        (format nil "Safety: ~(~a~) (~a)"
+                (getf assessment :classification)
+                (getf assessment :reason))
+        "Press Ctrl-X again to confirm; any other key cancels."))
+
 (defun %process-rerun-last-command-output-event ()
   (cond
     ((null *last-command-text*)
+     (setf *rerun-command-assessment* nil)
      (with-cleared-rendered-completions-and-prompt-cont
        (render-transient-panel '("No previous command to capture."))))
     ((not *rerun-confirmation-pending-p*)
      (with-cleared-rendered-completions-and-prompt-cont
-       (setf *rerun-confirmation-pending-p* t)
-       (render-transient-panel
-        '("Capture and rerun the previous command? Press Ctrl-X again to confirm."))))
+       (let ((assessment (%rerun-command-assessment *last-command-text*)))
+         (setf *rerun-command-assessment* assessment)
+         (if (or (getf assessment :interactive-command)
+                 (eq :block (getf assessment :classification)))
+             (render-transient-panel
+              (list (format nil "Capture rerun blocked: ~a"
+                            (getf assessment :reason))
+                    (format nil "Command: ~a" *last-command-text*)))
+             (progn
+               (setf *rerun-confirmation-pending-p* t)
+               (render-transient-panel (%rerun-panel-lines assessment)))))))
     (t
-     (setf *rerun-confirmation-pending-p* nil)
-     (clear-rendered-transient-panel)
-     (setf *input-state*
-           (make-repl-input-state
-            :buffer *last-command-text*
-            :cursor-pos (length *last-command-text*)))
-     (let ((*capture-command-output-p* t))
-       (%process-execute-output-event)))))
+     (let ((assessment *rerun-command-assessment*))
+       (setf *rerun-confirmation-pending-p* nil
+             *rerun-command-assessment* nil)
+       (if (or (null assessment)
+               (getf assessment :interactive-command)
+               (eq :block (getf assessment :classification)))
+           (with-cleared-rendered-completions-and-prompt-cont
+             (render-transient-panel
+              '("Capture rerun was blocked because the command is unsafe or interactive.")))
+           (progn
+             (clear-rendered-transient-panel)
+             (setf *input-state*
+                   (make-repl-input-state
+                    :buffer *last-command-text*
+                    :cursor-pos (length *last-command-text*)))
+             (let ((*capture-command-output-p* t))
+               (%process-execute-output-event))))))))
 
 (defun %execute-command-line (text)
   (if (%assistant-proposal-confirmation-required-p)

@@ -195,6 +195,18 @@ is spelled the way it is typed, in lowercase and hyphen-separated (`ctrl-r`,
 `alt-e`, `right`, `shift-tab`). Put `bind` lines in `~/.nshellrc` to apply
 custom bindings on every launch, the same way `theme` lines do.
 
+### Capturing the previous command's output
+
+After a command has finished, press `Ctrl-X` to request a captured rerun. nshell
+shows the complete command and its existing AI safety classification; press
+`Ctrl-X` again only when that displayed command and classification are
+acceptable. Any other key cancels the pending confirmation. Commands classified
+as blocked, and terminal-dependent commands such as `vim`, `less`, and `ssh`,
+are rejected because the capture path does not provide a live terminal.
+
+This is useful when the previous command's output was not retained for `?`
+(explain), and is intentionally a rerun rather than a replay of old output.
+
 ### Vi-mode cursor shape
 
 When `NSHELL_VI_MODE` is enabled (see the man page's KEY BINDINGS section),

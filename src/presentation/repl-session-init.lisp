@@ -105,6 +105,7 @@ entered during this session."
         *last-command-text* nil
         *capture-command-output-p* nil
         *rerun-confirmation-pending-p* nil
+        *rerun-command-assessment* nil
         *failure-explain-available-p* nil
         *history-persistence-enabled-p* history-p
         *history* (history-kit:make-history)

@@ -30,6 +30,7 @@ would fail to find :NSHELL without this, independent of the read-time symbol
 hazard that function's docstring describes."
   (let ((root (namestring (asdf:system-source-directory :nshell))))
     (list* "--eval" "(require :asdf)"
+           "--eval" (%asdf-output-translation-bootstrap-form)
            "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
            (loop for system in +nshell-runtime-dependencies+
                  collect "--eval"

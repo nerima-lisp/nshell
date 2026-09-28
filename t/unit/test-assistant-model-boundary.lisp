@@ -447,7 +447,7 @@
                                                   (format nil
                                                           "assistant model ended before result: ~A"
                                                           (%assistant-test-terminal-event-description
-                                                           event)))))))
+                                                           event))))))))
                                    (unless (or result failure)
                                      (sleep 0.01))))
                         (cond

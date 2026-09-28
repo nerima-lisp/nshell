@@ -8,10 +8,20 @@
 The list includes transitive dependencies because subprocess bootstrap uses an
 explicit central registry rather than inheriting the parent's registry.")
 
+(defun %asdf-output-translation-bootstrap-form ()
+  "Return a child form that shares the runner's compiled ASDF artifacts."
+  "(let ((root (uiop:getenv \"NSHELL_ASDF_OUTPUT_DIR\")))
+     (when root
+       (asdf:initialize-output-translations
+        (list :output-translations
+              (list t (merge-pathnames \"**/*.*\"
+                                        (uiop:ensure-directory-pathname root)))
+              :ignore-inherited-configuration))))")
+
 (defparameter +e2e-child-environment-names+
   '("HOME" "LANG" "LC_ALL" "LC_CTYPE" "LC_MESSAGES" "LC_MONETARY"
     "LC_NUMERIC" "LC_TIME" "LOGNAME" "PATH" "SHELL" "TERM" "TMPDIR"
-    "USER")
+    "USER" "NSHELL_ASDF_OUTPUT_DIR")
   "Stable host values needed by real-process E2E tests.
 
 Do not pass the test runner's ASDF/SBCL, nshell, or tool-specific environment

@@ -36,6 +36,7 @@
           (loop for system in +nshell-runtime-dependencies+
                 collect (namestring (asdf:system-source-directory system)))))
     (list* "--eval" "(require :asdf)"
+           "--eval" (%asdf-output-translation-bootstrap-form)
            "--eval" (format nil "(pushnew (truename ~S) asdf:*central-registry* :test #'equal)" root)
            (loop for dependency-root in dependency-roots
                  collect "--eval"

@@ -193,7 +193,7 @@
     (%assistant-sidecar-close-channel
      (assistant-pending-cell-events pending))))
 
-(defun %assistant-sidecar-stop-state (state)
+(defun %assistant-sidecar-stop-state (state &key preserve-pending-p)
   (let (pending write-channel handle startup reader writer error-thread)
     (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
       (setf (assistant-sidecar-state-starting-p state) nil
@@ -229,9 +229,10 @@
             (assistant-sidecar-state-reader-thread state) nil
             (assistant-sidecar-state-writer-thread state) nil
             (assistant-sidecar-state-error-thread state) nil
-            (assistant-sidecar-state-pending state) nil
             (assistant-sidecar-state-write-channel state) nil
             (assistant-sidecar-state-start-thread state) nil))
+      (unless preserve-pending-p
+        (setf (assistant-sidecar-state-pending state) nil))
     t))
 
 (defun %assistant-sidecar-start-thread (state)
@@ -359,20 +360,19 @@
                           state startup-generation)
                          (%assistant-sidecar-init-p state))
                     (progn
-                      (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
-                        (setf (assistant-sidecar-state-starting-p state) nil
-                              (assistant-sidecar-state-disabled-reason state) nil))
+                      (let ((payload nil))
+                        (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                          (setf (assistant-sidecar-state-starting-p state) nil
+                                (assistant-sidecar-state-disabled-reason state) nil
+                                payload
+                                  (shiftf
+                                   (assistant-pending-cell-request-payload pending)
+                                   nil)))
                       (%assistant-sidecar-publish
                        pending
                        (make-assistant-model-event
                         (assistant-pending-cell-generation pending)
                         :system-init nil))
-                      (let ((payload
-                              (sb-thread:with-mutex
-                                  ((assistant-sidecar-state-lock state))
-                                (shiftf
-                                 (assistant-pending-cell-request-payload pending)
-                                 nil))))
                         (when payload
                           (cl-concurrent-kit:try-send
                            write-channel
@@ -388,10 +388,14 @@
                         (assistant-pending-cell-generation pending)
                         "assistant sidecar init handshake failed"))
                       (%assistant-sidecar-complete pending)
-                      (%assistant-sidecar-stop-state state)))))))))))
+                      (%assistant-sidecar-stop-state state
+                                                     :preserve-pending-p t)))))))))))
 
 (defun %assistant-sidecar-start (state)
-  (if (null (assistant-sidecar-state-command state))
+  (if (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+        (assistant-sidecar-state-starting-p state))
+      t
+      (if (null (assistant-sidecar-state-command state))
       (progn
         (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
           (setf (assistant-sidecar-state-starting-p state) nil
@@ -428,7 +432,7 @@
                              (%assistant-sidecar-set-start-thread state nil)))
                          :name "nshell assistant sidecar startup")))
             (%assistant-sidecar-set-start-thread state thread))
-          t))))))
+          t)))))))
 
 (defun %assistant-sidecar-request (state generation payload)
   (let ((handle (%assistant-sidecar-handle state))
@@ -438,9 +442,7 @@
                (not (%assistant-sidecar-dead-p state)))
       (unless (%assistant-sidecar-start state)
         (return-from %assistant-sidecar-request nil)))
-    (let ((pending (%assistant-sidecar-current-pending state))
-          (channel (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
-                     (assistant-sidecar-state-write-channel state))))
+    (let ((pending (%assistant-sidecar-current-pending state)))
     (when (and pending (%assistant-sidecar-starting-p state))
       (handler-case
           (let ((line (json-kit:stringify (json-kit:alist->json-object payload))))
@@ -456,7 +458,8 @@
                         send-now-p t)))
               (when send-now-p
                 (cl-concurrent-kit:try-send
-                 channel
+                 (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                   (assistant-sidecar-state-write-channel state))
                  (%make-assistant-write-item generation line))))
             (return-from %assistant-sidecar-request t))
         (error () (return-from %assistant-sidecar-request nil))))
@@ -467,17 +470,20 @@
           (let ((line (json-kit:stringify (json-kit:alist->json-object payload))))
             (unless (json-kit:parse line :object-type :alist)
               (return-from %assistant-sidecar-request nil))
-            (setf (assistant-pending-cell-generation pending) generation)
-            (return-from %assistant-sidecar-request
-              (cl-concurrent-kit:try-send
-               channel
-               (%make-assistant-write-item generation line))))
+            (let ((channel nil))
+              (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                (setf (assistant-pending-cell-generation pending) generation
+                      channel (assistant-sidecar-state-write-channel state)))
+              (return-from %assistant-sidecar-request
+                (and channel
+                     (cl-concurrent-kit:try-send
+                      channel
+                      (%make-assistant-write-item generation line))))))
         (error () (return-from %assistant-sidecar-request nil))))
     (if (and handle
              (%assistant-sidecar-init-p state)
              (not (%assistant-sidecar-dead-p state))
-             (null pending)
-             channel)
+             (null pending))
         (handler-case
             (let* ((object (json-kit:alist->json-object payload))
                    (line (json-kit:stringify object)))
@@ -489,15 +495,19 @@
                        (cl-concurrent-kit:make-channel :buffer-size 128)
                        (cl-concurrent-kit:make-promise))))
                 (%assistant-sidecar-set-pending state new-pending)
-                (if (cl-concurrent-kit:try-send
-                     channel
-                     (%make-assistant-write-item generation line))
+                (let ((channel
+                        (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                          (assistant-sidecar-state-write-channel state))))
+                  (if (and channel
+                           (cl-concurrent-kit:try-send
+                            channel
+                            (%make-assistant-write-item generation line)))
                     t
                     (progn
                       (%assistant-sidecar-clear-pending state new-pending)
                       (%assistant-sidecar-close-channel
                        (assistant-pending-cell-events new-pending))
-                      nil))))
+                      nil)))))
           (error () nil))
         nil))))
 

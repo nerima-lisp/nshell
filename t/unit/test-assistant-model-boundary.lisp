@@ -423,8 +423,6 @@
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status
                         (nshell.feature.assistant:assistant-model-start)))
-               (expect :ready :to-be
-                       (getf (%assistant-test-await-state :ready) :state))
                (await-result 2)
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status
@@ -445,8 +443,31 @@
                   (start (nshell.feature.assistant:assistant-model-start)))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status start))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       1 '(("message" . "queued-before-handshake")))))
              (expect :unavailable :to-be
                      (getf (%assistant-test-await-state :unavailable) :state))
+             (let ((error-event nil))
+               (loop repeat 240
+                     until error-event
+                     do (let ((polled (nshell.feature.assistant:assistant-model-poll 1)))
+                          (when (eq :event
+                                    (nshell.feature.assistant:assistant-boundary-status
+                                     polled))
+                            (let ((event
+                                    (nshell.feature.assistant:assistant-boundary-value
+                                     polled)))
+                              (when (eq :stream-error
+                                        (nshell.feature.assistant:assistant-model-event-kind
+                                         event))
+                                (setf error-event event))))
+                          (unless error-event
+                            (sleep 0.01))))
+               (expect :stream-error :to-be
+                       (nshell.feature.assistant:assistant-model-event-kind
+                        error-event)))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-stop)))

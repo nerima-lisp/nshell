@@ -60,21 +60,28 @@
       (ignore-errors (sb-ext:process-wait proc))
       t)))
 
-(defun %terminate-process (proc)
+(defun %terminate-process (proc &optional expected-pgid)
   (when proc
-    (let* ((pid (sb-ext:process-pid proc))
-           (actual-pgid (and (integerp pid) (plusp pid)
-                             (ignore-errors (sb-posix:getpgid pid))))
-           (owns-process-group-p (and (integerp actual-pgid)
-                                      (plusp actual-pgid) (= pid actual-pgid))))
+    (let ((pid (sb-ext:process-pid proc)))
       (flet ((terminate (signal)
-               ;; Signal the process group only when this process created it;
-               ;; otherwise a timeout could kill the shell's own foreground
-               ;; group or an unrelated group reused by the OS.
-               (if owns-process-group-p
-                   (ignore-errors (%send-process-group-signal pid signal))
-                   (when (sb-ext:process-alive-p proc)
-                     (ignore-errors (sb-ext:process-kill proc signal))))))
+               (let* ((alive-p (ignore-errors (sb-ext:process-alive-p proc)))
+                      (actual-pgid (and (integerp pid) (plusp pid)
+                                        (ignore-errors (sb-posix:getpgid pid))))
+                      (owns-process-group-p
+                        (and alive-p
+                             (or (null expected-pgid)
+                                 (eql expected-pgid actual-pgid))
+                             (integerp actual-pgid)
+                             (plusp actual-pgid) (= pid actual-pgid))))
+                 ;; Signal the process group only when this process created
+                 ;; it; otherwise a timeout could kill the shell's own
+                 ;; foreground group or an unrelated group reused by the OS.
+                 ;; Recheck liveness before every signal so SIGKILL cannot
+                 ;; target a later process generation after SIGTERM exits it.
+                 (if owns-process-group-p
+                     (ignore-errors (%send-process-group-signal pid signal))
+                     (when alive-p
+                       (ignore-errors (sb-ext:process-kill proc signal)))))))
         (terminate sb-unix:sigterm)
         (%wait-process-exit-with-timeout proc 0.5)
         (terminate sb-unix:sigkill)

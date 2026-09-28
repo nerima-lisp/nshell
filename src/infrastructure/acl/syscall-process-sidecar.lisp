@@ -65,7 +65,8 @@
       nil
       (progn
         (setf (sidecar-handle-cleanup-state handle) :stopping)
-        (%terminate-process (sidecar-handle-process handle))
+        (%terminate-process (sidecar-handle-process handle)
+                            (sidecar-handle-pgid handle))
         (%close-sidecar-stream (sidecar-handle-input handle))
         (%close-sidecar-stream (sidecar-handle-output handle))
         (%close-sidecar-stream (sidecar-handle-error handle))

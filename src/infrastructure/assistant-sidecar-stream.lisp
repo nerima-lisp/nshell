@@ -103,6 +103,11 @@
                      (when (eq kind :result)
                        (%assistant-sidecar-complete pending)))))))
           (:eof
+           ;; EOF means the sidecar has closed its protocol stream.  Reap the
+           ;; exited child before respawn cleanup can inspect its stale handle.
+           (ignore-errors
+            (sb-ext:process-wait
+             (nshell.infrastructure.acl:sidecar-handle-process handle)))
            (%assistant-sidecar-mark-dead state :reader-eof)
            (when pending
              (%assistant-sidecar-publish

@@ -165,9 +165,12 @@
       (error (values error status))
       ((eq mode :execute)
        (if operands
-           (%execute-command-by-name-in-context context
-                                                (first operands)
-                                                (rest operands))
+           (%assistant-gated-command-dispatch
+            context (first operands) (rest operands)
+            (lambda ()
+              (%execute-command-by-name-in-context context
+                                                   (first operands)
+                                                   (rest operands))))
            (values nil 0)))
       ((null operands) (values nil 1))
       (t

@@ -50,6 +50,51 @@
                   (nshell.application:agent-step-status
                    (nshell.application:agent-session-current-step session)))))))
 
+  (it "auto-executes-safe-model-steps-and-keeps-invalid-proposals-out-of-the-buffer"
+    (with-repl-test-state
+      (let ((session (nshell.application:make-agent-session "inspect files"
+                                                             :max-steps 1))
+            (executed-p nil)
+            (panel nil))
+        (setf nshell.presentation::*agent-session* session)
+        (with-repl-input-state (:mode :ask-waiting :buffer "inspect files"
+                                :cursor-pos 13)
+          (with-temporary-functions
+              (('nshell.presentation::%agent-execute-current-step
+                (lambda () (setf executed-p t)))
+               ('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (nshell.presentation::%handle-agent-model-event
+             (nshell.feature.assistant::make-assistant-model-event
+              1 :result '(("command" . "ls")))))
+          (expect t :to-be executed-p)
+          (expect (search "auto" (third panel)) :to-be-truthy))
+        (setf executed-p nil panel nil
+              nshell.presentation::*agent-session*
+                (nshell.application:make-agent-session "inspect files"
+                                                       :max-steps 1))
+        (with-repl-input-state (:mode :ask-waiting :buffer "inspect files"
+                                :cursor-pos 13)
+          (with-temporary-functions
+              (('nshell.presentation::render-transient-panel
+                (lambda (content &rest arguments)
+                  (declare (ignore arguments))
+                  (setf panel content)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (nshell.presentation::%handle-agent-model-event
+             (nshell.feature.assistant::make-assistant-model-event
+              1 :result '(("command" . "unterminated '")))))
+          (expect "inspect files" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect nil :to-be executed-p)
+          (expect (search "invalid" (third panel)) :to-be-truthy)))))
+
   (it "executes-a-safe-step-only-after-enter-approval"
     (with-repl-test-state
       (let ((session (nshell.application:make-agent-session "list files"

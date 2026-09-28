@@ -1006,7 +1006,8 @@ it."
 
 (describe "assistant-execution-gate-tests"
   (it "blocks-confirmation-proposals-at-ast-dispatch-until-confirmed"
-    (let ((context (nshell.application:make-shell-context))
+    (let ((context (nshell.application:make-shell-context
+                    :environment (nshell.domain.environment:make-environment)))
           (ast (nshell.domain.parsing:make-command-node
                 "rm" (list "file")))
           (executed-p nil))
@@ -1036,6 +1037,51 @@ it."
             (expect t :to-be executed-p)
             (expect "executed" :to-equal output)
             (expect 0 :to-equal code)))))))
+
+  (it "rechecks-agent-command-name-after-variable-expansion"
+    (let ((context (nshell.application:make-shell-context
+                    :environment (nshell.domain.environment:make-environment)))
+          (ast (nshell.domain.parsing:make-command-node
+                "$NSHELL_AGENT_PIPELINE_CMD" '("-rf" "/")))
+          (executed-p nil))
+      (setf (nshell.application:shell-context-environment context)
+            (nshell.domain.environment:env-set
+             (nshell.application:shell-context-environment context)
+             "NSHELL_AGENT_PIPELINE_CMD" "rm" nil))
+      (let ((nshell.application::*execution-origin* :agent)
+            (nshell.application::*execution-confirmed-p* t))
+        (with-temporary-function
+            ('nshell.application::%execute-command-by-name-in-context
+             (lambda (ignored-context ignored-command ignored-args)
+               (declare (ignore ignored-context ignored-command ignored-args))
+               (setf executed-p t)
+               (values "executed" 0)))
+          (multiple-value-bind (output code)
+              (nshell.application:execute-ast-in-context context ast)
+            (expect nil :to-be executed-p)
+            (expect 126 :to-equal code)
+            (expect (search "blocked" output) :to-be-truthy))))))
+
+  (it "rechecks-agent-command-arguments-after-variable-expansion"
+    (let ((context (nshell.application:make-shell-context
+                    :environment (nshell.domain.environment:make-environment)))
+          (ast (nshell.domain.parsing:make-command-node
+                "rm" '("-rf" "$NSHELL_AGENT_TARGET"))))
+      (setf (nshell.application:shell-context-environment context)
+            (nshell.domain.environment:env-set
+             (nshell.application:shell-context-environment context)
+             "NSHELL_AGENT_TARGET" "/" nil))
+      (let ((nshell.application::*execution-origin* :agent)
+            (nshell.application::*execution-confirmed-p* t))
+        (with-temporary-function
+            ('nshell.application::%execute-command-by-name-in-context
+             (lambda (ignored-context ignored-command ignored-args)
+               (declare (ignore ignored-context ignored-command ignored-args))
+               (values "executed" 0)))
+          (multiple-value-bind (output code)
+              (nshell.application:execute-ast-in-context context ast)
+            (expect 126 :to-equal code)
+            (expect (search "blocked" output) :to-be-truthy))))))
 
 (describe "prefix-assignment-tests"
   (it "bare-assignment-sets-a-shell-variable"

@@ -394,7 +394,7 @@
                                 (nshell.feature.assistant:assistant-boundary-status
                                  request)))
                       (let ((result nil))
-                        (loop repeat 100
+                        (loop repeat 1200
                               until result
                               do (let ((polled
                                          (nshell.feature.assistant:assistant-model-poll

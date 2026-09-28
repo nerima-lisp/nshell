@@ -47,6 +47,27 @@
     (sb-posix:chmod (namestring path) #o700)
     path))
 
+(defun %assistant-test-pending-sidecar-script ()
+  (let ((path (merge-pathnames
+               (format nil "nshell-assistant-pending-sidecar-~D.sh"
+                       (get-universal-time))
+               (uiop:temporary-directory))))
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (dolist (line
+                '("#!/bin/sh"
+                  "if [ \"$1\" = \"--version\" ]; then"
+                  "  printf '%s\\n' 'test-version'"
+                  "  exit 0"
+                  "fi"
+                  "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
+                  "while IFS= read -r line"
+                  "do"
+                  "  while :; do sleep 1; done"
+                  "done"))
+        (write-line line stream)))
+    (sb-posix:chmod (namestring path) #o700)
+    path))
+
 (defun %assistant-test-hanging-version-sidecar-script ()
   (let ((path (merge-pathnames
                (format nil "nshell-assistant-hanging-version-~D.sh"
@@ -429,6 +450,91 @@
                         (nshell.feature.assistant:assistant-model-stop))))
         (when (probe-file script)
           (delete-file script))))))
+
+  (it "publishes-a-reasoned-terminal-event-before-stop-closes-pending"
+    (let ((script (%assistant-test-pending-sidecar-script)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (expect :ready :to-be
+                     (getf (%assistant-test-await-state :ready) :state))
+             (expect :event :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-poll 0)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       31 '(("message" . "stop-pending")))))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-stop)))
+             (let* ((polled (nshell.feature.assistant:assistant-model-poll 31))
+                    (event (nshell.feature.assistant:assistant-boundary-value polled)))
+               (expect :event :to-be
+                       (nshell.feature.assistant:assistant-boundary-status polled))
+               (expect :stream-error :to-be
+                       (nshell.feature.assistant:assistant-model-event-kind event))
+               (expect "assistant sidecar stopped before the pending request completed"
+                       :to-equal
+                       (cdr (assoc "message"
+                                   (nshell.feature.assistant:assistant-model-event-payload
+                                    event)
+                                   :test #'string=)))))
+        (when (probe-file script)
+          (delete-file script)))))
+
+  (it "publishes-a-reasoned-terminal-event-before-respawn-replaces-pending"
+    (let ((script (%assistant-test-sidecar-script t)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (expect :ready :to-be
+                     (getf (%assistant-test-await-state :ready) :state))
+             (expect :event :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-poll 0)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       32 '(("message" . "respawn-pending")))))
+             (expect :dead :to-be
+                     (getf (%assistant-test-await-state :dead) :state))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (let ((error-event nil))
+               (loop repeat 8
+                     until error-event
+                     do (let ((polled (nshell.feature.assistant:assistant-model-poll 32)))
+                          (when (eq :event
+                                    (nshell.feature.assistant:assistant-boundary-status
+                                     polled))
+                            (let ((event
+                                    (nshell.feature.assistant:assistant-boundary-value polled)))
+                              (when (eq :stream-error
+                                        (nshell.feature.assistant:assistant-model-event-kind
+                                         event))
+                                (setf error-event event))))))
+                 (expect :stream-error :to-be
+                         (nshell.feature.assistant:assistant-model-event-kind
+                          error-event)))
+             (nshell.feature.assistant:assistant-model-stop))
+        (when (probe-file script)
+          (delete-file script)))))
 
 (describe "assistant-sidecar-reader-stop-race"
   (it "stops-cleanly-when-init-gate-rejects-a-live-reader"

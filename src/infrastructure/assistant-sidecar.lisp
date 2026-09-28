@@ -13,6 +13,7 @@
   starting-p
   disabled-reason
   (lock (sb-thread:make-mutex :name "nshell assistant sidecar"))
+  (write-lock (sb-thread:make-mutex :name "nshell assistant sidecar stdin"))
   reader-thread
   writer-thread
   error-thread
@@ -21,6 +22,7 @@
   dead-p
   dead-reason
   pending
+  (retired-pending nil)
   write-channel)
 
 (defun %assistant-sidecar-nonempty-string (value)

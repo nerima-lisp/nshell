@@ -135,7 +135,8 @@
              (stream (and handle
                           (nshell.infrastructure.acl:sidecar-handle-input handle))))
         (if (streamp stream)
-            (progn
+            (sb-thread:with-mutex
+                ((assistant-sidecar-state-write-lock state))
               (write-line (assistant-write-item-line item) stream)
               (finish-output stream))
             (error "assistant sidecar input stream is unavailable")))
@@ -193,6 +194,22 @@
     (%assistant-sidecar-close-channel
      (assistant-pending-cell-events pending))))
 
+(defun %assistant-sidecar-retire-pending (state pending)
+  (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+    (push pending (assistant-sidecar-state-retired-pending state))))
+
+(defun %assistant-sidecar-terminate-pending (state pending reason)
+  (when (and pending (%assistant-sidecar-clear-pending state pending))
+    (%assistant-sidecar-publish
+     pending
+     (%assistant-sidecar-error-event
+      (assistant-pending-cell-generation pending)
+      reason))
+    (%assistant-sidecar-complete pending)
+    (%assistant-sidecar-retire-pending state pending)
+    (%assistant-sidecar-close-channel
+     (assistant-pending-cell-events pending))))
+
 (defun %assistant-sidecar-stop-state (state &key preserve-pending-p)
   (let (pending write-channel handle startup reader writer error-thread)
     (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
@@ -206,9 +223,9 @@
             reader (assistant-sidecar-state-reader-thread state)
             writer (assistant-sidecar-state-writer-thread state)
             error-thread (assistant-sidecar-state-error-thread state)))
-    (when pending
-      (%assistant-sidecar-close-channel
-       (assistant-pending-cell-events pending)))
+    (unless preserve-pending-p
+      (%assistant-sidecar-terminate-pending
+       state pending "assistant sidecar stopped before the pending request completed"))
     (%assistant-sidecar-close-channel write-channel)
     (when (and startup
                (not (eq startup sb-thread:*current-thread*)))
@@ -231,8 +248,6 @@
             (assistant-sidecar-state-error-thread state) nil
             (assistant-sidecar-state-write-channel state) nil
             (assistant-sidecar-state-start-thread state) nil))
-      (unless preserve-pending-p
-        (setf (assistant-sidecar-state-pending state) nil))
     t))
 
 (defun %assistant-sidecar-start-thread (state)
@@ -344,11 +359,15 @@
                                   (assistant-model-event-payload event)))
                         (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
                           (setf (assistant-sidecar-state-init-p state) t)))
-                      (when (and present-p
-                                 (assistant-model-event-p event)
-                                 (member (assistant-model-event-kind event)
-                                         '(:stream-error :stream-ended)))
-                        (return))
+                      (when (and present-p (assistant-model-event-p event))
+                        (let ((kind (assistant-model-event-kind event)))
+                          (cond
+                            ((member kind '(:stream-error :stream-ended))
+                             (return))
+                            ((not (eq kind :system-init))
+                             (%assistant-sidecar-publish pending event)
+                             (when (eq kind :result)
+                               (%assistant-sidecar-complete pending))))))
                       (when (or (%assistant-sidecar-init-p state)
                                 (not (%assistant-sidecar-starting-p state)))
                         (return)))
@@ -513,6 +532,14 @@
 
 (defun %assistant-sidecar-poll (state generation)
   (let ((pending (%assistant-sidecar-current-pending state)))
+    (unless (and pending
+                 (eql generation (assistant-pending-cell-generation pending)))
+      (setf pending
+            (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+              (find generation
+                    (assistant-sidecar-state-retired-pending state)
+                    :key #'assistant-pending-cell-generation
+                    :test #'eql))))
     (if (and pending
              (eql generation (assistant-pending-cell-generation pending)))
         (multiple-value-bind (event present-p closed-p)
@@ -524,7 +551,13 @@
                      (member (assistant-model-event-kind event)
                              '(:result :stream-ended :stream-error
                                :rate-limit-event)))
-            (%assistant-sidecar-clear-pending state pending)
+            (if (eq pending (%assistant-sidecar-current-pending state))
+                (%assistant-sidecar-clear-pending state pending)
+                (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                  (setf (assistant-sidecar-state-retired-pending state)
+                        (delete pending
+                                (assistant-sidecar-state-retired-pending state)
+                                :test #'eq))))
             (%assistant-sidecar-close-channel
              (assistant-pending-cell-events pending)))
           (values event present-p))

@@ -96,20 +96,25 @@
       (let* ((command (first args))
              (command-args (rest args)))
         (multiple-value-bind (output code)
-            (%execute-command-by-name-in-context context command command-args)
+            (%assistant-gated-command-dispatch
+             context command command-args
+             (lambda ()
+               (%execute-command-by-name-in-context context command command-args)))
           (values output (%invert-status-code code))))
       (%builtin-usage "not" "not command [args...]" 2)))
 
-(defun %exec-and-exit (command args)
-  (sb-ext:quit
-   :unix-status
-   (nshell.infrastructure.acl:run-external-exec command args)))
-
 (define-builtin %builtin-exec (context args) (context)
   (if args
-      (progn
-       (ignore-errors (nshell.feature.assistant:assistant-model-stop))
-       (%exec-and-exit (first args) (rest args)))
+      (let ((gate (%assistant-execution-gate
+                   context
+                   (nshell.domain.parsing:make-command-node
+                    (first args) (rest args)))))
+        (if gate
+            (values (first gate) (second gate))
+            (sb-ext:quit
+             :unix-status
+             (nshell.infrastructure.acl:run-external-exec
+              (first args) (rest args)))))
       (%builtin-usage "exec" "exec command [args...]")))
 
 (defun %contains-usage ()

@@ -93,6 +93,13 @@
                (return status)
                (sleep 0.05))))
 
+(defun %assistant-test-terminal-event-description (event)
+  (let* ((kind (nshell.feature.assistant:assistant-model-event-kind event))
+         (payload (nshell.feature.assistant:assistant-model-event-payload event))
+         (message (or (cdr (assoc "message" payload :test #'string=))
+                      (cdr (assoc "reason" payload :test #'string=)))))
+    (format nil "kind=~S message=~S payload=~S" kind message payload)))
+
 (describe "assistant-model-boundary-contracts"
   (it "replays-a-sanitized-stream-json-fixture-through-the-injected-boundary"
     (with-temporary-output-file (fixture-path :prefix "nshell-assistant-fixture-")
@@ -426,15 +433,23 @@
                                      (let ((event
                                              (nshell.feature.assistant:assistant-boundary-value
                                               polled)))
-                                       (when (eq :result
-                                                 (nshell.feature.assistant:assistant-model-event-kind
-                                                  event))
-                                         (setf result event))))
+                                       (let ((kind
+                                               (nshell.feature.assistant:assistant-model-event-kind
+                                                event)))
+                                         (cond
+                                           ((eq :result kind)
+                                            (setf result event))
+                                           ((member kind
+                                                    '(:stream-error :stream-ended
+                                                      :rate-limit-event))
+                                            (error
+                                             "assistant model ended before result: ~A"
+                                             (%assistant-test-terminal-event-description
+                                              event)))))))
                                    (unless result
                                      (sleep 0.01))))
-                        (expect :result :to-be
-                                (nshell.feature.assistant:assistant-model-event-kind
-                                 result))
+                        (unless result
+                          (error "assistant model result did not arrive: no event received"))
                         (expect generation :to-be
                                 (nshell.feature.assistant:assistant-model-event-generation
                                  result)))))

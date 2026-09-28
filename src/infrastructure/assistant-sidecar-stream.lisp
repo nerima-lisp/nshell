@@ -315,9 +315,15 @@
 
 (defun %assistant-sidecar-start-worker (state pending startup-generation)
   (multiple-value-bind (version version-status)
-      (nshell.infrastructure.acl::run-sidecar-version-cancellable
-       (assistant-sidecar-state-command state)
-       (lambda () (not (%assistant-sidecar-starting-p state))))
+      (let ((cached-version
+              (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                (assistant-sidecar-state-version state)))
+            (command (assistant-sidecar-state-command state)))
+        (if cached-version
+            (values cached-version :ok)
+            (nshell.infrastructure.acl::run-sidecar-version-cancellable
+             command
+             (lambda () (not (%assistant-sidecar-starting-p state))))))
     (if (or (not (eq :ok version-status))
             (not (%assistant-sidecar-generation-current-p
                   state startup-generation)))

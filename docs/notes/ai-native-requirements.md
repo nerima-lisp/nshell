@@ -69,7 +69,7 @@ error: builder for '/nix/store/…-nshell-bundle.drv' failed with exit code 1;
 ~/src/nshell (main) [1 · ?] >
 ```
 
-`?` の印に対応するキーを押したときだけ、直前のコマンド、exit、所要時間、リングバッファの出力 (redaction 済み) を送って説明を求める。
+`?` の印に対応するキーを押したときだけ、直前のコマンド、exit、所要時間、PTY が保持したリングバッファの出力 (redaction 済み) を送って説明を求める。
 
 ```
 ~/src/nshell (main) [1 · ?] >
@@ -87,7 +87,7 @@ Tab で候補を編集バッファへ。それ以外のキーでパネルは消�
 
 ### 2.4 シナリオ C: エージェントモード
 
-`agent` はコマンドとして起動する。各ステップは「提案 → 承認キー → PTY 下で実行 → 出力をモデルに返す」の 1 サイクルで、承認なしに次へ進まない。
+`agent` はコマンドとして起動する。各ステップは「提案 → 承認キー → フォアグラウンド PTY 下で実行 → 出力をモデルに返す」の 1 サイクルで、承認なしに次へ進まない。
 
 ```
 ~/src/nshell (main) > agent "test-builtins-core の describe 名衝突を直して"
@@ -234,11 +234,11 @@ ask 中は履歴 autosuggestion、abbr 展開、`!!` 系の history expansion �
 2. `system/init` 行の `tools` と `mcp_servers` を sidecar 起動時に検証し、`mcp_servers` は空を要求、`tools` は `{"StructuredOutput"}` の部分集合のみ許可する明示的な許可リスト。`--json-schema` を使うと `tools` に `StructuredOutput` が入るため、空限定にすると sidecar 自身が拒否される。どちらか一方でも空でなければ AI を有効化しない。
 3. 起動フラグに `--effort`（既定 `low`、設定で上書き可）と `--model`（設定時のみ）を追加（コミット `3d70597`）。
 
-**FR-010 PTY 下の出力捕捉** · 必須 (スパイクゲート付き) · verified
+**FR-010 PTY 下の出力捕捉** · 必須 (スパイクゲート付き) · fallback active, gate failed
 - すべてのフォアグラウンド外部コマンドを shell 所有の PTY で実行し、出力を有界リングバッファに tee する。子は TTY を見続ける。
 - ウィンドウサイズを子に伝播し、`⌃C` / `⌃Z` / `fg` / `bg` / 対話エディタ / SSH が現行どおり動く。
 - **ゲート**: 既存の job-control / PTY テスト (`t/e2e/test-job-control.lisp`, `t/integration/test-job-control.lisp`, `t/integration/test-pty*.lisp`) が再アサートなしで緑、かつ手動で vim / ssh / `sleep 100` + `⌃Z` + `fg` を確認。
-- **フォールバック** (ゲート不通過時): 単純コマンドは exit のみ、パイプライン・リダイレクト付きは既存バッファを保持して文脈に使う。FR-004 の出力本文はその範囲に縮む。
+- **フォールバック**: PTY ゲート不通過のため、production foreground command は従来の process path を維持する。PTY/ring-buffer の出力文脈同期は次回 retry の候補として残す。
 
 **FR-011 history v3** · 必須 · verified
 - 各エントリに時刻、cwd、exit、所要時間、由来 (typed / proposal / agent) を持つ。
@@ -459,7 +459,7 @@ ask 中は履歴 autosuggestion、abbr 展開、`!!` 系の history expansion �
 10. PTY ランナー: `pty-spawn` (`src/infrastructure/acl/pty-spawn.lisp` 47 行) を子コマンド実行に転用、ウィンドウサイズ伝播、シグナル転送、リングバッファ tee。
 11. ゲート判定: 既存テスト + 手動チェックリスト。通過なら `%spawn-terminal-command` 経路を置換し raw-mode 文書を更新。不通過ならフォールバック経路に切り替え、FR-004 の範囲を縮小して記録。
 
-P1-b 判定: PTY ランナーの ACL 単体・統合テストと、`printf` および停止・再開の直接スモークは通過したが、子コマンド経路のゲートは不通過だった。`e2e-external-job-stop-bg-fg-interrupt` は `PTY job condition timed out; output: ""` で単独再現し、tmux 手動確認でも `sleep 100` に Ctrl-Z を送った後にプロンプトへ戻らず、`fg` と Ctrl-C の後にだけプロンプトへ戻った。Vim は起動・終了できた。SSH は `localhost:22` に接続先がなく判定不能だった。したがって `%spawn-terminal-command` は既存の SBCL プロセス経路に戻し、P1-b のフォールバック範囲を「単純コマンドは従来経路、パイプラインとリダイレクトも従来のバッファ経路」とする。PTY ACL とリングバッファの検証コードは、再試行時の基礎として残す。
+P1-b 再試行: 子 PTY が `setsid` して slave を controlling terminal として取得する `:new-session-p t` 候補と、PTY tee の保持出力を実装した。Linux integration と tmux checklist で direct foreground の入出力および Ctrl-Z/fg が不通過だったため、production foreground command は従来の process path に戻した。結果は `docs/notes/pty-capture-gate.md` に記録した。
 
 **P2 explain と history (P1-a、P1-b に依存)**
 12. history v3 (`file-history.lisp`、読み込み昇格、`⌃R` 絞り込み)。

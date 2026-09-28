@@ -215,6 +215,30 @@
                           "pty-ready")) :to-be-truthy))
         (pty-test-close-process pty)))))
 
+  (it "pty-tee-retains-output-while-forwarding-it"
+    "The foreground runner tees child output into the bounded ring buffer."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (let ((pty nil)
+            (input (make-string-input-stream "")))
+        (unwind-protect
+             (progn
+               (setf pty (nshell.infrastructure.acl:pty-spawn
+                          "/bin/sh" '("-c" "printf pty-captured")))
+               (let ((output
+                       (with-output-to-string (stream)
+                         (nshell.infrastructure.acl::%start-pty-tee pty input stream)
+                         (nshell.infrastructure.acl:pty-process-wait pty))))
+                 (expect "pty-captured" :to-equal
+                         (string-trim '(#\Return #\Newline) output))
+                 (expect "pty-captured" :to-equal
+                         (string-trim '(#\Return #\Newline)
+                                      (nshell.infrastructure.acl:pty-process-output pty)))))
+          (close input)
+          (pty-test-close-process pty)))))
+
   (it "pty-spawn-cleans-up-when-child-exec-fails"
     "A failed exec is reported after the PTY descriptors and child are cleaned up."
     #-(or darwin linux)

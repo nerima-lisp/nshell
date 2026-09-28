@@ -5,7 +5,8 @@
 
 (defun %assistant-test-sidecar-script (&optional one-shot-p)
   (let ((path (merge-pathnames
-               (format nil "nshell-assistant-sidecar-~D.sh" (get-universal-time))
+               (format nil "nshell-assistant-sidecar-~D.sh"
+                       (get-internal-real-time)))
                (uiop:temporary-directory))))
     (with-open-file (stream path :direction :output :if-exists :supersede)
       (dolist (line

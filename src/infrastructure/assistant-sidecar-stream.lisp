@@ -374,8 +374,8 @@
                         (assistant-pending-cell-generation pending)
                         :system-init nil))
                         (when payload
-                          (cl-concurrent-kit:try-send
-                           write-channel
+                          (%assistant-sidecar-write-item
+                           state
                            (%make-assistant-write-item
                             (assistant-pending-cell-generation pending)
                             payload)))))

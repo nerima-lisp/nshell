@@ -457,9 +457,8 @@
                   (setf (assistant-pending-cell-request-payload pending) nil
                         send-now-p t)))
               (when send-now-p
-                (cl-concurrent-kit:try-send
-                 (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
-                   (assistant-sidecar-state-write-channel state))
+                (%assistant-sidecar-write-item
+                 state
                  (%make-assistant-write-item generation line))))
             (return-from %assistant-sidecar-request t))
         (error () (return-from %assistant-sidecar-request nil))))
@@ -470,15 +469,16 @@
           (let ((line (json-kit:stringify (json-kit:alist->json-object payload))))
             (unless (json-kit:parse line :object-type :alist)
               (return-from %assistant-sidecar-request nil))
-            (let ((channel nil))
+            (let ((send-now-p nil))
               (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
                 (setf (assistant-pending-cell-generation pending) generation
-                      channel (assistant-sidecar-state-write-channel state)))
-              (return-from %assistant-sidecar-request
-                (and channel
-                     (cl-concurrent-kit:try-send
-                      channel
-                      (%make-assistant-write-item generation line))))))
+                      (assistant-pending-cell-request-payload pending) nil
+                      send-now-p t))
+              (when send-now-p
+                (%assistant-sidecar-write-item
+                 state
+                 (%make-assistant-write-item generation line)))
+              (return-from %assistant-sidecar-request t))))
         (error () (return-from %assistant-sidecar-request nil))))
     (if (and handle
              (%assistant-sidecar-init-p state)

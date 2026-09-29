@@ -12,7 +12,7 @@ domain-driven core whose line editor is a pure reducer over an immutable input
 state, and a reproducible Nix build that packages a dumped SBCL image with its
 process-launch helper.
 
-> **Status: development preview (0.4.x).** The interactive editor and core
+> **Status: development preview (0.5.x).** The interactive editor and core
 > pipeline execution are solid and heavily tested. The shell *language* is a
 > growing subset of POSIX/fish semantics. nshell is usable as a daily
 > interactive shell for common workflows; it is not a script-compatible
@@ -24,7 +24,7 @@ The source for that site lives in [docs/src/](docs/src/).
 ## Quick Start
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.4.0
+nix run github:nerima-lisp/nshell/v0.5.0
 ```
 
 Then type as you would in any shell. Commands and paths colorize live, and a
@@ -50,27 +50,28 @@ the edited line to nshell.
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.4.0
+nix profile install github:nerima-lisp/nshell/v0.5.0
 ```
 
 ```nix
 # flake.nix
 inputs.nshell = {
-  url = "github:nerima-lisp/nshell/v0.4.0";
+  url = "github:nerima-lisp/nshell/v0.5.0";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 ```
 
-Pin a release tag rather than following the default branch. The supported
-platforms are `x86_64-linux` and `aarch64-darwin`; other systems are currently
-outside the tested support boundary.
+Pin a release tag rather than following the default branch. The v0.5.0 release
+workflow publishes an `x86_64-linux` tarball only. `aarch64-darwin` remains a
+local development target; other systems are outside the tested support
+boundary.
 
-> **Release artifact warning:** the tarballs attached to `v0.4.0` are not
-> portable and can retain Nix store dependencies. No portable binary release
-> has been published yet. Use the pinned Nix commands above until a later
-> release explicitly identifies its bundles as portable. See
-> [Getting started](https://nerima-lisp.github.io/nshell/getting-started/)
-> for the future bundle verification and installation procedure.
+The `x86_64-linux` release bundle removes Nix store references, carries its
+ELF runtime library closure, and is checked for required files and dependency
+metadata. CI also runs `--help`, `--version`, and an `echo` smoke test on the
+bundle; use the pinned Nix commands above on other platforms. See [Getting
+started](https://nerima-lisp.github.io/nshell/getting-started/) for the bundle
+verification and installation procedure.
 
 ## Documentation
 

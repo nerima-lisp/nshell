@@ -5,13 +5,13 @@
 With [Nix](https://nixos.org/download) (flakes enabled):
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.4.0
+nix run github:nerima-lisp/nshell/v0.5.0
 ```
 
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.4.0
+nix profile install github:nerima-lisp/nshell/v0.5.0
 nshell
 man nshell   # the manual page is installed alongside the binary
 ```
@@ -22,16 +22,16 @@ the default branch:
 ```nix
 # flake.nix
 inputs.nshell = {
-  url = "github:nerima-lisp/nshell/v0.4.0";
+  url = "github:nerima-lisp/nshell/v0.5.0";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 ```
 
-The release workflow currently publishes an `x86_64-linux` tarball and SHA-256
-checksum. Check the [GitHub releases](https://github.com/nerima-lisp/nshell/releases)
-page before downloading: the `v0.4.0` artifacts are not portable and may retain
-Nix store dependencies. For reproducible installation, use the pinned Nix
-commands above.
+The release workflow publishes an `x86_64-linux` tarball and SHA-256 checksum.
+The release bundle removes Nix store references, carries its ELF runtime
+library closure, and is checked for required files and dependency metadata. CI
+also runs `--help`, `--version`, and an `echo` smoke test on the bundle. Use the
+pinned Nix commands above on other platforms.
 
 ## First commands
 

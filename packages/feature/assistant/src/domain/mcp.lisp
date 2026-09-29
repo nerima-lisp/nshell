@@ -167,7 +167,8 @@
    (cons "serverInfo"
          (%assistant-mcp-object
           (cons "name" "nshell-state")
-          (cons "version" "0.4.0")))))
+          (cons "version"
+                (asdf:component-version (asdf:find-system "nshell")))))))
 
 (defun %assistant-mcp-tool-call
     (request session-ids snapshot-present-p snapshot-content

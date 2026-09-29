@@ -251,12 +251,6 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
     (:dead (values "AI 停止" :assistant-dead))
     (otherwise (values nil nil))))
 
-(defun %assistant-status-text ()
-  "Return the display label for the assistant model lifecycle state."
-  (nth-value 0
-             (%assistant-status-display
-              (nshell.feature.assistant:assistant-model-status))))
-
 (defun %assistant-status-segment ()
   (multiple-value-bind (text kind)
       (%assistant-status-display

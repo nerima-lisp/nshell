@@ -124,6 +124,18 @@
                       :terminal-width 10 :theme theme))))
       (expect (search "git status --long-flag-name-here" output) :to-be-falsy)))
 
+  (it "render-search-result-row-fits-badges-within-terminal-width"
+    (let ((nshell.infrastructure.terminal:*terminal-color-depth* :none)
+          (theme (nshell.domain.configuration:default-theme)))
+      (let ((output (capture-standard-output
+                      (nshell.presentation::%search-result-row
+                       '(:text "deploy production"
+                         :origin :agent
+                         :exit-code 7)
+                       "deploy" t 10 theme))))
+        (expect (<= (nshell.presentation::%string-visible-width output) 10)
+                :to-be-truthy))))
+
   (it "render-search-results-truncates-the-header-at-width-40-and-80"
     (dolist (width '(40 80))
       (let* ((theme (nshell.domain.configuration:default-theme))

@@ -46,6 +46,21 @@ when QUERY does not occur in TEXT."
         (push (list (format nil " [終了 ~d]" exit-code) :prompt-error) badges)))
     (nreverse badges)))
 
+(defun %search-result-badges-within-width (badges width)
+  (loop with remaining = (max 0 width)
+        for badge in badges
+        while (plusp remaining)
+        for text = (first badge)
+        for visible-width = (%string-visible-width text)
+        if (<= visible-width remaining)
+          collect (progn
+                    (decf remaining visible-width)
+                    badge)
+        else
+          collect (list (%truncate-string-to-width text remaining)
+                        (second badge))
+          and do (setf remaining 0)))
+
 (defun %search-header-text (query count)
   (format nil "~a | 絞り込み: status:failed status:success exit:N cwd:PATH origin:typed|proposal|agent"
           (if (zerop count)
@@ -55,8 +70,12 @@ when QUERY does not occur in TEXT."
 (defun %search-result-row (match query selected-p width theme)
   (let* ((metadata (%search-result-metadata match))
          (text (getf metadata :text))
-         (marker (%search-result-marker selected-p))
+         (marker (%truncate-string-to-width (%search-result-marker selected-p)
+                                           width))
          (badges (%search-result-badges metadata))
+         (badges (%search-result-badges-within-width
+                  badges
+                  (- width (%string-visible-width marker))))
          (badge-text (mapcar #'first badges))
          (badge-width (reduce #'+ badge-text :key #'%string-visible-width :initial-value 0))
          (text-width (max 0 (- width (%string-visible-width marker) badge-width)))

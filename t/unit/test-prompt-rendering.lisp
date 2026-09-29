@@ -84,10 +84,10 @@
                  (nshell.feature.assistant:make-assistant-model-boundary
                   :status-fn (lambda ()
                                (list :state state :version "1.0" :reason "test"))))))
-          (expect expected-text :to-equal
-                  (nshell.presentation::%assistant-status-text))
           (let ((segment (nshell.presentation::%assistant-status-segment))
                 (theme (nshell.domain.configuration:default-theme)))
+            (expect expected-text :to-equal
+                    (nshell.domain.prompting:prompt-segment-text segment))
             (expect expected-kind :to-equal
                     (nshell.domain.prompting:prompt-segment-kind segment))
             (expect expected-role :to-equal

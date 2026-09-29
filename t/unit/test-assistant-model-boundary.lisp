@@ -474,6 +474,53 @@
         (when (probe-file script)
           (delete-file script))))))
 
+  (it "does-not-let-poll-consume-the-startup-handshake"
+    (let ((script (%assistant-test-sidecar-script)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       1 '(("message" . "handshake-race")))))
+             (let* ((result nil)
+                    (deadline
+                      (+ (get-internal-real-time)
+                         (round
+                          (* (1+ nshell.feature.assistant::+assistant-sidecar-handshake-timeout-seconds+)
+                             internal-time-units-per-second)))))
+               (loop while (and (null result)
+                                (< (get-internal-real-time) deadline))
+                     do (let* ((polled
+                                 (nshell.feature.assistant:assistant-model-poll 1))
+                               (status
+                                 (nshell.feature.assistant:assistant-boundary-status
+                                  polled)))
+                          (when (eq :event status)
+                            (let ((event
+                                    (nshell.feature.assistant:assistant-boundary-value
+                                     polled)))
+                              (when (eq :result
+                                        (nshell.feature.assistant:assistant-model-event-kind
+                                         event))
+                                (setf result event))))
+                          (unless result
+                            (sleep 0))))
+               (expect :result :to-be
+                       (nshell.feature.assistant:assistant-model-event-kind result)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-stop))))
+        (when (probe-file script)
+          (delete-file script)))))
+
   (it "publishes-a-reasoned-terminal-event-before-stop-closes-pending"
     (let ((script (%assistant-test-pending-sidecar-script)))
       (unwind-protect

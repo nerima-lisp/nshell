@@ -323,7 +323,8 @@
       t)))
 
 (defun %assistant-sidecar-start-worker (state pending startup-generation)
-  (multiple-value-bind (version version-status)
+  (let ((startup-events nil))
+    (multiple-value-bind (version version-status)
       (let ((cached-version
               (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
                 (assistant-sidecar-state-version state)))
@@ -396,10 +397,8 @@
                           (cond
                             ((member kind '(:stream-error :stream-ended))
                              (return))
-                            ((not (eq kind :system-init))
-                             (%assistant-sidecar-publish pending event)
-                             (when (eq kind :result)
-                               (%assistant-sidecar-complete pending))))))
+                             ((not (eq kind :system-init))
+                              (push event startup-events)))))
                       (when (or (%assistant-sidecar-init-p state)
                                 (not (%assistant-sidecar-starting-p state)))
                         (return)))
@@ -425,6 +424,8 @@
                        (make-assistant-model-event
                         (assistant-pending-cell-generation pending)
                         :system-init nil))
+                      (dolist (event (nreverse startup-events))
+                        (%assistant-sidecar-publish pending event))
                         (when payload
                           (%assistant-sidecar-write-item
                            state
@@ -441,7 +442,7 @@
                         "assistant sidecar init handshake failed"))
                       (%assistant-sidecar-complete pending)
                       (%assistant-sidecar-stop-state state
-                                                     :preserve-pending-p t)))))))))))
+                                                     :preserve-pending-p t))))))))))))
 
 (defun %assistant-sidecar-start (state)
   (if (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
@@ -569,6 +570,10 @@
 
 (defun %assistant-sidecar-poll (state generation)
   (let ((pending (%assistant-sidecar-current-pending state)))
+    (when (and pending
+               (eql generation (assistant-pending-cell-generation pending))
+               (%assistant-sidecar-starting-p state))
+      (return-from %assistant-sidecar-poll (values nil nil)))
     (unless (and pending
                  (eql generation (assistant-pending-cell-generation pending)))
       (setf pending

@@ -67,21 +67,23 @@ the startup file has run, so a line in ~/.nshellrc decides it."
   (loop for name in '("LC_ALL" "LC_CTYPE" "LANG")
         for locale = (nshell.domain.environment:env-get environment name)
         when (and locale (plusp (length locale)))
-          do (return (or (search "ja" locale :test #'char-equal)
-                         (search "zh" locale :test #'char-equal)
-                         (search "ko" locale :test #'char-equal)))))
+          do (return
+               (some (lambda (language)
+                       (and (>= (length locale) 2)
+                            (string-equal locale language :end1 2 :end2 2)
+                            (or (= (length locale) 2)
+                                (member (char locale 2) '(#\_ #\. #\@)))))
+                     '("ja" "zh" "ko")))))
 
 (defun %configured-east-asian-width (environment)
-  (let ((value (or (nshell.domain.environment:env-get
-                   environment "NSHELL_EAST_ASIAN_AMBIGUOUS")
-                   (nshell.domain.environment:env-get
-                    environment "NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH"))))
+  (let ((value (nshell.domain.environment:env-get
+                environment "NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH")))
     (handler-case
         (nshell.domain.configuration:parse-east-asian-ambiguous-width
          (or value :auto))
       (type-error (condition)
         (format *error-output*
-                "nshell: invalid NSHELL_EAST_ASIAN_AMBIGUOUS value: ~a~%"
+                "nshell: invalid NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH value: ~a~%"
                 condition)
         :auto))))
 
@@ -92,10 +94,13 @@ the startup file has run, so a line in ~/.nshellrc decides it."
              (:wide t)
              (:narrow nil)
              (:auto
-              (and interactive-p
-                   (nshell.infrastructure.terminal:interactive-terminal-p)
-                   (or (nshell.infrastructure.terminal:detect-east-asian-ambiguous-wide-p)
-                       (%east-asian-locale-wide-p *environment*)))))))
+              (if (and interactive-p
+                       (nshell.infrastructure.terminal:interactive-terminal-p))
+                  (case (nshell.infrastructure.terminal:detect-east-asian-ambiguous-wide-p)
+                    (:wide t)
+                    (:narrow nil)
+                    (otherwise (%east-asian-locale-wide-p *environment*)))
+                  (%east-asian-locale-wide-p *environment*))))))
     (setf *config*
           (nshell.domain.configuration:make-config
            :theme (nshell.domain.configuration:config-theme *config*)

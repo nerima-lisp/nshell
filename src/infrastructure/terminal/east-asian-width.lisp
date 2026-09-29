@@ -31,14 +31,16 @@ after returning to the saved cursor position."
       (write-string (cl-tty-kit:ansi-restore-cursor) stream)
       ;; ECH clears cells without moving the cursor or clobbering neighbors.
       (write-string (format nil "~C[2X" (code-char 27)) stream)
-      (write-string (cl-tty-kit:ansi-restore-cursor) stream)
       (finish-output stream)))))
 
 (defun detect-east-asian-ambiguous-wide-p (&key (attempts 20)
                                                 (sleep-seconds 0.005))
-  "Return T when the interactive terminal renders ambiguous text wide.
+  "Return :WIDE, :NARROW, or NIL when the CPR measurement is trustworthy.
 
 NIL means that no trustworthy CPR measurement was obtained.  The default
 arguments bound the probe wait to about 100ms, before the locale fallback."
-  (eql 2 (%east-asian-probe-width :attempts attempts
-                                  :sleep-seconds sleep-seconds)))
+  (case (%east-asian-probe-width :attempts attempts
+                                 :sleep-seconds sleep-seconds)
+    (2 :wide)
+    (1 :narrow)
+    (otherwise nil)))

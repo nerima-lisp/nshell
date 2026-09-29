@@ -42,9 +42,9 @@
                         (nshell.domain.environment:make-default-environment)
                         (nshell.infrastructure.acl:current-environment-entries)
                         (function nshell.infrastructure.acl:current-working-directory))))
-  ;; Batch and -c never issue terminal probes.  Do not leak an interactive
-  ;; session's dynamic cl-tty-kit policy when tests reuse this image.
-  (setf cl-tty-kit:*east-asian-ambiguous-wide* nil)
+  ;; Batch and -c never issue terminal probes, but explicit configuration and
+  ;; the locale fallback still apply.
+  (%apply-east-asian-ambiguous-width :interactive-p nil)
   (nshell.feature.assistant:reset-assistant-usage)
   (nshell.feature.assistant:reset-assistant-settings)
   (%reset-repl-state-tables))

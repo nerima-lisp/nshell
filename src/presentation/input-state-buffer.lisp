@@ -66,6 +66,25 @@
 (defun buffer-deletion-request-at-cursor (cursor)
   (%make-buffer-deletion-request :at-cursor cursor))
 
+(defun %previous-grapheme-boundary (buffer cursor)
+  (let ((boundary 0))
+    (loop with position = 0
+          for grapheme in (cl-tty-kit:string-graphemes buffer)
+          for next = (+ position (length grapheme))
+          while (< next cursor)
+          do (setf boundary next
+                   position next)
+          finally (return boundary))))
+
+(defun %next-grapheme-boundary (buffer cursor)
+  (loop with position = 0
+        for grapheme in (cl-tty-kit:string-graphemes buffer)
+        for next = (+ position (length grapheme))
+        do (when (> next cursor)
+             (return next))
+           (setf position next)
+        finally (return (length buffer))))
+
 (defun buffer-deletion-for-request (request buffer)
   (let ((cursor (%buffer-deletion-request-cursor request)))
     (case (%buffer-deletion-request-kind request)
@@ -73,12 +92,13 @@
        (unless (zerop cursor)
          (%make-buffer-deletion
           (%make-buffer-deletion-plan
-           (make-buffer-splice (1- cursor) cursor)))))
+           (make-buffer-splice (%previous-grapheme-boundary buffer cursor)
+                               cursor)))))
       (:at-cursor
        (unless (>= cursor (length buffer))
          (%make-buffer-deletion
           (%make-buffer-deletion-plan
-           (make-buffer-splice cursor (1+ cursor)))))))))
+           (make-buffer-splice cursor (%next-grapheme-boundary buffer cursor)))))))))
 
 (defun buffer-deletion-result (deletion buffer)
   (buffer-splice-result

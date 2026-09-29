@@ -29,10 +29,24 @@
   (apply-buffer-clear-plan state (%buffer-clear-edit-plan edit)))
 
 (defun %commit-cursor-move-request (state request)
-  (values (commit-cursor-move-edit
-           state
-           (cursor-move-edit-for-request request))
-          :redraw))
+  (let* ((buffer (input-state-buffer state))
+         (cursor (input-state-cursor-pos state))
+         (target (case (nshell.presentation::%cursor-move-request-kind request)
+                   (:by
+                    (loop with position = cursor
+                          repeat (abs (nshell.presentation::%cursor-move-request-delta request))
+                          do (setf position
+                                   (if (plusp (nshell.presentation::%cursor-move-request-delta request))
+                                       (%next-grapheme-boundary buffer position)
+                                       (%previous-grapheme-boundary buffer position)))
+                          finally (return position)))
+                   (:to
+                    (min (length buffer)
+                         (max 0 (nshell.presentation::%cursor-move-request-position request)))))))
+    (values (commit-cursor-move-edit
+             state
+             (%make-cursor-move-edit target))
+          :redraw)))
 
 (defun commit-cursor-move-edit (state edit)
   (copy-input-state-with state

@@ -77,8 +77,8 @@ What is actually checkable on a plain `aarch64-darwin` development machine
 - Publish at least one low-friction installation path beyond `nix run`, such as
   nixpkgs, Homebrew, or prebuilt release binaries.
 - Obtain native x86_64-linux CI evidence for the implemented bundle derivation:
-  build it, validate it, and smoke-test it after tar extraction. Published
-  v0.4.0 artifacts remain non-portable.
+  build it, validate it, and smoke-test it after tar extraction. Until that
+  evidence is recorded, v0.5.0 bundle portability remains unconfirmed.
 - Verify the global all-target publication gate, checksums, and GitHub artifact
   attestations in CI before describing release provenance as operational.
 - Validate the process-isolated benchmark scenarios in CI and collect equivalent

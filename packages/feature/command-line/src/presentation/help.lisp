@@ -27,5 +27,5 @@
   "Print nshell's version banner to STREAM."
   (format
    stream
-   "nshell v0.4.0 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
+   "nshell v0.5.0 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
    (lisp-implementation-version)))

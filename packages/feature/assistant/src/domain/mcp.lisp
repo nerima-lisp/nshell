@@ -167,7 +167,7 @@
    (cons "serverInfo"
          (%assistant-mcp-object
           (cons "name" "nshell-state")
-          (cons "version" "0.4.0")))))
+          (cons "version" "0.5.0")))))
 
 (defun %assistant-mcp-tool-call
     (request session-ids snapshot-present-p snapshot-content

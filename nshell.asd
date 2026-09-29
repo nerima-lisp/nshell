@@ -269,6 +269,7 @@
    (:file "infrastructure/terminal/input-core")
    (:file "infrastructure/terminal/input-decode")
    (:file "infrastructure/terminal/input-read")
+   (:file "infrastructure/terminal/east-asian-width")
    (:file "presentation/input-state-static-data"
           :pathname "../data/presentation/input-state-data")
    (:file "presentation/input-state-core")
@@ -422,6 +423,7 @@
    (:file "unit/test-last-argument")
    (:file "unit/test-history-expansion")
    (:file "unit/test-configuration")
+   (:file "unit/test-east-asian-width")
    (:file "unit/test-theme-style")
    (:file "unit/test-builtin-theme")
    (:file "unit/test-prompt-format")

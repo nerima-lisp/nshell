@@ -57,11 +57,51 @@ the startup file has run, so a line in ~/.nshellrc decides it."
                   (format *error-output*
                           "nshell: ~a exited with status ~a~%"
                           source-name
-                          code)))))
+                  code)))))
         (error (condition)
           (format *error-output* "nshell: ~a: ~a~%"
                   source-name
                   condition))))))
+
+(defun %east-asian-locale-wide-p (environment)
+  (loop for name in '("LC_ALL" "LC_CTYPE" "LANG")
+        for locale = (nshell.domain.environment:env-get environment name)
+        when (and locale (plusp (length locale)))
+          do (return (or (search "ja" locale :test #'char-equal)
+                         (search "zh" locale :test #'char-equal)
+                         (search "ko" locale :test #'char-equal)))))
+
+(defun %configured-east-asian-width (environment)
+  (let ((value (or (nshell.domain.environment:env-get
+                   environment "NSHELL_EAST_ASIAN_AMBIGUOUS")
+                   (nshell.domain.environment:env-get
+                    environment "NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH"))))
+    (handler-case
+        (nshell.domain.configuration:parse-east-asian-ambiguous-width
+         (or value :auto))
+      (type-error (condition)
+        (format *error-output*
+                "nshell: invalid NSHELL_EAST_ASIAN_AMBIGUOUS value: ~a~%"
+                condition)
+        :auto))))
+
+(defun %apply-east-asian-ambiguous-width (&key (interactive-p t))
+  (let* ((configured (%configured-east-asian-width *environment*))
+         (wide-p
+           (case configured
+             (:wide t)
+             (:narrow nil)
+             (:auto
+              (and interactive-p
+                   (nshell.infrastructure.terminal:interactive-terminal-p)
+                   (or (nshell.infrastructure.terminal:detect-east-asian-ambiguous-wide-p)
+                       (%east-asian-locale-wide-p *environment*)))))))
+    (setf *config*
+          (nshell.domain.configuration:make-config
+           :theme (nshell.domain.configuration:config-theme *config*)
+           :east-asian-ambiguous-width configured))
+    (setf cl-tty-kit:*east-asian-ambiguous-wide* (not (null wide-p)))
+    wide-p))
 (defun %seed-history-from-file (history)
   "Load persisted entries into HISTORY so recall starts at the newest one.
 
@@ -157,6 +197,7 @@ entered during this session."
         (%vi-mode-flag-enabled-p
          (nshell.infrastructure.acl:current-environment-value "NSHELL_VI_MODE")))
   (%load-interactive-config :enabled-p load-config-p :path config-path)
+  (%apply-east-asian-ambiguous-width)
   (when history-p
     (%seed-history-from-file *history*))
   (seed-repl-completion-knowledge-base *kb*))

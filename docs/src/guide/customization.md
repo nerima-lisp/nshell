@@ -7,6 +7,23 @@ between built-in presets or override individual roles, and `~/.nshellrc` runs
 plain nshell commands at startup, so a `theme` line there applies on every
 launch.
 
+## East Asian ambiguous character width
+
+Some Unicode characters, such as `·`, `…`, and `○`, have an East Asian
+ambiguous width. Set `NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH` to `auto` (the
+default), `narrow`, or `wide` in `~/.nshellrc` or the environment:
+
+```
+set -x NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH wide
+```
+
+With `auto`, an interactive TTY is probed using a cursor-position report. If
+the terminal does not answer promptly, nshell uses `LC_ALL`, then `LC_CTYPE`,
+then `LANG`: `ja`, `zh`, and `ko` locales select `wide`, and other locales
+select `narrow`. Batch commands and `-c` never perform the probe. The selected
+width is used consistently for prompts, input wrapping, cursor movement,
+completion columns, transient panels, and history search.
+
 ## Customizing colors
 
 ### The `theme` builtin

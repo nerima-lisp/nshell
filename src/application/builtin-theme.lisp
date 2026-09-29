@@ -57,7 +57,11 @@ the theme builtin can swap the live configuration.")
     (funcall *theme-apply-handler* theme))
   (when (shell-context-config context)
     (setf (shell-context-config context)
-          (nshell.domain.configuration:make-config :theme theme)))
+            (nshell.domain.configuration:make-config
+             :theme theme
+             :east-asian-ambiguous-width
+             (nshell.domain.configuration:config-east-asian-ambiguous-width
+              (shell-context-config context)))))
   theme)
 
 (defun %theme-use (context name)

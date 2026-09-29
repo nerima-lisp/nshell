@@ -1,5 +1,18 @@
 (in-package #:nshell/test)
 
+(defun %strip-sgr-sequences (text)
+  (with-output-to-string (output)
+    (loop with in-control-sequence-p = nil
+          for char across text
+          do (cond
+               (in-control-sequence-p
+                (when (char= char #\m)
+                  (setf in-control-sequence-p nil)))
+               ((char= char #\Esc)
+                (setf in-control-sequence-p t))
+               (t
+                (write-char char output))))))
+
 (describe "repl-search-ui-tests"
   (it "render-search-results-prints-header-with-match-count"
     (let* ((theme (nshell.domain.configuration:default-theme))
@@ -127,14 +140,18 @@
   (it "render-search-result-row-fits-badges-within-terminal-width"
     (let ((nshell.infrastructure.terminal:*terminal-color-depth* :none)
           (theme (nshell.domain.configuration:make-theme)))
-      (let ((output (capture-standard-output
-                      (nshell.presentation::%search-result-row
-                       '(:text "deploy production"
-                         :origin :agent
-                         :exit-code 7)
-                       "deploy" t 10 theme))))
-        (expect (<= (nshell.presentation::%string-visible-width output) 10)
-                :to-be-truthy))))
+      (dolist (width '(10 3))
+        (let ((output (capture-standard-output
+                        (nshell.presentation::%search-result-row
+                         '(:text "deploy production"
+                           :origin :agent
+                           :exit-code 7)
+                         "deploy" t width theme))))
+          (expect
+           (<= (nshell.presentation::%string-visible-width
+                (%strip-sgr-sequences output))
+               width)
+           :to-be-truthy)))))
 
   (it "render-search-results-truncates-the-header-at-width-40-and-80"
     (dolist (width '(40 80))

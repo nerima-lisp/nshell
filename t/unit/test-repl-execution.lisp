@@ -95,11 +95,26 @@
       (repl-test-define-alias "view" "less")
       (repl-test-define-alias "broken" "if true")
       (setf (gethash "browse" nshell.presentation::*abbreviations*) "fzf")
-      (dolist (case '("edit file" "conditional-edit" "view file" "browse"))
+      (dolist (case '("edit file" "conditional-edit" "time edit"
+                      "view file" "browse"))
         (let ((assessment
                 (nshell.presentation::%rerun-command-assessment case)))
           (expect t :to-equal
                   (not (null (getf assessment :interactive-command))))))))
+
+  (it "rerun-last-command-rejects-too-deep-definition-chains"
+    (with-repl-test-state
+      (dotimes (index 10)
+        (repl-test-define-alias
+         (format nil "a~d" (1+ index))
+         (if (= index 9)
+             "vim"
+             (format nil "a~d" (+ index 2)))))
+      (let ((assessment
+              (nshell.presentation::%rerun-command-assessment "a1")))
+        (expect :block :to-equal (getf assessment :classification))
+        (expect (search "深すぎる" (getf assessment :reason))
+                :to-be-truthy))))
 
   (it "rerun-last-command-rejects-unparseable-definitions"
     (with-repl-test-state

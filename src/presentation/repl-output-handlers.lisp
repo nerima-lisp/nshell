@@ -701,6 +701,10 @@ wrapped line's other rows on screen as stale duplicates."
 
 (defparameter +rerun-command-expansion-depth-limit+ 8)
 
+(defparameter +rerun-dynamic-command-names+
+  '("eval" "source" ".")
+  "Commands whose contents are only known at execution time.")
+
 (defun %rerun-command-substitution-texts (value)
   (mapcan (lambda (marker)
             (let ((texts
@@ -723,12 +727,9 @@ wrapped line's other rows on screen as stale duplicates."
 (defun %rerun-definition-details (name texts &key depth seen)
   (if (or (null texts) (member name seen :test #'string-equal))
       nil
-      (if (> depth +rerun-command-expansion-depth-limit+)
-          (list (list :dynamic
-                      "定義の展開が深すぎるため出力を捕捉できません"))
-          (%rerun-parse-command-details
-           (format nil "~{~a~^~%~}" texts)
-           :depth (1+ depth) :seen (cons name seen)))))
+      (%rerun-parse-command-details
+       (format nil "~{~a~^~%~}" texts)
+       :depth (1+ depth) :seen (cons name seen))))
 
 (defun %rerun-command-substitution-details (values &key depth seen)
   (mapcan
@@ -744,22 +745,27 @@ wrapped line's other rows on screen as stale duplicates."
    values))
 
 (defun %rerun-command-definition-details (name &key depth seen)
-  (when (< depth +rerun-command-expansion-depth-limit+)
-    (append
-     (%rerun-definition-details
-      name (let ((alias (gethash name *aliases*)))
-             (and alias (list alias)))
-      :depth depth :seen seen)
-     (%rerun-definition-details
-      name (gethash name *functions*) :depth depth :seen seen)
-     (%rerun-definition-details
-      name (let ((abbreviation (gethash name *abbreviations*)))
-             (when abbreviation
-               (list (if (stringp abbreviation)
-                         abbreviation
-                         (nshell.domain.abbreviation:abbreviation-expansion
-                          abbreviation)))))
-      :depth depth :seen seen))))
+  (cond
+    ((member name seen :test #'string-equal) nil)
+    ((>= depth +rerun-command-expansion-depth-limit+)
+     (list (list :dynamic
+                 "定義の展開が深すぎるため出力を捕捉できません")))
+    (t
+     (append
+      (%rerun-definition-details
+       name (let ((alias (gethash name *aliases*)))
+              (and alias (list alias)))
+       :depth depth :seen seen)
+      (%rerun-definition-details
+       name (gethash name *functions*) :depth depth :seen seen)
+      (%rerun-definition-details
+       name (let ((abbreviation (gethash name *abbreviations*)))
+              (when abbreviation
+                (list (if (stringp abbreviation)
+                          abbreviation
+                          (nshell.domain.abbreviation:abbreviation-expansion
+                           abbreviation)))))
+       :depth depth :seen seen)))))
 
 (defun %rerun-command-details (ast &key (depth 0) (seen nil))
   (cond
@@ -776,7 +782,7 @@ wrapped line's other rows on screen as stale duplicates."
         (%rerun-command-substitution-details
          (cons raw-command raw-args) :depth depth :seen seen)
         (%rerun-command-definition-details
-         raw-command :depth depth :seen seen))))
+         (first command-and-args) :depth depth :seen seen))))
     ((nshell.domain.parsing:pipeline-node-p ast)
      (mapcan (lambda (node) (%rerun-command-details node :depth depth :seen seen))
              (nshell.domain.parsing:pipeline-node-commands ast)))
@@ -834,7 +840,7 @@ wrapped line's other rows on screen as stale duplicates."
                  (some (lambda (detail)
                          (when (eq (first detail) :command)
                            (let ((command (getf detail :command)))
-                             (when (or (member command '("eval" "source" ".")
+                             (when (or (member command +rerun-dynamic-command-names+
                                                 :test #'string-equal)
                                        (search "$" command)
                                        (search "`" command))

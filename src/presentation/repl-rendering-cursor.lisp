@@ -100,8 +100,11 @@ lies outside the rendered buffer."
                              (>= target-column (rendered-position-column start)))
                     (return index)))
                  (t
-                  (let ((width (max 1 (%char-visible-width char))))
-                    (when (and (= target-row (rendered-position-row start))
+                  (let ((width (%char-visible-width char)))
+                    ;; Combining marks share the preceding character's cell;
+                    ;; they do not create a new mouse-coordinate target.
+                    (when (and (plusp width)
+                               (= target-row (rendered-position-row start))
                                (>= target-column (rendered-position-column start))
                                (< target-column
                                   (+ (rendered-position-column start) width)))

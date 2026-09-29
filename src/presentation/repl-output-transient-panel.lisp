@@ -87,20 +87,30 @@
     (error () 0)))
 
 (defun %transient-panel-border (left right width)
-  (format nil "~a~a~a"
-          left
-          (make-string (max 0 (- width 2)) :initial-element #\─)
-          right))
+  (let* ((side-width (+ (%string-visible-width (string left))
+                        (%string-visible-width (string right))))
+         (fill-width (max 0 (- width side-width)))
+         (fill (%truncate-string-to-width
+                (make-string (max 0 width) :initial-element #\─)
+                fill-width)))
+    (format nil "~a~a~a"
+            left
+            (%pad-to-visible-width fill fill-width)
+            right)))
 
 (defun %transient-panel-line (line width)
-  (let* ((content-width (max 0 (- width 4)))
+  (let* ((left "│ ")
+         (right " │")
+         (content-width (max 0 (- width
+                                  (%string-visible-width left)
+                                  (%string-visible-width right))))
          (visible (%truncate-string-to-width line content-width))
          (padding (max 0 (- content-width (%string-visible-width visible)))))
     (concatenate 'string
-                 "│ "
+                 left
                  visible
                  (make-string padding :initial-element #\Space)
-                 " │")))
+                 right)))
 
 (defun %render-transient-panel-lines (lines width)
   (format t "~C~%" #\Return)

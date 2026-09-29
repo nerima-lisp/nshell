@@ -280,6 +280,22 @@
       (expect "low" :to-equal
               (second (member "--effort" arguments :test #'string=)))))
 
+  (it "captures-pending-generation-with-reader-pending-state"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state
+                   nil nil))
+           (handle (gensym "HANDLE-"))
+           (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                     17 nil nil)))
+      (setf (nshell.feature.assistant::assistant-sidecar-state-handle state)
+            handle
+            (nshell.feature.assistant::assistant-sidecar-state-pending state)
+            pending)
+      (multiple-value-bind (actual actual-generation)
+          (nshell.feature.assistant::%assistant-sidecar-reader-pending
+           state handle 0)
+        (expect t :to-be (eq pending actual))
+        (expect 17 :to-be actual-generation))))
+
   (it "disables-sidecar-when-requested-by-environment"
     (let ((old-value (host-kit:getenv "NSHELL_AI_DISABLE")))
       (unwind-protect

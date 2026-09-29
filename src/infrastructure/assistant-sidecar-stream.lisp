@@ -51,7 +51,9 @@
     (when (and (eql generation
                     (assistant-sidecar-state-startup-generation state))
                (eq handle (assistant-sidecar-state-handle state)))
-      (assistant-sidecar-state-pending state))))
+      (let ((pending (assistant-sidecar-state-pending state)))
+        (values pending
+                (and pending (assistant-pending-cell-generation pending)))))))
 
 (defun %assistant-sidecar-set-pending (state pending)
   (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
@@ -89,7 +91,8 @@
     (multiple-value-bind (object status message)
         (%assistant-read-json-value
          (nshell.infrastructure.acl:sidecar-handle-output handle))
-      (let ((pending (%assistant-sidecar-reader-pending state handle generation)))
+      (multiple-value-bind (pending pending-generation)
+          (%assistant-sidecar-reader-pending state handle generation)
         (unless pending
           (return))
         (case status
@@ -101,11 +104,11 @@
                      (%assistant-sidecar-publish
                       pending
                       (%assistant-sidecar-error-event
-                       (assistant-pending-cell-generation pending)
+                       pending-generation
                        "assistant sidecar returned an unknown event"))
                      (%assistant-sidecar-complete pending))
                    (let ((event (make-assistant-model-event
-                                 (assistant-pending-cell-generation pending)
+                                 pending-generation
                                  kind
                                  object)))
                      (%assistant-sidecar-publish pending event)
@@ -122,7 +125,7 @@
              (%assistant-sidecar-publish
               pending
               (%assistant-sidecar-error-event
-               (assistant-pending-cell-generation pending)
+               pending-generation
                "assistant sidecar process exited before the pending request completed"))
              (%assistant-sidecar-complete pending))
            (return))
@@ -137,7 +140,7 @@
              (%assistant-sidecar-publish
               pending
               (%assistant-sidecar-error-event
-               (assistant-pending-cell-generation pending)
+               pending-generation
                message))
              (%assistant-sidecar-complete pending))
            (return)))))))

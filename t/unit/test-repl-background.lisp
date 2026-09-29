@@ -129,6 +129,9 @@
             (let ((nshell.presentation::*background-proc-alive-p*
                     (lambda (proc)
                       (eq proc alive-proc)))
+                  (nshell.presentation::*background-proc-wait*
+                    (lambda (proc)
+                      (declare (ignore proc))))
                   (nshell.presentation::*background-proc-exit-code*
                     (lambda (proc)
                       (declare (ignore proc))
@@ -168,6 +171,9 @@
             (let ((nshell.presentation::*background-proc-alive-p*
                     (lambda (proc)
                       (eq proc alive-proc)))
+                  (nshell.presentation::*background-proc-wait*
+                    (lambda (proc)
+                      (declare (ignore proc))))
                   (nshell.presentation::*background-proc-exit-code*
                     (lambda (proc)
                       (case proc
@@ -180,6 +186,37 @@
             (expect :completed :to-be (nshell.domain.execution:job-state completed-job))
             (expect 23 :to-equal (nshell.domain.execution:job-exit-code completed-job))
             (expect :created :to-be (nshell.domain.execution:job-state alive-job))))))
+
+  (it "reap-background-jobs-waits-before-reading-exit-status"
+    "Reaping should collect each completed process before reading its status."
+    (with-repl-test-state
+        (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+               (job (make-test-job 0 "pipeline"))
+               (proc-1 :proc-1)
+               (proc-2 :proc-2)
+               (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+               (events nil))
+          (let ((nshell.application:*job-monitor* monitor))
+            (repl-test-register-process-entry job-id (list proc-1 proc-2))
+            (let ((nshell.presentation::*background-proc-alive-p*
+                    (lambda (proc)
+                      (declare (ignore proc))
+                      nil))
+                  (nshell.presentation::*background-proc-wait*
+                    (lambda (proc)
+                      (push (list :wait proc) events)))
+                  (nshell.presentation::*background-proc-exit-code*
+                    (lambda (proc)
+                      (push (list :status proc) events)
+                      (if (eq proc proc-1) 11 23))))
+              (nshell.presentation::reap-background-jobs))
+            (expect (list (list :wait proc-1)
+                          (list :status proc-1)
+                          (list :wait proc-2)
+                          (list :status proc-2))
+                    :to-equal
+                    (nreverse events))
+            (expect 23 :to-equal (nshell.domain.execution:job-exit-code job))))))
 
   (it "reap-background-jobs-normalizes-signaled-process-status"
     "Completed background jobs should store shell-compatible signal exit statuses."
@@ -218,6 +255,9 @@
                   (lambda (proc)
                     (declare (ignore proc))
                     nil))
+                (nshell.presentation::*background-proc-wait*
+                  (lambda (proc)
+                    (declare (ignore proc))))
                 (nshell.presentation::*background-proc-exit-code*
                   (lambda (proc)
                     (case proc

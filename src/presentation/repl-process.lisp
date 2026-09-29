@@ -8,6 +8,10 @@
   #'nshell.infrastructure.acl:process-exit-status-code
   "Function used to read the shell-compatible exit code from a completed background process.")
 
+(defparameter *background-proc-wait*
+  #'nshell.infrastructure.acl:process-wait
+  "Function used to collect a completed background process.")
+
 (defun reap-background-jobs ()
   ;; The registry scan remains authoritative; this only acknowledges signal delivery.
   (nshell.infrastructure.acl:consume-children-changed-p)
@@ -27,6 +31,7 @@
                     jid))
                  (statuses
                    (mapcar (lambda (proc)
+                             (funcall *background-proc-wait* proc)
                              (or (funcall *background-proc-exit-code* proc) 0))
                            procs)))
              (nshell.domain.job-control:complete-job

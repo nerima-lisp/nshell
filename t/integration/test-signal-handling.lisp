@@ -77,8 +77,13 @@
 
   (it "sigchld-notification-is-consumed-once"
     "Child-process notifications are acknowledged once outside the signal handler."
-    (let ((nshell.infrastructure.acl::*children-changed* nil))
-      (nshell.infrastructure.acl::shell-sigchld-handler nil nil nil)
+    (let ((nshell.infrastructure.acl::*children-changed* nil)
+          (refreshed nil))
+      (with-temporary-function
+          ('nshell.infrastructure.acl::%refresh-sbcl-process-statuses
+           (lambda () (setf refreshed t)))
+        (nshell.infrastructure.acl::shell-sigchld-handler nil nil nil))
+      (expect refreshed :to-be-truthy)
       (expect t :to-be
               (nshell.infrastructure.acl:consume-children-changed-p))
       (expect nil :to-be

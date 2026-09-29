@@ -76,7 +76,7 @@
           (error (condition)
             (list :state :unavailable
                   :reason (princ-to-string condition))))
-        (list :state :unknown
+        (list :state :unavailable
               :reason "assistant model boundary status is unavailable"))))
 
 (defun %call-assistant-boundary (function arguments)
@@ -149,3 +149,7 @@
   (apply #'assistant-boundary-stop
          (assistant-model-boundary)
          arguments))
+
+(defun assistant-model-status ()
+  "Return the public sidecar lifecycle snapshot for presentation consumers."
+  (assistant-boundary-status-snapshot (assistant-model-boundary)))

@@ -8,36 +8,6 @@
   started-p
   stopped-p)
 
-(defun %assistant-event-kind (object)
-  (let ((type (%assistant-object-field object "type"))
-        (subtype (%assistant-object-field object "subtype")))
-    (cond
-      ((and (equal type "system") (equal subtype "init")) :system-init)
-      ((equal type "assistant") :assistant)
-      ((equal type "rate_limit_event") :rate-limit-event)
-      ((equal type "result") :result)
-      (t :unknown))))
-
-(defun %assistant-read-json-value (stream)
-  (handler-case
-      (let ((first-char
-              (loop for char = (read-char stream nil :eof)
-                    do (cond
-                         ((eq char :eof) (return :eof))
-                         ((find char '(#\Space #\Tab #\Newline #\Return)
-                                :test #'char=))
-                         (t (unread-char char stream)
-                            (return char))))))
-        (if (eq first-char :eof)
-            (values nil :eof nil)
-            (values (json-kit:read-json stream
-                                        :object-type :alist
-                                        :array-type :list)
-                    :value
-                    nil)))
-    (error (condition)
-      (values nil :error (princ-to-string condition)))))
-
 (defun %assistant-load-fixture (path)
   (handler-case
       (with-open-file (stream path :direction :input)
@@ -56,9 +26,13 @@
 
 (defun %assistant-fixture-pending-event (state generation object)
   (declare (ignore state))
-  (make-assistant-model-event generation
-                               (%assistant-event-kind object)
-                               object))
+  (let ((kind (%assistant-event-kind object)))
+    (if (eq kind :unknown)
+        (make-assistant-model-event
+         generation
+         :stream-error
+         (list (cons "message" "assistant fixture returned an unknown event")))
+        (make-assistant-model-event generation kind object))))
 
 (defun %assistant-fixture-start (state)
   (setf (assistant-fixture-state-index state) 1

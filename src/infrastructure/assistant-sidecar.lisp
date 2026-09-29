@@ -1,5 +1,8 @@
 (in-package #:nshell.feature.assistant)
 
+(defparameter +assistant-sidecar-handshake-timeout-seconds+ 10
+  "Maximum time allowed for sidecar version and init handshakes.")
+
 (defstruct (assistant-sidecar-state
             (:constructor %make-assistant-sidecar-state (command arguments)))
   command
@@ -7,18 +10,35 @@
   handle
   version
   init-p
+  starting-p
   disabled-reason
   (lock (sb-thread:make-mutex :name "nshell assistant sidecar"))
+  (write-lock (sb-thread:make-mutex :name "nshell assistant sidecar stdin"))
   reader-thread
   writer-thread
   error-thread
+  start-thread
+  (startup-generation 0)
   dead-p
   dead-reason
   pending
+  (retired-pending nil)
   write-channel)
 
 (defun %assistant-sidecar-nonempty-string (value)
   (and (stringp value) (plusp (length value)) value))
+
+(defun %assistant-sidecar-starting-p (state)
+  (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+    (assistant-sidecar-state-starting-p state)))
+
+(defun %assistant-sidecar-init-p (state)
+  (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+    (assistant-sidecar-state-init-p state)))
+
+(defun %assistant-sidecar-handle (state)
+  (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+    (assistant-sidecar-state-handle state)))
 
 (defun %assistant-sidecar-model (options)
   (or (%assistant-sidecar-nonempty-string (getf options :model))
@@ -33,26 +53,35 @@
       "low"))
 
 (defun %assistant-sidecar-status (state)
-  (cond
+  (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+    (cond
+    ((assistant-sidecar-state-starting-p state)
+     (list :state :starting
+           :version (assistant-sidecar-state-version state)))
     ((and (assistant-sidecar-state-handle state)
           (assistant-sidecar-state-init-p state)
-          (not (%assistant-sidecar-dead-p state)))
-     (list :state :running
+          (not (assistant-sidecar-state-dead-p state))
+          (nshell.infrastructure.acl:sidecar-alive-p
+           (assistant-sidecar-state-handle state)))
+     (list :state :ready
            :version (assistant-sidecar-state-version state)))
     ((assistant-sidecar-state-disabled-reason state)
      (list :state :unavailable
            :version (assistant-sidecar-state-version state)
-           :reason (princ-to-string
-                    (assistant-sidecar-state-disabled-reason state))))
+           :reason (if (eq :disabled-by-environment
+                           (assistant-sidecar-state-disabled-reason state))
+                       "NSHELL_AI_DISABLE is set"
+                       (princ-to-string
+                        (assistant-sidecar-state-disabled-reason state)))))
     ((assistant-sidecar-state-dead-p state)
-     (list :state :unavailable
+     (list :state :dead
            :version (assistant-sidecar-state-version state)
            :reason (princ-to-string
                     (or (assistant-sidecar-state-dead-reason state)
                         "assistant sidecar stopped"))))
     (t
      (list :state :not-started
-           :version (assistant-sidecar-state-version state)))))
+           :version (assistant-sidecar-state-version state))))))
 
 (defun assistant-sidecar-command-arguments (&optional options)
   (let ((arguments
@@ -72,10 +101,12 @@
           arguments))))
 
 (defun %assistant-sidecar-command (options)
-  (or (getf options :command)
-      (let ((configured (uiop:getenv "NSHELL_AI_COMMAND")))
-        (and configured (plusp (length configured)) configured))
-      "claude"))
+  (if (uiop:getenv "NSHELL_AI_DISABLE")
+      nil
+      (or (getf options :command)
+          (let ((configured (uiop:getenv "NSHELL_AI_COMMAND")))
+            (and configured (plusp (length configured)) configured))
+          "claude")))
 
 (defun %assistant-sidecar-arguments (options)
   (getf options :arguments))

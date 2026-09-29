@@ -17,7 +17,7 @@
            (nshell.feature.assistant:assistant-boundary-status-snapshot
             (nshell.feature.assistant:assistant-model-boundary)))
          (usage nshell.feature.assistant:*assistant-usage*))
-    (list :connected (eq :running (getf status :state))
+    (list :connected (eq :ready (getf status :state))
           :turns (nshell.feature.assistant:assistant-usage-turns usage)
           :tokens (+ (nshell.feature.assistant:assistant-usage-input-tokens usage)
                      (nshell.feature.assistant:assistant-usage-output-tokens usage)))))

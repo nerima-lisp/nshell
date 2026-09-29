@@ -1,5 +1,8 @@
 (in-package #:nshell.infrastructure.acl)
 
+(defparameter +sidecar-version-timeout-seconds+ 10
+  "Maximum time allowed for the sidecar version probe.")
+
 (defstruct (sidecar-handle
             (:constructor %make-sidecar-handle
                 (process pgid input output error cleanup-state)))
@@ -62,7 +65,8 @@
       nil
       (progn
         (setf (sidecar-handle-cleanup-state handle) :stopping)
-        (%terminate-process (sidecar-handle-process handle))
+        (%terminate-process (sidecar-handle-process handle)
+                            (sidecar-handle-pgid handle))
         (%close-sidecar-stream (sidecar-handle-input handle))
         (%close-sidecar-stream (sidecar-handle-output handle))
         (%close-sidecar-stream (sidecar-handle-error handle))
@@ -78,27 +82,59 @@
                       (sidecar-handle-process handle)))
       nil))
 
-(defun run-sidecar-version (command)
+(defun run-sidecar-version-cancellable (command cancelled-p)
+  (unless command
+    (return-from run-sidecar-version-cancellable (values nil :disabled)))
   (multiple-value-bind (handle status)
       (spawn-sidecar command '("--version")
                       :input nil :output :stream :error :output)
     (if (null handle)
         (values nil status)
-        (let ((version
-                (handler-case
-                    (with-output-to-string (stream)
-                      (loop for line = (read-line (sidecar-handle-output handle)
-                                                  nil nil)
-                            while line
-                            do (write-line line stream)))
-                  (error (condition)
-                    (declare (ignore condition))
-                    nil)))
-              (exit-status nil))
-          (ignore-errors (sb-ext:process-wait (sidecar-handle-process handle)))
-          (setf exit-status (sidecar-exit-status handle))
-          (stop-sidecar handle)
+        (let* ((version nil)
+               (reader
+                (sb-thread:make-thread
+                 (lambda ()
+                   (setf version
+                         (handler-case
+                             (with-output-to-string (stream)
+                               (loop for line = (read-line
+                                                 (sidecar-handle-output handle)
+                                                 nil nil)
+                                     while line
+                                     do (write-line line stream)))
+                           (error (condition)
+                             (declare (ignore condition))
+                             nil)))
+                   nil)
+                 :name "nshell assistant sidecar version reader"))
+              (deadline (+ (get-internal-real-time)
+                           (round (* +sidecar-version-timeout-seconds+
+                                     internal-time-units-per-second))))
+              (timed-out-p nil))
+          (loop while (sb-ext:process-alive-p
+                       (sidecar-handle-process handle))
+                do (cond
+                     ((and cancelled-p (funcall cancelled-p))
+                      (setf timed-out-p t)
+                      (return))
+                     ((>= (get-internal-real-time) deadline)
+                      (setf timed-out-p t)
+                      (return))
+                     (t (sleep 0.01))))
+          (unless timed-out-p
+            (ignore-errors (sb-ext:process-wait (sidecar-handle-process handle))))
+          (when timed-out-p
+            (stop-sidecar handle))
+          (ignore-errors
+           (sb-thread:join-thread reader :default nil :timeout 0.2))
+          (let ((exit-status (sidecar-exit-status handle)))
+            (stop-sidecar handle)
           (values (and version
                        (string-trim '(#\Space #\Tab #\Newline #\Return)
                                     version))
-                  (if (zerop (or exit-status 1)) :ok :version-failed))))))
+                  (cond (timed-out-p :timeout)
+                        ((zerop (or exit-status 1)) :ok)
+                        (t :version-failed))))))))
+
+(defun run-sidecar-version (command)
+  (run-sidecar-version-cancellable command nil))

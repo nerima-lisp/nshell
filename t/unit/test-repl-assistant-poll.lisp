@@ -89,6 +89,38 @@
             (expect event :to-be read-event)))))))
 
 (describe "repl-assistant-cancel-tests"
+  (it "cancels-a-starting-sidecar-through-the-read-key-path"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :ask-waiting :buffer "question" :cursor-pos 8)
+        (let* ((stop-count 0)
+               (boundary
+                 (nshell.feature.assistant:make-assistant-model-boundary
+                  :start-fn (lambda () t)
+                  :request-fn (lambda (generation payload)
+                                (declare (ignore generation payload)) t)
+                  :poll-fn (lambda (generation)
+                             (declare (ignore generation)) (values nil nil))
+                  :stop-fn (lambda () (incf stop-count) t)
+                  :status-fn (lambda () '(:state :starting)))))
+          (setf nshell.feature.assistant:*assistant-boundaries*
+                (nshell.feature.assistant:make-assistant-boundary-context boundary)
+                nshell.presentation::*assistant-request-kind* :ask
+                nshell.presentation::*assistant-model-event-handler*
+                  (lambda (event) (declare (ignore event))))
+          (with-temporary-functions
+              (('nshell.infrastructure.acl:consume-terminal-resize-p
+                (lambda () nil))
+               ('nshell.infrastructure.terminal:read-key-event
+                (lambda (&key interrupt-predicate)
+                  (declare (ignore interrupt-predicate))
+                  (input-key-event :ctrl-c)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda () nil)))
+            (let ((continuation (nshell.presentation::read-key-cont)))
+              (expect (functionp continuation) :to-be-truthy)
+              (funcall continuation)
+              (expect 1 :to-be stop-count)))))))
+
   (it "keeps-the-sidecar-on-the-first-cancel-and-restarts-it-on-the-second"
     (with-repl-test-state
       (with-repl-input-state (:mode :ask-waiting

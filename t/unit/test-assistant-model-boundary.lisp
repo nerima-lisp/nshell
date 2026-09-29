@@ -5,7 +5,8 @@
 
 (defun %assistant-test-sidecar-script (&optional one-shot-p)
   (let ((path (merge-pathnames
-               (format nil "nshell-assistant-sidecar-~D.sh" (get-universal-time))
+               (format nil "nshell-assistant-sidecar-~D.sh"
+                       (get-internal-real-time))
                (uiop:temporary-directory))))
     (with-open-file (stream path :direction :output :if-exists :supersede)
       (dolist (line
@@ -47,11 +48,58 @@
     (sb-posix:chmod (namestring path) #o700)
     path))
 
+(defun %assistant-test-pending-sidecar-script ()
+  (let ((path (merge-pathnames
+               (format nil "nshell-assistant-pending-sidecar-~D.sh"
+                       (get-universal-time))
+               (uiop:temporary-directory))))
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (dolist (line
+                '("#!/bin/sh"
+                  "if [ \"$1\" = \"--version\" ]; then"
+                  "  printf '%s\\n' 'test-version'"
+                  "  exit 0"
+                  "fi"
+                  "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
+                  "while IFS= read -r line"
+                  "do"
+                  "  while :; do sleep 1; done"
+                  "done"))
+        (write-line line stream)))
+    (sb-posix:chmod (namestring path) #o700)
+    path))
+
+(defun %assistant-test-hanging-version-sidecar-script ()
+  (let ((path (merge-pathnames
+               (format nil "nshell-assistant-hanging-version-~D.sh"
+                       (get-universal-time))
+               (uiop:temporary-directory))))
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (dolist (line '("#!/bin/sh"
+                      "while :; do sleep 1; done"))
+        (write-line line stream)))
+    (sb-posix:chmod (namestring path) #o700)
+    path))
+
 (defun %assistant-test-live-thread-named-p (name)
   (some (lambda (thread)
           (and (equal name (sb-thread:thread-name thread))
                (sb-thread:thread-alive-p thread)))
         (sb-thread:list-all-threads)))
+
+(defun %assistant-test-await-state (state &optional (limit 240))
+  (loop repeat limit
+        for status = (nshell.feature.assistant:assistant-model-status)
+        do (if (eq state (getf status :state))
+               (return status)
+               (sleep 0.05))))
+
+(defun %assistant-test-terminal-event-description (event)
+  (let* ((kind (nshell.feature.assistant:assistant-model-event-kind event))
+         (payload (nshell.feature.assistant:assistant-model-event-payload event))
+         (message (or (cdr (assoc "message" payload :test #'string=))
+                      (cdr (assoc "reason" payload :test #'string=)))))
+    (format nil "kind=~S message=~S payload=~S" kind message payload)))
 
 (describe "assistant-model-boundary-contracts"
   (it "replays-a-sanitized-stream-json-fixture-through-the-injected-boundary"
@@ -127,6 +175,27 @@
                       kinds))
             (expect :stream-ended :to-be (first kinds))))))))
 
+  (it "terminates-an-unknown-fixture-event"
+    (with-temporary-output-file (fixture-path :prefix "nshell-assistant-unknown-")
+      (write-test-lines
+       fixture-path
+       '("{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[],\"mcp_servers\":[]}"
+         "{\"type\":\"future_event\"}"))
+      (multiple-value-bind (boundary error-message)
+          (nshell.feature.assistant:make-assistant-fixture-boundary fixture-path)
+        (expect nil :to-be error-message)
+        (let ((nshell.feature.assistant:*assistant-boundaries*
+                (nshell.feature.assistant:make-assistant-boundary-context boundary)))
+          (nshell.feature.assistant:assistant-model-start)
+          (nshell.feature.assistant:assistant-model-poll 0)
+          (nshell.feature.assistant:assistant-model-request 1 nil)
+          (let ((event-result (nshell.feature.assistant:assistant-model-poll 1)))
+            (expect :event :to-be
+                    (nshell.feature.assistant:assistant-boundary-status event-result))
+            (expect :stream-error :to-be
+                    (nshell.feature.assistant:assistant-model-event-kind
+                     (nshell.feature.assistant:assistant-boundary-value event-result))))))))
+
   (it "accepts-only-structured-output-tools-and-empty-mcp-servers"
     (expect t :to-be
             (nshell.feature.assistant:assistant-system-init-safe-p
@@ -196,6 +265,48 @@
       (expect "low" :to-equal
               (second (member "--effort" arguments :test #'string=)))))
 
+  (it "disables-sidecar-when-requested-by-environment"
+    (let ((old-value (host-kit:getenv "NSHELL_AI_DISABLE")))
+      (unwind-protect
+           (progn
+             (sb-posix:setenv "NSHELL_AI_DISABLE" "1" 1)
+             (let* ((boundary (nshell.feature.assistant:make-assistant-sidecar-boundary
+                               :command "/bin/false"))
+                    (nshell.feature.assistant:*assistant-boundaries*
+                      (nshell.feature.assistant:make-assistant-boundary-context boundary))
+                    (result (nshell.feature.assistant:assistant-model-start)))
+               (expect :unavailable :to-be
+                       (nshell.feature.assistant:assistant-boundary-status result))
+               (expect :unavailable :to-be
+                       (getf (nshell.feature.assistant:assistant-model-status)
+                             :state))
+               (expect "NSHELL_AI_DISABLE is set" :to-equal
+                       (getf (nshell.feature.assistant:assistant-model-status)
+                             :reason))))
+        (if old-value
+            (sb-posix:setenv "NSHELL_AI_DISABLE" old-value 1)
+            (sb-posix:unsetenv "NSHELL_AI_DISABLE")))))
+
+  (it "times-out-a-sidecar-that-hangs-during-version-probe"
+    (let ((script (%assistant-test-hanging-version-sidecar-script)))
+      (unwind-protect
+           (let* ((boundary (nshell.feature.assistant:make-assistant-sidecar-boundary
+                             :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context boundary))
+                  (result (nshell.feature.assistant:assistant-model-start))
+                  (status nil))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status result))
+             (setf status (%assistant-test-await-state :unavailable))
+             (expect :unavailable :to-be (getf status :state))
+             (expect t :to-be (stringp (getf status :reason)))
+             (expect nil :to-be
+                     (search (string #\Newline) (getf status :reason)))
+             (nshell.feature.assistant:assistant-model-stop))
+        (when (probe-file script)
+          (delete-file script)))))
+
   (it "starts-sidecar-in-its-own-group-without-shell-registration"
     (let ((foreground-pgid nshell.infrastructure.acl::*foreground-pgid*)
           (registry-count (hash-table-count nshell.presentation::*proc-registry*)))
@@ -228,6 +339,8 @@
                      (nshell.feature.assistant:assistant-boundary-status start))
              (expect t :to-be
                      (nshell.feature.assistant:assistant-boundary-value start))
+             (expect :ready :to-be
+                     (getf (%assistant-test-await-state :ready) :state))
              (let ((request
                      (nshell.feature.assistant:assistant-model-request
                       7 '(("message" . "hello")))))
@@ -300,6 +413,8 @@
                   (start (nshell.feature.assistant:assistant-model-start)))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status start))
+             (expect :ready :to-be
+                     (getf (%assistant-test-await-state :ready) :state))
              (flet ((await-result (generation)
                       (let ((request
                               (nshell.feature.assistant:assistant-model-request
@@ -307,9 +422,10 @@
                         (expect :ok :to-be
                                 (nshell.feature.assistant:assistant-boundary-status
                                  request)))
-                      (let ((result nil))
-                        (loop repeat 100
-                              until result
+                      (let ((result nil)
+                            (failure nil))
+                        (loop repeat 1200
+                              until (or result failure)
                               do (let ((polled
                                          (nshell.feature.assistant:assistant-model-poll
                                           generation)))
@@ -319,26 +435,176 @@
                                      (let ((event
                                              (nshell.feature.assistant:assistant-boundary-value
                                               polled)))
-                                       (when (eq :result
-                                                 (nshell.feature.assistant:assistant-model-event-kind
-                                                  event))
-                                         (setf result event))))
-                                   (unless result
+                                       (let ((kind
+                                               (nshell.feature.assistant:assistant-model-event-kind
+                                                event)))
+                                         (cond
+                                           ((eq :result kind)
+                                            (setf result event))
+                                           ((member kind
+                                                    '(:stream-error :stream-ended
+                                                      :rate-limit-event))
+                                            (setf failure
+                                                  (format nil
+                                                          "assistant model ended before result: ~A"
+                                                          (%assistant-test-terminal-event-description
+                                                           event))))))))
+                                   (unless (or result failure)
                                      (sleep 0.01))))
-                        (expect :result :to-be
-                                (nshell.feature.assistant:assistant-model-event-kind
-                                 result))
-                        (expect generation :to-be
-                                (nshell.feature.assistant:assistant-model-event-generation
-                                 result)))))
+                        (cond
+                          (failure
+                           (expect nil :to-be failure))
+                          (result
+                           (expect generation :to-be
+                                   (nshell.feature.assistant:assistant-model-event-generation
+                                    result)))
+                          (t
+                           (expect nil :to-be
+                                   "assistant model result did not arrive: no event received"))))))
                (await-result 1)
-               (sleep 0.1)
+               (expect :dead :to-be
+                       (getf (%assistant-test-await-state :dead) :state))
+               (expect :ok :to-be
+                       (nshell.feature.assistant:assistant-boundary-status
+                        (nshell.feature.assistant:assistant-model-start)))
                (await-result 2)
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status
                         (nshell.feature.assistant:assistant-model-stop))))
         (when (probe-file script)
           (delete-file script))))))
+
+  (it "does-not-let-poll-consume-the-startup-handshake"
+    (let ((script (%assistant-test-sidecar-script)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       1 '(("message" . "handshake-race")))))
+             (let* ((result nil)
+                    (deadline
+                      (+ (get-internal-real-time)
+                         (round
+                          (* (1+ nshell.feature.assistant::+assistant-sidecar-handshake-timeout-seconds+)
+                             internal-time-units-per-second)))))
+               (loop while (and (null result)
+                                (< (get-internal-real-time) deadline))
+                     do (let* ((polled
+                                 (nshell.feature.assistant:assistant-model-poll 1))
+                               (status
+                                 (nshell.feature.assistant:assistant-boundary-status
+                                  polled)))
+                          (when (eq :event status)
+                            (let ((event
+                                    (nshell.feature.assistant:assistant-boundary-value
+                                     polled)))
+                              (when (eq :result
+                                        (nshell.feature.assistant:assistant-model-event-kind
+                                         event))
+                                (setf result event))))
+                          (unless result
+                            (sleep 0))))
+               (expect :result :to-be
+                       (nshell.feature.assistant:assistant-model-event-kind result)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-stop))))
+        (when (probe-file script)
+          (delete-file script)))))
+
+  (it "publishes-a-reasoned-terminal-event-before-stop-closes-pending"
+    (let ((script (%assistant-test-pending-sidecar-script)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (expect :ready :to-be
+                     (getf (%assistant-test-await-state :ready) :state))
+             (expect :event :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-poll 0)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       31 '(("message" . "stop-pending")))))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-stop)))
+             (let* ((polled (nshell.feature.assistant:assistant-model-poll 31))
+                    (event (nshell.feature.assistant:assistant-boundary-value polled)))
+               (expect :event :to-be
+                       (nshell.feature.assistant:assistant-boundary-status polled))
+               (expect :stream-error :to-be
+                       (nshell.feature.assistant:assistant-model-event-kind event))
+               (expect "assistant sidecar stopped before the pending request completed"
+                       :to-equal
+                       (cdr (assoc "message"
+                                   (nshell.feature.assistant:assistant-model-event-payload
+                                    event)
+                                   :test #'string=)))))
+        (when (probe-file script)
+          (delete-file script)))))
+
+  (it "publishes-a-reasoned-terminal-event-before-respawn-replaces-pending"
+    (let ((script (%assistant-test-sidecar-script t)))
+      (unwind-protect
+           (let* ((boundary
+                    (nshell.feature.assistant:make-assistant-sidecar-boundary
+                     :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context
+                     boundary)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (expect :ready :to-be
+                     (getf (%assistant-test-await-state :ready) :state))
+             (expect :event :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-poll 0)))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       32 '(("message" . "respawn-pending")))))
+             (expect :dead :to-be
+                     (getf (%assistant-test-await-state :dead) :state))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-start)))
+             (let ((error-event nil))
+               (loop repeat 8
+                     until error-event
+                     do (let ((polled (nshell.feature.assistant:assistant-model-poll 32)))
+                          (when (eq :event
+                                    (nshell.feature.assistant:assistant-boundary-status
+                                     polled))
+                            (let ((event
+                                    (nshell.feature.assistant:assistant-boundary-value polled)))
+                              (when (eq :stream-error
+                                        (nshell.feature.assistant:assistant-model-event-kind
+                                         event))
+                                (setf error-event event))))))
+                 (expect :stream-error :to-be
+                         (nshell.feature.assistant:assistant-model-event-kind
+                          error-event)))
+             (nshell.feature.assistant:assistant-model-stop))
+        (when (probe-file script)
+          (delete-file script)))))
 
 (describe "assistant-sidecar-reader-stop-race"
   (it "stops-cleanly-when-init-gate-rejects-a-live-reader"
@@ -351,8 +617,33 @@
                     (nshell.feature.assistant:make-assistant-boundary-context
                      boundary))
                   (start (nshell.feature.assistant:assistant-model-start)))
-             (expect :unavailable :to-be
+             (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status start))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status
+                      (nshell.feature.assistant:assistant-model-request
+                       1 '(("message" . "queued-before-handshake")))))
+             (expect :unavailable :to-be
+                     (getf (%assistant-test-await-state :unavailable) :state))
+             (let ((error-event nil))
+               (loop repeat 240
+                     until error-event
+                     do (let ((polled (nshell.feature.assistant:assistant-model-poll 1)))
+                          (when (eq :event
+                                    (nshell.feature.assistant:assistant-boundary-status
+                                     polled))
+                            (let ((event
+                                    (nshell.feature.assistant:assistant-boundary-value
+                                     polled)))
+                              (when (eq :stream-error
+                                        (nshell.feature.assistant:assistant-model-event-kind
+                                         event))
+                                (setf error-event event))))
+                          (unless error-event
+                            (sleep 0.01))))
+               (expect :stream-error :to-be
+                       (nshell.feature.assistant:assistant-model-event-kind
+                        error-event)))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-stop)))

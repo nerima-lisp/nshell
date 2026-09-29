@@ -10,21 +10,31 @@
       "none"
       (princ-to-string value)))
 
+(defun %ai-status-reason (reason)
+  (if (or (eq reason :disabled-by-environment)
+          (and (stringp reason)
+               (string-equal
+                (string-left-trim ":" reason)
+                "disabled-by-environment")))
+      "NSHELL_AI_DISABLE is set"
+      reason))
+
 (defun %ai-status-output ()
-  (let* ((snapshot
-           (nshell.feature.assistant:assistant-boundary-status-snapshot
-            (nshell.feature.assistant:assistant-model-boundary)))
+  (let* ((snapshot (nshell.feature.assistant:assistant-model-status))
          (usage nshell.feature.assistant:*assistant-usage*)
-         (state (getf snapshot :state)))
+         (state (getf snapshot :state))
+         (reason (getf snapshot :reason)))
     (with-output-to-string (stream)
       (format stream "AI sidecar: ~a~%"
               (case state
-                (:running "running")
+                (:ready "ready")
+                (:starting "starting")
+                (:dead "dead; waiting for respawn")
                 (:not-started "not started")
                 (:unavailable "unavailable")
                 (otherwise "unknown")))
-      (when (getf snapshot :reason)
-        (format stream "Reason: ~a~%" (getf snapshot :reason)))
+      (when reason
+        (format stream "Reason: ~a~%" (%ai-status-reason reason)))
       (format stream "Claude version: ~a~%"
               (%ai-display-value (getf snapshot :version)))
       (format stream "Turns: ~d~%"

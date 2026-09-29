@@ -145,6 +145,29 @@
         (expect nil :to-be (nshell.presentation::read-key-cont))
         (expect nil :to-be nshell.presentation::*running*))))
 
+  (it "repl-eof-stops-the-assistant-before-terminal-cleanup"
+    "EOF exits through the REPL unwind cleanup and requests model shutdown."
+    (with-repl-test-state
+      (let ((stop-calls 0)
+            (restore-calls 0))
+        (with-temporary-functions
+            (('nshell.presentation::install-interactive-terminal
+              (lambda () t))
+             ('nshell.presentation::restore-interactive-terminal
+              (lambda () (incf restore-calls)))
+             ('nshell.presentation::read-key-cont
+              (lambda () nil))
+             ('nshell.feature.assistant:assistant-model-stop
+              (lambda ()
+                (incf stop-calls)
+                (error "forced model stop failure"))))
+          (expect 0 :to-equal
+                  (nshell.presentation:run-repl
+                   :load-config-p nil
+                   :history-p nil))
+          (expect 1 :to-equal stop-calls)
+          (expect 1 :to-equal restore-calls)))))
+
   (it "read-key-cont-renders-after-resize-detected-during-read"
     "A resize detected after an input read still schedules a redraw."
     (with-repl-test-state

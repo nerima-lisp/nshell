@@ -103,6 +103,11 @@
           (values output (%invert-status-code code))))
       (%builtin-usage "not" "not command [args...]" 2)))
 
+(defun %exec-and-exit (command args)
+  (sb-ext:quit
+   :unix-status
+   (nshell.infrastructure.acl:run-external-exec command args)))
+
 (define-builtin %builtin-exec (context args) (context)
   (if args
       (let ((gate (%assistant-execution-gate
@@ -111,10 +116,10 @@
                     (first args) (rest args)))))
         (if gate
             (values (first gate) (second gate))
-            (sb-ext:quit
-             :unix-status
-             (nshell.infrastructure.acl:run-external-exec
-              (first args) (rest args)))))
+            (progn
+              (ignore-errors
+                (nshell.feature.assistant:assistant-model-stop))
+              (%exec-and-exit (first args) (rest args)))))
       (%builtin-usage "exec" "exec command [args...]")))
 
 (defun %contains-usage ()

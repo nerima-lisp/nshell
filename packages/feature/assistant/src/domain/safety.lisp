@@ -199,6 +199,17 @@
          (values (target-index 0 (string= name "env")) :command))
         (t (values nil nil))))))
 
+(defun assistant-command-after-wrappers (command args)
+  "Return the effective command and arguments after known wrappers."
+  (loop
+    (multiple-value-bind (index kind)
+        (%assistant-wrapper-index-and-kind command args)
+      (declare (ignore kind))
+      (if index
+          (setf command (nth index args)
+                args (nthcdr (1+ index) args))
+          (return (values (%assistant-command-basename command) args))))))
+
 (defun %assistant-safe-git-command-p (args)
   (let ((subcommand (first args)))
     (and (member subcommand '("log" "show" "branch" "remote")

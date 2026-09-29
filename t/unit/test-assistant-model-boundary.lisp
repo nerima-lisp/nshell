@@ -81,6 +81,33 @@
     (sb-posix:chmod (namestring path) #o700)
     path))
 
+(defun %assistant-test-term-ignoring-sidecar-script ()
+  (let ((path (merge-pathnames
+               (format nil "nshell-assistant-term-ignoring-~D.sh"
+                       (get-universal-time))
+               (uiop:temporary-directory))))
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (dolist (line '("#!/bin/sh"
+                      "trap '' TERM"
+                      "while :; do sleep 1; done"))
+        (write-line line stream)))
+    (sb-posix:chmod (namestring path) #o700)
+    path))
+
+(defun %assistant-test-failing-version-sidecar-script ()
+  (let ((path (merge-pathnames
+               (format nil "nshell-assistant-failing-version-~D.sh"
+                       (get-universal-time))
+               (uiop:temporary-directory))))
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (dolist (line '("#!/bin/sh"
+                      "printf '%s\\n' 'version probe stdout'"
+                      "printf '%s\\n' 'version probe stderr' >&2"
+                      "exit 17"))
+        (write-line line stream)))
+    (sb-posix:chmod (namestring path) #o700)
+    path))
+
 (defun %assistant-test-live-thread-named-p (name)
   (some (lambda (thread)
           (and (equal name (sb-thread:thread-name thread))
@@ -334,6 +361,30 @@
              (expect t :to-be (stringp (getf status :reason)))
              (expect nil :to-be
                      (search (string #\Newline) (getf status :reason)))
+             (nshell.feature.assistant:assistant-model-stop))
+        (%assistant-test-with-sidecar-cleanup)
+        (when (probe-file script)
+          (delete-file script)))))
+
+  (it "reports-version-probe-output-when-the-sidecar-exits-with-an-error"
+    (let ((script (%assistant-test-failing-version-sidecar-script)))
+      (unwind-protect
+           (let* ((boundary (nshell.feature.assistant:make-assistant-sidecar-boundary
+                             :command (namestring script)))
+                  (nshell.feature.assistant:*assistant-boundaries*
+                    (nshell.feature.assistant:make-assistant-boundary-context boundary))
+                  (result (nshell.feature.assistant:assistant-model-start))
+                  (status nil)
+                  (reason nil))
+             (expect :ok :to-be
+                     (nshell.feature.assistant:assistant-boundary-status result))
+             (setf status (%assistant-test-await-state :unavailable)
+                   reason (getf status :reason))
+             (expect :unavailable :to-be (getf status :state))
+             (expect (search "version probe stdout" reason) :to-be-truthy)
+             (expect (search "version probe stderr" reason) :to-be-truthy)
+             (expect (search "17" reason)
+                     :to-be-truthy)
              (nshell.feature.assistant:assistant-model-stop))
         (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)

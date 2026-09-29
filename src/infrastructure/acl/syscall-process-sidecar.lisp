@@ -91,20 +91,20 @@
     (if (null handle)
         (values nil status)
         (let* ((version nil)
+               (version-error nil)
                (reader
                 (sb-thread:make-thread
                  (lambda ()
                    (setf version
-                         (handler-case
-                             (with-output-to-string (stream)
+                         (with-output-to-string (stream)
+                           (handler-case
                                (loop for line = (read-line
                                                  (sidecar-handle-output handle)
                                                  nil nil)
                                      while line
-                                     do (write-line line stream)))
-                           (error (condition)
-                             (declare (ignore condition))
-                             nil)))
+                                     do (write-line line stream))
+                             (error (condition)
+                               (setf version-error (princ-to-string condition))))))
                    nil)
                  :name "nshell assistant sidecar version reader"))
               (deadline (+ (get-internal-real-time)
@@ -129,12 +129,18 @@
            (sb-thread:join-thread reader :default nil :timeout 0.2))
           (let ((exit-status (sidecar-exit-status handle)))
             (stop-sidecar handle)
-          (values (and version
+            (values (and version
                        (string-trim '(#\Space #\Tab #\Newline #\Return)
                                     version))
                   (cond (timed-out-p :timeout)
                         ((zerop (or exit-status 1)) :ok)
-                        (t :version-failed))))))))
+                        (t (list :version-failed
+                                 :output (and version
+                                              (string-trim
+                                               '(#\Space #\Tab #\Newline #\Return)
+                                               version))
+                                 :error version-error
+                                 :exit-status exit-status)))))))))
 
 (defun run-sidecar-version (command)
   (run-sidecar-version-cancellable command nil))

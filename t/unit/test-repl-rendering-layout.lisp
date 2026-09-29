@@ -97,7 +97,11 @@ line's own geometry unchanged."
                                    :search-index 0)
             (let ((output (capture-standard-output
                             (nshell.presentation::render-prompt-cont))))
-              (expect (search "history: git" output) :to-be-truthy)
+              (expect (search (nshell.presentation::%truncate-string-to-width
+                               (nshell.presentation::%search-header-text "git" 0)
+                               10)
+                              output)
+                      :to-be-truthy)
               (expect 1 :to-equal nshell.presentation::*prompt-rendered-lines*)
               (expect 0 :to-equal nshell.presentation::*prompt-rendered-cursor-row*)
               (expect (plusp nshell.presentation::*search-rendered-lines*)

@@ -152,6 +152,11 @@ borrow the closest existing one."
     (:git :prompt-git)
     (:git-dirty :prompt-git-dirty)
     (:assistant :prompt-assistant)
+    (:assistant-not-started :prompt-time)
+    (:assistant-starting :prompt-duration)
+    (:assistant-ready :prompt-ok)
+    (:assistant-unavailable :prompt-error)
+    (:assistant-dead :prompt-error)
     (:duration :prompt-duration)
     (:time :prompt-time)
     (:jobs :prompt-time)
@@ -237,6 +242,22 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
     (when text
       (nshell.domain.prompting:make-prompt-segment text :assistant))))
 
+(defun %assistant-status-display (status)
+  (case (getf status :state)
+    (:not-started (values "AI 未起動" :assistant-not-started))
+    (:starting (values "AI 起動中" :assistant-starting))
+    (:ready (values "AI 準備完了" :assistant-ready))
+    (:unavailable (values "AI 利用不可" :assistant-unavailable))
+    (:dead (values "AI 停止" :assistant-dead))
+    (otherwise (values nil nil))))
+
+(defun %assistant-status-segment ()
+  (multiple-value-bind (text kind)
+      (%assistant-status-display
+       (nshell.feature.assistant:assistant-model-status))
+    (when (and text kind)
+      (nshell.domain.prompting:make-prompt-segment text kind))))
+
 (defun %background-jobs-count ()
   "The {jobs} format-segment count: the shell's currently tracked jobs."
   (length (nshell.application:jobs)))
@@ -244,12 +265,15 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
 (defun %right-prompt-segments (pm failure-explain-p)
   (let* ((base (nshell.domain.prompting:render-right-prompt-model
                 pm :failure-explain-p failure-explain-p))
+         (status (%assistant-status-segment))
          (assistant (%assistant-usage-segment)))
-    (if assistant
-        (append base
-                (when base (list (nshell.domain.prompting:make-prompt-segment " " :literal)))
-                (list assistant))
-        base)))
+    (append base
+            (when (or status assistant)
+              (list (nshell.domain.prompting:make-prompt-segment " " :literal)))
+            (when status (list status))
+            (when (and status assistant)
+              (list (nshell.domain.prompting:make-prompt-segment " " :literal)))
+            (when assistant (list assistant)))))
 
 (defparameter *prompt-left-format* nil
   "NIL to render the built-in left-prompt layout, or a format string (see

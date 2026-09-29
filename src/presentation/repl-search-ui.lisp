@@ -30,27 +30,81 @@ when QUERY does not occur in TEXT."
 (defun %search-result-marker (selected-p)
   (if selected-p "▸ " "  "))
 
-(defun %search-result-row (text query selected-p width theme)
-  (let* ((marker (%search-result-marker selected-p))
-         (visible (%truncate-string-to-width
-                   (concatenate 'string marker text) width)))
-    (if selected-p
-        (%write-styled visible :completion-selected theme)
-        (let* ((marker-length (length marker))
-               (match-start (history-search-match-start text query))
-               (row-start (and match-start (+ marker-length match-start)))
-               (visible-length (length visible)))
-          (if (and row-start (< row-start visible-length))
-              (let ((row-end (min (+ row-start (length query)) visible-length)))
-                (write-string (subseq visible 0 row-start))
-                (%write-styled (subseq visible row-start row-end) :search-match theme)
-                (write-string (subseq visible row-end)))
-              (write-string visible))))))
+(defun %search-result-metadata (match)
+  (if (stringp match)
+      (list :text match)
+      match))
+
+(defun %search-result-badges (match)
+  (let ((metadata (%search-result-metadata match))
+        (badges nil))
+    (case (getf metadata :origin)
+      (:proposal (push (list " [提案]" :prompt-assistant) badges))
+      (:agent (push (list " [エージェント]" :prompt-assistant) badges)))
+    (let ((exit-code (getf metadata :exit-code)))
+      (when (and (integerp exit-code) (not (zerop exit-code)))
+        (push (list (format nil " [終了 ~d]" exit-code) :prompt-error) badges)))
+    (nreverse badges)))
+
+(defun %search-result-badges-within-width (badges width)
+  (labels ((badges-width (items)
+             (reduce #'+ items
+                     :key (lambda (badge)
+                            (%string-visible-width (first badge)))
+                     :initial-value 0))
+           (fit (items)
+             (cond
+               ((null items) nil)
+               ((<= (badges-width items) width) items)
+               ((cdr items) (fit (butlast items)))
+               (t (list (list (%truncate-string-to-width
+                               (first (first items)) width)
+                              (second (first items))))))))
+    (and (plusp width) (fit badges))))
 
 (defun %search-header-text (query count)
-  (if (zerop count)
-      (format nil "history: ~a  (no matches)" query)
-      (format nil "history: ~a  (~d matches)" query count)))
+  (format nil "~a | 絞り込み: status:failed status:success exit:N cwd:PATH origin:typed|proposal|agent"
+          (if (zerop count)
+              (format nil "履歴: ~a  (該当なし)" query)
+              (format nil "履歴: ~a  (~d 件)" query count))))
+
+(defun %search-result-row (match query selected-p width theme)
+  (let* ((metadata (%search-result-metadata match))
+         (text (getf metadata :text))
+         (marker (%truncate-string-to-width (%search-result-marker selected-p)
+                                           width))
+         (badges (%search-result-badges metadata))
+         (badges (%search-result-badges-within-width
+                  badges
+                  (- width (%string-visible-width marker))))
+         (badge-text (mapcar #'first badges))
+         (badge-width (reduce #'+ badge-text :key #'%string-visible-width :initial-value 0))
+         (text-width (max 0 (- width (%string-visible-width marker) badge-width)))
+         (visible-text (%truncate-string-to-width text text-width))
+         (visible (concatenate 'string marker visible-text
+                               (if badge-text
+                                   (apply #'concatenate 'string badge-text)
+                                   "")))
+         (text-visible (concatenate 'string marker visible-text)))
+    (if selected-p
+        (progn
+          (%write-styled text-visible :completion-selected theme)
+          (dolist (badge badges)
+            (%write-styled (first badge) (second badge) theme)))
+        (let* ((marker-length (length marker))
+               (match-start (history-search-match-start visible-text query))
+               (row-start (and match-start (+ marker-length match-start)))
+               (row-end (and row-start
+                             (min (+ row-start (length query))
+                                  (+ marker-length (length visible-text))))))
+          (if (and row-start row-end (> row-end row-start))
+              (progn
+                (write-string (subseq text-visible 0 row-start))
+                (%write-styled (subseq visible row-start row-end) :search-match theme)
+                (write-string (subseq text-visible row-end)))
+              (write-string text-visible))
+          (dolist (badge badges)
+            (%write-styled (first badge) (second badge) theme))))))
 
 (defun render-search-results (query matches selected-index
                               &key (terminal-width (terminal-width))
@@ -63,11 +117,14 @@ lines written, for the caller to clear on the next redraw."
          (visible-matches
            (subseq matches 0 (min +history-search-max-visible-matches+ count))))
     (format t "~%")
-    (%write-styled (%search-header-text query count) :comment theme)
+    (%write-styled
+     (%truncate-string-to-width (%search-header-text query count)
+                                terminal-width)
+     :comment theme)
     (format t "~%")
-    (loop for text in visible-matches
+    (loop for match in visible-matches
           for index from 0
-          do (%search-result-row text query (eql index selected-index)
+          do (%search-result-row match query (eql index selected-index)
                                  terminal-width theme)
              (format t "~%"))
     (1+ (length visible-matches))))
@@ -86,6 +143,13 @@ below the prompt using the input state's already-clamped selection index."
   (let* ((query (input-state-search-query *input-state*))
          (entries (nshell.application:interactive-history-search-use-case
                    *history* query))
-         (texts (history-kit:history-entry-texts entries)))
+         (matches (mapcar (lambda (entry)
+                            (list :text (history-kit:history-entry-text entry)
+                                  :exit-code (history-kit:history-entry-exit-code entry)
+                                  :origin
+                                  (nshell.infrastructure.persistence::history-record-origin
+                                   (nshell.infrastructure.persistence::history-record-for-entry
+                                    *history* entry))))
+                          entries)))
     (render-search-results-below-prompt
-     query texts (input-state-search-index *input-state*))))
+     query matches (input-state-search-index *input-state*))))

@@ -62,7 +62,38 @@
     "The AI segment is absent until the assistant has recorded a turn."
     (nshell.feature.assistant:reset-assistant-usage)
     (let ((output (capture-render-prompt :terminal-width 80)))
-      (expect (search "AI " output) :to-be-falsy)))
+      (expect (search "0t" output) :to-be-falsy)))
+
+  (it "render-prompt-shows-the-current-ai-sidecar-status"
+    (let ((nshell.feature.assistant:*assistant-boundaries*
+            (nshell.feature.assistant:make-assistant-boundary-context
+             (nshell.feature.assistant:make-assistant-model-boundary
+              :status-fn (lambda () (list :state :ready :version "1.0"))))))
+      (let ((output (capture-render-prompt :terminal-width 200)))
+        (expect (search "AI 準備完了" output) :to-be-truthy))))
+
+  (it "prompt-ai-status-renders-every-model-lifecycle-state-with-its-theme-role"
+    (dolist (case '((:not-started "AI 未起動" :assistant-not-started :prompt-time)
+                    (:starting "AI 起動中" :assistant-starting :prompt-duration)
+                    (:ready "AI 準備完了" :assistant-ready :prompt-ok)
+                    (:unavailable "AI 利用不可" :assistant-unavailable :prompt-error)
+                    (:dead "AI 停止" :assistant-dead :prompt-error)))
+      (destructuring-bind (state expected-text expected-kind expected-role) case
+        (let ((nshell.feature.assistant:*assistant-boundaries*
+                (nshell.feature.assistant:make-assistant-boundary-context
+                 (nshell.feature.assistant:make-assistant-model-boundary
+                  :status-fn (lambda ()
+                               (list :state state :version "1.0" :reason "test"))))))
+          (let ((segment (nshell.presentation::%assistant-status-segment))
+                (theme (nshell.domain.configuration:default-theme)))
+            (expect expected-text :to-equal
+                    (nshell.domain.prompting:prompt-segment-text segment))
+            (expect expected-kind :to-equal
+                    (nshell.domain.prompting:prompt-segment-kind segment))
+            (expect expected-role :to-equal
+                    (nshell.presentation::segment-kind->role expected-kind))
+            (expect (nshell.domain.configuration:theme-style theme expected-role)
+                    :to-be-truthy))))))
 
   (it "render-prompt-shows-the-ai-usage-segment-after-a-turn"
     "The AI segment appears in the right prompt once ASSISTANT-USAGE-TURNS is positive."

@@ -100,7 +100,7 @@
             (funcall continuation)
             (expect rendered :to-be-truthy))))))
 
-    (it "read-key-cont-passes-the-sigint-predicate"
+  (it "read-key-cont-passes-the-sigint-predicate"
     "The REPL passes pending SIGINT detection into terminal input."
     (with-repl-test-state
       (with-repl-input-state (:buffer "" :cursor-pos 0)
@@ -131,6 +131,111 @@
               (expect reduced-state :to-be nshell.presentation::*input-state*)
               (expect event :to-be (second received-reduction))
               (expect :redraw :to-be processed-output)))))))
+
+  (it "read-key-cont-commits-an-ask-panel-on-v"
+    "The physical v key commits an ask panel through read-key-event."
+    (with-repl-test-state
+      (let ((committed 0)
+            (rendered 0))
+        (setf nshell.presentation::*assistant-request-kind* :ask
+              nshell.presentation::*transient-panel-rendered-lines* 1
+              nshell.presentation::*transient-panel-content* '("ask panel"))
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                (input-key-event :char #\v)))
+             ('nshell.presentation::commit-transient-panel-to-scrollback
+              (lambda () (incf committed)))
+             ('nshell.presentation::reset-rendered-prompt-state
+              (lambda () nil))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () (incf rendered))))
+          (funcall (nshell.presentation::read-key-cont)))
+        (expect 1 :to-equal committed)
+        (expect 1 :to-equal rendered)
+        (expect :ask :to-be nshell.presentation::*assistant-request-kind*))))
+
+  (it "read-key-cont-commits-an-explain-panel-on-v"
+    "The physical v key commits an explain panel through read-key-event."
+    (with-repl-test-state
+      (let ((committed 0))
+        (setf nshell.presentation::*assistant-request-kind* :explain
+              nshell.presentation::*transient-panel-rendered-lines* 1
+              nshell.presentation::*transient-panel-content* '("explain panel"))
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                (input-key-event :char #\v)))
+             ('nshell.presentation::commit-transient-panel-to-scrollback
+              (lambda () (incf committed)))
+             ('nshell.presentation::reset-rendered-prompt-state
+              (lambda () nil))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () nil)))
+          (funcall (nshell.presentation::read-key-cont)))
+        (expect 1 :to-equal committed)
+        (expect :explain :to-be nshell.presentation::*assistant-request-kind*))))
+
+  (it "read-key-cont-commits-an-explain-candidate-panel-on-v"
+    "The physical v key commits an explain panel without installing a candidate."
+    (with-repl-test-state
+      (let ((committed 0))
+        (setf nshell.presentation::*assistant-explain-candidates* '("ls")
+              nshell.presentation::*transient-panel-rendered-lines* 1
+              nshell.presentation::*transient-panel-content* '("candidate panel"))
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                (input-key-event :char #\v)))
+             ('nshell.presentation::commit-transient-panel-to-scrollback
+              (lambda () (incf committed)))
+             ('nshell.presentation::reset-rendered-prompt-state
+              (lambda () nil))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () nil)))
+          (funcall (nshell.presentation::read-key-cont)))
+        (expect 1 :to-equal committed)
+        (expect '("ls") :to-equal
+                nshell.presentation::*assistant-explain-candidates*))))
+
+  (it "read-key-cont-commits-an-agent-step-panel-on-v"
+    "The physical v key commits an agent step without changing its session."
+    (with-repl-test-state
+      (let ((committed 0)
+            (session (nshell.application:make-agent-session "list files"
+                                                             :max-steps 1)))
+        (nshell.application:agent-session-propose-step session "ls")
+        (setf nshell.presentation::*agent-session* session
+              nshell.presentation::*transient-panel-rendered-lines* 1
+              nshell.presentation::*transient-panel-content* '("agent panel"))
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                (input-key-event :char #\v)))
+             ('nshell.presentation::commit-transient-panel-to-scrollback
+              (lambda () (incf committed)))
+             ('nshell.presentation::reset-rendered-prompt-state
+              (lambda () nil))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () nil)))
+          (funcall (nshell.presentation::read-key-cont)))
+        (expect 1 :to-equal committed)
+        (expect session :to-be nshell.presentation::*agent-session*)
+        (expect :awaiting-approval :to-equal
+                (nshell.application:agent-step-status
+                 (nshell.application:agent-session-current-step session))))))
 
   (it "read-key-cont-stops-after-end-of-input"
     "End of input stops the REPL when no resize notification is pending."

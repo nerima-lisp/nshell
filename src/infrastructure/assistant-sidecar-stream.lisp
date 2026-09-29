@@ -77,11 +77,13 @@
    :stream-error
    (list (cons "message" (or message "assistant sidecar stream error")))))
 
-(defun %assistant-sidecar-reader-loop (state handle)
+(defun %assistant-sidecar-reader-loop (state handle generation)
   (loop
     (multiple-value-bind (object status message)
         (%assistant-read-json-value
          (nshell.infrastructure.acl:sidecar-handle-output handle))
+      (unless (%assistant-sidecar-generation-current-p state generation)
+        (return))
       (let ((pending (%assistant-sidecar-current-pending state)))
         (case status
           (:value
@@ -298,7 +300,7 @@
             (assistant-sidecar-state-reader-thread state)
               (sb-thread:make-thread
                (lambda ()
-                 (%assistant-sidecar-reader-loop state handle))
+                 (%assistant-sidecar-reader-loop state handle generation))
                :name "nshell assistant sidecar reader")
             (assistant-sidecar-state-writer-thread state)
               (sb-thread:make-thread

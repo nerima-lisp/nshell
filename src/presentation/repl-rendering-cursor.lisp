@@ -4,37 +4,6 @@
     ((row 0 :type fixnum)
      (column 0 :type fixnum)))
 
-(defun %advance-rendered-character (position char terminal-width)
-  (let ((row (rendered-position-row position))
-        (column (rendered-position-column position)))
-    (if (char= char #\Newline)
-        (%make-rendered-position (1+ row) 2)
-        (let ((char-width (%char-visible-width char)))
-          (when (and terminal-width
-                     (plusp terminal-width)
-                     (> (+ column char-width) terminal-width))
-            (setf row (1+ row)
-                  column 0))
-          (if (and terminal-width
-                   (plusp terminal-width)
-                   (> char-width terminal-width))
-              (%make-rendered-position (1+ row) (- char-width terminal-width))
-              (%make-rendered-position row (+ column char-width)))))))
-
-(defun %rendered-character-start-position (position char terminal-width)
-  "Return the cell at which CHAR is rendered from POSITION."
-  (if (char= char #\Newline)
-      position
-      (let ((row (rendered-position-row position))
-            (column (rendered-position-column position))
-            (char-width (%char-visible-width char)))
-        (when (and terminal-width
-                   (plusp terminal-width)
-                   (> (+ column char-width) terminal-width))
-          (setf row (1+ row)
-                column 0))
-        (%make-rendered-position row column))))
-
 (defun %advance-rendered-string (position text terminal-width)
   (loop with current = position
         for grapheme in (cl-tty-kit:string-graphemes (or text ""))
@@ -45,7 +14,7 @@
 (defun %advance-rendered-grapheme (position grapheme terminal-width)
   (if (and (= (length grapheme) 1)
            (char= (char grapheme 0) #\Newline))
-      (%advance-rendered-character position #\Newline terminal-width)
+      (%make-rendered-position (1+ (rendered-position-row position)) 2)
       (let ((width (%string-visible-width grapheme)))
         (%advance-rendered-width position width terminal-width))))
 

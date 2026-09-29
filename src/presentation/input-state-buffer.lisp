@@ -126,15 +126,23 @@
     ((cursor-pos 0 :type fixnum))
   :public-accessors nil)
 
-(defun cursor-move-edit-for-request (request)
+(defun cursor-move-edit-for-request (request buffer)
   (case (%cursor-move-request-kind request)
     (:by
-     (%make-cursor-move-edit
-      (+ (%cursor-move-request-cursor request)
-         (%cursor-move-request-delta request))))
+     (let ((cursor (%cursor-move-request-cursor request))
+           (delta (%cursor-move-request-delta request)))
+       (%make-cursor-move-edit
+        (loop with position = cursor
+              repeat (abs delta)
+              do (setf position
+                        (if (plusp delta)
+                            (%next-grapheme-boundary buffer position)
+                            (%previous-grapheme-boundary buffer position)))
+              finally (return position)))))
     (:to
      (%make-cursor-move-edit
-      (%cursor-move-request-position request)))))
+      (min (length buffer)
+           (max 0 (%cursor-move-request-position request)))))))
 
 (nshell.util:define-value-struct %buffer-clear-plan
     ((buffer "" :type string)

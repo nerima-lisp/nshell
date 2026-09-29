@@ -65,7 +65,7 @@ matching the plain layout %FORMAT-CANDIDATE produces for width purposes."
 
 (defun %pad-to-visible-width (text width)
   "Right-pad TEXT with spaces to occupy WIDTH terminal columns, leaving it
-  unchanged when it is already at least that wide."
+unchanged when it is already at least that wide."
   (let ((padding (- width (%string-visible-width text))))
     (if (plusp padding)
         (concatenate 'string text (make-string padding :initial-element #\Space))

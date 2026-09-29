@@ -130,7 +130,7 @@ dropped, and (when narrow) its interior components cut fish-style."
 
 (defun %truncate-string-to-width (text width)
   "Longest prefix of TEXT whose terminal width is at most WIDTH.
-  Grapheme clusters are kept whole, including ZWJ emoji and combining text."
+Grapheme clusters are kept whole, including ZWJ emoji and combining text."
   (let ((remaining (max 0 width)))
     (with-output-to-string (out)
       (loop for grapheme in (cl-tty-kit:string-graphemes text)

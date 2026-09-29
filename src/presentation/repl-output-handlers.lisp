@@ -699,40 +699,116 @@ wrapped line's other rows on screen as stale duplicates."
   '("python" "python3" "node" "irb" "sbcl" "ghci")
   "Commands that are interactive only when started without arguments.")
 
-(defun %rerun-command-details (ast)
+(defparameter +rerun-command-expansion-depth-limit+ 8)
+
+(defparameter +rerun-dynamic-command-names+
+  '("eval" "source" ".")
+  "Commands whose contents are only known at execution time.")
+
+(defun %rerun-command-substitution-texts (value)
+  (mapcan (lambda (marker)
+            (let ((texts
+                    (nshell.domain.parsing:parenthesized-substitution-texts
+                     value marker)))
+              (if (member :incomplete texts)
+                  (list :incomplete)
+                  texts)))
+          '("$(" "<(" ">(" "(")))
+
+(defun %rerun-parse-command-details (text &key depth seen)
+  (let ((result (nshell.domain.parsing:parse-command-line text)))
+    (if (nshell.domain.parsing:parse-complete-p result)
+        (%rerun-command-details
+         (nshell.domain.parsing:parse-result-ast result)
+         :depth depth :seen seen)
+        (list (list :dynamic
+                    "定義または置換の内容を解析できないため出力を捕捉できません")))))
+
+(defun %rerun-definition-details (name texts &key depth seen)
+  (if (or (null texts) (member name seen :test #'string-equal))
+      nil
+      (%rerun-parse-command-details
+       (format nil "~{~a~^~%~}" texts)
+       :depth (1+ depth) :seen (cons name seen))))
+
+(defun %rerun-command-substitution-details (values &key depth seen)
+  (mapcan
+   (lambda (value)
+     (mapcan (lambda (text)
+               (if (eq text :incomplete)
+                   (list (list :dynamic
+                               "置換の内容を完全に解析できないため出力を捕捉できません"))
+                   (%rerun-parse-command-details text
+                                                  :depth (1+ depth)
+                                                  :seen seen)))
+             (%rerun-command-substitution-texts value)))
+   values))
+
+(defun %rerun-command-definition-details (name &key depth seen)
+  (cond
+    ((member name seen :test #'string-equal) nil)
+    ((>= depth +rerun-command-expansion-depth-limit+)
+     (list (list :dynamic
+                 "定義の展開が深すぎるため出力を捕捉できません")))
+    (t
+     (append
+      (%rerun-definition-details
+       name (let ((alias (gethash name *aliases*)))
+              (and alias (list alias)))
+       :depth depth :seen seen)
+      (%rerun-definition-details
+       name (gethash name *functions*) :depth depth :seen seen)
+      (%rerun-definition-details
+       name (let ((abbreviation (gethash name *abbreviations*)))
+              (when abbreviation
+                (list (if (stringp abbreviation)
+                          abbreviation
+                          (nshell.domain.abbreviation:abbreviation-expansion
+                           abbreviation)))))
+       :depth depth :seen seen)))))
+
+(defun %rerun-command-details (ast &key (depth 0) (seen nil))
   (cond
     ((nshell.domain.parsing:command-node-p ast)
-     (multiple-value-bind (command args)
-         (nshell.feature.assistant:assistant-command-after-wrappers
-          (nshell.domain.parsing:command-node-command ast)
-          (nshell.domain.parsing:command-node-arg-values ast))
-       (list (cons command args))))
+     (let* ((raw-command (nshell.domain.parsing:command-node-command ast))
+            (raw-args (nshell.domain.parsing:command-node-arg-values ast))
+            (command-and-args
+              (multiple-value-list
+               (nshell.feature.assistant:assistant-command-after-wrappers
+                raw-command raw-args))))
+       (append
+        (list (list :command (first command-and-args)
+                    :args (second command-and-args)))
+        (%rerun-command-substitution-details
+         (cons raw-command raw-args) :depth depth :seen seen)
+        (%rerun-command-definition-details
+         (first command-and-args) :depth depth :seen seen))))
     ((nshell.domain.parsing:pipeline-node-p ast)
-     (mapcan #'%rerun-command-details
+     (mapcan (lambda (node) (%rerun-command-details node :depth depth :seen seen))
              (nshell.domain.parsing:pipeline-node-commands ast)))
     ((nshell.domain.parsing:sequence-node-p ast)
-     (mapcan #'%rerun-command-details
+     (mapcan (lambda (node) (%rerun-command-details node :depth depth :seen seen))
              (nshell.domain.parsing:sequence-node-commands ast)))
     ((nshell.domain.parsing:if-node-p ast)
-     (mapcan #'%rerun-command-details
+     (mapcan (lambda (node) (%rerun-command-details node :depth depth :seen seen))
              (append (list (nshell.domain.parsing:if-node-condition ast))
                      (nshell.domain.parsing:if-node-then-branch ast)
                      (nshell.domain.parsing:if-node-else-branch ast))))
     ((nshell.domain.parsing:for-node-p ast)
-     (mapcan #'%rerun-command-details
+     (mapcan (lambda (node) (%rerun-command-details node :depth depth :seen seen))
              (append (nshell.domain.parsing:for-node-in-values ast)
                      (nshell.domain.parsing:for-node-body ast))))
     ((nshell.domain.parsing:while-node-p ast)
-     (mapcan #'%rerun-command-details
+     (mapcan (lambda (node) (%rerun-command-details node :depth depth :seen seen))
              (append (list (nshell.domain.parsing:while-node-condition ast))
                      (nshell.domain.parsing:while-node-body ast))))
     ((nshell.domain.parsing:case-node-p ast)
      (mapcan (lambda (clause)
-               (mapcan #'%rerun-command-details
+               (mapcan (lambda (node) (%rerun-command-details node :depth depth :seen seen))
                        (nshell.domain.parsing:case-clause-body clause)))
              (nshell.domain.parsing:case-node-clauses ast)))
     ((nshell.domain.parsing:begin-end-node-p ast)
-     (mapcan #'%rerun-command-details
+     (mapcan (lambda (node) (%rerun-command-details node :depth depth :seen seen))
              (nshell.domain.parsing:begin-end-node-body ast)))
     (t nil)))
 
@@ -741,26 +817,52 @@ wrapped line's other rows on screen as stale duplicates."
     (if (nshell.domain.parsing:parse-complete-p result)
         (let* ((ast (nshell.domain.parsing:parse-result-ast result))
                (classification (nshell.feature.assistant:classify-ast ast))
+               (details (%rerun-command-details ast))
+               (dynamic-reason
+                 (some (lambda (detail)
+                         (when (eq (first detail) :dynamic)
+                           (second detail)))
+                       details))
                (interactive-command
                  (some (lambda (detail)
-                         (let ((command (car detail))
-                               (args (cdr detail)))
-                           (when (or (member command +rerun-interactive-command-names+
-                                              :test #'string-equal)
-                                     (and (null args)
-                                          (member command
-                                                  +rerun-interactive-repl-command-names+
-                                                  :test #'string-equal)))
-                             command)))
-                       (%rerun-command-details ast))))
+                         (when (eq (first detail) :command)
+                           (let ((command (getf detail :command))
+                                 (args (getf detail :args)))
+                             (when (or (member command +rerun-interactive-command-names+
+                                                :test #'string-equal)
+                                       (and (null args)
+                                            (member command
+                                                    +rerun-interactive-repl-command-names+
+                                                    :test #'string-equal)))
+                               command))))
+                       details))
+               (dynamic-command
+                 (some (lambda (detail)
+                         (when (eq (first detail) :command)
+                           (let ((command (getf detail :command)))
+                             (when (or (member command +rerun-dynamic-command-names+
+                                                :test #'string-equal)
+                                       (search "$" command)
+                                       (search "`" command))
+                               command))))
+                       details)))
           (list :classification
-                (nshell.feature.assistant:assistant-safety-result-classification
-                 classification)
-                :reason
-                (if interactive-command
-                    (format nil "~a にはライブ端末が必要です" interactive-command)
-                    (nshell.feature.assistant:assistant-safety-result-reason
+                (if (or dynamic-reason dynamic-command)
+                    :block
+                    (nshell.feature.assistant:assistant-safety-result-classification
                      classification))
+                :reason
+                (cond
+                  (dynamic-reason
+                   dynamic-reason)
+                  (dynamic-command
+                   (format nil "~a は実行時まで内容が決まらないため出力を捕捉できません"
+                           dynamic-command))
+                  (interactive-command
+                    (format nil "~a にはライブ端末が必要です" interactive-command))
+                  (t
+                   (nshell.feature.assistant:assistant-safety-result-reason
+                    classification)))
                 :interactive-command interactive-command))
         (list :classification :block
               :reason "直前のコマンドを安全に解析できません"

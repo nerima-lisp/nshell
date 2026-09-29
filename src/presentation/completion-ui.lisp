@@ -65,9 +65,11 @@ matching the plain layout %FORMAT-CANDIDATE produces for width purposes."
 
 (defun %pad-to-visible-width (text width)
   "Right-pad TEXT with spaces to occupy WIDTH terminal columns, leaving it
-unchanged when it is already at least that wide.  Delegates to cl-tty-kit's
-display-width-aware padding so wide glyphs are accounted for correctly."
-  (cl-tty-kit:pad-string text width :align :left :pad #\Space))
+unchanged when it is already at least that wide."
+  (let ((padding (- width (%string-visible-width text))))
+    (if (plusp padding)
+        (concatenate 'string text (make-string padding :initial-element #\Space))
+        text)))
 
 (defun %pad-styled-cell (styled-text plain-text width)
   "Right-pad STYLED-TEXT to WIDTH columns, measuring visible width from

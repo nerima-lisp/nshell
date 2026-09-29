@@ -20,9 +20,26 @@ otherwise remain in the terminal for typed input.")
 classifier (control/combining -> 0, wide/emoji -> 2, otherwise 1)."
   (cl-tty-kit:char-width char))
 
+(defun %grapheme-visible-width (grapheme)
+  "Return GRAPHEME's width, compensating for cl-tty-kit's VS16 gap.
+
+cl-tty-kit:GRAPHEME-WIDTH handles ZWJ and combining clusters, but its
+code-point maximum leaves VS16 presentations and regional-indicator flags at
+text width. Terminals render those clusters as two-column glyphs."
+  (let ((width (cl-tty-kit:grapheme-width grapheme)))
+    (if (and (= width 1)
+             (or (find (code-char #xFE0F) grapheme)
+                 (and (= (length grapheme) 2)
+                      (every (lambda (char)
+                              (<= #x1F1E6 (char-code char) #x1F1FF))
+                            grapheme))))
+        2
+        width)))
+
 (defun %string-visible-width (text)
-  "Sum of the terminal column widths of the characters in TEXT."
-  (cl-tty-kit:string-width text))
+  "Return the terminal width of TEXT measured one grapheme at a time."
+  (loop for grapheme in (cl-tty-kit:string-graphemes text)
+        sum (%grapheme-visible-width grapheme)))
 
 (defun %segments-visible-width (segments)
   (loop for segment in segments
@@ -113,9 +130,14 @@ dropped, and (when narrow) its interior components cut fish-style."
 
 (defun %truncate-string-to-width (text width)
   "Longest prefix of TEXT whose terminal width is at most WIDTH.
-Delegates to cl-tty-kit, which drops a wide glyph whole rather than splitting
-it and treats a negative WIDTH as 0."
-  (cl-tty-kit:truncate-string text width :ellipsis ""))
+Grapheme clusters are kept whole, including ZWJ emoji and combining text."
+  (let ((remaining (max 0 width)))
+    (with-output-to-string (out)
+      (loop for grapheme in (cl-tty-kit:string-graphemes text)
+            for grapheme-width = (%grapheme-visible-width grapheme)
+            while (<= grapheme-width remaining)
+            do (write-string grapheme out)
+               (decf remaining grapheme-width)))))
 
 (defun %truncate-segments (segments width)
   "Return SEGMENTS shortened so their visible terminal width is at most WIDTH."

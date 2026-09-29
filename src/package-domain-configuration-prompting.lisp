@@ -10,7 +10,8 @@ nshell.infrastructure.persistence's job.")
     (:import-from #:nshell.util #:define-value-struct)
     (:export #:make-theme #:theme-color #:theme-name #:theme-set-color
              #:theme-p #:config-p
-             #:make-config #:config-theme
+             #:make-config #:config-theme #:config-east-asian-ambiguous-width
+             #:parse-east-asian-ambiguous-width
              #:default-theme #:default-config
              #:make-theme-from-entries #:theme-style #:theme-roles
              #:theme-entries #:theme-rename

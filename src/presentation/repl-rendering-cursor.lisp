@@ -4,43 +4,47 @@
     ((row 0 :type fixnum)
      (column 0 :type fixnum)))
 
-(defun %advance-rendered-character (position char terminal-width)
-  (let ((row (rendered-position-row position))
-        (column (rendered-position-column position)))
-    (if (char= char #\Newline)
-        (%make-rendered-position (1+ row) 2)
-        (let ((char-width (%char-visible-width char)))
-          (when (and terminal-width
-                     (plusp terminal-width)
-                     (> (+ column char-width) terminal-width))
-            (setf row (1+ row)
-                  column 0))
-          (if (and terminal-width
-                   (plusp terminal-width)
-                   (> char-width terminal-width))
-              (%make-rendered-position (1+ row) (- char-width terminal-width))
-              (%make-rendered-position row (+ column char-width)))))))
-
-(defun %rendered-character-start-position (position char terminal-width)
-  "Return the cell at which CHAR is rendered from POSITION."
-  (if (char= char #\Newline)
-      position
-      (let ((row (rendered-position-row position))
-            (column (rendered-position-column position))
-            (char-width (%char-visible-width char)))
-        (when (and terminal-width
-                   (plusp terminal-width)
-                   (> (+ column char-width) terminal-width))
-          (setf row (1+ row)
-                column 0))
-        (%make-rendered-position row column))))
-
 (defun %advance-rendered-string (position text terminal-width)
   (loop with current = position
-        for char across (or text "")
+        for grapheme in (cl-tty-kit:string-graphemes (or text ""))
         do (setf current
-                 (%advance-rendered-character current char terminal-width))
+                 (%advance-rendered-grapheme current grapheme terminal-width))
         finally (return current)))
+
+(defun %advance-rendered-grapheme (position grapheme terminal-width)
+  (if (and (= (length grapheme) 1)
+           (char= (char grapheme 0) #\Newline))
+      (%make-rendered-position (1+ (rendered-position-row position)) 2)
+      (let ((width (%string-visible-width grapheme)))
+        (%advance-rendered-width position width terminal-width))))
+
+(defun %rendered-grapheme-start-position (position grapheme terminal-width)
+  (if (and (= (length grapheme) 1)
+           (char= (char grapheme 0) #\Newline))
+      position
+      (let ((width (%string-visible-width grapheme)))
+        (if (and terminal-width
+                 (plusp terminal-width)
+                 (> (+ (rendered-position-column position) width)
+                    terminal-width))
+            (%make-rendered-position
+             (1+ (rendered-position-row position))
+             0)
+            position))))
+
+(defun %advance-rendered-width (position width terminal-width)
+  (let ((row (rendered-position-row position))
+        (column (rendered-position-column position)))
+    (when (and terminal-width
+               (plusp terminal-width)
+               (> (+ column width) terminal-width))
+      (setf row (1+ row)
+            column 0))
+    (if (and terminal-width
+             (plusp terminal-width)
+             (> width terminal-width))
+        (%make-rendered-position (1+ row) (- width terminal-width))
+        (%make-rendered-position row (+ column width)))))
 
 (defun %initial-rendered-position (prompt-width terminal-width)
   (let ((prompt-width (or prompt-width 0)))
@@ -66,10 +70,12 @@
 (defun %rendered-buffer-position (text cursor prompt-width &key terminal-width)
   (let ((initial-position (%initial-rendered-position prompt-width terminal-width)))
     (loop with current = initial-position
-          for index below (max 0 (min cursor (length text)))
-          for char = (char text index)
-          do (setf current
-                   (%advance-rendered-character current char terminal-width))
+          with consumed = 0
+          for grapheme in (cl-tty-kit:string-graphemes text)
+          while (< consumed cursor)
+          do (incf consumed (length grapheme))
+             (setf current
+                   (%advance-rendered-grapheme current grapheme terminal-width))
           finally (return current))))
 
 (defun %rendered-buffer-index-at-position (text row column prompt-width
@@ -91,23 +97,28 @@ lies outside the rendered buffer."
     (let ((target-row (- row origin-row))
           (target-column (- column origin-column)))
       (loop with current = (%initial-rendered-position prompt-width terminal-width)
-            for index below (length (or text ""))
-            for char = (char text index)
-            for start = (%rendered-character-start-position current char terminal-width)
+            with index = 0
+            for grapheme in (cl-tty-kit:string-graphemes (or text ""))
+            for newline-p = (and (= (length grapheme) 1)
+                                 (char= (char grapheme 0) #\Newline))
+            for start = (%rendered-grapheme-start-position
+                         current grapheme terminal-width)
             do (cond
-                 ((char= char #\Newline)
+                 (newline-p
                   (when (and (= target-row (rendered-position-row start))
                              (>= target-column (rendered-position-column start)))
                     (return index)))
                  (t
-                  (let ((width (max 1 (%char-visible-width char))))
-                    (when (and (= target-row (rendered-position-row start))
+                  (let ((width (%string-visible-width grapheme)))
+                    (when (and (plusp width)
+                               (= target-row (rendered-position-row start))
                                (>= target-column (rendered-position-column start))
                                (< target-column
                                   (+ (rendered-position-column start) width)))
                       (return index)))))
                 (setf current
-                      (%advance-rendered-character current char terminal-width))
+                      (%advance-rendered-grapheme current grapheme terminal-width))
+                (incf index (length grapheme))
             finally
                (when (and (= target-row (rendered-position-row current))
                           (>= target-column (rendered-position-column current)))

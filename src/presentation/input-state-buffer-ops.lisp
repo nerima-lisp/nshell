@@ -31,7 +31,7 @@
 (defun %commit-cursor-move-request (state request)
   (values (commit-cursor-move-edit
            state
-           (cursor-move-edit-for-request request))
+           (cursor-move-edit-for-request request (input-state-buffer state)))
           :redraw))
 
 (defun commit-cursor-move-edit (state edit)

@@ -208,7 +208,8 @@
                                :cursor-pos 3
                                :suggestion "def"))
            (request (nshell.presentation::cursor-move-request-by 3 2))
-           (edit (nshell.presentation::cursor-move-edit-for-request request))
+           (edit (nshell.presentation::cursor-move-edit-for-request request
+                                                                     "abcdef"))
            (committed (nshell.presentation::commit-cursor-move-edit state edit)))
       (assert-symbol-boundaries
           :present (nshell.presentation::%make-cursor-move-request
@@ -242,16 +243,29 @@
                                :cursor-pos 3
                                :suggestion "def"))
            (request (nshell.presentation::cursor-move-request-to 99))
-           (edit (nshell.presentation::cursor-move-edit-for-request request))
+           (edit (nshell.presentation::cursor-move-edit-for-request request
+                                                                     "abcdef"))
            (committed (nshell.presentation::commit-cursor-move-edit state edit)))
       (expect (nshell.presentation::%cursor-move-request-p request) :to-be-truthy)
       (expect (nshell.presentation::%cursor-move-edit-p edit) :to-be-truthy)
       (expect :to :to-be (nshell.presentation::%cursor-move-request-kind request))
       (expect 99 :to-equal (nshell.presentation::%cursor-move-request-position request))
-      (expect 99 :to-equal (nshell.presentation::%cursor-move-edit-cursor-pos edit))
+      (expect 6 :to-equal (nshell.presentation::%cursor-move-edit-cursor-pos edit))
       (is-input-state committed
                       :buffer "abcdef"
                       :cursor-pos 6
+                      :suggestion nil))
+    (let* ((family "👨‍👩‍👧‍👦")
+           (buffer (concatenate 'string "a" family "b"))
+           (state (input-state :buffer buffer :cursor-pos 0))
+           (request (nshell.presentation::cursor-move-request-by 1 1))
+           (edit (nshell.presentation::cursor-move-edit-for-request request buffer))
+           (committed (nshell.presentation::commit-cursor-move-edit state edit)))
+      (expect (+ 1 (length family))
+              :to-equal (nshell.presentation::%cursor-move-edit-cursor-pos edit))
+      (is-input-state committed
+                      :buffer buffer
+                      :cursor-pos (+ 1 (length family))
                       :suggestion nil)))
 
   (it "input-state-buffer-clear-edit-resets-editing-session"

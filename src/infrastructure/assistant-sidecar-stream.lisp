@@ -407,9 +407,10 @@
                                (>= (get-internal-real-time) deadline))
                       (return))
                     (sleep 0.01)))
-                    (if (and (%assistant-sidecar-generation-current-p
-                          state startup-generation)
-                         (%assistant-sidecar-init-p state))
+                    (unless (%assistant-sidecar-generation-current-p
+                             state startup-generation)
+                      (return-from %assistant-sidecar-start-worker nil))
+                    (if (%assistant-sidecar-init-p state)
                     (progn
                       (let ((payload nil))
                         (sb-thread:with-mutex ((assistant-sidecar-state-lock state))

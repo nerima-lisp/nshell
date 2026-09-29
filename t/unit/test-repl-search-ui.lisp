@@ -126,7 +126,7 @@
 
   (it "render-search-result-row-fits-badges-within-terminal-width"
     (let ((nshell.infrastructure.terminal:*terminal-color-depth* :none)
-          (theme (nshell.domain.configuration:default-theme)))
+          (theme (nshell.domain.configuration:make-theme)))
       (let ((output (capture-standard-output
                       (nshell.presentation::%search-result-row
                        '(:text "deploy production"

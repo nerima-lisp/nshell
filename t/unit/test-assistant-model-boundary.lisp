@@ -3,7 +3,7 @@
 (defun %assistant-stop-sidecar (handle)
   (funcall (symbol-function 'nshell.infrastructure.acl:stop-sidecar) handle))
 
-(defun %assistant-test-sidecar-script (&optional one-shot-p)
+(defun %assistant-test-sidecar-script (&optional one-shot-p received-path)
   (let ((path (merge-pathnames
                (format nil "nshell-assistant-sidecar-~D.sh"
                        (get-internal-real-time))
@@ -17,8 +17,15 @@
                   "fi"
                   "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
                   "while IFS= read -r line"
-                  "do"
-                  "  printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}'"
+                  "do"))
+        (write-line line stream))
+      (when received-path
+        (write-line
+         (format nil "  printf '%s\\n' \"$line\" >> '~a'"
+                 (namestring received-path))
+         stream))
+      (dolist (line
+                '("  printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}'"
                   "  printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"structured_output\":{\"command\":\"pwd\",\"reason\":\"fixture\",\"risk\":\"low\"}}'"))
         (write-line line stream))
       (when one-shot-p
@@ -129,12 +136,16 @@
                           (< (get-internal-real-time) deadline))
                do (sleep 0.01))))))
 
-(defun %assistant-test-await-state (state &optional (limit 240))
-  (loop repeat limit
-        for status = (nshell.feature.assistant:assistant-model-status)
-        do (if (eq state (getf status :state))
-               (return status)
-               (sleep 0.05))))
+(defun %assistant-test-await-state (state &optional (timeout-seconds 12))
+  (let ((deadline (+ (get-internal-real-time)
+                     (round (* timeout-seconds internal-time-units-per-second))))
+        (status nil))
+    (loop while (< (get-internal-real-time) deadline)
+          do (setf status (nshell.feature.assistant:assistant-model-status))
+             (when (eq state (getf status :state))
+               (return status))
+             (sleep 0.05))
+    status))
 
 (defun %assistant-test-terminal-event-description (event)
   (let* ((kind (nshell.feature.assistant:assistant-model-event-kind event))
@@ -483,32 +494,67 @@
           (delete-file script)))))
 
   (it "discards-a-stale-sidecar-pending-before-the-next-request"
-    (let ((script (%assistant-test-sidecar-script)))
+    (with-temporary-output-file (received-path :prefix "nshell-assistant-received-")
+      (let ((script (%assistant-test-sidecar-script nil received-path)))
+        (unwind-protect
+             (let* ((boundary
+                      (nshell.feature.assistant:make-assistant-sidecar-boundary
+                       :command (namestring script)))
+                    (nshell.feature.assistant:*assistant-boundaries*
+                      (nshell.feature.assistant:make-assistant-boundary-context
+                       boundary)))
+               (expect :ok :to-be
+                       (nshell.feature.assistant:assistant-boundary-status
+                        (nshell.feature.assistant:assistant-model-start)))
+               (expect :ok :to-be
+                       (nshell.feature.assistant:assistant-boundary-status
+                        (nshell.feature.assistant:assistant-model-request
+                         1 '(("message" . "stale")))))
+               (expect :empty :to-be
+                       (nshell.feature.assistant:assistant-boundary-status
+                        (nshell.feature.assistant:assistant-model-poll 2)))
+               (expect :ok :to-be
+                       (nshell.feature.assistant:assistant-boundary-status
+                        (nshell.feature.assistant:assistant-model-request
+                         2 '(("message" . "fresh")))))
+               (let ((deadline (+ (get-internal-real-time)
+                                  (round (* 2 internal-time-units-per-second))))
+                     (received ""))
+                 (loop while (and (not (search "fresh" received))
+                                  (< (get-internal-real-time) deadline))
+                       do (setf received
+                                 (if (probe-file received-path)
+                                     (uiop:read-file-string received-path)
+                                     ""))
+                          (sleep 0.01))
+                 (expect nil :to-be (search "stale" received))
+                 (expect (search "fresh" received) :to-be-truthy))
+               (expect :ok :to-be
+                       (nshell.feature.assistant:assistant-boundary-status
+                        (nshell.feature.assistant:assistant-model-stop))))
+          (%assistant-test-with-sidecar-cleanup)
+          (when (probe-file script)
+            (delete-file script))))))
+
+  (it "kills-a-sidecar-that-ignores-sigterm"
+    (let ((script (%assistant-test-term-ignoring-sidecar-script))
+          (handle nil))
       (unwind-protect
-           (let* ((boundary
-                    (nshell.feature.assistant:make-assistant-sidecar-boundary
-                     :command (namestring script)))
-                  (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context
-                     boundary)))
-             (expect :ok :to-be
-                     (nshell.feature.assistant:assistant-boundary-status
-                      (nshell.feature.assistant:assistant-model-start)))
-             (expect :ok :to-be
-                     (nshell.feature.assistant:assistant-boundary-status
-                      (nshell.feature.assistant:assistant-model-request
-                       1 '(("message" . "stale")))))
-             (expect :empty :to-be
-                     (nshell.feature.assistant:assistant-boundary-status
-                      (nshell.feature.assistant:assistant-model-poll 2)))
-             (expect :ok :to-be
-                     (nshell.feature.assistant:assistant-boundary-status
-                      (nshell.feature.assistant:assistant-model-request
-                       2 '(("message" . "fresh")))))
-             (expect :ok :to-be
-                     (nshell.feature.assistant:assistant-boundary-status
-                      (nshell.feature.assistant:assistant-model-stop))))
-        (%assistant-test-with-sidecar-cleanup)
+           (multiple-value-bind (started-handle status)
+               (nshell.infrastructure.acl:spawn-sidecar
+                (namestring script) nil
+                :input :stream :output :stream :error :stream)
+             (setf handle started-handle)
+             (expect :started :to-be status)
+             (expect t :to-be
+                     (nshell.infrastructure.acl:process-alive-p
+                      (nshell.infrastructure.acl::sidecar-handle-process handle)))
+             (expect t :to-be (%assistant-stop-sidecar handle))
+             (expect nil :to-be
+                     (nshell.infrastructure.acl:process-alive-p
+                      (nshell.infrastructure.acl::sidecar-handle-process handle))))
+        (when handle
+          (%assistant-stop-sidecar handle))
         (when (probe-file script)
           (delete-file script)))))
 

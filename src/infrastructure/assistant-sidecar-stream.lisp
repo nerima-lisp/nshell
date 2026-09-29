@@ -46,6 +46,13 @@
   (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
     (assistant-sidecar-state-pending state)))
 
+(defun %assistant-sidecar-reader-pending (state handle generation)
+  (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+    (when (and (eql generation
+                    (assistant-sidecar-state-startup-generation state))
+               (eq handle (assistant-sidecar-state-handle state)))
+      (assistant-sidecar-state-pending state))))
+
 (defun %assistant-sidecar-set-pending (state pending)
   (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
     (setf (assistant-sidecar-state-pending state) pending)))
@@ -82,9 +89,9 @@
     (multiple-value-bind (object status message)
         (%assistant-read-json-value
          (nshell.infrastructure.acl:sidecar-handle-output handle))
-      (unless (%assistant-sidecar-generation-current-p state generation)
-        (return))
-      (let ((pending (%assistant-sidecar-current-pending state)))
+      (let ((pending (%assistant-sidecar-reader-pending state handle generation)))
+        (unless pending
+          (return))
         (case status
           (:value
            (when pending

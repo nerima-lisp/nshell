@@ -47,21 +47,20 @@ when QUERY does not occur in TEXT."
     (nreverse badges)))
 
 (defun %search-result-badges-within-width (badges width)
-  (when (plusp width)
-    (let ((fitted (copy-list badges)))
-      (loop while (and fitted
-                       (> (reduce #'+ fitted
-                                  :key (lambda (badge)
-                                         (%string-visible-width (first badge))))
-                          width))
-            do (if (cdr fitted)
-                   (setf fitted (butlast fitted))
-                   (let ((badge (first fitted)))
-                     (setf (first fitted)
-                           (list (%truncate-string-to-width
-                                  (first badge) width)
-                                 (second badge)))))
-      fitted)))
+  (labels ((badges-width (items)
+             (reduce #'+ items
+                     :key (lambda (badge)
+                            (%string-visible-width (first badge)))
+                     :initial-value 0))
+           (fit (items)
+             (cond
+               ((null items) nil)
+               ((<= (badges-width items) width) items)
+               ((cdr items) (fit (butlast items)))
+               (t (list (list (%truncate-string-to-width
+                               (first (first items)) width)
+                              (second (first items))))))))
+    (and (plusp width) (fit badges))))
 
 (defun %search-header-text (query count)
   (format nil "~a | 絞り込み: status:failed status:success exit:N cwd:PATH origin:typed|proposal|agent"

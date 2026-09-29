@@ -3,6 +3,9 @@
 (defparameter +assistant-sidecar-handshake-timeout-seconds+ 10
   "Maximum time allowed for sidecar version and init handshakes.")
 
+(defparameter +assistant-sidecar-response-timeout-seconds+ 90
+  "Maximum silence allowed between response events; long generations may run longer.")
+
 (defstruct (assistant-sidecar-state
             (:constructor %make-assistant-sidecar-state (command arguments)))
   command

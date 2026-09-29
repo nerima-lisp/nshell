@@ -24,6 +24,7 @@
          (nshell.presentation::*input-state* nil)
          (nshell.presentation::*assistant-turn-generation* 0)
          (nshell.presentation::*assistant-turn-started-at* nil)
+         (nshell.presentation::*assistant-last-event-at* nil)
          (nshell.presentation::*assistant-last-cancel-at* nil)
          (nshell.presentation::*last-assistant-model-event* nil)
          (nshell.presentation::*assistant-model-event-handler* nil)

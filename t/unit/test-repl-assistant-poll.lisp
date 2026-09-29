@@ -1,6 +1,81 @@
 (in-package #:nshell/test)
 
 (describe "repl-assistant-poll-tests"
+  (it "does-not-time-out-while-response-events-continue"
+    (with-repl-test-state
+      (let ((clock 0)
+            (stop-count 0)
+            (poll-count 0)
+            (clocks (list 0 0
+                          (round (* 0.5 internal-time-units-per-second))
+                          (round (* 0.5 internal-time-units-per-second))
+                          internal-time-units-per-second
+                          internal-time-units-per-second
+                          (round (* 1.5 internal-time-units-per-second))
+                          (round (* 1.5 internal-time-units-per-second)))))
+        (setf nshell.presentation::*assistant-turn-generation* 7
+              nshell.presentation::*assistant-turn-started-at* 0
+              nshell.presentation::*assistant-last-event-at* 0
+              nshell.feature.assistant:*assistant-boundaries*
+                (nshell.feature.assistant:make-assistant-boundary-context
+                 (nshell.feature.assistant:make-assistant-model-boundary
+                  :start-fn (lambda () t)
+                  :request-fn (lambda (generation payload)
+                                (declare (ignore generation payload)) t)
+                  :poll-fn (lambda (generation)
+                             (declare (ignore generation))
+                             (incf poll-count)
+                             (values
+                              (nshell.feature.assistant::make-assistant-model-event
+                               7 :assistant nil)
+                              t))
+                  :stop-fn (lambda () (incf stop-count) t)
+                  :status-fn (lambda () '(:state :ready)))))
+        (let ((nshell.feature.assistant:+assistant-sidecar-response-timeout-seconds+ 1))
+          (with-temporary-functions
+              (('nshell.presentation::boundary-monotonic
+                (lambda () (setf clock (pop clocks)))))
+            (dotimes (index 4)
+              (declare (ignore index))
+              (expect (nshell.feature.assistant:assistant-model-event-p
+                       (nshell.presentation::%poll-assistant-model-event))
+                      :to-be-truthy))
+            (expect stop-count :to-be 0)
+            (expect poll-count :to-be 4))))))
+
+  (it "stops-and-delivers-a-terminal-event-after-response-silence"
+    (with-repl-test-state
+      (let ((clock internal-time-units-per-second)
+            (stop-count 0)
+            (poll-count 0))
+        (setf nshell.presentation::*assistant-turn-generation* 7
+              nshell.presentation::*assistant-turn-started-at* 0
+              nshell.presentation::*assistant-last-event-at* 0
+              nshell.feature.assistant:*assistant-boundaries*
+                (nshell.feature.assistant:make-assistant-boundary-context
+                 (nshell.feature.assistant:make-assistant-model-boundary
+                  :start-fn (lambda () t)
+                  :request-fn (lambda (generation payload)
+                                (declare (ignore generation payload)) t)
+                  :poll-fn (lambda (generation)
+                             (declare (ignore generation))
+                             (incf poll-count)
+                             (values nil nil))
+                  :stop-fn (lambda () (incf stop-count) t)
+                  :status-fn (lambda () '(:state :ready)))))
+        (let ((nshell.feature.assistant:+assistant-sidecar-response-timeout-seconds+ 1))
+          (with-temporary-functions
+              (('nshell.presentation::boundary-monotonic (lambda () clock)))
+            (let ((event (nshell.presentation::%poll-assistant-model-event)))
+              (expect poll-count :to-be 0)
+              (expect stop-count :to-be 1)
+              (expect (nshell.feature.assistant:assistant-model-event-kind event)
+                      :to-be :stream-error)
+              (expect (cdr (assoc "message"
+                                  (nshell.feature.assistant:assistant-model-event-payload event)
+                                  :test #'string=))
+                      :to-equal "AI 応答がタイムアウトしました（1 秒）")))))))
+
   (it "delivers-a-current-generation-model-event-through-the-repl-loop"
     (with-repl-test-state
       (let* ((event

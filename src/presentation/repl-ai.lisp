@@ -5,6 +5,7 @@
           (nshell.feature.assistant:next-assistant-turn-generation
            *assistant-turn-generation*)
         *assistant-turn-started-at* nil
+        *assistant-last-event-at* nil
         *last-assistant-model-event* nil
         *assistant-model-event-handler* nil
         *assistant-request-kind* nil

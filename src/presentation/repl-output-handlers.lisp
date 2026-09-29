@@ -224,6 +224,7 @@ wrapped line's other rows on screen as stale duplicates."
   (clear-rendered-transient-panel)
   (setf *assistant-model-event-handler* nil
         *assistant-turn-started-at* nil
+        *assistant-last-event-at* nil
         *assistant-request-kind* nil
         *assistant-explain-candidates* nil
         *assistant-explain-candidate-index* 0
@@ -341,6 +342,7 @@ wrapped line's other rows on screen as stale duplicates."
   (setf *input-state* (make-repl-input-state)
         *assistant-model-event-handler* nil
         *assistant-turn-started-at* nil
+        *assistant-last-event-at* nil
         *assistant-request-kind* nil
         *assistant-explain-candidates* nil
         *assistant-explain-candidate-index* 0
@@ -389,7 +391,8 @@ wrapped line's other rows on screen as stale duplicates."
               (multiple-value-bind (status classification reason)
                   (%assistant-proposal-assessment proposal)
                 (setf *assistant-model-event-handler* nil
-                      *assistant-turn-started-at* nil)
+                      *assistant-turn-started-at* nil
+                      *assistant-last-event-at* nil)
                 (clear-rendered-transient-panel)
                 (if (eq status :parse-error)
                     (progn
@@ -459,7 +462,6 @@ wrapped line's other rows on screen as stale duplicates."
     (setf *assistant-last-cancel-at* nil)
     (setf *assistant-explain-candidates* nil
           *assistant-explain-candidate-index* 0)
-    (setf *assistant-turn-started-at* (boundary-monotonic))
     (unless (%assistant-boundary-ok-p start-result)
       (return-from %process-ask-submit-output-event
         (%return-from-ask-with-message
@@ -480,6 +482,8 @@ wrapped line's other rows on screen as stale duplicates."
            (format nil "AI 要求を送信できません: ~a"
                    (%assistant-boundary-failure-message
                     request-result "assistant model request failed")))))
+      (setf *assistant-turn-started-at* (boundary-monotonic))
+      (setf *assistant-last-event-at* *assistant-turn-started-at*)
       (setf *assistant-model-event-handler* #'%handle-ask-model-event)
       (render-prompt-cont)
       (render-assistant-progress-panel *assistant-turn-started-at*)
@@ -540,6 +544,7 @@ wrapped line's other rows on screen as stale duplicates."
        (setf *input-state* (make-repl-input-state)
              *assistant-model-event-handler* nil
              *assistant-turn-started-at* nil
+             *assistant-last-event-at* nil
              *assistant-request-kind* nil
              *assistant-explain-candidates* nil
              *assistant-explain-candidate-index* 0

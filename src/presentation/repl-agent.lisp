@@ -67,6 +67,7 @@
   (setf *agent-session* nil
         *assistant-model-event-handler* nil
         *assistant-turn-started-at* nil
+        *assistant-last-event-at* nil
         *assistant-request-kind* nil
         *assistant-command-origin* :typed
         *assistant-command-confirmed-p* nil

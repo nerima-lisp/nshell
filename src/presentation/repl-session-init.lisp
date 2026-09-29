@@ -159,6 +159,7 @@ entered during this session."
         *input-state* (make-repl-input-state)
         *assistant-turn-generation* 0
         *assistant-turn-started-at* nil
+        *assistant-last-event-at* nil
         *assistant-last-cancel-at* nil
         *last-assistant-model-event* nil
         *assistant-model-event-handler* nil

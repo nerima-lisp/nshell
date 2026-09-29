@@ -117,9 +117,11 @@ depend on one stable feature package.")
      #:assistant-model-event-generation
      #:assistant-model-event-kind
      #:assistant-model-event-payload
+     #:make-assistant-model-error-event
      #:next-assistant-turn-generation
      #:make-assistant-user-payload
      #:assistant-system-init-safe-p
      #:make-assistant-sidecar-boundary
      #:assistant-sidecar-command-arguments
+     #:+assistant-sidecar-response-timeout-seconds+
      #:make-assistant-fixture-boundary)))

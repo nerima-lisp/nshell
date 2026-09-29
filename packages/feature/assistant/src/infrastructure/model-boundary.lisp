@@ -8,6 +8,12 @@
   kind
   payload)
 
+(defun make-assistant-model-error-event (generation message)
+  (make-assistant-model-event
+   generation
+   :stream-error
+   (list (cons "message" (or message "assistant model stream error")))))
+
 (defstruct (assistant-model-boundary
             (:constructor %make-assistant-model-boundary
                 (start-fn request-fn poll-fn stop-fn status-fn)))

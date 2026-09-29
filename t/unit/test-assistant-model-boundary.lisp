@@ -87,6 +87,21 @@
                (sb-thread:thread-alive-p thread)))
         (sb-thread:list-all-threads)))
 
+(defmacro %assistant-test-with-sidecar-cleanup (&body body)
+  `(unwind-protect
+       (progn ,@body)
+     (ignore-errors
+       (nshell.feature.assistant:assistant-model-stop))
+     (let ((deadline (+ (get-internal-real-time)
+                        (round (* 2 internal-time-units-per-second)))))
+       (dolist (name '("nshell assistant sidecar startup"
+                       "nshell assistant sidecar reader"
+                       "nshell assistant sidecar writer"
+                       "nshell assistant sidecar error reader"))
+         (loop while (and (%assistant-test-live-thread-named-p name)
+                          (< (get-internal-real-time) deadline))
+               do (sleep 0.01))))))
+
 (defun %assistant-test-await-state (state &optional (limit 240))
   (loop repeat limit
         for status = (nshell.feature.assistant:assistant-model-status)
@@ -304,6 +319,7 @@
              (expect nil :to-be
                      (search (string #\Newline) (getf status :reason)))
              (nshell.feature.assistant:assistant-model-stop))
+        (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)
           (delete-file script)))))
 
@@ -369,6 +385,7 @@
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-stop))))
+        (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)
           (delete-file script)))))
 
@@ -398,6 +415,7 @@
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-stop))))
+        (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)
           (delete-file script)))))
 
@@ -471,6 +489,7 @@
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status
                         (nshell.feature.assistant:assistant-model-stop))))
+        (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)
           (delete-file script))))))
 
@@ -518,6 +537,7 @@
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-stop))))
+        (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)
           (delete-file script)))))
 
@@ -557,6 +577,7 @@
                                    (nshell.feature.assistant:assistant-model-event-payload
                                     event)
                                    :test #'string=)))))
+        (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)
           (delete-file script)))))
 
@@ -603,6 +624,7 @@
                          (nshell.feature.assistant:assistant-model-event-kind
                           error-event)))
              (nshell.feature.assistant:assistant-model-stop))
+        (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)
           (delete-file script)))))
 
@@ -650,5 +672,6 @@
              (expect nil :to-be
                      (%assistant-test-live-thread-named-p
                       "nshell assistant sidecar reader")))
+        (%assistant-test-with-sidecar-cleanup)
         (when (probe-file script)
           (delete-file script))))))

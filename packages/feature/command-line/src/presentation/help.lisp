@@ -27,5 +27,6 @@
   "Print nshell's version banner to STREAM."
   (format
    stream
-   "nshell v0.5.0 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
+   "nshell v~a - fish-inspired shell in Common Lisp (SBCL ~a)~%"
+   (asdf:component-version (asdf:find-system "nshell"))
    (lisp-implementation-version)))

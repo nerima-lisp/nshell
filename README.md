@@ -12,7 +12,7 @@ domain-driven core whose line editor is a pure reducer over an immutable input
 state, and a reproducible Nix build that packages a dumped SBCL image with its
 process-launch helper.
 
-> **Status: development preview (0.5.0).** The interactive editor and core
+> **Status: development preview (0.5.x).** The interactive editor and core
 > pipeline execution are solid and heavily tested. The shell *language* is a
 > growing subset of POSIX/fish semantics. nshell is usable as a daily
 > interactive shell for common workflows; it is not a script-compatible
@@ -66,12 +66,12 @@ workflow publishes an `x86_64-linux` tarball only. `aarch64-darwin` remains a
 local development target; other systems are outside the tested support
 boundary.
 
-> **Release artifact warning:** portability of the `v0.5.0` release bundle is
-> not confirmed in this tree. Treat a tarball as non-portable until the Linux
-> release-bundle build and verification gate succeeds and the release notes
-> identify it as portable. Use the pinned Nix commands above in the meantime. See
-> [Getting started](https://nerima-lisp.github.io/nshell/getting-started/)
-> for the bundle verification and installation procedure.
+The `x86_64-linux` release bundle removes Nix store references, carries its
+ELF runtime library closure, and is checked for required files and dependency
+metadata. CI also runs `--help`, `--version`, and an `echo` smoke test on the
+bundle; use the pinned Nix commands above on other platforms. See [Getting
+started](https://nerima-lisp.github.io/nshell/getting-started/) for the bundle
+verification and installation procedure.
 
 ## Documentation
 

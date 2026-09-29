@@ -1,5 +1,8 @@
 (in-package #:nshell/test)
 
+(defun %assistant-mcp-e2e-field (object name)
+  (cdr (assoc name object :test #'string=)))
+
 (defun %assistant-mcp-e2e-json-lines (text)
   (with-input-from-string (stream text)
     (loop for line = (read-line stream nil nil)
@@ -17,6 +20,29 @@
                             :directory root
                             :input input
                             :timeout 120))))
+
+(describe "release-version-contract"
+  (it "keeps-cli-and-mcp-versions-aligned-with-asdf"
+    (let ((expected-version (asdf:component-version (asdf:find-system "nshell"))))
+      (multiple-value-bind (stdout stderr exit-code)
+          (%run-nshell-main '("--version"))
+        (expect 0 :to-equal exit-code)
+        (expect "" :to-equal stderr)
+        (expect (search (format nil "nshell v~a " expected-version) stdout)
+                :to-be-truthy))
+      (host-kit:with-temporary-directory (directory)
+        (let* ((input (format nil "~a~%"
+                              "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}"))
+               (result (%assistant-mcp-e2e-run directory input))
+               (responses (%assistant-mcp-e2e-json-lines
+                           (host-kit:process-result-stdout result)))
+               (server-info
+                 (%assistant-mcp-e2e-field
+                  (%assistant-mcp-e2e-field (first responses) "result")
+                  "serverInfo")))
+          (expect 0 :to-equal (host-kit:process-result-exit-code result))
+          (expect expected-version :to-equal
+                  (%assistant-mcp-e2e-field server-info "version")))))))
 
 (describe "assistant-mcp-stdio-process-contracts"
   (it "serves-state-over-stdio-after-the-mcp-handshake"

@@ -28,11 +28,10 @@ inputs.nshell = {
 ```
 
 The release workflow publishes an `x86_64-linux` tarball and SHA-256 checksum.
-Check the [GitHub releases](https://github.com/nerima-lisp/nshell/releases) page
-before downloading. Portability of the `v0.5.0` bundle is not confirmed until
-the Linux release-bundle build and verification gate succeeds and the release
-notes identify the bundle as portable. For reproducible installation, use the
-pinned Nix commands above.
+The release bundle removes Nix store references, carries its ELF runtime
+library closure, and is checked for required files and dependency metadata. CI
+also runs `--help`, `--version`, and an `echo` smoke test on the bundle. Use the
+pinned Nix commands above on other platforms.
 
 ## First commands
 

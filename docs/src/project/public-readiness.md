@@ -76,9 +76,10 @@ What is actually checkable on a plain `aarch64-darwin` development machine
   development machine.
 - Publish at least one low-friction installation path beyond `nix run`, such as
   nixpkgs, Homebrew, or prebuilt release binaries.
-- Obtain native x86_64-linux CI evidence for the implemented bundle derivation:
-  build it, validate it, and smoke-test it after tar extraction. Until that
-  evidence is recorded, v0.5.0 bundle portability remains unconfirmed.
+- The x86_64-linux release bundle is checked for Nix store references, its ELF
+  runtime closure, required files, dependency metadata, and `--help`,
+  `--version`, and `echo` smoke behavior in CI. Tarball extraction is not a
+  separate CI check.
 - Verify the global all-target publication gate, checksums, and GitHub artifact
   attestations in CI before describing release provenance as operational.
 - Validate the process-isolated benchmark scenarios in CI and collect equivalent

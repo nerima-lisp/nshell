@@ -45,7 +45,7 @@ continuation line. A pure string-to-AST function with no filesystem access.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:tokenize #:shell-assignment-word-p #:parse-command-line
-           #:shell-input-blank-p
+           #:shell-input-blank-p #:parenthesized-substitution-texts
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
            #:+redirect-specs+ #:+redirect-fd-dup-specs+

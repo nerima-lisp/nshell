@@ -132,36 +132,12 @@
 (defun %assistant-unsafe-argument-p (command args)
   (not (null (%assistant-unsafe-argument-reason command args))))
 
-(defun %assistant-parenthesized-substitution-texts (value marker)
-  (let ((results nil)
-        (start 0))
-    (loop
-      (let ((opening (search marker value :start2 start)))
-        (unless opening
-          (return (nreverse results)))
-        (if (and (string= marker "(")
-                 (plusp opening)
-                 (find (char value (1- opening)) "$<>"))
-            (setf start (1+ opening))
-            (let ((depth 1)
-                  (position (+ opening (length marker))))
-              (loop while (and (< position (length value)) (plusp depth))
-                    do (let ((character (char value position)))
-                         (cond
-                           ((char= character (code-char 40)) (incf depth))
-                           ((char= character (code-char 41)) (decf depth)))
-                         (incf position)))
-              (if (zerop depth)
-                  (progn
-                    (push (subseq value (+ opening (length marker)) (1- position)) results)
-                    (setf start position))
-                  (return (nreverse (cons :incomplete results))))))))))
-
 (defun %assistant-command-substitution-result (command args)
   (let ((results nil))
     (dolist (arg (cons command args))
       (dolist (marker '("$(" "<(" ">(" "("))
-        (dolist (text (%assistant-parenthesized-substitution-texts arg marker))
+        (dolist (text (nshell.domain.parsing:parenthesized-substitution-texts
+                       arg marker))
           (push (if (eq text :incomplete)
                     (make-assistant-safety-result
                      :classification :block

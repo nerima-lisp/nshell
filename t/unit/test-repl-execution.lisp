@@ -66,13 +66,50 @@
                     ("sudo vim x" . t)
                     ("env TERM=xterm less x" . t)
                     ("true && vim x" . t)
+                    ("echo $(fzf)" . t)
+                    ("echo $(echo $(fzf))" . t)
+                    ("echo $(date)" . nil)
                     ("python" . t)
                     ("python script.py" . nil)
+                    ("python3 script.py" . nil)
                     ("ls" . nil)))
       (let ((assessment
               (nshell.presentation::%rerun-command-assessment (car case))))
         (expect (cdr case) :to-equal
                 (not (null (getf assessment :interactive-command)))))))
+
+  (it "rerun-last-command-rejects-dynamic-commands"
+    (dolist (command '("eval \"$cmd\"" "$EDITOR file"))
+      (let ((assessment
+              (nshell.presentation::%rerun-command-assessment command)))
+        (expect :block :to-equal (getf assessment :classification))
+        (expect (search "実行時まで内容が決まらない"
+                        (getf assessment :reason))
+                :to-be-truthy))))
+
+  (it "rerun-last-command-detects-interactive-commands-through-definitions"
+    (with-repl-test-state
+      (repl-test-define-function "edit" '("vim $argv"))
+      (repl-test-define-function "conditional-edit"
+                                 '("if true" "  vim file" "end"))
+      (repl-test-define-alias "view" "less")
+      (repl-test-define-alias "broken" "if true")
+      (setf (gethash "browse" nshell.presentation::*abbreviations*) "fzf")
+      (dolist (case '("edit file" "conditional-edit" "view file" "browse"))
+        (let ((assessment
+                (nshell.presentation::%rerun-command-assessment case)))
+          (expect t :to-equal
+                  (not (null (getf assessment :interactive-command))))))))
+
+  (it "rerun-last-command-rejects-unparseable-definitions"
+    (with-repl-test-state
+      (repl-test-define-alias "broken" "if true")
+      (let ((assessment
+              (nshell.presentation::%rerun-command-assessment "broken")))
+        (expect :block :to-equal (getf assessment :classification))
+        (expect (search "解析できない"
+                        (getf assessment :reason))
+                :to-be-truthy))))
 
   (it "rerun-last-command-cancel-clears-confirmation-on-other-input"
     (with-repl-test-state

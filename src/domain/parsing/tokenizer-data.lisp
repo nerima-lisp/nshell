@@ -204,5 +204,35 @@
                 (when (zerop depth)
                   (return index)))))))
 
+(defun parenthesized-substitution-texts (value marker)
+  "Return the balanced command-substitution bodies in VALUE for MARKER.
+MARKER may be `$(', `<(', `>(`, or `('.  An incomplete substitution is
+represented by :INCOMPLETE as the final item."
+  (let ((results nil)
+        (start 0))
+    (loop
+      (let ((opening (search marker value :start2 start)))
+        (unless opening
+          (return (nreverse results)))
+        (if (and (string= marker "(")
+                 (plusp opening)
+                 (find (char value (1- opening)) "$<>"))
+            (setf start (1+ opening))
+            (let ((depth 1)
+                  (position (+ opening (length marker))))
+              (loop while (and (< position (length value)) (plusp depth))
+                    do (let ((character (char value position)))
+                         (cond
+                           ((char= character #\() (incf depth))
+                           ((char= character #\)) (decf depth)))
+                         (incf position)))
+              (if (zerop depth)
+                  (progn
+                    (push (subseq value (+ opening (length marker))
+                                  (1- position))
+                          results)
+                    (setf start position))
+                  (return (nreverse (cons :incomplete results))))))))))
+
 (defun %tokenizer-balanced-substitution-end (state start)
   (%balanced-substitution-end (tokenizer-state-input state) start))

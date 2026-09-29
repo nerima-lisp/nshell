@@ -1,14 +1,5 @@
 (in-package #:nshell/test)
 
-;; PR #14 follows the public status API introduced by PR #13. Keep this
-;; compatibility shim local to the pre-merge test tree so the branch can run
-;; its checks before PR #13 is merged.
-(unless (fboundp 'nshell.feature.assistant::assistant-model-status)
-  (setf (symbol-function 'nshell.feature.assistant::assistant-model-status)
-        (lambda ()
-          (nshell.feature.assistant:assistant-boundary-status-snapshot
-           (nshell.feature.assistant:assistant-model-boundary)))))
-
 (describe "prompt-rendering-tests"
   (it "render-prompt-truncates-right-prompt-to-current-terminal-width"
     "The presentation prompt uses the supplied terminal width for right prompt alignment."
@@ -71,7 +62,7 @@
     "The AI segment is absent until the assistant has recorded a turn."
     (nshell.feature.assistant:reset-assistant-usage)
     (let ((output (capture-render-prompt :terminal-width 80)))
-      (expect (search "AI " output) :to-be-falsy)))
+      (expect (search "0t" output) :to-be-falsy)))
 
   (it "render-prompt-shows-the-current-ai-sidecar-status"
     (let ((nshell.feature.assistant:*assistant-boundaries*
@@ -79,14 +70,14 @@
              (nshell.feature.assistant:make-assistant-model-boundary
               :status-fn (lambda () (list :state :ready :version "1.0"))))))
       (let ((output (capture-render-prompt :terminal-width 200)))
-        (expect (search "AI ready" output) :to-be-truthy))))
+        (expect (search "AI 準備完了" output) :to-be-truthy))))
 
   (it "prompt-ai-status-renders-every-model-lifecycle-state-with-its-theme-role"
-    (dolist (case '((:not-started "AI not started" :assistant-not-started :prompt-time)
-                    (:starting "AI starting" :assistant-starting :prompt-duration)
-                    (:ready "AI ready" :assistant-ready :prompt-ok)
-                    (:unavailable "AI unavailable" :assistant-unavailable :prompt-error)
-                    (:dead "AI dead" :assistant-dead :prompt-error)))
+    (dolist (case '((:not-started "AI 未起動" :assistant-not-started :prompt-time)
+                    (:starting "AI 起動中" :assistant-starting :prompt-duration)
+                    (:ready "AI 準備完了" :assistant-ready :prompt-ok)
+                    (:unavailable "AI 利用不可" :assistant-unavailable :prompt-error)
+                    (:dead "AI 停止" :assistant-dead :prompt-error)))
       (destructuring-bind (state expected-text expected-kind expected-role) case
         (let ((nshell.feature.assistant:*assistant-boundaries*
                 (nshell.feature.assistant:make-assistant-boundary-context

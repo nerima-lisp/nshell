@@ -39,18 +39,18 @@ when QUERY does not occur in TEXT."
   (let ((metadata (%search-result-metadata match))
         (badges nil))
     (case (getf metadata :origin)
-      (:proposal (push (list " [proposal]" :prompt-assistant) badges))
-      (:agent (push (list " [agent]" :prompt-assistant) badges)))
+      (:proposal (push (list " [提案]" :prompt-assistant) badges))
+      (:agent (push (list " [エージェント]" :prompt-assistant) badges)))
     (let ((exit-code (getf metadata :exit-code)))
       (when (and (integerp exit-code) (not (zerop exit-code)))
-        (push (list (format nil " [exit ~d]" exit-code) :prompt-error) badges)))
+        (push (list (format nil " [終了 ~d]" exit-code) :prompt-error) badges)))
     (nreverse badges)))
 
 (defun %search-header-text (query count)
-  (format nil "~a | filters: status:failed status:success exit:N cwd:PATH origin:typed|proposal|agent"
+  (format nil "~a | 絞り込み: status:failed status:success exit:N cwd:PATH origin:typed|proposal|agent"
           (if (zerop count)
-              (format nil "history: ~a  (no matches)" query)
-              (format nil "history: ~a  (~d matches)" query count))))
+              (format nil "履歴: ~a  (該当なし)" query)
+              (format nil "履歴: ~a  (~d 件)" query count))))
 
 (defun %search-result-row (match query selected-p width theme)
   (let* ((metadata (%search-result-metadata match))

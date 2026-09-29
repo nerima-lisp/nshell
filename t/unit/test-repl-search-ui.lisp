@@ -7,7 +7,7 @@
                      (nshell.presentation::render-search-results
                       "git" '("git status" "git log") 0
                       :terminal-width 80 :theme theme))))
-      (expect (search "history: git  (2 matches)" output) :to-be-truthy)))
+      (expect (search "履歴: git  (2 件)" output) :to-be-truthy)))
 
   (it "render-search-results-prints-header-for-no-matches"
     (let* ((theme (nshell.domain.configuration:default-theme))
@@ -15,7 +15,7 @@
                      (nshell.presentation::render-search-results
                       "zzz" nil 0
                       :terminal-width 80 :theme theme))))
-      (expect (search "history: zzz  (no matches)" output) :to-be-truthy)))
+      (expect (search "履歴: zzz  (該当なし)" output) :to-be-truthy)))
 
   (it "render-search-results-header-uses-comment-role"
     (let ((nshell.infrastructure.terminal:*terminal-color-depth* :truecolor))
@@ -103,8 +103,8 @@
                         "deploy"
                         '((:text "deploy production" :origin :proposal :exit-code 7))
                         0 :terminal-width 80 :theme theme))))
-        (expect (search "[proposal]" output) :to-be-truthy)
-        (expect (search "[exit 7]" output) :to-be-truthy)
+        (expect (search "[提案]" output) :to-be-truthy)
+        (expect (search "[終了 7]" output) :to-be-truthy)
         (expect (search assistant-prefix output) :to-be-truthy)
         (expect (search error-prefix output) :to-be-truthy))))
 

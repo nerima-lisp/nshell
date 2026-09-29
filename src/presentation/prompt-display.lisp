@@ -244,30 +244,23 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
 
 (defun %assistant-status-display (status)
   (case (getf status :state)
-    (:not-started (values "AI not started" :assistant-not-started))
-    (:starting (values "AI starting" :assistant-starting))
-    (:ready (values "AI ready" :assistant-ready))
-    (:unavailable (values "AI unavailable" :assistant-unavailable))
-    (:dead (values "AI dead" :assistant-dead))
+    (:not-started (values "AI 未起動" :assistant-not-started))
+    (:starting (values "AI 起動中" :assistant-starting))
+    (:ready (values "AI 準備完了" :assistant-ready))
+    (:unavailable (values "AI 利用不可" :assistant-unavailable))
+    (:dead (values "AI 停止" :assistant-dead))
     (otherwise (values nil nil))))
-
-(defun %assistant-model-status ()
-  "Read the PR #13 status API, tolerating its pre-merge absence locally."
-  (handler-case
-      (nshell.feature.assistant::assistant-model-status)
-    (undefined-function ()
-      (list :state :not-started))))
 
 (defun %assistant-status-text ()
   "Return the display label for the assistant model lifecycle state."
   (nth-value 0
              (%assistant-status-display
-              (%assistant-model-status))))
+              (nshell.feature.assistant:assistant-model-status))))
 
 (defun %assistant-status-segment ()
   (multiple-value-bind (text kind)
       (%assistant-status-display
-       (%assistant-model-status))
+       (nshell.feature.assistant:assistant-model-status))
     (when (and text kind)
       (nshell.domain.prompting:make-prompt-segment text kind))))
 

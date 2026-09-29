@@ -128,6 +128,7 @@
                pending-generation
                "assistant sidecar process exited before the pending request completed"))
              (%assistant-sidecar-complete pending))
+           (%assistant-sidecar-stop-state state :preserve-pending-p t)
            (return))
           (otherwise
            (when (and (eq status :error)
@@ -186,7 +187,8 @@
       (error () nil))))
 
 (defun %assistant-sidecar-join-thread (thread)
-  (when thread
+  (when (and thread
+             (not (eq thread sb-thread:*current-thread*)))
     (ignore-errors
      (sb-thread:join-thread thread :default nil :timeout 0.1))
     (when (sb-thread:thread-alive-p thread)

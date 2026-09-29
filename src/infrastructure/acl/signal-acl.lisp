@@ -115,9 +115,14 @@
     (sb-sys:enable-interrupt sb-unix:sigtstp :default)
     (kill-process (current-process-id) sb-unix:sigtstp)))
 
+(defun %refresh-sbcl-process-statuses ()
+  "Let SBCL update process objects before notifying the shell job monitor."
+  (sb-impl::get-processes-status-changes))
+
 (defun shell-sigchld-handler (signal info context)
-  "Record that child process state changed; reaping is done outside the handler."
+  "Refresh SBCL process objects and record that child state changed."
   (declare (ignore signal info context))
+  (%refresh-sbcl-process-statuses)
   (setf *children-changed* t))
 
 (defun shell-sigwinch-handler (signal info context)

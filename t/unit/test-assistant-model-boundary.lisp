@@ -323,6 +323,32 @@
         (expect t :to-be (eq pending actual))
         (expect 17 :to-be actual-generation))))
 
+  (it "clears-starting-state-when-startup-handoff-fails"
+    (let ((state (nshell.feature.assistant::%make-assistant-sidecar-state
+                  "/bin/false" nil))
+          (stop-calls 0))
+      (unwind-protect
+           (with-temporary-function
+               ('nshell.feature.assistant::%assistant-sidecar-stop-state
+                (lambda (state &key preserve-pending-p preserve-starting-p)
+                  (declare (ignore state preserve-pending-p preserve-starting-p))
+                  (incf stop-calls)
+                  (when (= stop-calls 1)
+                    (error "injected startup handoff failure"))))
+             (expect t :to-be
+                     (handler-case
+                         (progn
+                           (nshell.feature.assistant::%assistant-sidecar-start state)
+                           nil)
+                       (error () t)))
+             (expect nil :to-be
+                     (nshell.feature.assistant::%assistant-sidecar-starting-p state))
+             (expect t :to-be
+                     (nshell.feature.assistant::%assistant-sidecar-start state))
+             (expect 2 :to-be stop-calls))
+        (ignore-errors
+          (nshell.feature.assistant::%assistant-sidecar-stop-state state)))))
+
   (it "disables-sidecar-when-requested-by-environment"
     (let ((old-value (host-kit:getenv "NSHELL_AI_DISABLE")))
       (unwind-protect

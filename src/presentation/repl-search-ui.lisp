@@ -47,19 +47,21 @@ when QUERY does not occur in TEXT."
     (nreverse badges)))
 
 (defun %search-result-badges-within-width (badges width)
-  (loop with remaining = (max 0 width)
-        for badge in badges
-        while (plusp remaining)
-        for text = (first badge)
-        for visible-width = (%string-visible-width text)
-        if (<= visible-width remaining)
-          collect (progn
-                    (decf remaining visible-width)
-                    badge)
-        else
-          collect (list (%truncate-string-to-width text remaining)
-                        (second badge))
-          and do (setf remaining 0)))
+  (when (plusp width)
+    (let ((fitted (copy-list badges)))
+      (loop while (and fitted
+                       (> (reduce #'+ fitted
+                                  :key (lambda (badge)
+                                         (%string-visible-width (first badge))))
+                          width))
+            do (if (cdr fitted)
+                   (setf fitted (butlast fitted))
+                   (let ((badge (first fitted)))
+                     (setf (first fitted)
+                           (list (%truncate-string-to-width
+                                  (first badge) width)
+                                 (second badge)))))
+      fitted)))
 
 (defun %search-header-text (query count)
   (format nil "~a | 絞り込み: status:failed status:success exit:N cwd:PATH origin:typed|proposal|agent"

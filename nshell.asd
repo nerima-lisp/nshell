@@ -65,6 +65,7 @@
     :pathname "."
     :serial t
     :components ((:file "package-presentation")))
+   (:file "infrastructure/acl/timeout")
    (:module "feature-command-line"
     :pathname "../packages/feature/command-line/src"
     :serial t
@@ -249,7 +250,6 @@
    (:file "application/search-history")
    (:file "infrastructure/acl/syscall")
    (:file "infrastructure/acl/syscall-constants")
-   (:file "infrastructure/acl/timeout")
    (:file "infrastructure/acl/syscall-foreign")
    (:file "infrastructure/acl/syscall-environment")
    (:file "infrastructure/acl/syscall-redirection")

@@ -85,6 +85,18 @@
       url = "github:nerima-lisp/cl-process-kit/v3.2.0";
       flake = false;
     };
+    cl-regex-kit = {
+      url = "github:nerima-lisp/cl-regex-kit/v2.2.0";
+      flake = false;
+    };
+    cl-vcs-kit = {
+      url = "github:nerima-lisp/cl-vcs-kit/v0.2.0";
+      flake = false;
+    };
+    cl-tui-kit = {
+      url = "github:nerima-lisp/cl-tui-kit/v1.0.0";
+      flake = false;
+    };
     # cl-history-kit backs the command-history store, search, and recall
     # navigation cursor; nshell itself keeps only the tokenizer-coupled
     # `!$`/Alt-. last-argument extraction on top of it.
@@ -140,6 +152,9 @@
       cl-tty-kit,
       cl-log-kit,
       cl-process-kit,
+      cl-regex-kit,
+      cl-vcs-kit,
+      cl-tui-kit,
       cl-history-kit,
       cl-codec-kit,
       cl-concurrent-kit,
@@ -304,6 +319,27 @@
             # fd-readiness.lisp. Upstream main is still identical; remove this
             # patch when a release containing the upstream fix is available.
             patches = [ ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch ];
+          };
+          clRegexKit = sibling {
+            name = "cl-regex-kit";
+            source = cl-regex-kit;
+            dependencies = [
+              clConcurrentKit
+              clParserKit
+            ];
+          };
+          clVcsKit = sibling {
+            name = "cl-vcs-kit";
+            source = cl-vcs-kit;
+            dependencies = [
+              clProcessKit
+              clHostKit
+              clLogKit
+            ];
+          };
+          clTuiKit = sibling {
+            name = "cl-tui-kit";
+            source = cl-tui-kit;
           };
           clHistoryKit = sibling {
             name = "cl-history-kit";
@@ -566,6 +602,9 @@
           clCli
           clTtyKit
           clProcessKit
+          clRegexKit
+          clVcsKit
+          clTuiKit
           clHistoryKit
           clHostKit
           clCodecKit

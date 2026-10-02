@@ -31,6 +31,9 @@
                "cl-cli"
                "cl-tty-kit"
                "cl-process-kit"
+               "cl-regex-kit"
+               "cl-vcs-kit"
+               "cl-tui-kit"
                "cl-history-kit"
                "cl-concurrent-kit"
                "cl-json-kit")
@@ -43,13 +46,25 @@
     :serial t
     :components ((:file "package")
                  (:file "domain/feature-registry")))
-   (:file "package-domain-signals-input-abbreviation")
-   (:file "package-domain")
-   (:file "package-domain-completion")
-   (:file "package-domain-configuration-prompting")
-   (:file "package-application")
-   (:file "package-infrastructure")
-   (:file "package-presentation")
+   (:module "package-domain"
+    :pathname "."
+    :serial t
+    :components ((:file "package-domain-signals-input-abbreviation")
+                 (:file "package-domain")
+                 (:file "package-domain-completion")
+                 (:file "package-domain-configuration-prompting")))
+   (:module "package-application"
+    :pathname "."
+    :serial t
+    :components ((:file "package-application")))
+   (:module "package-infrastructure"
+    :pathname "."
+    :serial t
+    :components ((:file "package-infrastructure")))
+   (:module "package-presentation"
+    :pathname "."
+    :serial t
+    :components ((:file "package-presentation")))
    (:module "feature-command-line"
     :pathname "../packages/feature/command-line/src"
     :serial t

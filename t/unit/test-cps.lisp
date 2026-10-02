@@ -16,6 +16,14 @@
   `(expect ,expected :to-equal (%trampoline-result-sequence ,values)))
 
 (describe "cps-tests"
+  (it "with-cps-trampoline-expands-to-trampoline"
+    (multiple-value-bind (expansion expanded-p)
+        (macroexpand-1
+         '(nshell.presentation:with-cps-trampoline
+            (lambda () nil)))
+      (expect t :to-be-truthy expanded-p)
+      (expect 'nshell.presentation:trampoline :to-be (first expansion))))
+
   (it "trampoline-sequential"
     (assert-trampoline-sequence '(3 2 1) '(1 2 3)))
 

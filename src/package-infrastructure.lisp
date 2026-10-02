@@ -12,6 +12,9 @@ tests rebind these boundary functions when they need deterministic behavior.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
+           #:+default-external-command-timeout+
+           #:+default-command-substitution-timeout+
+           #:timeout-seconds-p
            #:external-command-environment
            #:current-environment-entries #:current-environment-value
            #:current-working-directory

@@ -419,7 +419,7 @@
                (- (nshell.infrastructure.acl:pty-process-pgid process))
                :sigterm)))
           (ignore-errors
-            (nshell.infrastructure.acl:pty-process-wait process))))))
+            (nshell.infrastructure.acl:pty-process-wait process)))))))
 
   (it "pty-close-is-idempotent-for-shared-descriptor"
     "PTY cleanup does not close a descriptor twice when both slots share it."

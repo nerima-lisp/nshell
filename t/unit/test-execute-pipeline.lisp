@@ -453,8 +453,14 @@
     (expect t :to-equal
             (nshell.infrastructure.acl:timeout-seconds-p
              most-positive-double-float))
+    (expect t :to-equal
+            (nshell.infrastructure.acl:timeout-seconds-p
+             least-positive-double-float))
     (expect nil :to-equal
             (nshell.infrastructure.acl:timeout-seconds-p -1))
+    (expect nil :to-equal
+            (nshell.infrastructure.acl:timeout-seconds-p
+             sb-ext:double-float-negative-infinity))
     (expect nil :to-equal
             (nshell.infrastructure.acl:timeout-seconds-p "3600"))
     (expect nil :to-equal

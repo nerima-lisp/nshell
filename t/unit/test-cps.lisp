@@ -21,7 +21,7 @@
         (macroexpand-1
          '(nshell.presentation:with-cps-trampoline
             (lambda () nil)))
-      (expect t :to-be-truthy expanded-p)
+      (expect expanded-p :to-be-truthy)
       (expect 'nshell.presentation:trampoline :to-be (first expansion))))
 
   (it "trampoline-sequential"

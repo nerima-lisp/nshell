@@ -442,9 +442,9 @@
 
   (it "external-command-timeout-defaults-to-one-hour"
     (expect 3600 :to-equal nshell.infrastructure.acl:*external-command-timeout*)
-    (expect t :to-be-truthy
-            (nshell.infrastructure.acl:timeout-seconds-p
-             nshell.infrastructure.acl:*external-command-timeout*)))
+    (expect (nshell.infrastructure.acl:timeout-seconds-p
+             nshell.infrastructure.acl:*external-command-timeout*)
+            :to-be-truthy))
 
   (it "external-redirect-plan-preserves-routing-data"
     "External process routing is an immutable data boundary with no copier."
@@ -605,9 +605,9 @@
 
   (it "command-substitution-timeout-defaults-to-five-minutes"
     (expect 300 :to-equal nshell.application::*command-substitution-timeout*)
-    (expect t :to-be-truthy
-            (nshell.infrastructure.acl:timeout-seconds-p
-             nshell.application::*command-substitution-timeout*)))
+    (expect (nshell.infrastructure.acl:timeout-seconds-p
+             nshell.application::*command-substitution-timeout*)
+            :to-be-truthy))
 
   (it "execute-pipeline-node-in-context-times-out-external-stages-in-cps-mode"
     "The CPS execution path drains external output and times out long-running stages."

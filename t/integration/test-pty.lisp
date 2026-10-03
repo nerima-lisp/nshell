@@ -390,9 +390,9 @@
     #+(or darwin linux)
     (skip-when-pty-round-trip-unreliable "PTY master/slave round-trip I/O is unreliable"
       (let ((process
-              (nshell.infrastructure.acl:pty-spawn
-               "/bin/sh"
-               '("-c" "IFS= read -r line; printf '%s\\n' \"$line\""))))
+            (nshell.infrastructure.acl:pty-spawn
+               "/bin/cat"
+               '())))
         (unwind-protect
              (let ((master (nshell.infrastructure.acl:pty-process-master-fd process))
                    (buffer (make-array 128 :element-type '(unsigned-byte 8)))

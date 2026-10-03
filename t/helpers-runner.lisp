@@ -61,13 +61,17 @@ environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
   "Run BODY only where raw PTY master/slave round-trip I/O is reliable.
 
 Reading bytes straight back through a PTY depends on the terminal line
-discipline, which differs across platforms and is not honored by hosted CI
-runners, so skip the hermetic sandbox, CI, and unavailable PTYs."
-  `(if (or (in-hermetic-sandbox-p)
-           (host-kit:getenv "CI")
-           (not (pty-available-p)))
-       (skip (format nil "~a (skipped in sandbox/CI/unavailable PTY)" ,reason))
-       (progn ,@body)))
+discipline. The hermetic Nix sandbox cannot provide this integration
+facility, but the non-sandboxed CI job is required to exercise it."
+  `(cond
+     ((in-hermetic-sandbox-p)
+      (skip (format nil "~a (skipped in hermetic sandbox)" ,reason)))
+     ((not (pty-available-p))
+      (if (host-kit:getenv "CI")
+          (error "~a (PTY unavailable in CI)" ,reason)
+          (skip (format nil "~a (unavailable PTY)" ,reason))))
+     (t
+      (progn ,@body))))
 
 (defun run-tests ()
   "Run all nshell tests through cl-weave.

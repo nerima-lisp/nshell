@@ -446,6 +446,23 @@
              nshell.infrastructure.acl:*external-command-timeout*)
             :to-be-truthy))
 
+  (it "timeout-seconds-p-rejects-invalid-boundaries"
+    "Timeout validation accepts finite non-negative values only."
+    (expect t :to-equal
+            (nshell.infrastructure.acl:timeout-seconds-p 0))
+    (expect t :to-equal
+            (nshell.infrastructure.acl:timeout-seconds-p
+             most-positive-double-float))
+    (expect nil :to-equal
+            (nshell.infrastructure.acl:timeout-seconds-p -1))
+    (expect nil :to-equal
+            (nshell.infrastructure.acl:timeout-seconds-p "3600"))
+    (expect nil :to-equal
+            (nshell.infrastructure.acl:timeout-seconds-p nil))
+    (expect nil :to-equal
+            (nshell.infrastructure.acl:timeout-seconds-p
+             sb-ext:double-float-positive-infinity)))
+
   (it "external-redirect-plan-preserves-routing-data"
     "External process routing is an immutable data boundary with no copier."
     (let ((plan (nshell.application::%make-external-process-redirect-plan

@@ -9,4 +9,7 @@
 (defun timeout-seconds-p (value)
   "Return true when VALUE is a finite, non-negative timeout in seconds."
   (and (realp value)
-       (not (minusp value))))
+       (not (minusp value))
+       (or (not (floatp value))
+           (and (not (sb-ext:float-infinity-p value))
+                (not (sb-ext:float-nan-p value))))))

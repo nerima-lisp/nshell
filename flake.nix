@@ -166,7 +166,9 @@
       lib = nixpkgs.lib;
 
       # CI and release checks target Ubuntu x86_64 only.
-      systems = [ "x86_64-linux" ];
+      systems = [
+        "x86_64-linux"
+      ];
 
       meta = {
         description = "Modern, fish-inspired interactive shell written in Common Lisp";

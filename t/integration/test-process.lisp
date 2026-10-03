@@ -297,7 +297,7 @@
 when *STANDARD-OUTPUT* is not an interactive terminal."
     (let ((*standard-output* (make-string-output-stream)))
       (expect (nshell.infrastructure.acl::%foreground-external-command-timeout)
-              :to-be nshell.infrastructure.acl:+default-external-command-timeout*)))
+              :to-be nshell.infrastructure.acl:*external-command-timeout*)))
 
   (it "foreground-process-group-macro-runs-body-without-a-pgid"
     "The foreground-group wrapper preserves execution when no group is available."

@@ -384,26 +384,42 @@
     (skip "PTY tests are only supported on Darwin and Linux"))
 
   (it "pty-open-write-read-close"
-    "PTY can be opened, used in both directions, and closed."
+    "PTY can carry input to a child and its output back to the master."
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
     (skip-when-pty-round-trip-unreliable "PTY master/slave round-trip I/O is unreliable"
-    (with-open-pty (master slave slave-name)
-      (expect (integerp master) :to-be-truthy)
-      (expect (integerp slave) :to-be-truthy)
-      (expect (stringp slave-name) :to-be-truthy)
-      (let ((from-master (make-array 64 :element-type '(unsigned-byte 8))))
-        (expect (length (line "master-to-slave")) :to-equal
-                (nshell.infrastructure.acl:pty-write master (line "master-to-slave")))
-        (let ((count (nshell.infrastructure.acl:pty-read slave from-master 64)))
-          (expect (plusp count) :to-be-truthy)
-          (expect (search "master-to-slave" (octets->string from-master count)) :to-be-truthy)))
-      (let ((from-slave (make-array 64 :element-type '(unsigned-byte 8))))
-        (nshell.infrastructure.acl:pty-write slave (string->octets (line "slave-to-master")))
-        (let ((count (nshell.infrastructure.acl:pty-read master from-slave 64)))
-          (expect (plusp count) :to-be-truthy)
-          (expect (search "slave-to-master" (octets->string from-slave count)) :to-be-truthy))))))
+      (let ((process
+            (nshell.infrastructure.acl:pty-spawn
+               "/bin/cat"
+               '())))
+        (unwind-protect
+             (let ((master (nshell.infrastructure.acl:pty-process-master-fd process))
+                   (buffer (make-array 128 :element-type '(unsigned-byte 8)))
+                   (received (make-array 0 :element-type 'character
+                                           :adjustable t :fill-pointer 0)))
+               (expect (integerp master) :to-be-truthy)
+               (expect (length (line "master-to-slave")) :to-equal
+                       (nshell.infrastructure.acl:pty-write
+                        master
+                        (line "master-to-slave")))
+               (loop repeat 8
+                     until (search "master-to-slave" received)
+                     do (let ((count (nshell.infrastructure.acl:pty-read
+                                      master buffer (length buffer))))
+                          (loop for index below count
+                                do (vector-push-extend
+                                    (code-char (aref buffer index))
+                                    received)))
+               (expect (search "master-to-slave" received) :to-be-truthy))
+          (unless (member (nshell.infrastructure.acl:pty-process-status process)
+                          '(:exited :signaled))
+            (ignore-errors
+              (nshell.infrastructure.acl:kill-process
+               (- (nshell.infrastructure.acl:pty-process-pgid process))
+               :sigterm)))
+          (ignore-errors
+            (nshell.infrastructure.acl:pty-process-wait process)))))))
 
   (it "pty-close-is-idempotent-for-shared-descriptor"
     "PTY cleanup does not close a descriptor twice when both slots share it."

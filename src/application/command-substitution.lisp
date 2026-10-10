@@ -24,7 +24,7 @@
 
 (defun %command-sub-fields-at (context value open-paren &optional preserve-newlines-p)
   "Run the command substitution at OPEN-PAREN, if balanced and non-empty."
-  (let ((end (nshell.domain.parsing::%balanced-substitution-end value open-paren)))
+  (let ((end (nshell.domain.parsing:%balanced-substitution-end value open-paren)))
     (when (and end (> end (1+ open-paren)))
       (values (if preserve-newlines-p
                   (%execute-command-substitution-output

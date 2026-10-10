@@ -734,10 +734,10 @@ path must be converted from a pathname before being appended."
                              (history-kit:history-entries
                               nshell.presentation::*history*)))
                      (record
-                       (nshell.infrastructure.persistence::history-record-for-entry
+                       (nshell.infrastructure.persistence:history-record-for-entry
                         nshell.presentation::*history* entry)))
                 (expect :proposal :to-be
-                        (nshell.infrastructure.persistence::history-record-origin
+                        (nshell.infrastructure.persistence:history-record-origin
                          record))))))))))
 
 (describe "command-resolution-fallback-tests"

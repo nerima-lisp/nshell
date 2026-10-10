@@ -85,6 +85,18 @@
       url = "github:nerima-lisp/cl-process-kit/v3.2.0";
       flake = false;
     };
+    cl-regex-kit = {
+      url = "github:nerima-lisp/cl-regex-kit/v2.2.0";
+      flake = false;
+    };
+    cl-vcs-kit = {
+      url = "github:nerima-lisp/cl-vcs-kit/v0.2.0";
+      flake = false;
+    };
+    cl-tui-kit = {
+      url = "github:nerima-lisp/cl-tui-kit/v1.0.0";
+      flake = false;
+    };
     # cl-history-kit backs the command-history store, search, and recall
     # navigation cursor; nshell itself keeps only the tokenizer-coupled
     # `!$`/Alt-. last-argument extraction on top of it.
@@ -140,6 +152,9 @@
       cl-tty-kit,
       cl-log-kit,
       cl-process-kit,
+      cl-regex-kit,
+      cl-vcs-kit,
+      cl-tui-kit,
       cl-history-kit,
       cl-codec-kit,
       cl-concurrent-kit,
@@ -150,17 +165,9 @@
     let
       lib = nixpkgs.lib;
 
-      # x86_64-linux is what CI gates; aarch64-darwin is the development
-      # machine. Every per-system output -- packages, checks, apps AND devShells
-      # -- comes from this one list, so leaving aarch64-darwin out takes `nix
-      # build` and `nix develop` off the development machine as well. That trade
-      # was made on 2026-08-01 and reverted on 2026-08-02; aarch64-darwin carries
-      # no CI gate, which PACKAGE_STANDARD.md's "systems" section accepts
-      # explicitly. aarch64-linux and x86_64-darwin are nobody's verification and
-      # are not declared.
+      # CI and release checks target Ubuntu x86_64 only.
       systems = [
         "x86_64-linux"
-        "aarch64-darwin"
       ];
 
       meta = {
@@ -305,6 +312,27 @@
             # patch when a release containing the upstream fix is available.
             patches = [ ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch ];
           };
+          clRegexKit = sibling {
+            name = "cl-regex-kit";
+            source = cl-regex-kit;
+            dependencies = [
+              clConcurrentKit
+              clParserKit
+            ];
+          };
+          clVcsKit = sibling {
+            name = "cl-vcs-kit";
+            source = cl-vcs-kit;
+            dependencies = [
+              clProcessKit
+              clHostKit
+              clLogKit
+            ];
+          };
+          clTuiKit = sibling {
+            name = "cl-tui-kit";
+            source = cl-tui-kit;
+          };
           clHistoryKit = sibling {
             name = "cl-history-kit";
             source = cl-history-kit;
@@ -367,6 +395,9 @@
             cp ${cl-date-kit}/LICENSE "$out/LICENSES/CL-DATE-KIT-LICENSE"
             cp ${cl-concurrent-kit}/LICENSE "$out/LICENSES/CL-CONCURRENT-KIT-LICENSE"
             cp ${cl-json-kit}/LICENSE "$out/LICENSES/CL-JSON-KIT-LICENSE"
+            cp ${cl-regex-kit}/LICENSE "$out/LICENSES/CL-REGEX-KIT-LICENSE"
+            cp ${cl-vcs-kit}/LICENSE "$out/LICENSES/CL-VCS-KIT-LICENSE"
+            cp ${cl-tui-kit}/LICENSE "$out/LICENSES/CL-TUI-KIT-LICENSE"
             cp ${./man/nshell.1} "$out/share/man/man1/nshell.1"
           '';
         });
@@ -566,6 +597,9 @@
           clCli
           clTtyKit
           clProcessKit
+          clRegexKit
+          clVcsKit
+          clTuiKit
           clHistoryKit
           clHostKit
           clCodecKit

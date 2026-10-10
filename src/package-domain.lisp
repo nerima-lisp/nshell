@@ -87,6 +87,9 @@ continuation line. A pure string-to-AST function with no filesystem access.")
                 #:command-list-redirect-split-result-clean-commands
                 #:command-list-redirect-split-result-redirects
                 #:ast-node->command-line
+           #:ast-node-span
+           #:%balanced-substitution-end
+           #:+control-flow-keywords+
                 #:command-arg #:command-arg-p #:make-command-arg
                 #:command-arg-value #:command-arg-quote-style #:command-arg-fragments
                 #:command-fragment #:command-fragment-p #:make-command-fragment
@@ -166,6 +169,7 @@ filesystem capability, so expansion remains testable without a disk.")
            #:expand-command-name-by-quote-style
            #:expand-double-quoted #:expand-arithmetic #:evaluate-arithmetic
            #:expand-braces #:argv-reference-fields #:*positional-args*
+           #:%single-command-name-or-error
            #:parameter-expansion-error #:parameter-expansion-error-name
            #:parameter-expansion-error-message))
 

@@ -1,9 +1,9 @@
 (in-package #:nshell.application)
 
 (declaim (ftype function
-                nshell.infrastructure.persistence::history-record-for-entry
-                nshell.infrastructure.persistence::history-record-matches-p
-                nshell.infrastructure.persistence::history-record-filter-token))
+                nshell.infrastructure.persistence:history-record-for-entry
+                nshell.infrastructure.persistence:history-record-matches-p
+                nshell.infrastructure.persistence:history-record-filter-token))
 
 (defparameter +history-filter-usage+
   "history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE]")
@@ -52,7 +52,7 @@
                  (values filter (nreverse query) nil)
                  (let* ((argument (first remaining))
                         (token-filter
-                          (nshell.infrastructure.persistence::history-record-filter-token
+                          (nshell.infrastructure.persistence:history-record-filter-token
                            argument)))
                    (cond
                      ((string= argument "--failed")
@@ -135,8 +135,8 @@
     (parse args nil nil)))
 
 (defun %history-entry-matches-filter-p (history entry filter)
-  (apply #'nshell.infrastructure.persistence::history-record-matches-p
-         (nshell.infrastructure.persistence::history-record-for-entry
+  (apply #'nshell.infrastructure.persistence:history-record-matches-p
+         (nshell.infrastructure.persistence:history-record-for-entry
           history entry)
          filter))
 

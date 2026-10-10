@@ -2,7 +2,7 @@
 (in-package #:nshell.presentation)
 
 (defparameter +repl-highlight-keywords+
-  (append nshell.domain.parsing::+control-flow-keywords+ '("function"))
+  (append nshell.domain.parsing:+control-flow-keywords+ '("function"))
   "Words nshell's parser treats as control-flow syntax rather than commands.")
 
 (defvar *repl-highlight-path-cache* (make-hash-table :test #'equal)
@@ -72,7 +72,7 @@ directory listing so a correction never walks PATH itself."
       (ignore-errors
        (mapcar (lambda (candidate)
                  (nshell.domain.completion:candidate-text candidate))
-               (nshell.domain.completion::%command-candidates-from-path
+               (nshell.domain.completion:%command-candidates-from-path
                 path "" (nshell.infrastructure.acl:make-host-filesystem)))))))
 
 (defun %repl-table-names (table)
@@ -81,7 +81,7 @@ directory listing so a correction never walks PATH itself."
 
 (defun %repl-known-command-names ()
   (append +repl-highlight-keywords+
-          (loop for name being the hash-keys of nshell.application::*builtin-registry*
+          (loop for name being the hash-keys of nshell.application:*builtin-registry*
                 collect name)
           (%repl-table-names *functions*)
           (%repl-table-names *aliases*)

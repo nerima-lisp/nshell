@@ -1,7 +1,7 @@
 (in-package #:nshell.infrastructure.acl)
 
-(defparameter *external-command-timeout* nil
-  "Maximum seconds for synchronous external commands. NIL disables the timeout.")
+(defparameter *external-command-timeout* +default-external-command-timeout+
+  "Maximum seconds for synchronous non-interactive external commands.")
 
 (defun %spawn-terminal-command (command args)
   (multiple-value-bind (resolved environment) (%prepare-external-command command)

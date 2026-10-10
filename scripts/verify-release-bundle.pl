@@ -29,10 +29,15 @@ for my $relative (qw(
     LICENSES/CL-CODEC-KIT-LICENSE
     LICENSES/CL-DATE-KIT-LICENSE
     LICENSES/CL-CONCURRENT-KIT-LICENSE
+    LICENSES/CL-JSON-KIT-LICENSE
+    LICENSES/CL-REGEX-KIT-LICENSE
+    LICENSES/CL-VCS-KIT-LICENSE
+    LICENSES/CL-TUI-KIT-LICENSE
     share/man/man1/nshell.1
     bin/nshell
 )) {
     die "missing release file: $relative\n" unless -f "$bundle/$relative";
+    die "empty release file: $relative\n" unless -s "$bundle/$relative";
 }
 die "bin/nshell is not executable\n" unless -x "$bundle/bin/nshell";
 

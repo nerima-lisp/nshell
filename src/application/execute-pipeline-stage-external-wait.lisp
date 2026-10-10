@@ -6,7 +6,7 @@
           (%start-external-process-copiers
            process stdout-buffer stderr-buffer))
         (timeout
-          (nshell.infrastructure.acl::%foreground-external-command-timeout)))
+          (nshell.infrastructure.acl:%foreground-external-command-timeout)))
     (flet ((collect-output (status)
              (%finish-external-process-output
               stdout-buffer stderr-buffer redirect-plan status))
@@ -18,14 +18,14 @@
                      command timeout)))
       (unwind-protect
            (if (null timeout)
-               (nshell.infrastructure.acl::%wait-process-with-copiers-or-stop
+               (nshell.infrastructure.acl:%wait-process-with-copiers-or-stop
                 process copiers
                 (lambda ()
                   (collect-output
                    (nshell.infrastructure.acl:process-exit-status-code
                     process)))
                 #'continue-stopped-process)
-               (nshell.infrastructure.acl::%wait-process-with-copiers
+               (nshell.infrastructure.acl:%wait-process-with-copiers
                 process copiers timeout
                 (lambda ()
                   (collect-output

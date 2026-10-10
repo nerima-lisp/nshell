@@ -36,7 +36,7 @@
   (defun %fetch-completion-help (command)
     (let ((parts (%completion-help-command-parts command)))
       (when parts
-        (let ((nshell.infrastructure.acl::*external-command-timeout*
+        (let ((nshell.infrastructure.acl:*external-command-timeout*
                 *completion-help-timeout*))
           (nshell.infrastructure.acl:run-external-capture
            (first parts)

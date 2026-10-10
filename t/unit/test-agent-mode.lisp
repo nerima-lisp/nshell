@@ -232,10 +232,10 @@
               (let* ((entry (first (history-kit:history-entries
                                     nshell.presentation::*history*)))
                      (record
-                       (nshell.infrastructure.persistence::history-record-for-entry
+                       (nshell.infrastructure.persistence:history-record-for-entry
                         nshell.presentation::*history* entry)))
                 (expect :agent :to-equal
-                        (nshell.infrastructure.persistence::history-record-origin
+                        (nshell.infrastructure.persistence:history-record-origin
                          record)))))))))
 
   (it "stops-after-the-configured-maximum-step-count"

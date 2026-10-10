@@ -2,11 +2,12 @@
 
 (defparameter +nshell-runtime-dependencies+
   '(:cl-prolog-kit :cl-parser-kit :cl-dataflow-kit :cl-boundary-kit :cl-cli
-    :cl-tty-kit :cl-process-kit :cl-history-kit :cl-host-kit :cl-log-kit
+    :cl-tty-kit :cl-process-kit
+    :cl-history-kit :cl-host-kit :cl-log-kit
     :cl-concurrent-kit :cl-codec-kit :cl-date-kit :cl-json-kit)
   "ASDF systems whose source directories a fresh nshell subprocess needs.
-The list includes transitive dependencies because subprocess bootstrap uses an
-explicit central registry rather than inheriting the parent's registry.")
+The list is the transitive runtime closure of nshell, expressed explicitly
+because subprocess bootstrap does not inherit the parent's registry.")
 
 (defun %asdf-output-translation-bootstrap-form ()
   "Return a child form that shares the runner's compiled ASDF artifacts."

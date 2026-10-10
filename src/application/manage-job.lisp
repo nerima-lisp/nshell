@@ -31,11 +31,11 @@
             (or ,previous (%shell-process-group-id))))))))
 
 (defun %run-terminal-command (context command args)
-  (let ((process (nshell.infrastructure.acl::%spawn-terminal-command command args)))
+  (let ((process (nshell.infrastructure.acl:%spawn-terminal-command command args)))
     (unless process
       (return-from %run-terminal-command
         (values
-         (nshell.infrastructure.acl::%external-command-not-found-message command)
+         (nshell.infrastructure.acl:%external-command-not-found-message command)
          127)))
     (let ((pgid (nshell.infrastructure.acl:process-pid process)))
       (unwind-protect
@@ -104,7 +104,7 @@
         (setf *foreground-job-pgid* nil)
         (%set-acl-foreground-pgid nil)
         (unless retained-p
-          (nshell.infrastructure.acl::%abort-pipeline (reverse processes) nil))))))
+          (nshell.infrastructure.acl:%abort-pipeline (reverse processes) nil))))))
 
 (defun fg (job-id &optional (job-monitor *job-monitor*) process-registry)
   "Move JOB-ID to the foreground, wait for it, then restore the shell PGID."

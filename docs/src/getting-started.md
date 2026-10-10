@@ -1,37 +1,58 @@
 # Getting started
 
+The release and Nix flake support `x86_64-linux` only. Other systems are
+outside the tested support boundary.
+
 ## Run without installing
 
 With [Nix](https://nixos.org/download) (flakes enabled):
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.5.0
+nix run github:nerima-lisp/nshell/v0.6.1
 ```
 
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.5.0
+nix profile install github:nerima-lisp/nshell/v0.6.1
 nshell
 man nshell   # the manual page is installed alongside the binary
 ```
 
-Consumers inside the nerima-lisp org pin a release tag rather than following
-the default branch:
+Pin a release tag rather than following the default branch.
 
-```nix
-# flake.nix
-inputs.nshell = {
-  url = "github:nerima-lisp/nshell/v0.5.0";
-  inputs.nixpkgs.follows = "nixpkgs";
-};
+### Prebuilt Linux bundle
+
+Without Nix, download both assets from the
+[v0.6.1 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.1),
+verify the checksum, and extract the bundle. On `x86_64-linux`, with `curl`,
+`sha256sum`, and `tar` available, run these commands in an empty directory:
+
+```sh
+curl --fail --location --remote-name https://github.com/nerima-lisp/nshell/releases/download/v0.6.1/nshell-v0.6.1-x86_64-linux.tar.gz
+curl --fail --location --remote-name https://github.com/nerima-lisp/nshell/releases/download/v0.6.1/nshell-v0.6.1-x86_64-linux.tar.gz.sha256
+sha256sum --check nshell-v0.6.1-x86_64-linux.tar.gz.sha256
 ```
+
+Proceed only if the checksum command succeeds:
+
+```sh
+tar -xzf nshell-v0.6.1-x86_64-linux.tar.gz
+./nshell-v0.6.1-x86_64-linux/bin/nshell --version
+./nshell-v0.6.1-x86_64-linux/bin/nshell
+man ./nshell-v0.6.1-x86_64-linux/share/man/man1/nshell.1
+```
+
+Keep the extracted directory intact: the launcher resolves libraries and
+helpers relative to itself. To invoke `nshell` by name, add its `bin`
+directory to your existing shell's `PATH`.
 
 The release workflow publishes an `x86_64-linux` tarball and SHA-256 checksum.
 The release bundle removes Nix store references, carries its ELF runtime
 library closure, and is checked for required files and dependency metadata. CI
-also runs `--help`, `--version`, and an `echo` smoke test on the bundle. Use the
-pinned Nix commands above on other platforms.
+also runs `--help`, `--version`, and an `echo` smoke test on the bundle. The
+checksum detects a mismatch with the published asset; it is not a provenance
+attestation.
 
 ## First commands
 
@@ -102,11 +123,11 @@ nix flake check      # full hermetic gate on x86_64-linux CI
 nix develop          # dev shell with SBCL + cl-weave
 ```
 
-`flake.nix` declares `x86_64-linux` and `aarch64-darwin`. The full hermetic
-flake gate, the release-binary gate, and the non-sandboxed integration suite
-all run in CI on `x86_64-linux` only; `aarch64-darwin` is a local development
-target (`nix build`, `nix develop`), and some build checks can be unavailable
-there when a pinned upstream package has no Darwin build.
+`flake.nix` declares `x86_64-linux` only. The full hermetic flake gate, the
+release-binary gate, and the non-sandboxed integration suite run in CI on that
+target. A remote `x86_64-linux` builder can build the artifacts from another
+host, but running the dev shell or the non-sandboxed PTY suite requires an
+`x86_64-linux` execution environment.
 
 Inside `nix develop`, load the system into a REPL:
 

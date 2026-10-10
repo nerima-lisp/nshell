@@ -1,7 +1,7 @@
 (in-package #:nshell/test)
 
 (defun add-history-record (history text &rest initargs)
-  (apply #'nshell.infrastructure.persistence::history-record-add
+  (apply #'nshell.infrastructure.persistence:history-record-add
          history text initargs)
   history)
 

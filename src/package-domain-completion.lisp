@@ -43,4 +43,12 @@ exported predicates below are goals callers may query directly.")
              #:candidate-prefix-match-p
              #:completion-context-redirection-target-p
              #:filesystem-candidates-for-value-kind
-             #:command-path-candidates)))
+             #:command-path-candidates
+             ;; Cross-layer completion sources used by application/presentation.
+             #:%command-candidates-from-path
+             #:%first-command-path-candidate
+             #:%configure-path-command-cache-locks
+             #:%git-output-lines
+             #:%git-porcelain-status-paths
+             #:*git-branch-lister*
+             #:*git-modified-path-lister*)))

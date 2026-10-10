@@ -147,8 +147,8 @@ below the prompt using the input state's already-clamped selection index."
                             (list :text (history-kit:history-entry-text entry)
                                   :exit-code (history-kit:history-entry-exit-code entry)
                                   :origin
-                                  (nshell.infrastructure.persistence::history-record-origin
-                                   (nshell.infrastructure.persistence::history-record-for-entry
+                                  (nshell.infrastructure.persistence:history-record-origin
+                                   (nshell.infrastructure.persistence:history-record-for-entry
                                     *history* entry))))
                           entries)))
     (render-search-results-below-prompt

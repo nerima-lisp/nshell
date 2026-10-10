@@ -597,9 +597,9 @@ wrapped line's other rows on screen as stale duplicates."
            (let ((nshell.infrastructure.acl:*command-not-found-hook*
                    (lambda (command)
                      (setf *command-not-found-command* command)))
-                 (nshell.application::*execution-origin*
+                 (nshell.application:*execution-origin*
                    *assistant-command-origin*)
-                 (nshell.application::*execution-confirmed-p*
+                 (nshell.application:*execution-confirmed-p*
                    *assistant-command-confirmed-p*))
              (setf *command-not-found-command* nil)
              (setf *last-command-output* nil)
@@ -634,7 +634,7 @@ wrapped line's other rows on screen as stale duplicates."
                     (write-string *last-command-output*))
                   (when *history-persistence-enabled-p*
                     (multiple-value-bind (history record)
-                        (nshell.infrastructure.persistence::history-record-add
+                        (nshell.infrastructure.persistence:history-record-add
                          *history* text
                          :timestamp timestamp
                          :cwd cwd
@@ -643,7 +643,7 @@ wrapped line's other rows on screen as stale duplicates."
                          :origin *assistant-command-origin*)
                       (declare (ignore history))
                       (history-kit:history-reset-navigation *history*)
-                      (let ((nshell.infrastructure.persistence::*history-record-to-append*
+                      (let ((nshell.infrastructure.persistence:*history-record-to-append*
                               record))
                         (nshell.infrastructure.persistence:append-history-entry text))))))
             (setf *last-command-text* text

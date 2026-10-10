@@ -321,6 +321,23 @@
         "type": "github"
       }
     },
+    "cl-regex-kit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790521261,
+        "narHash": "sha256-4BAunpX2NMUgt5usfJWp1dRqc0H01Is3MrGMGkquKio=",
+        "owner": "nerima-lisp",
+        "repo": "cl-regex-kit",
+        "rev": "da83905cad2bcb28518ebb28cac6628c654bb328",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nerima-lisp",
+        "ref": "v2.2.0",
+        "repo": "cl-regex-kit",
+        "type": "github"
+      }
+    },
     "cl-tty-kit": {
       "flake": false,
       "locked": {
@@ -335,6 +352,40 @@
         "owner": "nerima-lisp",
         "ref": "v1.6.1",
         "repo": "cl-tty-kit",
+        "type": "github"
+      }
+    },
+    "cl-tui-kit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786772589,
+        "narHash": "sha256-eZGqIdJFhzETYiB/7Cw5/nrXQZ73dElVO1NqnDGwN7c=",
+        "owner": "nerima-lisp",
+        "repo": "cl-tui-kit",
+        "rev": "345ea0b3cb08bcdf850df096d0b34a22b8bcc077",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nerima-lisp",
+        "ref": "v1.0.0",
+        "repo": "cl-tui-kit",
+        "type": "github"
+      }
+    },
+    "cl-vcs-kit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786359167,
+        "narHash": "sha256-CXbyJBaB36mOSsAXh4AgVag47JaLz2WXCxQjjgfzXmY=",
+        "owner": "nerima-lisp",
+        "repo": "cl-vcs-kit",
+        "rev": "ceca9962b105c98c763e2f6fac178c4537bb2497",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nerima-lisp",
+        "ref": "v0.2.0",
+        "repo": "cl-vcs-kit",
         "type": "github"
       }
     },
@@ -541,7 +592,10 @@
         "cl-parser-kit": "cl-parser-kit",
         "cl-process-kit": "cl-process-kit",
         "cl-prolog-kit": "cl-prolog-kit",
+        "cl-regex-kit": "cl-regex-kit",
         "cl-tty-kit": "cl-tty-kit",
+        "cl-tui-kit": "cl-tui-kit",
+        "cl-vcs-kit": "cl-vcs-kit",
         "cl-weave": "cl-weave_2",
         "nixpkgs": "nixpkgs",
         "paredit-cli": "paredit-cli_3",

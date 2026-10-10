@@ -1,34 +1,35 @@
 # Roadmap
 
-Release readiness tracks the areas below. For the release bar each area is
-measured against, see
+For release gates and known limits, see
 [Release readiness](public-readiness.md).
 
 ## Near-term focus
 
-**Shell language audit** — audit expansion semantics beyond the implemented
-structured unquoted list-variable and compound list expansion.
+**Shell language audit:** review quoting and list-variable expansion against
+nshell's documented scripting subset, not full POSIX/fish compatibility.
 
-Already done: quoting; parameter expansion with defaults, required checks,
+Implemented features include quoting; parameter expansion with defaults, required checks,
 substring slicing, and patterns; arithmetic `$((...))` including `**`, bitwise,
 shift, and ternary operators; brace expansion; command substitution
 `$(...)`/`(...)`; fd redirections `2>`, `2>&1`, `&>`; here-docs `<<`;
 here-strings `<<<`; and function arguments via `$argv` / `$argv[N]`.
+This list does not establish that every edge case has been audited.
 
-**Job control verification** — local non-sandboxed integration now covers
-foreground external commands and pipelines with `Ctrl-Z` suspension, `bg`
-resumption, `fg` terminal handoff, and `Ctrl-C` interruption. Directly
-launched terminal commands use a job-aware wait instead of the synchronous
-capture wait that previously prevented suspension. Release evidence on
-`x86_64-linux` remains outstanding.
+**Command discovery:** extend help-text-driven discovery beyond the static
+command catalog to additional commands and subcommands. See the
+[completion model](../guide/concepts.md#completion-is-a-knowledge-base-not-a-table).
 
-**Command discovery** — extend help-text-driven discovery to cover more
-subcommands and non-curated external tools.
+**Distribution:** evaluate nixpkgs and Homebrew packaging. Neither channel
+is published; a packaging target has not been selected. A prebuilt
+`x86_64-linux` bundle is available for v0.6.1; see the
+[installation instructions](../getting-started.md#prebuilt-linux-bundle).
 
-**Distribution** — publish at least one installation path beyond `nix run`:
-nixpkgs, Homebrew, or prebuilt release binaries.
+## Release evidence
 
-## Released changes
+The v0.6.1 Linux CI and release workflow links will be recorded after the tag
+workflow completes. The non-sandboxed integration suite covers foreground
+external commands and pipelines with `Ctrl-Z` suspension, `bg` resumption, `fg`
+terminal handoff, and `Ctrl-C` interruption. This does not establish
+compatibility with every terminal; see [Release readiness](public-readiness.md).
 
-See the
 [GitHub Releases](https://github.com/nerima-lisp/nshell/releases).

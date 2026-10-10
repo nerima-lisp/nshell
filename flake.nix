@@ -395,6 +395,9 @@
             cp ${cl-date-kit}/LICENSE "$out/LICENSES/CL-DATE-KIT-LICENSE"
             cp ${cl-concurrent-kit}/LICENSE "$out/LICENSES/CL-CONCURRENT-KIT-LICENSE"
             cp ${cl-json-kit}/LICENSE "$out/LICENSES/CL-JSON-KIT-LICENSE"
+            cp ${cl-regex-kit}/LICENSE "$out/LICENSES/CL-REGEX-KIT-LICENSE"
+            cp ${cl-vcs-kit}/LICENSE "$out/LICENSES/CL-VCS-KIT-LICENSE"
+            cp ${cl-tui-kit}/LICENSE "$out/LICENSES/CL-TUI-KIT-LICENSE"
             cp ${./man/nshell.1} "$out/share/man/man1/nshell.1"
           '';
         });

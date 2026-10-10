@@ -4,38 +4,36 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-MkDocs%20Material-0a7a5a)](https://nerima-lisp.github.io/nshell/)
 
-nshell is a modern, fish-inspired interactive shell written in Common Lisp for
-SBCL. It puts the *interactive* experience first — real-time syntax
-highlighting, history-aware autosuggestions, fish-style abbreviations, and a
-context-aware completion engine driven by a logic knowledge base — on top of a
-domain-driven core whose line editor is a pure reducer over an immutable input
-state, and a reproducible Nix build that packages a dumped SBCL image with its
-process-launch helper.
+nshell is a fish-inspired interactive shell written in Common Lisp for SBCL.
+It provides syntax highlighting, history-aware autosuggestions, abbreviations,
+and context-aware completion.
 
-> **Status: development preview (0.6.x).** The interactive editor and core
-> pipeline execution are solid and heavily tested. The shell *language* is a
-> growing subset of POSIX/fish semantics. nshell is usable as a daily
-> interactive shell for common workflows; it is not a script-compatible
-> `/bin/sh` replacement.
+> **Status: development preview (0.6.x).** CI tests the interactive editor and
+> pipeline execution on `x86_64-linux`. The shell language implements a subset
+> of POSIX/fish semantics; it is not a script-compatible `/bin/sh` replacement.
 
-Full documentation is published at <https://nerima-lisp.github.io/nshell/>.
-The source for that site lives in [docs/src/](docs/src/).
+Documentation source lives in [docs/src/](docs/src/).
 
 ## Quick Start
 
+The release and Nix flake support `x86_64-linux` only. With
+[Nix](https://nixos.org/download) and flakes enabled:
+
 ```sh
-nix run github:nerima-lisp/nshell/v0.6.0
+nix run github:nerima-lisp/nshell/v0.6.1
 ```
 
 Then type as you would in any shell. Commands and paths colorize live, and a
-dimmed completion of the most recent matching history entry trails the cursor —
+dimmed completion of the most recent matching history entry trails the cursor;
 press `→` or `Ctrl-F` to accept it:
 
 ```
-~/src/nshell main ❯ git com               # "mit -m " suggested from history
 ~/src/nshell main ❯ string upper hello
 HELLO
 ```
+
+After running that command, type `string up` to see `per hello` suggested
+from history.
 
 Colors come from a theme; run `theme list` to see the built-in presets and
 `theme use dracula` (or any other name from that list) to switch, live, with
@@ -50,25 +48,15 @@ the edited line to nshell.
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.6.0
+nix profile install github:nerima-lisp/nshell/v0.6.1
 ```
 
-```nix
-# flake.nix
-inputs.nshell = {
-  url = "github:nerima-lisp/nshell/v0.6.0";
-  inputs.nixpkgs.follows = "nixpkgs";
-};
-```
-
-Pin a release tag rather than following the default branch. The v0.6.0 release
-workflow publishes an `x86_64-linux` tarball only. The flake currently declares
-that target only; other systems are outside the tested support boundary.
+Pin a release tag rather than following the default branch.
 
 The `x86_64-linux` release bundle removes Nix store references, carries its
 ELF runtime library closure, and is checked for required files and dependency
 metadata. CI also runs `--help`, `--version`, and an `echo` smoke test on the
-bundle; use the pinned Nix commands above on other platforms. See [Getting
+bundle. See [Getting
 started](https://nerima-lisp.github.io/nshell/getting-started/) for the bundle
 verification and installation procedure.
 
@@ -91,6 +79,9 @@ nix build .#releaseBundle
 perl scripts/verify-release-bundle.pl result
 ```
 
+The Perl wrappers limit each local check to five minutes and return exit code
+124 if that limit expires.
+
 To measure executable-source coverage, keep the report outside the checkout
 and run the same hermetic test loader used by CI:
 
@@ -100,10 +91,10 @@ NSHELL_COVERAGE_DIR="$(mktemp -d)" \
 ```
 
 The command writes `coverage-summary.json` and `coverage-files.json` to the
-selected directory. Declarative data and package-definition forms are kept
-out of the executable expression denominator; the report still lists every
-source file so uncovered behavior is visible. The configured minimum is a
-gate, while the target remains 100%.
+selected directory. These reports cover executable source under `src/`,
+excluding declarative data and package-definition files. The default minimum
+is 85% (`NSHELL_COVERAGE_MIN`); the target is 100%
+(`NSHELL_COVERAGE_TARGET`).
 
 Tests live in `t/` and run under
 [cl-weave](https://github.com/nerima-lisp/cl-weave), the org's test framework.

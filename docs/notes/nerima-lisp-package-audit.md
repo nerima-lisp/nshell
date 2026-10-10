@@ -1,105 +1,75 @@
 # nerima-lisp package integration audit
 
-Which packages from the [nerima-lisp org](https://github.com/orgs/nerima-lisp/repositories)
-nshell integrates, and — for every one it does not — a concrete reason. The goal
-is "adopt every applicable nerima-lisp package at the direct dependency boundary,
-without compatibility wrappers", so this table exists to prove the *un*-adopted
-set is non-applicable rather than overlooked.
+This audit covers [`nshell.asd`](../../nshell.asd), `src/`, the assistant feature
+in `packages/`, and the dependency graph in [`flake.nix`](../../flake.nix)
+for the v0.6.1 release line.
 
-## Integrated and in active use
+## Declared runtime dependencies with API use
 
-Every runtime system in `nshell :depends-on` is genuinely exercised (qualified-
-symbol counts are from `src/`; `cl-parser-kit` is `:import-from`, so its symbols
-appear unqualified):
-
-| package | role in nshell | evidence |
+| Package | Role | Source evidence |
 |---|---|---|
-| `cl-prolog-kit` | completion knowledge base — facts/rules, `map-prolog-solutions` | `domain/completion/rule-data.lisp` (8 refs) |
-| `cl-parser-kit` | `$((…))` arithmetic tokenizer + Pratt parser | `:import-from` in `package.lisp`; `domain/expansion/arithmetic.lisp` |
-| `cl-dataflow-kit` | reactive dataflow wiring | 12 refs |
-| `cl-host-kit` | host environment, pathname, and process boundaries | `presentation/repl-environment.lisp`, `infrastructure/terminal/ansi.lisp`, `application/builtin-runtime.lisp` |
-| `cl-boundary-kit` | clock/sleeper boundaries (also under cl-process-kit) | 14 refs |
-| `cl-cli` | argument-vector parsing for `main` | 13 refs |
-| `cl-tty-kit` | terminal control / raw-mode / rendering | 17 refs |
-| `cl-process-kit` | timeout-guarded external process launch (`run`) | `infrastructure/acl/syscall-process-execution.lisp` (6 refs) |
-| `cl-history-kit` | command-history store, search, and recall navigation cursor | used directly (qualified `history-kit:...`) throughout `application/` and `presentation/`; nshell keeps only the tokenizer-coupled `!$`/Alt-. last-argument extraction in `domain/history/last-argument.lisp` |
-| `cl-concurrent-kit` | structured task scopes and promises for concurrent syscall work | `infrastructure/acl/syscall.lisp` (`with-task-scope`, `spawn`, `await`) |
+| `cl-prolog-kit` | Completion facts and rules | [`src/domain/completion/rule-data.lisp`](../../src/domain/completion/rule-data.lisp): `make-rulebase`, `map-prolog-solutions` |
+| `cl-parser-kit` | Arithmetic tokenizer and Pratt parser | [`src/package-domain.lisp`](../../src/package-domain.lisp) imports the API used by [`src/domain/expansion/arithmetic.lisp`](../../src/domain/expansion/arithmetic.lisp) |
+| `cl-dataflow-kit` | DOT/Mermaid pipeline diagrams; graph validation before DOT rendering | [`src/application/pipeline-diagram.lisp`](../../src/application/pipeline-diagram.lisp): `make-graph`, `validate-graph`, `graph->dot`, `graph->mermaid` |
+| `cl-host-kit` | Host environment, pathnames, and working directory | [`src/application/builtin-commands.lisp`](../../src/application/builtin-commands.lisp): `getcwd`, `chdir`; [`src/infrastructure/acl/syscall-environment.lisp`](../../src/infrastructure/acl/syscall-environment.lisp): `getenv` |
+| `cl-boundary-kit` | Synchronization boundary | [`src/infrastructure/acl/syscall.lisp`](../../src/infrastructure/acl/syscall.lisp): `make-lock` |
+| `cl-cli` | Executable argument parsing | [`src/main.lisp`](../../src/main.lisp): `make-option`, `option-value` |
+| `cl-tty-kit` | ANSI rendering, terminal size, and grapheme widths | [`src/infrastructure/terminal/ansi.lisp`](../../src/infrastructure/terminal/ansi.lisp), [`src/infrastructure/acl/syscall-terminal.lisp`](../../src/infrastructure/acl/syscall-terminal.lisp), [`src/presentation/prompt-display.lisp`](../../src/presentation/prompt-display.lisp) |
+| `cl-process-kit` | External-process lifecycle and bounded Git probes | [`src/infrastructure/acl/syscall-process-execution.lisp`](../../src/infrastructure/acl/syscall-process-execution.lisp): `spawn`, `communicate`; [`src/infrastructure/acl/git.lisp`](../../src/infrastructure/acl/git.lisp): `run` |
+| `cl-history-kit` | History storage, search, and persistence | [`src/application/search-history.lisp`](../../src/application/search-history.lisp), [`src/infrastructure/persistence/file-history.lisp`](../../src/infrastructure/persistence/file-history.lisp) |
+| `cl-concurrent-kit` | Task scopes and promises for syscall work | [`src/infrastructure/acl/syscall.lisp`](../../src/infrastructure/acl/syscall.lisp): `with-task-scope`, `spawn`, `await` |
+| `cl-json-kit` | Assistant JSON/JSONL state, audit records, and MCP messages | [`packages/feature/assistant/src/infrastructure/audit-log.lisp`](../../packages/feature/assistant/src/infrastructure/audit-log.lisp), [`packages/feature/assistant/src/infrastructure/mcp-server.lisp`](../../packages/feature/assistant/src/infrastructure/mcp-server.lisp), [`src/infrastructure/assistant-sidecar-stream.lisp`](../../src/infrastructure/assistant-sidecar-stream.lisp) |
 
-No declared dependency is unused, so there is no dead dependency to drop.
+## Explicit test/bootstrap inputs without direct API use
 
-The flake inputs are pinned to explicit upstream release refs rather than
-floating branches. The current pins include `cl-weave` `v1.3.0`,
-`cl-prolog-kit` `v1.5.0`, `cl-parser-kit` `v1.1.1`, and `cl-dataflow-kit`
-`v1.2.0`; the complete resolved set is recorded in `flake.lock`. A release
-API's `latest` field is not treated as authoritative here because an upstream
-tag may exist before its GitHub release metadata is published. A future upgrade
-must update `flake.nix` and `flake.lock` together and rerun the complete check
-matrix.
+`cl-regex-kit`, `cl-vcs-kit`, and `cl-tui-kit` are not direct API dependencies
+of nshell. They are retained in the Nix source registry because
+[`t/support/runtime.lisp`](../../t/support/runtime.lisp) loads their systems
+when it bootstraps child processes, and because sibling package systems may
+need those sources while the integration suite is running. Their presence in
+that registry is not advertised as an nshell feature.
 
-The test systems are kept separate from the runtime dependency audit:
+They are no longer declared in `nshell.asd`'s direct `:depends-on` list. The
+remaining explicit Nix inputs are intentional bootstrap/build inputs and are
+covered by the tagged-tree integration gate.
 
-| package | role in nshell's test systems | evidence |
+## Dependencies outside nshell's ASDF declaration
+
+The sibling derivations in `flake.nix` include these dependency edges.
+`cl-date-kit` and `cl-codec-kit` are also explicit Nix `lispDependencies` of
+nshell. Neither they nor `cl-log-kit` is a direct dependency in `nshell.asd`.
+
+| Package | Consumers in the build graph | nshell use |
 |---|---|---|
-| `cl-weave` | the test framework for the weave suite | `nshell/weave` |
-| `cl-prolog-kit/weave` | cl-prolog-kit-query coverage of the completion engine | `nshell/weave` |
+| `cl-log-kit` | `cl-process-kit`, `cl-vcs-kit` | No direct API reference identified. The assistant writes its own redacted JSONL audit records through `cl-json-kit`. |
+| `cl-date-kit` | `cl-concurrent-kit`, `cl-log-kit` | No direct API reference identified. |
+| `cl-codec-kit` | `cl-tty-kit`, `cl-process-kit` | No direct API reference identified. |
 
-As of the current upstream tag listing, every pinned nerima-lisp input is
-already at its newest published tag: `cl-nix-forge` `v0.5.0`, `paredit-cli`
-`v1.6.2`, `cl-parser-kit` `v1.1.1`, `cl-dataflow-kit` `v1.2.0`,
-`cl-boundary-kit` `v2.3.0`, `cl-cli` `v1.3.0`, `cl-tty-kit` `v1.6.1`,
-`cl-log-kit` `v2.2.0`, `cl-process-kit` `v3.2.0`, `cl-history-kit` `v1.0.4`,
-`cl-host-kit` `v0.3.1`, `cl-codec-kit` `v0.5.0`, `cl-concurrent-kit` `v0.6.1`,
-and `cl-date-kit` `v1.0.0`. This is a tag comparison, not a claim that every
-upstream branch is API-compatible; upgrade only when a newer release tag
-appears and the full matrix accepts it.
+## Test and build inputs
 
-## Transitive, not adopted directly
+`nshell/test` uses `cl-weave`. `nshell/weave` additionally depends on
+`cl-prolog-kit/weave` for completion-query tests. Loading a library or its test
+helpers is not the same as running that library's own suite. The sibling
+derivations do not enable `doCheck`, and the CI jobs run nshell's suites,
+not the dependencies' own suites. In particular, `checks.weave` runs
+`nshell/weave`, not `cl-weave/test`. Dependency suite results remain unverified.
 
-| package | why not direct |
-|---|---|
-| `cl-log-kit` | Pulled in transitively by `cl-process-kit` for *its* structured logging. nshell itself performs no logging (a shell's diagnostics go to the user's stderr, not a structured log sink), so it is deliberately absent from nshell's own `:depends-on`. Adopting it directly would mean inventing a logging concern the shell does not have. |
-| `cl-date-kit` | Pulled in transitively by `cl-concurrent-kit`; nshell consumes concurrency primitives, not date formatting or parsing. |
-| `cl-codec-kit` | Pulled in transitively by `cl-tty-kit` and `cl-process-kit`; nshell consumes terminal and process APIs, not the codec surface, so it remains an indirect build input. |
+`cl-nix-forge` supplies the Nix build helpers. `paredit-cli` is a development
+tool, not an executable runtime dependency. Release refs are declared in
+`flake.nix`; resolved revisions and hashes are recorded in
+[`flake.lock`](../../flake.lock). This audit makes no claim that those refs are
+the newest upstream tags. An upgrade must update the declaration and lock file,
+review the local [`cl-process-kit` patch](../../nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch),
+and rerun the release gates. The dependency's own suite also needs a separate
+run.
 
-## Non-applicable org repositories
+## Reproduce the source checks
 
-| package | what it is | why nshell cannot use it |
-|---|---|---|
-| `cl-json-kit` | dependency-free JSON reader/writer | nshell has no JSON I/O. The only `json` tokens in the tree are completion-catalog *values* (e.g. `kubectl --output json`), not parsing. |
-| `cl-http-kit`, `cl-http-message-kit`, `cl-websocket-kit`, `cl-sse-kit` | HTTP, message, WebSocket, and SSE protocol libraries | nshell is a local process shell and exposes no network protocol endpoint. |
-| `cl-postgresql-kit`, `cl-redis-kit` | database clients | No database connection or persistence boundary exists in the shell. |
-| `cl-observability-kit`, `cl-log-kit`, `cl-resilience-kit`, `cl-event-sourcing-kit` | service observability, logging, resilience, and event-sourcing libraries | These solve service/runtime concerns absent from a local CLI; diagnostics remain user-facing stderr. |
-| `cl-cffi-kit`, `cl-regex-kit`, `cl-hpack-codec-kit` | FFI, regular-expression, and compression helpers | No direct feature requires them; adding them would duplicate existing host/parser boundaries or add unused functionality. |
-| `cl-tui-kit`, `cl-glfw3-kit`, `cl-vulkan-kit`, `cl-fx-quant-kit` | UI, graphics, and quantitative-computing libraries | nshell uses `cl-tty-kit` for terminal control and has no graphical or numerical UI. |
-| `cl-asciiquarium`, `cl-chip8`, `cl-cmatrix`, `cl-cowsay`, `cl-nes`, `cl-nyancat`, `cl-sl`, `ncl`, `nerimux`, `loom`, `cachix` | standalone applications, tools, or infrastructure | They are independently runnable products rather than libraries used by a shell execution boundary. |
-| `cl-tmux` | a full terminal multiplexer in CL | Orthogonal peer application. A multiplexer *hosts* shells; a shell does not embed one. Integration would be a dependency inversion. |
-| `cl-cc`, `cl-cc-ast`, `cl-cc-binary`, `cl-cc-javascript`, `cl-cc-php`, `cl-cc-runtime`, `cl-cc-type` | a self-hosting CL compiler collection | Language-implementation infrastructure with no surface a shell consumes. |
-| `cl-vcs-kit` | version-control toolkit | nshell only needs the prompt's small, timeout-bounded `git` probe; adopting a repository abstraction would add a broader policy surface without replacing the existing process boundary. |
-| `paredit-cli` | the Rust S-expression refactoring CLI | A development *tool* used to perform these refactors, not a runtime dependency. |
-
-## Conclusion
-
-The applicable nerima-lisp surface is fully adopted: ten runtime systems plus
-two test systems, all directly declared where used. The executable composition
-root consumes `cl-cli` directly to parse `argv`; the command-line feature owns
-the policy, contract, and help presentation, with no compatibility adapter or
-duplicate parser. The un-adopted remainder is compiler infrastructure
-(`cl-cc*`), a version-control helper whose surface is broader than nshell's
-prompt probe (`cl-vcs-kit`), a peer application (`cl-tmux`), a format library
-for a format nshell never handles (`cl-json-kit`), or a build-time tool
-(`paredit-cli`).
-Re-run the usage half of this audit with:
+Run these commands from the repository root.
+Inspect imports and executable forms: a match in a comment or registry list is
+not evidence of a runtime call, and textual absence is not a runtime test.
 
 ```sh
-rg -o '\\b(cl-prolog-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|process-kit|history-kit|cl-concurrent-kit)::?[a-z]' src/ \\
-  | perl -pe 's/:.*$//' | sort | uniq -c | sort -rn
-```
-
-To re-check the release refs and compare them with the lock file:
-
-```sh
-for repo in cl-weave cl-prolog-kit cl-parser-kit cl-dataflow-kit cl-boundary-kit cl-cli cl-tty-kit cl-process-kit cl-history-kit cl-host-kit cl-codec-kit cl-concurrent-kit cl-date-kit; do
-  printf '%s: ' "$repo"
-  gh api "repos/nerima-lisp/$repo/tags?per_page=1" --jq '.[0].name'
-done
+rg -n 'cl-(prolog|parser|dataflow|host|boundary|tty|concurrent|json)-kit|cl-cli|process-kit:|history-kit:|host-kit:|json-kit:' nshell.asd src packages
+rg -n -i '\b(cl-(regex|vcs|tui|log|date|codec)-kit|regex-kit:|vcs-kit:|tui-kit:|log-kit:|date-kit:|codec-kit:)' nshell.asd src packages t/support/runtime.lisp
 ```

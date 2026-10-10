@@ -18,10 +18,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Gate the release once, before any binary is built. Splitting this out of
-  # the matrix means the org invariants are checked a single time rather than
-  # once per target, and a mismatch fails before spending two native builds on
-  # a release that must not be published.
   verify:
     name: Verify the tagged tree
     runs-on: ubuntu-latest
@@ -57,10 +53,6 @@ jobs:
           fi
           echo "commit-sha=$commit_sha" >> "$GITHUB_OUTPUT"
 
-      # Enforces the org invariant "git tag == .asd :version" at the only point
-      # where it can still be corrected cheaply. Without this gate the two drift
-      # silently, which is how cl-boundary-kit reached :version 1.0.0 while its
-      # newest tag was still v0.6.0.
       - name: Verify tag matches .asd version
         env:
           PACKAGE: nshell
@@ -84,19 +76,38 @@ jobs:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      # Never publish a release that does not pass its own test suite.
       - name: Check flake
         run: nix flake check --print-build-logs
 
-  release:
-    # One tarball, for the one platform `systems` declares. The matrix that used
-    # to sit here carried a macos-14 (aarch64-darwin) leg; the 2026-08-01
-    # revision reduced `systems` to x86_64-linux alone, so `nix build` on macOS
-    # would now fail on a missing attribute. A one-element matrix is deleted
-    # rather than left in place — it signals an intent to add a platform, and
-    # there is none. See PACKAGE_STANDARD.md "CI の粒度".
-    name: build and publish x86_64-linux
+  integration:
+    name: Test the tagged tree with real PTYs
     needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HOME: ${{ runner.temp }}/nshell-home
+      XDG_CACHE_HOME: ${{ runner.temp }}/nshell-cache
+      XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-config
+      XDG_STATE_HOME: ${{ runner.temp }}/nshell-state
+      NSHELL_AI_COMMAND: /nonexistent
+      NSHELL_TEST_PTY: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.commit-sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/nix-setup
+        with:
+          cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Run full test suite
+        run: nix develop -c sbcl --script run-tests.lisp
+
+  release:
+    name: build and publish x86_64-linux
+    needs: [verify, integration]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -120,6 +131,9 @@ jobs:
       - name: Build release bundle
         run: nix build .#releaseBundle --print-build-logs
 
+      - name: Verify release bundle
+        run: perl scripts/verify-release-bundle.pl result
+
       - name: Package tarball + checksum
         run: |
           set -euo pipefail
@@ -141,30 +155,7 @@ jobs:
           rm "dist/${name}.repro.tar.gz"
           ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
 
-      # Creates the release as an empty draft, with the tarball and checksum
-      # attached. This workflow does not produce a release body at all.
-      #
-      # As of the 2026-08-01 revision the GitHub Release description is the only
-      # canonical changelog in this org; there is no CHANGELOG.md to read from.
-      # See RELEASE_STANDARD.md. After this job goes green the maintainer fills
-      # the body in and publishes:
-      #
-      #   gh release edit "$RELEASE_REF" --notes-file <file> --draft=false
-      #
-      # `draft: true` is load-bearing. Publishing straight away would make "the
-      # maintainer forgot the notes" a user-visible state. A draft appears
-      # neither under "Latest release" nor in the default output of
-      # `gh release list`, so an unfinished release never reaches downstream.
-      #
-      # `generate_release_notes` is deliberately left off. Generated notes are a
-      # list of commit titles and PR numbers, and RELEASE_STANDARD.md requires
-      # the notes to be selected by "does a user of this package have to change
-      # their own code" — a judgement no generator can make.
-      #
-      # Every `uses:` in this org references a 40-character SHA, never a mutable
-      # tag. Re-resolve before bumping, and do not copy a SHA you have not
-      # resolved yourself:
-      #   gh api repos/softprops/action-gh-release/git/ref/tags/v2 --jq .object.sha
+      # Publish only after the maintainer supplies user-facing release notes.
       - name: Create draft release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:

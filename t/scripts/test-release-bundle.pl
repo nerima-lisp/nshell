@@ -37,7 +37,7 @@ if ($flag eq '-d') {
     print " [Requesting program interpreter: $interpreter]\n";
 } else { die "unexpected readelf flag $flag" }
 STUB
-my @licenses = qw(SBCL-COPYING ZSTD-LICENSE CL-PROLOG-KIT-LICENSE CL-PARSER-KIT-LICENSE CL-DATAFLOW-KIT-LICENSE CL-HOST-KIT-LICENSE CL-BOUNDARY-KIT-LICENSE CL-CLI-LICENSE CL-TTY-KIT-LICENSE CL-LOG-KIT-LICENSE CL-PROCESS-KIT-LICENSE CL-HISTORY-KIT-LICENSE CL-CODEC-KIT-LICENSE CL-DATE-KIT-LICENSE CL-CONCURRENT-KIT-LICENSE GLIBC-COPYING.LIB);
+my @licenses = qw(SBCL-COPYING ZSTD-LICENSE CL-PROLOG-KIT-LICENSE CL-PARSER-KIT-LICENSE CL-DATAFLOW-KIT-LICENSE CL-HOST-KIT-LICENSE CL-BOUNDARY-KIT-LICENSE CL-CLI-LICENSE CL-TTY-KIT-LICENSE CL-LOG-KIT-LICENSE CL-PROCESS-KIT-LICENSE CL-HISTORY-KIT-LICENSE CL-CODEC-KIT-LICENSE CL-DATE-KIT-LICENSE CL-CONCURRENT-KIT-LICENSE CL-JSON-KIT-LICENSE CL-REGEX-KIT-LICENSE CL-VCS-KIT-LICENSE CL-TUI-KIT-LICENSE GLIBC-COPYING.LIB);
 my @cases = (
     ['control', undef, undef],
     ['missing-launcher', 'bin/cl-process-kit-spawn', qr/missing Linux release file: bin\/cl-process-kit-spawn/],
@@ -48,12 +48,19 @@ my @cases = (
     ['interpreter', undef, qr/unexpected ELF interpreter/],
     ['readelf-failure', undef, qr/readelf -d failed/],
 );
+for my $package (qw(JSON REGEX VCS TUI)) {
+    my $relative = "LICENSES/CL-$package-KIT-LICENSE";
+    push @cases,
+        ["missing-license-$package", $relative, qr/missing release file: \Q$relative\E/],
+        ["empty-license-$package", $relative, qr/empty release file: \Q$relative\E/];
+}
 for my $case (@cases) {
     my ($name, $target, $error) = @$case;
     my $bundle = "$root/$name";
     make_path(map { "$bundle/$_" } qw(bin libexec lib LICENSES share/man/man1));
     for my $relative ('README.md', 'LICENSE', 'share/man/man1/nshell.1', map { "LICENSES/$_" } @licenses) {
-        write_file("$bundle/$relative", "fixture\n", 0644);
+        next if $name =~ /^missing-/ && $relative eq $target;
+        write_file("$bundle/$relative", $name =~ /^empty-/ && $relative eq $target ? '' : "fixture\n", 0644);
     }
     for my $relative (qw(bin/nshell bin/cl-process-kit-spawn libexec/nshell libexec/cl-process-kit-spawn lib/ld-linux-x86-64.so.2)) {
         next if $name =~ /^missing-/ && $relative eq $target;
@@ -84,4 +91,4 @@ for my $case (@cases) {
         like($calls, qr/-l .*libexec\/cl-process-kit-spawn/, 'helper interpreter inspected');
     }
 }
-done_testing(17);
+done_testing(33);

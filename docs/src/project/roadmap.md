@@ -26,10 +26,14 @@ is published; a packaging target has not been selected. A prebuilt
 
 ## Release evidence
 
-The v0.6.1 Linux CI and release workflow links will be recorded after the tag
-workflow completes. The non-sandboxed integration suite covers foreground
-external commands and pipelines with `Ctrl-Z` suspension, `bg` resumption, `fg`
-terminal handoff, and `Ctrl-C` interruption. This does not establish
-compatibility with every terminal; see [Release readiness](public-readiness.md).
+The [v0.6.1 Linux CI run](https://github.com/nerima-lisp/nshell/actions/runs/38050042888)
+and [release workflow](https://github.com/nerima-lisp/nshell/actions/runs/38052885425)
+validate the tagged tree. The published
+[v0.6.1 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.1)
+contains the x86_64-linux bundle and SHA-256 checksum. The non-sandboxed
+integration suite covers foreground external commands and pipelines with
+`Ctrl-Z` suspension, `bg` resumption, `fg` terminal handoff, and `Ctrl-C`
+interruption. This does not establish compatibility with every terminal; see
+[Release readiness](public-readiness.md).
 
 [GitHub Releases](https://github.com/nerima-lisp/nshell/releases).

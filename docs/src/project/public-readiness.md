@@ -20,9 +20,13 @@ not a POSIX/fish-compatible script interpreter.
 | Distribution | Reproducible Nix build, installed man page, release binary smoke, checksummed artifacts | flake build, man page, CI/release workflows, [v0.6.1 release assets](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.1) | Prebuilt `x86_64-linux` binary and SHA-256 checksum published; nixpkgs/Homebrew remain future work |
 | Security and operations | Private vulnerability reporting, explicit security scope, validation of secret handling in history/completion/diagnostics | [repository security policy](https://github.com/nerima-lisp/nshell/blob/v0.6.1/SECURITY.md) and [contribution guidelines](contributing.md) | Reporting policy exists; it does not establish a security audit of runtime behavior |
 
-The v0.6.1 CI and release run links are recorded here after the tag workflow
-completes. The non-sandboxed integration job runs the PTY and external-process
-cases skipped by the Nix sandbox.
+The [v0.6.1 CI run](https://github.com/nerima-lisp/nshell/actions/runs/38050042888)
+and [release workflow](https://github.com/nerima-lisp/nshell/actions/runs/38052885425)
+validate the tagged tree. The published
+[v0.6.1 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.1)
+contains the x86_64-linux bundle and SHA-256 checksum. The non-sandboxed
+integration job runs the PTY and external-process cases skipped by the Nix
+sandbox.
 
 ## Release Gates
 
@@ -44,8 +48,7 @@ Before a public release can claim the capabilities listed here:
 
 The [release workflow](https://github.com/nerima-lisp/nshell/blob/v0.6.1/.github/workflows/release.yml)
 runs hermetic checks and a non-sandboxed integration job against the same
-resolved tagged commit, and only then builds a draft release. Publishing still
-requires user-facing release notes and maintainer confirmation.
+resolved tagged commit, and only then builds the published release assets.
 
 ## Verification outside CI
 

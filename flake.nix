@@ -239,10 +239,12 @@
           clParserKit = sibling {
             name = "cl-parser-kit";
             source = cl-parser-kit;
+            patches = [ ./nix/patches/cl-parser-kit-prolog-kit-name.patch ];
           };
           clDataflow = sibling {
             name = "cl-dataflow-kit";
             source = cl-dataflow-kit;
+            patches = [ ./nix/patches/cl-dataflow-kit-writable-snapshot-fixture.patch ];
             dependencies = [
               clProlog
               clConcurrentKit
@@ -263,6 +265,7 @@
           clBoundaryKit = sibling {
             name = "cl-boundary-kit";
             source = cl-boundary-kit;
+            patches = [ ./nix/patches/cl-boundary-kit-prolog-kit-name.patch ];
             dependencies = [ clHostKit ];
           };
           clConcurrentKit = sibling {
@@ -289,11 +292,13 @@
           clCli = sibling {
             name = "cl-cli";
             source = cl-cli;
+            patches = [ ./nix/patches/cl-cli-prolog-kit-name.patch ];
             dependencies = [ clHostKit ];
           };
           clTtyKit = sibling {
             name = "cl-tty-kit";
             source = cl-tty-kit;
+            patches = [ ./nix/patches/cl-tty-kit-prolog-kit-name.patch ];
             dependencies = [
               clCodecKit
               clConcurrentKit
@@ -353,6 +358,24 @@
           installPhase = ''
             runHook preInstall
             install -Dm755 cl-process-kit-spawn "$out/bin/cl-process-kit-spawn"
+            runHook postInstall
+          '';
+        };
+
+      ptyHelperFor =
+        ctx:
+        ctx.pkgs.stdenv.mkDerivation {
+          pname = "cl-process-kit-pty";
+          version = ctx.cl.fromAsdSystem "${cl-process-kit}/cl-process-kit.asd";
+          dontUnpack = true;
+          buildPhase = ''
+            runHook preBuild
+            $CC -O2 -fPIC -shared ${cl-process-kit}/native/pty.c -o libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}
+            runHook postBuild
+          '';
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary} "$out/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}"
             runHook postInstall
           '';
         };
@@ -721,6 +744,7 @@
           # derivation's own resolved registry, including check dependencies)
           # is kept.
           devShells.default = ctx.generated.devShells.default.overrideAttrs (previous: {
+            CL_PROCESS_KIT_PTY_LIBRARY = "${ptyHelperFor ctx}/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}";
             shellHook = previous.shellHook + ''
               export NSHELL_ROOT=$PWD
               alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'

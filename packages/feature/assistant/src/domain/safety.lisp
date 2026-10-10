@@ -187,9 +187,26 @@
           (return (values (%assistant-command-basename command) args))))))
 
 (defun %assistant-safe-git-command-p (args)
-  (let ((subcommand (first args)))
-    (and (member subcommand '("log" "show" "branch" "remote")
-                 :test #'string=)
+  (let ((subcommand (first args))
+        (options (rest args)))
+    (cond
+      ((equal subcommand "branch")
+       ;; A bare name creates a branch; -l creates its reflog, not a listing.
+       (or (null options)
+           (and (equal (first options) "--list")
+                (loop with patterns-only = nil
+                      for arg in (rest options)
+                      always (cond
+                               (patterns-only t)
+                               ((string= arg "--") (setf patterns-only t))
+                               (t (not (%assistant-string-prefix-p "-" arg))))))))
+      ((equal subcommand "remote")
+       ;; Only the no-subcommand listing grammar is automatically approved.
+       (every (lambda (arg)
+                (member arg '("-v" "--verbose") :test #'string=))
+              options))
+      (t
+       (and (member subcommand '("log" "show") :test #'string=)
          (every
           (lambda (arg)
             (or (not (%assistant-string-prefix-p "-" arg))
@@ -202,9 +219,7 @@
                           ((string= subcommand "show")
                            '("--stat" "--patch" "-p" "--name-only"
                              "--name-status" "--pretty" "--format"
-                             "--no-patch" "--"))
-                          ((string= subcommand "branch") '("--list" "-l" "--"))
-                          ((string= subcommand "remote") '("-v" "--verbose" "--")))
+                             "--no-patch" "--")))
                         :test #'string=)
                 (some (lambda (prefix)
                         (%assistant-string-prefix-p prefix arg))
@@ -212,7 +227,7 @@
                         ((string= subcommand "log") '("--pretty=" "--format="))
                         ((string= subcommand "show") '("--pretty=" "--format="))
                         (t nil)))))
-          (rest args)))))
+          options))))))
 
 (defun %assistant-parse-and-classify-text (text)
   (let ((parsed (nshell.domain.parsing:parse-command-line text)))
@@ -288,7 +303,13 @@
              (when index
                (%assistant-parse-and-classify-text
                 (format nil "~{~a~^ ~}" (nthcdr (1+ index) (cons command args)))))))
-          ((member command '("eval" "source") :test #'string=)
+          ((string= command "source")
+           ;; The arguments name a file; classifying them cannot vet its contents.
+           (make-assistant-safety-result
+            :classification :confirm
+            :command command
+            :reason "sourcing a file can execute commands and requires confirmation"))
+          ((string= command "eval")
            (%assistant-parse-and-classify-text (format nil "~{~a~^ ~}" args)))
           ((member command '("sh" "bash" "zsh" "fish") :test #'string=)
            (let ((index (position "-c" args :test #'string=)))

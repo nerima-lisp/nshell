@@ -19,7 +19,7 @@
   :license "MIT"
   ;; Single source of truth for the version. flake.nix reads this form
   ;; line-by-line, and release.yml refuses a tag that disagrees with it.
-  :version "0.6.1"
+  :version "0.6.2"
   :homepage "https://github.com/nerima-lisp/nshell"
   :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
   :source-control (:git "https://github.com/nerima-lisp/nshell.git")
@@ -398,7 +398,7 @@
   :in-order-to ((test-op (test-op "nshell/test"))))
 
 (asdf:defsystem "nshell/test"
-  :version "0.6.1"
+  :version "0.6.2"
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
@@ -585,7 +585,7 @@
                 (error "cl-weave tests failed"))))
 
 (asdf:defsystem "nshell/weave"
-  :version "0.6.1"
+  :version "0.6.2"
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
@@ -615,7 +615,7 @@ primary suite in nshell/test."
                               :reporter :spec)
                (error "cl-weave suite failed"))))
 (asdf:defsystem "nshell/benchmark"
-  :version "0.6.1"
+  :version "0.6.2"
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"

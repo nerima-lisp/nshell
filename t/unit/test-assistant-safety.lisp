@@ -106,6 +106,84 @@
                 (nshell.feature.assistant:assistant-safety-result-classification
                  (nshell.feature.assistant:classify-ast ast))))))
 
+  (it "limits git branch safety to an explicit listing grammar"
+    (let ((cases '(("git branch" :safe)
+                   ("git branch --list" :safe)
+                   ("git branch --list feature/*" :safe)
+                   ("git branch --list -- -topic" :safe)
+                   ("git branch new-name" :confirm)
+                   ("git branch new-name HEAD" :confirm)
+                   ("git branch -l new-name" :confirm)
+                   ("git branch --" :confirm)
+                   ("git branch -- new-name" :confirm)
+                   ("git branch --list -d topic" :confirm)
+                   ("git branch -m old new" :confirm)
+                   ("git branch --set-upstream-to=origin/main topic" :confirm))))
+      (cl-weave:expect-assertions (* 2 (length cases)))
+      (dolist (case cases)
+        (let ((parsed (nshell.domain.parsing:parse-command-line (first case))))
+          (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
+          (expect (second case) :to-be
+                  (nshell.feature.assistant:assistant-safety-result-classification
+                   (nshell.feature.assistant:classify-ast
+                    (nshell.domain.parsing:parse-result-ast parsed))))))))
+
+  (it "limits git remote safety to listing without a subcommand"
+    (let ((cases '(("git remote" :safe)
+                   ("git remote -v" :safe)
+                   ("git remote --verbose" :safe)
+                   ("git remote remove origin" :confirm)
+                   ("git remote rm origin" :confirm)
+                   ("git remote add origin local-repo" :confirm)
+                   ("git remote rename origin backup" :confirm)
+                   ("git remote set-url origin local-repo" :confirm)
+                   ("git remote -v remove origin" :confirm)
+                   ("git remote update" :confirm)
+                   ("git remote get-url origin" :confirm))))
+      (cl-weave:expect-assertions (* 2 (length cases)))
+      (dolist (case cases)
+        (let ((parsed (nshell.domain.parsing:parse-command-line (first case))))
+          (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
+          (expect (second case) :to-be
+                  (nshell.feature.assistant:assistant-safety-result-classification
+                   (nshell.feature.assistant:classify-ast
+                    (nshell.domain.parsing:parse-result-ast parsed))))))))
+
+  (it "requires confirmation for source without treating filenames as commands"
+    (let ((cases '(("source echo" :confirm)
+                   ("source ls" :confirm)
+                   ("source git log" :confirm)
+                   ("source" :confirm)
+                   ("source script.sh" :confirm)
+                   ("source rm -rf /" :confirm)
+                   ("command source echo" :confirm)
+                   ("builtin source echo" :confirm)
+                   ("source $(echo echo)" :confirm)
+                   ("source $(rm -rf /)" :block))))
+      (cl-weave:expect-assertions (* 2 (length cases)))
+      (dolist (case cases)
+        (let ((parsed (nshell.domain.parsing:parse-command-line (first case))))
+          (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
+          (expect (second case) :to-be
+                  (nshell.feature.assistant:assistant-safety-result-classification
+                   (nshell.feature.assistant:classify-ast
+                    (nshell.domain.parsing:parse-result-ast parsed))))))))
+
+  (it "preserves the existing safe git log and show argument grammar"
+    (let ((cases '("git log" "git log --oneline -n 5"
+                   "git log --format=%h HEAD -- file"
+                   "git log --graph --all"
+                   "git show" "git show --pretty=oneline HEAD"
+                   "git show --format %h -- file")))
+      (cl-weave:expect-assertions (* 2 (length cases)))
+      (dolist (text cases)
+        (let ((parsed (nshell.domain.parsing:parse-command-line text)))
+          (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
+          (expect :safe :to-be
+                  (nshell.feature.assistant:assistant-safety-result-classification
+                   (nshell.feature.assistant:classify-ast
+                    (nshell.domain.parsing:parse-result-ast parsed))))))))
+
   (it "blocks find output actions and command substitutions in command position"
     (dolist (text '("find . -fprint output" "find . -fprintf output %p"
                     "find . -fls output" "find . -okdir rm {} \\;"

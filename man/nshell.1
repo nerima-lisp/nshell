@@ -1,6 +1,6 @@
-.TH NSHELL 1 "2026-09-30" "nshell 0.5.0" "User Commands"
+.TH NSHELL 1 "2026-09-30" "nshell 0.6.2" "User Commands"
 .SH NAME
-nshell \- a modern, fish-inspired interactive shell written in Common Lisp
+nshell \- a fish-inspired interactive shell written in Common Lisp
 .SH SYNOPSIS
 .B nshell
 .RB [ \-\-help ]
@@ -17,9 +17,8 @@ nshell \- a modern, fish-inspired interactive shell written in Common Lisp
 .RI [ ARGS .\|.\|.]]
 .SH DESCRIPTION
 .B nshell
-is an interactive command-line shell that emphasizes the interactive
-experience: real-time syntax highlighting, history-aware autosuggestions,
-fish-style abbreviations, and a fast, context-aware completion engine.
+provides real-time syntax highlighting, history-aware autosuggestions,
+fish-style abbreviations, and context-aware completion.
 .PP
 When started with standard input connected to a terminal,
 .B nshell
@@ -38,6 +37,7 @@ file argument, it runs the script (with multiline blocks); any following
 .I ARGS
 are exposed to the script as
 .BR $argv .
+Indexing is 1-based: \fB$argv[1]\fR selects the first argument.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help
@@ -68,12 +68,20 @@ instead of
 .BR ~/.nshellrc .
 .TP
 .B \-\-no\-history
-Do not read or write interactive history.
+Do not load or save the history file; in-session history remains available.
 .SH KEY BINDINGS
-By default the line editor uses Emacs-style key bindings, including cursor
-motion (\fBC\-a\fR, \fBC\-e\fR, \fBM\-f\fR, \fBM\-b\fR), editing (\fBC\-k\fR,
-\fBC\-u\fR, \fBC\-w\fR, \fBC\-y\fR), undo (\fBC\-_\fR), incremental history
-search (\fBC\-r\fR), and autosuggestion acceptance (\fBRight\fR, \fBC\-f\fR).
+The default Emacs-style bindings use \fBC\-\fR for Ctrl
+and \fBM\-\fR for Alt (Meta).
+\fBC\-a\fR moves to the start of the line; \fBC\-e\fR moves to the end,
+or accepts the autosuggestion when already at the end.
+\fBM\-b\fR moves back one word; \fBM\-f\fR moves forward one word,
+or accepts the next suggested word at the end of the line.
+\fBRight\fR and \fBC\-f\fR move forward one character,
+or accept the entire autosuggestion at the end of the line.
+.PP
+\fBC\-k\fR cuts to the end of the line; \fBC\-u\fR cuts to the start;
+\fBC\-w\fR cuts the preceding word; \fBC\-y\fR reinserts the last cut text.
+\fBC\-_\fR undoes the last edit.
 .PP
 \fBC\-r\fR lists the matching history entries under the prompt.
 \fBC\-r\fR/\fBC\-s\fR and the arrow keys move the selection,
@@ -84,7 +92,8 @@ restores the line that was being typed.
 .PP
 Setting the environment variable
 .B NSHELL_VI_MODE
-to a non-empty value (other than 0/false/no) enables vi key bindings: press
+to a non-empty value other than 0, false, or no (case-insensitive)
+enables vi key bindings: press
 .B ESC
 to enter normal mode, which supports motions (\fBh l 0 ^ $ w b e\fR), insert
 entries (\fBi a I A\fR), edits (\fBx D C s\fR), counts, operators
@@ -108,10 +117,19 @@ expansion (\fB~\fR), arithmetic expansion (\fB$((expr))\fR), variable and
 parameter expansion, command substitution (\fB$(cmd)\fR and fish-style
 \fB(cmd)\fR), and globbing (\fB* ? [\&.\&.\&.]\fR).
 .PP
-Parameter expansion supports \fB${VAR}\fR, defaults \fB${VAR:-word}\fR and
-relatives (\fB:= :+ :?\fR), substring slicing \fB${VAR:offset[:length]}\fR,
-length \fB${#VAR}\fR, prefix/suffix stripping (\fB${VAR#pat} ## % %%\fR), and
-substitution (\fB${VAR/pat/rep} //\fR).
+\fB${VAR}\fR expands to the variable's value; \fB${#VAR}\fR gives its length.
+\fB${VAR:-word}\fR uses \fBword\fR when VAR is unset or empty;
+\fB${VAR:=word}\fR also assigns that value to VAR.
+\fB${VAR:+word}\fR uses \fBword\fR only when VAR is set and non-empty;
+\fB${VAR:?message}\fR reports an error when VAR is unset or empty.
+.PP
+\fB${VAR:offset}\fR takes a substring from the zero-based offset to the end;
+\fB${VAR:offset:length}\fR specifies a length.
+\fB${VAR#pat}\fR and \fB${VAR##pat}\fR remove the shortest and longest
+glob-matching prefixes; \fB${VAR%pat}\fR and \fB${VAR%%pat}\fR do the same
+for suffixes.
+\fB${VAR/pat/rep}\fR replaces the first literal occurrence of \fBpat\fR
+with \fBrep\fR; \fB${VAR//pat/rep}\fR replaces all occurrences.
 .PP
 Double quotes suppress globbing and word-splitting but allow variable,
 arithmetic, and command-substitution expansion; single quotes are fully
@@ -149,8 +167,12 @@ is rejected, since nshell has no universal-variable store.
 .SH BUILTINS
 .B nshell
 provides the following builtins:
+.BR . ,
+.BR [ ,
 .BR alias ,
 .BR abbr ,
+.BR agent ,
+.BR ai ,
 .BR and ,
 .BR bg ,
 .BR bind ,
@@ -203,10 +225,23 @@ provides the following builtins:
 Run
 .B help
 inside the shell for details.
+.SH HISTORY FILE
+.I ~/.nshell_history
+is created with owner-only permissions. Symlinks, hard links, nonregular files,
+and files owned by another user are rejected.
+.PP
+A malformed or truncated record is reported. Earlier complete records remain
+readable, but new records are not appended until the file is moved aside.
+Existing bytes are not discarded automatically.
+.PP
+Use
+.B \-\-no\-history
+to disable history persistence.
 .SH ENVIRONMENT
 .TP
 .B NSHELL_VI_MODE
-When set to a non-empty value, enables vi key bindings (see KEY BINDINGS).
+When set to a non-empty value other than 0, false, or no (case-insensitive),
+enables vi key bindings.
 .TP
 .B NSHELL_GREETING
 Printed at interactive startup in place of the version banner. An empty value
@@ -215,9 +250,9 @@ starts the session silently. Read after the startup file runs, so
 can set it.
 .TP
 .B NSHELL_PROMPT
-Sets the left prompt's format string at session start (see
-.B prompt
-under BUILTINS). A
+Sets the left prompt's format string at session start. See
+<https://nerima-lisp.github.io/nshell/reference/builtins/>.
+A
 .B prompt left
 line in
 .B ~/.nshellrc
@@ -244,7 +279,7 @@ Used for tilde expansion.
 .B PATH
 Searched for external commands.
 .SH EXAMPLES
-Run a one-off pipeline:
+Run a one-off command:
 .RS
 .EX
 nshell \-c 'string upper hello'
@@ -267,5 +302,3 @@ interactive exit.
 .BR zsh (1)
 .SH BUGS
 Report issues at <https://github.com/nerima-lisp/nshell/issues>.
-.SH AUTHORS
-The nshell authors.

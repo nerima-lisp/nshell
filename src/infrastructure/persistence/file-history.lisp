@@ -25,6 +25,7 @@
 
 (defvar *history-record-tables* (make-hash-table :test #'eq))
 (defvar *history-record-to-append* nil)
+(defvar *history-file-lock* (sb-thread:make-mutex :name "nshell history file"))
 
 (defun %make-history-record-from-values (&key text timestamp cwd exit-code duration-ms origin)
   (check-type text string)
@@ -114,7 +115,7 @@
               (let ((payload (make-string length)))
                 (if (= length (read-sequence payload stream))
                     (let ((separator (read-char stream nil nil)))
-                      (if (or (null separator) (char= separator #\Newline))
+                      (if (eql separator #\Newline)
                           (case version
                             (:v2 (values
                                   (%make-history-record-from-values :text payload)
@@ -150,6 +151,48 @@
             +history-record-prefix+
             (length payload)
             payload)))
+
+(defun %open-history-stream (path &key append)
+  (let ((fd (handler-case
+                (if append
+                    (handler-case
+                        (sb-posix:open (namestring path)
+                                       (logior sb-posix:o-rdwr sb-posix:o-creat
+                                               sb-posix:o-excl sb-posix:o-nofollow
+                                               sb-posix:o-nonblock)
+                                       #o600)
+                      (sb-posix:syscall-error (condition)
+                        (if (= (sb-posix:syscall-errno condition) sb-posix:eexist)
+                            (sb-posix:open (namestring path)
+                                           (logior sb-posix:o-rdwr sb-posix:o-nofollow
+                                                   sb-posix:o-nonblock))
+                            (error condition))))
+                    (sb-posix:open (namestring path)
+                                   (logior sb-posix:o-rdonly sb-posix:o-nofollow
+                                           sb-posix:o-nonblock)))
+              (sb-posix:syscall-error (condition)
+                (if (and (not append)
+                         (= (sb-posix:syscall-errno condition) sb-posix:enoent))
+                    nil
+                    (error condition))))))
+    (when fd
+      (handler-case
+          (let ((stat (sb-posix:fstat fd)))
+            (unless (and (sb-posix:s-isreg (sb-posix:stat-mode stat))
+                         (= (sb-posix:stat-uid stat) (sb-posix:getuid))
+                         (= (sb-posix:stat-nlink stat) 1))
+              (error "History must be a regular, singly-linked file owned by this user."))
+            (sb-posix:fchmod fd #o600)
+            ;; Never wait on another shell while handling interactive input.
+            ;; The descriptor starts at zero, so a zero-length lock covers the file.
+            (when append (sb-posix:lockf fd sb-posix:f-tlock 0))
+            (sb-sys:make-fd-stream fd :input t :output append
+                                     :element-type 'character
+                                     :external-format :utf-8 :auto-close t
+                                     :pathname path))
+        (error (condition)
+          (sb-posix:close fd)
+          (error condition))))))
 
 (defun %history-record-table (history)
   (or (gethash history *history-record-tables*)
@@ -229,22 +272,25 @@
 (defun load-history-file ()
   "Return v3 records oldest first, promoting v2 records with NIL metadata."
   (let ((path (history-file-path)))
-    (when (probe-file path)
-      (handler-case
-          (with-open-file (f path :direction :input :if-does-not-exist nil)
-            (multiple-value-bind (records status) (%read-history-records f)
-              (when status
-                (%report-history-error "read" path
-                                       (format nil "~a history record" status)))
-              records))
-        (condition (condition)
-          (%report-history-error "read" path condition)
-          nil)))))
+    (handler-case
+        ;; Closing any descriptor releases this process's POSIX file locks.
+        (sb-thread:with-mutex (*history-file-lock*)
+          (let ((stream (%open-history-stream path)))
+            (when stream
+              (with-open-stream (f stream)
+                (multiple-value-bind (records status) (%read-history-records f)
+                  (when status
+                    (%report-history-error "read" path
+                                           (format nil "~a history record" status)))
+                  records)))))
+      (condition (condition)
+        (%report-history-error "read" path condition)
+        nil))))
 
 (defun append-history-entry (text &key timestamp cwd exit-code duration-ms origin)
   (let ((path (history-file-path)))
     (handler-case
-        (progn
+        (sb-thread:with-mutex (*history-file-lock*)
           (ensure-directories-exist path)
           (let ((record (or *history-record-to-append*
                             (%make-history-record-from-values
@@ -256,9 +302,14 @@
                              :origin origin))))
             (unless (string= text (history-record-text record))
               (error "History record text does not match the appended command."))
-            (with-open-file (f path :direction :output
-                               :if-exists :append :if-does-not-exist :create)
-              (%append-history-record f record))))
+            (with-open-stream (f (%open-history-stream path :append t))
+              (multiple-value-bind (records status) (%read-history-records f)
+                (declare (ignore records))
+                (when status
+                  (error "~a history record; existing bytes were preserved." status)))
+              (file-position f :end)
+              (%append-history-record f record)
+              (finish-output f))))
       (condition (condition)
         (%report-history-error "append to" path condition)
         nil))))

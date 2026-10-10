@@ -1,0 +1,401 @@
+diff --git a/cl-boundary-kit.asd b/cl-boundary-kit.asd
+--- a/cl-boundary-kit.asd
++++ b/cl-boundary-kit.asd
+@@ -167,7 +167,7 @@
+       (:file "examples-runtime-test")))
+   (asdf:defsystem "cl-boundary-kit/test-prolog"
+     :description "Prolog-backed test suite for cl-boundary-kit"
+-    :depends-on (:cl-boundary-kit/test-base :cl-prolog :cl-prolog/weave)
++    :depends-on (:cl-boundary-kit/test-base :cl-prolog-kit :cl-prolog-kit/weave)
+     :pathname "t"
+     :serial t
+     :components ((:file "prolog-boundary-invariants-test")
+diff --git a/t/package.lisp b/t/package.lisp
+--- a/t/package.lisp
++++ b/t/package.lisp
+@@ -61,7 +61,7 @@
+       ,@body)))
+ 
+ (defun prolog-special-symbol (name)
+-  (multiple-value-bind (symbol status) (find-symbol name '#:cl-prolog)
++  (multiple-value-bind (symbol status) (find-symbol name '#:cl-prolog-kit)
+     (when (and status (boundp symbol))
+       symbol)))
+ 
+@@ -90,7 +90,7 @@
+   ())
+ 
+ (defun prolog-parser-resource-error-symbol ()
+-  (multiple-value-bind (symbol status) (find-symbol "PROLOG-PARSER-RESOURCE-ERROR" '#:cl-prolog)
++  (multiple-value-bind (symbol status) (find-symbol "PROLOG-PARSER-RESOURCE-ERROR" '#:cl-prolog-kit)
+     (when status
+       symbol)))
+ 
+@@ -104,7 +104,7 @@
+   condition)
+ 
+ (defun prolog-parser-resource-error-accessor-value (name condition)
+-  (multiple-value-bind (symbol status) (find-symbol name '#:cl-prolog)
++  (multiple-value-bind (symbol status) (find-symbol name '#:cl-prolog-kit)
+     (when (and status (fboundp symbol))
+       (funcall (symbol-function symbol) condition))))
+ 
+@@ -129,7 +129,7 @@
+       ,@body)))
+ 
+ (defun prolog-condition-symbol (name)
+-  (multiple-value-bind (symbol status) (find-symbol name '#:cl-prolog)
++  (multiple-value-bind (symbol status) (find-symbol name '#:cl-prolog-kit)
+     (when status
+       symbol)))
+ 
+diff --git a/t/property-invariants-test.lisp b/t/property-invariants-test.lisp
+--- a/t/property-invariants-test.lisp
++++ b/t/property-invariants-test.lisp
+@@ -156,7 +156,7 @@
+                                            ("*MAX-PROLOG-SOURCE-CHARACTERS*" 256))
+         (handler-case
+             ;; Parsed within limits: a well-formed term is returned.
+-            (expect (cl-prolog:read-prolog-term source) :to-be-truthy)
++            (expect (cl-prolog-kit:read-prolog-term source) :to-be-truthy)
+           (error (condition)
+             ;; Rejected: the failure is bounded and carries a positive limit.
+             (assert-prolog-parser-resource-error condition)
+diff --git a/t/prolog-advanced-test.lisp b/t/prolog-advanced-test.lisp
+--- a/t/prolog-advanced-test.lisp
++++ b/t/prolog-advanced-test.lisp
+@@ -1,6 +1,6 @@
+ ;;;; t/prolog-advanced-test.lisp
+ ;;;;
+-;;;; Advanced cl-prolog usage: bounded parsing of untrusted policy source,
++;;;; Advanced cl-prolog-kit usage: bounded parsing of untrusted policy source,
+ ;;;; ISO-conformant rejection of malformed goals, and terminating transitive
+ ;;;; reasoning over a boundary delegation graph. Split from
+ ;;;; prolog-boundary-invariants-test.lisp, which holds the trusted-Lisp-data policy
+@@ -24,31 +24,31 @@
+ ;;; a host can tighten it around any consult of untrusted input.
+ 
+ (it "untrusted-policy-source-parses-and-answers-queries"
+-  (let ((policy (cl-prolog:consult-prolog *boundary-policy-source*)))
++  (let ((policy (cl-prolog-kit:consult-prolog *boundary-policy-source*)))
+-    (expect (cl-prolog:prolog-succeeds-p
++    (expect (cl-prolog-kit:prolog-succeeds-p
+-             policy (cl-prolog:read-prolog-term "permitted(filesystem, read)"))
++             policy (cl-prolog-kit:read-prolog-term "permitted(filesystem, read)"))
+             :to-be-truthy)
+-    (expect (cl-prolog:prolog-succeeds-p
++    (expect (cl-prolog-kit:prolog-succeeds-p
+-             policy (cl-prolog:read-prolog-term "permitted(filesystem, mutate)"))
++             policy (cl-prolog-kit:read-prolog-term "permitted(filesystem, mutate)"))
+             :to-be-null)))
+ 
+ (it "oversized-policy-token-stream-is-rejected-with-a-bounded-error"
+   (with-optional-first-prolog-special (("*MAX-PROLOG-TOKENS*" 8)
+                                        ("*MAX-PROLOG-SOURCE-CHARACTERS*" 8))
+     (with-prolog-parser-resource-error (condition)
+-        (cl-prolog:consult-prolog *boundary-policy-source*)
++        (cl-prolog-kit:consult-prolog *boundary-policy-source*)
+       condition)))
+ 
+ (it "deeply-nested-policy-terms-are-rejected-before-stack-exhaustion"
+   (with-optional-prolog-special ("*MAX-PROLOG-PARSER-DEPTH*" 4)
+     (with-prolog-parser-resource-error (condition)
+-        (cl-prolog:read-prolog-term "effect(a(b(c(d(e(f))))))")
++        (cl-prolog-kit:read-prolog-term "effect(a(b(c(d(e(f))))))")
+       condition)))
+ 
+ (it "the-parser-resource-error-carries-actionable-diagnostics"
+   (with-optional-prolog-special ("*MAX-PROLOG-SOURCE-CHARACTERS*" 5)
+     (with-prolog-parser-resource-error (condition)
+-        (cl-prolog:read-prolog-term "boundary(filesystem)")
++        (cl-prolog-kit:read-prolog-term "boundary(filesystem)")
+       (let ((resource (prolog-parser-resource-error-resource-value condition))
+             (limit (prolog-parser-resource-error-limit-value condition)))
+         (when resource
+@@ -65,7 +65,7 @@
+ (it "prolog-query-boundary-rejects-unbound-goals-with-a-catchable-error"
+   (handler-case
+       (progn
+-        (cl-prolog:query-prolog *boundary-policy* '?goal)
++        (cl-prolog-kit:query-prolog *boundary-policy* '?goal)
+         (error "Expected unbound Prolog goal to fail"))
+     (error (condition)
+       (expect (or (prolog-condition-p condition "PROLOG-INSTANTIATION-ERROR")
+@@ -75,7 +75,7 @@
+ (it "prolog-query-boundary-rejects-non-callable-goals-before-dispatch"
+   (handler-case
+       (progn
+-        (cl-prolog:query-prolog *boundary-policy* 42)
++        (cl-prolog-kit:query-prolog *boundary-policy* 42)
+         (error "Expected non-callable Prolog goal to fail"))
+     (error (condition)
+       (expect (prolog-condition-p condition "INVALID-GOAL-ERROR") :to-be-truthy))))
+@@ -86,7 +86,7 @@
+ ;;; and terminates, where a naive resolution order would diverge.
+ 
+ (defparameter *boundary-delegation*
+-  (cl-prolog:prolog
++  (cl-prolog-kit:prolog
+     ((delegates recording-filesystem buffered-filesystem))
+     ((delegates buffered-filesystem native-filesystem))
+     ((delegates recording-process native-process))
+@@ -96,7 +96,7 @@
+     ((reaches ?a ?b) (delegates ?a ?b)))
+   "Which concrete boundaries a recording boundary ultimately delegates to.")
+ 
+-(cl-prolog/weave:deftest-queries boundary-delegation-reachability-terminates
++(cl-prolog-kit/weave:deftest-queries boundary-delegation-reachability-terminates
+     (*boundary-delegation*)
+   ("left-recursive reachability yields the full delegation closure"
+    (reaches recording-filesystem ?target) :set
+@@ -112,7 +112,7 @@
+ 
+ (it "tabled-reachability-over-a-cyclic-graph-terminates-and-deduplicates"
+   (handler-case
+-      (let ((graph (cl-prolog:consult-prolog
++      (let ((graph (cl-prolog-kit:consult-prolog
+                     "
+ :- table(reaches/2).
+ delegates(a, b).
+@@ -122,8 +122,8 @@
+ reaches(X, Y) :- delegates(X, Z), reaches(Z, Y).")))
+         ;; Over the cycle a -> b -> c -> a every node reaches all three nodes,
+         ;; each exactly once thanks to tabled answer deduplication.
+-        (expect (= 3 (length (cl-prolog:query-prolog
++        (expect (= 3 (length (cl-prolog-kit:query-prolog
+-                              graph (cl-prolog:read-prolog-term "reaches(a, Y)"))))
++                              graph (cl-prolog-kit:read-prolog-term "reaches(a, Y)"))))
+                 :to-be-truthy))
+     (error (condition)
+       (if (prolog-error-message-contains-p condition "Unknown Prolog directive")
+@@ -134,23 +134,23 @@
+ ;;; non-empty stream of recognized boundary effects.  The grammar validates
+ ;;; the stream declaratively; unknown effects or an empty grant are rejected.
+ ;;; (Grammar operators like TERMINAL are matched by symbol name, so they stay
+-;;; unqualified; DEF-DCG-RULE/MAKE-RULEBASE/PHRASE-ALL are cl-prolog entry
++;;; unqualified; DEF-DCG-RULE/MAKE-RULEBASE/PHRASE-ALL are cl-prolog-kit entry
+ ;;; points.)
+ 
+ (defparameter *capability-grammar*
+-  (cl-prolog:make-rulebase
++  (cl-prolog-kit:make-rulebase
+-   :clauses (list (cl-prolog:def-dcg-rule effect (terminal :read))
++   :clauses (list (cl-prolog-kit:def-dcg-rule effect (terminal :read))
+-                  (cl-prolog:def-dcg-rule effect (terminal :write))
++                  (cl-prolog-kit:def-dcg-rule effect (terminal :write))
+-                  (cl-prolog:def-dcg-rule effect (terminal :request))
++                  (cl-prolog-kit:def-dcg-rule effect (terminal :request))
+-                  (cl-prolog:def-dcg-rule effect (terminal :observe))
++                  (cl-prolog-kit:def-dcg-rule effect (terminal :observe))
+-                  (cl-prolog:def-dcg-rule capability effect)
++                  (cl-prolog-kit:def-dcg-rule capability effect)
+-                  (cl-prolog:def-dcg-rule capability effect capability)))
++                  (cl-prolog-kit:def-dcg-rule capability effect capability)))
+   "A DCG whose CAPABILITY rule accepts a non-empty stream of boundary effects.")
+ 
+ (defun %capability-grant-p (tokens)
+   "True when TOKENS is fully consumed by the CAPABILITY grammar, i.e. the whole
+ stream is a well-formed boundary capability grant."
+-  (and (member nil (cl-prolog:phrase-all *capability-grammar* 'capability tokens)
++  (and (member nil (cl-prolog-kit:phrase-all *capability-grammar* 'capability tokens)
+                :test #'eq)
+        t))
+ 
+@@ -171,9 +171,9 @@
+ 
+ (it "finite-domain-constraints-enumerate-admissible-boundary-orderings"
+   (let ((orderings
+-          (cl-prolog:query-prolog
++          (cl-prolog-kit:query-prolog
+-           (cl-prolog:make-rulebase)
++           (cl-prolog-kit:make-rulebase)
+-           (cl-prolog:read-prolog-term
++           (cl-prolog-kit:read-prolog-term
+             "Fs in [1,2,3], Net in [1,2,3], Proc in [1,2,3], all_different([Fs,Net,Proc]), Fs #< Net, labeling([], [Fs,Net,Proc])"))))
+     ;; Over distinct priorities in 1..3 with Fs < Net there are exactly three
+     ;; admissible orderings.
+diff --git a/t/prolog-boundary-invariants-test.lisp b/t/prolog-boundary-invariants-test.lisp
+--- a/t/prolog-boundary-invariants-test.lisp
++++ b/t/prolog-boundary-invariants-test.lisp
+@@ -4,7 +4,7 @@
+ (defun %prolog-binding (variable solution)
+   (cdr (assoc variable solution)))
+ 
+-(defparameter *boundary-policy* (cl-prolog:prolog
++(defparameter *boundary-policy* (cl-prolog-kit:prolog
+     ((boundary filesystem))
+     ((boundary environment))
+     ((boundary process))
+@@ -29,7 +29,7 @@
+       (recordable ?boundary)))
+   "Facts and rules describing the effect surface of boundary objects.")
+ 
+-(cl-prolog/weave:deftest-queries
++(cl-prolog-kit/weave:deftest-queries
+   prolog-boundary-policy-has-declarative-invariants
+   (*boundary-policy*)
+   ("filesystem boundaries permit the expected operations"
+@@ -60,7 +60,7 @@
+ ;;;; added with a full native/test/recording triad, so they extend the fact
+ ;;;; base and the expected solution set below rather than introducing new
+ ;;;; asymmetries.
+-(defparameter *boundary-api-completeness* (cl-prolog:prolog
++(defparameter *boundary-api-completeness* (cl-prolog-kit:prolog
+     ((provides-native filesystem))
+     ((provides-native environment))
+     ((provides-native process))
+@@ -147,7 +147,7 @@
+   "Which native/test/recording constructors each boundary kind actually
+ exports.")
+ 
+-(cl-prolog/weave:deftest-queries
++(cl-prolog-kit/weave:deftest-queries
+   boundary-api-triads-match-the-documented-asymmetry
+   (*boundary-api-completeness*)
+   ("every boundary except clock completes the native/test/recording triad"
+@@ -204,56 +204,56 @@
+ immediately RETRACT-ing a throwaway fact registers the predicate as dynamic
+ with an empty extension, so BODY can query it before anything real is
+ registered without tripping that error."
+-  (cl-prolog:query-prolog
++  (cl-prolog-kit:query-prolog
+     policy
+-    '(cl-prolog:assertz (registered-boundary %seed%)))
++    '(cl-prolog-kit:assertz (registered-boundary %seed%)))
+-  (cl-prolog:query-prolog
++  (cl-prolog-kit:query-prolog
+     policy
+-    '(cl-prolog:assertz (registered-effect %seed% %seed%)))
++    '(cl-prolog-kit:assertz (registered-effect %seed% %seed%)))
+-  (cl-prolog:query-prolog
++  (cl-prolog-kit:query-prolog
+     policy
+-    '(cl-prolog:retract (registered-boundary %seed%)))
++    '(cl-prolog-kit:retract (registered-boundary %seed%)))
+-  (cl-prolog:query-prolog
++  (cl-prolog-kit:query-prolog
+     policy
+-    '(cl-prolog:retract (registered-effect %seed% %seed%)))
++    '(cl-prolog-kit:retract (registered-effect %seed% %seed%)))
+   (funcall body))
+ 
+ (it "runtime-plugin-registration-via-assertz-and-retract-updates-permitted-facts"
+-  (let ((policy (cl-prolog:extend-rulebase *boundary-policy*
++  (let ((policy (cl-prolog-kit:extend-rulebase *boundary-policy*
+                   ((permitted ?boundary ?operation)
+                    (registered-boundary ?boundary)
+                    (registered-effect ?boundary ?operation)))))
+     (%call-with-empty-dynamic-registration policy
+      (lambda ()
+-       (expect (cl-prolog:prolog-succeeds-p policy '(permitted plugin invoke))
++       (expect (cl-prolog-kit:prolog-succeeds-p policy '(permitted plugin invoke))
+                :to-be-null)
+-       (cl-prolog:query-prolog policy '(cl-prolog:assertz (registered-boundary plugin)))
++       (cl-prolog-kit:query-prolog policy '(cl-prolog-kit:assertz (registered-boundary plugin)))
+-       (cl-prolog:query-prolog policy '(cl-prolog:assertz (registered-effect plugin invoke)))
++       (cl-prolog-kit:query-prolog policy '(cl-prolog-kit:assertz (registered-effect plugin invoke)))
+-       (expect (cl-prolog:prolog-succeeds-p policy '(permitted plugin invoke))
++       (expect (cl-prolog-kit:prolog-succeeds-p policy '(permitted plugin invoke))
+                :to-be-truthy)
+-       (cl-prolog:query-prolog policy '(cl-prolog:retract (registered-effect plugin invoke)))
++       (cl-prolog-kit:query-prolog policy '(cl-prolog-kit:retract (registered-effect plugin invoke)))
+-       (expect (cl-prolog:prolog-succeeds-p policy '(permitted plugin invoke))
++       (expect (cl-prolog-kit:prolog-succeeds-p policy '(permitted plugin invoke))
+                :to-be-null)
+        ;; The original shared policy is untouched by mutating its extended copy.
+-       (expect (cl-prolog:prolog-succeeds-p *boundary-policy* '(boundary plugin))
++       (expect (cl-prolog-kit:prolog-succeeds-p *boundary-policy* '(boundary plugin))
+                :to-be-null)))))
+ 
+ ;;; Negation as failure: "clock mutation is not permitted" stated as a rule
+ ;;; (using NOT rather than the :FAILS query kind above) so the restriction is
+ ;;; itself a declarative fact a query can depend on, not only an assertion a
+ ;;; test makes about the absence of solutions.
+-(defparameter *boundary-policy-with-negation* (cl-prolog:extend-rulebase
++(defparameter *boundary-policy-with-negation* (cl-prolog-kit:extend-rulebase
+     *boundary-policy*
+     ((clock-mutation-forbidden) (not (permitted clock mutate)))))
+ 
+ (it "negation-as-failure-declares-clock-mutation-forbidden"
+-  (expect (cl-prolog:prolog-succeeds-p
++  (expect (cl-prolog-kit:prolog-succeeds-p
+            *boundary-policy-with-negation* '(clock-mutation-forbidden))
+           :to-be-truthy)
+   ;; A permitted operation is NOT forbidden -- the negated rule tracks the
+   ;; underlying PERMITTED facts rather than always succeeding.
+-  (expect (cl-prolog:prolog-succeeds-p
++  (expect (cl-prolog-kit:prolog-succeeds-p
+-           (cl-prolog:extend-rulebase *boundary-policy-with-negation*
++           (cl-prolog-kit:extend-rulebase *boundary-policy-with-negation*
+              ((clock-observation-forbidden) (not (permitted clock observe))))
+            '(clock-observation-forbidden))
+           :to-be-null))
+@@ -261,25 +261,25 @@
+ (it
+   "prolog-rulebase-extension-is-transactional"
+   (let ((extended
+-        (cl-prolog:extend-rulebase
++        (cl-prolog-kit:extend-rulebase
+           *boundary-policy*
+           ((effect clock advance))
+           ((recordable clock)))))
+-    (cl-prolog/weave:assert-query
++    (cl-prolog-kit/weave:assert-query
+       *boundary-policy*
+       (permitted clock advance)
+       :fails)
+-    (cl-prolog/weave:assert-query
++    (cl-prolog-kit/weave:assert-query
+       *boundary-policy*
+       (permitted clock ?operation)
+       :set
+       (((?operation . observe))))
+-    (cl-prolog/weave:assert-query
++    (cl-prolog-kit/weave:assert-query
+       extended
+       (permitted clock ?operation)
+       :set
+       (((?operation . advance)) ((?operation . observe))))
+-    (cl-prolog/weave:assert-query
++    (cl-prolog-kit/weave:assert-query
+       extended
+       (observable-effect clock ?operation)
+       :set
+@@ -288,7 +288,7 @@
+ (it
+   "prolog-solutions-stream-through-cps-query-boundary"
+   (let ((seen '()))
+-    (cl-prolog:map-prolog-solutions
++    (cl-prolog-kit:map-prolog-solutions
+       (lambda (solution)
+         (push (%prolog-binding '?boundary solution) seen))
+       *boundary-policy*
+@@ -305,7 +305,7 @@
+ 
+ (it
+   "prolog-occurs-check-rejects-cyclic-boundary-facts"
+-  (expect (null (cl-prolog:unify '?boundary '(wrapped ?boundary))) :to-be-truthy))
++  (expect (null (cl-prolog-kit:unify '?boundary '(wrapped ?boundary))) :to-be-truthy))
+ 
+ ;;; FINDALL: aggregate every declared BOUNDARY/1 fact into one list and
+ ;;; assert its length, rather than enumerating solutions one at a time the
+@@ -318,7 +318,7 @@
+ (it
+   "findall-aggregates-every-declared-boundary-fact-into-one-count"
+   (let ((policy
+-        (cl-prolog:consult-prolog
++        (cl-prolog-kit:consult-prolog
+           "boundary(filesystem).
+                   boundary(environment).
+                   boundary(process).
+@@ -328,8 +328,8 @@
+       (=
+         1
+         (length
+-          (cl-prolog:query-prolog
++          (cl-prolog-kit:query-prolog
+             policy
+-            (cl-prolog:read-prolog-term
++            (cl-prolog-kit:read-prolog-term
+               "findall(B, boundary(B), [filesystem,environment,process,network,clock])"))))
+       :to-be-truthy)))

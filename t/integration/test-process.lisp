@@ -291,15 +291,13 @@
                              (eq :signaled (sb-ext:process-status process)))
                            processes)))))))
 
-  (it "foreground-external-command-timeout-is-nil-by-default-for-noninteractive-output"
-    "With *EXTERNAL-COMMAND-TIMEOUT* left at its production default (now NIL),
-%FOREGROUND-EXTERNAL-COMMAND-TIMEOUT must return NIL even when
-*STANDARD-OUTPUT* is not an interactive terminal -- pre-fix the default was
-30, so this same non-interactive check would have returned 30 (a truthy,
-enforced timeout) instead."
+  (it "foreground-external-command-timeout-uses-default-for-noninteractive-output"
+    "With *EXTERNAL-COMMAND-TIMEOUT* left at its production default,
+%FOREGROUND-EXTERNAL-COMMAND-TIMEOUT applies the configured finite timeout
+when *STANDARD-OUTPUT* is not an interactive terminal."
     (let ((*standard-output* (make-string-output-stream)))
       (expect (nshell.infrastructure.acl::%foreground-external-command-timeout)
-              :to-be nil)))
+              :to-be nshell.infrastructure.acl:*external-command-timeout*)))
 
   (it "foreground-process-group-macro-runs-body-without-a-pgid"
     "The foreground-group wrapper preserves execution when no group is available."

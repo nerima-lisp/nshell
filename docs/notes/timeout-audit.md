@@ -8,7 +8,7 @@ after N seconds regardless of context."
 
 `run-external` (`infrastructure/acl/syscall-process.lisp`) — the path for
 every plain foreground external command typed at the interactive prompt —
-applied `*external-command-timeout*` (30s default) unconditionally. That is
+applied `*external-command-timeout*` unconditionally. That is
 the *opposite* failure mode from a missing timeout: typing `vim file.txt`,
 `ssh host`, or `top` at the prompt got the process SIGTERM'd, then SIGKILL'd,
 30 seconds in, mid-edit, with no exemption for a foreground program a human
@@ -44,10 +44,11 @@ under the `--non-interactive` batch test runner is never
 
 ## Confirmed sound, no change needed
 
-- **`run-external-capture`** (command substitution, `$(...)`) — delegates to
-  `cl-process-kit`'s `run` with `:timeout *external-command-timeout*
-  :on-timeout :return`; single choke point, no bypass. Correctly unconditional
-  — command substitution has no terminal of its own to be interactive with.
+- **`run-external-capture`** (command substitution, `$(...)`) — validates the
+  configured command-substitution timeout at the communication boundary and
+  delegates to `cl-process-kit`'s `run` with that finite value. Correctly
+  unconditional — command substitution has no terminal of its own to be
+  interactive with.
 - **`spawn-pipeline` / `%wait-pipeline-with-output`** — foreground OS-pipe
   pipelines bound by the same `*external-command-timeout*` via
   `%wait-pipeline-exit-with-timeout`. `spawn-pipeline-async` (background `cmd
@@ -89,26 +90,17 @@ PTY-based e2e test harness (`t/e2e/test-smoke.lisp`'s
 present risk; would need a bound before being wired into a real interactive
 feature.
 
-## Current conclusion (2026-08-26)
+## Current behavior
 
-The production-audit fixes removed the default timeout. The interactive gate
-was found to be bypassed on the path real interactive commands take
-(`%execute-external-pipeline-stage` and `run-external-capture` read the raw
-special), so an interactive `sleep 30` was still killed at 30 seconds. The
-resolution removes the default bound entirely rather than re-scoping it:
+The shipped defaults are finite: external commands use 3600 seconds and
+command substitution uses 300 seconds. An external command attached to the
+interactive terminal is exempt from the timeout so editors, SSH sessions, and
+other human-driven programs can run until they finish or the user interrupts
+them. Redirected or otherwise non-interactive external commands remain
+bounded, and command substitution is always bounded because it has no
+terminal of its own.
 
-- `*external-command-timeout*` and `*command-substitution-timeout*` now
-  default to `nil` (unbounded), matching POSIX shells, which impose no
-  execution ceiling in any mode. A long build, an editor, or an SSH session
-  is legitimate foreground work interactively *and* in scripts.
-- Bounding is the caller's job: tests and the completion-help path bind the
-  specials to finite values, and external supervision (`timeout(1)`, CI job
-  limits) owns script-level runaway protection. A security review proposed
-  restoring a finite non-interactive fallback; that was declined as it would
-  re-break batch scripts running legitimate >30s commands — the original
-  production blocker.
-- The table above therefore no longer describes default behavior: with the
-  shipped defaults, no foreground external command or command substitution
-  times out unless a caller binds the special. The gate function
-  `%foreground-external-command-timeout` remains, and still bounds
-  non-interactive runs whenever the special *is* bound.
+Callers may bind either special variable for a narrower policy. Invalid values
+(negative numbers, non-numbers, infinities, and NaN) are rejected at the
+operational execution boundary; `nil` remains the explicit unbounded value for
+callers that need it.

@@ -5,13 +5,13 @@
 With [Nix](https://nixos.org/download) (flakes enabled):
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.5.0
+nix run github:nerima-lisp/nshell/v0.6.0
 ```
 
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.5.0
+nix profile install github:nerima-lisp/nshell/v0.6.0
 nshell
 man nshell   # the manual page is installed alongside the binary
 ```
@@ -22,7 +22,7 @@ the default branch:
 ```nix
 # flake.nix
 inputs.nshell = {
-  url = "github:nerima-lisp/nshell/v0.5.0";
+  url = "github:nerima-lisp/nshell/v0.6.0";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 ```
@@ -102,11 +102,10 @@ nix flake check      # full hermetic gate on x86_64-linux CI
 nix develop          # dev shell with SBCL + cl-weave
 ```
 
-`flake.nix` declares `x86_64-linux` and `aarch64-darwin`. The full hermetic
-flake gate, the release-binary gate, and the non-sandboxed integration suite
-all run in CI on `x86_64-linux` only; `aarch64-darwin` is a local development
-target (`nix build`, `nix develop`), and some build checks can be unavailable
-there when a pinned upstream package has no Darwin build.
+`flake.nix` declares `x86_64-linux` only. The full hermetic flake gate, the
+release-binary gate, and the non-sandboxed integration suite run in CI on that
+target. Other hosts are outside the tested support boundary; use an
+`x86_64-linux` builder for Nix-based development and release verification.
 
 Inside `nix develop`, load the system into a REPL:
 

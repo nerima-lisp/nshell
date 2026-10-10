@@ -2,7 +2,7 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :sb-posix)
-  (nshell.domain.completion::%configure-path-command-cache-locks
+  (nshell.domain.completion:%configure-path-command-cache-locks
     (lambda ()
       (let ((mutex (sb-thread:make-mutex :name "PATH command directory cache")))
         (cl-boundary-kit:make-lock

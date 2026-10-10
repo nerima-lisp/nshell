@@ -24,7 +24,7 @@
                        #o111)))))
 
 (defun %resolve-external-command (command &optional (environment (%get-environment)))
-  (nshell.domain.completion::%first-command-path-candidate
+  (nshell.domain.completion:%first-command-path-candidate
    command
    (or (%environment-value "PATH" environment)
        "/bin:/usr/bin")

@@ -12,6 +12,9 @@ permitted to know both the domain and infrastructure.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
+            ;; Runtime seams consumed by presentation and assistant adapters.
+            #:*builtin-registry* #:*execution-confirmed-p* #:*execution-origin*
+            #:*foreground-terminal-runner*
             #:*agent-start-handler*
             #:*ai-reset-handler*
             #:*theme-apply-handler*

@@ -276,7 +276,7 @@ spawns, so a stage's assignment reaches that stage's process alone.")
     (cons name (format nil "~{~a~^ ~}" fields))))
 
 (defun %command-node-from-arg (arg rest-args span)
-  (let ((typed (and (nshell.domain.parsing::command-arg-p arg) arg)))
+  (let ((typed (and (nshell.domain.parsing:command-arg-p arg) arg)))
     (nshell.domain.parsing:make-command-node
      (nshell.domain.parsing:arg-value arg)
      rest-args
@@ -300,7 +300,7 @@ NIL when the line was assignments only."
           (values (nreverse assignments)
                   (and args
                        (%command-node-from-arg (first args) (rest args)
-                                               (nshell.domain.parsing::ast-node-span command-node))))))))
+                                               (nshell.domain.parsing:ast-node-span command-node))))))))
 
 (defun %assign-shell-variables (context assignments)
   (dolist (assignment assignments (values nil 0))

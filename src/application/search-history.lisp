@@ -1,9 +1,9 @@
 (in-package #:nshell.application)
 
 (declaim (ftype function
-                nshell.infrastructure.persistence::history-record-filter-token
-                nshell.infrastructure.persistence::history-record-for-entry
-                nshell.infrastructure.persistence::history-record-matches-p))
+                nshell.infrastructure.persistence:history-record-filter-token
+                nshell.infrastructure.persistence:history-record-for-entry
+                nshell.infrastructure.persistence:history-record-matches-p))
 
 (defun %interactive-history-query-valid-p (query)
   (and query
@@ -23,7 +23,7 @@
     (dolist (part (uiop:split-string query
                                      :separator '(#\Space #\Tab #\Newline)))
       (let ((token-filter
-              (nshell.infrastructure.persistence::history-record-filter-token
+              (nshell.infrastructure.persistence:history-record-filter-token
                part)))
         (if token-filter
             (loop for (key value) on token-filter by #'cddr
@@ -33,8 +33,8 @@
 
 (defun %interactive-history-entry-filter-p (history entry filter)
   (or (null filter)
-      (apply #'nshell.infrastructure.persistence::history-record-matches-p
-             (nshell.infrastructure.persistence::history-record-for-entry
+      (apply #'nshell.infrastructure.persistence:history-record-matches-p
+             (nshell.infrastructure.persistence:history-record-for-entry
               history entry)
              filter)))
 
@@ -97,8 +97,8 @@
 (defun search-history-use-case (history query mode &key (exit-code :any) cwd origin)
   (remove-if-not
    (lambda (entry)
-     (nshell.infrastructure.persistence::history-record-matches-p
-      (nshell.infrastructure.persistence::history-record-for-entry history entry)
+     (nshell.infrastructure.persistence:history-record-matches-p
+      (nshell.infrastructure.persistence:history-record-for-entry history entry)
       :exit-code exit-code
       :cwd cwd
       :origin origin))

@@ -117,17 +117,17 @@ entry the newest entry in HISTORY too. Do not reverse the loaded list here --
 that would hand HISTORY-ADD the newest entry first, burying it under every
 older entry added afterward and inverting recall order."
   (dolist (record (nshell.infrastructure.persistence:load-history-file))
-    (nshell.infrastructure.persistence::history-record-add
+    (nshell.infrastructure.persistence:history-record-add
      history
-     (nshell.infrastructure.persistence::history-record-text record)
+     (nshell.infrastructure.persistence:history-record-text record)
      :timestamp
-     (nshell.infrastructure.persistence::history-record-timestamp record)
-     :cwd (nshell.infrastructure.persistence::history-record-cwd record)
+     (nshell.infrastructure.persistence:history-record-timestamp record)
+     :cwd (nshell.infrastructure.persistence:history-record-cwd record)
      :exit-code
-     (nshell.infrastructure.persistence::history-record-exit-code record)
+     (nshell.infrastructure.persistence:history-record-exit-code record)
      :duration-ms
-     (nshell.infrastructure.persistence::history-record-duration-ms record)
-     :origin (nshell.infrastructure.persistence::history-record-origin record))))
+     (nshell.infrastructure.persistence:history-record-duration-ms record)
+     :origin (nshell.infrastructure.persistence:history-record-origin record))))
 
 (defun %vi-mode-flag-enabled-p (flag)
   (and flag

@@ -61,14 +61,14 @@
 
 (defun %start-external-process-copiers (process stdout-buffer stderr-buffer)
   (let ((stdout-thread
-          (nshell.infrastructure.acl::%start-stream-copier
+          (nshell.infrastructure.acl:%start-stream-copier
            (sb-ext:process-output process)
            stdout-buffer
            "nshell process stdout copier"))
         (stderr-thread nil))
     (when stderr-buffer
       (setf stderr-thread
-            (nshell.infrastructure.acl::%start-stream-copier
+            (nshell.infrastructure.acl:%start-stream-copier
              (sb-ext:process-error process)
              stderr-buffer
              "nshell process stderr copier")))
@@ -163,14 +163,14 @@ dropping Ctrl-Z for waits that cannot observe a stop."
                         ;; there is no controlling terminal (batch mode, a
                         ;; redirected pipeline stage, `-c`/script execution).
                         (when pgid
-                          (nshell.infrastructure.acl::%assign-process-group
+                          (nshell.infrastructure.acl:%assign-process-group
                            pid pgid))
                         (flet ((finish-process ()
                                  (%finish-external-pipeline-process
                                   process stdout-buffer stderr-buffer
                                   redirect-plan command pgid)))
                           (if pgid
-                              (nshell.infrastructure.acl::%call-with-foreground-process-group
+                              (nshell.infrastructure.acl:%call-with-foreground-process-group
                                pgid #'finish-process)
                               (finish-process)))))
                  (when opened-input

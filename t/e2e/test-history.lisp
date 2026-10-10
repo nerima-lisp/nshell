@@ -53,7 +53,7 @@
                     history-path))
               (expect (list older newer)
                       :to-equal
-                      (mapcar #'nshell.infrastructure.persistence::history-record-text
+                      (mapcar #'nshell.infrastructure.persistence:history-record-text
                               (nshell.infrastructure.persistence:load-history-file))))
             (run-session
              (lambda (pty fd)

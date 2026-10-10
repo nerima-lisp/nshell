@@ -12,6 +12,22 @@ tests rebind these boundary functions when they need deterministic behavior.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
+           #:+default-external-command-timeout+
+           #:+default-command-substitution-timeout+
+           #:timeout-seconds-p
+           #:ensure-timeout-seconds
+           ;; Cross-layer integration seams used by application and domain code.
+           #:%foreground-external-command-timeout
+           #:%spawn-terminal-command
+           #:%start-stream-copier
+           #:%wait-process-with-copiers
+           #:%wait-process-with-copiers-or-stop
+           #:%assign-process-group
+           #:%call-with-foreground-process-group
+           #:%abort-pipeline
+           #:%external-command-not-found-message
+           #:%run-git
+           #:run-sidecar-version-cancellable
            #:external-command-environment
            #:current-environment-entries #:current-environment-value
            #:current-working-directory
@@ -103,13 +119,20 @@ line editor has a single place to import them from.")
 (defpackage #:nshell.infrastructure.persistence
   (:documentation
    "Infrastructure: state that outlives a session. Locates, reads, and appends
-to the history file as plain text lines (the caller wraps them into
-history-kit entries) and loads and saves the config file, converting
+to the history file as length-framed records and loads and saves the config file,
+converting
 between that on-disk format and nshell.domain.configuration's domain
 values.")
   (:use #:cl)
   (:export #:*history-file-path-override*
            #:load-history-file #:append-history-entry
            #:history-file-path
+           #:history-record #:history-record-p
+           #:history-record-text #:history-record-timestamp
+           #:history-record-cwd #:history-record-exit-code
+           #:history-record-duration-ms #:history-record-origin
+           #:history-record-add #:history-record-for-entry
+           #:history-record-matches-p #:history-record-filter-token
+           #:*history-record-to-append*
            #:load-config #:save-config))
 )

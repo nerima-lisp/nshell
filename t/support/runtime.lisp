@@ -2,7 +2,10 @@
 
 (defparameter +nshell-runtime-dependencies+
   '(:cl-prolog-kit :cl-parser-kit :cl-dataflow-kit :cl-boundary-kit :cl-cli
-    :cl-tty-kit :cl-process-kit :cl-history-kit :cl-host-kit :cl-log-kit
+    :cl-tty-kit :cl-process-kit :cl-regex-kit :cl-vcs-kit :cl-tui-kit
+    :cl-tui-kit/ansi :cl-tui-kit/core :cl-tui-kit/layout
+    :cl-tui-kit/testing :cl-tui-kit/widgets
+    :cl-history-kit :cl-host-kit :cl-log-kit
     :cl-concurrent-kit :cl-codec-kit :cl-date-kit :cl-json-kit)
   "ASDF systems whose source directories a fresh nshell subprocess needs.
 The list includes transitive dependencies because subprocess bootstrap uses an

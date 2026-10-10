@@ -12,10 +12,14 @@ Returns its trailing-newline-trimmed output, or NIL on error or timeout."
                         (execute-ast-in-context context ast)
                       (declare (ignore exit-code))
                       (%trim-command-substitution-output output))))
-             (if *command-substitution-timeout*
-                 (sb-ext:with-timeout *command-substitution-timeout*
-                   (execute-substitution))
-                 (execute-substitution)))))
+             (let ((timeout
+                     (nshell.infrastructure.acl:ensure-timeout-seconds
+                      *command-substitution-timeout*
+                      "command substitution timeout")))
+               (if timeout
+                   (sb-ext:with-timeout timeout
+                     (execute-substitution))
+                   (execute-substitution))))))
         (:error nil)
         (:incomplete nil))
     (sb-ext:timeout ()

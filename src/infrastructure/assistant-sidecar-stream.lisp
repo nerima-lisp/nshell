@@ -334,7 +334,7 @@
             (command (assistant-sidecar-state-command state)))
         (if cached-version
             (values cached-version :ok)
-            (nshell.infrastructure.acl::run-sidecar-version-cancellable
+            (nshell.infrastructure.acl:run-sidecar-version-cancellable
              command
              (lambda () (not (%assistant-sidecar-starting-p state))))))
     (if (or (not (eq :ok version-status))

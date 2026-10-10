@@ -10,7 +10,8 @@ redirected to a file/pipe or nshell itself is non-interactive. Per-command
 redirects already rebind *STANDARD-OUTPUT*, so this naturally covers `cmd >
 file` typed at an interactive prompt too."
   (and (not (interactive-stream-p *standard-output*))
-       *external-command-timeout*))
+       (ensure-timeout-seconds *external-command-timeout*
+                              "external command timeout")))
 
 (defmacro %with-foreground-process-group-if ((pgid) &body body)
   (let ((pgid-var (gensym "PGID-")))
@@ -112,17 +113,21 @@ deadlock the shell."
                    (progn
                      (when (and (integerp pid) (plusp pid))
                        (setf *foreground-pgid* pid))
-                     (let ((result (process-kit:communicate
-                                    process
-                                    :input input
-                                    :timeout *external-command-timeout*
-                                    :on-timeout :return)))
+                     (let* ((timeout
+                              (ensure-timeout-seconds
+                               *external-command-timeout*
+                               "external command timeout"))
+                            (result (process-kit:communicate
+                                     process
+                                     :input input
+                                     :timeout timeout
+                                     :on-timeout :return)))
                        (when separate-stderr-p
                          (write-string (process-kit:process-result-stderr result)
                                        *error-output*))
                        (if (process-kit:process-result-timed-out-p result)
                            (values (%external-command-timeout-message
-                                    cmd *external-command-timeout*)
+                                   cmd timeout)
                                    124)
                            (values (process-kit:process-result-stdout result)
                                    (%process-result-shell-exit result)))))

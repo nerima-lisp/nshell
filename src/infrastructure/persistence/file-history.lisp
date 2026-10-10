@@ -131,10 +131,15 @@
   (loop with entries = nil
         do (multiple-value-bind (entry status) (%read-history-record stream)
              (case status
-               (:eof (return (nreverse entries)))
+               (:eof (return (values (nreverse entries) nil)))
                (:entry (push entry entries))
-               (:invalid (return (nreverse entries)))
-               (:truncated (return (nreverse entries)))))))
+               (:invalid (return (values (nreverse entries) :invalid)))
+               (:truncated (return (values (nreverse entries) :truncated)))))))
+
+(defun %report-history-error (operation path condition)
+  (format *error-output*
+          "nshell: history: unable to ~a ~a: ~a~%"
+          operation path condition))
 
 (defun %append-history-record (stream record)
   (let ((payload (%history-record-payload record)))
@@ -223,26 +228,37 @@
 
 (defun load-history-file ()
   "Return v3 records oldest first, promoting v2 records with NIL metadata."
-  (ignore-errors
-      (let ((path (history-file-path)))
-        (when (probe-file path)
+  (let ((path (history-file-path)))
+    (when (probe-file path)
+      (handler-case
           (with-open-file (f path :direction :input :if-does-not-exist nil)
-            (%read-history-records f))))))
+            (multiple-value-bind (records status) (%read-history-records f)
+              (when status
+                (%report-history-error "read" path
+                                       (format nil "~a history record" status)))
+              records))
+        (condition (condition)
+          (%report-history-error "read" path condition)
+          nil)))))
 
 (defun append-history-entry (text &key timestamp cwd exit-code duration-ms origin)
-  (ignore-errors
-      (progn
-        (ensure-directories-exist (history-file-path))
-        (let ((record (or *history-record-to-append*
-                          (%make-history-record-from-values
-                           :text text
-                           :timestamp timestamp
-                           :cwd cwd
-                           :exit-code exit-code
-                           :duration-ms duration-ms
-                           :origin origin))))
-          (unless (string= text (history-record-text record))
-            (error "History record text does not match the appended command."))
-          (with-open-file (f (history-file-path) :direction :output
-                             :if-exists :append :if-does-not-exist :create)
-            (%append-history-record f record))))))
+  (let ((path (history-file-path)))
+    (handler-case
+        (progn
+          (ensure-directories-exist path)
+          (let ((record (or *history-record-to-append*
+                            (%make-history-record-from-values
+                             :text text
+                             :timestamp timestamp
+                             :cwd cwd
+                             :exit-code exit-code
+                             :duration-ms duration-ms
+                             :origin origin))))
+            (unless (string= text (history-record-text record))
+              (error "History record text does not match the appended command."))
+            (with-open-file (f path :direction :output
+                               :if-exists :append :if-does-not-exist :create)
+              (%append-history-record f record))))
+      (condition (condition)
+        (%report-history-error "append to" path condition)
+        nil))))

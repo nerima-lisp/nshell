@@ -19,7 +19,7 @@
   :license "MIT"
   ;; Single source of truth for the version. flake.nix reads this form
   ;; line-by-line, and release.yml refuses a tag that disagrees with it.
-  :version "0.5.0"
+  :version "0.6.0"
   :homepage "https://github.com/nerima-lisp/nshell"
   :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
   :source-control (:git "https://github.com/nerima-lisp/nshell.git")
@@ -31,6 +31,9 @@
                "cl-cli"
                "cl-tty-kit"
                "cl-process-kit"
+               "cl-regex-kit"
+               "cl-vcs-kit"
+               "cl-tui-kit"
                "cl-history-kit"
                "cl-concurrent-kit"
                "cl-json-kit")
@@ -43,13 +46,26 @@
     :serial t
     :components ((:file "package")
                  (:file "domain/feature-registry")))
-   (:file "package-domain-signals-input-abbreviation")
-   (:file "package-domain")
-   (:file "package-domain-completion")
-   (:file "package-domain-configuration-prompting")
-   (:file "package-application")
-   (:file "package-infrastructure")
-   (:file "package-presentation")
+   (:module "package-domain"
+    :pathname "."
+    :serial t
+    :components ((:file "package-domain-signals-input-abbreviation")
+                 (:file "package-domain")
+                 (:file "package-domain-completion")
+                 (:file "package-domain-configuration-prompting")))
+   (:module "package-application"
+    :pathname "."
+    :serial t
+    :components ((:file "package-application")))
+   (:module "package-infrastructure"
+    :pathname "."
+    :serial t
+    :components ((:file "package-infrastructure")))
+   (:module "package-presentation"
+    :pathname "."
+    :serial t
+    :components ((:file "package-presentation")))
+   (:file "infrastructure/acl/timeout")
    (:module "feature-command-line"
     :pathname "../packages/feature/command-line/src"
     :serial t
@@ -385,7 +401,7 @@
   :in-order-to ((test-op (test-op "nshell/test"))))
 
 (asdf:defsystem "nshell/test"
-  :version "0.5.0"
+  :version "0.6.0"
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
@@ -572,7 +588,7 @@
                 (error "cl-weave tests failed"))))
 
 (asdf:defsystem "nshell/weave"
-  :version "0.5.0"
+  :version "0.6.0"
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
@@ -602,7 +618,7 @@ primary suite in nshell/test."
                               :reporter :spec)
                (error "cl-weave suite failed"))))
 (asdf:defsystem "nshell/benchmark"
-  :version "0.5.0"
+  :version "0.6.0"
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"

@@ -84,13 +84,6 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      HOME: ${{ runner.temp }}/nshell-home
-      XDG_CACHE_HOME: ${{ runner.temp }}/nshell-cache
-      XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-config
-      XDG_STATE_HOME: ${{ runner.temp }}/nshell-state
-      NSHELL_AI_COMMAND: /nonexistent
-      NSHELL_TEST_PTY: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -103,6 +96,13 @@ jobs:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Run full test suite
+        env:
+          HOME: ${{ runner.temp }}/nshell-home
+          XDG_CACHE_HOME: ${{ runner.temp }}/nshell-cache
+          XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-config
+          XDG_STATE_HOME: ${{ runner.temp }}/nshell-state
+          NSHELL_AI_COMMAND: /nonexistent
+          NSHELL_TEST_PTY: "1"
         run: nix develop -c sbcl --script run-tests.lisp
 
   release:

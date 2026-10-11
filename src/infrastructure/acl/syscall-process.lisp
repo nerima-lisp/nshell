@@ -120,6 +120,7 @@
 (defun %wait-process-with-copiers (proc copiers timeout-seconds success-fn timeout-fn)
   (let ((copiers (remove nil copiers))
         (callback success-fn)
+        (timed-out-p nil)
         (deadline (when timeout-seconds
                     (+ (get-internal-real-time)
                        (round (* timeout-seconds internal-time-units-per-second))))))
@@ -130,10 +131,11 @@
                  do (when (and deadline (>= (get-internal-real-time) deadline))
                       (when (sb-ext:process-alive-p proc)
                         (%terminate-process proc))
-                      (setf callback timeout-fn)
+                      (setf callback timeout-fn
+                            timed-out-p t)
                       (return))
                     (sb-sys:serve-all-events 0.01))
-           (when (eq callback success-fn)
+           (unless timed-out-p
              (%wait-sbcl-process proc)))
       ;; Descendants may keep output pipes open after the owned process exits.
       (dolist (copier copiers)

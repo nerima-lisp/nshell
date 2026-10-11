@@ -316,9 +316,12 @@
               clLogKit
               clCodecKit
             ];
-            # Remove the duplicate clock definition and serialize process
-            # reaping with the cancellation watcher.
-            patches = [ ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch ];
+            # Share process reaping with the cancellation watcher and execute
+            # the complete dependency suite on Linux as well as Darwin.
+            patches = [
+              ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch
+              ./nix/patches/cl-process-kit-enable-linux-tests.patch
+            ];
           };
           clRegexKit = sibling {
             name = "cl-regex-kit";
@@ -720,6 +723,7 @@
             bash
             zsh
             fish
+            ghq
             mandoc
             nushell
             powershell
@@ -762,6 +766,8 @@
           # derivation's own resolved registry, including check dependencies)
           # is kept.
           devShells.default = ctx.generated.devShells.default.overrideAttrs (previous: {
+            TZDIR = "${ctx.pkgs.tzdata}/share/zoneinfo";
+            CL_PROCESS_KIT_SPAWN = "${spawnHelperFor ctx}/bin/cl-process-kit-spawn";
             CL_PROCESS_KIT_PTY_LIBRARY = "${ptyHelperFor ctx}/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}";
             shellHook = previous.shellHook + ''
               export NSHELL_ROOT=$PWD

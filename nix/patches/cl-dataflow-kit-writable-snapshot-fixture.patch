@@ -1,0 +1,47 @@
+--- a/t/graph-export-test.lisp
++++ b/t/graph-export-test.lisp
+@@ -14,21 +14,30 @@
+              (search "\"a\" -> \"c\"" dot))))))
+ 
+ (deftest graph->dot-and-mermaid-match-recorded-snapshots
+-  ;; Snapshot tests (cl-weave :to-match-snapshot) complement the fragment
+-  ;; checks above: they catch any unintended change anywhere in the full
+-  ;; rendered text, not just the substrings asserted elsewhere. Regenerate
+-  ;; with CL_WEAVE_UPDATE_SNAPSHOTS=1 after an intentional rendering change.
+-  ;; *SNAPSHOT-DIRECTORY* is bound to an absolute path explicitly: cl-weave
+-  ;; resolves its default relative location against *DEFAULT-PATHNAME-DEFAULTS*,
+-  ;; which some invocations of this suite (e.g. a saved executable image)
+-  ;; leave unbound.
++  ;; Compare the complete rendering with the recorded baseline, never update it.
++  ;; Weave locks beside its snapshot file, so copy it out of read-only sources.
++  (when (cl-weave::snapshot-update-enabled-p)
++    (error "Graph export snapshots are comparison-only."))
+   (let ((*snapshot-directory*
+-          (merge-pathnames #P"__snapshots__/" (asdf:system-source-directory "cl-dataflow-kit/test"))))
+-    (with-graph-fixture (graph
+-                         ((a "a") (b "b") (c "c"))
+-                         :edges ((a b) (a c)))
+-      (expect (graph->dot graph :name "flow") :to-match-snapshot "graph-export/dot-basic")
+-      (expect (graph->mermaid graph :direction "LR") :to-match-snapshot "graph-export/mermaid-basic"))))
++          (uiop:ensure-directory-pathname
++           (uiop:run-program
++            (list "mktemp" "-d"
++                  (namestring (merge-pathnames "cl-dataflow-snapshots.XXXXXX"
++                                              (uiop:temporary-directory))))
++            :output '(:string :stripped t)))))
++    (unwind-protect
++         (progn
++           (uiop:copy-file
++            (merge-pathnames #P"__snapshots__/snapshots.sexp"
++                             (asdf:system-source-directory "cl-dataflow-kit/test"))
++            (merge-pathnames #P"snapshots.sexp" *snapshot-directory*))
++           (with-graph-fixture (graph
++                                ((a "a") (b "b") (c "c"))
++                                :edges ((a b) (a c)))
++             (expect (graph->dot graph :name "flow") :to-match-snapshot "graph-export/dot-basic")
++             (expect (graph->mermaid graph :direction "LR") :to-match-snapshot "graph-export/mermaid-basic")))
++      (uiop:delete-directory-tree *snapshot-directory*
++                                  :validate t :if-does-not-exist :ignore))))
+ 
+ (deftest graph->dot-escapes-quotes-in-names
+   (with-graph-fixture (graph ((weird "a\"b")))

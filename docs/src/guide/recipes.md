@@ -68,6 +68,10 @@ perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 1800; exec @ARGV' nix flake check --
 
 Just the primary suite, through the same entry point CI uses:
 
+For source-loaded checks, first isolate HOME and XDG directories using the
+[validation procedure](../project/public-readiness.md#verification-outside-ci) to keep
+personal history and configuration out of the test run.
+
 ```sh
 perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix run .#test
 # or, inside `nix develop`:
@@ -84,12 +88,10 @@ perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' sbcl --script scrip
 
 Some cases need a real PTY, `stty`, and external binaries, which the Nix
 sandbox does not provide; they are skipped inside `nix flake check` and run
-instead in CI's `integration` job. Run them locally when changing PTY,
-subprocess, terminal, or job-control behaviour:
-
-```sh
-perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix develop -c sbcl --script run-tests.lisp
-```
+instead in CI's `integration` job. When changing PTY, subprocess, terminal,
+or job-control behaviour, run the [isolated integration, dependency, and history
+suites](../project/public-readiness.md#verification-outside-ci) with `NSHELL_TEST_PTY=1`,
+as shown there.
 
 This covers the real-PTY interactive smoke tests, `Ctrl-C` recovery, and the
 job-control lifecycle checks.

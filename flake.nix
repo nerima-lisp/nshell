@@ -239,10 +239,12 @@
           clParserKit = sibling {
             name = "cl-parser-kit";
             source = cl-parser-kit;
+            patches = [ ./nix/patches/cl-parser-kit-prolog-kit-name.patch ];
           };
           clDataflow = sibling {
             name = "cl-dataflow-kit";
             source = cl-dataflow-kit;
+            patches = [ ./nix/patches/cl-dataflow-kit-writable-snapshot-fixture.patch ];
             dependencies = [
               clProlog
               clConcurrentKit
@@ -263,11 +265,13 @@
           clBoundaryKit = sibling {
             name = "cl-boundary-kit";
             source = cl-boundary-kit;
+            patches = [ ./nix/patches/cl-boundary-kit-prolog-kit-name.patch ];
             dependencies = [ clHostKit ];
           };
           clConcurrentKit = sibling {
             name = "cl-concurrent-kit";
             source = cl-concurrent-kit;
+            patches = [ ./nix/patches/cl-concurrent-kit-cancelled-barrier.patch ];
             dependencies = [
               clBoundaryKit
               clDateKit
@@ -289,11 +293,16 @@
           clCli = sibling {
             name = "cl-cli";
             source = cl-cli;
+            patches = [
+              ./nix/patches/cl-cli-prolog-kit-name.patch
+              ./nix/patches/cl-cli-zsh-render-cache.patch
+            ];
             dependencies = [ clHostKit ];
           };
           clTtyKit = sibling {
             name = "cl-tty-kit";
             source = cl-tty-kit;
+            patches = [ ./nix/patches/cl-tty-kit-prolog-kit-name.patch ];
             dependencies = [
               clCodecKit
               clConcurrentKit
@@ -307,9 +316,8 @@
               clLogKit
               clCodecKit
             ];
-            # v3.2.0 defines %monotonic-seconds in both parameters.lisp and
-            # fd-readiness.lisp. Upstream main is still identical; remove this
-            # patch when a release containing the upstream fix is available.
+            # Remove the duplicate clock definition and serialize process
+            # reaping with the cancellation watcher.
             patches = [ ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch ];
           };
           clRegexKit = sibling {
@@ -353,6 +361,24 @@
           installPhase = ''
             runHook preInstall
             install -Dm755 cl-process-kit-spawn "$out/bin/cl-process-kit-spawn"
+            runHook postInstall
+          '';
+        };
+
+      ptyHelperFor =
+        ctx:
+        ctx.pkgs.stdenv.mkDerivation {
+          pname = "cl-process-kit-pty";
+          version = ctx.cl.fromAsdSystem "${cl-process-kit}/cl-process-kit.asd";
+          dontUnpack = true;
+          buildPhase = ''
+            runHook preBuild
+            $CC -O2 -fPIC -shared ${cl-process-kit}/native/pty.c -o libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}
+            runHook postBuild
+          '';
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary} "$out/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}"
             runHook postInstall
           '';
         };
@@ -680,11 +706,26 @@
       # The cl-weave CLI, which the suites' reporters are documented against.
       # Interactive only: the registry the shell exports already carries every
       # system, check dependencies included.
-      devShellPackages = ctx: [
-        (spawnHelperFor ctx)
-        cl-weave.packages.${ctx.system}.default
-        paredit-cli.packages.${ctx.system}.default
-      ];
+      devShellPackages =
+        ctx:
+        [
+          (spawnHelperFor ctx)
+          cl-weave.packages.${ctx.system}.default
+          paredit-cli.packages.${ctx.system}.default
+        ]
+        # The dependency gate rejects skipped real-shell verification tests.
+        ++ lib.optionals ctx.pkgs.stdenv.hostPlatform.isLinux (
+          with ctx.pkgs;
+          [
+            bash
+            zsh
+            fish
+            mandoc
+            nushell
+            powershell
+            elvish
+          ]
+        );
 
       overrideOutputs =
         ctx:
@@ -721,6 +762,7 @@
           # derivation's own resolved registry, including check dependencies)
           # is kept.
           devShells.default = ctx.generated.devShells.default.overrideAttrs (previous: {
+            CL_PROCESS_KIT_PTY_LIBRARY = "${ptyHelperFor ctx}/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}";
             shellHook = previous.shellHook + ''
               export NSHELL_ROOT=$PWD
               alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'

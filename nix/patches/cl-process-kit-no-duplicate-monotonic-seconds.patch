@@ -8,3 +8,13 @@
 -  (/ (get-internal-real-time) internal-time-units-per-second))
 -
  (defun %timeval-parts (seconds)
+--- a/src/communicate.lisp
++++ b/src/communicate.lisp
+@@ -154,5 +154,5 @@
+-             (unless (process-handle-reaped-p process)
+-               (sb-ext:process-wait (%handle-raw-process process)))
++             ;; Share the state lock with the cancellation watcher's reaper.
++             (process-wait process :poll-interval poll-interval)
+              (when (and (boundp '*current-cancellation-token*)
+                         (symbol-value '*current-cancellation-token*)
+                         (cancellation-requested-p (symbol-value '*current-cancellation-token*)))

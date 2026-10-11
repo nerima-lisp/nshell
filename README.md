@@ -20,10 +20,10 @@ The release and Nix flake support `x86_64-linux` only. With
 [Nix](https://nixos.org/download) and flakes enabled:
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.6.1
+nix run github:nerima-lisp/nshell/v0.6.2
 ```
 
-Then type as you would in any shell. Commands and paths colorize live, and a
+At the prompt, enter `string upper hello`. Commands and paths colorize live, and a
 dimmed completion of the most recent matching history entry trails the cursor;
 press `→` or `Ctrl-F` to accept it:
 
@@ -43,20 +43,28 @@ Interactive history expansion supports `!!`, `!$`, `!-N`, `!?text?`, and
 `!prefix`; exclamation marks inside single quotes or preceded by a backslash
 remain literal. Press `Alt-E` to edit the current command in the editor named
 by `NSHELL_EDITOR`, `VISUAL`, or `EDITOR` (falling back to `vi`), then return
-the edited line to nshell.
+the edited line to nshell. Save and quit the editor, then press Enter in nshell
+to execute it. See [History expansion](docs/src/guide/concepts.md#history-expansion-is-explicit)
+for the expansion forms.
+
+History is stored in `~/.nshell_history` with owner-only permissions. Symlinks,
+hard links, and files owned by another user are rejected. A malformed tail is
+reported without discarding existing bytes; further appends are refused until
+the file is moved aside. `--no-history` disables persistence.
 
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.6.1
+nix profile install github:nerima-lisp/nshell/v0.6.2
 ```
 
 Pin a release tag rather than following the default branch.
 
-The `x86_64-linux` release bundle removes Nix store references, carries its
+To install without Nix, use the `x86_64-linux` release bundle. It removes Nix store references, carries its
 ELF runtime library closure, and is checked for required files and dependency
-metadata. CI also runs `--help`, `--version`, and an `echo` smoke test on the
-bundle. See [Getting
+metadata. CI checks an extracted archive and exercises its executable with a
+real PTY, including editing, signals, job control, history restart, and terminal
+restoration. See [Getting
 started](https://nerima-lisp.github.io/nshell/getting-started/) for the bundle
 verification and installation procedure.
 
@@ -71,19 +79,27 @@ verification and installation procedure.
 
 ```sh
 nix develop          # SBCL with CL_SOURCE_REGISTRY already set (x86_64-linux)
-perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix build .#checks.$(nix eval --raw --impure --expr 'builtins.currentSystem').default --no-link  # run the test suite
-perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix flake check      # full hermetic gate on x86_64-linux CI
+perl -e 'alarm 300; exec @ARGV' nix build .#checks.$(nix eval --raw --impure --expr 'builtins.currentSystem').default --no-link  # run the test suite
+perl -e 'alarm 300; exec @ARGV' nix flake check      # time-limited local hermetic check
 nix fmt              # format Nix sources (treefmt)
 nix build            # produces ./result/bin/nshell
 nix build .#releaseBundle
 perl scripts/verify-release-bundle.pl result
+perl scripts/test-release-pty.pl result
 ```
 
-The Perl wrappers limit each local check to five minutes and return exit code
-124 if that limit expires.
+The Perl wrappers send `SIGALRM` to each local check after five minutes.
+This is not the full CI gate's time limit; see
+[Recipes](docs/src/guide/recipes.md#run-the-test-suite) for that command.
+The bundle checks run on Linux and require Perl, Python 3, `readelf`, and
+standard POSIX tools.
+
+Run source-loaded integration, dependency, and history checks with the
+[isolated HOME and XDG procedure](docs/src/project/public-readiness.md#verification-outside-ci)
+to avoid reading or modifying personal history and configuration.
 
 To measure executable-source coverage, keep the report outside the checkout
-and run the same hermetic test loader used by CI:
+and use the isolated HOME and XDG procedure above with this command:
 
 ```sh
 NSHELL_COVERAGE_DIR="$(mktemp -d)" \
@@ -97,7 +113,7 @@ is 85% (`NSHELL_COVERAGE_MIN`); the target is 100%
 (`NSHELL_COVERAGE_TARGET`).
 
 Tests live in `t/` and run under
-[cl-weave](https://github.com/nerima-lisp/cl-weave), the org's test framework.
+[cl-weave](https://github.com/nerima-lisp/cl-weave).
 Cases needing a real PTY, `stty`, or external binaries cannot run in the Nix
 sandbox and are covered by CI's separate `integration` job; run them locally
 with the command in
@@ -116,7 +132,3 @@ guide and the [package standard](https://github.com/nerima-lisp/.github/blob/mai
 See [SUPPORT](https://github.com/nerima-lisp/.github/blob/main/SUPPORT.md).
 Report vulnerabilities privately per this repository's
 [security policy](SECURITY.md) rather than a public issue.
-
-## License
-
-MIT. See [LICENSE](LICENSE).

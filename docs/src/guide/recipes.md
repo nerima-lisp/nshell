@@ -39,8 +39,10 @@ Start an interactive assistant task from a terminal:
 agent "inspect the current job state"
 ```
 
-The `agent` builtin is interactive-only. Proposed shell commands are shown for
-review and require pressing Enter again before execution.
+The `agent` builtin is interactive-only. Commands classified as safe execute
+automatically. Commands requiring confirmation are shown for review and execute
+only after Enter; blocked commands are not executed. Review this policy before
+starting a task, especially in a directory containing sensitive data.
 
 Inspect assistant state and configure the session with `ai`:
 

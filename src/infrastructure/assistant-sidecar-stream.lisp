@@ -53,7 +53,8 @@
                (eq handle (assistant-sidecar-state-handle state)))
       (let ((pending (assistant-sidecar-state-pending state)))
         (values pending
-                (and pending (assistant-pending-cell-generation pending)))))))
+                (and pending (assistant-pending-cell-generation pending))
+                t)))))
 
 (defun %assistant-sidecar-set-pending (state pending)
   (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
@@ -88,9 +89,9 @@
     (multiple-value-bind (object status message)
         (%assistant-read-json-value
          (nshell.infrastructure.acl:sidecar-handle-output handle))
-      (multiple-value-bind (pending pending-generation)
+      (multiple-value-bind (pending pending-generation current-p)
           (%assistant-sidecar-reader-pending state handle generation)
-        (unless pending
+        (unless current-p
           (return))
         (case status
           (:value
@@ -117,15 +118,20 @@
            (ignore-errors
             (sb-ext:process-wait
              (nshell.infrastructure.acl:sidecar-handle-process handle)))
-           (%assistant-sidecar-mark-dead state :reader-eof)
-           (when pending
-             (%assistant-sidecar-publish
-              pending
-              (%assistant-sidecar-error-event
-               pending-generation
-               "assistant sidecar process exited before the pending request completed"))
-             (%assistant-sidecar-complete pending))
-           (%assistant-sidecar-stop-state state :preserve-pending-p t)
+           ;; A request can arrive while PROCESS-WAIT reaps the child.  Settle
+           ;; the cell captured by the identity-validated stop transition.
+           (multiple-value-bind (stopped-p stopped-pending)
+               (%assistant-sidecar-stop-state
+                state :preserve-pending-p t
+                :expected-handle handle :expected-generation generation
+                :dead-reason :reader-eof)
+             (when (and stopped-p stopped-pending)
+               (%assistant-sidecar-publish
+                stopped-pending
+                (%assistant-sidecar-error-event
+                 (assistant-pending-cell-generation stopped-pending)
+                 "assistant sidecar process exited before the pending request completed"))
+               (%assistant-sidecar-complete stopped-pending)))
            (return))
           (otherwise
            (when (and (eq status :error)
@@ -238,14 +244,25 @@
     (%assistant-sidecar-close-channel
      (assistant-pending-cell-events pending))))
 
-(defun %assistant-sidecar-stop-state (state &key preserve-pending-p preserve-starting-p)
-  (let (pending write-channel handle startup reader writer error-thread)
+(defun %assistant-sidecar-stop-state (state &key preserve-pending-p preserve-starting-p
+                                            (expected-handle nil expected-handle-p)
+                                            expected-generation dead-reason)
+  (let (pending write-channel handle startup reader writer error-thread stopping-generation)
     (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+      (when (and expected-handle-p
+                 (not (and (eq expected-handle (assistant-sidecar-state-handle state))
+                           (eql expected-generation
+                                (assistant-sidecar-state-startup-generation state)))))
+        (return-from %assistant-sidecar-stop-state nil))
+      (when dead-reason
+        (setf (assistant-sidecar-state-dead-p state) t
+              (assistant-sidecar-state-dead-reason state) dead-reason))
       (unless preserve-starting-p
         (setf (assistant-sidecar-state-starting-p state) nil
               (assistant-sidecar-state-startup-generation state)
                 (1+ (assistant-sidecar-state-startup-generation state))))
-      (setf pending (assistant-sidecar-state-pending state)
+      (setf stopping-generation (assistant-sidecar-state-startup-generation state)
+            pending (assistant-sidecar-state-pending state)
             write-channel (assistant-sidecar-state-write-channel state)
             handle (assistant-sidecar-state-handle state)
             startup (assistant-sidecar-state-start-thread state)
@@ -270,14 +287,17 @@
     (%assistant-sidecar-join-thread writer)
     (%assistant-sidecar-join-thread error-thread)
     (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
-      (setf (assistant-sidecar-state-handle state) nil
-            (assistant-sidecar-state-init-p state) nil
-            (assistant-sidecar-state-reader-thread state) nil
-            (assistant-sidecar-state-writer-thread state) nil
-            (assistant-sidecar-state-error-thread state) nil
-            (assistant-sidecar-state-write-channel state) nil
-            (assistant-sidecar-state-start-thread state) nil))
-    t))
+      (when (and (eq handle (assistant-sidecar-state-handle state))
+                 (eql stopping-generation
+                      (assistant-sidecar-state-startup-generation state)))
+        (setf (assistant-sidecar-state-handle state) nil
+              (assistant-sidecar-state-init-p state) nil
+              (assistant-sidecar-state-reader-thread state) nil
+              (assistant-sidecar-state-writer-thread state) nil
+              (assistant-sidecar-state-error-thread state) nil
+              (assistant-sidecar-state-write-channel state) nil
+              (assistant-sidecar-state-start-thread state) nil)))
+    (values t pending)))
 
 (defun %assistant-sidecar-start-thread (state)
   (sb-thread:with-mutex ((assistant-sidecar-state-lock state))

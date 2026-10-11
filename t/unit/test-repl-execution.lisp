@@ -9,43 +9,213 @@
   character)
 
 (describe "repl-tests"
-  (it "rerun-last-command-requires-confirmation-and-captures-output"
-    (with-repl-test-state
-      (setf nshell.presentation::*last-command-text* "printf captured")
-      (with-repl-input-state (:buffer "")
-        (let ((calls 0)
-              (captured nil))
-          (with-temporary-function
-              ('nshell.presentation::%process-execute-output-event
-               (lambda ()
-                 (incf calls)
-                 (setf captured nshell.presentation::*capture-command-output-p*)
-                 nil))
-            (capture-standard-output
-              (nshell.presentation::process-output-event :rerun-last-command))
-            (expect t :to-equal
-                    nshell.presentation::*rerun-confirmation-pending-p*)
-            (expect 0 :to-equal calls)
-            (capture-standard-output
-              (nshell.presentation::process-output-event :rerun-last-command))
-            (expect 1 :to-equal calls)
-            (expect t :to-equal captured)
-            (expect nil :to-equal
-                    nshell.presentation::*rerun-confirmation-pending-p*))))))
+  (it "rerun-last-command-confirms-through-the-key-reader"
+    (dolist (key '(:ctrl-x :ctrl-p))
+      (with-fresh-input-dispatch-bindings
+        (when (eq key :ctrl-p)
+          (expect :ok :to-equal
+                  (nshell.presentation::input-dispatch-erase-binding "ctrl-x"))
+          (expect :ok :to-equal
+                  (nshell.presentation::input-dispatch-set-binding
+                   "ctrl-p" "rerun-last-command")))
+        (dolist (command '("printf captured" "git push"))
+          (dolist (failure-explain-p '(nil t))
+            (with-fixed-terminal-size (24 80)
+              (with-repl-test-state
+                (with-stable-repl-prompt ()
+                  (setf nshell.presentation::*last-command-text* command
+                        nshell.presentation::*failure-explain-available-p*
+                        failure-explain-p)
+                  (with-repl-input-state (:buffer "")
+                    (let ((calls 0)
+                          (captured nil))
+                      (with-temporary-functions
+                          (('nshell.infrastructure.acl:consume-terminal-resize-p
+                            (lambda () nil))
+                           ('nshell.infrastructure.terminal:read-key-event
+                            (lambda (&key interrupt-predicate)
+                              (declare (ignore interrupt-predicate))
+                              (input-key-event key)))
+                           ('nshell.presentation::%process-execute-output-event
+                            (lambda ()
+                              (incf calls)
+                              (setf captured
+                                    nshell.presentation::*capture-command-output-p*)
+                              nil)))
+                        (capture-standard-output
+                          (funcall (funcall (nshell.presentation::read-key-cont))))
+                        (expect t :to-equal
+                                nshell.presentation::*rerun-confirmation-pending-p*)
+                        (expect (+ 2 (length nshell.presentation::*transient-panel-content*))
+                                :to-equal
+                                nshell.presentation::*transient-panel-rendered-lines*)
+                        (expect nshell.presentation::*transient-panel-content*
+                                :to-be-truthy)
+                        (expect 0 :to-equal calls)
+                        (when (eq key :ctrl-p)
+                          (expect (search "ctrl-p"
+                                          (princ-to-string
+                                           nshell.presentation::*transient-panel-content*))
+                                  :to-be-truthy)
+                          (expect (search "ctrl-x"
+                                          (princ-to-string
+                                           nshell.presentation::*transient-panel-content*))
+                                  :to-be-null))
+                        (capture-standard-output
+                          (funcall (nshell.presentation::read-key-cont)))
+                        (expect 1 :to-equal calls)
+                        (expect t :to-equal captured)
+                        (expect command :to-equal
+                                (nshell.presentation:input-state-buffer
+                                 nshell.presentation::*input-state*))
+                        (expect nil :to-equal
+                                nshell.presentation::*rerun-confirmation-pending-p*))))))))))))
 
-  (it "rerun-last-command-shows-safety-and-command-before-confirming"
+  (it "rerun-last-command-requires-confirmation-and-captures-output"
+    (with-fixed-terminal-size (24 80)
+      (with-repl-test-state
+        (setf nshell.presentation::*last-command-text* "printf captured")
+        (with-repl-input-state (:buffer "")
+          (let ((calls 0)
+                (captured nil))
+            (with-temporary-function
+                ('nshell.presentation::%process-execute-output-event
+                 (lambda ()
+                   (incf calls)
+                   (setf captured nshell.presentation::*capture-command-output-p*)
+                   nil))
+              (capture-standard-output
+                (nshell.presentation::process-output-event :rerun-last-command))
+              (expect t :to-equal
+                      nshell.presentation::*rerun-confirmation-pending-p*)
+              (expect 0 :to-equal calls)
+              (capture-standard-output
+                (nshell.presentation::process-output-event :rerun-last-command))
+              (expect 1 :to-equal calls)
+              (expect t :to-equal captured)
+              (expect nil :to-equal
+                      nshell.presentation::*rerun-confirmation-pending-p*)))))))
+
+  (it "rerun-last-command-wraps-the-complete-confirmation"
     (with-repl-test-state
-      (setf nshell.presentation::*last-command-text* "git push")
-      (with-repl-input-state (:buffer "")
+      (with-fixed-terminal-size (40 32)
+        (setf nshell.presentation::*last-command-text*
+              "printf abcdefghijklmnopqrstuvwxyz0123456789")
+        (with-repl-input-state (:buffer "")
+          (capture-standard-output
+            (nshell.presentation::process-output-event :rerun-last-command))
+          (expect t :to-equal
+                  nshell.presentation::*rerun-confirmation-pending-p*)
+          (let* ((lines nshell.presentation::*transient-panel-content*)
+                 (joined (format nil "~{~a~}" lines)))
+            (expect (search nshell.presentation::*last-command-text* joined)
+                    :to-be-truthy)
+            (expect (every (lambda (line)
+                             (<= (nshell.presentation::%string-visible-width line) 28))
+                           lines)
+                    :to-be-truthy)
+            (expect (+ 2 (length lines)) :to-equal
+                    nshell.presentation::*transient-panel-rendered-lines*))))))
+
+  (it "rerun-last-command-rejects-an-incomplete-confirmation"
+    (dolist (command (cons "printf captured"
+                          (loop for code in '(9 10 13 27 127 133)
+                                collect (format nil "printf 'hidden~ccommand'"
+                                                (code-char code)))))
+      (dolist (size '((4 80) (24 3) (24 80)))
+        (when (or (not (equal size '(24 80)))
+                  (not (string= command "printf captured")))
+          (with-repl-test-state
+            (with-fixed-terminal-size ((first size) (second size))
+              (setf nshell.presentation::*last-command-text* command)
+              (with-repl-input-state (:buffer "")
+                (let ((calls 0))
+                  (with-temporary-function
+                      ('nshell.presentation::%process-execute-output-event
+                       (lambda () (incf calls)))
+                    (dotimes (attempt 2)
+                      (capture-standard-output
+                        (nshell.presentation::process-output-event :rerun-last-command))))
+                  (expect 0 :to-equal calls)
+                  (expect nil :to-equal
+                          nshell.presentation::*rerun-confirmation-pending-p*)))))))))
+
+  (it "rerun-last-command-resize-cancels-confirmation"
+    (with-repl-test-state
+      (with-fixed-terminal-size (24 80)
+        (setf nshell.presentation::*last-command-text* "printf captured")
+        (with-repl-input-state (:buffer "")
+          (capture-standard-output
+            (nshell.presentation::process-output-event :rerun-last-command))
+          (expect t :to-equal
+                  nshell.presentation::*rerun-confirmation-pending-p*)
+          (with-fixed-terminal-size (4 20)
+            (capture-standard-output
+              (nshell.presentation::%render-prompt-after-terminal-resize)))
+          (expect nil :to-equal
+                  nshell.presentation::*rerun-confirmation-pending-p*)
+          (expect nil :to-equal nshell.presentation::*rerun-command-assessment*)))))
+
+  (it "rerun-last-command-cancels-a-resize-during-key-read"
+    (dolist (timing '(:during-read :after-read))
+      (with-repl-test-state
+        (with-fixed-terminal-size (24 80)
+          (with-repl-input-state (:buffer "")
+            (with-stable-repl-prompt ()
+              (setf nshell.presentation::*last-command-text* "printf captured")
+              (capture-standard-output
+                (funcall (nshell.presentation::process-output-event :rerun-last-command)))
+              (expect t :to-equal nshell.presentation::*rerun-confirmation-pending-p*)
+              (let ((resize-p nil)
+                    (calls 0))
+                (with-temporary-functions
+                    (('nshell.infrastructure.acl:consume-terminal-resize-p
+                      (lambda () (prog1 resize-p (setf resize-p nil))))
+                     ('nshell.infrastructure.terminal:read-key-event
+                      (lambda (&key interrupt-predicate)
+                        (declare (ignore interrupt-predicate))
+                        (when (eq timing :during-read) (setf resize-p t))
+                        (input-key-event :ctrl-x)))
+                     ('nshell.presentation::%process-execute-output-event
+                      (lambda () (incf calls))))
+                  (let ((continuation (nshell.presentation::read-key-cont)))
+                    (when (eq timing :after-read) (setf resize-p t))
+                    (capture-standard-output (funcall continuation)))
+                  (expect 0 :to-equal calls)
+                  (expect nil :to-equal nshell.presentation::*rerun-confirmation-pending-p*)
+                  (expect nil :to-equal nshell.presentation::*rerun-command-assessment*)))))))))
+
+  (it "rerun-last-command-rejects-a-confirmation-cleared-before-approval"
+    (with-repl-test-state
+      (with-fixed-terminal-size (24 80)
+        (setf nshell.presentation::*last-command-text* "printf captured")
         (capture-standard-output
           (nshell.presentation::process-output-event :rerun-last-command))
-        (expect t :to-equal
-                nshell.presentation::*rerun-confirmation-pending-p*)
-        (let ((panel
-                (nshell.presentation::%rerun-panel-lines
-                 nshell.presentation::*rerun-command-assessment*)))
-          (expect (search "git push" (princ-to-string panel)) :to-be-truthy)
-          (expect (search "confirmation" (princ-to-string panel)) :to-be-truthy)))))
+        (expect t :to-equal nshell.presentation::*rerun-confirmation-pending-p*)
+        (let ((calls 0))
+          (with-temporary-function
+              ('nshell.presentation::%process-execute-output-event
+               (lambda () (incf calls)))
+            (capture-standard-output
+              (nshell.presentation::clear-rendered-transient-panel)
+              (nshell.presentation::process-output-event :rerun-last-command)))
+          (expect 0 :to-equal calls)
+          (expect nil :to-equal nshell.presentation::*rerun-confirmation-pending-p*)))))
+
+  (it "rerun-last-command-shows-safety-and-command-before-confirming"
+    (with-fixed-terminal-size (24 80)
+      (with-repl-test-state
+        (setf nshell.presentation::*last-command-text* "git push")
+        (with-repl-input-state (:buffer "")
+          (capture-standard-output
+            (nshell.presentation::process-output-event :rerun-last-command))
+          (expect t :to-equal
+                  nshell.presentation::*rerun-confirmation-pending-p*)
+          (let ((panel
+                  (nshell.presentation::%rerun-panel-lines
+                   nshell.presentation::*rerun-command-assessment*)))
+            (expect (search "git push" (princ-to-string panel)) :to-be-truthy)
+            (expect (search "confirmation" (princ-to-string panel)) :to-be-truthy))))))
 
   (it "rerun-last-command-rejects-interactive-commands"
     (with-repl-test-state
@@ -127,29 +297,33 @@
                 :to-be-truthy))))
 
   (it "rerun-last-command-cancel-clears-confirmation-on-other-input"
-    (with-repl-test-state
-      (setf nshell.presentation::*last-command-text* "git push")
-      (with-repl-input-state (:buffer "")
-        (capture-standard-output
-          (nshell.presentation::process-output-event :rerun-last-command))
-        (with-temporary-functions
-            (('nshell.infrastructure.acl:consume-terminal-resize-p
-              (lambda () nil))
-             ('nshell.infrastructure.acl:consume-sigint-received-p
-              (lambda () nil))
-             ('nshell.infrastructure.terminal:read-key-event
-              (lambda (&key interrupt-predicate)
-                (declare (ignore interrupt-predicate))
-                (input-key-event :char #\x)))
-             ('nshell.presentation::render-prompt-cont (lambda () nil)))
-          (let ((continuation (nshell.presentation::read-key-cont)))
-            (funcall continuation))
-          (expect nil :to-equal
-                  nshell.presentation::*rerun-confirmation-pending-p*)
-          (expect nil :to-equal nshell.presentation::*rerun-command-assessment*)
-          (expect "x" :to-equal
-                  (nshell.presentation:input-state-buffer
-                   nshell.presentation::*input-state*))))))
+    (dolist (character '(#\x #\v))
+      (with-fixed-terminal-size (24 80)
+        (with-repl-test-state
+          (setf nshell.presentation::*last-command-text* "git push")
+          (with-repl-input-state (:buffer "")
+            (capture-standard-output
+              (nshell.presentation::process-output-event :rerun-last-command))
+            (expect t :to-equal
+                    nshell.presentation::*rerun-confirmation-pending-p*)
+            (with-temporary-functions
+                (('nshell.infrastructure.acl:consume-terminal-resize-p
+                  (lambda () nil))
+                 ('nshell.infrastructure.acl:consume-sigint-received-p
+                  (lambda () nil))
+                 ('nshell.infrastructure.terminal:read-key-event
+                  (lambda (&key interrupt-predicate)
+                    (declare (ignore interrupt-predicate))
+                    (input-key-event :char character)))
+                 ('nshell.presentation::render-prompt-cont (lambda () nil)))
+              (let ((continuation (nshell.presentation::read-key-cont)))
+                (funcall continuation))
+              (expect nil :to-equal
+                      nshell.presentation::*rerun-confirmation-pending-p*)
+              (expect nil :to-equal nshell.presentation::*rerun-command-assessment*)
+              (expect (string character) :to-equal
+                      (nshell.presentation:input-state-buffer
+                       nshell.presentation::*input-state*))))))))
 
   (it "repl-installed-terminal-controls-actual-runner-lifecycle"
     (dolist (scenario '(:success :install-failure :execution-failure))

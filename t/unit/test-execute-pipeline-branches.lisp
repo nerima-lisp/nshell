@@ -74,6 +74,46 @@
               :to-equal
               (nshell.application::%process-substitution-resource-fds
                (list (list :fd 3) (list :fd 4))))))
+  (it "wait-process-substitution-reaps-children-after-interruption"
+    (let* ((processes (list :child))
+           (resource (nshell.infrastructure.acl::%make-process-substitution-resource
+                      "/dev/fd/test" nil processes))
+           (terminated nil))
+      (with-temporary-functions
+          (('nshell.infrastructure.acl::%wait-pipeline-processes
+            (lambda (children)
+              (expect processes :to-be children)
+              (error "interrupted wait")))
+           ('nshell.infrastructure.acl::%terminate-pipeline-processes
+            (lambda (children) (push children terminated))))
+        (expect (lambda ()
+                  (nshell.infrastructure.acl:wait-process-substitution resource))
+                :to-throw 'error)
+        (expect (list processes) :to-equal terminated)
+        (expect (nshell.infrastructure.acl::process-substitution-resource-processes
+                 resource)
+                :to-be-null)
+        (nshell.infrastructure.acl:close-process-substitution resource)
+        (expect (list processes) :to-equal terminated))))
+  (it "wait-process-substitution-preserves-normal-result-values"
+    (let* ((processes (list :child))
+           (resource (nshell.infrastructure.acl::%make-process-substitution-resource
+                      "/dev/fd/test" nil processes))
+           (terminated nil))
+      (with-temporary-functions
+          (('nshell.infrastructure.acl::%wait-pipeline-processes
+            (lambda (children)
+              (expect processes :to-be children)
+              (values 7 (list 7))))
+           ('nshell.infrastructure.acl::%terminate-pipeline-processes
+            (lambda (children) (push children terminated))))
+        (expect (list 7 (list 7)) :to-equal
+                (multiple-value-list
+                 (nshell.infrastructure.acl:wait-process-substitution resource)))
+        (expect 0 :to-equal
+                (nshell.infrastructure.acl:wait-process-substitution resource))
+        (nshell.infrastructure.acl:close-process-substitution resource)
+        (expect terminated :to-be-null))))
   (it "source-pipeline-exit-status-honors-pipefail"
     (expect 2 :to-equal (nshell.application::%source-pipeline-exit-status (list 0 2) nil))
     (expect 2 :to-equal (nshell.application::%source-pipeline-exit-status (list 0 2 0) t))

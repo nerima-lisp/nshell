@@ -121,20 +121,21 @@
                (sb-thread:thread-alive-p thread)))
         (sb-thread:list-all-threads)))
 
-(defmacro %assistant-test-with-sidecar-cleanup (&body body)
-  `(unwind-protect
-       (progn ,@body)
-     (ignore-errors
-       (nshell.feature.assistant:assistant-model-stop))
-     (let ((deadline (+ (get-internal-real-time)
-                        (round (* 2 internal-time-units-per-second)))))
-       (dolist (name '("nshell assistant sidecar startup"
-                       "nshell assistant sidecar reader"
-                       "nshell assistant sidecar writer"
-                       "nshell assistant sidecar error reader"))
-         (loop while (and (%assistant-test-live-thread-named-p name)
-                          (< (get-internal-real-time) deadline))
-               do (sleep 0.01))))))
+(defmacro %assistant-test-with-sidecar-cleanup (context &body body)
+  `(let ((nshell.feature.assistant:*assistant-boundaries* ,context))
+     (unwind-protect
+          (progn ,@body)
+       (ignore-errors
+         (nshell.feature.assistant:assistant-model-stop))
+       (let ((deadline (+ (get-internal-real-time)
+                          (round (* 2 internal-time-units-per-second)))))
+         (dolist (name '("nshell assistant sidecar startup"
+                         "nshell assistant sidecar reader"
+                         "nshell assistant sidecar writer"
+                         "nshell assistant sidecar error reader"))
+           (loop while (and (%assistant-test-live-thread-named-p name)
+                            (< (get-internal-real-time) deadline))
+                 do (sleep 0.01)))))))
 
 (defun %assistant-test-await-state (state &optional (timeout-seconds 12))
   (let ((deadline (+ (get-internal-real-time)
@@ -334,6 +335,205 @@
         (expect t :to-be (eq pending actual))
         (expect 17 :to-be actual-generation))))
 
+  (it "handles-reader-eof-after-poll-clears-pending"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+           (handle (nshell.infrastructure.acl::%make-sidecar-handle
+                    nil nil nil (make-string-input-stream "") nil :stopped))
+           (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                     17 (cl-concurrent-kit:make-channel :buffer-size 2)
+                     (cl-concurrent-kit:make-promise))))
+      (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle
+            (nshell.feature.assistant::assistant-sidecar-state-init-p state) t
+            (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+      (nshell.feature.assistant::%assistant-sidecar-publish
+       pending (nshell.feature.assistant::make-assistant-model-event 17 :result nil))
+      (multiple-value-bind (event present-p)
+          (nshell.feature.assistant::%assistant-sidecar-poll state 17)
+        (expect t :to-be present-p)
+        (expect :result :to-be
+                (nshell.feature.assistant:assistant-model-event-kind event)))
+      (expect nil :to-be
+              (nshell.feature.assistant::assistant-sidecar-state-pending state))
+      (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0)
+      (expect t :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-p state))
+      (expect :reader-eof :to-be
+              (nshell.feature.assistant::assistant-sidecar-state-dead-reason state))
+      (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))))
+
+  (it "keeps-idle-reader-through-values-until-eof"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+           (stream (make-string-input-stream
+                    (format nil "{\"type\":\"system\"}~%{\"type\":\"system\"}~%")))
+           (handle (nshell.infrastructure.acl::%make-sidecar-handle
+                    nil nil nil stream nil :stopped)))
+      (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle)
+      (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0)
+      (expect :eof :to-be (read-char stream nil :eof))
+      (expect t :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-p state))
+      (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))))
+
+  (it "ignores-reader-eof-from-stale-handle-or-generation"
+    (dolist (stale-part '(:handle :generation))
+      (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+             (handle (nshell.infrastructure.acl::%make-sidecar-handle
+                      nil nil nil (make-string-input-stream "") nil :stopped))
+             (active (if (eq stale-part :handle) (gensym "ACTIVE-") handle))
+             (generation (if (eq stale-part :generation) 1 0))
+             (pending (nshell.feature.assistant::%make-assistant-pending-cell 17 nil nil)))
+        (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) active
+              (nshell.feature.assistant::assistant-sidecar-state-startup-generation state) generation
+              (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+        (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0)
+        (expect active :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))
+        (expect generation :to-be
+                (nshell.feature.assistant::assistant-sidecar-state-startup-generation state))
+        (expect pending :to-be (nshell.feature.assistant::assistant-sidecar-state-pending state))
+        (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-p state)))))
+
+  (it "rechecks-reader-identity-after-eof-process-wait"
+    (dolist (changed-part '(:handle :generation))
+      (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+             (handle (nshell.infrastructure.acl::%make-sidecar-handle
+                      nil nil nil (make-string-input-stream "") nil :stopped))
+             (active (if (eq changed-part :handle)
+                         (nshell.infrastructure.acl::%make-sidecar-handle
+                          nil nil nil (make-string-input-stream "") nil :stopped)
+                         handle))
+             (generation (if (eq changed-part :generation) 1 0))
+             (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                       17 (cl-concurrent-kit:make-channel :buffer-size 2)
+                       (cl-concurrent-kit:make-promise))))
+        (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle
+              (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+        (sb-ext:without-package-locks
+          (with-temporary-function
+              ('sb-ext:process-wait
+               (lambda (process)
+                 (declare (ignore process))
+                 (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) active
+                       (nshell.feature.assistant::assistant-sidecar-state-startup-generation state)
+                       generation)))
+            (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0)))
+        (expect active :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))
+        (expect generation :to-be
+                (nshell.feature.assistant::assistant-sidecar-state-startup-generation state))
+        (expect pending :to-be (nshell.feature.assistant::assistant-sidecar-state-pending state))
+        (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-p state))
+        (expect nil :to-be
+                (cl-concurrent-kit:promise-settled-p
+                 (nshell.feature.assistant::assistant-pending-cell-completion pending)))
+        (cl-concurrent-kit:close-channel
+         (nshell.feature.assistant::assistant-pending-cell-events pending)))))
+
+  (it "settles-request-accepted-while-reader-waits-for-eof"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+           (handle (nshell.infrastructure.acl::%make-sidecar-handle
+                    nil nil nil (make-string-input-stream "") nil :stopped))
+           (writes (cl-concurrent-kit:make-channel :buffer-size 2))
+           (pending nil)
+           (accepted-p nil)
+           (queued-generation nil)
+           (wait-calls 0))
+      (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle
+            (nshell.feature.assistant::assistant-sidecar-state-init-p state) t
+            (nshell.feature.assistant::assistant-sidecar-state-write-channel state) writes)
+      (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-pending state))
+      (unwind-protect
+           (progn
+             (sb-ext:without-package-locks
+               (with-temporary-function
+                   ('sb-ext:process-wait
+                    (lambda (process)
+                      (declare (ignore process))
+                      (incf wait-calls)
+                      (setf accepted-p
+                            (with-temporary-function
+                                ('nshell.infrastructure.acl:sidecar-alive-p
+                                 (lambda (candidate)
+                                   (expect handle :to-be candidate)
+                                   t))
+                              (nshell.feature.assistant::%assistant-sidecar-request
+                               state 17 '(("type" . "user") ("message" . "pwd"))))
+                            pending (nshell.feature.assistant::assistant-sidecar-state-pending state))
+                      (multiple-value-bind (item present-p)
+                          (cl-concurrent-kit:try-recv writes)
+                        (when present-p
+                          (setf queued-generation
+                                (nshell.feature.assistant::assistant-write-item-generation item))))))
+                 (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0)))
+             (expect 1 :to-be wait-calls)
+             (expect t :to-be accepted-p)
+             (expect 17 :to-be queued-generation)
+             (expect t :to-be
+                     (and pending
+                          (cl-concurrent-kit:promise-settled-p
+                           (nshell.feature.assistant::assistant-pending-cell-completion pending))))
+             (multiple-value-bind (event present-p)
+                 (nshell.feature.assistant::%assistant-sidecar-poll state 17)
+               (expect t :to-be present-p)
+               (when present-p
+                 (expect :stream-error :to-be
+                         (nshell.feature.assistant::assistant-model-event-kind event))
+                 (expect 17 :to-be
+                         (nshell.feature.assistant::assistant-model-event-generation event))))
+             (expect t :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-p state))
+             (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state)))
+        (cl-concurrent-kit:close-channel writes)
+        (when pending
+          (cl-concurrent-kit:close-channel
+           (nshell.feature.assistant::assistant-pending-cell-events pending))))))
+
+  (it "preserves-new-reader-identity-during-eof-cleanup"
+    (dolist (changed-part '(:handle :generation))
+      (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+             (handle (nshell.infrastructure.acl::%make-sidecar-handle
+                      nil nil nil (make-string-input-stream "") nil :stopped))
+             (active (if (eq changed-part :handle)
+                         (nshell.infrastructure.acl::%make-sidecar-handle
+                          nil nil nil (make-string-input-stream "") nil :stopped)
+                         handle))
+             (generation (if (eq changed-part :generation) 2 1))
+             (writes (cl-concurrent-kit:make-channel :buffer-size 2))
+             (thread sb-thread:*current-thread*)
+             (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                       17 (cl-concurrent-kit:make-channel :buffer-size 2)
+                       (cl-concurrent-kit:make-promise))))
+        (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle
+              (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+        (with-temporary-function
+            ('nshell.infrastructure.acl:stop-sidecar
+             (lambda (stopped)
+               (expect handle :to-be stopped)
+               (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) active
+                     (nshell.feature.assistant::assistant-sidecar-state-startup-generation state) generation
+                     (nshell.feature.assistant::assistant-sidecar-state-init-p state) t
+                     (nshell.feature.assistant::assistant-sidecar-state-dead-p state) nil
+                     (nshell.feature.assistant::assistant-sidecar-state-write-channel state) writes
+                     (nshell.feature.assistant::assistant-sidecar-state-reader-thread state) thread
+                     (nshell.feature.assistant::assistant-sidecar-state-writer-thread state) thread
+                     (nshell.feature.assistant::assistant-sidecar-state-error-thread state) thread
+                     (nshell.feature.assistant::assistant-sidecar-state-start-thread state) thread)))
+          (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0))
+        (expect active :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))
+        (expect generation :to-be
+                (nshell.feature.assistant::assistant-sidecar-state-startup-generation state))
+        (expect t :to-be (nshell.feature.assistant::assistant-sidecar-state-init-p state))
+        (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-p state))
+        (expect writes :to-be
+                (nshell.feature.assistant::assistant-sidecar-state-write-channel state))
+        (expect thread :to-be
+                (nshell.feature.assistant::assistant-sidecar-state-reader-thread state))
+        (expect thread :to-be
+                (nshell.feature.assistant::assistant-sidecar-state-writer-thread state))
+        (expect thread :to-be
+                (nshell.feature.assistant::assistant-sidecar-state-error-thread state))
+        (expect thread :to-be
+                (nshell.feature.assistant::assistant-sidecar-state-start-thread state))
+        (expect t :to-be (cl-concurrent-kit:try-send writes :replacement))
+        (cl-concurrent-kit:close-channel writes)
+        (cl-concurrent-kit:close-channel
+         (nshell.feature.assistant::assistant-pending-cell-events pending)))))
+
   (it "clears-starting-state-when-startup-handoff-fails"
     (let ((state (nshell.feature.assistant::%make-assistant-sidecar-state
                   "/bin/false" nil))
@@ -383,12 +583,14 @@
             (sb-posix:unsetenv "NSHELL_AI_DISABLE")))))
 
   (it "times-out-a-sidecar-that-hangs-during-version-probe"
-    (let ((script (%assistant-test-hanging-version-sidecar-script)))
+    (let ((script (%assistant-test-hanging-version-sidecar-script))
+          (context nil))
       (unwind-protect
            (let* ((boundary (nshell.feature.assistant:make-assistant-sidecar-boundary
                              :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context boundary))
+                    (setf context
+                          (nshell.feature.assistant:make-assistant-boundary-context boundary)))
                   (result (nshell.feature.assistant:assistant-model-start))
                   (status nil))
              (expect :ok :to-be
@@ -399,17 +601,19 @@
              (expect nil :to-be
                      (search (string #\Newline) (getf status :reason)))
              (nshell.feature.assistant:assistant-model-stop))
-        (%assistant-test-with-sidecar-cleanup)
+        (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script)))))
 
   (it "reports-version-probe-output-when-the-sidecar-exits-with-an-error"
-    (let ((script (%assistant-test-failing-version-sidecar-script)))
+    (let ((script (%assistant-test-failing-version-sidecar-script))
+          (context nil))
       (unwind-protect
            (let* ((boundary (nshell.feature.assistant:make-assistant-sidecar-boundary
                              :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context boundary))
+                    (setf context
+                          (nshell.feature.assistant:make-assistant-boundary-context boundary)))
                   (result (nshell.feature.assistant:assistant-model-start))
                   (status nil)
                   (reason nil))
@@ -423,7 +627,7 @@
              (expect (search "17" reason)
                      :to-be-truthy)
              (nshell.feature.assistant:assistant-model-stop))
-        (%assistant-test-with-sidecar-cleanup)
+        (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script)))))
 
@@ -446,14 +650,16 @@
             (%assistant-stop-sidecar handle))))))
 
   (it "streams-sidecar-values-through-reader-and-writer-threads"
-    (let ((script (%assistant-test-sidecar-script)))
+    (let ((script (%assistant-test-sidecar-script))
+          (context nil))
       (unwind-protect
            (let* ((boundary
                     (nshell.feature.assistant:make-assistant-sidecar-boundary
                      :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context
-                     boundary))
+                    (setf context
+                          (nshell.feature.assistant:make-assistant-boundary-context
+                           boundary)))
                   (start (nshell.feature.assistant:assistant-model-start)))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status start))
@@ -489,20 +695,22 @@
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-stop))))
-        (%assistant-test-with-sidecar-cleanup)
+        (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script)))))
 
   (it "discards-a-stale-sidecar-pending-before-the-next-request"
     (with-temporary-output-file (received-path :prefix "nshell-assistant-received-")
-      (let ((script (%assistant-test-sidecar-script nil received-path)))
+      (let ((script (%assistant-test-sidecar-script nil received-path))
+            (context nil))
         (unwind-protect
              (let* ((boundary
                       (nshell.feature.assistant:make-assistant-sidecar-boundary
                        :command (namestring script)))
                     (nshell.feature.assistant:*assistant-boundaries*
-                      (nshell.feature.assistant:make-assistant-boundary-context
-                       boundary)))
+                      (setf context
+                            (nshell.feature.assistant:make-assistant-boundary-context
+                             boundary))))
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status
                         (nshell.feature.assistant:assistant-model-start)))
@@ -532,7 +740,7 @@
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status
                         (nshell.feature.assistant:assistant-model-stop))))
-          (%assistant-test-with-sidecar-cleanup)
+          (%assistant-test-with-sidecar-cleanup context)
           (when (probe-file script)
             (delete-file script))))))
 
@@ -559,14 +767,16 @@
           (delete-file script)))))
 
   (it "respawns-sidecar-after-reader-detects-process-death"
-    (let ((script (%assistant-test-sidecar-script t)))
+    (let ((script (%assistant-test-sidecar-script t))
+          (context nil))
       (unwind-protect
            (let* ((boundary
                     (nshell.feature.assistant:make-assistant-sidecar-boundary
                      :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context
-                     boundary))
+                    (setf context
+                          (nshell.feature.assistant:make-assistant-boundary-context
+                           boundary)))
                   (start (nshell.feature.assistant:assistant-model-start)))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status start))
@@ -628,19 +838,21 @@
                (expect :ok :to-be
                        (nshell.feature.assistant:assistant-boundary-status
                         (nshell.feature.assistant:assistant-model-stop))))
-        (%assistant-test-with-sidecar-cleanup)
+        (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script))))))
 
   (it "does-not-let-poll-consume-the-startup-handshake"
-    (let ((script (%assistant-test-sidecar-script)))
+    (let ((script (%assistant-test-sidecar-script))
+          (context nil))
       (unwind-protect
            (let* ((boundary
                     (nshell.feature.assistant:make-assistant-sidecar-boundary
                      :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context
-                     boundary)))
+                    (setf context
+                          (nshell.feature.assistant:make-assistant-boundary-context
+                           boundary))))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-start)))
@@ -676,19 +888,21 @@
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-stop))))
-        (%assistant-test-with-sidecar-cleanup)
+        (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script)))))
 
   (it "publishes-a-reasoned-terminal-event-before-stop-closes-pending"
-    (let ((script (%assistant-test-pending-sidecar-script)))
+    (let ((script (%assistant-test-pending-sidecar-script))
+          (context nil))
       (unwind-protect
            (let* ((boundary
                     (nshell.feature.assistant:make-assistant-sidecar-boundary
                      :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context
-                     boundary)))
+                    (setf context
+                          (nshell.feature.assistant:make-assistant-boundary-context
+                           boundary))))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-start)))
@@ -716,19 +930,21 @@
                                    (nshell.feature.assistant:assistant-model-event-payload
                                     event)
                                    :test #'string=)))))
-        (%assistant-test-with-sidecar-cleanup)
+        (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script)))))
 
   (it "publishes-a-reasoned-terminal-event-before-respawn-replaces-pending"
-    (let ((script (%assistant-test-sidecar-script t)))
+    (let ((script (%assistant-test-sidecar-script t))
+          (context nil))
       (unwind-protect
            (let* ((boundary
                     (nshell.feature.assistant:make-assistant-sidecar-boundary
                      :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context
-                     boundary)))
+                    (setf context
+                          (nshell.feature.assistant:make-assistant-boundary-context
+                           boundary))))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status
                       (nshell.feature.assistant:assistant-model-start)))
@@ -763,20 +979,22 @@
                          (nshell.feature.assistant:assistant-model-event-kind
                           error-event)))
              (nshell.feature.assistant:assistant-model-stop))
-        (%assistant-test-with-sidecar-cleanup)
+        (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script)))))
 
 (describe "assistant-sidecar-reader-stop-race"
   (it "stops-cleanly-when-init-gate-rejects-a-live-reader"
-    (let ((script (%assistant-test-rejecting-sidecar-script)))
+    (let ((script (%assistant-test-rejecting-sidecar-script))
+          (context nil))
       (unwind-protect
            (let* ((boundary
                     (nshell.feature.assistant:make-assistant-sidecar-boundary
                      :command (namestring script)))
                   (nshell.feature.assistant:*assistant-boundaries*
-                    (nshell.feature.assistant:make-assistant-boundary-context
-                     boundary))
+                    (setf context
+                          (nshell.feature.assistant:make-assistant-boundary-context
+                           boundary)))
                   (start (nshell.feature.assistant:assistant-model-start)))
              (expect :ok :to-be
                      (nshell.feature.assistant:assistant-boundary-status start))
@@ -811,6 +1029,6 @@
              (expect nil :to-be
                      (%assistant-test-live-thread-named-p
                       "nshell assistant sidecar reader")))
-        (%assistant-test-with-sidecar-cleanup)
+        (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script))))))

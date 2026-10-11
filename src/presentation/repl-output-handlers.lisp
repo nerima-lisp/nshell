@@ -878,7 +878,45 @@ wrapped line's other rows on screen as stale duplicates."
         (format nil "安全性: ~(~a~)（~a）"
                 (getf assessment :classification)
                 (getf assessment :reason))
-        "確認するにはもう一度 Ctrl-X を押してください。その他のキーで取り消します。"))
+        (format nil "確認するにはもう一度 ~{~a~^ / ~} を押してください。その他のキーで取り消します。"
+                (loop for (key . action) in (input-dispatch-bindings-listing)
+                      when (string= action "rerun-last-command")
+                        collect key))))
+
+(defun %rerun-confirmation-panel-lines (assessment)
+  (let ((width (- (terminal-width) 4))
+        (lines nil))
+    (unless (plusp width)
+      (return-from %rerun-confirmation-panel-lines nil))
+    (dolist (line (%rerun-panel-lines assessment))
+      (when (some (lambda (char)
+                    (let ((code (char-code char)))
+                      (or (< code 32) (<= 127 code 159))))
+                  line)
+        (return-from %rerun-confirmation-panel-lines nil))
+      (let ((graphemes nil)
+            (line-width 0))
+        (dolist (grapheme (cl-tty-kit:string-graphemes line))
+          (let ((grapheme-width (%grapheme-visible-width grapheme)))
+            (when (> grapheme-width width)
+              (return-from %rerun-confirmation-panel-lines nil))
+            (when (> (+ line-width grapheme-width) width)
+              (push (format nil "~{~a~}" (nreverse graphemes)) lines)
+              (setf graphemes nil line-width 0))
+            (push grapheme graphemes)
+            (incf line-width grapheme-width)))
+        (push (format nil "~{~a~}" (nreverse graphemes)) lines)))
+    (when (<= (+ 2 (length lines))
+              (max 0 (- (%transient-panel-terminal-rows)
+                        *prompt-rendered-lines* 1)))
+      (nreverse lines))))
+
+(defun %reject-incomplete-rerun-confirmation ()
+  (setf *rerun-confirmation-pending-p* nil
+        *rerun-command-assessment* nil)
+  (render-transient-panel
+   '("確認内容を全て表示できないため、出力捕捉による再実行を拒否しました。"
+     "端末を広げ、表示できない制御文字を含まないコマンドを使用してください。")))
 
 (defun %process-rerun-last-command-output-event ()
   (cond
@@ -896,9 +934,13 @@ wrapped line's other rows on screen as stale duplicates."
               (list (format nil "出力捕捉による再実行を拒否: ~a"
                             (getf assessment :reason))
                     (format nil "コマンド: ~a" *last-command-text*)))
-             (progn
-               (setf *rerun-confirmation-pending-p* t)
-               (render-transient-panel (%rerun-panel-lines assessment)))))))
+             (let ((lines (%rerun-confirmation-panel-lines assessment)))
+               (if lines
+                   (progn
+                     (setf *rerun-confirmation-pending-p* t)
+                     (render-transient-panel lines)
+                     (setf *preserve-transient-panel-on-next-prompt-p* t))
+                   (%reject-incomplete-rerun-confirmation)))))))
     (t
      (let ((assessment *rerun-command-assessment*))
        (setf *rerun-confirmation-pending-p* nil
@@ -909,14 +951,21 @@ wrapped line's other rows on screen as stale duplicates."
            (with-cleared-rendered-completions-and-prompt-cont
              (render-transient-panel
               '("安全でない、または対話型のコマンドのため、出力捕捉による再実行を拒否しました。")))
-           (progn
-             (clear-rendered-transient-panel)
-             (setf *input-state*
-                   (make-repl-input-state
-                    :buffer *last-command-text*
-                    :cursor-pos (length *last-command-text*)))
-             (let ((*capture-command-output-p* t))
-               (%process-execute-output-event))))))))
+           (if (let ((lines (%rerun-confirmation-panel-lines assessment)))
+                 (not (and lines
+                           (equal lines *transient-panel-content*)
+                           (= (+ 2 (length lines))
+                              *transient-panel-rendered-lines*))))
+               (with-cleared-rendered-completions-and-prompt-cont
+                 (%reject-incomplete-rerun-confirmation))
+               (progn
+                 (clear-rendered-transient-panel)
+                 (setf *input-state*
+                       (make-repl-input-state
+                        :buffer *last-command-text*
+                        :cursor-pos (length *last-command-text*)))
+                 (let ((*capture-command-output-p* t))
+                   (%process-execute-output-event)))))))))
 
 (defun %execute-command-line (text)
   (if (%assistant-proposal-confirmation-required-p)

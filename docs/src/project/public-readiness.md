@@ -42,8 +42,9 @@ Before a public release can claim the capabilities listed here:
 3. The pinned dependency suites execute directly, with nonempty discovery,
    matching selected/executed counts, and no skipped cases. The private history
    storage regressions pass.
-4. An `x86_64-linux` release archive passes checksum and manifest verification
-   after extraction. Its executable passes the real-PTY gate for editing,
+4. An `x86_64-linux` release archive passes checksum verification before
+   extraction. The extracted bundle passes required-file, dependency-closure,
+   license-file, and runtime smoke checks. Its executable passes the real-PTY gate for editing,
    signals, job control, history restart, and terminal restoration, and ships
    with `README.md`, `LICENSE`, dependency licenses, and `nshell(1)`.
 5. User-visible behavior changes are represented in README, man page, the
@@ -52,7 +53,8 @@ Before a public release can claim the capabilities listed here:
 
 The [release workflow](https://github.com/nerima-lisp/nshell/blob/main/.github/workflows/release.yml)
 runs hermetic checks and a non-sandboxed integration job against the same
-resolved tagged commit, and only then builds the published release assets.
+resolved tagged commit, and only then builds the release assets in a draft.
+A maintainer reviews the assets and release notes before publishing the draft.
 
 ## Verification outside CI
 
@@ -91,7 +93,8 @@ does not supply that runtime coverage.
 - The dependency runner executes the pinned libraries' own suites; the history
   script checks private persistence. A successful library load is not a test
   result.
-- Extract a release archive and run
+- Verify the release archive against its SHA-256 checksum before extraction.
+  Extract it and run
   `perl scripts/verify-release-bundle.pl <extracted-bundle>` followed by
   `perl scripts/test-release-pty.pl <extracted-bundle>` on `x86_64-linux`.
 

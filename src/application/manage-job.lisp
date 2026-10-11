@@ -72,7 +72,7 @@
              (%set-acl-foreground-pgid pgid)
              (%with-terminal-foreground-pgroup pgid
                (dolist (process processes)
-                 (sb-ext:process-kill process sb-unix:sigcont :pid))
+                 (nshell.infrastructure.acl:process-continue process))
                (if (eq :stopped (%wait-terminal-processes processes))
                    (let* ((monitor (shell-context-job-monitor context))
                           (id (nshell.domain.job-control:monitor-add-background-job

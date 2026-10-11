@@ -1,6 +1,89 @@
 (in-package #:nshell/test)
 
+(defmacro with-stopped-resume-process ((process &optional (script "kill -STOP $$; exit 7")) &body body)
+  `(let ((,process (sb-ext:run-program "/bin/sh"
+                    (list "-c" ,script)
+                    :wait nil :output nil :error nil)))
+     (unwind-protect
+          (progn
+            (sb-ext:process-wait ,process t)
+            (expect :stopped :to-be (sb-ext:process-status ,process))
+            (sb-ext:without-package-locks ,@body))
+       (when (member (sb-ext:process-status ,process) '(:running :stopped))
+         (sb-ext:process-kill ,process sb-unix:sigkill :pid))
+       (sb-ext:process-wait ,process)
+       (sb-ext:process-close ,process))))
+
 (describe "manage-job-service-tests"
+  (it "process-resume-does-not-treat-cached-stop-as-a-new-stop"
+    (with-stopped-resume-process (process)
+        (with-temporary-function
+            ('sb-ext:process-kill
+              (lambda (observed signal &optional target)
+                (expect process :to-be observed)
+                (expect sb-unix:sigcont :to-equal signal)
+                (expect :pid :to-be target)
+                t))
+          (expect (nshell.infrastructure.acl:process-continue process) :to-be-truthy)
+          (expect :running :to-be (nshell.infrastructure.acl:process-status process))
+          (expect (sb-ext:process-exit-code process) :to-be-null))))
+
+  (it "process-resume-observes-a-new-stop-and-preserves-the-status-hook"
+    (with-stopped-resume-process (process "kill -STOP $$; kill -STOP $$; exit 7")
+      (let* ((notifications 0)
+             (previous-hook (lambda (observed)
+                              (expect process :to-be observed)
+                              (incf notifications))))
+        (setf (sb-ext:process-status-hook process) previous-hook)
+        (expect (nshell.infrastructure.acl:process-continue process) :to-be-truthy)
+        (sb-ext:process-wait process t)
+        (expect :stopped :to-be (nshell.infrastructure.acl:process-status process))
+        (expect previous-hook :to-be (sb-ext:process-status-hook process))
+        (expect (plusp notifications) :to-be-truthy)
+        (expect (nshell.infrastructure.acl:process-continue process) :to-be-truthy)
+        (sb-ext:process-wait process)
+        (expect :exited :to-be (nshell.infrastructure.acl:process-status process))
+        (expect 7 :to-equal (nshell.infrastructure.acl:process-exit-status-code process)))))
+
+  (it "process-resume-preserves-running-and-terminal-states"
+    (dolist (next-state '(:running :exited :signaled))
+      (with-stopped-resume-process (process)
+        (let ((notifications 0))
+          (let ((previous-hook (lambda (observed)
+                                 (expect process :to-be observed)
+                                 (incf notifications))))
+            (setf (sb-ext:process-status-hook process) previous-hook)
+            (sb-sys:without-interrupts
+              (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
+                (setf (sb-impl::process-%status process) next-state)))
+            (with-temporary-function
+                ('sb-ext:process-kill
+                  (lambda (&rest args) (declare (ignore args)) t))
+              (expect (nshell.infrastructure.acl:process-continue process) :to-be-truthy)
+              (expect next-state :to-be (nshell.infrastructure.acl:process-status process))
+              (expect previous-hook :to-be (sb-ext:process-status-hook process))
+              (expect 0 :to-equal notifications))
+            (sb-sys:without-interrupts
+              (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
+                (setf (sb-impl::process-%status process) :stopped))))))))
+
+  (it "process-resume-preserves-failed-signal-status-and-hook"
+    (with-stopped-resume-process (process)
+      (let ((previous-hook (lambda (observed)
+                             (expect process :to-be observed))))
+        (setf (sb-ext:process-status-hook process) previous-hook)
+        (with-temporary-function
+            ('sb-ext:process-kill
+             (lambda (&rest args)
+               (declare (ignore args))
+               (values nil sb-posix:esrch)))
+          (multiple-value-bind (sent errno)
+              (nshell.infrastructure.acl:process-continue process)
+            (expect sent :to-be-falsy)
+            (expect sb-posix:esrch :to-equal errno))
+          (expect :stopped :to-be (nshell.infrastructure.acl:process-status process))
+          (expect previous-hook :to-be (sb-ext:process-status-hook process))))))
+
   (it "registered-foreground-job-keeps-processes-across-stop-and-resume"
     (let* ((registry (make-hash-table))
            (monitor (nshell.domain.job-control:make-job-monitor))

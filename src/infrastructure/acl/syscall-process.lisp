@@ -27,7 +27,16 @@
 (defun process-continue (process)
   (if (pty-process-p process)
       (pty-process-continue process)
-      (sb-ext:process-kill process sb-unix:sigcont :pid)))
+      ;; SBCL 2.6 does not invalidate a cached stop when sending SIGCONT.
+      ;; Use its waitpid lock so a later stop or exit cannot be overwritten.
+      (sb-sys:without-interrupts
+        (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
+          (multiple-value-bind (sent errno)
+              (sb-ext:process-kill process sb-unix:sigcont :pid)
+            (when (and sent (eq :stopped (sb-impl::process-%status process)))
+              (setf (sb-impl::process-%status process) :running
+                    (sb-impl::process-%exit-code process) nil))
+            (values sent errno))))))
 
 (defun process-alive-p (process)
   (if (pty-process-p process)

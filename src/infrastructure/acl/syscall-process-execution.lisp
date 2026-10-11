@@ -43,7 +43,7 @@ normal foreground timeout policy."
                   (if (or (null timeout)
                           (%wait-process-exit-with-timeout proc timeout))
                       (progn
-                        (sb-ext:process-wait proc)
+                        (%wait-sbcl-process proc)
                         (process-exit-status-code proc))
                       (progn
                         (%terminate-process proc)

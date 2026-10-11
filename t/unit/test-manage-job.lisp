@@ -1,20 +1,99 @@
 (in-package #:nshell/test)
 
-(defmacro with-stopped-resume-process ((process &optional (script "kill -STOP $$; exit 7")) &body body)
+(defmacro with-stopped-resume-process ((process &optional (script "kill -STOP $$; exit 7") output) &body body)
   `(let ((,process (sb-ext:run-program "/bin/sh"
                     (list "-c" ,script)
-                    :wait nil :output nil :error nil)))
+                    :wait nil :output ,output :error nil)))
      (unwind-protect
           (progn
-            (sb-ext:process-wait ,process t)
+            (nshell.infrastructure.acl::%wait-sbcl-process ,process t)
             (expect :stopped :to-be (sb-ext:process-status ,process))
             (sb-ext:without-package-locks ,@body))
        (when (member (sb-ext:process-status ,process) '(:running :stopped))
          (sb-ext:process-kill ,process sb-unix:sigkill :pid))
-       (sb-ext:process-wait ,process)
+       (nshell.infrastructure.acl:process-wait ,process)
        (sb-ext:process-close ,process))))
 
 (describe "manage-job-service-tests"
+  (it "process-resume-wait-serves-events-before-terminal-output-drain"
+    (let ((states '(:running :stopped :running :exited))
+          (served 0)
+          (drained 0))
+      (sb-ext:without-package-locks
+        (with-temporary-functions
+            (('sb-ext:process-status
+              (lambda (process)
+                (expect :process :to-be process)
+                (first states)))
+             ('sb-sys:serve-all-events
+              (lambda (timeout)
+                (expect 0.01 :to-equal timeout)
+                (pop states)
+                (incf served)))
+             ('sb-ext:process-wait
+              (lambda (process &optional stopped-p)
+                (expect :process :to-be process)
+                (expect stopped-p :to-be-falsy)
+                (expect :exited :to-be (first states))
+                (incf drained)
+                process)))
+          (expect :process :to-be (nshell.infrastructure.acl:process-wait :process))
+          (expect 3 :to-equal served)
+          (expect 1 :to-equal drained)))))
+
+  (it "process-resume-wait-returns-a-new-stop-without-terminal-drain"
+    (let ((state :running)
+          (served 0))
+      (sb-ext:without-package-locks
+        (with-temporary-functions
+            (('sb-ext:process-status
+              (lambda (process)
+                (expect :process :to-be process)
+                state))
+             ('sb-sys:serve-all-events
+              (lambda (timeout)
+                (expect 0.01 :to-equal timeout)
+                (expect 0 :to-equal served)
+                (incf served)
+                (setf state :stopped)))
+             ('sb-ext:process-wait
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (error "A stopped process must not install a wake pipe"))))
+          (expect :process :to-be
+                  (nshell.infrastructure.acl::%wait-sbcl-process :process t))
+          (expect 1 :to-equal served)))))
+
+  (it "process-resume-external-pipeline-cleanup-uses-safe-wait"
+    (let ((waits 0)
+          (failure (make-condition 'simple-error)))
+      (sb-ext:without-package-locks
+        (with-temporary-functions
+            (('nshell.application::%start-external-process-copiers
+              (lambda (&rest arguments) (declare (ignore arguments)) nil))
+             ('nshell.infrastructure.acl::%foreground-external-command-timeout
+              (lambda () nil))
+             ('nshell.infrastructure.acl::%wait-process-with-copiers-or-stop
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (error failure)))
+             ('sb-ext:process-alive-p
+              (lambda (process) (expect :process :to-be process) t))
+             ('sb-ext:process-status
+              (lambda (process) (expect :process :to-be process) :running))
+             ('nshell.infrastructure.acl:process-wait
+              (lambda (process) (expect :process :to-be process) (incf waits)))
+             ('sb-ext:process-wait
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (error "Unsafe wait during pipeline cleanup"))))
+          (expect failure :to-be
+                  (handler-case
+                      (nshell.application::%finish-external-pipeline-process
+                       :process nil nil nil "command" nil)
+                    (simple-error (condition) condition)))
+          (expect 1 :to-equal waits)))))
+
   (it "process-resume-does-not-treat-cached-stop-as-a-new-stop"
     (with-stopped-resume-process (process)
         (with-temporary-function
@@ -29,21 +108,24 @@
           (expect (sb-ext:process-exit-code process) :to-be-null))))
 
   (it "process-resume-observes-a-new-stop-and-preserves-the-status-hook"
-    (with-stopped-resume-process (process "kill -STOP $$; kill -STOP $$; exit 7")
+    (let ((output (make-string-output-stream)))
+      (with-stopped-resume-process
+          (process "printf before; kill -STOP $$; printf middle; kill -STOP $$; printf after; exit 7" output)
       (let* ((notifications 0)
              (previous-hook (lambda (observed)
                               (expect process :to-be observed)
                               (incf notifications))))
         (setf (sb-ext:process-status-hook process) previous-hook)
         (expect (nshell.infrastructure.acl:process-continue process) :to-be-truthy)
-        (sb-ext:process-wait process t)
+        (nshell.infrastructure.acl::%wait-sbcl-process process t)
         (expect :stopped :to-be (nshell.infrastructure.acl:process-status process))
         (expect previous-hook :to-be (sb-ext:process-status-hook process))
         (expect (plusp notifications) :to-be-truthy)
         (expect (nshell.infrastructure.acl:process-continue process) :to-be-truthy)
-        (sb-ext:process-wait process)
+        (nshell.infrastructure.acl:process-wait process)
         (expect :exited :to-be (nshell.infrastructure.acl:process-status process))
-        (expect 7 :to-equal (nshell.infrastructure.acl:process-exit-status-code process)))))
+        (expect 7 :to-equal (nshell.infrastructure.acl:process-exit-status-code process))
+        (expect "beforemiddleafter" :to-equal (get-output-stream-string output))))))
 
   (it "process-resume-preserves-running-and-terminal-states"
     (dolist (next-state '(:running :exited :signaled))

@@ -9,7 +9,7 @@
 (defun %wait-pipeline-processes (procs &optional (pipefail-p nil))
   (let ((statuses nil))
     (dolist (proc procs)
-      (sb-ext:process-wait proc)
+      (%wait-sbcl-process proc)
       (push (process-exit-status-code proc) statuses))
     (values (%pipeline-exit-status statuses pipefail-p)
             statuses)))
@@ -37,7 +37,7 @@
         (%wait-pipeline-exit-with-timeout procs 0.5)
         (terminate sb-unix:sigkill)
         (dolist (proc procs)
-          (ignore-errors (sb-ext:process-wait proc)))))))
+          (ignore-errors (%wait-sbcl-process proc)))))))
 
 (defun %wait-pipeline-exit-with-timeout (procs timeout-seconds)
   (let ((deadline (+ (get-internal-real-time)

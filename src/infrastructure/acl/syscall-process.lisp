@@ -19,10 +19,21 @@
       (pty-process-status process)
       (sb-ext:process-status process)))
 
+(defun %wait-sbcl-process (process &optional check-for-stopped)
+  ;; SBCL's wake pipe can close an already closed FD on successive CONT/STOP
+  ;; notifications. Serve stream copiers without installing that wake pipe.
+  (loop for state = (sb-ext:process-status process)
+        while (or (eq state :running)
+                  (and (eq state :stopped) (not check-for-stopped)))
+        do (sb-sys:serve-all-events 0.01)
+        finally (return (if (eq state :stopped)
+                            process
+                            (sb-ext:process-wait process)))))
+
 (defun process-wait (process)
   (if (pty-process-p process)
       (pty-process-wait process)
-      (sb-ext:process-wait process)))
+      (%wait-sbcl-process process)))
 
 (defun process-continue (process)
   (if (pty-process-p process)
@@ -111,13 +122,13 @@
    (%with-process-output-copiers (copiers)
      (if (or (null timeout-seconds)
              (%wait-process-exit-with-timeout proc timeout-seconds))
-         (progn (sb-ext:process-wait proc) success-fn)
+         (progn (%wait-sbcl-process proc) success-fn)
          (progn (%terminate-process proc) timeout-fn)))))
 
 (defun %wait-process-with-copiers-or-stop (proc copiers success-fn stop-fn)
   "Wait for PROC while allowing a stopped process to be continued."
   (loop
-    (sb-ext:process-wait proc t)
+    (%wait-sbcl-process proc t)
     (if (eq (sb-ext:process-status proc) :stopped)
         (let ((decision (funcall stop-fn)))
           (unless (eq decision :continue-wait) (return decision))

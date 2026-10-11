@@ -20,7 +20,7 @@ The release and Nix flake support `x86_64-linux` only. With
 [Nix](https://nixos.org/download) and flakes enabled:
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.6.3
+nix run github:nerima-lisp/nshell/v0.6.4
 ```
 
 At the prompt, enter `string upper hello`. Commands and paths colorize live, and a
@@ -62,7 +62,7 @@ and session settings.
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.6.3
+nix profile install github:nerima-lisp/nshell/v0.6.4
 ```
 
 Pin a release tag rather than following the default branch.
@@ -70,8 +70,8 @@ Pin a release tag rather than following the default branch.
 To install without Nix, use the `x86_64-linux` release bundle. It removes Nix store references, carries its
 ELF runtime library closure, and is checked for required files and dependency
 metadata. CI checks an extracted archive and exercises its executable with a
-real PTY, including editing, signals, job control, history restart, and terminal
-restoration. See [Getting
+real PTY, including multiline editing and paste, completion with spaces,
+signals, job control, resize, history restart, and terminal restoration. See [Getting
 started](https://nerima-lisp.github.io/nshell/getting-started/) for the bundle
 verification and installation procedure.
 

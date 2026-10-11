@@ -50,10 +50,72 @@ HISTIGNORE=
 HISTFILE=$HOME/.nshell_history
 HISTSIZE=100
 HISTFILESIZE=100
+shopt -s cmdhist lithist
+# Bash 3.2 lacks bracketed paste: quote literal LF into the real Readline buffer.
+paste_begin() { bind '"\C-j":"\C-v\C-j"'; }
+paste_end() { bind '"\C-j":accept-line'; }
+bind -x '"\C-xp":paste_begin'
+bind -x '"\C-xq":paste_end'
+bind '"\e[200~":"\C-xp"'
+bind '"\e[201~":"\C-xq"'
 if [ "$FIXTURE_HISTORY" = off ]; then unset HISTFILE; fi
 BASH
+    $settings .= "bind '\"\\e[D\":forward-char'\n" if $name eq 'bad-multiline-edit';
+    if ($name eq 'bad-quoted-paste') {
+        $settings .= <<'BASH';
+fixture_pastes=0
+paste_begin() {
+    bind '"\C-j":"\C-v\C-j"'
+    fixture_pastes=$((fixture_pastes + 1))
+    if [ "$fixture_pastes" = 2 ]; then bind '"\\":forward-char'; fi
+}
+BASH
+    }
+    $settings .= "bind '\"\\C-i\":self-insert'\n" if $name eq 'bad-completion';
+    if ($name eq 'bad-resize') {
+        $settings .= <<'BASH';
+trap 'bind '\''"\C-h":forward-char'\''' WINCH
+BASH
+    }
+    if ($name eq 'ignored-multiline') {
+        $settings .= <<'BASH';
+printf() {
+    builtin printf "$@"
+    case "$2" in paste-*) trap '' INT ;; esac
+}
+BASH
+    }
     $settings .= "bind '\"\\C-h\":forward-char'\n" if $name eq 'bad-edit';
     $settings .= "unset HISTFILE\n" if $name eq 'no-history';
+    # Bash 3.2 splits lithist entries on reload; preserve real entries with NUL framing.
+    $settings .= <<'BASH';
+fixture_save_history() {
+    local latest entry index
+    read -r latest entry < <(history 1)
+    : > "$fixture_history_file"
+    for ((index=1; index<=latest; index++)); do
+        entry=$(history -p "!$index") || return
+        builtin printf '%s\0' "$entry" >> "$fixture_history_file"
+    done
+}
+if [ -n "$HISTFILE" ]; then
+    fixture_history_file=$HISTFILE
+    unset HISTFILE
+    if [ -f "$fixture_history_file" ]; then
+        while IFS= read -r -d '' entry; do
+            history -s "$entry"
+        done < "$fixture_history_file"
+    fi
+    trap fixture_save_history EXIT
+fi
+BASH
+    if ($name eq 'bad-quoted-history') {
+        $settings .= <<'BASH';
+if [ "$FIXTURE_HISTORY" = on ]; then
+    trap 'fixture_save_history; /usr/bin/tr "\\134" "/" < "$fixture_history_file" > "$fixture_history_file.bad"; /bin/mv "$fixture_history_file.bad" "$fixture_history_file"' EXIT
+fi
+BASH
+    }
     $settings .= "trap '' INT\n" if $name eq 'ignored-pending';
     if ($name eq 'ansi-pending') {
         # Consume the real pending input without rendering it; only emit ANSI color 91.
@@ -74,12 +136,15 @@ BASH
     $settings .= "PROMPT_COMMAND='status=\$?; set +m'\n" if $name eq 'no-job-control';
     $settings .= "jobs() { printf 'broken job table\\n'; }\n" if $name eq 'bad-jobs';
     make_path("$bundle/tools");
-    my $sleep_program = '#!' . $^X . "\nuse strict; use warnings;\n";
-    $sleep_program .= 'open my $log, ">>", ' . perl_literal($job_trace) . " or die \$!;\n";
-    $sleep_program .= 'print {$log} "$$\n"; close $log;' . "\n";
-    $sleep_program .= "\$SIG{INT} = 'IGNORE';\n" if $name eq 'ignored-foreground';
-    $sleep_program .= 'exec "/bin/sleep", @ARGV; die $!;' . "\n";
-    write_file("$bundle/tools/sleep", $sleep_program, 0755);
+    my $sh_program = '#!' . $^X . "\nuse strict; use warnings;\n";
+    # Record only foreground jobs, before their marker can release the runner.
+    $sh_program .= 'if (@ARGV == 2 && $ARGV[0] eq "-c" && $ARGV[1] =~ m{ > /dev/tty; exec sleep 30\z}) {' . "\n";
+    $sh_program .= "\$SIG{INT} = 'IGNORE';\n" if $name eq 'ignored-foreground';
+    $sh_program .= 'open my $log, ">>", ' . perl_literal($job_trace) . " or die \$!;\n";
+    $sh_program .= 'print {$log} "$$\n" or die $!; close $log or die $!;' . "\n}\n";
+    $sh_program .= 's{> /dev/tty}{> /dev/null}g for @ARGV;' . "\n" if $name eq 'missing-job-marker';
+    $sh_program .= 'exec "/bin/sh", @ARGV; die $!;' . "\n";
+    write_file("$bundle/tools/sh", $sh_program, 0755);
     if ($name eq 'watchdog') {
         # Independent wedged backend: real descendants, no cooperative TERM handler.
         my $wedged = '#!' . $^X . "\nuse strict; use warnings;\n";
@@ -90,11 +155,6 @@ BASH
         write_file("$bundle/tools/python3", $wedged, 0755);
     }
     $settings .= 'PATH=' . perl_literal("$bundle/tools:/usr/bin:/bin") . "\n";
-    if ($name eq 'missing-job-marker') {
-        my $sh_program = '#!' . $^X . "\nuse strict; use warnings;\n";
-        $sh_program .= 's{> /dev/tty}{> /dev/null}g for @ARGV; exec "/bin/sh", @ARGV; die $!;' . "\n";
-        write_file("$bundle/tools/sh", $sh_program, 0755);
-    }
     write_file($rc, $settings, 0600);
     my $program = '#!' . $^X . "\nuse strict; use warnings;\n";
     $program .= 'open my $log, ">>", ' . perl_literal($trace) . " or die \$!;\n";
@@ -188,7 +248,7 @@ local $ENV{BASH_ENV} = '/must/not/load';
 my ($status, $text, $records, $elapsed, $jobs) = run_fixture('control', 20);
 is($status, 0, 'independent Bash control passes real PTY checks');
 diag($text) if $status;
-like($text, qr/^PASS: 6 PTY checks; 3 executable sessions exited zero; owned processes cleaned$/m,
+like($text, qr/^PASS: 11 PTY checks; 3 executable sessions exited zero; owned processes cleaned$/m,
     'nonzero assertion and session completion counts');
 like($text, qr/^CLEANUP: owned processes absent; PTYs closed$/m,
     'control positively confirms cleanup completion');
@@ -208,6 +268,12 @@ for my $case (
     ['missing-job-marker', qr/FAIL: Ctrl-C foreground:/],
     ['no-job-control', qr/FAIL: Ctrl-C foreground: foreground job lacks an independent real PGID/],
     ['bad-jobs', qr/FAIL: Ctrl-Z\/bg\/fg real PGID:/],
+    ['bad-multiline-edit', qr/FAIL: multiline cross-line editing:/],
+    ['bad-quoted-paste', qr/FAIL: quoted multiline paste:/],
+    ['bad-completion', qr/FAIL: Tab completion spaced filename:/],
+    ['ignored-multiline', qr/FAIL: Ctrl-C multiline pending input:/],
+    ['bad-resize', qr/FAIL: resize pending wrapped editing:/],
+    ['bad-quoted-history', qr/FAIL: history restart isolated HOME:/],
     ['bad-termios', qr/FAIL: interactive termios restoration: interactive termios was not restored \(oflag: \d+ -> \d+\)/],
     ['no-history', qr/FAIL: history restart isolated HOME:/],
     ['hang', qr/FAIL: startup: .*deadline/],

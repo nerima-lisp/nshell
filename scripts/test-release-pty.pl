@@ -188,7 +188,7 @@ class Session:
         expected = ('rel-%s:<%s>' % (label, value)).encode()
         start = len(self.output)
         self.send(command)
-        match, end = self.expect(re.escape(expected), start, command)
+        match, end = self.expect(re.escape(expected).replace(re.escape(b'\n'), rb'\r?\n'), start, command)
         self.expect(re.escape(prompt), end)
         return command
 
@@ -335,6 +335,73 @@ try:
     session.wait(lambda: session.foreground() == pid)
     interrupt_job(pid)
     check(stage)
+    stage = 'multiline cross-line editing'
+    label = 'multiline-' + nonce
+    line = ("printf 'rel-%%s:<%%s>\\n' %s 'Lx\nR'" % label).encode()
+    command = b'\x1b[200~' + line + b'\x1b[201~' + b'\x1b[D' * 3 + b'\x08' + b'\x1b[C' * 3 + b'\n'
+    start = len(session.output)
+    session.send(command)
+    _, end = session.expect(re.escape(('rel-%s:<L' % label).encode()) + rb'\r?\nR>', start, command)
+    session.expect(re.escape(prompt), end)
+    check(stage)
+
+    stage = 'quoted multiline paste'
+    quoted = 'a "b" \\ c\nd'
+    label = 'paste-' + nonce
+    line = ("printf 'rel-%%s:<%%s>\\n' %s '%s'" % (label, quoted)).encode()
+    command = b'\x1b[200~' + line + b'\x1b[201~\n'
+    start = len(session.output)
+    session.send(command)
+    expected = re.escape(('rel-%s:<%s>' % (label, quoted)).encode()).replace(re.escape(b'\n'), rb'\r?\n')
+    _, end = session.expect(expected, start, command)
+    session.expect(re.escape(prompt), end)
+    check(stage)
+
+    stage = 'Tab completion spaced filename'
+    filename = 'complete-' + nonce + ' space.txt'
+    expected = ('rel-complete-%s:<file-content>' % nonce).encode()
+    with open(os.path.join(isolation, filename), 'xb') as completed_file:
+        completed_file.write(expected + b'\n')
+    command = ('cat ./complete-' + nonce).encode() + b'\t\n'
+    start = len(session.output)
+    session.send(command)
+    _, end = session.expect(re.escape(expected), start, command)
+    session.expect(re.escape(prompt), end)
+    check(stage)
+
+    stage = 'Ctrl-C multiline pending input'
+    label = 'cancel-' + nonce
+    pending = ("printf 'rel-%%s:<%%s>\\n' %s 'cancel-first\ncancel-second" % label).encode()
+    start = len(session.output)
+    session.send(pending)
+    session.expect(ansi.join(re.escape(bytes([byte])) for byte in b'cancel-second'), start)
+    start = len(session.output)
+    session.send(b'\x03')
+    session.expect(re.escape(prompt), start)
+    session.marker('multiline-recovered', 'yes')
+    if ('rel-%s:<' % label).encode() in session.output[start:]:
+        raise RuntimeError('cancelled multiline input executed')
+    if session.foreground() != session.pid:
+        raise RuntimeError('shell did not retain foreground after multiline interrupt')
+    check(stage)
+
+    stage = 'resize pending wrapped editing'
+    label = 'resize-' + nonce
+    pending = ("printf 'rel-%%s:<%%s>\\n' %s okx" % label).encode()
+    start = len(session.output)
+    session.send(pending)
+    session.expect(ansi.join(re.escape(bytes([byte])) for byte in b'okx'), start)
+    size = fcntl.ioctl(session.master, termios.TIOCGWINSZ, b'\0' * 8)
+    try:
+        fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 20, 0, 0))
+        command = b'\x08\n'
+        session.send(command)
+        _, end = session.expect(re.escape(('rel-%s:<ok>' % label).encode()), start, pending + command)
+        session.expect(re.escape(prompt), end)
+    finally:
+        fcntl.ioctl(session.master, termios.TIOCSWINSZ, size)
+    check(stage)
+
     stage = 'interactive termios restoration'
     session.finish()
     check(stage)
@@ -343,7 +410,7 @@ try:
     writer = Session(history=True)
     writer.expect(re.escape(prompt), 0)
     writer.marker('history-older', 'older')
-    writer.marker('history-newest', 'newest')
+    writer.marker('history-newest', quoted)
     writer.finish()
     reader = Session(history=True)
     reader.expect(re.escape(prompt), 0)
@@ -351,7 +418,8 @@ try:
         raise RuntimeError('history restart did not start a different process')
     start = len(reader.output)
     reader.send(b'\x1b[A\n')
-    _, end = reader.expect(re.escape(('rel-history-newest-%s:<newest>' % nonce).encode()), start, b'\x1b[A\n')
+    expected = re.escape(('rel-history-newest-%s:<%s>' % (nonce, quoted)).encode()).replace(re.escape(b'\n'), rb'\r?\n')
+    _, end = reader.expect(expected, start, b'\x1b[A\n')
     reader.expect(re.escape(prompt), end)
     reader.finish()
     check(stage)
@@ -479,10 +547,10 @@ if failure or cleanup_errors:
     for error in cleanup_errors:
         print('cleanup: ' + error, file=sys.stderr)
     sys.exit(1)
-if len(passed) != 6 or len(sessions) != 3 or any(s.status != 0 for s in sessions):
+if len(passed) != 11 or len(sessions) != 3 or any(s.status != 0 for s in sessions):
     print('FAIL: incomplete PTY execution', file=sys.stderr)
     sys.exit(1)
-print('PASS: 6 PTY checks; 3 executable sessions exited zero; owned processes cleaned', flush=True)
+print('PASS: 11 PTY checks; 3 executable sessions exited zero; owned processes cleaned', flush=True)
 PYTHON
 
 my $pid = fork // die "cannot start PTY backend: $!\n";

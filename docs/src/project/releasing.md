@@ -52,7 +52,7 @@ tools on the Linux verification host.
   manifest, store-reference hygiene, platform library closure, and smoke
   startup. Do not replace this with a check of the unbundled default package.
 - `./result/bin/nshell --version` reports the intended version.
-- `./result/bin/nshell --help` and `man ./man/nshell.1` match the documentation
+- `./result/bin/nshell --help` and `man ./result/share/man/man1/nshell.1` match the documentation
   and shipped behaviour.
 - Package the built bundle using GNU tar and gzip, as the release workflow
   does. Replace `vX.Y.Z` with the intended tag:
@@ -80,8 +80,9 @@ tools on the Linux verification host.
   perl scripts/test-release-pty.pl "$extracted/$name"
   ```
 
-  The PTY check exercises editing, Ctrl-C, Ctrl-Z/`bg`/`fg`, history across
-  restart, and terminal restoration. A source-loaded suite is not a substitute.
+  The PTY check exercises multiline editing and paste, completion with spaces,
+  Ctrl-C, Ctrl-Z/`bg`/`fg`, resize during editing, history across restart, and
+  terminal restoration. A source-loaded suite is not a substitute.
 - Release notes are drafted. Review changes since the previous tag and describe
   user-visible features, fixes, and any required migration. After the
   workflow goes green, paste them in and publish the draft:

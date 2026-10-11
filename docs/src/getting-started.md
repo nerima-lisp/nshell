@@ -9,13 +9,13 @@ Install [Nix](https://nixos.org/download) and enable its `nix-command` and
 `flakes` experimental features before running:
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.6.3
+nix run github:nerima-lisp/nshell/v0.6.4
 ```
 
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.6.3
+nix profile install github:nerima-lisp/nshell/v0.6.4
 man nshell   # the manual page is installed alongside the binary
 nshell
 ```
@@ -26,34 +26,34 @@ leave the interactive shell.
 ### Prebuilt Linux bundle
 
 Without Nix, download both assets from the
-[v0.6.3 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.3),
+[v0.6.4 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.4),
 verify the checksum, and extract the bundle. On `x86_64-linux`, with `curl`,
 `sha256sum`, and `tar` available, run these commands in an empty directory:
 
 ```sh
-curl --fail --location --remote-name https://github.com/nerima-lisp/nshell/releases/download/v0.6.3/nshell-v0.6.3-x86_64-linux.tar.gz
-curl --fail --location --remote-name https://github.com/nerima-lisp/nshell/releases/download/v0.6.3/nshell-v0.6.3-x86_64-linux.tar.gz.sha256
-sha256sum --check nshell-v0.6.3-x86_64-linux.tar.gz.sha256
+curl --fail --location --remote-name https://github.com/nerima-lisp/nshell/releases/download/v0.6.4/nshell-v0.6.4-x86_64-linux.tar.gz
+curl --fail --location --remote-name https://github.com/nerima-lisp/nshell/releases/download/v0.6.4/nshell-v0.6.4-x86_64-linux.tar.gz.sha256
+sha256sum --check nshell-v0.6.4-x86_64-linux.tar.gz.sha256
 ```
 
 Proceed only if the checksum command exits successfully and prints
-`nshell-v0.6.3-x86_64-linux.tar.gz: OK`:
+`nshell-v0.6.4-x86_64-linux.tar.gz: OK`:
 
 ```sh
-tar -xzf nshell-v0.6.3-x86_64-linux.tar.gz
-./nshell-v0.6.3-x86_64-linux/bin/nshell --version
-man ./nshell-v0.6.3-x86_64-linux/share/man/man1/nshell.1
-./nshell-v0.6.3-x86_64-linux/bin/nshell
+tar -xzf nshell-v0.6.4-x86_64-linux.tar.gz
+./nshell-v0.6.4-x86_64-linux/bin/nshell --version
+man ./nshell-v0.6.4-x86_64-linux/share/man/man1/nshell.1
+./nshell-v0.6.4-x86_64-linux/bin/nshell
 ```
 
 Keep the extracted directory intact: the launcher resolves libraries and
-helpers relative to itself. The version output must identify `v0.6.3`.
+helpers relative to itself. The version output must identify `v0.6.4`.
 Type `exit` to return to your existing shell. To use `nshell` by name in
 the examples below, add the extracted `bin` directory to that shell's
 `PATH`. For Bash or Zsh, from the download directory:
 
 ```sh
-export PATH="$PWD/nshell-v0.6.3-x86_64-linux/bin:$PATH"
+export PATH="$PWD/nshell-v0.6.4-x86_64-linux/bin:$PATH"
 ```
 
 This changes only the current terminal session. Alternatively, replace
@@ -95,14 +95,14 @@ nshell -c 'string upper hello'
 ### Run a script
 
 ```sh
-curl --fail --location --output greet.nsh https://raw.githubusercontent.com/nerima-lisp/nshell/v0.6.3/examples/greet.nsh
+curl --fail --location --output greet.nsh https://raw.githubusercontent.com/nerima-lisp/nshell/v0.6.4/examples/greet.nsh
 nshell greet.nsh World
 ```
 
 Script files support multiline blocks (functions, `if`/`for`/`while`/`switch`),
 comments, and a `#!` shebang; arguments after the script name are available as
 `$argv`. See
-[`examples/`](https://github.com/nerima-lisp/nshell/tree/v0.6.3/examples) for a
+[`examples/`](https://github.com/nerima-lisp/nshell/tree/v0.6.4/examples) for a
 runnable sample.
 
 ### Command line
@@ -131,7 +131,7 @@ The Nix build supplies [SBCL](http://www.sbcl.org/), ASDF, and the dependencies.
 On `x86_64-linux`, with Git and flake-enabled Nix installed:
 
 ```sh
-git clone --branch v0.6.3 https://github.com/nerima-lisp/nshell
+git clone --branch v0.6.4 https://github.com/nerima-lisp/nshell
 cd nshell
 nix build
 ./result/bin/nshell

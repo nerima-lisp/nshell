@@ -2,8 +2,8 @@
 
 ## Draw a pipeline without running it
 
-`pipeline-graph` renders a typed pipeline as a validated Graphviz DOT graph — or
-a Mermaid flowchart with `--mermaid` — without executing it. Quote the pipeline
+`pipeline-graph` renders a pipeline as a Graphviz DOT graph, or a Mermaid
+flowchart with `--mermaid`, without executing it. Quote the pipeline
 so the shell passes it as a single argument rather than running it:
 
 ```sh
@@ -11,10 +11,7 @@ pipeline-graph 'cat access.log | grep 404 | wc -l'
 pipeline-graph --mermaid 'cat access.log | grep 404 | wc -l'
 ```
 
-It is a diagnostic built on the
-[cl-dataflow-kit](https://github.com/nerima-lisp/cl-dataflow-kit) computation-graph
-toolkit, and it validates the pipeline as it builds the graph, so a malformed
-redirect shows up as an error rather than a picture.
+Malformed redirects are reported as errors instead of rendered as graphs.
 
 ## Write a script
 
@@ -27,13 +24,17 @@ end
 greet $argv[1]
 ```
 
-Run it with `nshell greet.nsh World`. Multiline blocks (`function`, `if`, `for`,
+Save this as `greet.nsh` and run `nshell greet.nsh World`. Multiline blocks (`function`, `if`, `for`,
 `while`, `switch`, `begin`/`end`), comments, and a `#!` shebang all work;
 arguments after the script name arrive as `$argv`.
 
 ## Use the assistant
 
-Start an interactive assistant task from a terminal:
+The assistant requires an authenticated `claude` CLI on PATH. Set
+`NSHELL_AI_COMMAND` to use another executable implementing the same streaming
+protocol. `NSHELL_AI_DISABLE` disables the assistant.
+
+Start an interactive assistant task from an nshell terminal:
 
 ```sh
 agent "inspect the current job state"
@@ -45,21 +46,45 @@ commands are not executed. Approval applies to one proposal, not the rest of
 the task. Review each command, especially in a directory containing sensitive
 data.
 
-The assistant refuses to start if its sidecar reports tools or MCP servers
-outside the permitted initialization contract, even if a later initialization
-event reports an acceptable configuration.
+The safety label comes from static command analysis, not a security sandbox.
+For example, recursive deletion of the filesystem root is blocked. A safe label
+does not replace your review of the command, its arguments, and its working
+directory.
+
+Before command approval, the assistant receives your task and context: the last
+command, its exit status and duration, the working directory, Git branch and
+dirty state, a bounded tail of command output, and environment-variable names.
+Known sensitive paths, commands, and environment values are redacted, but this
+does not guarantee that task text or command output contains no secrets. Do not
+submit confidential information unless the configured provider is permitted to
+receive it.
+
+At the review panel, press `e` to edit, `s` to skip the proposal, or `q` to cancel
+the task. While editing, `q` and `s` insert text; Ctrl-C cancels the task. Enter
+reclassifies the edited command and approves it for execution if it is not
+blocked.
+
+The sidecar may report only the `StructuredOutput` tool (or no tools) and no MCP
+servers. Both fields must be present in its initialization event. Other
+configurations are rejected even if a later event reports an acceptable one.
 
 Inspect assistant state and configure the session with `ai`:
 
 ```sh
 ai status
 ai set effort medium
-ai set model 'model-name'
 ai set max-steps 20
-ai set budget 1.50
 ai log 10
-ai reset
 ```
+
+`ai log 10` shows the last ten audit entries. `ai reset` resets the conversation
+and usage counters. `ai set model 'model-name'` selects a model identifier
+supported by your CLI; without a setting, the CLI chooses its default model.
+The default maximum is ten proposals per task. Skipped and blocked proposals
+also count toward `max-steps`; editing a proposal does not add a step.
+
+`ai set budget 1.50` sets a US-dollar reference amount for the usage display.
+It does **not** enforce a spending limit or stop provider requests.
 
 `ai set` changes the current session. The corresponding environment variables
 are `NSHELL_AI_EFFORT`, `NSHELL_AI_MODEL`, `NSHELL_AI_MAX_STEPS`, and
@@ -85,7 +110,7 @@ perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix run .#test
 perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' sbcl --script run-tests.lisp
 ```
 
-Just the focused completion suite (`nshell/weave`):
+Just the focused completion suite (`nshell/weave`), inside `nix develop`:
 
 ```sh
 perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' sbcl --script scripts/weave.lisp

@@ -173,6 +173,65 @@
                   (nshell.presentation:input-state-buffer
                    nshell.presentation::*input-state*))))))
 
+  (it "accepts-q-and-s-as-text-while-editing"
+    (dolist (character '(#\q #\s))
+      (with-repl-test-state
+        (let ((session (nshell.application:make-agent-session "list files" :max-steps 1))
+              (dispatches 0))
+          (nshell.application:agent-session-propose-step session "ls")
+          (setf nshell.presentation::*agent-session* session)
+          (with-repl-input-state (:mode :insert :buffer "ls" :cursor-pos 2)
+            (with-temporary-functions
+                (('nshell.application::execute-command-node-in-context
+                  (lambda (context node)
+                    (declare (ignore context node))
+                    (incf dispatches)
+                    (values "" 0)))
+                 ('nshell.presentation::render-prompt-cont (lambda () nil))
+                 ('nshell.presentation::render-transient-panel
+                  (lambda (&rest arguments) (declare (ignore arguments)) nil))
+                 ('nshell.presentation::process-output-event
+                  (lambda (event) (declare (ignore event)) nil)))
+              (nshell.presentation::%process-agent-panel-event (input-key-event :char #\e))
+              (nshell.presentation::%process-agent-panel-event (input-key-event :char character))
+              (expect :editing :to-equal (nshell.application:agent-session-state session))
+              (expect session :to-be nshell.presentation::*agent-session*)
+              (expect (concatenate 'string "ls" (string character))
+                      :to-equal (nshell.presentation:input-state-buffer
+                                 nshell.presentation::*input-state*))
+              (expect :awaiting-approval :to-equal
+                      (nshell.application:agent-step-status
+                       (nshell.application:agent-session-current-step session)))
+              (expect 0 :to-equal dispatches)
+              (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)))))))
+
+  (it "cancels-editing-with-control-c-without-executing"
+    (with-repl-test-state
+      (let ((session (nshell.application:make-agent-session "list files" :max-steps 1))
+            (dispatches 0))
+        (let ((step (nshell.application:agent-session-propose-step session "ls")))
+          (setf nshell.presentation::*agent-session* session)
+          (with-repl-input-state (:mode :insert :buffer "ls" :cursor-pos 2)
+            (with-temporary-functions
+                (('nshell.application::execute-command-node-in-context
+                  (lambda (context node)
+                    (declare (ignore context node))
+                    (incf dispatches)
+                    (values "" 0)))
+                 ('nshell.presentation::render-prompt-cont (lambda () nil))
+                 ('nshell.presentation::render-transient-panel
+                  (lambda (&rest arguments) (declare (ignore arguments)) nil)))
+              (nshell.presentation::%process-agent-panel-event (input-key-event :char #\e))
+              (nshell.presentation::%process-agent-panel-event (input-key-event :ctrl-c))
+              (expect :stopped :to-equal (nshell.application:agent-session-state session))
+              (expect "canceled" :to-equal (nshell.application:agent-session-stop-reason session))
+              (expect nil :to-be nshell.presentation::*agent-session*)
+              (expect "" :to-equal (nshell.presentation:input-state-buffer
+                                   nshell.presentation::*input-state*))
+              (expect :awaiting-approval :to-equal (nshell.application:agent-step-status step))
+              (expect 0 :to-equal dispatches)
+              (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)))))))
+
   (it "does-not-mint-approval-in-the-step-executor"
     (with-repl-test-state
       (let ((session (nshell.application:make-agent-session "list files" :max-steps 1))

@@ -4,36 +4,47 @@
   (dolist (phase '(:wait-error :callback-error))
     (let ((phase phase))
       (it (format nil "copier-order-~(~A~)" phase)
-        (let ((joins 0)
+        (let ((copier (sb-thread:make-thread (lambda () nil)))
+              (joins 0)
+              (callbacks 0)
               (failure (make-condition 'simple-error)))
-          (with-temporary-functions
-              (('nshell.infrastructure.acl::%wait-process-exit-with-timeout
-                (lambda (&rest arguments)
-                  (declare (ignore arguments))
-                  (when (eq phase :wait-error) (error failure))
-                  nil))
-               ('nshell.infrastructure.acl::%terminate-process
-                (lambda (process) (declare (ignore process))))
-               ('nshell.infrastructure.acl::%join-process-output-copiers
-                (lambda (copiers)
-                  (declare (ignore copiers))
-                  (incf joins))))
-            (expect failure :to-equal
-                    (handler-case
-                        (nshell.infrastructure.acl::%wait-process-with-copiers
-                         :process '(:copier) 1
-                         (lambda () (error "Unexpected success"))
-                         (lambda () (error failure)))
-                      (simple-error (condition) condition)))
-            (expect 1 :to-equal joins))))))
+          (sb-thread:join-thread copier)
+          (sb-ext:without-package-locks
+            (with-temporary-functions
+                (('sb-ext:process-alive-p
+                  (lambda (process)
+                    (declare (ignore process))
+                    (when (eq phase :wait-error) (error failure))
+                    nil))
+                 ('nshell.infrastructure.acl::%wait-sbcl-process
+                  (lambda (process) (declare (ignore process))))
+                 ('nshell.infrastructure.acl::%join-stream-copier
+                  (lambda (thread)
+                    (expect copier :to-equal thread)
+                    (expect nil :to-equal (sb-thread:thread-alive-p thread))
+                    (incf joins))))
+              (expect failure :to-equal
+                      (handler-case
+                          (nshell.infrastructure.acl::%wait-process-with-copiers
+                           :process (list copier) 1
+                           (lambda ()
+                             (incf callbacks)
+                             (expect 1 :to-equal joins)
+                             (error failure))
+                           (lambda () (error "Unexpected timeout")))
+                        (simple-error (condition) condition)))
+              (expect 1 :to-equal joins)
+              (expect (if (eq phase :wait-error) 0 1) :to-equal callbacks)))))))
 
   (dolist (mode '(:success :timeout :resumed-stop))
     (let ((mode mode))
       (it (format nil "copier-order-~(~A~)" mode)
         (let ((buffer (make-string-output-stream))
+              (copier (sb-thread:make-thread (lambda () nil)))
               (joins 0)
               (waits 0)
               (terminated nil))
+          (sb-thread:join-thread copier)
           (sb-ext:without-package-locks
             (with-temporary-functions
                 (('nshell.infrastructure.acl::%wait-sbcl-process
@@ -44,17 +55,18 @@
                   (lambda (process)
                     (declare (ignore process))
                     (if (= waits 1) :stopped :exited)))
-                 ('nshell.infrastructure.acl::%wait-process-exit-with-timeout
-                  (lambda (&rest arguments)
-                    (declare (ignore arguments))
-                    nil))
+                 ('sb-ext:process-alive-p
+                  (lambda (process)
+                    (declare (ignore process))
+                    (eq mode :timeout)))
                  ('nshell.infrastructure.acl::%terminate-process
                   (lambda (process)
                     (declare (ignore process))
                     (setf terminated t)))
-                 ('nshell.infrastructure.acl::%join-process-output-copiers
-                  (lambda (copiers)
-                    (expect '(:copier) :to-equal copiers)
+                 ('nshell.infrastructure.acl::%join-stream-copier
+                  (lambda (thread)
+                    (expect copier :to-equal thread)
+                    (expect nil :to-equal (sb-thread:thread-alive-p thread))
                     (incf joins)
                     (write-string "complete" buffer))))
               (flet ((collect-output ()
@@ -62,16 +74,18 @@
                 (multiple-value-bind (output code)
                     (if (eq mode :resumed-stop)
                         (nshell.infrastructure.acl::%wait-process-with-copiers-or-stop
-                         :process '(:copier) #'collect-output
+                         :process (list copier) #'collect-output
                          (lambda ()
                            (expect 0 :to-equal joins)
                            :continue-wait))
                         (nshell.infrastructure.acl::%wait-process-with-copiers
-                         :process '(:copier) (when (eq mode :timeout) 1)
+                         :process (list copier) (when (eq mode :timeout) 0)
                          #'collect-output #'collect-output))
                   (expect "complete" :to-equal output)
                   (expect 7 :to-equal code)
                   (expect 1 :to-equal joins)
+                  (expect (case mode (:timeout 0) (:success 1) (:resumed-stop 2))
+                          :to-equal waits)
                   (expect (eq mode :timeout) :to-equal terminated)))))))))
 
   (it "command-substitution-keeps-capture-under-terminal-runner"

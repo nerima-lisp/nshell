@@ -12,6 +12,59 @@
         "--eval"
         form))
 
+(defun %check-orphaned-external-output-timeout (executor separate-stderr-p fd-output-p)
+  (with-temporary-output-file (pid-file :prefix "nshell-external-orphan")
+    (with-temporary-output-file (output-file :prefix "nshell-external-output")
+      (let ((worker nil) (result nil) (failure nil) (join-reason nil)
+            (cleanup-join-reason nil) (worker-alive-p nil) (child-alive-p nil)
+            (child-kill-result nil) (error-output nil))
+        (unwind-protect
+             (progn
+               (setf worker
+                     (sb-thread:make-thread
+                      (lambda ()
+                        (handler-case
+                            (with-open-file (file-output output-file :direction :output
+                                                         :if-does-not-exist :create)
+                              (let ((nshell.infrastructure.acl:*external-command-timeout* 0.2)
+                                    (nshell.infrastructure.acl::*redirected-stderr*
+                                      separate-stderr-p)
+                                    (*standard-output*
+                                      (if fd-output-p file-output
+                                          (make-string-output-stream))))
+                                (setf error-output
+                                      (with-output-to-string (*error-output*)
+                                        (setf result
+                                              (funcall executor "/bin/sh"
+                                                       (list "-c"
+                                                             "sleep 3 & printf '%s' \"$!\" > \"$1\""
+                                                             "nshell-test" pid-file)))))))
+                          (error (condition) (setf failure condition))))))
+               (multiple-value-bind (value reason)
+                   (sb-thread:join-thread worker :timeout 1 :default nil)
+                 (declare (ignore value))
+                 (setf join-reason reason
+                       worker-alive-p (sb-thread:thread-alive-p worker))))
+          (let ((pid (ignore-errors
+                       (parse-integer (host-kit:read-file-string pid-file)))))
+            (when pid
+              (setf child-alive-p (ignore-errors (sb-posix:kill pid 0) t)
+                    child-kill-result (ignore-errors (sb-posix:kill pid sb-unix:sigkill)))))
+          (when worker
+            (multiple-value-bind (value reason)
+                (sb-thread:join-thread worker :timeout 3 :default nil)
+              (declare (ignore value))
+              (setf cleanup-join-reason reason))))
+        (expect nil :to-equal failure)
+        (expect nil :to-equal join-reason)
+        (expect nil :to-equal worker-alive-p)
+        (expect nil :to-equal cleanup-join-reason)
+        (expect nil :to-equal (sb-thread:thread-alive-p worker))
+        (expect t :to-equal child-alive-p)
+        (expect 0 :to-equal child-kill-result)
+        (expect 124 :to-equal result)
+        (expect (search "timed out after" error-output) :to-be-truthy)))))
+
 (describe "process-tests"
   (it "spawn-terminal-command-stops-before-running-user-code"
     (with-temporary-output-file (target :prefix "nshell-terminal-barrier")
@@ -375,6 +428,20 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
         (when bad-index
           (fail "unexpected character at ~d: ~s" bad-index (char output bad-index))))))
 
+  (it "run-external-merges-stderr-into-stdout-once"
+    (let ((exit nil) (output nil)
+          (nshell.infrastructure.acl::*redirected-stderr* nil))
+      (let ((error-output
+              (with-output-to-string (*error-output*)
+                (setf output
+                      (capture-standard-output
+                        (setf exit
+                              (nshell.infrastructure.acl:run-external
+                               "/bin/sh" '("-c" "printf OUT; printf ERR >&2"))))))))
+        (expect 0 :to-equal exit)
+        (expect "OUTERR" :to-equal output)
+        (expect "" :to-equal error-output))))
+
   (it "run-external-capture-echo"
     "External command capture returns stdout and exit code."
     (multiple-value-bind (output exit)
@@ -407,6 +474,63 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
                               "(sleep 5)")))))))
       (expect 124 :to-equal exit)
       (expect (search "timed out after" error-output) :to-be-truthy)))
+
+  (it "run-external-timeout-covers-orphaned-output-writer"
+    (%check-orphaned-external-output-timeout
+     #'nshell.infrastructure.acl:run-external nil nil))
+
+  (it "process-output-timeout-callback-runs-after-copier-cleanup"
+    (let* ((proc (sb-ext:run-program "/bin/sh" '("-c" "exit 0")
+                                    :input nil :output nil :error nil :wait nil))
+           (semaphore (sb-thread:make-semaphore))
+           (copier (sb-thread:make-thread
+                    (lambda () (sb-thread:wait-on-semaphore semaphore :timeout 3))))
+           (success-called-p nil) (timeout-calls 0) (callback-copier-alive-p t))
+      (unwind-protect
+           (multiple-value-bind (status timed-out-p)
+               (nshell.infrastructure.acl:%wait-process-with-copiers
+                proc (list copier) 0.2
+                (lambda () (setf success-called-p t) (values 0 nil))
+                (lambda ()
+                  (incf timeout-calls)
+                  (setf callback-copier-alive-p (sb-thread:thread-alive-p copier))
+                  (values 124 t)))
+             (expect 124 :to-equal status)
+             (expect t :to-equal timed-out-p)
+             (expect nil :to-equal success-called-p)
+             (expect 1 :to-equal timeout-calls)
+             (expect nil :to-equal callback-copier-alive-p)
+             (expect nil :to-equal (sb-thread:thread-alive-p copier)))
+        (sb-thread:signal-semaphore semaphore)
+        (ignore-errors (sb-thread:join-thread copier :timeout 3))
+        (nshell.infrastructure.acl::%terminate-process proc)
+        (sb-ext:process-close proc))))
+
+  (it "run-external-timeout-covers-orphaned-non-fd-stderr"
+    (%check-orphaned-external-output-timeout
+     #'nshell.infrastructure.acl:run-external t nil))
+
+  (it "run-external-exec-timeout-covers-orphaned-non-fd-stderr"
+    (%check-orphaned-external-output-timeout
+     #'nshell.infrastructure.acl:run-external-exec t t))
+
+  (it "run-external-exec-large-stdout-and-stderr-are-drained"
+    (let* ((size 131072)
+           (exit nil) (output nil)
+           (error-output
+             (with-output-to-string (*error-output*)
+               (setf output
+                     (capture-standard-output
+                       (setf exit
+                             (nshell.infrastructure.acl:run-external-exec
+                              (current-sbcl-executable)
+                              (%process-test-sbcl-argv
+                               (format nil
+                                       "(progn (write-string (make-string ~d :initial-element #\\x)) (write-string (make-string ~d :initial-element #\\y) *error-output*))"
+                                       size size)))))))))
+      (expect 0 :to-equal exit)
+      (expect (make-string size :initial-element #\x) :to-equal output)
+      (expect (make-string size :initial-element #\y) :to-equal error-output)))
 
   (it "run-external-timeout-terminates-descendant-processes"
     "Timeout cleanup should kill descendants that inherited stdout."

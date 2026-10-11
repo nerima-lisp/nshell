@@ -23,8 +23,8 @@ file` typed at an interactive prompt too."
 (defun run-external-exec (cmd args)
   "Execute CMD with ARGS for the exec builtin.
 
-Standard streams pass through directly and noninteractive execution uses the
-normal foreground timeout policy."
+FD-backed standard streams pass through directly; other output streams are
+drained under the normal foreground timeout policy."
   (handler-case
       (multiple-value-bind (resolved-cmd environment)
           (%prepare-external-command cmd)
@@ -33,23 +33,21 @@ normal foreground timeout policy."
           (return-from run-external-exec 127))
         (let ((proc (%spawn-in-own-process-group
                      resolved-cmd args environment
-                     *standard-input* *standard-output*
-                     :error *error-output*)))
+                     *standard-input* (%external-output-target *standard-output*)
+                     :error (%external-output-target *error-output*))))
           (if proc
               (let* ((pid (sb-ext:process-pid proc))
                      (pgid (and (integerp pid) (plusp pid) pid))
                      (timeout (%foreground-external-command-timeout)))
                 (%with-foreground-process-group-if (pgid)
-                  (if (or (null timeout)
-                          (%wait-process-exit-with-timeout proc timeout))
-                      (progn
-                        (%wait-sbcl-process proc)
-                        (process-exit-status-code proc))
-                      (progn
-                        (%terminate-process proc)
-                        (format *error-output* "~a"
-                                (%external-command-timeout-message cmd timeout))
-                        124))))
+                  (values
+                   (%wait-process-with-output
+                    proc *standard-output* timeout
+                    (lambda ()
+                      (format *error-output* "~a"
+                              (%external-command-timeout-message cmd timeout))
+                      124)
+                    *error-output*))))
               1)))
     (error (err)
       (format *error-output* "exec: ~a: ~a~%" cmd err)
@@ -65,7 +63,10 @@ normal foreground timeout policy."
           (return-from run-external 127))
         (let ((proc (%spawn-external-command resolved-cmd args environment
                                              :input *standard-input*
-                                             :output :stream)))
+                                             :output :stream
+                                             :error (if *redirected-stderr*
+                                                        (%external-output-target *error-output*)
+                                                        :output))))
           (if proc
               (let* ((pid (sb-ext:process-pid proc))
                      (pgid (and (integerp pid) (plusp pid) pid))
@@ -78,7 +79,8 @@ normal foreground timeout policy."
                    (lambda ()
                      (format *error-output* "~a"
                              (%external-command-timeout-message cmd timeout))
-                     124))))
+                     124)
+                   *error-output*)))
               1)))
     (error (err)
       (format *error-output* "nshell: ~a: ~a~%" cmd err)

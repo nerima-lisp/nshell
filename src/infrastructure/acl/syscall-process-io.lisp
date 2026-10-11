@@ -1,5 +1,12 @@
 (in-package #:nshell.infrastructure.acl)
 
+(defun %external-output-target (output)
+  ;; SBCL's internal copier for non-FD streams has no drain deadline.
+  (if (and (streamp output)
+           (null (sb-impl::get-stream-fd-and-external-format output :output)))
+      :stream
+      output))
+
 (defun %process-result-shell-exit (result)
   "Map a cl-process-kit PROCESS-RESULT to a shell exit status."
   (let ((code (process-kit:process-result-exit-code result))

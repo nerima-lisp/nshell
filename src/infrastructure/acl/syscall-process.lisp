@@ -118,12 +118,29 @@
      (%join-process-output-copiers ,copiers)))
 
 (defun %wait-process-with-copiers (proc copiers timeout-seconds success-fn timeout-fn)
-  (funcall
-   (%with-process-output-copiers (copiers)
-     (if (or (null timeout-seconds)
-             (%wait-process-exit-with-timeout proc timeout-seconds))
-         (progn (%wait-sbcl-process proc) success-fn)
-         (progn (%terminate-process proc) timeout-fn)))))
+  (let ((copiers (remove nil copiers))
+        (callback success-fn)
+        (deadline (when timeout-seconds
+                    (+ (get-internal-real-time)
+                       (round (* timeout-seconds internal-time-units-per-second))))))
+    (unwind-protect
+         (progn
+           (loop while (or (sb-ext:process-alive-p proc)
+                           (some #'sb-thread:thread-alive-p copiers))
+                 do (when (and deadline (>= (get-internal-real-time) deadline))
+                      (when (sb-ext:process-alive-p proc)
+                        (%terminate-process proc))
+                      (setf callback timeout-fn)
+                      (return))
+                    (sb-sys:serve-all-events 0.01))
+           (when (eq callback success-fn)
+             (%wait-sbcl-process proc)))
+      ;; Descendants may keep output pipes open after the owned process exits.
+      (dolist (copier copiers)
+        (when (sb-thread:thread-alive-p copier)
+          (sb-thread:terminate-thread copier))
+        (%join-stream-copier copier)))
+    (funcall callback)))
 
 (defun %wait-process-with-copiers-or-stop (proc copiers success-fn stop-fn)
   "Wait for PROC while allowing a stopped process to be continued."
@@ -136,11 +153,26 @@
         (return (funcall (%with-process-output-copiers (copiers)
                            success-fn))))))
 
-(defun %wait-process-with-output (proc output timeout-seconds timeout-fn)
-  (let ((copier (%start-process-output-copier proc output)))
-    (%wait-process-with-copiers proc (list copier) timeout-seconds
-      (lambda () (values (process-exit-status-code proc) nil))
-      (lambda () (values (funcall timeout-fn) t)))))
+(defun %wait-process-with-output (proc output timeout-seconds timeout-fn
+                                 &optional error-output)
+  (let ((copiers nil))
+    (unwind-protect
+         (progn
+           (push (%start-process-output-copier proc output) copiers)
+           (let ((error-stream (sb-ext:process-error proc)))
+             (when (and error-stream
+                        (not (eq error-stream (sb-ext:process-output proc))))
+               (push (%start-stream-copier error-stream error-output
+                                          "nshell process error copier")
+                     copiers)))
+           (%wait-process-with-copiers proc copiers timeout-seconds
+             (lambda () (values (process-exit-status-code proc) nil))
+             (lambda () (values (funcall timeout-fn) t))))
+      (dolist (copier copiers)
+        (when (and copier (sb-thread:thread-alive-p copier))
+          (sb-thread:terminate-thread copier))
+        (%join-stream-copier copier))
+      (sb-ext:process-close proc))))
 
 (defun spawn-async (cmd args &key redirects)
   "Spawn CMD with ARGS asynchronously. Returns the process or NIL on error."

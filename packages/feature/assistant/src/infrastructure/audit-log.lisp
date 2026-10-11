@@ -42,6 +42,7 @@
 
 (defun %assistant-json-value (value)
   (cond
+    ((null value) json-kit:+json-null+)
     ((stringp value) value)
     ((%assistant-plist-p value)
      (json-kit:alist->json-object

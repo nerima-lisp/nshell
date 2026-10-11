@@ -105,6 +105,10 @@
     (return-from %process-input-event (%render-prompt-after-terminal-resize)))
   (multiple-value-bind (new-state output-event)
       (reduce-input-state *input-state* event)
+    (when (and (eq *assistant-command-origin* :proposal)
+               (not (string= (input-state-buffer *input-state*)
+                             (input-state-buffer new-state))))
+      (setf *assistant-command-confirmed-p* nil))
     (when (and (not (eq output-event :rerun-last-command))
                (or *rerun-confirmation-pending-p* *rerun-command-assessment*))
       (setf *rerun-confirmation-pending-p* nil

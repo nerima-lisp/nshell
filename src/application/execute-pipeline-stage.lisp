@@ -3,7 +3,8 @@
 (declaim (notinline nshell.infrastructure.acl:process-substitution-resource-path
                     nshell.infrastructure.acl:process-substitution-resource-fd))
 
-(declaim (special nshell.infrastructure.acl:*external-command-timeout*))
+(declaim (special nshell.infrastructure.acl:*external-command-timeout*
+                  *execution-gate-parent-kind*))
 
 ;;; Pipeline stage execution and command expansion.
 ;;; execute-ast-in-context (defined in execute-pipeline-control.lisp) is

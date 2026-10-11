@@ -1,6 +1,38 @@
 (in-package #:nshell/test)
 
 (describe "assistant-safety-classifier-contracts"
+  (it "P1 preserves block across redirects wrappers and recursive short options"
+    (let ((cases '("rm -rf / > out" "rm -fr /" "rm -R /" "rm -fR /"
+                   "rm -ifr /" "rm --recursive /" "rm -fr ." "rm -R ~"
+                   "rm -fr /*" "rm -R $HOME" "\"rm\" -fr /"
+                   "sudo -u root rm -fr / > out" "command rm -R / > out"
+                   "env DUMMY=1 rm -fr / > out" "DUMMY=1 rm -fr / > out"
+                   "sh -c 'rm -fr /' > out" "eval 'rm -fr /' > out"
+                   "rm -rf / $(git push)" "ls > out $(rm -fr /)"
+                   "ls | rm -fr / > out")))
+      (cl-weave:expect-assertions (* 2 (length cases)))
+      (dolist (line cases)
+        (let ((parsed (nshell.domain.parsing:parse-command-line line)))
+          (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
+          (expect :block :to-be
+                  (nshell.feature.assistant:assistant-safety-result-classification
+                   (nshell.feature.assistant:classify-ast
+                    (nshell.domain.parsing:parse-result-ast parsed))))))))
+
+  (it "P1 keeps safe and confirm controls without treating operands as options"
+    (let ((cases '(("ls" :safe) ("ls > out" :confirm) ("rm -f /" :confirm)
+                   ("rm -- -rf /" :confirm) ("rm -- --recursive /" :confirm)
+                   ("rm -fr file" :confirm)
+                   ("command ls > out" :confirm) ("echo $(ls)" :safe))))
+      (cl-weave:expect-assertions (* 2 (length cases)))
+      (dolist (case cases)
+        (let ((parsed (nshell.domain.parsing:parse-command-line (first case))))
+          (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
+          (expect (second case) :to-be
+                  (nshell.feature.assistant:assistant-safety-result-classification
+                   (nshell.feature.assistant:classify-ast
+                    (nshell.domain.parsing:parse-result-ast parsed))))))))
+
   (it "classifies the required command AST cases"
     (flet ((command (name &rest args)
              (nshell.domain.parsing:make-command-node name args))

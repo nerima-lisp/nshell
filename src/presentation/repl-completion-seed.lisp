@@ -1,17 +1,8 @@
 ;;; REPL completion seed data
 (in-package #:nshell.presentation)
 
-;;; Git-aware dynamic completion (NSHELL.DOMAIN.COMPLETION:*GIT-BRANCH-LISTER*
-;;; and *GIT-MODIFIED-PATH-LISTER*, declared in domain/completion/dynamic-
-;;; sources.lisp) is a process-I/O seam the domain never touches directly.
-;;; This installs the real git-backed implementation, the same composition
-;;; pattern src/presentation/repl-session-init.lisp already uses for
-;;; NSHELL.DOMAIN.PROMPTING:*GIT-STATUS-RESOLVER*. Installing it here is
-;;; inert for every existing caller: NSHELL.DOMAIN.COMPLETION:COMPLETE only
-;;; consults these hooks when its :DIRECTORY argument is supplied, which no
-;;; current call site does yet (see this agent's completion report for the
-;;; one-line change autosuggest.lisp and repl-output-completion-help.lisp
-;;; need to wire :directory, :variable-names, and :home-directory live).
+;;; Keep process I/O outside the domain by supplying Git-backed hooks
+;;; for completion requests that carry the current directory.
 
 (defun %seed-git-branch-lister (directory)
   (multiple-value-bind (output exit-code)

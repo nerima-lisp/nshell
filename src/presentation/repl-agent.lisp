@@ -129,7 +129,7 @@
              :buffer (nshell.application:agent-step-text step)))
     (render-prompt-cont)
     (render-transient-panel
-     (list "agent: 編集中 · Enter 実行 · q 中止"))
+     (list "agent: 編集中 · Enter 実行 · Ctrl-C 中止"))
     (lambda () (read-key-cont))))
 
 (defun %agent-apply-edited-input ()
@@ -144,23 +144,14 @@
         (%render-agent-step-panel))))
 
 (defun %agent-editing-event (event)
-  (let ((type (nshell.domain.input:key-event-type event)))
-    (cond
-      ((eq type :ctrl-c)
-       (%finish-agent-session "canceled"))
-      ((and (eq type :char)
-            (char= (nshell.domain.input:key-event-char event) #\q))
-       (%finish-agent-session "canceled"))
-      ((and (eq type :char)
-            (char= (nshell.domain.input:key-event-char event) #\s))
-       (%agent-skip-current-step))
-      (t
-       (multiple-value-bind (new-state output-event)
-           (reduce-input-state *input-state* event)
-         (setf *input-state* new-state)
-         (if (eq output-event :execute)
-             (%agent-apply-edited-input)
-             (process-output-event output-event)))))))
+  (if (eq (nshell.domain.input:key-event-type event) :ctrl-c)
+      (%finish-agent-session "canceled")
+      (multiple-value-bind (new-state output-event)
+          (reduce-input-state *input-state* event)
+        (setf *input-state* new-state)
+        (if (eq output-event :execute)
+            (%agent-apply-edited-input)
+            (process-output-event output-event)))))
 
 (defun %process-agent-panel-event (event)
   (let* ((session *agent-session*)

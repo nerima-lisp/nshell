@@ -35,11 +35,7 @@
     (list
      (format nil "agent · step ~d/~d" step-number max-steps)
      (format nil "> ~a" (nshell.application:agent-step-text step))
-     (format nil "~@[auto · ~]~a~@[ · ~a~]"
-             (and (nshell.application:agent-step-classification step)
-                  (eq :safe
-                      (nshell.feature.assistant:assistant-safety-result-classification
-                       (nshell.application:agent-step-classification step))))
+     (format nil "~a~@[ · ~a~]"
              (%agent-classification-label step)
              (and (nshell.application:agent-step-classification step)
                   (nshell.feature.assistant:assistant-safety-result-reason
@@ -83,6 +79,8 @@
         (%finish-agent-session "maximum step count reached")
         (progn
           (setf *assistant-request-kind* :agent
+                *assistant-command-origin* :typed
+                *assistant-command-confirmed-p* nil
                 *input-state*
                   (copy-input-state-with
                    (make-repl-input-state
@@ -94,11 +92,11 @@
   (let* ((session *agent-session*)
          (step (and session
                     (nshell.application:agent-session-current-step session))))
-    (unless (nshell.application:agent-step-executable-p step)
+    (unless (and *assistant-command-confirmed-p*
+                 (nshell.application:agent-step-executable-p step))
       (return-from %agent-execute-current-step
         (%render-agent-step-panel)))
-    (setf *assistant-command-origin* :agent
-          *assistant-command-confirmed-p* t)
+    (setf *assistant-command-origin* :agent)
     (clear-rendered-transient-panel)
     (clear-rendered-prompt)
     (%execute-complete-command
@@ -140,7 +138,9 @@
            *agent-session*
            (input-state-buffer *input-state*))))
     (if (nshell.application:agent-step-executable-p step)
-        (%agent-execute-current-step)
+        (progn
+          (setf *assistant-command-confirmed-p* t)
+          (%agent-execute-current-step))
         (%render-agent-step-panel))))
 
 (defun %agent-editing-event (event)
@@ -176,9 +176,11 @@
       ((eq type :ctrl-c)
        (%finish-agent-session "canceled"))
       ((eq type :enter)
-       (if (nshell.application:agent-step-blocked-p step)
-           (%render-agent-step-panel)
-           (%agent-execute-current-step)))
+       (if (nshell.application:agent-step-executable-p step)
+           (progn
+             (setf *assistant-command-confirmed-p* t)
+             (%agent-execute-current-step))
+           (%render-agent-step-panel)))
       ((and char (char= char #\e))
        (%agent-enter-editing))
       ((and char (char= char #\s))
@@ -200,18 +202,12 @@
            (%finish-agent-session "AI 応答に提案がありません")
            (if (nshell.application:agent-session-propose-step
                 *agent-session* proposal)
-               (progn
-                 (let ((step (nshell.application:agent-session-current-step
-                              *agent-session*)))
-                   (when (nshell.application:agent-step-ast step)
-                     (setf *input-state*
-                           (make-repl-input-state :buffer proposal)))
-                   (%render-agent-step-panel)
-                   (when (and (nshell.application:agent-step-classification step)
-                              (eq :safe
-                                  (nshell.feature.assistant:assistant-safety-result-classification
-                                   (nshell.application:agent-step-classification step))))
-                     (%agent-execute-current-step))))
+               (let ((step (nshell.application:agent-session-current-step
+                            *agent-session*)))
+                 (when (nshell.application:agent-step-ast step)
+                   (setf *input-state*
+                         (make-repl-input-state :buffer proposal)))
+                 (%render-agent-step-panel))
                (%finish-agent-session "maximum step count reached")))))
     ((:stream-error :rate-limit-event)
      (%finish-agent-session

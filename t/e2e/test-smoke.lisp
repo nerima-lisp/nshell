@@ -470,6 +470,20 @@ The regular read timeout remains short for command-response assertions.")
                  (%assert-pty-child-exit pty)))
           (%terminate-pty-process pty)))))
 
+  (it "e2e-pty-reader-waits-for-complete-job-listing"
+    (cl-weave:expect-assertions 4)
+    (dolist (status '("Running" "Done"))
+      (let ((chunks (list (format nil "[1] ~A " status) "/bin/sleep 3")))
+        (with-temporary-function
+            ('%e2e-pty-read-available
+             (lambda (fd &rest arguments)
+               (declare (ignore fd arguments))
+               (pop chunks)))
+          (expect (%e2e-pty-read-until -1 (format nil "~A /bin/sleep 3" status)
+                                       :attempts 2 :delay 0)
+                  :to-equal (format nil "[1] ~A /bin/sleep 3" status))
+          (expect chunks :to-be-null)))))
+
   (it "e2e-main-interactive-pty-job-control-lifecycle"
     "The public entry point exposes background job state and fg completion under a real PTY."
     #-(or darwin linux)
@@ -492,12 +506,12 @@ The regular read timeout remains short for command-response assertions.")
                  (%e2e-pty-await-ready fd)
                  (%e2e-pty-write-line fd "/bin/sleep 3 &")
                  (%e2e-pty-write-line fd "jobs")
-                 (let ((running-output (%e2e-pty-read-until fd "Running")))
+                 (let ((running-output (%e2e-pty-read-until fd "Running /bin/sleep 3")))
                    (expect (search "Running" running-output) :to-be-truthy)
                    (expect (search "/bin/sleep 3" running-output) :to-be-truthy))
                  (%e2e-pty-write-line fd "fg 1")
                  (%e2e-pty-write-line fd "jobs")
-                 (let ((done-output (%e2e-pty-read-until fd "Done" :attempts 220)))
+                 (let ((done-output (%e2e-pty-read-until fd "Done /bin/sleep 3" :attempts 220)))
                    (expect (search "Done" done-output) :to-be-truthy)
                    (expect (search "/bin/sleep 3" done-output) :to-be-truthy))
                  (%e2e-pty-write-line fd "exit")

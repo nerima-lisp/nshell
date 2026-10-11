@@ -24,12 +24,12 @@ literal, matching fish. Undefined variables expand to the empty string."
                       (write-char ch out))))
                ((char= (char input (1+ i)) #\?)
                 (write-string
-                 (or (nshell.domain.environment:env-get env "?") "0")
+                 (%encode-fragment-data (or (nshell.domain.environment:env-get env "?") "0"))
                  out)
                 (incf i))
                ((char= (char input (1+ i)) #\!)
                 (write-string
-                 (or (nshell.domain.environment:env-get env "!") "")
+                 (%encode-fragment-data (or (nshell.domain.environment:env-get env "!") ""))
                  out)
                 (incf i))
                ((variable-name-start-p (char input (1+ i)))
@@ -37,7 +37,7 @@ literal, matching fish. Undefined variables expand to the empty string."
                     (%expand-variable-reference input i len env)
                   (if element
                       (progn
-                        (write-string element out)
+                        (write-string (%encode-fragment-data element) out)
                         (setf i (1- next)))
                       (write-char ch out))))
                (t (write-char ch out))))))

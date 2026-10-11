@@ -50,30 +50,50 @@
                   (nshell.application:agent-step-status
                    (nshell.application:agent-session-current-step session)))))))
 
-  (it "auto-executes-safe-model-steps-and-keeps-invalid-proposals-out-of-the-buffer"
+  (it "waits-for-a-key-before-dispatching-safe-model-steps"
     (with-repl-test-state
       (let ((session (nshell.application:make-agent-session "inspect files"
                                                              :max-steps 1))
-            (executed-p nil)
+            (dispatches 0)
+            (key-reads 0)
+            (continuation nil)
             (panel nil))
-        (setf nshell.presentation::*agent-session* session)
+        (setf nshell.presentation::*agent-session* session
+              nshell.presentation::*history-persistence-enabled-p* nil)
         (with-repl-input-state (:mode :ask-waiting :buffer "inspect files"
                                 :cursor-pos 13)
           (with-temporary-functions
-              (('nshell.presentation::%agent-execute-current-step
-                (lambda () (setf executed-p t)))
+              (('nshell.application::execute-command-node-in-context
+                (lambda (node context)
+                  (declare (ignore node context))
+                  (incf dispatches)
+                  (values "fixture-output" 0)))
+               ('nshell.presentation::read-key-cont
+                (lambda () (incf key-reads) nil))
                ('nshell.presentation::render-transient-panel
                 (lambda (content &rest arguments)
                   (declare (ignore arguments))
                   (setf panel content)))
                ('nshell.presentation::render-prompt-cont
                 (lambda () nil)))
-            (nshell.presentation::%handle-agent-model-event
-             (nshell.feature.assistant::make-assistant-model-event
-              1 :result '(("command" . "ls")))))
-          (expect t :to-be executed-p)
-          (expect (search "auto" (third panel)) :to-be-truthy))
-        (setf executed-p nil panel nil
+            (capture-standard-output
+              (setf continuation
+                    (nshell.presentation::%handle-agent-model-event
+                     (nshell.feature.assistant::make-assistant-model-event
+                      1 :result '(("command" . "ls"))))))
+            (expect 0 :to-equal dispatches)
+            (expect 0 :to-equal key-reads)
+            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (expect :awaiting-approval :to-equal
+                    (nshell.application:agent-session-state session))
+            (expect 0 :to-equal
+                    (nshell.application:agent-session-completed-steps session))
+            (expect nil :to-be (search "auto" (third panel)))
+            (expect (functionp continuation) :to-be-truthy)
+            (when (functionp continuation) (funcall continuation))
+            (expect 1 :to-equal key-reads)
+            (expect 0 :to-equal dispatches)))
+        (setf panel nil
               nshell.presentation::*agent-session*
                 (nshell.application:make-agent-session "inspect files"
                                                        :max-steps 1))
@@ -92,33 +112,41 @@
           (expect "inspect files" :to-equal
                   (nshell.presentation:input-state-buffer
                    nshell.presentation::*input-state*))
-          (expect nil :to-be executed-p)
           (expect (search "invalid" (third panel)) :to-be-truthy)))))
 
   (it "executes-a-safe-step-only-after-enter-approval"
     (with-repl-test-state
       (let ((session (nshell.application:make-agent-session "list files"
                                                              :max-steps 1))
-            (executed-p nil))
+            (dispatches 0)
+            (observed-origin nil)
+            (observed-confirmed nil))
         (nshell.application:agent-session-propose-step session "ls")
         (let ((step (nshell.application:agent-session-current-step session)))
-          (setf nshell.presentation::*agent-session* session)
+          (setf nshell.presentation::*agent-session* session
+                nshell.presentation::*history-persistence-enabled-p* nil)
           (with-repl-input-state (:mode :insert :buffer "ls" :cursor-pos 2)
             (with-temporary-functions
-                (('nshell.presentation::execute-ast
-                  (lambda (ast)
-                    (declare (ignore ast))
-                    (setf executed-p t)
-                    0))
+                (('nshell.application::execute-command-node-in-context
+                  (lambda (node context)
+                    (declare (ignore node context))
+                    (incf dispatches)
+                    (setf observed-origin nshell.application::*execution-origin*
+                          observed-confirmed nshell.application::*execution-confirmed-p*)
+                    (values "fixture-output" 0)))
                  ('nshell.presentation::render-prompt-cont
                   (lambda () nil))
                  ('nshell.presentation::render-transient-panel
                   (lambda (content &rest arguments)
                     (declare (ignore content arguments))
                     nil)))
-              (nshell.presentation::%process-agent-panel-event
-               (input-key-event :enter)))
-            (expect t :to-be executed-p)
+              (expect 0 :to-equal dispatches)
+              (capture-standard-output
+                (nshell.presentation::%process-agent-panel-event
+                 (input-key-event :enter))))
+            (expect 1 :to-equal dispatches)
+            (expect :agent :to-be observed-origin)
+            (expect t :to-be observed-confirmed)
             (expect :executed :to-equal
                     (nshell.application:agent-step-status step))
             (expect nil :to-be nshell.presentation::*agent-session*))))))
@@ -145,36 +173,171 @@
                   (nshell.presentation:input-state-buffer
                    nshell.presentation::*input-state*))))))
 
+  (it "does-not-mint-approval-in-the-step-executor"
+    (with-repl-test-state
+      (let ((session (nshell.application:make-agent-session "list files" :max-steps 1))
+            (dispatches 0))
+        (nshell.application:agent-session-propose-step session "ls")
+        (setf nshell.presentation::*agent-session* session
+              nshell.presentation::*history-persistence-enabled-p* nil)
+        (with-repl-input-state (:mode :insert :buffer "ls" :cursor-pos 2)
+          (with-temporary-functions
+              (('nshell.application::execute-command-node-in-context
+                (lambda (context node)
+                  (declare (ignore context node))
+                  (incf dispatches)
+                  (values "fixture-output" 0)))
+               ('nshell.presentation::render-prompt-cont (lambda () nil))
+               ('nshell.presentation::render-transient-panel
+                (lambda (&rest arguments) (declare (ignore arguments)) nil)))
+            (capture-standard-output
+              (nshell.presentation::%agent-execute-current-step))
+            (expect 0 :to-equal dispatches)
+            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (expect :awaiting-approval :to-equal
+                    (nshell.application:agent-session-state session)))))))
+
+  (it "reclassifies-edited-input-before-enter-approval"
+    (with-repl-test-state
+      (let ((session (nshell.application:make-agent-session "inspect files" :max-steps 1))
+            (dispatches 0)
+            (classification nil)
+            (observed-text nil)
+            (observed-origin nil)
+            (observed-confirmed nil))
+        (nshell.application:agent-session-propose-step session "ls")
+        (setf nshell.presentation::*agent-session* session
+              nshell.presentation::*history-persistence-enabled-p* nil)
+        (with-repl-input-state (:mode :insert :buffer "ls" :cursor-pos 2)
+          (with-temporary-functions
+              (('nshell.application::execute-command-node-in-context
+                (lambda (context node)
+                  (declare (ignore context node))
+                  (incf dispatches)
+                  (let ((step (nshell.application:agent-session-current-step session)))
+                    (setf classification
+                          (nshell.feature.assistant:assistant-safety-result-classification
+                           (nshell.application:agent-step-classification step))
+                          observed-text (nshell.application:agent-step-text step)
+                          observed-origin nshell.application::*execution-origin*
+                          observed-confirmed nshell.application::*execution-confirmed-p*))
+                  (values "fixture-output" 0)))
+               ('nshell.presentation::render-prompt-cont (lambda () nil))
+               ('nshell.presentation::render-transient-panel
+                (lambda (&rest arguments) (declare (ignore arguments)) nil)))
+            (nshell.presentation::%process-agent-panel-event (input-key-event :char #\e))
+            (setf nshell.presentation::*input-state*
+                  (nshell.presentation::make-repl-input-state :buffer "rm -rf /"))
+            (nshell.presentation::%process-agent-panel-event (input-key-event :enter))
+            (expect 0 :to-equal dispatches)
+            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (expect t :to-be
+                    (nshell.application:agent-step-blocked-p
+                     (nshell.application:agent-session-current-step session)))
+            (nshell.presentation::%process-agent-panel-event (input-key-event :char #\e))
+            (setf nshell.presentation::*input-state*
+                  (nshell.presentation::make-repl-input-state :buffer "rm fixture"))
+            (expect 0 :to-equal dispatches)
+            (capture-standard-output
+              (nshell.presentation::%process-agent-panel-event (input-key-event :enter)))
+            (expect 1 :to-equal dispatches)
+            (expect :confirm :to-be classification)
+            (expect "rm fixture" :to-equal observed-text)
+            (expect :agent :to-be observed-origin)
+            (expect t :to-be observed-confirmed))))))
+
+  (it "requires-fresh-enter-approval-for-the-next-step"
+    (with-repl-test-state
+      (let ((session (nshell.application:make-agent-session "inspect files" :max-steps 2))
+            (dispatches 0)
+            (requests 0)
+            (approval-at-request :unset)
+            (dispatch-origins nil)
+            (dispatch-approvals nil))
+        (nshell.application:agent-session-propose-step session "ls")
+        (setf nshell.presentation::*agent-session* session
+              nshell.presentation::*history-persistence-enabled-p* nil)
+        (with-repl-input-state (:mode :insert :buffer "ls" :cursor-pos 2)
+          (with-temporary-functions
+              (('nshell.application::execute-command-node-in-context
+                (lambda (context node)
+                  (declare (ignore context node))
+                  (incf dispatches)
+                  (push nshell.application::*execution-origin* dispatch-origins)
+                  (push nshell.application::*execution-confirmed-p* dispatch-approvals)
+                  (values "fixture-output" 0)))
+               ('nshell.presentation::%process-ask-submit-output-event
+                (lambda ()
+                  (incf requests)
+                  (setf approval-at-request
+                        nshell.presentation::*assistant-command-confirmed-p*)))
+               ('nshell.presentation::read-key-cont (lambda () nil))
+               ('nshell.presentation::render-prompt-cont (lambda () nil))
+               ('nshell.presentation::render-transient-panel
+                (lambda (&rest arguments) (declare (ignore arguments)) nil)))
+            (capture-standard-output
+              (nshell.presentation::%process-agent-panel-event (input-key-event :enter)))
+            (expect 1 :to-equal dispatches)
+            (expect 1 :to-equal requests)
+            (expect nil :to-be approval-at-request)
+            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (nshell.presentation::%handle-agent-model-event
+             (nshell.feature.assistant::make-assistant-model-event
+              2 :result '(("command" . "ls"))))
+            (expect 1 :to-equal dispatches)
+            (expect :awaiting-approval :to-equal
+                    (nshell.application:agent-session-state session))
+            (capture-standard-output
+              (nshell.presentation::%process-agent-panel-event (input-key-event :enter)))
+            (expect 2 :to-equal dispatches)
+            (expect '(:agent :agent) :to-equal dispatch-origins)
+            (expect '(t t) :to-equal dispatch-approvals)
+            (nshell.presentation::%process-agent-panel-event (input-key-event :enter))
+            (expect 2 :to-equal dispatches)
+            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*))))))
+
   (it "skips-a-step-with-s-and-does-not-execute-the-rest"
     (with-repl-test-state
       (let ((session (nshell.application:make-agent-session "list files"
                                                              :max-steps 1))
-            (executed-p nil))
-        (nshell.application:agent-session-propose-step session "ls")
+            (dispatches 0))
+        (nshell.application:agent-session-propose-step session "rm -rf /")
         (let ((step (nshell.application:agent-session-current-step session)))
           (setf nshell.presentation::*agent-session* session)
           (with-repl-input-state (:mode :insert :buffer "ls" :cursor-pos 2)
-            (with-temporary-function
-                ('nshell.presentation::render-transient-panel
+            (with-temporary-functions
+                (('nshell.application::execute-command-node-in-context
+                  (lambda (context node)
+                    (declare (ignore context node))
+                    (incf dispatches)
+                    (values "fixture-output" 0)))
+                 ('nshell.presentation::render-transient-panel
                  (lambda (content &rest arguments)
                    (declare (ignore content arguments))
-                   nil))
+                   nil)))
               (nshell.presentation::%process-agent-panel-event
                (input-key-event :char #\s)))
             (expect :skipped :to-equal
                     (nshell.application:agent-step-status step))
-            (expect nil :to-be executed-p)
+            (expect 0 :to-equal dispatches)
+            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
             (expect nil :to-be nshell.presentation::*agent-session*))))))
 
   (it "cancels-an-agent-session-with-q"
     (with-repl-test-state
       (let ((session (nshell.application:make-agent-session "list files"
-                                                             :max-steps 1)))
-        (nshell.application:agent-session-propose-step session "ls")
+                                                             :max-steps 1))
+            (dispatches 0))
+        (nshell.application:agent-session-propose-step session "rm -rf /")
         (setf nshell.presentation::*agent-session* session)
         (with-repl-input-state (:mode :insert :buffer "ls" :cursor-pos 2)
           (with-temporary-functions
-              (('nshell.presentation::render-prompt-cont
+              (('nshell.application::execute-command-node-in-context
+                (lambda (context node)
+                  (declare (ignore context node))
+                  (incf dispatches)
+                  (values "fixture-output" 0)))
+               ('nshell.presentation::render-prompt-cont
                 (lambda () nil))
                ('nshell.presentation::render-transient-panel
                 (lambda (content &rest arguments)
@@ -186,6 +349,8 @@
                   (nshell.application:agent-session-state session))
           (expect "canceled" :to-equal
                   (nshell.application:agent-session-stop-reason session))
+          (expect 0 :to-equal dispatches)
+          (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
           (expect nil :to-be nshell.presentation::*agent-session*)))))
 
   (it "rejects-agent-in-a-noninteractive-session-without-starting-the-sidecar"

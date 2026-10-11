@@ -2,26 +2,26 @@
 
 ## Positioning
 
-nshell targets daily interactive use first. v0.6.1 is a development preview,
+nshell targets daily interactive use first. v0.6.2 is a development preview,
 not a POSIX/fish-compatible script interpreter.
 
 ## Capability Matrix
 
-The evidence and statuses below describe the published `v0.6.1` tree, not
+The evidence and statuses below describe the published `v0.6.2` tree, not
 unreleased changes on the default branch.
 
-| Area | Release bar | Published evidence | Status |
+| Area | Capability or policy | Published evidence | Status |
 | --- | --- | --- | --- |
 | Interactive editor | Live syntax feedback, Emacs bindings, optional vi mode, multiline editing, undo/yank, predictable rendering | input-state, rendering, and PTY integration tests | CI-verified on `x86_64-linux` |
 | History and suggestions | Persistent history, reverse search, prefix autosuggestions, handling of multiline entries | history, autosuggest, and E2E editing tests | CI-verified on `x86_64-linux` |
 | Completion | Context-aware command/path/flag completion, candidate menu, deterministic cycling and cancellation | completion domain and REPL rendering tests, hierarchical command resolution, curated external command metadata and selective help-text enrichment | Broader command discovery/cache policy and subcommand coverage remain future work |
 | Shell language | Functions, control flow, command substitution, expansions, heredocs, here-strings, redirection, pipelines | parser, expansion, source, pipeline, process-substitution, descriptor-duplication, tab-stripping-heredoc, and smoke tests | Tested subset; full POSIX/fish parity is not claimed |
-| Process control | Foreground/background jobs, `jobs`/`fg`/`bg`/`disown`, Ctrl-C recovery, terminal restoration; terminal-attached commands have no default timeout, while redirected execution defaults to 3600 seconds and command substitution to 300 seconds | job-control and non-sandboxed PTY integration tests | CI-verified on `x86_64-linux` |
-| Distribution | Nix-pinned build, installed man page, release binary smoke, checksummed artifacts | flake build, man page, CI/release workflows, [v0.6.1 release assets](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.1) | Prebuilt `x86_64-linux` binary and SHA-256 checksum published; nixpkgs/Homebrew remain future work |
-| Security and operations | Private vulnerability reporting, explicit security scope, validation of secret handling in history/completion/diagnostics | [repository security policy](https://github.com/nerima-lisp/nshell/blob/v0.6.1/SECURITY.md) and [contribution guidelines](contributing.md) | Reporting policy exists; it does not establish a security audit of runtime behavior |
+| Process control | Foreground/background jobs, `jobs`/`fg`/`bg`/`disown`, Ctrl-C recovery, terminal restoration; foreground external commands whose standard output is a terminal have no default timeout, while file/pipe output defaults to 3600 seconds and command substitution to 300 seconds | job-control and non-sandboxed PTY integration tests | CI-verified on `x86_64-linux` |
+| Distribution | Nix-pinned build, installed man page, release binary smoke, checksummed artifacts | flake build, man page, CI/release workflows, [v0.6.2 release assets](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.2) | Prebuilt `x86_64-linux` binary and SHA-256 checksum published; nixpkgs/Homebrew remain future work |
+| Security and operations | Private vulnerability reporting and explicit security scope | [repository security policy](https://github.com/nerima-lisp/nshell/blob/v0.6.2/SECURITY.md) and [contribution guidelines](contributing.md) | Reporting policy exists; it does not establish a security audit of runtime behavior |
 
-The [v0.6.1 CI run](https://github.com/nerima-lisp/nshell/actions/runs/38050042888)
-and [release workflow](https://github.com/nerima-lisp/nshell/actions/runs/38052885425)
+The [v0.6.2 CI run](https://github.com/nerima-lisp/nshell/actions/runs/38120933504)
+and [release workflow](https://github.com/nerima-lisp/nshell/actions/runs/38120952046)
 validate the tagged tree. The non-sandboxed
 integration job runs the PTY and external-process cases skipped by the Nix
 sandbox.
@@ -29,8 +29,8 @@ sandbox.
 ## Release Gates
 
 These are the existing nshell gates, not a production-readiness verdict.
-The workflow also requires dependency-suite and extracted-artifact checks;
-the older published runs linked above do not establish these newer gates.
+The linked v0.6.2 release run includes dependency-suite and extracted-artifact
+checks, including the extracted executable's real-PTY gate.
 
 Before a public release can claim the capabilities listed here:
 
@@ -51,14 +51,16 @@ Before a public release can claim the capabilities listed here:
    GitHub Release notes, and completion metadata when applicable.
 6. Open roadmap gaps remain explicit instead of being implied as complete.
 
-The [release workflow](https://github.com/nerima-lisp/nshell/blob/main/.github/workflows/release.yml)
+The [v0.6.2 release workflow](https://github.com/nerima-lisp/nshell/blob/v0.6.2/.github/workflows/release.yml)
 runs hermetic checks and a non-sandboxed integration job against the same
 resolved tagged commit, and only then builds the release assets in a draft.
 A maintainer reviews the assets and release notes before publishing the draft.
 
 ## Verification outside CI
 
-The current flake declares only `x86_64-linux`. On another host, the Nix
+Run these checks from the checkout being verified. To reproduce the historical
+release evidence above, use the `v0.6.2` tag. The flake declares only
+`x86_64-linux`. On another host, the Nix
 checks require an `x86_64-linux` builder. Running the dev shell or PTY suite
 also requires an `x86_64-linux` execution environment; a remote builder alone
 does not supply that runtime coverage.

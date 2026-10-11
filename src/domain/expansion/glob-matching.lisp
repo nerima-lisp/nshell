@@ -18,7 +18,10 @@
   (let ((wild (position-if #'glob-char-p pattern)))
     (if wild
         (let* ((prefix (subseq pattern 0 wild))
-               (slash (position #\/ prefix :from-end t)))
+               (slash (position-if
+                       (lambda (character)
+                         (char= (%decode-fragment-character character) #\/))
+                       prefix :from-end t)))
           (if slash (subseq prefix 0 (1+ slash)) "./"))
         (pathname-directory-string pattern))))
 
@@ -67,10 +70,11 @@
 
 (defun bracket-range-member-p (pattern start end ch)
   (loop with index = start while (< index end)
-        thereis (let ((left (char pattern index)))
+        thereis (let ((left (%decode-fragment-character (char pattern index)))
+                      (ch (%decode-fragment-character ch)))
                   (cond
                     ((and (< (+ index 2) end) (char= (char pattern (1+ index)) #\-))
-                     (let ((right (char pattern (+ index 2))))
+                     (let ((right (%decode-fragment-character (char pattern (+ index 2)))))
                        (incf index 3) (char<= left ch right)))
                     (t (incf index) (char= left ch))))))
 
@@ -105,6 +109,8 @@
                            (bracket-match-p pidx pattern (char text tidx))
                          (if parsed-p (and ok (match next-pidx (1+ tidx)))
                              (and (char= (char text tidx) #\[) (match (1+ pidx) (1+ tidx)))))))
-                 (t (and (< tidx text-length) (char= (char pattern pidx) (char text tidx))
+                 (t (and (< tidx text-length)
+                         (char= (%decode-fragment-character (char pattern pidx))
+                                (%decode-fragment-character (char text tidx)))
                          (match (1+ pidx) (1+ tidx)))))))
       (match 0 0))))

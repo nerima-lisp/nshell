@@ -1,4 +1,4 @@
-.TH NSHELL 1 "2026-09-30" "nshell 0.6.2" "User Commands"
+.TH NSHELL 1 "2026-09-30" "nshell 0.6.3" "User Commands"
 .SH NAME
 nshell \- a fish-inspired interactive shell written in Common Lisp
 .SH SYNOPSIS
@@ -233,6 +233,20 @@ provides the following builtins:
 Run
 .B help
 inside the shell for details.
+.SH ASSISTANT
+The
+.B agent
+builtin is interactive-only. Every proposed command, including one classified
+as safe, requires
+.B Enter
+before execution. Blocked commands cannot be approved.
+.PP
+The assistant refuses to start if its sidecar reports tools or MCP servers
+outside the permitted initialization contract. Use
+.B ai status
+to inspect assistant state and
+.B ai set
+to change session settings.
 .SH HISTORY FILE
 .I ~/.nshell_history
 is created with owner-only permissions. Symlinks, hard links, nonregular files,

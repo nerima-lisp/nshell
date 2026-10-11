@@ -3,7 +3,7 @@
 (defun %assistant-stop-sidecar (handle)
   (funcall (symbol-function 'nshell.infrastructure.acl:stop-sidecar) handle))
 
-(defun %assistant-test-sidecar-script (&optional one-shot-p received-path)
+(defun %assistant-test-sidecar-script (&optional one-shot-p received-path unsafe-init)
   (let ((path (merge-pathnames
                (format nil "nshell-assistant-sidecar-~D.sh"
                        (get-internal-real-time))
@@ -14,8 +14,12 @@
                   "if [ \"$1\" = \"--version\" ]; then"
                   "  printf '%s\\n' 'test-version'"
                   "  exit 0"
-                  "fi"
-                  "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
+                  "fi"))
+        (write-line line stream))
+      (when unsafe-init
+        (write-line (format nil "printf '%s\\n' '~a'" unsafe-init) stream))
+      (dolist (line
+                '("printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
                   "while IFS= read -r line"
                   "do"))
         (write-line line stream))
@@ -154,6 +158,254 @@
          (message (or (cdr (assoc "message" payload :test #'string=))
                       (cdr (assoc "reason" payload :test #'string=)))))
     (format nil "kind=~S message=~S payload=~S" kind message payload)))
+
+(defun %assistant-test-init-sequence (unsafe-init)
+  (let* ((script (%assistant-test-sidecar-script nil nil unsafe-init))
+         (state (nshell.feature.assistant::%make-assistant-sidecar-state
+                 (namestring script) nil))
+         (events (cl-concurrent-kit:make-channel :buffer-size 128))
+         (completion (cl-concurrent-kit:make-promise))
+         (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                   0 events completion))
+         (write-item (symbol-function
+                      'nshell.feature.assistant::%assistant-sidecar-write-item))
+         (install-threads (symbol-function
+                           'nshell.feature.assistant::%assistant-sidecar-install-threads))
+         (forwarded nil)
+         (threads nil))
+    (unwind-protect
+         (progn
+           (setf (nshell.feature.assistant::assistant-sidecar-state-starting-p state) t
+                 (nshell.feature.assistant::assistant-sidecar-state-startup-generation state) 1
+                 (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+           (expect t :to-be
+                   (nshell.feature.assistant::%assistant-sidecar-request
+                    state 41 '(("message" . "init-sequence"))))
+           ;; Run the gate synchronously, but keep the real process and IO threads.
+           (with-temporary-function
+               ('nshell.feature.assistant::%assistant-sidecar-write-item
+                (lambda (current item)
+                  (push (nshell.feature.assistant::assistant-write-item-line item)
+                        forwarded)
+                  (funcall write-item current item)))
+             (with-temporary-function
+                 ('nshell.feature.assistant::%assistant-sidecar-install-threads
+                  (lambda (current generation handle version channel)
+                    (prog1 (funcall install-threads current generation handle version channel)
+                      (setf threads
+                            (list (nshell.feature.assistant::assistant-sidecar-state-reader-thread current)
+                                  (nshell.feature.assistant::assistant-sidecar-state-writer-thread current)
+                                  (nshell.feature.assistant::assistant-sidecar-state-error-thread current))))))
+               (nshell.feature.assistant::%assistant-sidecar-start-worker
+                state pending 1)))
+           (if unsafe-init
+               (progn
+                 (expect :mcp-isolation-failed :to-be
+                         (nshell.feature.assistant::assistant-sidecar-state-disabled-reason state))
+                 (expect nil :to-be forwarded)
+                 (expect nil :to-be
+                         (nshell.feature.assistant::assistant-sidecar-state-init-p state)))
+               (progn
+                 (expect nil :to-be
+                         (nshell.feature.assistant::assistant-sidecar-state-disabled-reason state))
+                 (expect t :to-be
+                         (nshell.feature.assistant::assistant-sidecar-state-init-p state))
+                 (expect 1 :to-be (length forwarded))
+                 (expect "init-sequence" :to-equal
+                         (cdr (assoc "message"
+                                     (json-kit:parse (first forwarded) :object-type :alist)
+                                     :test #'string=)))))
+           (let ((terminal nil))
+             (loop repeat 8
+                   until terminal
+                   do (multiple-value-bind (event present-p)
+                          (cl-concurrent-kit:recv
+                           events :timeout (cl-date-kit:duration-of-seconds 2))
+                        (expect t :to-be present-p)
+                        (expect 41 :to-be
+                                (nshell.feature.assistant:assistant-model-event-generation event))
+                        (when (member
+                               (nshell.feature.assistant:assistant-model-event-kind event)
+                               '(:result :stream-error :stream-ended))
+                          (setf terminal event))))
+             (expect (if unsafe-init :stream-error :result) :to-be
+                     (nshell.feature.assistant:assistant-model-event-kind terminal))
+             (when unsafe-init
+               (expect "assistant sidecar init handshake failed" :to-equal
+                       (cdr (assoc "message"
+                                   (nshell.feature.assistant:assistant-model-event-payload terminal)
+                                   :test #'string=)))))
+           (expect t :to-be
+                   (cl-concurrent-kit:await
+                    completion :timeout (cl-date-kit:duration-of-seconds 2)))
+           (expect t :to-be (cl-concurrent-kit:promise-settled-p completion))
+           (expect nil :to-be
+                   (nshell.feature.assistant::assistant-sidecar-state-starting-p state))
+           (unless unsafe-init
+             (nshell.feature.assistant::%assistant-sidecar-stop-state state))
+           (dolist (accessor
+                     '(nshell.feature.assistant::assistant-sidecar-state-handle
+                       nshell.feature.assistant::assistant-sidecar-state-reader-thread
+                       nshell.feature.assistant::assistant-sidecar-state-writer-thread
+                       nshell.feature.assistant::assistant-sidecar-state-error-thread
+                       nshell.feature.assistant::assistant-sidecar-state-start-thread
+                       nshell.feature.assistant::assistant-sidecar-state-write-channel))
+             (expect nil :to-be (funcall accessor state)))
+           (dolist (thread threads)
+             (when thread
+               (expect nil :to-be (sb-thread:thread-alive-p thread)))))
+      (nshell.feature.assistant::%assistant-sidecar-stop-state state)
+      (nshell.feature.assistant::%assistant-sidecar-close-channel events)
+      (when (probe-file script)
+        (delete-file script)))))
+
+(defun %assistant-test-async-init-sequence (unsafe-init)
+  (with-temporary-output-file (received-path :prefix "nshell-assistant-init-received-")
+    (with-open-file (stream received-path :direction :output :if-exists :supersede)
+      (declare (ignore stream)))
+    (let* ((script (%assistant-test-sidecar-script t received-path unsafe-init))
+           (state (nshell.feature.assistant::%make-assistant-sidecar-state
+                   (namestring script) nil))
+           (installed (cl-concurrent-kit:make-channel :buffer-size 1))
+           (release (cl-concurrent-kit:make-channel :buffer-size 1))
+           (install-threads (symbol-function
+                             'nshell.feature.assistant::%assistant-sidecar-install-threads))
+           (pending nil)
+           (handle nil)
+           (write-channel nil)
+           (threads nil))
+      (unwind-protect
+           (with-temporary-function
+               ('nshell.feature.assistant::%assistant-sidecar-install-threads
+                (lambda (current generation current-handle version channel)
+                  (let ((ok (funcall install-threads current generation
+                                     current-handle version channel)))
+                    (when ok
+                      (setf handle current-handle
+                            write-channel channel
+                            threads
+                            (list (nshell.feature.assistant::assistant-sidecar-state-reader-thread current)
+                                  (nshell.feature.assistant::assistant-sidecar-state-writer-thread current)
+                                  (nshell.feature.assistant::assistant-sidecar-state-error-thread current)))
+                      ;; Hold the real startup gate until the real request is queued.
+                      (cl-concurrent-kit:send installed t)
+                      (cl-concurrent-kit:recv
+                       release :timeout (cl-date-kit:duration-of-seconds 2)))
+                    ok)))
+             (unwind-protect
+                  (progn
+                    (expect t :to-be (nshell.feature.assistant::%assistant-sidecar-start state))
+                    (multiple-value-bind (value present-p)
+                        (cl-concurrent-kit:recv
+                         installed :timeout (cl-date-kit:duration-of-seconds 2))
+                      (expect t :to-be present-p)
+                      (expect t :to-be value))
+                    (push (nshell.feature.assistant::assistant-sidecar-state-start-thread state)
+                          threads)
+                    (setf pending (nshell.feature.assistant::%assistant-sidecar-current-pending state))
+                    (expect t :to-be
+                            (nshell.feature.assistant::%assistant-sidecar-request
+                             state 41 '(("message" . "async-init-sequence"))))
+                    (expect 41 :to-be
+                            (nshell.feature.assistant::assistant-pending-cell-generation pending))
+                    (multiple-value-bind (event present-p)
+                        (nshell.feature.assistant::%assistant-sidecar-poll state 41)
+                      (expect nil :to-be event)
+                      (expect nil :to-be present-p))
+                    (cl-concurrent-kit:send release t)
+                    (expect t :to-be
+                            (cl-concurrent-kit:await
+                             (nshell.feature.assistant::assistant-pending-cell-completion pending)
+                             :timeout (cl-date-kit:duration-of-seconds 2)))
+                    (dolist (thread threads)
+                      (expect t :to-be (not (null thread)))
+                      (expect nil :to-be
+                              (eq :timed-out
+                                  (sb-thread:join-thread thread :timeout 2 :default :timed-out)))
+                      (expect nil :to-be (sb-thread:thread-alive-p thread)))
+                    (let ((received (uiop:read-file-lines received-path)))
+                      (expect (if unsafe-init 0 1) :to-be (length received))
+                      (unless unsafe-init
+                        (expect "async-init-sequence" :to-equal
+                                (cdr (assoc "message"
+                                            (json-kit:parse (first received) :object-type :alist)
+                                            :test #'string=)))))
+                    (let ((terminal nil))
+                      (loop repeat 8
+                            until terminal
+                            do (multiple-value-bind (event present-p)
+                                   (nshell.feature.assistant::%assistant-sidecar-poll state 41)
+                                 (expect t :to-be present-p)
+                                 (when (member (nshell.feature.assistant:assistant-model-event-kind event)
+                                               '(:result :stream-error :stream-ended))
+                                   (setf terminal event))))
+                      (expect (if unsafe-init :stream-error :result) :to-be
+                              (nshell.feature.assistant:assistant-model-event-kind terminal))
+                      (expect 41 :to-be
+                              (nshell.feature.assistant:assistant-model-event-generation terminal))
+                      (when unsafe-init
+                        (expect "assistant sidecar init handshake failed" :to-equal
+                                (cdr (assoc "message"
+                                            (nshell.feature.assistant:assistant-model-event-payload terminal)
+                                            :test #'string=)))))
+                    ;; All assertions precede the explicit stop in unwind cleanup.
+                    (expect (if unsafe-init :mcp-isolation-failed nil) :to-be
+                            (nshell.feature.assistant::assistant-sidecar-state-disabled-reason state))
+                    (dolist (accessor
+                              '(nshell.feature.assistant::assistant-sidecar-state-pending
+                                nshell.feature.assistant::assistant-sidecar-state-retired-pending
+                                nshell.feature.assistant::assistant-sidecar-state-handle
+                                nshell.feature.assistant::assistant-sidecar-state-init-p
+                                nshell.feature.assistant::assistant-sidecar-state-starting-p
+                                nshell.feature.assistant::assistant-sidecar-state-start-thread
+                                nshell.feature.assistant::assistant-sidecar-state-reader-thread
+                                nshell.feature.assistant::assistant-sidecar-state-writer-thread
+                                nshell.feature.assistant::assistant-sidecar-state-error-thread
+                                nshell.feature.assistant::assistant-sidecar-state-write-channel))
+                      (expect nil :to-be (funcall accessor state)))
+                    (expect t :to-be
+                            (cl-concurrent-kit:promise-settled-p
+                             (nshell.feature.assistant::assistant-pending-cell-completion pending)))
+                    (expect t :to-be
+                            (cl-concurrent-kit:channel-closed-p
+                             (nshell.feature.assistant::assistant-pending-cell-events pending)))
+                    (expect t :to-be (cl-concurrent-kit:channel-closed-p write-channel))
+                    (expect nil :to-be
+                            (sb-ext:process-alive-p
+                             (nshell.infrastructure.acl:sidecar-handle-process handle))))
+               (cl-concurrent-kit:try-send release t)
+               (nshell.feature.assistant::%assistant-sidecar-stop-state state)))
+        (nshell.feature.assistant::%assistant-sidecar-close-channel installed)
+        (nshell.feature.assistant::%assistant-sidecar-close-channel release)
+        (when pending
+          (nshell.feature.assistant::%assistant-sidecar-close-channel
+           (nshell.feature.assistant::assistant-pending-cell-events pending)))
+        (when (probe-file script)
+          (delete-file script))))))
+
+(describe "assistant-model-init-sequence"
+  (it "rejects-unsafe-init-before-a-later-safe-init"
+    (dolist (unsafe-init
+              '("{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"Bash\"],\"mcp_servers\":[]}"
+                "{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[{\"name\":\"unexpected\"}]}"
+                "{\"type\":\"system\",\"subtype\":\"init\"}"))
+      (%assistant-test-init-sequence unsafe-init)))
+  (it "accepts-safe-init-and-forwards-the-queued-request"
+    (%assistant-test-init-sequence nil))
+  (it "rejects-init-missing-only-tools-before-a-later-safe-init"
+    (%assistant-test-async-init-sequence
+     "{\"type\":\"system\",\"subtype\":\"init\",\"mcp_servers\":[]}"))
+  (it "rejects-init-missing-only-mcp-servers-before-a-later-safe-init"
+    (%assistant-test-async-init-sequence
+     "{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"]}"))
+  (it "cleans-up-rejected-async-startup-through-normal-terminal-poll"
+    (dolist (unsafe-init
+              '("{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"Bash\"],\"mcp_servers\":[]}"
+                "{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[{\"name\":\"unexpected\"}]}"
+                "{\"type\":\"system\",\"subtype\":\"init\"}"))
+      (%assistant-test-async-init-sequence unsafe-init)))
+  (it "receives-one-valid-request-and-cleans-up-through-normal-terminal-poll"
+    (%assistant-test-async-init-sequence nil)))
 
 (describe "assistant-model-boundary-contracts"
   (it "replays-a-sanitized-stream-json-fixture-through-the-injected-boundary"

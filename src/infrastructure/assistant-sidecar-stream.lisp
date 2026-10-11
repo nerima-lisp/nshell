@@ -420,6 +420,8 @@
                           (cond
                             ((member kind '(:stream-error :stream-ended))
                              (return))
+                            ((eq kind :system-init)
+                             (return))
                              ((not (eq kind :system-init))
                               (push event startup-events)))))
                       (when (or (%assistant-sidecar-init-p state)

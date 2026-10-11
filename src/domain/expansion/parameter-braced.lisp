@@ -58,7 +58,8 @@ a further leading % selects the longest match instead of the shortest."
 
 (defun %assign-parameter-default (env name value)
   "Assign VALUE to NAME in ENV for ${NAME:=word}, preserving export state."
-  (nshell.domain.environment:env-assign-default! env name value))
+  (nshell.domain.environment:env-assign-default! env name (%decode-fragment-data value))
+  value)
 
 (defun %parse-substring-integer (text)
   (let ((trimmed (string-trim '(#\Space #\Tab #\Newline #\Return) text)))
@@ -113,7 +114,7 @@ Returns NIL when CONTENT is not a length expansion."
 
 (defun %parameter-binding (name env)
   (let ((raw (nshell.domain.environment:env-get env name)))
-    (%make-parameter-binding name raw (not (null raw)) (or raw ""))))
+    (%make-parameter-binding name raw (not (null raw)) (%encode-fragment-data (or raw "")))))
 
 (defun %parameter-operator-parts (rest)
   "Parse REST into a braced parameter operator value."
@@ -132,7 +133,7 @@ Returns NIL when CONTENT is not a length expansion."
 
 (defun %parameter-required-message (operator word)
   (if (plusp (length word))
-      word
+      (%decode-fragment-data word)
       (if (parameter-operator-colon-p operator)
           "parameter null or not set"
           "parameter not set")))

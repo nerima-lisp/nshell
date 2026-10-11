@@ -6,8 +6,8 @@
 (defun %spawn-terminal-command (command args)
   (multiple-value-bind (resolved environment) (%prepare-external-command command)
     (when resolved
-      (%spawn-in-own-process-group resolved args environment *standard-input* t
-                                   :error t))))
+      ;; Hold user code until the caller hands this process group the terminal.
+      (%run-pipeline-command command args *standard-input* t t environment resolved))))
 
 (defun process-pid (process)
   (if (pty-process-p process)

@@ -13,6 +13,27 @@
         form))
 
 (describe "process-tests"
+  (it "spawn-terminal-command-stops-before-running-user-code"
+    (with-temporary-output-file (target :prefix "nshell-terminal-barrier")
+      (let ((process nil))
+        (unwind-protect
+             (progn
+               (setf process
+                     (nshell.infrastructure.acl:%spawn-terminal-command
+                      "/bin/sh"
+                      (list "-c" "printf started > \"$1\"" "nshell-test" target)))
+               (expect :stopped :to-equal (sb-ext:process-status process))
+               (expect (sb-ext:process-pid process) :to-equal
+                       (sb-posix:getpgid (sb-ext:process-pid process)))
+               (expect (probe-file target) :to-be-null)
+               (nshell.infrastructure.acl:process-continue process)
+               (sb-ext:process-wait process)
+               (expect 0 :to-equal
+                       (nshell.infrastructure.acl:process-exit-status-code process))
+               (expect "started" :to-equal (host-kit:read-file-string target)))
+          (nshell.infrastructure.acl::%terminate-process process)
+          (when process (sb-ext:process-close process))))))
+
   (it "spawn-pipeline-timeout-covers-orphaned-output-writer"
     (with-temporary-output-file (pid-file :prefix "nshell-pipeline-orphan")
       (let ((worker nil) (result nil) (failure nil) (joined nil))

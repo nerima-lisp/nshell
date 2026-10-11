@@ -2,6 +2,7 @@
 
 (require :asdf)
 (load (merge-pathnames "asdf-runtime.lisp" *load-truename*))
+(load (merge-pathnames "dependency-registry.lisp" *load-truename*))
 
 (defparameter *dependency-test-systems*
   '(("cl-prolog-kit/test" nil)
@@ -31,37 +32,6 @@
     (unless (and symbol (fboundp symbol))
       (error "Required cl-weave API is unavailable: ~A" name))
     (apply (symbol-function symbol) arguments)))
-
-(defun dependency-store-path-p (path)
-  (and path (uiop:string-prefix-p "/nix/store/" (namestring (truename path)))))
-
-(defun dependency-configure-registry ()
-  (let* ((value (uiop:getenv "CL_SOURCE_REGISTRY"))
-         (registry (and value (asdf/source-registry:parse-source-registry-string value)))
-         (entries (and registry (rest registry))))
-    (unless (and value (plusp (length value)) (eq (first registry) :source-registry))
-      (error "CL_SOURCE_REGISTRY must explicitly name pinned Nix store sources"))
-    (setf entries (remove-if (lambda (entry)
-                              (member entry '(:inherit-configuration
-                                              :ignore-inherited-configuration
-                                              (:inherit-configuration)
-                                              (:ignore-inherited-configuration))
-                                      :test #'equal))
-                            entries))
-    (unless (and entries
-                 (every (lambda (entry)
-                          (and (consp entry)
-                               (member (first entry) '(:directory :tree))
-                               (= (length entry) 2)
-                               (dependency-store-path-p (second entry))))
-                        entries))
-      (error "Only explicit Nix store :directory/:tree registry entries are allowed"))
-    (let ((configuration `(:source-registry ,@entries :ignore-inherited-configuration)))
-      (setf asdf:*central-registry* nil)
-      (asdf:clear-source-registry)
-      (asdf:initialize-source-registry configuration)
-      ;; Dependency tests that launch child Lisp images inherit the same pins.
-      (sb-posix:setenv "CL_SOURCE_REGISTRY" (prin1-to-string configuration) 1))))
 
 (defun dependency-check-source (system)
   (let ((source (asdf:system-source-file (asdf:find-system system))))

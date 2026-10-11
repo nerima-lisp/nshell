@@ -22,6 +22,7 @@ fi
 # A private cache avoids both read-only store writes and other sessions' caches.
 dependency_cache=$(mktemp -d "${TMPDIR:-/tmp}/nshell-dependency-tests.XXXXXXXX")
 export NSHELL_ASDF_OUTPUT_DIR="$dependency_cache/asdf/"
+"$dependency_sbcl" --noinform --script "$dependency_script_dir/test-dependency-registry.lisp"
 dependency_failed=0
 dependency_passed=0
 for dependency_system in "$@"; do

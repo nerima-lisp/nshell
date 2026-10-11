@@ -1,7 +1,7 @@
 # Contributing to nshell
 
-The process — branching, pull requests, commit conventions, and the org-wide
-rules a review checks — lives in the
+Branching, pull requests, commit conventions, and org-wide review rules are
+documented in the
 [nerima-lisp contributing guide](https://github.com/nerima-lisp/.github/blob/main/CONTRIBUTING.md).
 This page covers only what is specific to nshell.
 
@@ -14,10 +14,11 @@ review will actually push back on:
 - **`domain/` performs no I/O.** Whether it lives under `src/` or a feature
   package, new parsing, expansion, completion, or history logic belongs here and
   must be unit-testable without a terminal.
-- **`infrastructure/` isolates all OS- and SBCL-specific code** — syscalls, PTY,
-  signals, terminal handling, persistence. Guard implementation-specific code
-  with `#+sbcl` where relevant.
-- **`application/` holds use cases** — builtins, pipeline execution, job
+- **`infrastructure/` holds OS adapters**: syscalls, PTYs, signals, terminal
+  handling, and persistence. The runtime targets SBCL; application and
+  presentation code also use SBCL facilities. Guard implementation-specific
+  code with `#+sbcl` where relevant.
+- **`application/` holds use cases**: builtins, pipeline execution, job
   management.
 - **`presentation/` is the REPL, line editor, and rendering.**
 
@@ -43,11 +44,21 @@ Iterate with the smallest relevant suite, then run the full gate before review.
 
 | Change | Run |
 |---|---|
-| Anything | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 1800; exec @ARGV' nix flake check --print-build-logs` before review; the full gate runs on `x86_64-linux` CI |
+| Anything | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 1800; exec @ARGV' nix flake check --print-build-logs` before review; CI runs on `x86_64-linux` |
 | Domain logic, builtins, parser, expansion | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix run .#test` |
 | Completion engine or cl-prolog-kit knowledge base | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' sbcl --script scripts/weave.lisp` |
 | PTY, subprocess, terminal, signal, job control | the non-sandboxed run below |
 | Coverage-oriented validation | `perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 900; exec @ARGV' nix develop -c sbcl --script scripts/coverage.lisp` |
+
+The full CI gate also runs these checks separately from `nix flake check`:
+
+```sh
+nix develop -c bash scripts/test-dependencies.sh
+nix develop -c perl t/scripts/test-dependencies.pl
+nix develop -c perl t/scripts/test-native-spawn.pl
+nix develop -c sbcl --script t/scripts/test-dependency-assertions.lisp
+nix develop -c sbcl --script scripts/test-history-storage.lisp
+```
 
 The non-sandboxed integration run, for changes the Nix sandbox cannot exercise:
 
@@ -56,8 +67,8 @@ perl -e '$SIG{ALRM}=sub { exit 124 }; alarm 300; exec @ARGV' nix develop -c sbcl
 ```
 
 Tests live in `t/` and must be hermetic: no dependence on the ambient working
-directory, terminal size, or environment. Use the provided fixtures — for
-example `with-stable-repl-prompt` and `with-fixed-terminal-size` — for
+directory, terminal size, or environment. Use the provided fixtures, such as
+`with-stable-repl-prompt` and `with-fixed-terminal-size`, for
 rendering tests.
 
 For parser, expansion, execution, or builtin changes, include focused unit

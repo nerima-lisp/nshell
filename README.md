@@ -20,7 +20,7 @@ The release and Nix flake support `x86_64-linux` only. With
 [Nix](https://nixos.org/download) and flakes enabled:
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.6.4
+nix run github:nerima-lisp/nshell/v0.6.5
 ```
 
 At the prompt, enter `string upper hello`. Commands and paths colorize live, and a
@@ -62,7 +62,7 @@ and session settings.
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.6.4
+nix profile install github:nerima-lisp/nshell/v0.6.5
 ```
 
 Pin a release tag rather than following the default branch.

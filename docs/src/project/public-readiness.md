@@ -2,13 +2,38 @@
 
 ## Positioning
 
-nshell targets daily interactive use first. v0.6.2 is a development preview,
+nshell targets interactive use. The 0.6 series is a development preview,
 not a POSIX/fish-compatible script interpreter.
 
-## Capability Matrix
+## Current release evidence
 
-The evidence and statuses below describe the published `v0.6.2` tree, not
-unreleased changes on the default branch.
+The published [v0.6.4 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.4)
+contains the `x86_64-linux` bundle and SHA-256 checksum. The
+[main CI run](https://github.com/nerima-lisp/nshell/actions/runs/38136077742)
+and [v0.6.4 release run](https://github.com/nerima-lisp/nshell/actions/runs/38136113875)
+completed with success for commit `5969f455312025356905a0f8e2e104da317a0d6a`.
+These workflow results do not establish production readiness, complete
+dependency assertion coverage, or successful live AI provider requests.
+
+## Local verification for v0.6.5
+
+The macOS arm64 source-loaded suite passed with PTY cases enabled and no
+skipped cases. The pinned dependency suites and private history storage
+regressions also passed. The dependency gate rejects zero-assertion runs of
+three selected history properties and tests the pinned process library's
+native spawn helper separately from its Lisp suite.
+
+A locally built executable was tested in a real PTY with Claude Code 2.1.295.
+The probe checked that a proposed `touch` command did not run before approval,
+Enter executed it once, cancellation left no file, a subsequent request could
+execute a fresh proposal, and exit reaped the provider processes. These are
+bounded checks with one provider on one platform, not an exhaustive provider
+or terminal compatibility claim. They are not part of the linked CI runs.
+
+## Historical capability matrix (v0.6.2)
+
+The evidence and statuses below describe the published `v0.6.2` tree. They are
+historical evidence, not results from the v0.6.4 workflows above.
 
 | Area | Capability or policy | Published evidence | Status |
 | --- | --- | --- | --- |
@@ -29,7 +54,7 @@ sandbox.
 ## Release Gates
 
 These are the existing nshell gates, not a production-readiness verdict.
-The linked v0.6.2 release run includes dependency-suite and extracted-artifact
+The historical v0.6.2 release run includes dependency-suite and extracted-artifact
 checks, including the extracted executable's real-PTY gate.
 
 Before a public release can claim the capabilities listed here:
@@ -40,7 +65,8 @@ Before a public release can claim the capabilities listed here:
    signal, and job-control coverage on the sole CI matrix target,
    `x86_64-linux`, without skipping those cases.
 3. The pinned dependency suites execute directly, with nonempty discovery,
-   matching selected/executed counts, and no skipped cases. The private history
+   matching selected/executed counts, and no skipped cases. Suite-level pass
+   counts alone do not establish assertion coverage. The private history
    storage regressions pass.
 4. An `x86_64-linux` release archive passes checksum verification before
    extraction. The extracted bundle passes required-file, dependency-closure,
@@ -61,7 +87,7 @@ A maintainer reviews the assets and release notes before publishing the draft.
 Run these checks from the checkout being verified. To reproduce the historical
 release evidence above, use the `v0.6.2` tag. The flake declares only
 `x86_64-linux`. On another host, the Nix
-checks require an `x86_64-linux` builder. Running the dev shell or PTY suite
+checks require an `x86_64-linux` builder. Running these Nix-based commands
 also requires an `x86_64-linux` execution environment; a remote builder alone
 does not supply that runtime coverage.
 
@@ -102,6 +128,11 @@ does not supply that runtime coverage.
 
 ## Known Limits and Future Work
 
+- Live AI provider requests are not verified by the linked CI runs. The local
+  v0.6.5 probe above covers explicit approval, cancellation, and subsequent
+  requests with one provider; other providers and failure modes remain unverified.
+- Do not infer complete dependency assertion coverage from suite-level pass
+  counts; the audit gates require separate assertion-level evidence.
 - Broader help-text-driven command discovery remains future work, especially for
   subcommand coverage and non-curated external tools.
 - Mouse selection and clipboard behavior depend on the terminal. No exhaustive

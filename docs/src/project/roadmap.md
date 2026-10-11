@@ -22,17 +22,18 @@ help-text enrichment to additional commands and subcommands. See the
 **Distribution:** evaluate nixpkgs and Homebrew packaging. Neither channel
 is published; a packaging target has not been selected. A prebuilt
 `x86_64-linux` bundle is available in the
-[v0.6.2 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.2).
+[v0.6.4 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.4).
 See the [installation instructions](../getting-started.md#prebuilt-linux-bundle)
 for the current distribution.
 
 ## Release evidence
 
-The [v0.6.2 Linux CI run](https://github.com/nerima-lisp/nshell/actions/runs/38120933504)
-and [release workflow](https://github.com/nerima-lisp/nshell/actions/runs/38120952046)
-validate the tagged tree. The published
-[v0.6.2 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.2)
-contains the x86_64-linux bundle and SHA-256 checksum. The non-sandboxed
-integration suite covers foreground external commands and pipelines with
-`Ctrl-Z` suspension, `bg` resumption, `fg` terminal handoff, and `Ctrl-C`
-interruption.
+The [main Linux CI run](https://github.com/nerima-lisp/nshell/actions/runs/38136077742)
+and [v0.6.4 release run](https://github.com/nerima-lisp/nshell/actions/runs/38136113875)
+completed with success for commit `5969f455312025356905a0f8e2e104da317a0d6a`.
+The published [v0.6.4 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.4)
+contains the `x86_64-linux` bundle and SHA-256 checksum. Workflow success does
+not establish complete dependency assertion coverage, live AI provider
+behavior, or production readiness. The historical
+[v0.6.2 capability matrix](public-readiness.md#historical-capability-matrix-v062)
+is separate from these current workflow results.

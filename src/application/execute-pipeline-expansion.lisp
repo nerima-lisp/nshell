@@ -39,14 +39,21 @@ error.")
   (let ((value (nshell.domain.parsing:arg-value arg)))
     (if (nshell.domain.parsing:arg-here-doc-literal-p arg)
         (list value)
-        (let ((fields (list "")))
+        (let ((fields (list ""))
+              (nshell.domain.expansion::*fragment-escape-context*
+                (nshell.domain.expansion::%make-fragment-escape-context)))
           (dolist (fragment (%source-arg-fragments arg)
-                    (mapcar #'%restore-command-fragment-escapes fields))
+                    (if environment
+                        (%expand-complete-fragment-fields fields filesystem)
+                        (mapcar #'%restore-command-fragment-escapes fields)))
             (setf fields
                   (%append-expanded-fragment-fields
                    fields
-                   (%expand-source-fragment-fields
-                    fragment environment filesystem))))))))
+                   (%protect-quoted-fragment-globs
+                    (%expand-source-fragment-fields
+                     fragment environment filesystem nil)
+                    (nshell.domain.parsing:command-fragment-quote-style
+                     fragment)))))))))
 
 (defun %command-node-command-fragments (command-node)
   (or (nshell.domain.parsing:command-node-command-fragments command-node)
@@ -58,8 +65,11 @@ error.")
 
 (defun %expand-command-name-fields-from-fragments
     (command-node environment &optional filesystem)
-  (let ((fields (list "")))
-    (dolist (fragment (%command-node-command-fragments command-node) fields)
+  (let ((fields (list ""))
+        (nshell.domain.expansion::*fragment-escape-context*
+          (nshell.domain.expansion::%make-fragment-escape-context)))
+    (dolist (fragment (%command-node-command-fragments command-node)
+              (%expand-complete-fragment-fields fields filesystem))
       (let* ((value (nshell.domain.parsing:command-fragment-value fragment))
              (protected
                (%protect-command-fragment-escapes
@@ -72,9 +82,13 @@ error.")
                 (nshell.domain.parsing:command-fragment-quote-style
                  fragment)
                 environment
-                filesystem)))
+                filesystem nil)))
         (setf fields
-              (%append-expanded-fragment-fields fields fragment-fields))))))
+              (%append-expanded-fragment-fields
+               fields
+               (%protect-quoted-fragment-globs
+                fragment-fields
+                (nshell.domain.parsing:command-fragment-quote-style fragment))))))))
 
 (defun %expand-command-name-from-fragments
     (command-node environment &optional filesystem)
@@ -83,16 +97,18 @@ error.")
    (%expand-command-name-fields-from-fragments
     command-node environment filesystem)))
 
-(defun %expand-unquoted-source-arg-in-context (context value environment)
+(defun %expand-unquoted-source-arg-in-context
+    (context value environment &optional (glob-p t))
   (multiple-value-bind (fields argv-reference-p)
       (nshell.domain.expansion:argv-reference-fields value)
     (if argv-reference-p
-        fields
+        (mapcar #'nshell.domain.expansion::%encode-fragment-data fields)
         (loop for expanded in (%expand-command-substitutions context value)
               append (nshell.domain.expansion:expand-all
                       expanded
                       environment
-                      (shell-context-filesystem context))))))
+                      (shell-context-filesystem context)
+                      glob-p)))))
 
 (defun %expand-double-quoted-source-arg-in-context (context value environment)
   (list (apply #'concatenate 'string
@@ -101,17 +117,18 @@ error.")
                      collect (nshell.domain.expansion:expand-double-quoted
                               expanded environment)))))
 
-(defun %expand-source-fragment-fields-in-context (context fragment)
+(defun %expand-source-fragment-fields-in-context
+    (context fragment &optional (glob-p t))
   (let* ((value (nshell.domain.parsing:command-fragment-value fragment))
          (protected
            (%protect-command-fragment-escapes
             value
-         (nshell.domain.parsing:command-fragment-escaped-positions
+            (nshell.domain.parsing:command-fragment-escaped-positions
              fragment)))
          (environment (shell-context-environment context)))
     (nshell.domain.expansion:expand-by-quote-style
      (nshell.domain.parsing:command-fragment-quote-style fragment)
-     (%expand-unquoted-source-arg-in-context context protected environment)
+     (%expand-unquoted-source-arg-in-context context protected environment glob-p)
      (list protected)
      (%expand-double-quoted-source-arg-in-context context protected environment))))
 
@@ -119,14 +136,20 @@ error.")
   (let ((value (nshell.domain.parsing:arg-value arg)))
     (if (nshell.domain.parsing:arg-here-doc-literal-p arg)
         (list value)
-        (let ((fields (list "")))
+        (let ((fields (list ""))
+              (nshell.domain.expansion::*fragment-escape-context*
+                (nshell.domain.expansion::%make-fragment-escape-context)))
           (dolist (fragment (%source-arg-fragments arg)
-                    (mapcar #'%restore-command-fragment-escapes fields))
+                    (%expand-complete-fragment-fields
+                     fields (shell-context-filesystem context)))
             (setf fields
                   (%append-expanded-fragment-fields
                    fields
-                   (%expand-source-fragment-fields-in-context
-                    context fragment))))))))
+                   (%protect-quoted-fragment-globs
+                    (%expand-source-fragment-fields-in-context
+                     context fragment nil)
+                    (nshell.domain.parsing:command-fragment-quote-style
+                     fragment)))))))))
 
 (defun %line-command-args (command-node &optional environment)
   (loop for arg in (nshell.domain.parsing:command-node-args command-node)

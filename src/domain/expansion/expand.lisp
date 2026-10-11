@@ -1,6 +1,50 @@
 ;;; Shell expansion engine
 (in-package #:nshell.domain.expansion)
 
+(defvar *fragment-escape-context* nil)
+
+(defstruct (fragment-escape-context (:constructor %make-fragment-escape-context))
+  (encoded (make-hash-table :test #'eql))
+  (decoded (make-hash-table :test #'eql))
+  (next #xf0000))
+
+(defun %encode-fragment-data (value)
+  ;; Encode data at insertion boundaries, never already encoded expansion text.
+  ;; One character per token keeps parser indices and substring lengths intact.
+  (if (null *fragment-escape-context*)
+      value
+      (map 'string
+           (lambda (character)
+             (let ((code (char-code character))
+                   (context *fragment-escape-context*))
+               (if (or (<= #xe100 code #xe1ff) (<= #xf0000 code #xffffd))
+                   (or (gethash character (fragment-escape-context-encoded context))
+                       (let ((next (fragment-escape-context-next context)))
+                         (when (> next #xffffd)
+                           (error "Fragment provenance token space exhausted"))
+                         (let ((token (code-char next)))
+                           (incf (fragment-escape-context-next context))
+                           (setf (gethash character (fragment-escape-context-encoded context)) token
+                                 (gethash token (fragment-escape-context-decoded context)) character)
+                           token)))
+                   character)))
+           value)))
+
+(defun %decode-fragment-character (character)
+  (if (null *fragment-escape-context*)
+      character
+      (or (gethash character
+                   (fragment-escape-context-decoded *fragment-escape-context*))
+          (let ((code (char-code character)))
+            (if (<= #xe100 code #xe1ff)
+                (code-char (- code #xe100))
+                character)))))
+
+(defun %decode-fragment-data (value)
+  (if *fragment-escape-context*
+      (map 'string #'%decode-fragment-character value)
+      value))
+
 (defun variable-name-char-p (ch)
   (or (alphanumericp ch) (char= ch #\_)))
 
@@ -23,16 +67,16 @@ Unknown users and incomplete environment data remain literal."
          (name-end (or slash (length input)))
          (name (subseq input 1 name-end)))
     (if (and home user (string= user name))
-        (concatenate 'string home
+        (concatenate 'string (%encode-fragment-data home)
                      (if slash (subseq input slash) ""))
         input)))
 
 (defun expand-tilde (input env)
   "Expand leading ~ using HOME, or the current-user ~NAME using ENV."
   (cond
-    ((string= input "~") (or (nshell.domain.environment:env-get env "HOME") "~"))
+    ((string= input "~") (%encode-fragment-data (or (nshell.domain.environment:env-get env "HOME") "~")))
     ((string-prefix-p "~/" input)
-     (concatenate 'string (or (nshell.domain.environment:env-get env "HOME") "~")
+     (concatenate 'string (%encode-fragment-data (or (nshell.domain.environment:env-get env "HOME") "~"))
                   (subseq input 1)))
     ((and (> (length input) 1) (char= (char input 0) #\~))
      (%tilde-user-home input env))
@@ -43,15 +87,15 @@ Unknown users and incomplete environment data remain literal."
 Returns a one-element list containing PATTERN when it has no glob syntax or no matches."
   (unless (glob-pattern-p pattern)
     (return-from expand-glob (list pattern)))
-  (let* ((root (glob-root pattern))
+  (let* ((root (%decode-fragment-data (glob-root pattern)))
          (files (%glob-candidate-files pattern root filesystem))
          (matches nil))
     (dolist (file files)
-      (let ((candidate (%glob-file-candidate pattern root file)))
+      (let ((candidate (%encode-fragment-data (%glob-file-candidate pattern root file))))
         (when (glob-match-p pattern candidate)
           (push candidate matches))))
     (if matches
-        (sort matches #'string<)
+        (sort matches #'string< :key #'%decode-fragment-data)
         (list pattern))))
 
 (defun %glob-candidate-files (pattern root filesystem)

@@ -1,5 +1,172 @@
 (in-package #:nshell/test)
 
+(describe "fragment-escape-provenance-regressions"
+  (it "restores an escaped command name"
+    (cl-weave:expect-assertions 1)
+    (let* ((env (nshell.domain.environment:make-default-environment))
+           (fragment (nshell.domain.parsing:make-command-fragment "echo" nil '(1)))
+           (node (nshell.domain.parsing:make-command-node
+                  "echo" nil nil nil (list fragment))))
+      (expect (nshell.application::%expand-command-name-fields-from-fragments node env)
+              :to-equal '("echo"))))
+  (it "preserves private-use literals alongside a genuine escape"
+    (cl-weave:expect-assertions 4)
+    (let* ((env (nshell.domain.environment:make-default-environment))
+           (data (concatenate 'string
+                              (coerce (loop for code from #xe100 below #xe200
+                                            collect (code-char code)) 'string)
+                              (string (code-char #xf0000))))
+           (value (concatenate 'string "$" data))
+           (fragment (nshell.domain.parsing:make-command-fragment value nil '(0)))
+           (arg (nshell.domain.parsing:make-command-arg value nil nil (list fragment))))
+      (expect (nshell.application::%expand-source-arg arg env) :to-equal (list value))
+      (expect (nshell.application::%expand-source-arg-in-context
+               (make-test-shell-context :environment env) arg) :to-equal (list value))
+      (dolist (style '(:single :double))
+        (expect (nshell.application::%expand-source-arg
+                 (nshell.domain.parsing:make-command-arg data style) env)
+                :to-equal (list data)))))
+  (it "preserves scalar braced and list data alongside a genuine escape"
+    (cl-weave:expect-assertions 6)
+    (let* ((env (nshell.domain.environment:make-default-environment))
+           (data (concatenate 'string (string (code-char #xe141))
+                              (string (code-char #xf0000)))))
+      (setf env (nshell.domain.environment:env-set env "PUA" data nil))
+      (dolist (suffix '("$PUA" "${PUA}"))
+        (let* ((value (concatenate 'string "$" suffix))
+               (fragment (nshell.domain.parsing:make-command-fragment value nil '(0)))
+               (arg (nshell.domain.parsing:make-command-arg value nil nil (list fragment))))
+          (expect (nshell.application::%expand-source-arg arg env)
+                  :to-equal (list (concatenate 'string "$" data)))
+          (expect (nshell.application::%expand-source-arg-in-context
+                   (make-test-shell-context :environment env) arg)
+                  :to-equal (list (concatenate 'string "$" data)))))
+      (setf env (nshell.domain.environment:env-set-values env "PUA" (list data data) nil))
+      (let* ((fragment (nshell.domain.parsing:make-command-fragment "$$PUA" nil '(0)))
+             (arg (nshell.domain.parsing:make-command-arg "$$PUA" nil nil (list fragment)))
+             (expected (list (concatenate 'string "$" data)
+                             (concatenate 'string "$" data))))
+        (expect (nshell.application::%expand-source-arg arg env) :to-equal expected)
+        (expect (nshell.application::%expand-source-arg-in-context
+                 (make-test-shell-context :environment env) arg) :to-equal expected))))
+  (it "preserves substitution output alongside a genuine escape"
+    (cl-weave:expect-assertions 2)
+    (let ((data (concatenate 'string (string (code-char #xe141))
+                             (string (code-char #xf0000))))
+          (context (make-test-shell-context)))
+      (with-temporary-function
+          ('nshell.application::%execute-command-substitution-output
+           (lambda (&rest args) (declare (ignore args)) data))
+        (dolist (style '(nil :double))
+          (let* ((fragment (nshell.domain.parsing:make-command-fragment
+                            "$(echo marker)$" style '(14)))
+                 (arg (nshell.domain.parsing:make-command-arg
+                       "$(echo marker)$" style nil (list fragment))))
+            (expect (nshell.application::%expand-source-arg-in-context context arg)
+                    :to-equal (list (concatenate 'string data "$"))))))))
+  (it "retains escape syntax when entering a nested substitution"
+    (cl-weave:expect-assertions 2)
+    (let* ((data (string (code-char #xe141)))
+           (value (concatenate 'string "$(echo $PUA" data ")"))
+           (fragment (nshell.domain.parsing:make-command-fragment value :double '(7)))
+           (arg (nshell.domain.parsing:make-command-arg value :double nil (list fragment)))
+           (seen nil))
+      (with-temporary-function
+          ('nshell.application::%execute-command-substitution-output
+           (lambda (context text)
+             (declare (ignore context))
+             (setf seen text)
+             "marker"))
+        (expect (nshell.application::%expand-source-arg-in-context
+                 (make-test-shell-context) arg) :to-equal '("marker")))
+      (expect seen :to-equal (concatenate 'string "echo \\$PUA" data))))
+  (it "expands parsed glob paths without treating escaped wildcards as syntax"
+    (cl-weave:expect-assertions 63)
+    (let* ((private-directory (concatenate 'string (string (code-char #xe141))
+                                           (string (code-char #xf0000))))
+           (cases (list (list "echo dir/*" "dir" t)
+                        (list "echo 'dir/'*" "dir" t)
+                        (list "echo dir/'*'" "dir" nil)
+                        (list "echo dir\\/*" "dir" t)
+                        (list "echo dir/\\*" "dir" nil)
+                        (list "echo dir\\/\\*" "dir" nil)
+                        (list (concatenate 'string "echo '" private-directory "'/*")
+                              private-directory t)
+                        (list (concatenate 'string "echo '" private-directory "'\\/*")
+                              private-directory t)
+                        (list (concatenate 'string "echo '" private-directory "'/\\*")
+                              private-directory nil))))
+      (dolist (case cases)
+        (destructuring-bind (line directory expand-p) case
+          (let* ((seen-root nil)
+                 (filesystem
+                   (make-test-filesystem
+                    :directory-files
+                    (lambda (root)
+                      (setf seen-root (namestring root))
+                      (list (make-pathname :directory (list :relative directory)
+                                           :name "a" :type "txt")))))
+                 (result (nshell.domain.parsing:parse-command-line line)))
+            (expect (nshell.domain.parsing:parse-result-state result) :to-be :complete)
+            (let* ((arg (first (nshell.domain.parsing:command-node-args
+                               (nshell.domain.parsing:parse-result-ast result))))
+                   (context (make-test-shell-context :filesystem filesystem)))
+              (dolist (expand (list
+                              (lambda ()
+                                (nshell.application::%expand-source-arg-in-context context arg))
+                              (lambda ()
+                                (nshell.application::%expand-source-arg
+                                 arg (nshell.application:shell-context-environment context)
+                                 filesystem))))
+                (setf seen-root nil)
+                (expect (funcall expand)
+                        :to-equal (list (concatenate 'string directory
+                                                     (if expand-p "/a.txt" "/*"))))
+                (expect seen-root :to-equal
+                        (when expand-p (concatenate 'string directory "/"))))
+              (setf seen-root nil)
+              (expect (nshell.application::%expand-source-arg arg nil filesystem)
+                      :to-equal (list (concatenate 'string directory "/*")))
+              (expect seen-root :to-be-null)))))))
+  (it "expands complete command-name globs and preserves quoted wildcards"
+    (cl-weave:expect-assertions 12)
+    (dolist (case '(("'dir/'*" t) ("dir/'*'" nil)
+                    ("dir\\/*" t) ("dir/\\*" nil)))
+      (destructuring-bind (line expand-p) case
+        (let* ((seen-root nil)
+               (filesystem
+                 (make-test-filesystem
+                  :directory-files
+                  (lambda (root)
+                    (setf seen-root (namestring root))
+                    (list #p"dir/tool"))))
+               (result (nshell.domain.parsing:parse-command-line line)))
+          (expect (nshell.domain.parsing:parse-result-state result) :to-be :complete)
+          (expect (nshell.application::%expand-command-name-from-fragments
+                   (nshell.domain.parsing:parse-result-ast result)
+                   (nshell.domain.environment:make-default-environment)
+                   filesystem)
+                  :to-equal (if expand-p "dir/tool" "dir/*"))
+          (expect seen-root :to-equal (when expand-p "dir/"))))))
+  (it "keeps parameter assignment data decoded in the environment"
+    (cl-weave:expect-assertions 4)
+    (let* ((env (nshell.domain.environment:make-default-environment))
+           (data (concatenate 'string (string (code-char #xe141))
+                              (string (code-char #xf0000)) "$"))
+           (value (concatenate 'string "${PUA:=" data "}"))
+           (fragment (nshell.domain.parsing:make-command-fragment
+                      value :double (list (- (length value) 2))))
+           (arg (nshell.domain.parsing:make-command-arg value :double nil
+                                                      (list fragment))))
+      (expect (nshell.application::%expand-source-arg arg env) :to-equal (list data))
+      (expect (nshell.domain.environment:env-get env "PUA") :to-equal data)
+      (let ((reference (nshell.domain.parsing:make-command-arg "$PUA" :double)))
+        (expect (nshell.application::%expand-source-arg reference env)
+                :to-equal (list data))
+        (expect (nshell.application::%expand-source-arg-in-context
+                 (make-test-shell-context :environment env) reference)
+                :to-equal (list data))))))
+
 (describe "execute-pipeline-expansion-branch-tests"
   (it "protects-and-restores-only-valid-byte-escapes"
     (let* ((wide-character (code-char 955))

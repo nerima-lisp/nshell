@@ -20,7 +20,7 @@ The release and Nix flake support `x86_64-linux` only. With
 [Nix](https://nixos.org/download) and flakes enabled:
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.6.2
+nix run github:nerima-lisp/nshell/v0.6.3
 ```
 
 At the prompt, enter `string upper hello`. Commands and paths colorize live, and a
@@ -52,10 +52,17 @@ hard links, and files owned by another user are rejected. A malformed tail is
 reported without discarding existing bytes; further appends are refused until
 the file is moved aside. `--no-history` disables persistence.
 
+The interactive `agent` builtin proposes commands for review. Every proposal,
+including one classified as safe, requires Enter before execution; blocked
+commands cannot be approved. The assistant refuses to start if its sidecar
+reports tools or MCP servers outside the permitted initialization contract.
+See [Use the assistant](docs/src/guide/recipes.md#use-the-assistant) for controls
+and session settings.
+
 ## Install
 
 ```sh
-nix profile install github:nerima-lisp/nshell/v0.6.2
+nix profile install github:nerima-lisp/nshell/v0.6.3
 ```
 
 Pin a release tag rather than following the default branch.

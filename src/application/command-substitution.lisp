@@ -22,16 +22,31 @@
                    ((char= ch #\)) (decf depth)
                     (when (zerop depth) (return (1+ index))))))))
 
+(defun %command-substitution-source-text (value)
+  ;; Re-parsing must retain escape syntax, while data tokens decode only once.
+  (with-output-to-string (out)
+    (loop for character across value
+          for code = (char-code character)
+          do (when (and nshell.domain.expansion::*fragment-escape-context*
+                        (<= +command-fragment-escape-base+ code
+                            (1- +command-fragment-escape-limit+)))
+               (write-char #\\ out))
+             (write-char (nshell.domain.expansion::%decode-fragment-character character) out))))
+
 (defun %command-sub-fields-at (context value open-paren &optional preserve-newlines-p)
   "Run the command substitution at OPEN-PAREN, if balanced and non-empty."
   (let ((end (nshell.domain.parsing:%balanced-substitution-end value open-paren)))
     (when (and end (> end (1+ open-paren)))
-      (values (if preserve-newlines-p
-                  (%execute-command-substitution-output
-                   context (subseq value (1+ open-paren) end))
-                  (%execute-command-substitution-fields
-                   context (subseq value (1+ open-paren) end)))
-              (1+ end)))))
+      (let* ((text (%command-substitution-source-text (subseq value (1+ open-paren) end)))
+             (replacement
+               (let ((nshell.domain.expansion::*fragment-escape-context* nil))
+                 (if preserve-newlines-p
+                     (%execute-command-substitution-output context text)
+                     (%execute-command-substitution-fields context text)))))
+        (values (if preserve-newlines-p
+                    (nshell.domain.expansion::%encode-fragment-data replacement)
+                    (mapcar #'nshell.domain.expansion::%encode-fragment-data replacement))
+                (1+ end))))))
 
 (defun %expand-arithmetic-command-substitution-at (value pos parts len)
   (when (and (char= (char value pos) #\$)

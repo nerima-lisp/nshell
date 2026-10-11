@@ -1,51 +1,53 @@
 # Architecture
 
-nshell follows a domain-driven, layered design. Each layer depends only on the
-layers beneath it:
+nshell groups shell policy, use cases, operating-system adapters, and the
+interactive interface into four layers:
 
 ```
 src/
 ├── domain/          Pure shell logic: parsing, expansion, completion,
 │                    history, prompting, job-control (no I/O).
 ├── application/     Use cases: builtins, pipeline execution, job management.
-├── infrastructure/  ACLs over the OS: syscalls, PTY, signals, terminal I/O,
-│                    persistence. SBCL-specific code is isolated here.
+├── infrastructure/  OS adapters: syscalls, PTY, signals, terminal I/O,
+│                    persistence.
 └── presentation/    The REPL, line editor (input-state reducer), rendering,
                      highlighting, autosuggestions, completion UI.
 ```
 
-`src/<DDD>` is the composition route for the existing shell runtime. New
-capabilities are vertical features under `packages/`, with the same DDD layer
-names kept together inside each feature:
+`src/` contains the shell runtime. Features under `packages/` keep their
+layers together; `<layer>` below means `domain`, `application`,
+`infrastructure`, or `presentation`:
 
 ```
 packages/
-├── core/<name>/src/<DDD>/       Shared domain and architecture primitives.
-└── feature/<name>/src/<DDD>/    A feature's domain, use cases, adapters, and UI.
+├── core/<name>/src/<layer>/       Shared domain and architecture primitives.
+└── feature/<name>/src/<layer>/    A feature's domain, use cases, adapters, and UI.
 ```
 
-The command-line feature is the first slice in this layout. Its pure option
+The command-line feature's pure option
 policy, application contract, and help presentation live in
-`packages/feature/command-line/src/`. `src/main.lisp` remains a small
-composition root and consumes `cl-cli` directly, so the feature boundary does
-not contain a compatibility adapter. Its established internal entry points
-delegate to the feature boundary, so startup and test callers do not need to
-know where the slice is stored. ASDF loads the package modules before the
-shared `src/<DDD>` components, preserving the dependency direction while
-making the vertical boundary explicit.
+`packages/feature/command-line/src/`. `src/main.lisp` constructs and parses
+the CLI with `cl-cli`, delegates option policy and help to the feature, and
+dispatches interactive, command, script, or stdin execution. `nshell.asd`
+declares the runtime and feature modules and their load order.
 
 ## Assistant feature
 
 The assistant is a vertical feature under
-`packages/feature/assistant/src/<DDD>/`. Its application layer assembles
+`packages/feature/assistant/src/<layer>/`. Its application layer assembles
 context and tracks settings and usage, while the infrastructure layer isolates
-the model-sidecar boundary and audit state. Domain checks classify proposed
+the model-sidecar boundary and audit state. The sidecar is an external
+assistant process; `src/infrastructure/assistant-sidecar-stream.lisp`
+manages its startup, requests, events, and shutdown. Domain checks classify proposed
 commands and redact sensitive payloads before the REPL approval gate allows a
 proposal to execute.
 
-Tests follow the same observable boundaries: `t/unit/` checks feature policy
-and contracts, `t/integration/` checks the source topology, and `t/e2e/`
-checks that the `src/main` route exposes the feature's user-facing behavior.
+`t/unit/` checks feature policy and contracts.
+`t/integration/test-package-topology.lisp` checks that the layer directories
+exist, not that dependencies obey the layer boundaries. `t/e2e/` checks
+user-facing CLI behavior.
+
+## Shell runtime
 
 The REPL is structured as a **continuation-passing / trampoline loop**: each
 keystroke runs a pure reducer over an immutable `input-state`, and rendering is
@@ -54,21 +56,18 @@ unit-testable without a terminal. See
 [Core concepts](../guide/concepts.md#the-input-state-is-a-value) for what that
 buys in practice.
 
-Confining SBCL-specific code to `infrastructure/` is what makes the layers
-above it portable in principle and testable in practice: a test replaces a
-boundary with a value instead of arranging for the operating system to produce
-one.
+The runtime targets SBCL. OS adapters live primarily in `infrastructure/`,
+but application and presentation code also use SBCL facilities, including
+timeouts and process status.
 
 Pipeline orchestration keeps process waiting and termination policy in
 `infrastructure/acl/syscall-pipeline-wait.lisp`, separate from pipe topology
-and stage spawning. This makes timeout escalation, process-group ownership,
-and pipefail status calculation independently reviewable while the public
-pipeline entry points remain unchanged.
+and stage spawning. That file implements timeout escalation, process-group
+ownership, and pipefail status calculation.
 
 ## Toolkit foundation
 
-nshell builds on the `nerima-lisp` Common Lisp toolkit family, each wired at the
-layer where it fits the domain-driven design:
+nshell uses these `nerima-lisp` Common Lisp toolkits:
 
 - **[cl-parser-kit](https://github.com/nerima-lisp/cl-parser-kit)**: its
   rule-based tokenizer and Pratt (operator-precedence) parser drive `$((...))`
@@ -89,11 +88,12 @@ layer where it fits the domain-driven design:
   `ioctl(TIOCGWINSZ)` window-size query behind
   `nshell.infrastructure.acl:get-terminal-size`. Raw mode is deliberately *not*
   taken from the kit: `cl-tty-kit:enable-raw-mode` is a full cfmakeraw-style
-  mode that also clears `ISIG` and `OPOST`, while nshell holds raw mode for the
-  whole session (including while a foreground child runs) and needs the
-  terminal driver to keep turning `^C`/`^Z` into signals for that child and to
-  keep mapping LF to CR-LF. nshell snapshots the complete native `termios`
-  structure to preserve terminal speeds and control fields across raw-mode
+  mode that also clears `ISIG` and `OPOST`. nshell's editor preserves these
+  flags so the terminal driver still generates signals and maps LF to CR-LF.
+  Before running a foreground command, nshell restores the saved terminal
+  settings; after the command returns, it re-enables editor mode.
+  nshell snapshots the complete native terminal settings (Linux `termios2`
+  or Darwin `termios`) to preserve speeds and control fields across raw-mode
   changes. See the commentary in
   `src/infrastructure/terminal/raw-mode.lisp`.
 - **[cl-process-kit](https://github.com/nerima-lisp/cl-process-kit)**: backs

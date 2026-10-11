@@ -1288,7 +1288,7 @@
   (it "stops-rejected-turn-before-releasing-pending-and-isolates-late-results"
     (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
            (handle (nshell.infrastructure.acl:spawn-sidecar
-                    "/bin/sleep" '("30") :input :stream :output :stream :error :stream))
+                    "sleep" '("30") :input :stream :output :stream :error :stream))
            (pending (nshell.feature.assistant::%make-assistant-pending-cell
                      91 (cl-concurrent-kit:make-channel :buffer-size 4)
                      (cl-concurrent-kit:make-promise)))

@@ -446,9 +446,10 @@
                              :timeout (cl-date-kit:duration-of-seconds 2)))
                     (dolist (thread threads)
                       (expect t :to-be (not (null thread)))
-                      (expect nil :to-be
-                              (eq :timed-out
-                                  (sb-thread:join-thread thread :timeout 2 :default :timed-out)))
+                      (multiple-value-bind (value problem)
+                          (sb-thread:join-thread thread :timeout 2 :default nil)
+                        (declare (ignore value))
+                        (expect nil :to-be (eq :timeout problem)))
                       (expect nil :to-be (sb-thread:thread-alive-p thread)))
                     (let ((received (uiop:read-file-lines received-path)))
                       (expect (if unsafe-init 0 1) :to-be (length received))

@@ -5,7 +5,7 @@ use Cwd qw(abs_path);
 use File::Path qw(make_path);
 use File::Temp qw(tempdir);
 use POSIX qw(WNOHANG);
-use Time::HiRes qw(time sleep);
+use Time::HiRes qw(clock_gettime CLOCK_MONOTONIC sleep alarm);
 
 # Usage: perl scripts/test-release-pty.pl EXTRACTED_BUNDLE [--timeout SECONDS]
 # Only the public executable is launched; no Lisp forms or source paths are supplied.
@@ -35,6 +35,8 @@ if ($^O eq 'darwin') {
 }
 my $isolation = tempdir('nshell-release-pty-XXXXXX', TMPDIR => 1, CLEANUP => 1);
 make_path(map { "$isolation/$_" } qw(home config cache data state tmp));
+my $origin = clock_gettime(CLOCK_MONOTONIC);
+my $deadline = $origin + $timeout;
 my $backend = <<'PYTHON';
 import copy
 import errno
@@ -49,8 +51,12 @@ import sys
 import termios
 import time
 
-executable, isolation, seconds = sys.argv[1:]
-deadline = time.monotonic() + int(seconds)
+executable, isolation, deadline_text = sys.argv[1:]
+# Older Darwin Python uses a process-relative monotonic() epoch.
+def monotonic():
+    return time.clock_gettime(time.CLOCK_MONOTONIC)
+
+deadline = float(deadline_text)
 # Reserve time for escalation/reaping inside the whole-run deadline.
 work_deadline = deadline - 2
 stage = 'startup'
@@ -75,11 +81,11 @@ def interrupted(signum, frame):
 signal.signal(signal.SIGTERM, interrupted)
 signal.signal(signal.SIGINT, interrupted)
 signal.signal(signal.SIGALRM, interrupted)
-signal.setitimer(signal.ITIMER_REAL, int(seconds))
+signal.setitimer(signal.ITIMER_REAL, max(0.001, deadline - monotonic()))
 
 
 def remaining(limit=5):
-    value = min(limit, work_deadline - time.monotonic())
+    value = min(limit, work_deadline - monotonic())
     if value <= 0:
         raise RuntimeError('whole-run deadline exceeded')
     return value
@@ -153,10 +159,10 @@ class Session:
     def send(self, data):
         if self.poll() is not None:
             raise RuntimeError('executable exited before input (status %d)' % self.status)
-        end = time.monotonic() + remaining()
+        end = monotonic() + remaining()
         view = memoryview(data)
         while view:
-            if time.monotonic() >= end:
+            if monotonic() >= end:
                 raise RuntimeError('PTY write deadline exceeded')
             if select.select([], [self.master], [], 0.02)[1]:
                 view = view[os.write(self.master, view):]
@@ -165,14 +171,14 @@ class Session:
         pattern = re.compile(expected) if isinstance(expected, bytes) else expected
         if pattern.search(stimulus):
             raise RuntimeError('assertion would match terminal input echo')
-        end = time.monotonic() + remaining()
+        end = monotonic() + remaining()
         while True:
             match = pattern.search(self.output[start:])
             if match:
                 return match, start + match.end()
             if self.poll() is not None:
                 raise RuntimeError('executable exited before expected output (status %d)' % self.status)
-            if time.monotonic() >= end:
+            if monotonic() >= end:
                 raise RuntimeError('expected output deadline exceeded')
             self.read()
 
@@ -190,19 +196,19 @@ class Session:
         return struct.unpack('i', fcntl.ioctl(self.master, termios.TIOCGPGRP, struct.pack('i', 0)))[0]
 
     def wait(self, predicate):
-        end = time.monotonic() + remaining()
+        end = monotonic() + remaining()
         while not predicate():
             if self.poll() is not None:
                 raise RuntimeError('executable exited during process-state assertion')
-            if time.monotonic() >= end:
+            if monotonic() >= end:
                 raise RuntimeError('process-state deadline exceeded')
             self.read()
 
     def finish(self):
         self.send(b'\x04')
-        end = time.monotonic() + remaining()
+        end = monotonic() + remaining()
         while self.poll() is None:
-            if time.monotonic() >= end:
+            if monotonic() >= end:
                 raise RuntimeError('interactive exit deadline exceeded')
             self.read()
         if not os.WIFEXITED(self.status) or os.WEXITSTATUS(self.status) != 0:
@@ -245,8 +251,11 @@ try:
 
     stage = 'Ctrl-C pending input'
     start = len(session.output)
-    session.send(b'exit 91')
-    session.expect(b'91', start)  # Ensure the pending bytes reached the editor first.
+    pending = b'exit 91'
+    session.send(pending)
+    # Require the entire rendered input, not 91 inside an ANSI color sequence.
+    ansi = rb'(?:\x1b\[[0-?]*[ -/]*[@-~])*'
+    session.expect(ansi.join(re.escape(bytes([byte])) for byte in pending), start)
     start = len(session.output)
     session.send(b'\x03')
     session.expect(re.escape(prompt), start)
@@ -347,10 +356,10 @@ finally:
     # Cleanup runs even after deadline/signal failures and never turns one into success.
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    signal.setitimer(signal.ITIMER_REAL, max(0.001, deadline - time.monotonic()))
+    signal.setitimer(signal.ITIMER_REAL, max(0.001, deadline - monotonic()))
 
     def cleanup_remaining():
-        return max(0.001, deadline - time.monotonic())
+        return max(0.001, deadline - monotonic())
 
     active = {s.pid for s in sessions if s.status is None}
     owned = {pid: 1 for pid in jobs}
@@ -401,8 +410,8 @@ finally:
             cleanup_errors.append('resume owned parent PID %d: %s' % (pid, error))
     # Keep parents alive briefly so they can reap killed children before exit.
     try:
-        end = min(deadline - 0.5, time.monotonic() + 0.5)
-        while owned and time.monotonic() < end:
+        end = min(deadline - 0.5, monotonic() + 0.5)
+        while owned and monotonic() < end:
             probe = subprocess.run(['ps', '-o', 'pid=', '-p', ','.join(map(str, owned))],
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    timeout=cleanup_remaining(), env=environment)
@@ -450,7 +459,7 @@ finally:
                     pending.remove(pid)
                 elif probe.returncode != 0:
                     raise RuntimeError('owned-process absence observation failed')
-            if pending and time.monotonic() >= deadline - 0.1:
+            if pending and monotonic() >= deadline - 0.1:
                 raise RuntimeError('owned PIDs remain after cleanup: %s' % sorted(pending))
             if pending:
                 time.sleep(0.02)
@@ -458,6 +467,8 @@ finally:
         cleanup_errors.append('owned-process postcondition: %s' % error)
     signal.setitimer(signal.ITIMER_REAL, 0)
 
+if not cleanup_errors:
+    print('CLEANUP: owned processes absent; PTYs closed', flush=True)
 if failure or cleanup_errors:
     print('FAIL: ' + (failure or 'cleanup failed'), file=sys.stderr)
     for error in cleanup_errors:
@@ -471,26 +482,141 @@ PYTHON
 
 my $pid = fork // die "cannot start PTY backend: $!\n";
 if (!$pid) {
-    exec 'python3', '-c', $backend, $executable, $isolation, $timeout;
+    exec 'python3', '-c', $backend, $executable, $isolation, sprintf('%.9f', $deadline);
     die "python3 PTY backend unavailable: $!\n";
 }
-my $signal;
-local $SIG{INT} = sub { $signal = 'INT'; kill 'TERM', $pid };
-local $SIG{TERM} = sub { $signal = 'TERM'; kill 'TERM', $pid };
-my $end = time + $timeout + 1;
+my ($signal, $requested, $backend_reaped);
+sub request_cleanup {
+    return if $backend_reaped;
+    # A stopped backend must be resumed to run its signal cleanup handler.
+    kill 'TERM', $pid;
+    kill 'CONT', $pid;
+    $requested = 1;
+}
+local $SIG{INT} = sub { $signal = 'INT'; request_cleanup() };
+local $SIG{TERM} = sub { $signal = 'TERM'; request_cleanup() };
+my $end = $deadline + 1;
+
+sub process_snapshot {
+    my ($until) = @_;
+    my ($observer, $fh, $text, $error);
+    eval {
+        local $SIG{ALRM} = sub { die "owned-process observation deadline\n" };
+        my $left = $until - clock_gettime(CLOCK_MONOTONIC);
+        die "owned-process observation deadline\n" if $left <= 0;
+        alarm $left;
+        $observer = open($fh, '-|', 'ps', '-axo', 'pid=,ppid=');
+        die "cannot observe owned processes\n" unless $observer;
+        local $/;
+        $text = <$fh>;
+        my $closed = close($fh);
+        undef $observer;  # close has reaped this observer, including on nonzero exit.
+        die "owned-process observation failed\n" unless $closed;
+        alarm 0;
+        1;
+    } or $error = $@;
+    alarm 0;
+    if ($error) {
+        kill 'KILL', $observer if $observer;
+        waitpid($observer, 0) if $observer;
+        die $error;
+    }
+    die "empty owned-process observation\n" unless defined($text) && $text =~ /\S/;
+    my %parents;
+    for my $row (split /\n/, $text) {
+        die "invalid owned-process observation\n" unless $row =~ /^\s*(\d+)\s+(\d+)\s*$/;
+        $parents{$1} = $2;
+    }
+    return \%parents;
+}
+
+sub watchdog_cleanup {
+    local $SIG{INT} = sub { $signal = 'INT' };
+    local $SIG{TERM} = sub { $signal = 'TERM' };
+    my %owned = ($pid => 0);
+    my (%frozen, $parents, $error);
+    eval {
+        # The unreaped fork child is the ownership root, never a name/PGID match.
+        # Freeze each newly discovered generation before the next observation.
+        while (1) {
+            for my $owner (keys %owned) {
+                kill 'STOP', $owner unless $frozen{$owner}++;
+            }
+            $parents = process_snapshot($end - 0.1);
+            die "owned backend missing from observation\n" unless exists $parents->{$pid};
+            my $added = 0;
+            for my $child (keys %$parents) {
+                next if exists $owned{$child};
+                my ($ancestor, $depth, %seen) = ($child, 0);
+                while (exists $parents->{$ancestor} && !exists $owned{$ancestor} && !$seen{$ancestor}++) {
+                    $ancestor = $parents->{$ancestor};
+                    ++$depth;
+                }
+                if (exists $owned{$ancestor}) {
+                    $owned{$child} = $owned{$ancestor} + $depth;
+                    $added = 1;
+                }
+            }
+            last unless $added;
+        }
+        1;
+    } or $error = $@;
+    for my $child (sort { $owned{$b} <=> $owned{$a} } grep { $_ != $pid } keys %owned) {
+        kill 'KILL', $child;
+        my $parent = $parents ? $parents->{$child} : undef;
+        # Keep the backend frozen until all descendants are killed. Only the
+        # child's still-owned parent gets a bounded opportunity to reap it.
+        if (defined($parent) && $parent != $pid && exists $owned{$parent}) {
+            kill 'CONT', $parent;
+            sleep 0.02 if clock_gettime(CLOCK_MONOTONIC) < $end - 0.2;
+            kill 'STOP', $parent;
+        }
+    }
+    request_cleanup();
+    my $grace_end = clock_gettime(CLOCK_MONOTONIC) + 0.1;
+    $grace_end = $end - 0.2 if $grace_end > $end - 0.2;
+    while (clock_gettime(CLOCK_MONOTONIC) < $grace_end) {
+        if (waitpid($pid, WNOHANG) == $pid) {
+            $backend_reaped = 1;
+            last;
+        }
+        sleep 0.02;
+    }
+    if (!$backend_reaped) {
+        kill 'KILL', $pid;
+        waitpid($pid, 0);
+        $backend_reaped = 1;
+    }
+    die $error if $error;
+    while (1) {
+        my $remaining = process_snapshot($end);
+        my @left = grep { exists $remaining->{$_} } keys %owned;
+        last unless @left;
+        die "owned PIDs remain: @left\n" if clock_gettime(CLOCK_MONOTONIC) >= $end - 0.02;
+        sleep 0.01;
+    }
+    print "CLEANUP: owned processes absent; PTYs closed\n";
+}
+
 while (1) {
     my $reaped = waitpid($pid, WNOHANG);
     if ($reaped == $pid) {
         my $status = $?;
+        $backend_reaped = 1;
         die "PTY backend interrupted\n" if $signal;
         exit(($status & 127) ? 1 : $status >> 8);
     }
     die "cannot reap PTY backend\n" if $reaped == -1;
-    if (time >= $end) {
-        kill 'TERM', $pid;
-        sleep 0.1;
-        kill 'KILL', $pid;
-        waitpid($pid, 0);
+    my $now = clock_gettime(CLOCK_MONOTONIC);
+    request_cleanup() if !$requested && $now >= $deadline - 2;
+    if ($now >= $deadline) {
+        eval { watchdog_cleanup(); 1 } or warn "cleanup: watchdog: $@";
+        # Even a failed observation must not leave the direct backend running.
+        if (!$backend_reaped) {
+            kill 'KILL', $pid;
+            waitpid($pid, 0);
+            $backend_reaped = 1;
+        }
         die "PTY backend exceeded whole-run deadline\n";
     }
     sleep 0.02;

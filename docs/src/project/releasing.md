@@ -42,13 +42,9 @@ tools on the Linux verification host.
 - `nix flake check --print-build-logs` passes on `x86_64-linux`. Other hosts
   require an `x86_64-linux` builder for the release gate.
 - The non-sandboxed integration suite passes for PTY, subprocess, terminal,
-  signal, and job-control coverage:
-
-  ```sh
-  NSHELL_TEST_PTY=1 nix develop -c sbcl --script run-tests.lisp
-  NSHELL_TEST_PTY=1 nix develop -c bash scripts/test-dependencies.sh
-  nix develop -c sbcl --script scripts/test-history-storage.lisp
-  ```
+  signal, and job-control coverage. Run the integration, dependency, and
+  history suites with the [isolated HOME and XDG procedure](public-readiness.md#verification-outside-ci),
+  not personal history or configuration directories.
 
 - `nix build .#releaseBundle --print-build-logs` produces the executable,
   man page, README, and dependency license texts in `./result`.

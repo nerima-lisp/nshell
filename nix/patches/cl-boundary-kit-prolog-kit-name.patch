@@ -399,3 +399,29 @@ diff --git a/t/prolog-boundary-invariants-test.lisp b/t/prolog-boundary-invarian
 +            (cl-prolog-kit:read-prolog-term
                "findall(B, boundary(B), [filesystem,environment,process,network,clock])"))))
        :to-be-truthy)))
+diff --git a/docs/src/reference/stability-policy.md b/docs/src/reference/stability-policy.md
+--- a/docs/src/reference/stability-policy.md
++++ b/docs/src/reference/stability-policy.md
+@@ -1,7 +1,7 @@
+ # Documentation Scope
+ 
+ The public contract is intentionally narrow. The current supported release
+-series is `2.2.x`:
++series is `2.3.x`:
+ 
+ - The exported symbols listed across the [Guide](../guide/composition.md) pages define
+   the current library surface.
+diff --git a/docs/src/project/security.md b/docs/src/project/security.md
+--- a/docs/src/project/security.md
++++ b/docs/src/project/security.md
+@@ -9,8 +9,8 @@
+ 
+ | Version | Supported |
+ | --- | --- |
+-| `2.2.x` | Yes |
+-| `< 2.2.0` | No |
++| `2.3.x` | Yes |
++| `< 2.3.0` | No |
+ 
+ ## Supported Scope
+ 

@@ -189,7 +189,7 @@
             (sb-sys:make-fd-stream fd :input t :output append
                                      :element-type 'character
                                      :external-format :utf-8 :auto-close t
-                                     :pathname path))
+                                     :pathname (pathname path)))
         (error (condition)
           (sb-posix:close fd)
           (error condition))))))

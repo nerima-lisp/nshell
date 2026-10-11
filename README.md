@@ -84,8 +84,6 @@ nix build            # produces ./result/bin/nshell
 nix build .#releaseBundle
 perl scripts/verify-release-bundle.pl result
 perl scripts/test-release-pty.pl result
-NSHELL_TEST_PTY=1 nix develop -c bash scripts/test-dependencies.sh
-nix develop -c sbcl --script scripts/test-history-storage.lisp
 ```
 
 The Perl wrappers limit each local check to five minutes and return exit code
@@ -93,6 +91,10 @@ The Perl wrappers limit each local check to five minutes and return exit code
 [Recipes](docs/src/guide/recipes.md#run-the-test-suite) for that command.
 The bundle checks run on Linux and require Perl, Python 3, `readelf`, and
 standard POSIX tools.
+
+Run source-loaded integration, dependency, and history checks with the
+[isolated HOME and XDG procedure](docs/src/project/public-readiness.md#verification-outside-ci)
+to avoid reading or modifying personal history and configuration.
 
 To measure executable-source coverage, keep the report outside the checkout
 and run the same hermetic test loader used by CI:
@@ -128,4 +130,3 @@ guide and the [package standard](https://github.com/nerima-lisp/.github/blob/mai
 See [SUPPORT](https://github.com/nerima-lisp/.github/blob/main/SUPPORT.md).
 Report vulnerabilities privately per this repository's
 [security policy](SECURITY.md) rather than a public issue.
-

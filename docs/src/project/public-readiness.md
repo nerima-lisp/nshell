@@ -62,17 +62,35 @@ also requires an `x86_64-linux` execution environment; a remote builder alone
 does not supply that runtime coverage.
 
 - Run `nix flake check --print-build-logs` on an `x86_64-linux` builder.
-- Run `NSHELL_TEST_PTY=1 nix develop -c sbcl --script run-tests.lisp` on the
-  same target for the non-sandboxed PTY and external-process suite.
+- Run the non-sandboxed suites on the same target with a temporary home and
+  XDG directories, as the integration jobs do. Tests can access history and
+  configuration through the normal runtime APIs; do not use personal data.
+  Run this block from the repository root:
+
+  ```sh
+  (
+    verification_dir=$(mktemp -d)
+    mkdir -p "$verification_dir/home" "$verification_dir/cache" \
+      "$verification_dir/config" "$verification_dir/state"
+    export HOME="$verification_dir/home"
+    export XDG_CACHE_HOME="$verification_dir/cache"
+    export XDG_CONFIG_HOME="$verification_dir/config"
+    export XDG_STATE_HOME="$verification_dir/state"
+    export NSHELL_AI_COMMAND=/nonexistent NSHELL_TEST_PTY=1
+    nix develop -c sbcl --script run-tests.lisp &&
+      nix develop -c bash scripts/test-dependencies.sh &&
+      nix develop -c sbcl --script scripts/test-history-storage.lisp
+  )
+  ```
+
   Confirm nonempty test discovery and no skipped PTY or external-process cases
   in the test report; an exit status of zero alone does not establish coverage.
 - The integrated suite covers OSC 52 clipboard output, tab-stripping `<<-` heredocs,
   process substitution, ordered descriptor duplication, path-like argument
   completion, hierarchical command completion, and SGR mouse selection.
-- Run `NSHELL_TEST_PTY=1 nix develop -c bash scripts/test-dependencies.sh` for
-  the pinned libraries' own suites, and
-  `nix develop -c sbcl --script scripts/test-history-storage.lisp` for private
-  history persistence. A successful library load is not a test result.
+- The dependency runner executes the pinned libraries' own suites; the history
+  script checks private persistence. A successful library load is not a test
+  result.
 - Extract a release archive and run
   `perl scripts/verify-release-bundle.pl <extracted-bundle>` followed by
   `perl scripts/test-release-pty.pl <extracted-bundle>` on `x86_64-linux`.

@@ -74,18 +74,48 @@ has put that fd into raw mode.")
 (defun %forget-termios (fd)
   (setf *saved-termios* (delete fd *saved-termios* :key #'car :test #'eql)))
 
+;; SB-POSIX's Lisp termios conversion omits native fields, including Darwin's
+;; baud rates. Keep the complete structure using its platform-grovelled size.
+(sb-alien:define-alien-routine ("tcgetattr" %tcgetattr) sb-alien:int
+  (fd sb-alien:int)
+  (termios sb-sys:system-area-pointer))
+
+(sb-alien:define-alien-routine ("tcsetattr" %tcsetattr) sb-alien:int
+  (fd sb-alien:int)
+  (action sb-alien:int)
+  (termios sb-sys:system-area-pointer))
+
+(defun %read-termios (fd)
+  (let ((termios (make-array (sb-alien:alien-size sb-posix::alien-termios :bytes)
+                            :element-type '(unsigned-byte 8)
+                            :initial-element 0)))
+    (sb-sys:with-pinned-objects (termios)
+      (when (minusp (%tcgetattr fd (sb-sys:vector-sap termios)))
+        (let ((errno (sb-unix::get-errno)))
+          (error "tcgetattr failed on fd ~d (errno=~d)" fd errno))))
+    termios))
+
+(defun %apply-termios (fd action termios)
+  (sb-sys:with-pinned-objects (termios)
+    (when (minusp (%tcsetattr fd action (sb-sys:vector-sap termios)))
+      (let ((errno (sb-unix::get-errno)))
+        (error "tcsetattr failed on fd ~d (errno=~d)" fd errno)))))
+
 (defun %raw-termios (termios)
   "Clear the input and local flags nshell's line editor needs off TERMIOS.
 ICANON and ECHO give the editor character-at-a-time input and full control of
 what is displayed; IXON and IXOFF stop ^S/^Q from being eaten as flow control.
 Everything else -- notably ISIG and OPOST -- is left as the terminal had it; see
 the commentary at the top of this file."
-  (setf (sb-posix:termios-iflag termios)
-        (logand (sb-posix:termios-iflag termios)
-                (lognot (logior sb-posix:ixon sb-posix:ixoff))))
-  (setf (sb-posix:termios-lflag termios)
-        (logand (sb-posix:termios-lflag termios)
-                (lognot (logior sb-posix:icanon sb-posix:echo))))
+  (sb-sys:with-pinned-objects (termios)
+    (let ((native (sb-alien:sap-alien (sb-sys:vector-sap termios)
+                                    (* sb-posix::alien-termios))))
+      (setf (sb-alien:slot (sb-alien:deref native) 'sb-posix::iflag)
+            (logand (sb-alien:slot (sb-alien:deref native) 'sb-posix::iflag)
+                    (lognot (logior sb-posix:ixon sb-posix:ixoff))))
+      (setf (sb-alien:slot (sb-alien:deref native) 'sb-posix::lflag)
+            (logand (sb-alien:slot (sb-alien:deref native) 'sb-posix::lflag)
+                    (lognot (logior sb-posix:icanon sb-posix:echo))))))
   termios)
 
 (defun enable-raw-mode (&optional (fd 0))
@@ -95,7 +125,7 @@ back. Calling this again while FD is already raw re-applies the mode without
 disturbing the remembered settings. Signals TERMINAL-MODE-OPERATION-FAILED if
 the terminal cannot be queried or reconfigured."
   (handler-case
-      (let ((raw (%raw-termios (sb-posix:tcgetattr fd))))
+      (let ((raw (%raw-termios (%read-termios fd))))
         ;; The drain is deliberately OUTSIDE the guard below, and has to stay
         ;; there. It waits for the terminal's output queue to empty, which is
         ;; not a bounded wait: a terminal stopped by ^S (IXON is still set at
@@ -135,8 +165,8 @@ the terminal cannot be queried or reconfigured."
         ;; saving raw settings as the way back.
         (sb-sys:without-interrupts
           (unless (%saved-termios fd)
-            (%save-termios fd (sb-posix:tcgetattr fd)))
-          (sb-posix:tcsetattr fd sb-posix:tcsanow raw)
+            (%save-termios fd (%read-termios fd)))
+          (%apply-termios fd sb-posix:tcsanow raw)
           t))
     (error (condition)
       (error 'terminal-mode-operation-failed
@@ -164,7 +194,7 @@ the terminal in an unknown state silently."
             ;; this %FORGET-TERMIOS discards the cooked settings that were the
             ;; only way back. The terminal is stranded raw for good.
             (sb-sys:without-interrupts
-              (sb-posix:tcsetattr fd sb-posix:tcsanow saved)
+              (%apply-termios fd sb-posix:tcsanow saved)
               (%forget-termios fd)
               t))
         (error (condition)

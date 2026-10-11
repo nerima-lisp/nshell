@@ -113,9 +113,9 @@
 
   (it "home-prefix-only-matches-path-boundaries"
     "Home-directory shortening should not trigger on plain string prefixes."
-    (expect (nshell.presentation::%home-prefix-p "/Users/take" "/Users/take") :to-be-truthy)
-    (expect (nshell.presentation::%home-prefix-p "/Users/take" "/Users/take/projects") :to-be-truthy)
-    (expect (nshell.presentation::%home-prefix-p "/Users/take" "/Users/takefoo") :to-be-falsy))
+    (expect (nshell.presentation::%home-prefix-p "/Users/example" "/Users/example") :to-be-truthy)
+    (expect (nshell.presentation::%home-prefix-p "/Users/example" "/Users/example/projects") :to-be-truthy)
+    (expect (nshell.presentation::%home-prefix-p "/Users/example" "/Users/examplefoo") :to-be-falsy))
 
   (it "strip-trailing-slash-keeps-a-lone-separator-or-tilde"
     "Root and home stay as a bare separator or tilde; every other path loses its trailing slash."

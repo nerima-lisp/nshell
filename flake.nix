@@ -271,6 +271,7 @@
           clConcurrentKit = sibling {
             name = "cl-concurrent-kit";
             source = cl-concurrent-kit;
+            patches = [ ./nix/patches/cl-concurrent-kit-cancelled-barrier.patch ];
             dependencies = [
               clBoundaryKit
               clDateKit
@@ -292,7 +293,10 @@
           clCli = sibling {
             name = "cl-cli";
             source = cl-cli;
-            patches = [ ./nix/patches/cl-cli-prolog-kit-name.patch ];
+            patches = [
+              ./nix/patches/cl-cli-prolog-kit-name.patch
+              ./nix/patches/cl-cli-zsh-render-cache.patch
+            ];
             dependencies = [ clHostKit ];
           };
           clTtyKit = sibling {
@@ -312,9 +316,8 @@
               clLogKit
               clCodecKit
             ];
-            # v3.2.0 defines %monotonic-seconds in both parameters.lisp and
-            # fd-readiness.lisp. Upstream main is still identical; remove this
-            # patch when a release containing the upstream fix is available.
+            # Remove the duplicate clock definition and serialize process
+            # reaping with the cancellation watcher.
             patches = [ ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch ];
           };
           clRegexKit = sibling {
@@ -703,11 +706,26 @@
       # The cl-weave CLI, which the suites' reporters are documented against.
       # Interactive only: the registry the shell exports already carries every
       # system, check dependencies included.
-      devShellPackages = ctx: [
-        (spawnHelperFor ctx)
-        cl-weave.packages.${ctx.system}.default
-        paredit-cli.packages.${ctx.system}.default
-      ];
+      devShellPackages =
+        ctx:
+        [
+          (spawnHelperFor ctx)
+          cl-weave.packages.${ctx.system}.default
+          paredit-cli.packages.${ctx.system}.default
+        ]
+        # The dependency gate rejects skipped real-shell verification tests.
+        ++ lib.optionals ctx.pkgs.stdenv.hostPlatform.isLinux (
+          with ctx.pkgs;
+          [
+            bash
+            zsh
+            fish
+            mandoc
+            nushell
+            powershell
+            elvish
+          ]
+        );
 
       overrideOutputs =
         ctx:

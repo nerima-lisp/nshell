@@ -59,6 +59,30 @@ under test. sb-posix does not name either constant, hence the literals."
   "FD's lflag with the driver's own status bits masked out."
   (logandc2 (%lflag fd) (%transient-lflag-bits)))
 
+#+(or darwin linux)
+(defun %native-baud-rates (fd)
+  ;; Use the grovelled native size only, bypassing Lisp termios conversion and
+  ;; observing both speeds through libc rather than SB-POSIX field accessors.
+  (sb-alien:with-alien ((storage sb-posix::alien-termios))
+    (let ((pointer (sb-alien:cast (sb-alien:addr storage) (* t))))
+      (unless (zerop
+               (sb-alien:alien-funcall
+                (sb-alien:extern-alien "tcgetattr"
+                  (function sb-alien:int sb-alien:int (* t)))
+                fd pointer))
+        (error "Native tcgetattr failed for fd ~D" fd))
+      (list
+       (sb-alien:alien-funcall
+        (sb-alien:extern-alien "cfgetispeed"
+          (function #+darwin sb-alien:unsigned-long
+                    #+linux sb-alien:unsigned-int (* t)))
+        pointer)
+       (sb-alien:alien-funcall
+        (sb-alien:extern-alien "cfgetospeed"
+          (function #+darwin sb-alien:unsigned-long
+                    #+linux sb-alien:unsigned-int (* t)))
+        pointer)))))
+
 (describe "terminal-raw-mode-tests"
   (it "raw-mode-clears-only-the-line-editor-flags"
     "Raw mode turns off ICANON/ECHO/IXON/IXOFF and leaves ISIG and OPOST set.
@@ -96,6 +120,30 @@ raw mode with no matching restore, which is exactly this case."
         (expect (%flag-set-p (%lflag fd) sb-posix:icanon) :to-be-falsy)
         (nshell.infrastructure.terminal:restore-terminal-mode fd)
         (expect original-lflag :to-equal (%settings-lflag fd)))))
+
+  (it "raw-mode-preserves-native-baud-rates-through-repeated-enable-and-restore"
+    #-(or darwin linux)
+    (skip "PTY-backed terminal tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (with-pty-slave (fd)
+      (let ((nshell.infrastructure.terminal::*saved-termios* nil)
+            (baseline (%native-baud-rates fd))
+            first-enable second-enable restored)
+        (cl-weave:expect-assertions 5)
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.terminal:enable-raw-mode fd)
+               (setf first-enable (%native-baud-rates fd))
+               (nshell.infrastructure.terminal:enable-raw-mode fd)
+               (setf second-enable (%native-baud-rates fd))
+               (nshell.infrastructure.terminal:restore-terminal-mode fd)
+               (setf restored (%native-baud-rates fd)))
+          (nshell.infrastructure.terminal:restore-terminal-mode fd))
+        (expect (plusp (first baseline)) :to-be-truthy)
+        (expect (plusp (second baseline)) :to-be-truthy)
+        (expect first-enable :to-equal baseline)
+        (expect second-enable :to-equal baseline)
+        (expect restored :to-equal baseline))))
 
   (it "raw-mode-keeps-saved-settings-per-fd"
     "Two fds in raw mode at once each restore their own settings."

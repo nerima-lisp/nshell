@@ -55,6 +55,22 @@ BASH
     $settings .= "bind '\"\\C-h\":forward-char'\n" if $name eq 'bad-edit';
     $settings .= "unset HISTFILE\n" if $name eq 'no-history';
     $settings .= "trap '' INT\n" if $name eq 'ignored-pending';
+    if ($name eq 'ansi-pending') {
+        # Consume the real pending input without rendering it; only emit ANSI color 91.
+        $settings .= <<'BASH';
+ansi_pending() {
+    local discarded
+    IFS= read -r -s -n 6 discarded
+    printf '%s\n' "$discarded" > "$FIXTURE_PENDING_TRACE"
+    bind '"e":self-insert'
+    READLINE_LINE=
+    READLINE_POINT=0
+    printf '\033[1;91m\033[0m'
+}
+fixture_prompts=0
+PROMPT_COMMAND='status=$?; fixture_prompts=$((fixture_prompts + 1)); if [ "$fixture_prompts" = 3 ]; then bind -x '\''"e":ansi_pending'\''; fi'
+BASH
+    }
     $settings .= "PROMPT_COMMAND='status=\$?; set +m'\n" if $name eq 'no-job-control';
     $settings .= "jobs() { printf 'broken job table\\n'; }\n" if $name eq 'bad-jobs';
     make_path("$bundle/tools");
@@ -64,6 +80,15 @@ BASH
     $sleep_program .= "\$SIG{INT} = 'IGNORE';\n" if $name eq 'ignored-foreground';
     $sleep_program .= 'exec "/bin/sleep", @ARGV; die $!;' . "\n";
     write_file("$bundle/tools/sleep", $sleep_program, 0755);
+    if ($name eq 'watchdog') {
+        # Independent wedged backend: real descendants, no cooperative TERM handler.
+        my $wedged = '#!' . $^X . "\nuse strict; use warnings;\n";
+        $wedged .= '$SIG{TERM} = "IGNORE";' . "\n";
+        $wedged .= '$ENV{HOME} = "$ARGV[3]/home"; my $child = fork // die $!;' . "\n";
+        $wedged .= 'if (!$child) { exec $ARGV[2], "--no-config", "--no-history"; die $!; }' . "\n";
+        $wedged .= 'sleep 30; waitpid($child, 0); sleep 30; exit 0;' . "\n";
+        write_file("$bundle/tools/python3", $wedged, 0755);
+    }
     $settings .= 'PATH=' . perl_literal("$bundle/tools:/usr/bin:/bin") . "\n";
     if ($name eq 'missing-job-marker') {
         my $sh_program = '#!' . $^X . "\nuse strict; use warnings;\n";
@@ -79,7 +104,16 @@ die "unexpected public CLI arguments" unless @ARGV >= 1 && $ARGV[0] eq '--no-con
 die "unexpected public CLI arguments" if @ARGV > 2 || (@ARGV == 2 && $ARGV[1] ne '--no-history');
 $ENV{FIXTURE_HISTORY} = @ARGV == 2 ? 'off' : 'on';
 PERL
-    if ($name eq 'hang') {
+    $program .= '$ENV{FIXTURE_PENDING_TRACE} = ' . perl_literal("$bundle/pending") . ";\n"
+        if $name eq 'ansi-pending';
+    if ($name eq 'watchdog' || $name eq 'signal') {
+        # Synchronize on a real descendant, then stop the backend, not the runner.
+        $program .= 'my $backend = getppid(); my $child = fork // die $!;' . "\n";
+        $program .= 'if (!$child) { exec "/bin/sleep", "30"; die $!; }' . "\n";
+        $program .= 'kill "STOP", $backend or die $!;' . "\n";
+        $program .= 'open my $jobs, ">>", ' . perl_literal($job_trace) . ' or die $!;' . "\n";
+        $program .= 'print {$jobs} "$child\n"; close $jobs; sleep 30; exit 0;' . "\n";
+    } elsif ($name eq 'hang') {
         $program .= "sleep 30; exit 0;\n";
     } elsif ($name eq 'echo-only') {
         $program .= 'print $ENV{NSHELL_PROMPT}; $|=1; while (<STDIN>) { print $_; print $ENV{NSHELL_PROMPT}; } exit 0;' . "\n";
@@ -106,11 +140,17 @@ sub run_fixture {
     if (!$pid) {
         open STDOUT, '>', $output or die $!;
         open STDERR, '>&', \*STDOUT or die $!;
+        $ENV{PATH} = "$bundle/tools:$ENV{PATH}" if $name eq 'watchdog';
         exec $^X, $runner, $bundle, '--timeout', $timeout;
         die $!;
     }
     my $end = time + $timeout + 5;
+    my $signalled = 0;
     while (waitpid($pid, WNOHANG) == 0) {
+        if ($name eq 'signal' && !$signalled && -s $job_trace) {
+            kill 'TERM', $pid or die "cannot signal owned runner: $!";
+            $signalled = 1;
+        }
         if (time >= $end) {
             kill 'TERM', $pid;
             sleep 0.2;
@@ -150,6 +190,8 @@ is($status, 0, 'independent Bash control passes real PTY checks');
 diag($text) if $status;
 like($text, qr/^PASS: 6 PTY checks; 3 executable sessions exited zero; owned processes cleaned$/m,
     'nonzero assertion and session completion counts');
+like($text, qr/^CLEANUP: owned processes absent; PTYs closed$/m,
+    'control positively confirms cleanup completion');
 is(scalar @$records, 3, 'three actual executable launches');
 is(scalar @$jobs, 2, 'two independently observed foreground jobs');
 my @homes = map { (split /\|/)[1] } @$records;
@@ -161,6 +203,7 @@ for my $case (
     ['echo-only', qr/FAIL: interactive readiness:/],
     ['exit-zero', qr/FAIL: startup:/],
     ['ignored-pending', qr/FAIL: Ctrl-C pending input:/],
+    ['ansi-pending', qr/FAIL: Ctrl-C pending input: expected output deadline exceeded/],
     ['ignored-foreground', qr/FAIL: Ctrl-C foreground:/],
     ['missing-job-marker', qr/FAIL: Ctrl-C foreground:/],
     ['no-job-control', qr/FAIL: Ctrl-C foreground: foreground job lacks an independent real PGID/],
@@ -168,17 +211,26 @@ for my $case (
     ['bad-termios', qr/FAIL: interactive termios restoration: interactive termios was not restored/],
     ['no-history', qr/FAIL: history restart isolated HOME:/],
     ['hang', qr/FAIL: startup: .*deadline/],
+    ['watchdog', qr/PTY backend exceeded whole-run deadline/],
+    ['signal', qr/PTY backend interrupted/],
 ) {
     my ($name, $diagnostic) = @$case;
     my ($result, $output, $trace, $elapsed, $jobs) = run_fixture($name, 9);
+    diag(sprintf '%s runner exit=%d signal=%d elapsed=%.3f seconds',
+        $name, $result >> 8, $result & 127, $elapsed) if $name eq 'watchdog' || $name eq 'signal';
     isnt($result, 0, "$name rejects broken behavior (no skip success)");
     like($output, $diagnostic, "$name fails at the relevant assertion");
     diag($output) unless $output =~ $diagnostic;
     cmp_ok($elapsed, '<', 11, "$name whole-run deadline bounded");
     cmp_ok(scalar @$trace, '>=', 1, "$name really executed the fixture");
     cmp_ok(scalar @$jobs, '>=', 1, "$name cleanup exercised a real child before failure")
-        if $name =~ /^(?:ignored-foreground|missing-job-marker|no-job-control|bad-jobs)$/;
+        if $name =~ /^(?:ignored-foreground|missing-job-marker|no-job-control|bad-jobs|watchdog|signal)$/;
     unlike($output, qr/^cleanup:/m, "$name cleanup completed without suppressed errors");
+    like($output, qr/^CLEANUP: owned processes absent; PTYs closed$/m,
+        "$name positively confirms cleanup completion after failure");
+    is(read_file("$root/$name bundle/pending"), "xit 91\n",
+        'ANSI-only control consumed the entire pending input independently')
+        if $name eq 'ansi-pending';
 }
 
 if ($^O eq 'darwin') {

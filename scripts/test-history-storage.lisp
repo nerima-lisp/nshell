@@ -9,30 +9,60 @@
 
 (let ((arguments (uiop:command-line-arguments)))
   (when (equal "--history-child-append" (first arguments))
-    (let ((nshell.infrastructure.persistence::*history-file-path-override*
-            (pathname (second arguments)))
-          (*error-output* (make-string-output-stream)))
-      (nshell.infrastructure.persistence::append-history-entry (third arguments))
-      (let ((errors (get-output-stream-string *error-output*)))
-        (write-string errors)
-        (uiop:quit (cond ((zerop (length errors)) 0)
-                         ((search "SB-POSIX:LOCKF" errors) 3)
-                         (t 4)))))))
+    (write-line "HISTORY-CHILD-READY")
+    (finish-output)
+    (let ((text (read-line *standard-input* nil nil)))
+      (unless text (uiop:quit 2))
+      (let ((nshell.infrastructure.persistence::*history-file-path-override*
+              (pathname (second arguments)))
+            (*error-output* (make-string-output-stream)))
+        (nshell.infrastructure.persistence::append-history-entry text)
+        (let ((errors (get-output-stream-string *error-output*)))
+          (write-string errors)
+          (uiop:quit (cond ((zerop (length errors)) 0)
+                           ((search "SB-POSIX:LOCKF" errors) 3)
+                           (t 4))))))))
 
 (defun check-history-reader-lock (path check)
-  (let ((script (namestring *load-truename*)))
-    (labels ((child-append (label text)
-               (multiple-value-bind (output errors code)
-                   (uiop:run-program
-                    (list (namestring sb-ext:*runtime-pathname*) "--script" script
-                          "--history-child-append" (namestring path) text)
-                    :output :string :error-output :string :ignore-error-status t)
-                 (format t "CHILD ~a exit=~d~%" label code)
-                 (unless (member code '(0 3 4))
-                   (error "Unexpected child result: ~d ~a ~a" code output errors))
-                 (when (= code 4)
-                   (write-string output))
-                 code))
+  (let ((script (namestring *load-truename*))
+        (children nil)
+        (all-children nil))
+    (labels ((prepare-child ()
+               (let* ((start (get-internal-real-time))
+                      (child (uiop:launch-program
+                              (list (namestring sb-ext:*runtime-pathname*) "--script" script
+                                    "--history-child-append" (namestring path))
+                              :input :stream :output :stream :error-output :output)))
+                 (push child all-children)
+                 (sb-ext:with-timeout 30
+                   (let ((startup (make-string-output-stream)))
+                     (loop for line = (read-line (uiop:process-info-output child) nil nil)
+                           do (cond
+                                ((null line)
+                                 (error "Child failed before ready: exit=~d ~a"
+                                        (uiop:wait-process child)
+                                        (get-output-stream-string startup)))
+                                ((string= line "HISTORY-CHILD-READY") (return))
+                                (t (write-line line startup))))))
+                 (format t "CHILD ready before writer hold in ~,3fs~%"
+                         (/ (- (get-internal-real-time) start)
+                            internal-time-units-per-second))
+                 child))
+             (child-append (label text)
+               (let* ((child (or (pop children) (error "No prepared child for ~a" label)))
+                      (input (uiop:process-info-input child)))
+                 (sb-ext:with-timeout 5
+                   (write-line text input)
+                   (finish-output input)
+                   (close input)
+                   (let* ((output (uiop:slurp-stream-string (uiop:process-info-output child)))
+                          (code (uiop:wait-process child)))
+                     (format t "CHILD ~a exit=~d~%" label code)
+                     (unless (member code '(0 3 4))
+                       (error "Unexpected child result: ~d ~a" code output))
+                     (when (= code 4)
+                       (write-string output))
+                     code))))
              (wait-for-signal (semaphore label)
                (unless (sb-thread:wait-on-semaphore semaphore :timeout 5)
                  (error "Timed out waiting for ~a" label)))
@@ -48,7 +78,7 @@
                    (when (> (get-internal-real-time) deadline)
                      (error "Reader neither completed nor waited for the history mutex"))
                    (sb-thread:thread-yield))))
-             (run-case (control-p)
+             (run-ready-case (control-p)
                (delete-file path)
                (let ((nshell.infrastructure.persistence::*history-file-path-override* path))
                  (nshell.infrastructure.persistence::append-history-entry "seed"))
@@ -126,6 +156,11 @@
                      (setf (symbol-function
                             'nshell.infrastructure.persistence::%append-history-record)
                            original)))
+                 (format t "WRITER ~a alive=~s stderr=~s~%"
+                         (if control-p "control" "public")
+                         (sb-thread:thread-alive-p writer) writer-result)
+                 (format t "READER-RESULT ~a ~s~%"
+                         (if control-p "control" "public") reader-result)
                  (funcall check
                           (if control-p "control writer and reader finish without errors"
                               "public writer and reader finish with committed records")
@@ -143,7 +178,34 @@
                               (and (equal '("seed" "holding-writer" "after-release")
                                           (mapcar #'nshell.infrastructure.persistence::history-record-text
                                                   records))
-                                   (string= "" (get-output-stream-string *error-output*)))))))))
+                                   (string= "" (get-output-stream-string *error-output*))))))))
+             (run-case (control-p)
+               ;; Cold SBCL/ASDF startup must not consume the writer's five-second hold.
+               (let ((completed nil)
+                     (cleanup-errors nil))
+                 (unwind-protect
+                      (progn
+                        (setf children (loop repeat (if control-p 2 3)
+                                             collect (prepare-child)))
+                        (run-ready-case control-p)
+                        (setf completed t))
+                   (dolist (child all-children)
+                     (handler-case
+                         (sb-ext:with-timeout 5
+                           (unwind-protect
+                                (progn
+                                  (when (uiop:process-alive-p child)
+                                    (uiop:terminate-process child :urgent t))
+                                  (uiop:wait-process child))
+                             (uiop:close-streams child)))
+                       (serious-condition (condition)
+                         (push condition cleanup-errors))))
+                   (setf children nil all-children nil)
+                   (when cleanup-errors
+                     (if completed
+                         (error "Child cleanup failed: ~{~a~^; ~}" cleanup-errors)
+                         (format *error-output* "Child cleanup also failed: ~{~a~^; ~}~%"
+                                 cleanup-errors)))))))
       (run-case t)
       (run-case nil))))
 

@@ -208,7 +208,7 @@ for my $case (
     ['missing-job-marker', qr/FAIL: Ctrl-C foreground:/],
     ['no-job-control', qr/FAIL: Ctrl-C foreground: foreground job lacks an independent real PGID/],
     ['bad-jobs', qr/FAIL: Ctrl-Z\/bg\/fg real PGID:/],
-    ['bad-termios', qr/FAIL: interactive termios restoration: interactive termios was not restored/],
+    ['bad-termios', qr/FAIL: interactive termios restoration: interactive termios was not restored \(oflag: \d+ -> \d+\)/],
     ['no-history', qr/FAIL: history restart isolated HOME:/],
     ['hang', qr/FAIL: startup: .*deadline/],
     ['watchdog', qr/PTY backend exceeded whole-run deadline/],

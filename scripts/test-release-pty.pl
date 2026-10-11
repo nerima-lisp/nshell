@@ -213,8 +213,13 @@ class Session:
             self.read()
         if not os.WIFEXITED(self.status) or os.WEXITSTATUS(self.status) != 0:
             raise RuntimeError('interactive executable exit was not zero')
-        if termios.tcgetattr(self.master) != self.baseline:
-            raise RuntimeError('interactive termios was not restored')
+        restored = termios.tcgetattr(self.master)
+        if restored != self.baseline:
+            fields = ('iflag', 'oflag', 'cflag', 'lflag', 'ispeed', 'ospeed', 'cc')
+            changes = ['%s: %r -> %r' % (name, before, after)
+                       for name, before, after in zip(fields, self.baseline, restored)
+                       if before != after]
+            raise RuntimeError('interactive termios was not restored (%s)' % '; '.join(changes))
 
 
 def check(name):

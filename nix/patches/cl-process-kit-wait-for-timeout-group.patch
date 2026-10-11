@@ -1,0 +1,190 @@
+--- a/src/communicate.lisp
++++ b/src/communicate.lisp
+@@ -153,6 +153,16 @@
+                (ignore-errors (%close-stream-for-copier stdin-stream stdin-feeder)))
+              ;; Share the state lock with the cancellation watcher's reaper.
+              (process-wait process :poll-interval poll-interval)
++             ;; Reaping the leader does not wait for SIGKILL delivery to its
++             ;; descendants. Cleanup uses real time even with an injected clock.
++             (when (and timed-out-p
++                        (not (%wait-until-process-group-gone process grace-period)))
++               (let ((condition
++                       (make-condition 'process-io-error :stream :cleanup
++                         :cause "Owned process group remained alive after timeout cleanup.")))
++                 (with-locked-process-state (state process)
++                   (setf (%process-state-communication-cleanup-error state) condition))
++                 (error condition)))
+              (when (and (boundp '*current-cancellation-token*)
+                         (symbol-value '*current-cancellation-token*)
+                         (cancellation-requested-p (symbol-value '*current-cancellation-token*)))
+--- a/src/process-handle.lisp
++++ b/src/process-handle.lisp
+@@ -17,6 +17,7 @@
+   result
+   communication-result
+   communication-contract
++  communication-cleanup-error
+   communication-reservation-owner
+   (communication-status :idle)
+   (status :running)
+--- a/src/communication-state.lisp
++++ b/src/communication-state.lisp
+@@ -69,20 +69,25 @@
+             :expected-options ,expected :actual-options ,actual)))
+ 
+ (defun %reserve-communication (process contract owner)
+-  (with-locked-process-state (state process)
+-    (let ((expected (%process-state-communication-contract state)))
+-      (case (%process-state-communication-status state)
+-        (:communicated
+-         (%check-contract-match process expected contract)
+-         :cached)
+-        (:idle
+-         (setf (%process-state-communication-contract state) contract
+-               (%process-state-communication-reservation-owner state) owner
+-               (%process-state-communication-status state) :reserved)
+-         :reserved)
+-        (otherwise
+-         (%check-contract-match process expected contract)
+-         (error "COMMUNICATE is already in progress for this process."))))))
++  (multiple-value-bind (result cleanup-error)
++      (with-locked-process-state (state process)
++        (if (%process-state-communication-cleanup-error state)
++            (values nil (%process-state-communication-cleanup-error state))
++            (let ((expected (%process-state-communication-contract state)))
++              (case (%process-state-communication-status state)
++                (:communicated
++                 (%check-contract-match process expected contract)
++                 :cached)
++                (:idle
++                 (setf (%process-state-communication-contract state) contract
++                       (%process-state-communication-reservation-owner state) owner
++                       (%process-state-communication-status state) :reserved)
++                 :reserved)
++                (otherwise
++                 (%check-contract-match process expected contract)
++                 (error "COMMUNICATE is already in progress for this process."))))))
++    (when cleanup-error (error cleanup-error))
++    result))
+ 
+ (defun %release-communication-reservation (process owner)
+   (with-locked-process-state (state process)
+@@ -104,27 +109,32 @@
+            input timeout grace-period timeout-signal kill-signal on-timeout
+            max-output-characters drain-timeout-seconds result-type external-format
+            decoding-error-policy clock sleeper poll-interval)))
+-    (with-locked-process-state (state process)
+-      (let ((expected-contract (%process-state-communication-contract state)))
+-        (case (%process-state-communication-status state)
+-          (:communicated
+-           (%check-contract-match process expected-contract actual-contract)
+-           (%process-state-communication-result state))
+-          (:reserved
+-           (%check-contract-match process expected-contract actual-contract)
+-           (unless (eq (%process-state-communication-reservation-owner state)
+-                       *communication-reservation-owner*)
+-             (error "COMMUNICATE is already reserved for this process."))
+-           (setf (%process-state-communication-status state) :communicating
+-                 (%process-state-communication-reservation-owner state) nil)
+-           nil)
+-          (:communicating
+-           (%check-contract-match process expected-contract actual-contract)
+-           (error "COMMUNICATE is already in progress for this process."))
+-          (otherwise
+-           (setf (%process-state-communication-contract state) actual-contract
+-                 (%process-state-communication-status state) :communicating)
+-           nil))))))
++    (multiple-value-bind (result cleanup-error)
++        (with-locked-process-state (state process)
++          (if (%process-state-communication-cleanup-error state)
++              (values nil (%process-state-communication-cleanup-error state))
++              (let ((expected-contract (%process-state-communication-contract state)))
++                (case (%process-state-communication-status state)
++                  (:communicated
++                   (%check-contract-match process expected-contract actual-contract)
++                   (%process-state-communication-result state))
++                  (:reserved
++                   (%check-contract-match process expected-contract actual-contract)
++                   (unless (eq (%process-state-communication-reservation-owner state)
++                               *communication-reservation-owner*)
++                     (error "COMMUNICATE is already reserved for this process."))
++                   (setf (%process-state-communication-status state) :communicating
++                         (%process-state-communication-reservation-owner state) nil)
++                   nil)
++                  (:communicating
++                   (%check-contract-match process expected-contract actual-contract)
++                   (error "COMMUNICATE is already in progress for this process."))
++                  (otherwise
++                   (setf (%process-state-communication-contract state) actual-contract
++                         (%process-state-communication-status state) :communicating)
++                   nil)))))
++      (when cleanup-error (error cleanup-error))
++      result)))
+ 
+ (defun %abort-communication (process)
+   (with-locked-process-state (state process)
+--- a/t/run-timeout-test.lisp
++++ b/t/run-timeout-test.lisp
+@@ -27,6 +27,62 @@
+    :sleep-fn (lambda (seconds) (declare (ignore seconds)) (incf (car counter)) nil)))
+ 
+ (describe "run timeout and signal escalation"
++  (it "confirms group termination after reaping a timed-out leader"
++    (let ((waits nil))
++      (with-process (process (spawn "/bin/sh" (list "-c" "sleep 5")
++                                    :output :stream :error :stream))
++        (with-mocked-functions
++            (((symbol-function 'process-kit::%wait-until-process-group-gone)
++              (lambda (owned-process timeout)
++                (push (list owned-process timeout) waits)
++                t)))
++          (expect (communicate process :timeout 0.05 :grace-period 0.05
++                                       :on-timeout :return)
++                  :to-have-timed-out))
++        (expect (length waits) :to-be 1)
++        (expect (caar waits) :to-be process)
++        (expect (cadar waits) :to-be 0.05))))
++
++  (it "reports incomplete group cleanup instead of caching a timeout result"
++    (let ((waits 0)
++          (failure nil))
++      (with-process (process (spawn "/bin/sh" (list "-c" "sleep 5")
++                                    :output :stream :error :stream))
++        (with-mocked-functions
++            (((symbol-function 'process-kit::%wait-until-process-group-gone)
++              (lambda (owned-process timeout)
++                (declare (ignore owned-process timeout))
++                (incf waits)
++                nil)))
++          (handler-case
++              (communicate process :timeout 0.05 :grace-period 0.05 :on-timeout :return)
++            (process-io-error (condition) (setf failure condition))))
++        (expect waits :to-be 1)
++        (expect (typep failure 'process-io-error) :to-be-truthy)
++        (expect (process-io-error-stream failure) :to-be :cleanup)
++        (process-kit::with-locked-process-state (state process)
++          (expect (process-kit::%process-state-communication-result state) :to-be nil))
++        (dolist (retry (list (lambda ()
++                              (communicate process :timeout 0.05 :grace-period 0.05
++                                                   :on-timeout :return))
++                            (lambda ()
++                              (process-kit::%reserve-communication process nil :retry))))
++          (let ((observed nil))
++            (expect (handler-case
++                        (handler-bind
++                            ((process-io-error
++                               (lambda (condition)
++                                 (process-kit::with-locked-process-state (state process)
++                                   (expect (process-kit::%process-state-communication-result state)
++                                           :to-be nil))
++                                 (setf observed condition))))
++                          (funcall retry))
++                      (process-io-error (condition) condition))
++                    :to-be failure)
++            (expect observed :to-be failure)))
++        (process-kit::with-locked-process-state (state process)
++          (expect (process-kit::%process-state-communication-result state) :to-be nil)))))
++
+   (it "run with on-timeout :return sets timed-out-p on a real timeout"
+     (let ((result (run "/bin/sh" (list "-c" "sleep 5")
+                        :timeout 0.2 :grace-period 0.1 :on-timeout :return)))

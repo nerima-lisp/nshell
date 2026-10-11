@@ -321,6 +321,7 @@
             patches = [
               ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch
               ./nix/patches/cl-process-kit-enable-linux-tests.patch
+              ./nix/patches/cl-process-kit-wait-for-timeout-group.patch
             ];
           };
           clRegexKit = sibling {

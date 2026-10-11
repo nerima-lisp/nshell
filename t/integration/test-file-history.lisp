@@ -21,6 +21,21 @@
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
         (when (probe-file test-path) (delete-file test-path)))))
 
+  (it "file-history-path-designators-round-trip"
+    (with-temporary-output-file (test-path :prefix "nshell-history-designators")
+      (dolist (designator (list (pathname test-path) test-path))
+        (let ((nshell.infrastructure.persistence:*history-file-path-override*
+                designator))
+          (nshell.infrastructure.persistence:append-history-entry "older")
+          (nshell.infrastructure.persistence:append-history-entry "newer")
+          (expect '("older" "newer")
+                  :to-equal
+                  (mapcar #'nshell.infrastructure.persistence:history-record-text
+                          (nshell.infrastructure.persistence:load-history-file)))
+          (expect #o600 :to-equal
+                  (logand #o777 (sb-posix:stat-mode (sb-posix:stat test-path))))
+          (delete-file test-path)))))
+
   (it "file-history-multiline-round-trip"
     "Multiline command history survives persistence."
     (let* ((test-path (format nil "/tmp/nshell-test-history-multiline-~d.lisp"

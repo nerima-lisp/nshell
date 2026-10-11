@@ -525,8 +525,15 @@ The regular read timeout remains short for command-response assertions.")
                     :cols 100))
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
                (%e2e-pty-await-ready fd)
-               (%e2e-pty-write-line fd "sh -c 'sleep 2; printf \"pty-%s\\n\" outlived-timeout' | cat")
+               ;; Enter accepts autosuggestions; this probe must execute exactly cat.
+               (%e2e-pty-write-line
+                fd
+                (format nil "~A~C"
+                        "sh -c 'sleep 2; printf \"pty-%s\\n\" outlived-timeout' | cat"
+                        (code-char 7)))
                (let ((output (%e2e-pty-read-until fd "pty-outlived-timeout" :attempts 220)))
+                 (unless (search "pty-outlived-timeout" output)
+                   (format *error-output* "~&Foreground pipeline PTY transcript: ~S~%" output))
                  (expect (search "pty-outlived-timeout" output) :to-be-truthy)
                  (expect (search "timed out after" output) :to-be-falsy))
                (%e2e-pty-write-line fd "exit")

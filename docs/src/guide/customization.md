@@ -96,7 +96,7 @@ nshell detects the terminal's color depth (truecolor, 256-color, or the
 16-color ANSI palette) and downsamples every hex color automatically: to the
 nearest 256-color entry, or on a 16-color terminal to the palette slot with
 the same hue (low-saturation colors become the grays). A preset written for
-truecolor still renders sensibly over a plain ANSI connection. Setting `NO_COLOR` to any value
+truecolor still renders sensibly over a plain ANSI connection. Setting `NO_COLOR` to a nonempty value
 disables color output entirely, regardless of the active theme.
 
 ### Presets
@@ -157,7 +157,9 @@ $ prompt left '{user}@{host} {path}{git} $ '
 
 `prompt preview FORMAT` renders `FORMAT` once against the current state,
 without installing it, so you can check a format before committing to it.
-`prompt reset` restores both defaults. An invalid format exits with status 2
+`prompt reset` removes both session overrides. The corresponding environment
+variables then apply, or the built-in defaults if those variables are empty or
+unset. An invalid format exits with status 2
 and names the unknown segment; `prompt` with anything else prints a usage
 line and exits 1.
 
@@ -217,8 +219,11 @@ custom bindings on every launch, the same way `theme` lines do.
 After a command has finished, press `Ctrl-X` to request a captured rerun. nshell
 shows the complete command and its existing AI safety classification; press
 `Ctrl-X` again only when that displayed command and classification are
-acceptable. Any other key cancels the pending confirmation. Commands classified
-as blocked, and terminal-dependent commands such as `vim`, `less`, and `ssh`,
+acceptable. Reassigned bindings are shown in the confirmation instead. Long
+lines wrap without omitting text. If the complete confirmation cannot fit in
+the terminal, or contains non-displayable control characters, nshell refuses
+the rerun. Any other key or a terminal resize cancels the pending confirmation.
+Commands classified as blocked, and terminal-dependent commands such as `vim`, `less`, and `ssh`,
 are rejected because the capture path does not provide a live terminal.
 
 This is useful when the previous command's output was not retained for `?`

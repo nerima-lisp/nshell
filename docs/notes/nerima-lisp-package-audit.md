@@ -50,18 +50,26 @@ nshell. Neither they nor `cl-log-kit` is a direct dependency in `nshell.asd`.
 `nshell/test` uses `cl-weave`. `nshell/weave` additionally depends on
 `cl-prolog-kit/weave` for completion-query tests. Loading a library or its test
 helpers is not the same as running that library's own suite. The sibling
-derivations do not enable `doCheck`, and the CI jobs run nshell's suites,
-not the dependencies' own suites. In particular, `checks.weave` runs
-`nshell/weave`, not `cl-weave/test`. Dependency suite results remain unverified.
+derivations do not enable `doCheck`. In particular, `checks.weave` runs
+`nshell/weave`, not `cl-weave/test`.
+
+The current CI and release integration jobs additionally run
+[`scripts/test-dependencies.sh`](../../scripts/test-dependencies.sh).
+It starts a separate Lisp image for each pinned dependency suite. Its
+[`runner`](../../scripts/test-dependencies.lisp) requires nonempty discovery,
+matching discovered, selected, executed, and passed counts, and matching test
+paths. Skipped, pending, focused, or failed tests do not clear that gate.
+The jobs also run the private-history storage regressions. These gates do not
+retroactively verify dependencies in the published v0.6.1 tree; their results
+must be checked for the commit being released.
 
 `cl-nix-forge` supplies the Nix build helpers. `paredit-cli` is a development
 tool, not an executable runtime dependency. Release refs are declared in
 `flake.nix`; resolved revisions and hashes are recorded in
 [`flake.lock`](../../flake.lock). This audit makes no claim that those refs are
 the newest upstream tags. An upgrade must update the declaration and lock file,
-review the local [`cl-process-kit` patch](../../nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch),
-and rerun the release gates. The dependency's own suite also needs a separate
-run.
+review the local patches under [`nix/patches/`](../../nix/patches/), and rerun
+the release gates, including the dependencies' own suites.
 
 ## Reproduce the source checks
 

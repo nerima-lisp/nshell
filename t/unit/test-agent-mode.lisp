@@ -282,8 +282,9 @@
               (format nil "cat /tmp/private.env~%ghp_agent-secret-token"))
       (repl-test-set-env "AGENT_SECRET" "agent-environment-secret" t)
       (with-repl-input-state (:mode :ask-waiting :buffer "continue" :cursor-pos 8)
-        (with-temporary-output-file (audit-path)
-          (let ((boundary
+        (host-kit:with-temporary-directory (audit-directory)
+          (let ((audit-path (merge-pathnames "ai-audit.jsonl" audit-directory))
+                (boundary
                   (nshell.feature.assistant:make-assistant-model-boundary
                    :start-fn (lambda () t)
                    :request-fn (lambda (generation payload)

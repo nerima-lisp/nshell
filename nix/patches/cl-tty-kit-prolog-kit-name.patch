@@ -1,0 +1,328 @@
+# Backport the Prolog package-name migration from upstream.
+# https://github.com/nerima-lisp/cl-tty-kit/commit/2ee564efbc32c629b2597094fe2d790b40e96da0
+--- a/cl-tty-kit.asd
++++ b/cl-tty-kit.asd
+@@ -6,9 +6,9 @@
+ ;;; See PACKAGE_STANDARD.md "asd の書き方".
+ (in-package #:asdf-user)
+ 
+-;; nerima-lisp/cl-prolog and nerima-lisp/cl-weave (see docs/src/guide/logic-engine.md
++;; nerima-lisp/cl-prolog-kit and nerima-lisp/cl-weave (see docs/src/guide/logic-engine.md
+ ;; and t/sgr-prolog-oracle-test.lisp) are both used only by :CL-TTY-KIT/TEST below --
+-;; cl-prolog as a differential-testing oracle cross-checking the hand-written
++;; cl-prolog-kit as a differential-testing oracle cross-checking the hand-written
+ ;; SGR/CSI decoders, cl-weave as the test framework -- never by :CL-TTY-KIT
+ ;; itself; those two stay test-only regardless of what :CL-TTY-KIT's own
+ ;; :DEPENDS-ON grows to (see the note on its :DEPENDS-ON below). Neither is
+@@ -150,7 +150,7 @@
+   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
+   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
+   :serial t
+-  :depends-on (#:cl-tty-kit #:cl-prolog #:cl-weave)
++  :depends-on (#:cl-tty-kit #:cl-prolog-kit #:cl-weave)
+   :components ((:file "t/package")
+                (:file "t/helpers-package-data")
+                (:file "t/suite")
+--- a/t/helpers-prolog-cases.lisp
++++ b/t/helpers-prolog-cases.lisp
+@@ -4,11 +4,11 @@
+ ;;; actual test files small and lets the suite enumerate behaviors one by one.
+ ;;;
+ ;;; AND/OR/NOT/= are ordinary Common Lisp symbols inherited from #:CL, so they
+-;;; dispatch to nerima-lisp/cl-prolog's builtins from any package without
++;;; dispatch to nerima-lisp/cl-prolog-kit's builtins from any package without
+-;;; qualification. CALL/FINDALL/TRUE/FAIL are cl-prolog-specific exports with no
++;;; qualification. CALL/FINDALL/TRUE/FAIL are cl-prolog-kit-specific exports with no
+ ;;; CL equivalent, so a bare (unqualified) symbol of that name read in this file
+-;;; is a different symbol than CL-PROLOG:CALL and the engine reports the goal as
++;;; is a different symbol than CL-PROLOG-KIT:CALL and the engine reports the goal as
+-;;; an undefined procedure -- these four are written CL-PROLOG:CALL etc.
++;;; an undefined procedure -- these four are written CL-PROLOG-KIT:CALL etc.
+ ;;; throughout.
+ 
+ (defparameter +prolog-query-cases+
+@@ -26,7 +26,7 @@
+      "an unprovable goal yields no solutions")))
+ 
+ (defparameter +prolog-primitive-cases+
+-  '((cl-prolog:prolog-succeeds-p
++  '((cl-prolog-kit:prolog-succeeds-p
+       (ancestor abraham joseph)
+       t
+       "provable-p reports a reachable relation")
+@@ -47,19 +47,19 @@
+      (jacob joseph)
+      "disjunction enumerates the solutions of each branch in order")
+     (%solve-variable
+-     (cl-prolog:call (ancestor abraham ?x))
++     (cl-prolog-kit:call (ancestor abraham ?x))
+      (isaac jacob joseph)
+      "call/1 proves a goal term like an ordinary relation")
+     (%solve-result
+-     (cl-prolog:findall ?a (ancestor ?a joseph) ?result)
++     (cl-prolog-kit:findall ?a (ancestor ?a joseph) ?result)
+      ((jacob abraham isaac))
+      "findall/3 aggregates every solution into a single list in proof order")
+     (%solve-result
+-     (cl-prolog:findall ?x (parent joseph ?x) ?result)
++     (cl-prolog-kit:findall ?x (parent joseph ?x) ?result)
+      (())
+      "findall/3 yields the empty list when the goal has no proof")
+     (%not-provable-p
+-     (cl-prolog:fail)
++     (cl-prolog-kit:fail)
+      t
+      "fail/0 never succeeds")
+     (%not-provable-p
+@@ -70,11 +70,11 @@
+      (= abraham isaac)
+      t
+      "the = primitive fails when its arguments don't unify")
+-    (cl-prolog:prolog-succeeds-p
++    (cl-prolog-kit:prolog-succeeds-p
+-     (cl-prolog:true)
++     (cl-prolog-kit:true)
+      t
+      "true/0 always succeeds")
+     (%not-provable-p
+-     (cl-prolog:findall ?x (parent abraham ?x) (mismatch))
++     (cl-prolog-kit:findall ?x (parent abraham ?x) (mismatch))
+      t
+      "findall/3 fails when RESULT doesn't unify with the collected items")))
+--- a/t/helpers-prolog.lisp
++++ b/t/helpers-prolog.lisp
+@@ -1,7 +1,7 @@
+ (in-package #:cl-tty-kit/test)
+ 
+ (defun %genealogy-db ()
+-  (cl-prolog:prolog
++  (cl-prolog-kit:prolog
+     ((parent abraham isaac))
+     ((parent isaac jacob))
+     ((parent jacob joseph))
+@@ -9,15 +9,15 @@
+     ((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b))))
+ 
+ (defun %many-solutions-db ()
+-  (cl-prolog:prolog
++  (cl-prolog-kit:prolog
+     ((value one))
+     ((value two))
+     ((value three))))
+ 
+ (defun %project-variable (database goal variable)
+   "Return VARIABLE's binding from every solution of GOAL against DATABASE."
+-  (mapcar (lambda (solution) (cl-prolog:solution-binding variable solution))
++  (mapcar (lambda (solution) (cl-prolog-kit:solution-binding variable solution))
+-          (cl-prolog:query-prolog database goal)))
++          (cl-prolog-kit:query-prolog database goal)))
+ 
+ (defun %normalize-solutions (solutions)
+   (sort (copy-list solutions)
+@@ -33,7 +33,7 @@
+         (expect actual :to-equal expected))))
+ 
+ (defun %not-provable-p (database goal)
+-  (not (cl-prolog:prolog-succeeds-p database goal)))
++  (not (cl-prolog-kit:prolog-succeeds-p database goal)))
+ 
+ (defun %solve-variable (database goal)
+   (%project-variable database goal '?x))
+--- a/t/prolog-db-test.lisp
++++ b/t/prolog-db-test.lisp
+@@ -1,6 +1,6 @@
+ (in-package #:cl-tty-kit/test)
+ 
+-;;; cl-prolog's rulebase is an immutable value by default (see the Rule DSL
++;;; cl-prolog-kit's rulebase is an immutable value by default (see the Rule DSL
+ ;;; docs on EXTEND-RULEBASE) rather than the retired hand-rolled engine's
+ ;;; mutable clause-db, so the invariants worth checking here are different:
+ ;;; functional extension leaves the base untouched, and an undefined relation
+@@ -8,25 +8,25 @@
+ 
+ (describe "extend-rulebase"
+   (it "leaves the base rulebase unaffected"
+-    (let* ((base (cl-prolog:prolog ((color apple red)))))
++    (let* ((base (cl-prolog-kit:prolog ((color apple red)))))
+-      (cl-prolog:extend-rulebase base ((color lime green)))
++      (cl-prolog-kit:extend-rulebase base ((color lime green)))
+-      (expect (mapcar (lambda (solution) (cl-prolog:solution-binding '?color solution))
++      (expect (mapcar (lambda (solution) (cl-prolog-kit:solution-binding '?color solution))
+-                      (cl-prolog:query-prolog base '(color apple ?color)))
++                      (cl-prolog-kit:query-prolog base '(color apple ?color)))
+               :to-equal '(red))))
+   (it "sees its own additional clauses"
+-    (let* ((base (cl-prolog:prolog ((color apple red))))
++    (let* ((base (cl-prolog-kit:prolog ((color apple red))))
+-           (extended (cl-prolog:extend-rulebase base ((color lime green)))))
++           (extended (cl-prolog-kit:extend-rulebase base ((color lime green)))))
+-      (expect (mapcar (lambda (solution) (cl-prolog:solution-binding '?color solution))
++      (expect (mapcar (lambda (solution) (cl-prolog-kit:solution-binding '?color solution))
+-                      (cl-prolog:query-prolog extended '(color lime ?color)))
++                      (cl-prolog-kit:query-prolog extended '(color lime ?color)))
+               :to-equal '(green))))
+   (it "also sees the base's clauses"
+-    (let* ((base (cl-prolog:prolog ((color apple red))))
++    (let* ((base (cl-prolog-kit:prolog ((color apple red))))
+-           (extended (cl-prolog:extend-rulebase base ((color lime green)))))
++           (extended (cl-prolog-kit:extend-rulebase base ((color lime green)))))
+-      (expect (mapcar (lambda (solution) (cl-prolog:solution-binding '?color solution))
++      (expect (mapcar (lambda (solution) (cl-prolog-kit:solution-binding '?color solution))
+-                      (cl-prolog:query-prolog extended '(color apple ?color)))
++                      (cl-prolog-kit:query-prolog extended '(color apple ?color)))
+               :to-equal '(red)))))
+ 
+ (describe "an undefined relation"
+   (it "signals a catchable prolog-existence-error instead of failing silently"
+-    (expect (lambda () (cl-prolog:query-prolog (%genealogy-db) '(no-such-relation abraham)))
++    (expect (lambda () (cl-prolog-kit:query-prolog (%genealogy-db) '(no-such-relation abraham)))
+-            :to-throw 'cl-prolog:prolog-existence-error)))
++            :to-throw 'cl-prolog-kit:prolog-existence-error)))
+--- a/t/prolog-primitives-test.lisp
++++ b/t/prolog-primitives-test.lisp
+@@ -6,26 +6,26 @@
+       (it description
+         (expect (funcall predicate (%genealogy-db) goal) :to-equal expected))))
+   ;; Unlike the retired engine's hand-written primitives (which reported "expects
+-  ;; N arguments" for a wrong arity), cl-prolog's builtins are registered per
++  ;; N arguments" for a wrong arity), cl-prolog-kit's builtins are registered per
+   ;; exact predicate indicator: a name called at an arity it does not support
+   ;; denotes a different, undefined procedure and signals the catchable ISO
+   ;; PROLOG-EXISTENCE-ERROR, same as calling any other undefined relation.
+   (it "a wrong-arity findall call signals prolog-existence-error"
+     (let ((db (%genealogy-db)))
+-      (expect (lambda () (cl-prolog:query-prolog db (list 'cl-prolog:findall '?x '(parent ?x ?y))))
++      (expect (lambda () (cl-prolog-kit:query-prolog db (list 'cl-prolog-kit:findall '?x '(parent ?x ?y))))
+-              :to-throw 'cl-prolog:prolog-existence-error)))
++              :to-throw 'cl-prolog-kit:prolog-existence-error)))
+   (it "a wrong-arity = call signals prolog-existence-error"
+-    (expect (lambda () (cl-prolog:query-prolog (%genealogy-db) '(= ?x)))
++    (expect (lambda () (cl-prolog-kit:query-prolog (%genealogy-db) '(= ?x)))
+-            :to-throw 'cl-prolog:prolog-existence-error))
++            :to-throw 'cl-prolog-kit:prolog-existence-error))
+   (it "a wrong-arity true call signals prolog-existence-error"
+-    (expect (lambda () (cl-prolog:query-prolog (%genealogy-db) (list 'cl-prolog:true 'extra)))
++    (expect (lambda () (cl-prolog-kit:query-prolog (%genealogy-db) (list 'cl-prolog-kit:true 'extra)))
+-            :to-throw 'cl-prolog:prolog-existence-error))
++            :to-throw 'cl-prolog-kit:prolog-existence-error))
+   ;; CALL/N is ISO meta-call: extra arguments are appended to the inner goal
+   ;; rather than making CALL itself arity-mismatched, so (call G extra) proves
+   ;; G with one more argument -- here PARENT/3, which the rulebase never
+   ;; defines, so it still signals PROLOG-EXISTENCE-ERROR, just against PARENT.
+   (it "call/n appends its extra argument to the inner goal"
+     (expect (lambda ()
+-              (cl-prolog:query-prolog (%genealogy-db)
++              (cl-prolog-kit:query-prolog (%genealogy-db)
+-                                      (list 'cl-prolog:call '(parent abraham isaac) 'extra)))
++                                      (list 'cl-prolog-kit:call '(parent abraham isaac) 'extra)))
+-            :to-throw 'cl-prolog:prolog-existence-error)))
++            :to-throw 'cl-prolog-kit:prolog-existence-error)))
+--- a/t/prolog-queries-test.lisp
++++ b/t/prolog-queries-test.lisp
+@@ -5,32 +5,32 @@
+     (destructuring-bind (goal template expected description &key set-p) case
+       (it description
+         (%check-query (%genealogy-db) goal template expected :set-p set-p))))
+-  ;; NOTE: unlike cl-tty-kit's retired hand-rolled engine, cl-prolog does not
++  ;; NOTE: unlike cl-tty-kit's retired hand-rolled engine, cl-prolog-kit does not
+   ;; proactively guard against a directly self-referential (circular) host
+   ;; goal term at the query level -- QUERY-PROLOG hangs rather than signaling,
+   ;; so that case is intentionally not exercised here. Only pass well-formed,
+   ;; finite goal terms to QUERY-PROLOG/PROLOG-SUCCEEDS-P.
+   (it "signals prolog-depth-limit-exceeded on an infinite goal past max-depth"
+-    (let ((db (cl-prolog:prolog ((loop ?x) (loop (s ?x))))))
++    (let ((db (cl-prolog-kit:prolog ((loop ?x) (loop (s ?x))))))
+-      (expect (lambda () (cl-prolog:query-prolog db '(loop ?x) :max-depth 5))
++      (expect (lambda () (cl-prolog-kit:query-prolog db '(loop ?x) :max-depth 5))
+-              :to-throw 'cl-prolog:prolog-depth-limit-exceeded)))
++              :to-throw 'cl-prolog-kit:prolog-depth-limit-exceeded)))
+   (it "signals invalid-max-depth-error with the offending value for a negative max-depth"
+     (expect (lambda ()
+-              (cl-prolog:prolog-succeeds-p (%genealogy-db) '(parent abraham isaac)
++              (cl-prolog-kit:prolog-succeeds-p (%genealogy-db) '(parent abraham isaac)
+                                            :max-depth -1))
+             :to-throw
+             (lambda (condition)
+-              (and (typep condition 'cl-prolog:invalid-max-depth-error)
++              (and (typep condition 'cl-prolog-kit:invalid-max-depth-error)
+-                   (= -1 (cl-prolog:invalid-max-depth-error-value condition))))))
++                   (= -1 (cl-prolog-kit:invalid-max-depth-error-value condition))))))
+-  ;; Unlike the retired engine's hard "result limit" budget, cl-prolog's :LIMIT
++  ;; Unlike the retired engine's hard "result limit" budget, cl-prolog-kit's :LIMIT
+   ;; is a benign cap: querying for more solutions than exist under a :LIMIT
+   ;; simply returns what was found, with no error.
+   (it ":limit truncates instead of erroring"
+-    (expect (mapcar (lambda (solution) (cl-prolog:solution-binding '?x solution))
++    (expect (mapcar (lambda (solution) (cl-prolog-kit:solution-binding '?x solution))
+-                    (cl-prolog:query-prolog (%many-solutions-db) '(value ?x) :limit 2))
++                    (cl-prolog-kit:query-prolog (%many-solutions-db) '(value ?x) :limit 2))
+             :to-equal '(one two)))
+   (it "signals type-error with the offending value for a negative limit"
+-    (expect (lambda () (cl-prolog:query-prolog (%many-solutions-db) '(value ?x) :limit -1))
++    (expect (lambda () (cl-prolog-kit:query-prolog (%many-solutions-db) '(value ?x) :limit -1))
+             :to-throw
+             (lambda (condition)
+               (and (typep condition 'type-error)
+--- a/t/prolog-unification-test.lisp
++++ b/t/prolog-unification-test.lisp
+@@ -3,24 +3,24 @@
+ (describe "unify"
+   (it "unifies a shared free variable across two terms"
+     (flet ((unified (left right)
+-             (multiple-value-bind (env ok) (cl-prolog:unify left right)
++             (multiple-value-bind (env ok) (cl-prolog-kit:unify left right)
+-               (and ok (cl-prolog:logic-substitute left env)))))
++               (and ok (cl-prolog-kit:logic-substitute left env)))))
+       (expect (unified '(?x b) '(a ?y)) :to-equal '(a b))
+       (expect (unified '(?x ?x) '(a a)) :to-equal '(a a))))
+   (it "rejects binding one variable to two distinct constants"
+-    (multiple-value-bind (env ok) (cl-prolog:unify '(?x ?x) '(a b))
++    (multiple-value-bind (env ok) (cl-prolog-kit:unify '(?x ?x) '(a b))
+       (declare (ignore env))
+       (expect (not ok))))
+   (it "the occurs check rejects an infinite term"
+-    (multiple-value-bind (env ok) (cl-prolog:unify '?x '(f ?x))
++    (multiple-value-bind (env ok) (cl-prolog-kit:unify '?x '(f ?x))
+       (declare (ignore env))
+       (expect (not ok))))
+   (it "a circular host term fails unification instead of looping"
+     ;; A directly circular host cons -- built by hand, never through the reader
+     ;; or the engine's own construction -- unifies safely rather than looping or
+-    ;; erroring: cl-prolog compares cyclic structure coinductively.
++    ;; erroring: cl-prolog-kit compares cyclic structure coinductively.
+     (let ((term (list 'loop)))
+       (setf (rest term) term)
+-      (multiple-value-bind (env ok) (cl-prolog:unify term '(loop))
++      (multiple-value-bind (env ok) (cl-prolog-kit:unify term '(loop))
+         (declare (ignore env))
+         (expect (not ok))))))
+--- a/t/sgr-prolog-oracle-test.lisp
++++ b/t/sgr-prolog-oracle-test.lisp
+@@ -6,10 +6,10 @@
+ ;;; The imperative SGR decoder in src/sgr-parse.lisp classifies the colour
+ ;;; parameters with a hand-written CASE. Here the same grammar is stated
+ ;;; declaratively -- one relational fact per parameter -- and resolved by
+-;;; nerima-lisp/cl-prolog. Cross-checking the two catches a drift in either
++;;; nerima-lisp/cl-prolog-kit. Cross-checking the two catches a drift in either
+ ;;; direction: the decoder is the fast path, the relation is the independent
+ ;;; specification. This keeps the data (the grammar) apart from the logic (the
+-;;; decoder) and exercises CL-PROLOG:QUERY-PROLOG / PROLOG-SUCCEEDS-P as
++;;; decoder) and exercises CL-PROLOG-KIT:QUERY-PROLOG / PROLOG-SUCCEEDS-P as
+ ;;; first-class code.
+ ;;;
+ ;;; (sgr-channel PARAM CHANNEL): PARAM touches CHANNEL. 38/48/58 set an extended
+@@ -17,7 +17,7 @@
+ ;;; --------------------------------------------------------------------------
+ 
+ (defun %sgr-channel-grammar ()
+-  (cl-prolog:prolog
++  (cl-prolog-kit:prolog
+     ((sgr-channel 38 :fg))
+     ((sgr-channel 39 :fg))
+     ((sgr-channel 48 :bg))
+@@ -50,4 +50,4 @@
+             :to-equal '(58 59)))
+   ;; A basic colour parameter is not part of the channel-selection grammar.
+   (it "a basic colour parameter is not part of the channel-selection grammar"
+-    (expect (not (cl-prolog:prolog-succeeds-p (%sgr-channel-grammar) '(sgr-channel 30 :fg))))))
++    (expect (not (cl-prolog-kit:prolog-succeeds-p (%sgr-channel-grammar) '(sgr-channel 30 :fg))))))

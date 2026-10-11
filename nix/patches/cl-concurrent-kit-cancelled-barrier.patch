@@ -1,0 +1,29 @@
+--- a/src/latch.lisp
++++ b/src/latch.lisp
+@@ -133,6 +133,7 @@
+           (handler-case
+               (with-lock-held
+                   ((%barrier-lock barrier))
++                (when scope (check-cancelled scope))
+                 (when (%barrier-broken-p barrier)
+                   (error 'barrier-broken :barrier barrier))
+                 (let ((generation (%barrier-generation barrier))
+--- a/t/latch-test.lisp
++++ b/t/latch-test.lisp
+@@ -115,6 +115,16 @@
+       (expect cancelled-p :to-be-truthy)
+       (expect (barrier-broken-p barrier) :to-be-truthy)))
+ 
++  (it "signals TASK-CANCELLED when its SCOPE was cancelled before arrival"
++    (let ((barrier (make-barrier 2))
++          (scope (cl-concurrent-kit::%make-task-scope)))
++      (cl-concurrent-kit::%scope-cancel scope)
++      (signals task-cancelled (await-barrier barrier :timeout +test-timeout+ :scope scope))
++      (expect (barrier-broken-p barrier) :to-be-truthy)
++      (expect (barrier-number-waiting barrier) :to-be 0)
++      (signals barrier-broken (await-barrier barrier :timeout +test-timeout+))
++      (expect (barrier-number-waiting barrier) :to-be 0)))
++
+   (it "permits a fresh generation again after RESET-BARRIER"
+     (let ((barrier (make-barrier 2)))
+       (signals operation-timed-out (await-barrier barrier :timeout +test-timeout-brief+))

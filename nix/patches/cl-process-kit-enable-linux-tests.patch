@@ -1,0 +1,81 @@
+--- a/t/spawn-test.lisp
++++ b/t/spawn-test.lisp
+@@ -73,6 +73,1 @@
+-  #+linux
+-  (cl-weave:it-skip
+-   "rejects a concurrent communicate while capture is in progress"
+-   "flaky under CI contention: asserts group death within a 0.1s grace period (see release notes)")
+-  #-linux
+   (it "rejects a concurrent communicate while capture is in progress"
+@@ -157,6 +152,1 @@
+-  #+linux
+-  (cl-weave:it-skip
+-   "kills descendants after the process-group leader exits on TERM"
+-   "flaky under CI contention: asserts group death within a 0.1s grace period (see release notes)")
+-  #-linux
+   (it "kills descendants after the process-group leader exits on TERM"
+@@ -181,6 +171,1 @@
+-  #+linux
+-  (cl-weave:it-skip
+-   "does not publicly signal a group after its leader is terminal"
+-   "flaky under CI contention: asserts group death within a 0.1s grace period (see release notes)")
+-  #-linux
+   (it "does not publicly signal a group after its leader is terminal"
+@@ -196,6 +181,1 @@
+-  #+linux
+-  (cl-weave:it-skip
+-   "provides distinct leader and group signal operations"
+-   "flaky under CI contention: asserts group death within a 0.1s grace period (see release notes)")
+-  #-linux
+   (it "provides distinct leader and group signal operations"
+@@ -217,6 +197,1 @@
+-  #+linux
+-  (cl-weave:it-skip
+-   "close-process cleans descendants more than five seconds after their leader exits"
+-   "flaky under CI contention: asserts group death within a 0.1s grace period (see release notes)")
+-  #-linux
+   (it "close-process cleans descendants more than five seconds after their leader exits"
+--- a/t/async-task-test.lisp
++++ b/t/async-task-test.lisp
+@@ -8,6 +8,1 @@
+-  #+linux
+-  (cl-weave:it-skip
+-   "communicate-async reports overflow without losing the terminal event"
+-   "flaky under CI contention: asserts group death within a 0.1s grace period (see release notes)")
+-  #-linux
+   (it "communicate-async reports overflow without losing the terminal event"
+@@ -56,6 +51,1 @@
+-  #+linux
+-  (cl-weave:it-skip
+-   "cancels blocked asynchronous output without failing the task"
+-   "flaky under CI contention: asserts group death within a 0.1s grace period (see release notes)")
+-  #-linux
+   (it "cancels blocked asynchronous output without failing the task"
+--- a/t/package.lisp
++++ b/t/package.lisp
+@@ -20,23 +20,10 @@
+ 
+ (in-package #:cl-process-kit/test)
+ 
+ (defparameter +suite-complete-p+
+-  (not #+linux t #-linux nil)
+-  "True when every test in the suite actually runs on this platform.
+-
+-False on Linux, where seven process-group/cancellation cases are `it-skip`ped
+-under `#+linux`: each asserts that a process group is gone within a 0.1s grace
+-period, which a contended shared CI runner cannot reliably deliver. They are
+-skipped rather than given more headroom because a timing assertion loose
+-enough to survive arbitrary contention no longer asserts the timing.
+-
+-`run-tests.lisp` consults this before enforcing its coverage ratchet. A floor
+-set from a complete run is not a meaningful bound on a run that skipped part
+-of the suite -- comparing the two is a category error, and it is what failed
+-CI on every Linux build before 1.0.0: the floor tracked the macOS figure
+-while CI measured the reduced Linux one and reported a \"regression\" that was
+-only ever the missing tests.")
++  t
++  "The pinned suite executes every test on both supported platforms.")
+ 
+ (defun run-tests ()
+   (unless (run-all :reporter :spec)
+     (error "cl-process-kit test suite failed"))

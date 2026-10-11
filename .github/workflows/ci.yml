@@ -85,6 +85,18 @@ jobs:
           NSHELL_TEST_PTY: "1"
         run: nix develop -c sbcl --script run-tests.lisp
 
+      - name: Verify dependency suites and private history storage
+        env:
+          HOME: ${{ runner.temp }}/nshell-dependency-home
+          XDG_CACHE_HOME: ${{ runner.temp }}/nshell-dependency-cache
+          XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-dependency-config
+          XDG_STATE_HOME: ${{ runner.temp }}/nshell-dependency-state
+          NSHELL_AI_COMMAND: /nonexistent
+          NSHELL_TEST_PTY: "1"
+        run: |
+          nix develop -c bash scripts/test-dependencies.sh
+          nix develop -c sbcl --script scripts/test-history-storage.lisp
+
   coverage:
     # Keep coverage separate from the integration gate: the report instrumented
     # run is slower and writes generated files, while integration remains the
@@ -155,5 +167,18 @@ jobs:
       - name: Build release bundle
         run: nix build .#releaseBundle --print-build-logs
 
+      - name: Verify release PTY harness regressions
+        run: perl t/scripts/test-release-pty.pl
+
       - name: Verify release bundle
         run: perl scripts/verify-release-bundle.pl result
+
+      - name: Verify extracted release bundle with a real PTY
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/nshell-ci.tar.gz"
+          tar -czf "$archive" -C result .
+          extracted="$(mktemp -d "$RUNNER_TEMP/nshell-ci.XXXXXX")"
+          tar -xzf "$archive" -C "$extracted"
+          perl scripts/verify-release-bundle.pl "$extracted"
+          perl scripts/test-release-pty.pl "$extracted"

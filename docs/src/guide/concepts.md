@@ -45,19 +45,16 @@ Completion candidates come from a logic knowledge base compiled into a
 predicates such as `completes`, `describes`, `has-flag`, `command-is`,
 `suggests-dir`, and `suggests-file`.
 
-Expressing completion as facts and rules rather than a lookup table means new
-command metadata is data, and the ranking and filtering logic stays in one
-place. Filesystem completion composes with the same query path, so a candidate
-menu can mix a flag, a subcommand, and a path without special-casing any of
-them.
+Command metadata is expressed as facts and rules. Filesystem completion joins
+the candidate query path, so a menu can mix flags, subcommands, and paths.
+Candidate sources still use command-specific rules and routing priorities.
 
 ## Autosuggestions come from history
 
 As you type, nshell searches command history for the most recent entry with the
 current line as a prefix and shows the remainder dimmed after the cursor.
-Accepting it with `→` or `Ctrl-F` inserts the rest. This is the fish-style
-behaviour: it costs nothing when you ignore it, and it is faster than reverse
-search when the command is recent.
+Accepting it with `→` or `Ctrl-F` inserts the rest. You can continue typing
+without accepting the suggestion.
 
 `Ctrl-R` opens incremental reverse search for the cases where a prefix is not
 what you remember. It draws the matching history entries under the prompt with
@@ -94,17 +91,15 @@ terminal is narrow) and the git branch with a `*` when the tree is dirty. The
 prompt character is green after a success and red after a failure, so the last
 result is visible without reading anything. The right prompt adds the failing
 exit code, the wall-clock duration of any command that took a second or more,
-and the time it finished. Everything on the right is omitted when it has
-nothing to say, which keeps a fast, successful command on a quiet line.
+and the current time when the prompt is rendered. The default clock remains
+visible after fast, successful commands too.
 
 ## Layers, and what is allowed to do I/O
 
-nshell follows a domain-driven, layered design where each layer depends only on
-the layers beneath it. The rule that matters day to day is that `domain/`
-performs no I/O: parsing, expansion, completion, history, prompting, and
-job-control logic are pure functions over values. Everything that touches the
-operating system — syscalls, PTY, signals, terminal I/O, persistence — is
-isolated in `infrastructure/`, behind explicit boundaries that tests can swap.
+The domain layer models parsing, expansion, completion, history, prompting,
+and job-control policy as values. Infrastructure adapters provide syscalls,
+PTYs, signals, terminal I/O, and persistence. The runtime targets SBCL and
+also uses its facilities outside infrastructure.
 
 That separation is why the prompt and command timing are deterministic under
 test: hostname, working directory, and the clock are injected boundaries rather

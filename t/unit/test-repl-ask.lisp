@@ -11,8 +11,9 @@
         (with-repl-input-state (:mode :ask-waiting
                               :buffer "show secret-value"
                               :cursor-pos 17)
-        (with-temporary-output-file (audit-path)
-          (let* ((start-count 0)
+        (host-kit:with-temporary-directory (audit-directory)
+          (let* ((audit-path (merge-pathnames "ai-audit.jsonl" audit-directory))
+                 (start-count 0)
                  (request-generation nil)
                  (request-payload nil)
                  (boundary
@@ -510,8 +511,9 @@
                           :exit-code 7
                           :duration-ms 42)
       (with-repl-input-state (:mode :ask-waiting :buffer "" :cursor-pos 0)
-        (with-temporary-output-file (audit-path)
-          (let* ((request-payload nil)
+        (host-kit:with-temporary-directory (audit-directory)
+          (let* ((audit-path (merge-pathnames "ai-audit.jsonl" audit-directory))
+                 (request-payload nil)
                 (boundary
                   (nshell.feature.assistant:make-assistant-model-boundary
                    :start-fn (lambda () t)

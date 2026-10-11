@@ -1,0 +1,238 @@
+--- a/src/completion-renderer-helpers.lisp
++++ b/src/completion-renderer-helpers.lisp
+@@ -129,5 +129,14 @@
+-(defun %completion-zsh-option-specs-for-options (options)
+-  (%completion-option-items-for-options
+-   options
+-   #'%completion-recognized-option-names
+-   #'%completion-zsh-option-spec))
++(defun %completion-zsh-option-specs-for-options (options &optional cache)
++  (collecting
++    (dolist (option options)
++      (unless (option-hidden-p option)
++        (let ((specs
++                (if cache
++                    (or (gethash option cache)
++                        (setf (gethash option cache)
++                              (%completion-zsh-option-specs-for-specs
++                               (list option))))
++                    (%completion-zsh-option-specs-for-specs (list option)))))
++          ;; Do not splice the cached list into a mutable output accumulator.
++          (dolist (spec specs)
++            (collect spec)))))))
+@@ -144,5 +153,5 @@
+-(defun %completion-zsh-write-option-specs (stream options variable-name &key app)
++(defun %completion-zsh-write-option-specs (stream options variable-name &key app cache)
+   (%completion-zsh-write-assignment
+    stream variable-name
+-   (append (%completion-zsh-option-specs-for-options options)
++   (append (%completion-zsh-option-specs-for-options options cache)
+            (when app
+--- a/src/completion-renderers-zsh.lisp
++++ b/src/completion-renderers-zsh.lisp
+@@ -33,7 +33,8 @@
+    stream "subcommand_specs"
+    (%completion-zsh-command-specs subcommands)))
+ 
+-(defun %completion-zsh-write-command-node (stream app command scope-options depth)
++(defun %completion-zsh-write-command-node (stream app command scope-options depth
++                                           &optional option-cache)
+   "Write the `NAME) ... ;;' case clause for COMMAND at word index DEPTH directly to STREAM.
+ 
+ SCOPE-OPTIONS accumulates globals plus every ancestor command's options; a
+@@ -50,12 +51,14 @@
+     (format stream "    ")
+     (%completion-zsh-write-command-labels stream command)
+     (format stream ")~%")
+-    (%completion-zsh-write-option-specs stream options "command_option_specs" :app app)
++    (%completion-zsh-write-option-specs stream options "command_option_specs"
++                                        :app app :cache option-cache)
+     (%completion-zsh-render-value-cases options stream)
+     (when subcommands
+       (format stream "      case \"${words[~A]}\" in~%" child-depth)
+       (dolist (subcommand subcommands)
+-        (%completion-zsh-write-command-node stream app subcommand options child-depth))
++        (%completion-zsh-write-command-node stream app subcommand options child-depth
++                                            option-cache))
+       (format stream "      esac~%"))
+     (format stream "      if [[ \"$current_word\" == -* ]]; then~%")
+     (format stream "        _describe 'options' command_option_specs~%")
+@@ -80,8 +83,9 @@
+     (format stream "      return 0~%")
+     (format stream "      ;;~%")))
+ 
+-(defun %completion-zsh-write-command-case-source (stream app command)
+-  (%completion-zsh-write-command-node stream app command (app-global-options app) 2))
++(defun %completion-zsh-write-command-case-source (stream app command &optional option-cache)
++  (%completion-zsh-write-command-node stream app command (app-global-options app) 2
++                                      option-cache))
+ 
+ (defun %completion-zsh-write-positional-fallback (app stream indent)
+   "Write INDENT-prefixed compadd/_files fallback lines for APP's own
+@@ -105,8 +109,9 @@
+ With no STREAM, return the completion script as a string. With a STREAM,
+ write the script to it and return no values."
+   (ensure-output-stream stream render-zsh-completion app)
+   (let ((function-name (%completion-function-name app))
+-        (app-name (%completion-control-safe-string (app-name app))))
++        (app-name (%completion-control-safe-string (app-name app)))
++        (option-cache (make-hash-table :test #'eq)))
+     (format stream "#compdef ~A~%" app-name)
+     (format stream "~A() {~%" function-name)
+     (format stream "  local current_word previous_word command_word~%")
+@@ -124,14 +129,15 @@
+     (format stream "    command_word=~%")
+     (format stream "  fi~%")
+     (%completion-zsh-write-command-specs stream app)
+-    (%completion-zsh-write-option-specs stream (app-global-options app) "option_specs" :app app)
++    (%completion-zsh-write-option-specs stream (app-global-options app) "option_specs"
++                                        :app app :cache option-cache)
+     (%completion-zsh-render-value-cases (app-global-options app) stream)
+     (if (%completion-visible-commands app)
+         (progn
+           (format stream "  case \"$command_word\" in~%")
+           (dolist (command (%completion-visible-commands app))
+-            (%completion-zsh-write-command-case-source stream app command))
++            (%completion-zsh-write-command-case-source stream app command option-cache))
+           (format stream "    *)~%")
+           (format stream "      if [[ \"$current_word\" == -* ]]; then~%")
+           (format stream "        _describe 'options' option_specs~%")
+           (format stream "        return 0~%")
+--- a/t/completion-commands-test.lisp
++++ b/t/completion-commands-test.lisp
+@@ -193,6 +193,56 @@
+       (assert-searches nushell "\"bad value\"" "first seconddone")
+       (assert-searches elvish "'bad value'")))
+ 
++  (it "reuses zsh option descriptors only within a render cache"
++    (let* ((option (make-option :name "verbose" :short #\v :kind :flag
++                                :description "first:[value]"))
++           (hidden (make-option :name "secret" :kind :flag :hidden-p t))
++           (options (list option hidden))
++           (cache (make-hash-table :test #'eq))
++           (first (cl-cli::%completion-zsh-option-specs-for-options options cache))
++           (again (cl-cli::%completion-zsh-option-specs-for-options options cache)))
++      (expect (equal first
++                     (cl-cli::%completion-option-items-for-options
++                      options #'cl-cli::%completion-recognized-option-names
++                      #'cl-cli::%completion-zsh-option-spec)))
++      (expect (= 1 (hash-table-count cache)))
++      (expect (= 2 (length first)))
++      (expect (equal first again))
++      (expect (every #'eq first again))
++      (expect (equal first (gethash option cache)))
++      (setf (car first) "poison")
++      (expect (not (equal first again)))
++      (expect (equal again (gethash option cache)))
++      (setf (option-description option) "second")
++      (expect (not (equal again
++                          (cl-cli::%completion-zsh-option-specs-for-options
++                           options (make-hash-table :test #'eq)))))))
++
++  (it "refreshes zsh descriptors between renders and shares them with child commands"
++    (let* ((option (make-option :name "verbose" :kind :flag :description "before"))
++           (child-option (make-option :name "leaf" :kind :flag))
++           (parent (make-command :name "parent"
++                                 :subcommands (list (make-command :name "child"
++                                                                 :options (list child-option)))))
++           (app (demo-app :global-options (list option) :commands (list parent)))
++           (cache (make-hash-table :test #'eq))
++           (before (render-zsh-completion app)))
++      (expect (string=
++               (with-output-to-string (s)
++                 (cl-cli::%completion-zsh-write-command-case-source s app parent cache))
++               (with-output-to-string (s)
++                 (cl-cli::%completion-zsh-write-command-case-source s app parent))))
++      (expect (= 2 (hash-table-count cache)))
++      (expect (gethash child-option cache))
++      (setf (option-description option) "after")
++      (let ((after (render-zsh-completion app)))
++        (expect (not (string= before after)))
++        (expect (search "--verbose[after]" after))
++        (expect (not (search "--verbose[before]" after)))
++        (expect (string= after (with-output-to-string (s)
++                                (expect (null (multiple-value-list
++                                               (render-zsh-completion app s))))))))))
++
+   (it "renderers return the script as a string when no stream is given"
+     (let ((app (demo-app
+                 :global-options (list (make-option :name "verbose" :kind :flag))
+--- a/src/option-relations.lisp
++++ b/src/option-relations.lisp
+@@ -92,10 +92,13 @@
+ two options that conflict with each other."
+   (some (lambda (root)
+-          (let ((reachable (cons root (transitive-required-option-keys graph root))))
++          (let ((reachable (cons root (transitive-required-option-keys graph root)))
++                (reachable-table (make-hash-table :test #'eql)))
++            (dolist (key reachable)
++              (setf (gethash key reachable-table) t))
+             (some (lambda (left)
+-                    (some (lambda (right)
+-                            (member right (gethash left (option-relation-graph-conflicts graph))))
+-                          reachable))
++                    (some (lambda (conflict)
++                            (gethash conflict reachable-table))
++                          (gethash left (option-relation-graph-conflicts graph))))
+                   reachable)))
+         keys))
+ 
+--- a/t/option-relations-test.lisp
++++ b/t/option-relations-test.lisp
+@@ -330,6 +330,56 @@
+                                          :conflicts-with '(:c))
+                              (make-option :name "c" :kind :flag)))))
+ 
++  (it "matches pairwise closure validation across fixed-order three-option DAGs and conflict graphs"
++    (let ((keys '(:a :b :c))
++          (edges '((:a :b) (:a :c) (:b :c)))
++          (checked 0))
++      (labels ((pairwise-conflict-p (graph roots)
++                 (some (lambda (root)
++                         (let ((reachable
++                                 (cons root (cl-cli::transitive-required-option-keys
++                                             graph root))))
++                           (some (lambda (left)
++                                   (some (lambda (right)
++                                           (member right
++                                                   (gethash left
++                                                            (cl-cli::option-relation-graph-conflicts
++                                                             graph))))
++                                         reachable))
++                                 reachable)))
++                       roots)))
++        (dotimes (requires-mask 8)
++          (dotimes (conflicts-mask 8)
++            (let ((graph (cl-cli::%make-option-relation-graph)))
++              (loop for (left right) in edges
++                    for bit from 0
++                    do (when (logbitp bit requires-mask)
++                         (push right (gethash left
++                                              (cl-cli::option-relation-graph-requires graph))))
++                       (when (logbitp bit conflicts-mask)
++                         (push right (gethash left (cl-cli::option-relation-graph-conflicts graph)))
++                         (push left (gethash right (cl-cli::option-relation-graph-conflicts graph)))))
++              (dolist (key keys)
++                (setf (gethash key (cl-cli::option-relation-graph-transitive-requires graph))
++                      (cl-cli::%relation-graph-transitive-requires graph key)))
++              (dolist (roots (cons keys (mapcar #'list keys)))
++                (expect (eql (not (null (pairwise-conflict-p graph roots)))
++                             (not (null (cl-cli::%relation-graph-conflicting-closure-p
++                                         graph roots))))))
++              (incf checked)))))
++      (expect (= 64 checked))))
++
++  (it "preserves eql conflict matching for numeric option keys"
++    (let* ((graph (cl-cli::%make-option-relation-graph))
++           (reachable-key (parse-integer "1000000000000000000000000000000"))
++           (conflict-key (parse-integer "1000000000000000000000000000000")))
++      (setf (gethash :a (cl-cli::option-relation-graph-transitive-requires graph))
++            (list reachable-key)
++            (gethash :a (cl-cli::option-relation-graph-conflicts graph))
++            (list conflict-key))
++      (expect (eql reachable-key conflict-key))
++      (expect (cl-cli::%relation-graph-conflicting-closure-p graph '(:a)))))
++
+   (it "keeps each app's cached relation rulebase independent when a command is reused across apps"
+     ;; COMMAND-SPEC is documented as a reusable, composable object -- the same
+     ;; instance can be spliced into :COMMANDS for more than one MAKE-APP call.

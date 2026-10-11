@@ -25,6 +25,7 @@
                             (20 . :ctrl-t)
                             (21 . :ctrl-u)
                             (23 . :ctrl-w)
+                            (24 . :ctrl-x)
                             (25 . :ctrl-y)
                             (31 . :ctrl-underscore)))
            (events (read-key-events-from-string

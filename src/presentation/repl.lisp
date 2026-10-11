@@ -3,6 +3,10 @@
 (in-package #:nshell.presentation)
 
 (defun %render-prompt-after-terminal-resize ()
+  (when *rerun-confirmation-pending-p*
+    (setf *rerun-confirmation-pending-p* nil
+          *rerun-command-assessment* nil)
+    (clear-rendered-transient-panel))
   (let ((*preserve-transient-panel-on-next-prompt-p* t))
     (render-prompt-cont)))
 
@@ -95,6 +99,21 @@
             (setf *input-state* new-state)
             (process-output-event output-event))))))
 
+(defun %process-input-event (event)
+  (when (and *rerun-confirmation-pending-p*
+             (nshell.infrastructure.acl:consume-terminal-resize-p))
+    (return-from %process-input-event (%render-prompt-after-terminal-resize)))
+  (multiple-value-bind (new-state output-event)
+      (reduce-input-state *input-state* event)
+    (when (and (not (eq output-event :rerun-last-command))
+               (or *rerun-confirmation-pending-p* *rerun-command-assessment*))
+      (setf *rerun-confirmation-pending-p* nil
+            *rerun-command-assessment* nil)
+      (clear-rendered-transient-panel))
+    (setf *assistant-last-cancel-at* nil
+          *input-state* new-state)
+    (process-output-event output-event)))
+
 (defun read-key-cont ()
   (if (nshell.infrastructure.acl:consume-terminal-resize-p)
       (lambda () (%render-prompt-after-terminal-resize))
@@ -109,6 +128,9 @@
                               raw-event)
                       (%map-rendered-mouse-event-to-buffer raw-event))))
         (cond
+          ((and *rerun-confirmation-pending-p*
+                (nshell.infrastructure.acl:consume-terminal-resize-p))
+           (lambda () (%render-prompt-after-terminal-resize)))
           ((nshell.feature.assistant:assistant-model-event-p raw-event)
            (lambda ()
              (when (eql *assistant-turn-generation*
@@ -118,6 +140,8 @@
                (when (functionp *assistant-model-event-handler*)
                  (funcall *assistant-model-event-handler* raw-event)))
              (read-key-cont)))
+          ((and event *rerun-confirmation-pending-p*)
+           (lambda () (%process-input-event event)))
           ((and event *command-not-found-fallback-text*)
            (lambda () (%process-command-not-found-fallback-event event)))
           ((and event (%transient-panel-expand-event-p event))
@@ -141,17 +165,7 @@
           ((%assistant-repeat-cancel-event-p event)
            (lambda () (process-output-event :ask-cancel-turn)))
           (event
-           (lambda ()
-            (when (or *rerun-confirmation-pending-p*
-                      *rerun-command-assessment*)
-               (setf *rerun-confirmation-pending-p* nil)
-               (setf *rerun-command-assessment* nil)
-               (clear-rendered-transient-panel))
-             (setf *assistant-last-cancel-at* nil)
-             (multiple-value-bind (new-state output-event)
-                 (reduce-input-state *input-state* event)
-               (setf *input-state* new-state)
-               (process-output-event output-event))))
+           (lambda () (%process-input-event event)))
           ((nshell.infrastructure.acl:consume-terminal-resize-p)
            (lambda () (%render-prompt-after-terminal-resize)))
           (t

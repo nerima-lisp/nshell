@@ -111,10 +111,13 @@ owns the parent-side fd and the child processes until it is closed."
   "Wait for RESOURCE's process substitution child processes."
   (let ((processes (process-substitution-resource-processes resource)))
     (unwind-protect
-         (if processes
-             (%wait-pipeline-processes processes)
-             0)
-      (setf (process-substitution-resource-processes resource) nil))))
+         (multiple-value-prog1
+             (if processes
+                 (%wait-pipeline-processes processes)
+                 0)
+           (setf (process-substitution-resource-processes resource) nil))
+      (when (process-substitution-resource-processes resource)
+        (close-process-substitution resource)))))
 
 (defun close-process-substitution (resource)
   "Release RESOURCE's fd and terminate/wait any remaining child processes."

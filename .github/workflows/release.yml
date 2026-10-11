@@ -105,6 +105,18 @@ jobs:
           NSHELL_TEST_PTY: "1"
         run: nix develop -c sbcl --script run-tests.lisp
 
+      - name: Verify dependency suites and private history storage
+        env:
+          HOME: ${{ runner.temp }}/nshell-dependency-home
+          XDG_CACHE_HOME: ${{ runner.temp }}/nshell-dependency-cache
+          XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-dependency-config
+          XDG_STATE_HOME: ${{ runner.temp }}/nshell-dependency-state
+          NSHELL_AI_COMMAND: /nonexistent
+          NSHELL_TEST_PTY: "1"
+        run: |
+          nix develop -c bash scripts/test-dependencies.sh
+          nix develop -c sbcl --script scripts/test-history-storage.lisp
+
   release:
     name: build and publish x86_64-linux
     needs: [verify, integration]
@@ -154,6 +166,16 @@ jobs:
           cmp "dist/${name}.tar.gz" "dist/${name}.repro.tar.gz"
           rm "dist/${name}.repro.tar.gz"
           ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
+
+      - name: Verify the packaged archive
+        run: |
+          set -euo pipefail
+          name="nshell-${RELEASE_REF}-x86_64-linux"
+          ( cd dist && shasum -a 256 -c "${name}.tar.gz.sha256" )
+          extracted="$(mktemp -d "$RUNNER_TEMP/nshell-release.XXXXXX")"
+          tar -xzf "dist/${name}.tar.gz" -C "$extracted"
+          perl scripts/verify-release-bundle.pl "$extracted/$name"
+          perl scripts/test-release-pty.pl "$extracted/$name"
 
       # Publish only after the maintainer supplies user-facing release notes.
       - name: Create draft release

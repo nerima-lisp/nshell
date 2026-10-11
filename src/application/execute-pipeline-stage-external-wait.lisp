@@ -37,4 +37,4 @@
         (when (and process
                    (sb-ext:process-alive-p process)
                    (not (eq (sb-ext:process-status process) :stopped)))
-          (ignore-errors (sb-ext:process-wait process)))))))
+          (ignore-errors (nshell.infrastructure.acl:process-wait process)))))))

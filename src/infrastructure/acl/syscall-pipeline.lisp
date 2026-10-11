@@ -59,7 +59,7 @@
                  (when (read-byte error-stream nil nil)
                    (error "Pipeline helper failed before exec"))
                  ;; The leader must stay alive until every stage has joined it.
-                 (sb-ext:process-wait proc t)
+                 (%wait-sbcl-process proc t)
                  (unless (and (eq :stopped (sb-ext:process-status proc))
                               (= (or pgid (sb-ext:process-pid proc))
                                  (sb-posix:getpgid (sb-ext:process-pid proc))))
@@ -69,7 +69,7 @@
             (unless complete
               (when proc
                 (ignore-errors (sb-ext:process-kill proc sb-unix:sigkill))
-                (ignore-errors (sb-ext:process-wait proc))
+                (ignore-errors (%wait-sbcl-process proc))
                 (ignore-errors (sb-ext:process-close proc))))
             (when error-stream (close error-stream))
             (when read-fd (sb-posix:close read-fd))

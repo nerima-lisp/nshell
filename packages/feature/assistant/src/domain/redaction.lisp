@@ -178,44 +178,43 @@
     (match 0 0)))
 
 (defun %assistant-command-token-separator-p (token)
-  (member token '("|" "||" ";" "&&" "$(" ")") :test #'string=))
+  (keywordp token))
 
 (defun %assistant-split-command-tokens (line)
   (let ((tokens nil)
-        (start nil)
-        (length (length line)))
-    (labels ((flush-token (position)
-               (when start
-                 (push (subseq line start position) tokens)
-                 (setf start nil)))
-             (push-token (token)
-               (push token tokens)))
-      (loop for position from 0 below length
-            for character = (char line position)
-            do (cond
-                 ((%assistant-whitespace-p character)
-                  (flush-token position))
-                 ((char= character #\$)
-                  (if (and (< (1+ position) length)
-                           (char= (char line (1+ position)) #\())
-                      (progn
-                        (flush-token position)
-                        (push-token "$(")
-                        (incf position))
-                      (unless start (setf start position))))
-                 ((member character '(#\| #\; #\) #\&) :test #'char=)
-                  (flush-token position)
-                  (if (and (member character '(#\| #\&) :test #'char=)
-                           (< (1+ position) length)
-                           (char= (char line (1+ position)) character))
-                      (progn
-                        (push-token (if (char= character #\|) "||" "&&"))
-                        (incf position))
-                      (push-token (string character))))
-                 (t
-                  (unless start (setf start position))))
-            finally (flush-token length))
-      (nreverse tokens))))
+        (substitutions nil)
+        (word-end nil))
+    (dolist (token (nshell.domain.parsing:tokenization-result-tokens
+                    (nshell.domain.parsing:tokenize line)))
+      (let ((type (nshell.domain.parsing:token-type token))
+            (value (nshell.domain.parsing:token-value token)))
+        (cond
+          ((eq type :word)
+           ;; The parser joins adjacent quoted and unquoted word fragments.
+           (if (eql word-end (nshell.domain.parsing:token-start token))
+               (setf (first tokens) (concatenate 'string (first tokens) value))
+               (push value tokens))
+           (setf word-end (nshell.domain.parsing:token-end token))
+           (unless (eq (nshell.domain.parsing:token-quote-style token) :single)
+             (dolist (marker '("$(" "<(" ">(" "("))
+               (dolist (text (nshell.domain.parsing:parenthesized-substitution-texts
+                              value marker))
+                 ;; Partial command lines still need their denylisted bodies removed.
+                 (let ((body (if (eq text :incomplete)
+                                 (subseq value (+ (search marker value)
+                                                  (length marker)))
+                                 text)))
+                   (push (cons :substitution
+                               (%assistant-split-command-tokens body))
+                         substitutions))))))
+          ((member type '(:pipe :and :or :semicolon :newline :ampersand
+                          :lparen :rparen))
+           (push type tokens)
+           (setf word-end nil))
+          (t (setf word-end nil)))))
+    (append (nreverse tokens)
+            (loop for substitution in (nreverse substitutions)
+                  append (append substitution (list :substitution))))))
 
 (defun %assistant-command-token-name (token)
   (let ((slash (position #\/ token :from-end t)))
@@ -227,17 +226,24 @@
           :test #'string=))
 
 (defun %assistant-wrapper-option-takes-argument-p (wrapper option)
-  (and (member wrapper '("sudo" "env" "nice" "stdbuf") :test #'string=)
-       (or (member option
-                   '("-u" "--user" "-g" "--group" "-h" "--host"
-                     "-p" "--prompt" "-C" "--close-from" "-D" "--chdir"
-                     "-R" "--chroot" "-r" "--role" "-t" "--type"
-                     "-n" "--adjustment" "-i" "--input" "-o" "--output"
-                     "-e" "--error" "--unset")
-                   :test #'string=)
-           (and (> (length option) 2)
-                (member (subseq option 0 2) '("-u" "-g" "-p" "-C" "-D" "-R" "-r" "-t" "-n")
-                        :test #'string=)))))
+  (multiple-value-bind (short-options long-options)
+      (cond
+        ((string= wrapper "sudo")
+         (values "ughpCDRrt" '("--user" "--group" "--host" "--prompt"
+                               "--close-from" "--chdir" "--chroot" "--role" "--type")))
+        ((string= wrapper "env")
+         (values "uCS" '("--unset" "--chdir" "--split-string")))
+        ((string= wrapper "nice") (values "n" '("--adjustment")))
+        ((string= wrapper "stdbuf") (values "ioe" '("--input" "--output" "--error"))))
+    (or (member option long-options :test #'string=)
+        ;; An attached short-option value does not consume the following command.
+        (and short-options (> (length option) 1)
+             (char= (char option 0) #\-)
+             (not (char= (char option 1) #\-))
+             (let ((position (position-if (lambda (character)
+                                            (find character short-options))
+                                          option :start 1)))
+               (and position (= position (1- (length option)))))))))
 
 (defun %assistant-command-index-after-wrappers (tokens start)
   (loop with position = start
@@ -246,6 +252,8 @@
         do (cond
              ((%assistant-command-token-separator-p token)
               (return nil))
+             ((nshell.domain.parsing:shell-assignment-word-p token)
+              (incf position))
              ((not (%assistant-wrapper-name-p token))
               (return position))
              (t
@@ -253,23 +261,29 @@
                 (incf position)
                 (loop while (< position (length tokens))
                       for option = (nth position tokens)
-                      while (or (and (string= wrapper "env")
-                                     (search "=" option))
-                                (and (plusp (length option))
-                                     (char= (char option 0) #\-)))
+                      while (and (stringp option)
+                                 (or (and (string= wrapper "env")
+                                          (nshell.domain.parsing:shell-assignment-word-p option))
+                                     (and (plusp (length option))
+                                          (char= (char option 0) #\-))))
                       do (incf position)
+                         (when (string= option "--") (return))
                          (when (%assistant-wrapper-option-takes-argument-p wrapper option)
-                           (incf position))))))))
+                           (if (and (< position (length tokens))
+                                    (stringp (nth position tokens)))
+                               (incf position)
+                               (return-from %assistant-command-index-after-wrappers nil)))))))))
 
 (defun %assistant-command-pattern-match-p (pattern tokens position)
   (let ((pattern-tokens (%assistant-split-command-tokens pattern)))
     (and (plusp (length pattern-tokens))
+         (stringp (first pattern-tokens))
          (<= (+ position (length pattern-tokens)) (length tokens))
          (string= (%assistant-command-token-name (first pattern-tokens))
                   (%assistant-command-token-name (nth position tokens)))
          (loop for offset from 1 below (length pattern-tokens)
-               always (string= (nth offset pattern-tokens)
-                               (nth (+ position offset) tokens))))))
+               always (equal (nth offset pattern-tokens)
+                             (nth (+ position offset) tokens))))))
 
 (defun %assistant-denylisted-command-p (tokens denylist-commands)
   (loop for position = 0 then (1+ separator)

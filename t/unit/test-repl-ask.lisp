@@ -1,5 +1,56 @@
 (in-package #:nshell/test)
 
+(describe "repl-proposal-edit-regressions"
+  (it "invalidates-approval-when-the-command-buffer-changes"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :insert :buffer "rm file" :cursor-pos 7)
+        (let ((nshell.presentation::*assistant-command-origin* :proposal)
+              (nshell.presentation::*assistant-command-confirmed-p* t))
+          (with-temporary-function
+              ('nshell.presentation::process-output-event
+               (lambda (event) (declare (ignore event)) nil))
+            (nshell.presentation::%process-input-event (input-key-event :char #\x)))
+          (expect "rm filex" :to-equal
+                  (nshell.presentation:input-state-buffer nshell.presentation::*input-state*))
+          (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)))))
+  (it "preserves-approval-when-only-the-cursor-moves"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :insert :buffer "rm file" :cursor-pos 7)
+        (let ((nshell.presentation::*assistant-command-origin* :proposal)
+              (nshell.presentation::*assistant-command-confirmed-p* t))
+          (with-temporary-function
+              ('nshell.presentation::process-output-event
+               (lambda (event) (declare (ignore event)) nil))
+            (nshell.presentation::%process-input-event (input-key-event :left)))
+          (expect 6 :to-be
+                  (nshell.presentation:input-state-cursor-pos nshell.presentation::*input-state*))
+          (expect t :to-be nshell.presentation::*assistant-command-confirmed-p*))))))
+
+(describe "repl-rate-limit-regressions"
+  (dolist (request-kind '(:ask :explain :agent))
+    (dolist (status '("allowed" "allowed_warning"))
+      (it (format nil "keeps-~A-waiting-after-~A" request-kind status)
+        (with-repl-test-state
+          (with-repl-input-state (:mode :ask-waiting :buffer "question" :cursor-pos 8)
+            (let* ((nshell.presentation::*assistant-request-kind* request-kind)
+                   (handler #'nshell.presentation::%handle-ask-model-event)
+                   (event (nshell.feature.assistant::make-assistant-model-event
+                           1 :rate-limit-event
+                           `(("rate_limit_info" . (("status" . ,status)))))))
+              (setf nshell.presentation::*assistant-model-event-handler* handler)
+              (expect nil :to-be (nshell.presentation::%ask-model-terminal-event-p event))
+              (funcall handler event)
+              (expect :ask-waiting :to-be
+                      (nshell.presentation:input-state-mode nshell.presentation::*input-state*))
+              (expect handler :to-be nshell.presentation::*assistant-model-event-handler*)
+              (expect request-kind :to-be nshell.presentation::*assistant-request-kind*)))))))
+  (it "treats-rejected-rate-limits-as-terminal"
+    (expect (nshell.presentation::%ask-model-terminal-event-p
+             (nshell.feature.assistant::make-assistant-model-event
+              1 :rate-limit-event
+              '(("rate_limit_info" . (("status" . "rejected"))))))
+            :to-be-truthy)))
+
 (describe "repl-ask-request-tests"
   (it "starts-the-model-and-sends-the-natural-language-payload"
     (with-repl-test-state

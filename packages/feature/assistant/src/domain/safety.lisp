@@ -30,7 +30,7 @@
                             (:arg-equals "~")
                             (:arg-equals "$HOME")
                             (:arg-equals "."))
-                 (:any (:arg-prefix "-r") (:arg-equals "--recursive")))
+                 (:any (:short-option-any "rR") (:option-equals "--recursive")))
     :reason "recursive deletion of the filesystem root is blocked")
    (make-assistant-safety-rule
     :name :destructive-delete
@@ -79,10 +79,23 @@
      (some (lambda (part) (%assistant-condition-p part args)) (rest condition)))
     ((and (consp condition) (eq (first condition) :arg-equals))
      (member (second condition) args :test #'string=))
+    ((and (consp condition) (eq (first condition) :option-equals))
+     (loop for arg in args
+           until (string= arg "--")
+           thereis (string= (second condition) arg)))
     ((and (consp condition) (eq (first condition) :arg-prefix))
      (some (lambda (arg)
              (%assistant-string-prefix-p (second condition) arg))
            args))
+    ((and (consp condition) (eq (first condition) :short-option-any))
+     (loop for arg in args
+           until (string= arg "--")
+           thereis (and (> (length arg) 1)
+                        (char= (char arg 0) #\-)
+                        (not (char= (char arg 1) #\-))
+                        (find-if (lambda (character)
+                                   (find character (second condition)))
+                                 (subseq arg 1)))))
     ((and (consp condition) (eq (first condition) :subcommand-equals))
      (and (first args) (string= (second condition) (first args))))
     (t nil)))
@@ -268,69 +281,67 @@
       (let* ((command (nshell.domain.parsing:command-node-command node))
              (args (nshell.domain.parsing:command-node-arg-values node))
              (rule (%assistant-rule-for command args))
-             (substitution-result (%assistant-command-substitution-result command args)))
-        (cond
-          ((and substitution-result
-                (eq :block
-                    (assistant-safety-result-classification substitution-result)))
-           substitution-result)
-          ((and substitution-result
-                (eq :confirm
-                    (assistant-safety-result-classification substitution-result)))
-           substitution-result)
-          ((%assistant-unsafe-argument-p command args)
-           (make-assistant-safety-result
-            :classification :confirm
-            :command command
-            :reason (%assistant-unsafe-argument-reason command args)))
-          ((and (string= command "git")
-                (not (%assistant-safe-git-command-p args)))
-           (make-assistant-safety-result
-            :classification :confirm
-            :command command
-            :reason "writing, external command execution, or configuration injection requires confirmation"))
-          ((or (member command +assistant-safe-command-names+ :test #'string=)
-               (and (string= command "git")
-                    (%assistant-safe-git-command-p args)))
-           (make-assistant-safety-result
-            :classification :safe
-            :command command
-            :rule-name :safe-allowlist
-            :reason "command is on the built-in read-only allowlist"))
-          ((multiple-value-bind (index kind)
-               (%assistant-wrapper-index-and-kind command args)
-             (declare (ignore kind))
-             (when index
-               (%assistant-parse-and-classify-text
-                (format nil "~{~a~^ ~}" (nthcdr (1+ index) (cons command args)))))))
-          ((string= command "source")
-           ;; The arguments name a file; classifying them cannot vet its contents.
-           (make-assistant-safety-result
-            :classification :confirm
-            :command command
-            :reason "sourcing a file can execute commands and requires confirmation"))
-          ((string= command "eval")
-           (%assistant-parse-and-classify-text (format nil "~{~a~^ ~}" args)))
-          ((member command '("sh" "bash" "zsh" "fish") :test #'string=)
-           (let ((index (position "-c" args :test #'string=)))
-             (if (and index (nth (1+ index) args))
-                 (%assistant-parse-and-classify-text (nth (1+ index) args))
-                 (%assistant-unknown-command-result command))))
-          ((and rule
-                (eq (assistant-safety-rule-classification rule) :block))
-           (make-assistant-safety-result
-            :classification :block
-            :command command
-            :rule-name (assistant-safety-rule-name rule)
-            :reason (assistant-safety-rule-reason rule)))
-          (rule
-           (make-assistant-safety-result
-            :classification (assistant-safety-rule-classification rule)
-            :command command
-            :rule-name (assistant-safety-rule-name rule)
-            :reason (assistant-safety-rule-reason rule)))
-          (t (or (%assistant-unknown-wrapper-result command args)
-                 (%assistant-unknown-command-result command)))))
+             (substitution-result (%assistant-command-substitution-result command args))
+             (unsafe-reason (%assistant-unsafe-argument-reason command args)))
+        ;; Redirects and substitutions add restrictions; they cannot relax a block.
+        (%assistant-most-restrictive-result
+         (remove nil
+          (list
+           (cond
+            ((and (string= command "git")
+                  (not (%assistant-safe-git-command-p args)))
+             (make-assistant-safety-result
+              :classification :confirm
+              :command command
+              :reason "writing, external command execution, or configuration injection requires confirmation"))
+            ((or (member command +assistant-safe-command-names+ :test #'string=)
+                 (and (string= command "git")
+                      (%assistant-safe-git-command-p args)))
+             (make-assistant-safety-result
+              :classification :safe
+              :command command
+              :rule-name :safe-allowlist
+              :reason "command is on the built-in read-only allowlist"))
+            ((multiple-value-bind (index kind)
+                 (%assistant-wrapper-index-and-kind command args)
+               (declare (ignore kind))
+               (when index
+                 (%assistant-parse-and-classify-text
+                  (format nil "~{~a~^ ~}" (nthcdr (1+ index) (cons command args)))))))
+            ((string= command "source")
+             ;; The arguments name a file; classifying them cannot vet its contents.
+             (make-assistant-safety-result
+              :classification :confirm
+              :command command
+              :reason "sourcing a file can execute commands and requires confirmation"))
+            ((string= command "eval")
+             (%assistant-parse-and-classify-text (format nil "~{~a~^ ~}" args)))
+            ((member command '("sh" "bash" "zsh" "fish") :test #'string=)
+             (let ((index (position "-c" args :test #'string=)))
+               (if (and index (nth (1+ index) args))
+                   (%assistant-parse-and-classify-text (nth (1+ index) args))
+                   (%assistant-unknown-command-result command))))
+            ((and rule
+                  (eq (assistant-safety-rule-classification rule) :block))
+             (make-assistant-safety-result
+              :classification :block
+              :command command
+              :rule-name (assistant-safety-rule-name rule)
+              :reason (assistant-safety-rule-reason rule)))
+            (rule
+             (make-assistant-safety-result
+              :classification (assistant-safety-rule-classification rule)
+              :command command
+              :rule-name (assistant-safety-rule-name rule)
+              :reason (assistant-safety-rule-reason rule)))
+            (t (or (%assistant-unknown-wrapper-result command args)
+                   (%assistant-unknown-command-result command))))
+           substitution-result
+           (when unsafe-reason
+             (make-assistant-safety-result
+              :classification :confirm
+              :command command
+              :reason unsafe-reason))))))
       (make-assistant-safety-result
        :classification :block
        :reason "the value is not a command AST node")))

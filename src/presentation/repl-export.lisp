@@ -1,10 +1,32 @@
 (in-package #:nshell.presentation)
 
+(defun %assistant-environment-denylist-values (bindings)
+  ;; Only known, typed non-credential bindings may be omitted. Unknown short
+  ;; values remain protected, even when they duplicate a normal setting.
+  (loop for binding in bindings
+        for name = (nshell.domain.environment:env-binding-name binding)
+        for value = (nshell.domain.environment:env-binding-value binding)
+        for number = (and (member name '("NSHELL_AI_MAX_STEPS" "?" "status")
+                                  :test #'string=)
+                          (plusp (length value))
+                          (every (lambda (character)
+                                   (char<= #\0 character #\9))
+                                 value)
+                          (parse-integer value))
+        unless (and number
+                    (or (and (string= name "NSHELL_AI_MAX_STEPS")
+                             (plusp number))
+                        (and (member name '("?" "status") :test #'string=)
+                             (not (nshell.domain.environment:env-binding-exported-p
+                                   binding))
+                             (<= 0 number 255))))
+          collect value))
+
 (defun %assistant-export-environment-data ()
   (let ((bindings (nshell.domain.environment:env-bindings
                    (ensure-environment))))
     (values (mapcar #'nshell.domain.environment:env-binding-name bindings)
-            (mapcar #'nshell.domain.environment:env-binding-value bindings))))
+            (%assistant-environment-denylist-values bindings))))
 
 (defun %export-prompt-state ()
   (when (and *interactive-terminal-installed-p* *assistant-session-id*)

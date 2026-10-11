@@ -8,6 +8,8 @@
       ((equal type "assistant") :assistant)
       ((equal type "rate_limit_event") :rate-limit-event)
       ((equal type "result") :result)
+      ((equal type "control_response") :control-response)
+      ((equal type "user") :user)
       (t :unknown))))
 
 (defun %assistant-read-json-value (stream)
@@ -97,29 +99,28 @@
           (:value
            (when pending
              (let ((kind (%assistant-event-kind object)))
-               (if (eq kind :unknown)
+               (cond
+                 ((and (member kind '(:control-response :user))
+                       (not (%assistant-sidecar-starting-p state))) nil)
+                 ((eq kind :unknown)
                    (progn
                      (%assistant-sidecar-publish
                       pending
                       (%assistant-sidecar-error-event
                        pending-generation
                        "assistant sidecar returned an unknown event"))
-                     (%assistant-sidecar-complete pending))
-                   (let ((event (make-assistant-model-event
+                     (%assistant-sidecar-complete pending)))
+                 (t (let ((event (make-assistant-model-event
                                  pending-generation
                                  kind
                                  object)))
                      (%assistant-sidecar-publish pending event)
-                     (when (eq kind :result)
-                       (%assistant-sidecar-complete pending)))))))
+                     (when (and (eq kind :result)
+                                (not (%assistant-sidecar-starting-p state)))
+                       (%assistant-sidecar-complete pending))))))))
           (:eof
-           ;; EOF means the sidecar has closed its protocol stream.  Reap the
-           ;; exited child before respawn cleanup can inspect its stale handle.
-           (ignore-errors
-            (sb-ext:process-wait
-             (nshell.infrastructure.acl:sidecar-handle-process handle)))
-           ;; A request can arrive while PROCESS-WAIT reaps the child.  Settle
-           ;; the cell captured by the identity-validated stop transition.
+           ;; Closing stdout does not imply process exit.  Use bounded stop
+           ;; cleanup and settle the cell captured by its identity check.
            (multiple-value-bind (stopped-p stopped-pending)
                (%assistant-sidecar-stop-state
                 state :preserve-pending-p t
@@ -203,18 +204,6 @@
   (when channel
     (ignore-errors (cl-concurrent-kit:close-channel channel))))
 
-(defun %assistant-sidecar-discard-pending (state pending)
-  (when (%assistant-sidecar-clear-pending state pending)
-    (loop
-      (multiple-value-bind (event present-p closed-p)
-          (cl-concurrent-kit:try-recv
-           (assistant-pending-cell-events pending))
-        (declare (ignore event closed-p))
-        (unless present-p
-          (return))))
-    (%assistant-sidecar-close-channel
-     (assistant-pending-cell-events pending))))
-
 (defun %assistant-sidecar-drain-pending-events (pending)
   (loop
     (multiple-value-bind (event present-p closed-p)
@@ -226,7 +215,8 @@
 
 (defun %assistant-sidecar-retire-pending (state pending)
   (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
-    (push pending (assistant-sidecar-state-retired-pending state))))
+    ;; Only the most recently stopped turn can still be polled by the caller.
+    (setf (assistant-sidecar-state-retired-pending state) (list pending))))
 
 (defun %assistant-sidecar-terminate-pending (state pending reason)
   (when (and pending (%assistant-sidecar-clear-pending state pending))
@@ -345,8 +335,60 @@
                :name "nshell assistant sidecar error reader"))
       t)))
 
+(defun %assistant-sidecar-init-handshake (state pending)
+  ;; Claude emits its isolation manifest only after receiving user input.
+  ;; Bootstrap with no user context, interrupt that turn, and consume its
+  ;; terminal response before allowing the queued request onto the stream.
+  (%assistant-sidecar-write-item
+   state (%make-assistant-write-item
+          (assistant-pending-cell-generation pending)
+          "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"\"}}"))
+  (let ((deadline (+ (get-internal-real-time)
+                     (round (* +assistant-sidecar-handshake-timeout-seconds+
+                               internal-time-units-per-second))))
+        (safe-p nil)
+        (interrupted-p nil)
+        (finished-p nil))
+    (loop
+      (unless (%assistant-sidecar-starting-p state)
+        (return nil))
+      (multiple-value-bind (event present-p closed-p)
+          (cl-concurrent-kit:try-recv (assistant-pending-cell-events pending))
+        (declare (ignore closed-p))
+        (when (and present-p (assistant-model-event-p event))
+          (case (assistant-model-event-kind event)
+            (:system-init
+             (unless (and (not safe-p)
+                          (assistant-system-init-safe-p
+                           (assistant-model-event-payload event)))
+               (return nil))
+             (setf safe-p t)
+             (%assistant-sidecar-write-item
+              state (%make-assistant-write-item
+                     (assistant-pending-cell-generation pending)
+                     "{\"type\":\"control_request\",\"request_id\":\"nshell-bootstrap-interrupt\",\"request\":{\"subtype\":\"interrupt\"}}")))
+            (:control-response
+             (let ((response (%assistant-object-field
+                              (assistant-model-event-payload event) "response")))
+               (unless (and safe-p
+                            (equal (%assistant-object-field response "request_id")
+                                   "nshell-bootstrap-interrupt")
+                            (equal (%assistant-object-field response "subtype")
+                                   "success"))
+                 (return nil))
+               (setf interrupted-p t)))
+            (:result
+             (unless safe-p (return nil))
+             (setf finished-p t))
+            ((:stream-error :stream-ended) (return nil))))
+        (when (and safe-p interrupted-p finished-p)
+          (return t))
+        (when (>= (get-internal-real-time) deadline)
+          (return nil))
+        (unless present-p (sleep 0.01))))))
+
 (defun %assistant-sidecar-start-worker (state pending startup-generation)
-  (let ((startup-events nil))
+  (progn
     (multiple-value-bind (version version-status)
       (let ((cached-version
               (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
@@ -397,40 +439,11 @@
                       (%assistant-sidecar-close-channel write-channel)
                       (return-from %assistant-sidecar-start-worker
                         (nshell.infrastructure.acl:stop-sidecar handle)))
-                (let ((deadline (+ (get-internal-real-time)
-                                   (round (* +assistant-sidecar-handshake-timeout-seconds+
-                                             internal-time-units-per-second)))))
-                  (loop
-                  (multiple-value-bind (event present-p closed-p)
-                      (cl-concurrent-kit:try-recv
-                       (assistant-pending-cell-events pending))
-                    (declare (ignore closed-p))
-                    (when (or (not (%assistant-sidecar-starting-p state))
-                              present-p)
-                      (when (and present-p
-                                 (assistant-model-event-p event)
-                                 (eq :system-init
-                                     (assistant-model-event-kind event))
-                                 (assistant-system-init-safe-p
-                                  (assistant-model-event-payload event)))
-                        (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
-                          (setf (assistant-sidecar-state-init-p state) t)))
-                      (when (and present-p (assistant-model-event-p event))
-                        (let ((kind (assistant-model-event-kind event)))
-                          (cond
-                            ((member kind '(:stream-error :stream-ended))
-                             (return))
-                            ((eq kind :system-init)
-                             (return))
-                             ((not (eq kind :system-init))
-                              (push event startup-events)))))
-                      (when (or (%assistant-sidecar-init-p state)
-                                (not (%assistant-sidecar-starting-p state)))
-                        (return)))
-                    (when (and (not present-p)
-                               (>= (get-internal-real-time) deadline))
-                      (return))
-                    (sleep 0.01)))
+                    (when (%assistant-sidecar-init-handshake state pending)
+                      (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                        (when (eql startup-generation
+                                   (assistant-sidecar-state-startup-generation state))
+                          (setf (assistant-sidecar-state-init-p state) t))))
                     (unless (%assistant-sidecar-generation-current-p
                              state startup-generation)
                       (return-from %assistant-sidecar-start-worker nil))
@@ -449,8 +462,6 @@
                        (make-assistant-model-event
                         (assistant-pending-cell-generation pending)
                         :system-init nil))
-                      (dolist (event (nreverse startup-events))
-                        (%assistant-sidecar-publish pending event))
                         (when payload
                           (%assistant-sidecar-write-item
                            state
@@ -467,13 +478,18 @@
                         "assistant sidecar init handshake failed"))
                       (%assistant-sidecar-complete pending)
                       (%assistant-sidecar-stop-state state
-                                                     :preserve-pending-p t))))))))))))
+                                                     :preserve-pending-p t)))))))))))
 
 (defun %assistant-sidecar-start (state)
   (let ((startup-generation
           (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
             (cond
               ((assistant-sidecar-state-starting-p state) :already-starting)
+              ((and (assistant-sidecar-state-init-p state)
+                    (not (assistant-sidecar-state-dead-p state))
+                    (assistant-sidecar-state-handle state)
+                    (nshell.infrastructure.acl:sidecar-alive-p
+                     (assistant-sidecar-state-handle state))) :already-starting)
               ((null (assistant-sidecar-state-command state))
                (setf (assistant-sidecar-state-disabled-reason state)
                      :disabled-by-environment)
@@ -541,7 +557,7 @@
     (let ((pending (%assistant-sidecar-current-pending state)))
     (when (and pending (%assistant-sidecar-starting-p state))
       (handler-case
-          (let ((line (json-kit:stringify (json-kit:alist->json-object payload))))
+          (let ((line (json-kit:stringify (%assistant-json-value payload))))
             (unless (json-kit:parse line :object-type :alist)
               (return-from %assistant-sidecar-request nil))
             (let ((send-now-p nil))
@@ -562,7 +578,7 @@
                (%assistant-sidecar-init-p state)
                (zerop (assistant-pending-cell-generation pending)))
       (handler-case
-          (let ((line (json-kit:stringify (json-kit:alist->json-object payload))))
+          (let ((line (json-kit:stringify (%assistant-json-value payload))))
             (unless (json-kit:parse line :object-type :alist)
               (return-from %assistant-sidecar-request nil))
             (let ((send-now-p nil))
@@ -581,7 +597,7 @@
              (not (%assistant-sidecar-dead-p state))
              (null pending))
         (handler-case
-            (let* ((object (json-kit:alist->json-object payload))
+            (let* ((object (%assistant-json-value payload))
                    (line (json-kit:stringify object)))
               (unless (json-kit:parse line :object-type :alist)
                 (return-from %assistant-sidecar-request nil))
@@ -608,7 +624,8 @@
         nil))))
 
 (defun %assistant-sidecar-poll (state generation)
-  (let ((pending (%assistant-sidecar-current-pending state)))
+  (let* ((current (%assistant-sidecar-current-pending state))
+         (pending current))
     (when (and pending
                (eql generation (assistant-pending-cell-generation pending))
                (%assistant-sidecar-starting-p state))
@@ -627,25 +644,41 @@
             (cl-concurrent-kit:try-recv
              (assistant-pending-cell-events pending))
           (declare (ignore closed-p))
-          (when (and present-p
-                     (assistant-model-event-p event)
-                     (member (assistant-model-event-kind event)
-                             '(:result :stream-ended :stream-error
-                               :rate-limit-event)))
-            (if (eq pending (%assistant-sidecar-current-pending state))
-                (%assistant-sidecar-clear-pending state pending)
-                (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
-                  (setf (assistant-sidecar-state-retired-pending state)
-                        (delete pending
-                                (assistant-sidecar-state-retired-pending state)
-                                :test #'eq))))
-            (%assistant-sidecar-close-channel
-             (assistant-pending-cell-events pending)))
+          (when (and present-p (assistant-model-event-p event))
+            (let ((rejected-p
+                    (and (eq (assistant-model-event-kind event) :rate-limit-event)
+                         (equal "rejected"
+                                (%assistant-object-field
+                                 (%assistant-object-field
+                                  (assistant-model-event-payload event) "rate_limit_info")
+                                 "status")))))
+              (when (or rejected-p
+                        (member (assistant-model-event-kind event)
+                                '(:result :stream-ended :stream-error)))
+                (if (eq pending (%assistant-sidecar-current-pending state))
+                    (progn
+                      ;; A rejected turn can still emit a result.  Retire its
+                      ;; process before allowing another request to use it.
+                      (when rejected-p
+                        (%assistant-sidecar-stop-state state :preserve-pending-p t))
+                      (%assistant-sidecar-clear-pending state pending))
+                    (sb-thread:with-mutex ((assistant-sidecar-state-lock state))
+                      (setf (assistant-sidecar-state-retired-pending state)
+                            (delete pending
+                                    (assistant-sidecar-state-retired-pending state)
+                                    :test #'eq))))
+                (when rejected-p
+                  (%assistant-sidecar-complete pending))
+                (%assistant-sidecar-close-channel
+                 (assistant-pending-cell-events pending)))))
           (values event present-p))
         (progn
-          (when (and pending
+          (when (and current
+                     (> generation (assistant-pending-cell-generation current))
                      (not (%assistant-sidecar-starting-p state)))
-            (%assistant-sidecar-discard-pending state pending))
+            ;; A stopped turn must lose its process, not just its event queue:
+            ;; otherwise its late response could be assigned to the next turn.
+            (%assistant-sidecar-stop-state state))
           (values nil nil)))))
 
 (defun %assistant-sidecar-stop (state)

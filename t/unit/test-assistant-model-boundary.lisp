@@ -1,5 +1,99 @@
 (in-package #:nshell/test)
 
+(describe "assistant-sidecar-payload-regressions"
+  (dolist (phase '(:starting :initialized :ready))
+    (let ((phase phase))
+      (it (format nil "serializes-the-real-user-payload-in-~A" phase)
+        (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+               (channel (cl-concurrent-kit:make-channel :buffer-size 8))
+               (pending (unless (eq phase :ready)
+                          (nshell.feature.assistant::%make-assistant-pending-cell
+                           0 (cl-concurrent-kit:make-channel :buffer-size 8)
+                           (cl-concurrent-kit:make-promise))))
+               (payload (nshell.feature.assistant:make-assistant-user-payload
+                         "Propose pwd."
+                         :context (nshell.feature.assistant:make-assistant-context
+                                   :command "pwd" :exit 0 :cwd "/fixture"
+                                   :environment-names '("PATH"))))
+               (line nil))
+          (setf (nshell.feature.assistant::assistant-sidecar-state-pending state) pending
+                (nshell.feature.assistant::assistant-sidecar-state-starting-p state)
+                  (eq phase :starting)
+                (nshell.feature.assistant::assistant-sidecar-state-init-p state)
+                  (not (eq phase :starting))
+                (nshell.feature.assistant::assistant-sidecar-state-handle state) :fixture
+                (nshell.feature.assistant::assistant-sidecar-state-write-channel state) channel)
+          (with-temporary-functions
+              (('nshell.feature.assistant::%assistant-sidecar-dead-p
+                (lambda (current) (declare (ignore current)) nil))
+               ('nshell.feature.assistant::%assistant-sidecar-start
+                (lambda (current) (declare (ignore current)) t))
+               ('nshell.feature.assistant::%assistant-sidecar-write-item
+                (lambda (current item)
+                  (declare (ignore current))
+                  (setf line (nshell.feature.assistant::assistant-write-item-line item)))))
+            (expect t :to-be
+                    (nshell.feature.assistant::%assistant-sidecar-request state 41 payload)))
+          (cond ((eq phase :starting)
+                 (expect nil :to-be line)
+                 (setf line (nshell.feature.assistant::assistant-pending-cell-request-payload
+                             pending)))
+                ((eq phase :ready)
+                 (multiple-value-bind (item present-p) (cl-concurrent-kit:try-recv channel)
+                   (expect t :to-be present-p)
+                   (setf line (nshell.feature.assistant::assistant-write-item-line item)))))
+          (let* ((object (json-kit:parse line :object-type :alist :array-type :list))
+                 (message (cdr (assoc "message" object :test #'string=)))
+                 (context (cdr (assoc "context" object :test #'string=))))
+            (expect "user" :to-equal (cdr (assoc "role" message :test #'string=)))
+            (expect "Propose pwd." :to-equal (cdr (assoc "content" message :test #'string=)))
+            (expect "/fixture" :to-equal (cdr (assoc "cwd" context :test #'string=)))
+            (expect '("PATH") :to-equal
+                    (cdr (assoc "environment-names" context :test #'string=)))))))))
+
+(describe "assistant-sidecar-cancel-regressions"
+  (it "stops-a-stale-active-request-before-accepting-another"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+           (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                     1 (cl-concurrent-kit:make-channel :buffer-size 8)
+                     (cl-concurrent-kit:make-promise)))
+           (stopped nil))
+      (setf (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+      (with-temporary-function
+          ('nshell.feature.assistant::%assistant-sidecar-stop-state
+           (lambda (current &rest options)
+             (declare (ignore options))
+             (setf stopped t)
+             (nshell.feature.assistant::%assistant-sidecar-clear-pending current pending)))
+        (multiple-value-bind (event present-p)
+            (nshell.feature.assistant::%assistant-sidecar-poll state 2)
+          (expect nil :to-be event)
+          (expect nil :to-be present-p)))
+      (expect t :to-be stopped)
+      (expect nil :to-be
+              (nshell.feature.assistant::%assistant-sidecar-current-pending state))))
+  (it "does-not-cancel-a-new-request-while-polling-a-retired-request"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+           (current (nshell.feature.assistant::%make-assistant-pending-cell
+                     2 (cl-concurrent-kit:make-channel :buffer-size 8)
+                     (cl-concurrent-kit:make-promise)))
+           (retired (nshell.feature.assistant::%make-assistant-pending-cell
+                     1 (cl-concurrent-kit:make-channel :buffer-size 8)
+                     (cl-concurrent-kit:make-promise))))
+      (setf (nshell.feature.assistant::assistant-sidecar-state-pending state) current
+            (nshell.feature.assistant::assistant-sidecar-state-retired-pending state)
+              (list retired))
+      (cl-concurrent-kit:send
+       (nshell.feature.assistant::assistant-pending-cell-events retired)
+       (nshell.feature.assistant:make-assistant-model-error-event 1 "cancelled"))
+      (multiple-value-bind (event present-p)
+          (nshell.feature.assistant::%assistant-sidecar-poll state 1)
+        (expect t :to-be present-p)
+        (expect :stream-error :to-be
+                (nshell.feature.assistant:assistant-model-event-kind event)))
+      (expect current :to-be
+              (nshell.feature.assistant::%assistant-sidecar-current-pending state)))))
+
 (defun %assistant-stop-sidecar (handle)
   (funcall (symbol-function 'nshell.infrastructure.acl:stop-sidecar) handle))
 
@@ -9,20 +103,7 @@
                        (get-internal-real-time))
                (uiop:temporary-directory))))
     (with-open-file (stream path :direction :output :if-exists :supersede)
-      (dolist (line
-                '("#!/bin/sh"
-                  "if [ \"$1\" = \"--version\" ]; then"
-                  "  printf '%s\\n' 'test-version'"
-                  "  exit 0"
-                  "fi"))
-        (write-line line stream))
-      (when unsafe-init
-        (write-line (format nil "printf '%s\\n' '~a'" unsafe-init) stream))
-      (dolist (line
-                '("printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
-                  "while IFS= read -r line"
-                  "do"))
-        (write-line line stream))
+      (%assistant-test-write-bootstrap-fixture stream unsafe-init)
       (when received-path
         (write-line
          (format nil "  printf '%s\\n' \"$line\" >> '~a'"
@@ -35,6 +116,47 @@
       (when one-shot-p
         (write-line "  exit 0" stream))
       (write-line "done" stream))
+    (sb-posix:chmod (namestring path) #o700)
+    path))
+
+(defun %assistant-test-write-bootstrap-fixture (stream &optional unsafe-init)
+  (dolist (line
+            '("#!/bin/sh"
+              "if [ \"$1\" = \"--version\" ]; then"
+              "  printf '%s\\n' 'test-version'"
+              "  exit 0"
+              "fi"
+              "request_count=0"
+              "while IFS= read -r line"
+              "do"
+              "  case \"$line\" in"
+              "    *'\"request_id\":\"nshell-bootstrap-interrupt\"'*)"
+              "      printf '%s\\n' '{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"nshell-bootstrap-interrupt\",\"response\":{\"still_queued\":[]}}}'"
+              "      printf '%s\\n' '{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[]}}'"
+              "      printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true}'"
+              "      continue ;;"
+              "    *'\"content\":\"\"'*)"))
+    (write-line line stream))
+  (when unsafe-init
+    (write-line (format nil "      printf '%s\\n' '~a'" unsafe-init) stream))
+  (dolist (line
+            '("      printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
+              "      continue ;;"
+              "  esac"))
+    (write-line line stream)))
+
+(defun %assistant-test-rate-sidecar-script ()
+  (let ((path (merge-pathnames
+               (format nil "nshell-assistant-rate-~D.sh" (get-internal-real-time))
+               (uiop:temporary-directory))))
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (%assistant-test-write-bootstrap-fixture stream)
+      (dolist (line
+                '("  request_count=$((request_count + 1))"
+                  "  printf '%s\\n' '{\"type\":\"rate_limit_event\",\"rate_limit_info\":{\"status\":\"allowed\"}}'"
+                  "  printf '%s\\n' \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\",\\\"structured_output\\\":{\\\"command\\\":\\\"pwd\\\",\\\"reason\\\":\\\"request-$request_count\\\",\\\"risk\\\":\\\"low\\\"}}\""
+                  "done"))
+        (write-line line stream)))
     (sb-posix:chmod (namestring path) #o700)
     path))
 
@@ -65,16 +187,9 @@
                        (get-universal-time))
                (uiop:temporary-directory))))
     (with-open-file (stream path :direction :output :if-exists :supersede)
+      (%assistant-test-write-bootstrap-fixture stream)
       (dolist (line
-                '("#!/bin/sh"
-                  "if [ \"$1\" = \"--version\" ]; then"
-                  "  printf '%s\\n' 'test-version'"
-                  "  exit 0"
-                  "fi"
-                  "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'"
-                  "while IFS= read -r line"
-                  "do"
-                  "  while :; do sleep 1; done"
+                '("  while :; do sleep 1; done"
                   "done"))
         (write-line line stream)))
     (sb-posix:chmod (namestring path) #o700)
@@ -180,13 +295,18 @@
                  (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
            (expect t :to-be
                    (nshell.feature.assistant::%assistant-sidecar-request
-                    state 41 '(("message" . "init-sequence"))))
+                    state 41
+                    (nshell.feature.assistant:make-assistant-user-payload "init-sequence")))
            ;; Run the gate synchronously, but keep the real process and IO threads.
            (with-temporary-function
                ('nshell.feature.assistant::%assistant-sidecar-write-item
                 (lambda (current item)
-                  (push (nshell.feature.assistant::assistant-write-item-line item)
-                        forwarded)
+                  (let* ((line (nshell.feature.assistant::assistant-write-item-line item))
+                         (object (json-kit:parse line :object-type :alist))
+                         (message (cdr (assoc "message" object :test #'string=)))
+                         (content (cdr (assoc "content" message :test #'string=))))
+                    (when (and (stringp content) (plusp (length content)))
+                      (push line forwarded)))
                   (funcall write-item current item)))
              (with-temporary-function
                  ('nshell.feature.assistant::%assistant-sidecar-install-threads
@@ -212,8 +332,10 @@
                          (nshell.feature.assistant::assistant-sidecar-state-init-p state))
                  (expect 1 :to-be (length forwarded))
                  (expect "init-sequence" :to-equal
-                         (cdr (assoc "message"
-                                     (json-kit:parse (first forwarded) :object-type :alist)
+                         (cdr (assoc "content"
+                                     (cdr (assoc "message"
+                                                 (json-kit:parse (first forwarded) :object-type :alist)
+                                                 :test #'string=))
                                      :test #'string=)))))
            (let ((terminal nil))
              (loop repeat 8
@@ -305,7 +427,12 @@
                     (setf pending (nshell.feature.assistant::%assistant-sidecar-current-pending state))
                     (expect t :to-be
                             (nshell.feature.assistant::%assistant-sidecar-request
-                             state 41 '(("message" . "async-init-sequence"))))
+                             state 41
+                             (nshell.feature.assistant:make-assistant-user-payload
+                              "async-init-sequence"
+                              :context (nshell.feature.assistant:make-assistant-context
+                                        :command "pwd" :exit 0 :cwd "/fixture"
+                                        :environment-names '("PATH")))))
                     (expect 41 :to-be
                             (nshell.feature.assistant::assistant-pending-cell-generation pending))
                     (multiple-value-bind (event present-p)
@@ -326,10 +453,18 @@
                     (let ((received (uiop:read-file-lines received-path)))
                       (expect (if unsafe-init 0 1) :to-be (length received))
                       (unless unsafe-init
-                        (expect "async-init-sequence" :to-equal
-                                (cdr (assoc "message"
-                                            (json-kit:parse (first received) :object-type :alist)
-                                            :test #'string=)))))
+                        (let* ((object (json-kit:parse (first received)
+                                                     :object-type :alist :array-type :list))
+                               (message (cdr (assoc "message" object :test #'string=)))
+                               (context (cdr (assoc "context" object :test #'string=))))
+                          (expect "user" :to-equal
+                                  (cdr (assoc "role" message :test #'string=)))
+                          (expect "async-init-sequence" :to-equal
+                                  (cdr (assoc "content" message :test #'string=)))
+                          (expect "/fixture" :to-equal
+                                  (cdr (assoc "cwd" context :test #'string=)))
+                          (expect '("PATH") :to-equal
+                                  (cdr (assoc "environment-names" context :test #'string=))))))
                     (let ((terminal nil))
                       (loop repeat 8
                             until terminal
@@ -642,7 +777,7 @@
         (expect pending :to-be (nshell.feature.assistant::assistant-sidecar-state-pending state))
         (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-p state)))))
 
-  (it "rechecks-reader-identity-after-eof-process-wait"
+  (it "rechecks-reader-identity-after-eof-read"
     (dolist (changed-part '(:handle :generation))
       (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
              (handle (nshell.infrastructure.acl::%make-sidecar-handle
@@ -657,15 +792,15 @@
                        (cl-concurrent-kit:make-promise))))
         (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle
               (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
-        (sb-ext:without-package-locks
-          (with-temporary-function
-              ('sb-ext:process-wait
-               (lambda (process)
-                 (declare (ignore process))
-                 (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) active
-                       (nshell.feature.assistant::assistant-sidecar-state-startup-generation state)
-                       generation)))
-            (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0)))
+        (with-temporary-function
+            ('nshell.feature.assistant::%assistant-read-json-value
+             (lambda (stream)
+               (declare (ignore stream))
+               (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) active
+                     (nshell.feature.assistant::assistant-sidecar-state-startup-generation state)
+                     generation)
+               (values nil :eof nil)))
+          (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0))
         (expect active :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))
         (expect generation :to-be
                 (nshell.feature.assistant::assistant-sidecar-state-startup-generation state))
@@ -677,7 +812,7 @@
         (cl-concurrent-kit:close-channel
          (nshell.feature.assistant::assistant-pending-cell-events pending)))))
 
-  (it "settles-request-accepted-while-reader-waits-for-eof"
+  (it "settles-request-accepted-while-reader-reads-eof"
     (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
            (handle (nshell.infrastructure.acl::%make-sidecar-handle
                     nil nil nil (make-string-input-stream "") nil :stopped))
@@ -685,19 +820,18 @@
            (pending nil)
            (accepted-p nil)
            (queued-generation nil)
-           (wait-calls 0))
+           (read-calls 0))
       (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle
             (nshell.feature.assistant::assistant-sidecar-state-init-p state) t
             (nshell.feature.assistant::assistant-sidecar-state-write-channel state) writes)
       (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-pending state))
       (unwind-protect
            (progn
-             (sb-ext:without-package-locks
-               (with-temporary-function
-                   ('sb-ext:process-wait
-                    (lambda (process)
-                      (declare (ignore process))
-                      (incf wait-calls)
+             (with-temporary-function
+                   ('nshell.feature.assistant::%assistant-read-json-value
+                    (lambda (stream)
+                      (declare (ignore stream))
+                      (incf read-calls)
                       (setf accepted-p
                             (with-temporary-function
                                 ('nshell.infrastructure.acl:sidecar-alive-p
@@ -711,9 +845,10 @@
                           (cl-concurrent-kit:try-recv writes)
                         (when present-p
                           (setf queued-generation
-                                (nshell.feature.assistant::assistant-write-item-generation item))))))
-                 (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0)))
-             (expect 1 :to-be wait-calls)
+                                (nshell.feature.assistant::assistant-write-item-generation item))))
+                      (values nil :eof nil)))
+                 (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0))
+             (expect 1 :to-be read-calls)
              (expect t :to-be accepted-p)
              (expect 17 :to-be queued-generation)
              (expect t :to-be
@@ -1093,6 +1228,230 @@
         (%assistant-test-with-sidecar-cleanup context)
         (when (probe-file script)
           (delete-file script))))))
+
+(defun %assistant-test-await-sidecar-ready (state)
+  (loop repeat 200
+        until (and (nshell.feature.assistant::assistant-sidecar-state-init-p state)
+                   (not (nshell.feature.assistant::assistant-sidecar-state-starting-p state)))
+        do (sleep 0.01))
+  (expect t :to-be (nshell.feature.assistant::assistant-sidecar-state-init-p state))
+  (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-starting-p state))
+  (let ((init-event nil))
+    (loop repeat 200
+          until init-event
+          do (multiple-value-bind (event present-p)
+                 (nshell.feature.assistant::%assistant-sidecar-poll state 0)
+               (when present-p (setf init-event event))
+               (unless init-event (sleep 0.01))))
+    (expect :system-init :to-be
+            (nshell.feature.assistant:assistant-model-event-kind init-event))
+    (expect 0 :to-be
+            (nshell.feature.assistant:assistant-model-event-generation init-event))))
+
+(defun %assistant-test-await-sidecar-result (state generation &key allowed-rate-p)
+  (let ((pending (nshell.feature.assistant::%assistant-sidecar-current-pending state))
+        (rate-count 0)
+        (result nil))
+    (loop repeat 200
+          until result
+          do (multiple-value-bind (event present-p)
+                 (nshell.feature.assistant::%assistant-sidecar-poll state generation)
+               (when present-p
+                 (expect generation :to-be
+                         (nshell.feature.assistant:assistant-model-event-generation event))
+                 (case (nshell.feature.assistant:assistant-model-event-kind event)
+                   (:rate-limit-event
+                    (incf rate-count)
+                    (expect "allowed" :to-equal
+                            (cdr (assoc "status"
+                                        (cdr (assoc "rate_limit_info"
+                                                    (nshell.feature.assistant:assistant-model-event-payload event)
+                                                    :test #'string=))
+                                        :test #'string=)))
+                    (expect pending :to-be
+                            (nshell.feature.assistant::%assistant-sidecar-current-pending state)))
+                   (:result (setf result event))
+                   ((:stream-error :stream-ended)
+                    (expect :result :to-be
+                            (nshell.feature.assistant:assistant-model-event-kind event)))))
+               (unless result (sleep 0.01))))
+    (expect (if allowed-rate-p 1 0) :to-be rate-count)
+    (expect :result :to-be (nshell.feature.assistant:assistant-model-event-kind result))
+    (expect "success" :to-equal
+            (cdr (assoc "subtype"
+                        (nshell.feature.assistant:assistant-model-event-payload result)
+                        :test #'string=)))
+    (expect nil :to-be (nshell.feature.assistant::%assistant-sidecar-current-pending state))
+    result))
+
+(describe "assistant-sidecar-lifecycle-regressions"
+  (it "stops-rejected-turn-before-releasing-pending-and-isolates-late-results"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+           (handle (nshell.infrastructure.acl:spawn-sidecar
+                    "sleep" '("30") :input :stream :output :stream :error :stream))
+           (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                     91 (cl-concurrent-kit:make-channel :buffer-size 4)
+                     (cl-concurrent-kit:make-promise)))
+           (rejected (nshell.feature.assistant::make-assistant-model-event
+                      91 :rate-limit-event
+                      '(("rate_limit_info" . (("status" . "rejected"))))))
+           (late (nshell.feature.assistant::make-assistant-model-event 91 :result nil))
+           (writes (cl-concurrent-kit:make-channel :buffer-size 2)))
+      (unwind-protect
+           (progn
+             (expect t :to-be (nshell.infrastructure.acl:sidecar-alive-p handle))
+             (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle
+                   (nshell.feature.assistant::assistant-sidecar-state-init-p state) t
+                   (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+             (nshell.feature.assistant::%assistant-sidecar-publish pending rejected)
+             (nshell.feature.assistant::%assistant-sidecar-publish pending late)
+             (multiple-value-bind (event present-p)
+                 (nshell.feature.assistant::%assistant-sidecar-poll state 91)
+               (expect t :to-be present-p)
+               (expect rejected :to-be event))
+             (expect nil :to-be (nshell.infrastructure.acl:sidecar-alive-p handle))
+             (expect :stopped :to-be (nshell.infrastructure.acl:sidecar-handle-cleanup-state handle))
+             (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))
+             (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-init-p state))
+             (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-pending state))
+             (expect t :to-be (cl-concurrent-kit:promise-settled-p
+                              (nshell.feature.assistant::assistant-pending-cell-completion pending)))
+             ;; Install a ready successor without a provider or shell restart.
+             (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) :successor
+                   (nshell.feature.assistant::assistant-sidecar-state-init-p state) t
+                   (nshell.feature.assistant::assistant-sidecar-state-write-channel state) writes)
+             (with-temporary-function
+                 ('nshell.infrastructure.acl:sidecar-alive-p
+                  (lambda (candidate) (eq candidate :successor)))
+               (expect t :to-be (nshell.feature.assistant::%assistant-sidecar-request
+                                state 92 '(("type" . "user") ("message" . "next")))))
+             (nshell.feature.assistant::%assistant-sidecar-publish pending late)
+             (multiple-value-bind (event present-p)
+                 (nshell.feature.assistant::%assistant-sidecar-poll state 92)
+               (expect nil :to-be event)
+               (expect nil :to-be present-p))
+             (expect 92 :to-be (nshell.feature.assistant::assistant-pending-cell-generation
+                               (nshell.feature.assistant::assistant-sidecar-state-pending state)))
+             (expect nil :to-be (cl-concurrent-kit:promise-settled-p
+                                (nshell.feature.assistant::assistant-pending-cell-completion
+                                 (nshell.feature.assistant::assistant-sidecar-state-pending state)))))
+        (nshell.infrastructure.acl:stop-sidecar handle)
+        (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) nil)
+        (nshell.feature.assistant::%assistant-sidecar-stop-state state)
+        (cl-concurrent-kit:close-channel writes)
+        (cl-concurrent-kit:close-channel
+         (nshell.feature.assistant::assistant-pending-cell-events pending)))))
+
+  (it "keeps-allowed-and-warning-rate-events-pending"
+    (dolist (status '("allowed" "allowed_warning"))
+      (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+             (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                       91 (cl-concurrent-kit:make-channel :buffer-size 2)
+                       (cl-concurrent-kit:make-promise)))
+             (event (nshell.feature.assistant::make-assistant-model-event
+                     91 :rate-limit-event `(("rate_limit_info" . (("status" . ,status)))))))
+        (unwind-protect
+             (progn
+               (setf (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+               (nshell.feature.assistant::%assistant-sidecar-publish pending event)
+               (multiple-value-bind (polled present-p)
+                   (nshell.feature.assistant::%assistant-sidecar-poll state 91)
+                 (expect t :to-be present-p)
+                 (expect event :to-be polled))
+               (expect pending :to-be (nshell.feature.assistant::assistant-sidecar-state-pending state))
+               (expect nil :to-be (cl-concurrent-kit:promise-settled-p
+                                  (nshell.feature.assistant::assistant-pending-cell-completion pending))))
+          (nshell.feature.assistant::%assistant-sidecar-stop-state state)))))
+
+  (it "bounds-eof-cleanup-when-child-closes-stdout-but-keeps-running"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+           (handle (nshell.infrastructure.acl:spawn-sidecar
+                    "/bin/sh" '("-c" "exec 1>&-; exec sleep 30")
+                    :input :stream :output :stream :error :stream))
+           (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                     93 (cl-concurrent-kit:make-channel :buffer-size 2)
+                     (cl-concurrent-kit:make-promise)))
+           (reader nil))
+      (unwind-protect
+           (progn
+             (expect t :to-be (nshell.infrastructure.acl:sidecar-alive-p handle))
+             (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) handle
+                   (nshell.feature.assistant::assistant-sidecar-state-init-p state) t
+                   (nshell.feature.assistant::assistant-sidecar-state-pending state) pending
+                   reader (sb-thread:make-thread
+                           (lambda ()
+                             (nshell.feature.assistant::%assistant-sidecar-reader-loop state handle 0))))
+             (sb-thread:join-thread reader :timeout 2 :default :timed-out)
+             (expect nil :to-be (sb-thread:thread-alive-p reader))
+             (expect nil :to-be (nshell.infrastructure.acl:sidecar-alive-p handle))
+             (expect t :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-p state))
+             (expect :reader-eof :to-be (nshell.feature.assistant::assistant-sidecar-state-dead-reason state))
+             (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-init-p state))
+             (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))
+             (expect t :to-be (cl-concurrent-kit:promise-settled-p
+                              (nshell.feature.assistant::assistant-pending-cell-completion pending)))
+             (multiple-value-bind (event present-p)
+                 (nshell.feature.assistant::%assistant-sidecar-poll state 93)
+               (expect t :to-be present-p)
+               (expect :stream-error :to-be (nshell.feature.assistant:assistant-model-event-kind event)))
+             (expect nil :to-be (nshell.feature.assistant::assistant-sidecar-state-pending state)))
+        (nshell.infrastructure.acl:stop-sidecar handle)
+        (when reader
+          (sb-thread:join-thread reader :timeout 2 :default nil))
+        (nshell.feature.assistant::%assistant-sidecar-stop-state state)
+        (cl-concurrent-kit:close-channel
+         (nshell.feature.assistant::assistant-pending-cell-events pending)))))
+
+  (it "keeps-the-ready-reader-generation-when-start-is-repeated"
+    (let* ((script (%assistant-test-sidecar-script))
+           (state (nshell.feature.assistant::%make-assistant-sidecar-state
+                   (namestring script) nil)))
+      (unwind-protect
+           (progn
+             (expect t :to-be (nshell.feature.assistant::%assistant-sidecar-start state))
+             (%assistant-test-await-sidecar-ready state)
+             (let ((generation (nshell.feature.assistant::assistant-sidecar-state-startup-generation state))
+                   (handle (nshell.feature.assistant::assistant-sidecar-state-handle state))
+                   (reader (nshell.feature.assistant::assistant-sidecar-state-reader-thread state)))
+               (expect t :to-be (nshell.feature.assistant::%assistant-sidecar-start state))
+               (expect generation :to-be
+                       (nshell.feature.assistant::assistant-sidecar-state-startup-generation state))
+               (expect handle :to-be (nshell.feature.assistant::assistant-sidecar-state-handle state))
+               (expect reader :to-be
+                       (nshell.feature.assistant::assistant-sidecar-state-reader-thread state))
+               (expect t :to-be (sb-thread:thread-alive-p reader))
+               (expect t :to-be
+                       (nshell.feature.assistant::%assistant-sidecar-request
+                        state 71 (nshell.feature.assistant:make-assistant-user-payload "ready-restart")))
+               (%assistant-test-await-sidecar-result state 71)))
+        (nshell.feature.assistant::%assistant-sidecar-stop-state state)
+        (when (probe-file script) (delete-file script)))))
+
+  (it "keeps-allowed-rate-events-nonterminal-across-two-requests"
+    (let* ((script (%assistant-test-rate-sidecar-script))
+           (state (nshell.feature.assistant::%make-assistant-sidecar-state
+                   (namestring script) nil)))
+      (unwind-protect
+           (progn
+             (expect t :to-be (nshell.feature.assistant::%assistant-sidecar-start state))
+             (%assistant-test-await-sidecar-ready state)
+             (loop for generation in '(81 82)
+                   for request-number from 1
+                   do (expect t :to-be
+                              (nshell.feature.assistant::%assistant-sidecar-request
+                               state generation
+                               (nshell.feature.assistant:make-assistant-user-payload
+                                (format nil "request-~D" request-number))))
+                      (let ((result (%assistant-test-await-sidecar-result
+                                     state generation :allowed-rate-p t)))
+                        (expect (format nil "request-~D" request-number) :to-equal
+                                (cdr (assoc "reason"
+                                            (cdr (assoc "structured_output"
+                                                        (nshell.feature.assistant:assistant-model-event-payload result)
+                                                        :test #'string=))
+                                            :test #'string=))))))
+        (nshell.feature.assistant::%assistant-sidecar-stop-state state)
+        (when (probe-file script) (delete-file script))))))
 
   (it "does-not-let-poll-consume-the-startup-handshake"
     (let ((script (%assistant-test-sidecar-script))

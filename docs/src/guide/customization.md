@@ -3,9 +3,9 @@
 nshell colors the prompt, syntax highlighting, and completion menu from a
 single **theme**: a mapping from named roles (`command`, `prompt-path`,
 `completion-file`, and so on) to a style. The `theme` builtin lets you switch
-between built-in presets or override individual roles, and `~/.nshellrc` runs
-plain nshell commands at startup, so a `theme` line there applies on every
-launch.
+between built-in presets or override individual roles. `~/.nshellrc` runs
+plain nshell commands at interactive startup. `--no-config` skips the file,
+and `--config PATH` selects another file. Batch and script runs do not load it.
 
 ## East Asian ambiguous character width
 
@@ -138,7 +138,7 @@ run of spaces is dropped too, so `{path} {git} {status}` never leaves a
 double space outside a repository.
 
 nshell has two prompts: the left one, and a right prompt that floats at the
-far edge of the terminal. They default to exactly today's layout:
+far edge of the terminal. The default formats are:
 
 ```
 {path} {git} {status} 
@@ -212,7 +212,7 @@ An unknown key name or action name exits with status 2 and lists the valid
 names; `bind` with anything else prints a usage line and exits 1. A key name
 is spelled the way it is typed, in lowercase and hyphen-separated (`ctrl-r`,
 `alt-e`, `right`, `shift-tab`). Put `bind` lines in `~/.nshellrc` to apply
-custom bindings on every launch, the same way `theme` lines do.
+custom bindings at interactive startup, the same way `theme` lines do.
 
 ### Capturing the previous command's output
 
@@ -239,8 +239,9 @@ when vi mode is off or the terminal is not interactive.
 ## In `~/.nshellrc`
 
 `.nshellrc` is not a separate configuration format: it is a file of plain
-nshell commands, sourced once at startup before the first prompt. Put a
-`theme` command there to start every session with your preset:
+nshell commands, sourced once at interactive startup before the first prompt
+unless `--no-config` or `--config PATH` changes this behavior. Put a `theme`
+command there to select your preset:
 
 ```sh
 theme use tokyo-night

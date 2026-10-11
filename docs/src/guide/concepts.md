@@ -2,30 +2,24 @@
 
 ## The input state is a value
 
-Every keystroke runs a pure reducer over an immutable `input-state` value, and
-what appears on screen is derived from that value. Nothing about the current
-line lives in a terminal buffer or a mutable global.
+The reducer returns a new `input-state` value. The REPL stores the current
+value in `*input-state*` and derives rendering from it.
 
-This is the single decision most of nshell's interactive behaviour follows
-from. Because a keystroke is a function from state to state, the line editor
-can be tested exhaustively without a terminal: a test feeds a key sequence and
-asserts on the resulting buffer, cursor, kill ring, or undo stack. Multi-level
-undo is a stack of prior values rather than a replay log, and rendering can be
-recomputed from scratch whenever it is cheaper than diffing.
+Reducer tests feed key sequences and assert on the resulting buffer, cursor,
+kill ring, or undo stack without a terminal. PTY tests check terminal
+integration separately. Multi-level undo stores prior values rather than a
+replay log, and rendering can be recomputed from the current state.
 
-The REPL that drives the reducer is a continuation-passing trampoline loop,
-which keeps the interactive core deterministic and unit-testable.
+The REPL drives the reducer through a continuation-passing trampoline loop.
 
 ## Color is a theme, not a pile of escape codes
 
-Every colored thing nshell draws (the prompt, the command line as you type, the
-completion menu) reads its style from one theme: a mapping from a named role to
-a fish-style style spec such as `5fafff --bold` or `gray --italics`. Nothing in
-the rendering code carries a hardcoded escape sequence, so switching the whole
-shell to another palette is one `theme use` away, and a role you dislike is one
-`theme set` away. Colors are written once in truecolor and downsampled at the
-terminal boundary, so the same theme renders on a 256-color or 16-color
-terminal and disappears entirely under `NO_COLOR`. See
+The prompt, command line, and completion menu read styles from a shared theme:
+a mapping from a named role to a fish-style spec such as `5fafff --bold` or
+`gray --italics`. `theme use` selects a palette; `theme set` changes a role.
+Theme roles control colors and text styles. Cursor movement and other terminal
+controls use separate escape sequences. Colors are downsampled for 256-color
+or 16-color terminals; a nonempty `NO_COLOR` disables color output. See
 [Customization](customization.md).
 
 ## Highlighting answers a question before you press Enter
@@ -72,10 +66,9 @@ remain literal.
 
 ## Abbreviations expand in place
 
-An abbreviation registered with `abbr` expands inline as you type, so what ends
-up in history is the expanded command. This differs from an alias, which stays
-unexpanded and hides what actually ran. Abbreviations keep muscle memory short
-while leaving history honest and greppable.
+An abbreviation registered with `abbr` expands inline as you type, so history
+records the expanded command. An alias is resolved during execution; history
+retains the entered alias name.
 
 ## External editing preserves the prompt state
 
@@ -124,6 +117,4 @@ instead. `set -l` forces a new local variable even when an outer one of the
 same name exists; `set -g` always reaches past every local scope to the
 outermost one. Reading a name walks the scope chain from innermost outward,
 so a local variable shadows a global of the same name for the rest of that
-call. This is fish's scoping model, and nshell's environment stores it as an
-ordered list of scopes rather than a single table, so shadowing and cleanup
-fall out of list structure instead of a bookkeeping pass.
+call. The environment stores scopes as an ordered list.

@@ -36,7 +36,7 @@
               (terminated nil))
           (sb-ext:without-package-locks
             (with-temporary-functions
-                (('sb-ext:process-wait
+                (('nshell.infrastructure.acl::%wait-sbcl-process
                   (lambda (&rest arguments)
                     (declare (ignore arguments))
                     (incf waits)))

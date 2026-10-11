@@ -26,7 +26,7 @@ proposed commands require confirmation before execution.
 
 **`pipeline-graph`** renders a typed pipeline as a Graphviz DOT graph, or a
 Mermaid flowchart with `--mermaid`, without executing it. Quote the pipeline so
-the shell passes it as one argument — see
+the shell passes it as one argument; see
 [Recipes](../guide/recipes.md#draw-a-pipeline-without-running-it).
 
 **`bind`** lists, sets, erases, or resets key bindings: `bind` alone lists

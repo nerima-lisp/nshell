@@ -151,6 +151,41 @@
                     (nshell.application:agent-step-status step))
             (expect nil :to-be nshell.presentation::*agent-session*))))))
 
+  (it "carries-enter-approval-through-command-expansion-and-dispatch"
+    (dolist (command '("ls" "touch approved-fixture"))
+      (with-repl-test-state
+        (let ((session (nshell.application:make-agent-session "run one step"
+                                                               :max-steps 1))
+              (dispatches 0))
+          (nshell.application:agent-session-propose-step session command)
+          (let ((step (nshell.application:agent-session-current-step session)))
+            (setf nshell.presentation::*agent-session* session
+                  nshell.presentation::*history-persistence-enabled-p* nil)
+            (with-repl-input-state (:mode :insert :buffer command
+                                    :cursor-pos (length command))
+              (with-temporary-functions
+                  (('nshell.application::%run-external-command-in-context
+                    (lambda (context name args)
+                      (declare (ignore context))
+                      (incf dispatches)
+                      (expect (if (string= command "ls") "ls" "touch")
+                              :to-equal name)
+                      (expect (if (string= command "ls") nil '("approved-fixture"))
+                              :to-equal args)
+                      (values "fixture-output" 0)))
+                   ('nshell.presentation::render-prompt-cont (lambda () nil))
+                   ('nshell.presentation::render-transient-panel
+                    (lambda (content &rest arguments)
+                      (declare (ignore content arguments))
+                      nil)))
+                (capture-standard-output
+                  (nshell.presentation::%process-agent-panel-event
+                   (input-key-event :enter))))
+              (expect 1 :to-equal dispatches)
+              (expect 0 :to-equal nshell.presentation::*last-exit-code*)
+              (expect :executed :to-equal
+                      (nshell.application:agent-step-status step))))))))
+
   (it "enters-editing-mode-with-e"
     (with-repl-test-state
       (let ((session (nshell.application:make-agent-session "list files"

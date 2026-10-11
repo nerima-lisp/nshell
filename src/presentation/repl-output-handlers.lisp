@@ -105,7 +105,7 @@ wrapped line's other rows on screen as stale duplicates."
      :denylist-commands
      nshell.feature.assistant:+assistant-default-denylist-commands+
      :denylist-values
-     (mapcar #'nshell.domain.environment:env-binding-value bindings))))
+     (%assistant-environment-denylist-values bindings))))
 
 (defun %assistant-payload-field (payload key)
   (when (listp payload)
@@ -363,9 +363,15 @@ wrapped line's other rows on screen as stale duplicates."
     (refresh-current-input-state-suggestion))
 
 (defun %ask-model-terminal-event-p (event)
-  (member (nshell.feature.assistant:assistant-model-event-kind event)
-          '(:result :stream-ended :stream-error :rate-limit-event)
-          :test #'eq))
+  (let ((kind (nshell.feature.assistant:assistant-model-event-kind event)))
+    (or (member kind '(:result :stream-ended :stream-error) :test #'eq)
+        (and (eq kind :rate-limit-event)
+             (equal "rejected"
+                    (%assistant-payload-field
+                     (%assistant-payload-field
+                      (nshell.feature.assistant:assistant-model-event-payload event)
+                      "rate_limit_info")
+                     "status"))))))
 
 (defun %handle-ask-model-event (event)
   (let ((kind (nshell.feature.assistant:assistant-model-event-kind event))
@@ -375,6 +381,9 @@ wrapped line's other rows on screen as stale duplicates."
        (nshell.feature.assistant:record-assistant-result-usage payload))
       (:rate-limit-event
        (nshell.feature.assistant:record-assistant-rate-limit payload)))
+    (when (and (eq kind :rate-limit-event)
+               (not (%ask-model-terminal-event-p event)))
+      (return-from %handle-ask-model-event nil))
     (cond
     ((eq *assistant-request-kind* :agent)
      (%handle-agent-model-event event))
@@ -455,9 +464,9 @@ wrapped line's other rows on screen as stale duplicates."
             :denylist-commands
             nshell.feature.assistant:+assistant-default-denylist-commands+
             :denylist-values
-            (mapcar #'nshell.domain.environment:env-binding-value
-                    (nshell.domain.environment:env-bindings
-                     (ensure-environment)))))
+            (%assistant-environment-denylist-values
+             (nshell.domain.environment:env-bindings
+              (ensure-environment)))))
          (start-result (nshell.feature.assistant:assistant-model-start)))
     (setf *assistant-last-cancel-at* nil)
     (setf *assistant-explain-candidates* nil
@@ -471,8 +480,8 @@ wrapped line's other rows on screen as stale duplicates."
     (nshell.feature.assistant:append-assistant-audit-entry
      payload nil
      :denylist-values
-     (mapcar #'nshell.domain.environment:env-binding-value
-             (nshell.domain.environment:env-bindings (ensure-environment))))
+     (%assistant-environment-denylist-values
+      (nshell.domain.environment:env-bindings (ensure-environment))))
     (let ((request-result
             (nshell.feature.assistant:assistant-model-request
              generation payload)))
@@ -661,8 +670,7 @@ wrapped line's other rows on screen as stale duplicates."
                           :denylist-commands
                           nshell.feature.assistant:+assistant-default-denylist-commands+
                           :denylist-values
-                          (mapcar
-                           #'nshell.domain.environment:env-binding-value
+                          (%assistant-environment-denylist-values
                            (nshell.domain.environment:env-bindings
                             (ensure-environment)))))
             (setf *command-not-found-command* nil))))

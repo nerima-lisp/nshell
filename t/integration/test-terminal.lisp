@@ -83,16 +83,33 @@ under test. sb-posix does not name either constant, hence the literals."
                     #+linux sb-alien:unsigned-int (* t)))
         pointer)))))
 
+#+linux
+(defun %kernel-preserved-terminal-state (fd)
+  ;; Read through an independent ioctl call, not nshell's snapshot helper.
+  (sb-alien:with-alien
+      ((storage nshell.infrastructure.terminal::kernel-termios2))
+    (unless (zerop
+             (sb-alien:alien-funcall
+              (sb-alien:extern-alien "ioctl"
+                (function sb-alien:int sb-alien:int sb-alien:unsigned-long (* t)))
+              fd
+              (ldb (byte (sb-alien:alien-size sb-alien:unsigned-long) 0)
+                   nshell.infrastructure.terminal::+kernel-tcgets2+)
+              (sb-alien:cast (sb-alien:addr storage) (* t))))
+      (error "Kernel terminal query failed for fd ~D" fd))
+    (list (sb-alien:slot storage 'nshell.infrastructure.terminal::control-flags)
+          (sb-alien:slot storage 'nshell.infrastructure.terminal::output-flags)
+          (sb-alien:slot storage 'nshell.infrastructure.terminal::discipline)
+          (sb-alien:slot storage 'nshell.infrastructure.terminal::input-speed)
+          (sb-alien:slot storage 'nshell.infrastructure.terminal::output-speed))))
+
 (describe "terminal-raw-mode-tests"
   (it "raw-mode-clears-only-the-line-editor-flags"
     "Raw mode turns off ICANON/ECHO/IXON/IXOFF and leaves ISIG and OPOST set.
 
-This is a regression guard, not an implementation detail. nshell enables raw
-mode once per session and keeps it while a foreground child runs, so ISIG is
-what still turns ^C/^Z into SIGINT/SIGTSTP for that child, and OPOST is what
-still maps LF to CR-LF for nshell's own output and the child's. A full
-cfmakeraw-style mode -- cl-tty-kit:enable-raw-mode, for instance -- clears both
-and would break foreground job interruption and multi-line rendering."
+ISIG keeps editor interrupts available after a foreground command returns;
+OPOST preserves multi-line rendering. Foreground commands receive cooked
+settings rather than inheriting the editor's mode."
     #-(or darwin linux)
     (skip "PTY-backed terminal tests are only supported on Darwin and Linux")
     #+(or darwin linux)
@@ -141,6 +158,29 @@ raw mode with no matching restore, which is exactly this case."
           (nshell.infrastructure.terminal:restore-terminal-mode fd))
         (expect (plusp (first baseline)) :to-be-truthy)
         (expect (plusp (second baseline)) :to-be-truthy)
+        (expect first-enable :to-equal baseline)
+        (expect second-enable :to-equal baseline)
+        (expect restored :to-equal baseline))))
+
+  #+linux
+  (it "raw-mode-preserves-kernel-control-flags-and-speeds"
+    (with-pty-slave (fd)
+      (let ((nshell.infrastructure.terminal::*saved-termios* nil)
+            (baseline (%kernel-preserved-terminal-state fd))
+            first-enable second-enable restored)
+        (cl-weave:expect-assertions 6)
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.terminal:enable-raw-mode fd)
+               (setf first-enable (%kernel-preserved-terminal-state fd))
+               (nshell.infrastructure.terminal:enable-raw-mode fd)
+               (setf second-enable (%kernel-preserved-terminal-state fd))
+               (nshell.infrastructure.terminal:restore-terminal-mode fd)
+               (setf restored (%kernel-preserved-terminal-state fd)))
+          (nshell.infrastructure.terminal:restore-terminal-mode fd))
+        (expect (plusp (first baseline)) :to-be-truthy)
+        (expect (plusp (fourth baseline)) :to-be-truthy)
+        (expect (plusp (fifth baseline)) :to-be-truthy)
         (expect first-enable :to-equal baseline)
         (expect second-enable :to-equal baseline)
         (expect restored :to-equal baseline))))

@@ -23,6 +23,7 @@
   :homepage "https://github.com/nerima-lisp/nshell"
   :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
   :source-control (:git "https://github.com/nerima-lisp/nshell.git")
+  :defsystem-depends-on (#+linux "sb-grovel")
   :depends-on ("cl-prolog-kit"
                "cl-parser-kit"
                "cl-dataflow-kit"
@@ -277,6 +278,10 @@
    (:file "infrastructure/persistence/file-history")
    (:file "infrastructure/persistence/file-config")
    (:file "infrastructure/terminal/detection")
+   #+linux
+   (:module "infrastructure/terminal/linux-abi"
+    :components ((:sb-grovel-constants-file "termios2"
+                  :package :nshell.infrastructure.terminal)))
    (:file "infrastructure/terminal/raw-mode")
    (:file "infrastructure/terminal/ansi")
    (:file "infrastructure/terminal/input-core")

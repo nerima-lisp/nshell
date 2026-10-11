@@ -12,15 +12,9 @@
 ;;; full cfmakeraw-style mode -- and two of the extra bits are load-bearing for
 ;;; a shell:
 ;;;
-;;;   ISIG   nshell leaves it SET.  enable-raw-mode is called once per session
-;;;          (repl-session.lisp) and stays in effect while a foreground child
-;;;          runs; manage-job.lisp hands the terminal to the child's process
-;;;          group but never returns the tty to cooked mode.  ISIG is what makes
-;;;          the kernel turn ^C/^Z into SIGINT/SIGTSTP for that foreground
-;;;          group, which is how `sleep 100` gets interrupted and how the
-;;;          shell-sigtstp-handler / fg / bg job-control path is driven at all.
-;;;          Clearing it would deliver a bare #\Etx byte to the reader instead
-;;;          and leave foreground jobs uninterruptible.
+;;;   ISIG   nshell leaves it SET so the kernel turns ^C/^Z into signals for
+;;;          the foreground process group. Foreground commands receive cooked
+;;;          settings; the editor must retain signal delivery when it resumes.
 ;;;   OPOST  nshell leaves it SET.  Both nshell's own output (every `~%' in the
 ;;;          presentation tier) and the inherited output of every child process
 ;;;          rely on the driver mapping LF to CR-LF; clearing it makes all
@@ -74,32 +68,59 @@ has put that fd into raw mode.")
 (defun %forget-termios (fd)
   (setf *saved-termios* (delete fd *saved-termios* :key #'car :test #'eql)))
 
-;; SB-POSIX's Lisp termios conversion omits native fields, including Darwin's
-;; baud rates. Keep the complete structure using its platform-grovelled size.
+;; SB-POSIX's Lisp conversion omits native fields, including Darwin's speeds.
+;; Linux libc can also normalize CIBAUD during tcgetattr/tcsetattr. Use the
+;; kernel's termios2 ABI there so restoring a snapshot preserves those bits.
+(sb-alien:define-alien-type native-termios
+  #+linux kernel-termios2
+  #-linux sb-posix::alien-termios)
+
+#+linux
+(sb-alien:define-alien-routine ("ioctl" %termios-ioctl) sb-alien:int
+  (fd sb-alien:int)
+  (request sb-alien:unsigned-long)
+  (termios sb-sys:system-area-pointer))
+
+#-linux
 (sb-alien:define-alien-routine ("tcgetattr" %tcgetattr) sb-alien:int
   (fd sb-alien:int)
   (termios sb-sys:system-area-pointer))
 
+#-linux
 (sb-alien:define-alien-routine ("tcsetattr" %tcsetattr) sb-alien:int
   (fd sb-alien:int)
   (action sb-alien:int)
   (termios sb-sys:system-area-pointer))
 
 (defun %read-termios (fd)
-  (let ((termios (make-array (sb-alien:alien-size sb-posix::alien-termios :bytes)
+  (let ((termios (make-array (sb-alien:alien-size native-termios :bytes)
                             :element-type '(unsigned-byte 8)
                             :initial-element 0)))
     (sb-sys:with-pinned-objects (termios)
-      (when (minusp (%tcgetattr fd (sb-sys:vector-sap termios)))
+      (when (minusp
+             #+linux
+             (%termios-ioctl fd
+                             (ldb (byte (sb-alien:alien-size sb-alien:unsigned-long) 0)
+                                  +kernel-tcgets2+)
+                             (sb-sys:vector-sap termios))
+             #-linux
+             (%tcgetattr fd (sb-sys:vector-sap termios)))
         (let ((errno (sb-unix::get-errno)))
-          (error "tcgetattr failed on fd ~d (errno=~d)" fd errno))))
+          (error "Terminal query failed on fd ~d (errno=~d)" fd errno))))
     termios))
 
-(defun %apply-termios (fd action termios)
+(defun %apply-termios (fd termios)
   (sb-sys:with-pinned-objects (termios)
-    (when (minusp (%tcsetattr fd action (sb-sys:vector-sap termios)))
+    (when (minusp
+           #+linux
+           (%termios-ioctl fd
+                           (ldb (byte (sb-alien:alien-size sb-alien:unsigned-long) 0)
+                                +kernel-tcsets2+)
+                           (sb-sys:vector-sap termios))
+           #-linux
+           (%tcsetattr fd sb-posix:tcsanow (sb-sys:vector-sap termios)))
       (let ((errno (sb-unix::get-errno)))
-        (error "tcsetattr failed on fd ~d (errno=~d)" fd errno)))))
+        (error "Terminal update failed on fd ~d (errno=~d)" fd errno)))))
 
 (defun %raw-termios (termios)
   "Clear the input and local flags nshell's line editor needs off TERMIOS.
@@ -109,12 +130,16 @@ Everything else -- notably ISIG and OPOST -- is left as the terminal had it; see
 the commentary at the top of this file."
   (sb-sys:with-pinned-objects (termios)
     (let ((native (sb-alien:sap-alien (sb-sys:vector-sap termios)
-                                    (* sb-posix::alien-termios))))
-      (setf (sb-alien:slot (sb-alien:deref native) 'sb-posix::iflag)
-            (logand (sb-alien:slot (sb-alien:deref native) 'sb-posix::iflag)
+                                    (* native-termios))))
+      (setf (sb-alien:slot (sb-alien:deref native)
+                          #+linux 'input-flags #-linux 'sb-posix::iflag)
+            (logand (sb-alien:slot (sb-alien:deref native)
+                                  #+linux 'input-flags #-linux 'sb-posix::iflag)
                     (lognot (logior sb-posix:ixon sb-posix:ixoff))))
-      (setf (sb-alien:slot (sb-alien:deref native) 'sb-posix::lflag)
-            (logand (sb-alien:slot (sb-alien:deref native) 'sb-posix::lflag)
+      (setf (sb-alien:slot (sb-alien:deref native)
+                          #+linux 'local-flags #-linux 'sb-posix::lflag)
+            (logand (sb-alien:slot (sb-alien:deref native)
+                                  #+linux 'local-flags #-linux 'sb-posix::lflag)
                     (lognot (logior sb-posix:icanon sb-posix:echo))))))
   termios)
 
@@ -166,7 +191,7 @@ the terminal cannot be queried or reconfigured."
         (sb-sys:without-interrupts
           (unless (%saved-termios fd)
             (%save-termios fd (%read-termios fd)))
-          (%apply-termios fd sb-posix:tcsanow raw)
+          (%apply-termios fd raw)
           t))
     (error (condition)
       (error 'terminal-mode-operation-failed
@@ -194,7 +219,7 @@ the terminal in an unknown state silently."
             ;; this %FORGET-TERMIOS discards the cooked settings that were the
             ;; only way back. The terminal is stranded raw for good.
             (sb-sys:without-interrupts
-              (%apply-termios fd sb-posix:tcsanow saved)
+              (%apply-termios fd saved)
               (%forget-termios fd)
               t))
         (error (condition)

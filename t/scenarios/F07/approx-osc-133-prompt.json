@@ -60,5 +60,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-R08 owns OSC 133 terminal integration."
+  }
 }

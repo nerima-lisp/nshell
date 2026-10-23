@@ -28,5 +28,8 @@
   "invocation": {
     "kind": "command",
     "text": "cat <(printf 'C16_PROCESS_VALUE')"
+  },
+  "expected_failure": {
+    "reason": "WP-L08 owns process substitution."
   }
 }

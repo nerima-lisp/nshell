@@ -1,0 +1,98 @@
+{
+  "id": "I03-partial-word-suggestion-acceptance",
+  "uc": [
+    "I03"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_I03-partial-word-suggestion-acceptance> ",
+      "SCENARIO_ALPHA": "I03_ALPHA",
+      "SCENARIO_BETA": "I03_BETA"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "touch \"$SCENARIO_ALPHA\" \"$SCENARIO_BETA\"; echo I03_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I03_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "touch"
+    },
+    {
+      "type": "key",
+      "key": "M-Right"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo I03_$((1+2))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I03_3",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "I03_ALPHA",
+          "exists": true
+        },
+        {
+          "path": "I03_BETA",
+          "exists": false
+        }
+      ]
+    },
+    "stream": {
+      "contains": [
+        "I03_2",
+        "I03_3"
+      ]
+    }
+  }
+}

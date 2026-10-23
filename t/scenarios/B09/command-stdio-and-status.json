@@ -1,0 +1,35 @@
+{
+  "id": "B09-command-stdio-and-status",
+  "uc": [
+    "B09"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "equals": "B09_STDOUT\n"
+    },
+    "stderr": {
+      "equals": "B09_STDERR\n"
+    },
+    "exit_code": 23
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "printf \"B09_STDOUT\\n\"; printf \"B09_STDERR\\n\" >&2; exit 23"
+  }
+}

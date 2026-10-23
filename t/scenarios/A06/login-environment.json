@@ -21,7 +21,7 @@
     "arguments": [
       "-l",
       "-c",
-      "if [ \"$SHLVL\" -gt 40 ] && [ \"$USER\" = \"r04-user\" ] && [ \"$SHELL\" = \"/r04-login-shell\" ]; then printf 'A06_OK|%s|%s|%s\\n' \"$USER\" \"$SHELL\" \"$SHLVL\"; else exit 91; fi"
+      "if [ \"$SHLVL\" -eq 41 ] && [ \"$USER\" = \"r04-user\" ] && [ \"$SHELL\" = \"/r04-login-shell\" ]; then printf 'A06_OK|%s|%s|%s\\n' \"$USER\" \"$SHELL\" \"$SHLVL\"; else exit 91; fi"
     ]
   },
   "expected": {
@@ -32,8 +32,5 @@
       "equals": ""
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "Login mode does not yet increment SHLVL while preserving USER and SHELL."
   }
 }

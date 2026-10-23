@@ -126,3 +126,23 @@ process's own stdout, calling REGISTER on any stream opened here."
         (when (plusp pid)
           (ignore-errors (set-process-group pid pid))))
       proc)))
+(defun run-shell-command (command arguments environment)
+  "Run COMMAND through /bin/sh with its argument vector and stdio preserved."
+  (check-type command string)
+  (check-type arguments list)
+  (check-type environment list)
+  (let ((process
+          (sb-ext:run-program
+           "/bin/sh"
+           (cons "-c" (cons command arguments))
+           :input t
+           :output t
+           :error t
+           :wait nil
+           :search nil
+           :environment environment)))
+    (sb-ext:process-wait process)
+    (let ((code (sb-ext:process-exit-code process)))
+      (if (and code (eq (sb-ext:process-status process) :signaled))
+          (+ 128 code)
+          (or code 0)))))

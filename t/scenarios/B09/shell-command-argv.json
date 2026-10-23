@@ -1,0 +1,42 @@
+{
+  "id": "B09-shell-command-argv",
+  "uc": ["B09"],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "argv",
+    "arguments": [
+      "-c",
+      "printf '%s\\n' \"$0\" \"$1\" \"$2\" \"$3\" \"$4\" \"$5\"; cat",
+      "r04-zero",
+      "space arg",
+      "single' quote",
+      "line one\nline two",
+      "--",
+      "-leading"
+    ],
+    "stdin": "R04_STDIN_OK\n"
+  },
+  "expected": {
+    "stdout": {
+      "equals": "r04-zero\nspace arg\nsingle' quote\nline one\nline two\n--\n-leading\nR04_STDIN_OK\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "The current -c CLI does not preserve /bin/sh command argv and standard streams."
+  }
+}

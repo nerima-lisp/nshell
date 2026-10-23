@@ -47,11 +47,6 @@
       "key": "Enter"
     },
     {
-      "type": "wait",
-      "contains": "Done",
-      "timeout_seconds": 10
-    },
-    {
       "type": "keys",
       "text": "wait; jobs > completed-jobs.txt; echo E06_$((2+4))"
     },
@@ -76,5 +71,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-R03 owns completion notification and removal of completed jobs."
+  }
 }

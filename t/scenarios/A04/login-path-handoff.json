@@ -11,14 +11,19 @@
     "cwd": "work"
   },
   "preconditions": {
-    "files": []
+    "files": [
+      {
+        "path": "home/.profile",
+        "content": "PATH=/r04-login-profile:$PATH\nexport PATH\n"
+      }
+    ]
   },
   "invocation": {
     "kind": "argv",
     "arguments": [
       "-l",
       "-c",
-      "case \":$PATH:\" in *:/usr/bin:*) printf 'LOGIN_PATH_OK\\n' ;; *) exit 90 ;; esac"
+      "case \":$PATH:\" in *:/r04-login-profile:*) ;; *) exit 89 ;; esac; if [ -r /etc/profile ] && [ -d /usr/bin ]; then case \":$PATH:\" in *:/usr/bin:*) ;; *) exit 90 ;; esac; fi; printf 'LOGIN_PATH_OK\\n'"
     ]
   },
   "expected": {

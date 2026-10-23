@@ -73,15 +73,24 @@ def _multi_pty_scenario(scenario_id: str = "shared-pty") -> dict[str, Any]:
 
 
 class ScenarioRunnerTests(unittest.TestCase):
-    def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
+    def test_batch_environment_appends_extra_path_to_default_path(self) -> None:
         scenario = _batch_scenario("batch-extra-path")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.dict(runner.os.environ, {"NSHELL_SCENARIO_EXTRA_PATH": "/nix/tools/bin"}):
+                env, _, _ = runner._environment(scenario, Path(temporary))
+
+        self.assertEqual(env["PATH"], f"/usr/bin:/bin{runner.os.pathsep}/nix/tools/bin")
+
+    def test_batch_environment_preserves_explicit_path(self) -> None:
+        scenario = _batch_scenario("batch-explicit-path")
         scenario["environment"]["variables"] = {"PATH": "bin:/usr/bin:/bin"}
 
         with tempfile.TemporaryDirectory() as temporary:
             with patch.dict(runner.os.environ, {"NSHELL_SCENARIO_EXTRA_PATH": "/nix/tools/bin"}):
                 env, _, _ = runner._environment(scenario, Path(temporary))
 
-        self.assertEqual(env["PATH"], f"bin:/usr/bin:/bin{runner.os.pathsep}/nix/tools/bin")
+        self.assertEqual(env["PATH"], "bin:/usr/bin:/bin")
 
     def test_pty_environment_does_not_append_extra_path(self) -> None:
         scenario = _pty_scenario(

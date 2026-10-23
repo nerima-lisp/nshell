@@ -500,7 +500,8 @@ def _environment(scenario: dict[str, Any], root: Path) -> tuple[dict[str, str], 
     }
     env.update(settings.get("variables", {}))
     extra_path = os.environ.get("NSHELL_SCENARIO_EXTRA_PATH")
-    if scenario["mode"] == "batch" and extra_path:
+    has_explicit_path = "PATH" in settings.get("variables", {})
+    if scenario["mode"] == "batch" and extra_path and not has_explicit_path:
         env["PATH"] = os.pathsep.join((env["PATH"], extra_path))
     return env, home, cwd
 

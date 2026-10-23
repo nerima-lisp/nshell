@@ -1,0 +1,40 @@
+{
+  "id": "O12-comments",
+  "uc": [
+    "O12"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(echo O12_FORM_OK) ; trailing comment\n; full-line comment\n(echo O12_AFTER_COMMENT_OK)\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O12_FORM_OK",
+        "O12_AFTER_COMMENT_OK"
+      ],
+      "excludes": [
+        "trailing comment",
+        "full-line comment"
+      ]
+    },
+    "exit_code": 0
+  }
+}

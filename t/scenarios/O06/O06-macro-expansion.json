@@ -1,0 +1,35 @@
+{
+  "id": "O06-macro-expansion",
+  "uc": [
+    "O06"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(defmacro o06_twice (form) `(progn ,form ,form))\n(o06_twice (echo O06_MACRO_OK))\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O06_MACRO_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "id": "K08-macro-expansion-error-location",
+  "uc": [
+    "K08"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_K08-macro-expansion-error-location> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "(define-macro bad-form () (error \"K08_EXPANSION_ERROR\"))\n(bad-form)"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "K08_EXPANSION_ERROR",
+        "bad-form",
+        "2"
+      ]
+    },
+    "exit_code": 1
+  }
+}

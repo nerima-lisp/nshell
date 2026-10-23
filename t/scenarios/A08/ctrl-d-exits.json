@@ -1,0 +1,36 @@
+{
+  "id": "A08-ctrl-d-exits",
+  "uc": [
+    "A08"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "A08-ctrl-d-exits> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "key",
+      "key": "C-d"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import stat
 import subprocess
 import sys
 import shlex
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -204,6 +205,26 @@ class ScenarioRunnerTests(unittest.TestCase):
             with self.subTest(status=status, dead_signal=dead_signal):
                 with self.assertRaisesRegex(runner.ScenarioError, message):
                     runner._pane_exit_status(status, dead_signal, "bad-exit")
+
+    def test_precondition_executable_fixture_is_written_executable(self) -> None:
+        scenario = _batch_scenario("executable-fixture")
+        scenario["preconditions"]["files"] = [
+            {"path": "home/bin/env", "content": "#!/bin/sh\n", "executable": True}
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "home/bin/env"
+            runner._write_preconditions(scenario, Path(temporary))
+            self.assertEqual(path.read_text(encoding="utf-8"), "#!/bin/sh\n")
+            self.assertTrue(path.stat().st_mode & stat.S_IXUSR)
+
+    def test_precondition_executable_must_be_boolean(self) -> None:
+        scenario = _batch_scenario("invalid-executable-fixture")
+        scenario["preconditions"]["files"] = [
+            {"path": "home/bin/env", "content": "", "executable": "yes"}
+        ]
+        with self.assertRaisesRegex(runner.ScenarioError, "executable must be a boolean"):
+            self._load_one(scenario, "invalid-executable-fixture.json")
+
     def _load_one(self, scenario: dict[str, Any], filename: str) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

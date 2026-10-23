@@ -395,6 +395,8 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         fixture_paths.add(fixture_path)
         _require(isinstance(fixture.get("content", ""), str),
                  f"{scenario_id}: precondition file content must be a string")
+        _require(isinstance(fixture.get("executable", False), bool),
+                 f"{scenario_id}: precondition file executable must be a boolean")
 
     file_sets = preconditions.get("file_sets", [])
     _require(isinstance(file_sets, list), f"{scenario_id}: preconditions.file_sets must be an array")
@@ -706,6 +708,8 @@ def _write_preconditions(scenario: dict[str, Any], root: Path) -> None:
         path = _relative_path(root, fixture["path"], f"{scenario['id']}: precondition file")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(fixture.get("content", ""), encoding="utf-8")
+        if fixture.get("executable", False):
+            path.chmod(0o755)
     for file_set in scenario.get("preconditions", {}).get("file_sets", []):
         directory = _relative_path(root, file_set["directory"], f"{scenario['id']}: file-set directory")
         directory.mkdir(parents=True, exist_ok=True)

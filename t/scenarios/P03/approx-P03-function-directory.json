@@ -8,8 +8,7 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "P03> ",
-      "NSHELL_RIGHT_PROMPT": "{time}"
+      "NSHELL_PROMPT": "P03> "
     },
     "home": "home",
     "cwd": "work",
@@ -38,24 +37,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "p03_greet"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "key",
-      "key": "C-c"
-    },
-    {
-      "type": "wait",
-      "contains": ":",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "keys",
-      "text": "echo P03_AFTER_$((1+1))"
+      "text": "p03_greet; echo P03_AFTER_$((1+1))"
     },
     {
       "type": "key",

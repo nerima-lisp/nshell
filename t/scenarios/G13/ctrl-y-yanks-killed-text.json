@@ -51,8 +51,20 @@
       "key": "Enter"
     },
     {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo G13_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "G13_YANK",
+      "contains": "G13_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -67,5 +79,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-E01 owns Ctrl-Y yank behavior on macOS."
+  }
 }

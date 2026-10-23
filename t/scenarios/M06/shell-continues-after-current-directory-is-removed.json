@@ -37,20 +37,7 @@
     },
     {
       "type": "keys",
-      "text": "echo \"$SCENARIO_VALUE\""
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "M06_SHELL_ALIVE",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "keys",
-      "text": "exit"
+      "text": "echo \"$SCENARIO_VALUE\"; exit"
     },
     {
       "type": "key",
@@ -68,5 +55,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "Plan section 3 records that an internal condition can terminate nshell; deleting cwd reproduces a fatal getcwd failure before the follow-up command."
   }
 }

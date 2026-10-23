@@ -2,29 +2,1222 @@
   "version": 1,
   "scenarios": [
     {
+      "id": "A01-terminal-launch",
+      "uc": [
+        "A01"
+      ],
+      "path": "A01/approx-terminal-launch.json"
+    },
+    {
+      "id": "A02-tmux-pane-start",
+      "uc": [
+        "A02"
+      ],
+      "path": "A02/approx-tmux-pane-start.json"
+    },
+    {
+      "id": "A08-ctrl-d-exits",
+      "uc": [
+        "A08"
+      ],
+      "path": "A08/ctrl-d-exits.json"
+    },
+    {
+      "id": "A08-exit-warns-about-job",
+      "uc": [
+        "A08"
+      ],
+      "path": "A08/exit-warns-about-job.json"
+    },
+    {
+      "id": "A10-exec-replaces-shell",
+      "uc": [
+        "A10"
+      ],
+      "path": "A10/exec-replaces-shell.json"
+    },
+    {
+      "id": "A12-no-config-skips-startup",
+      "uc": [
+        "A12"
+      ],
+      "path": "A12/no-config-skips-startup.json"
+    },
+    {
+      "id": "A13-config-error-keeps-prompt",
+      "uc": [
+        "A13"
+      ],
+      "path": "A13/config-error-keeps-prompt.json"
+    },
+    {
+      "id": "B02-approx-remote-shell-command-contract",
+      "uc": [
+        "B02"
+      ],
+      "path": "B02/approx-remote-shell-command-contract.json"
+    },
+    {
+      "id": "B03-approx-remote-copy-output-is-clean",
+      "uc": [
+        "B03"
+      ],
+      "path": "B03/approx-remote-copy-output-is-clean.json"
+    },
+    {
+      "id": "B06-approx-shell-c-command-contract",
+      "uc": [
+        "B06"
+      ],
+      "path": "B06/approx-shell-c-command-contract.json"
+    },
+    {
+      "id": "B09-command-stdio-and-status",
+      "uc": [
+        "B09"
+      ],
+      "path": "B09/command-stdio-and-status.json"
+    },
+    {
       "id": "C01-batch-command",
-      "uc": ["C01"],
+      "uc": [
+        "C01"
+      ],
       "path": "C01/batch-command.json"
     },
     {
       "id": "C01-batch-script",
-      "uc": ["C01"],
+      "uc": [
+        "C01"
+      ],
       "path": "C01/batch-script.json"
     },
     {
       "id": "C01-batch-stdin",
-      "uc": ["C01"],
+      "uc": [
+        "C01"
+      ],
       "path": "C01/batch-stdin.json"
     },
     {
       "id": "C01-pty-paste",
-      "uc": ["C01"],
+      "uc": [
+        "C01"
+      ],
       "path": "C01/pty-paste.json"
     },
     {
+      "id": "C02-quoted-unicode-arguments",
+      "uc": [
+        "C02"
+      ],
+      "path": "C02/quoted-unicode-arguments.json"
+    },
+    {
+      "id": "C03-path-search-and-absolute-path",
+      "uc": [
+        "C03"
+      ],
+      "path": "C03/path-search-and-absolute-path.json"
+    },
+    {
+      "id": "C04-missing-command-suggestion-and-status",
+      "uc": [
+        "C04"
+      ],
+      "path": "C04/missing-command-suggestion-and-status.json"
+    },
+    {
+      "id": "C05-last-exit-status-is-visible",
+      "uc": [
+        "C05"
+      ],
+      "path": "C05/last-exit-status-is-visible.json"
+    },
+    {
+      "id": "C06-pipeline-streams-all-stages",
+      "uc": [
+        "C06"
+      ],
+      "path": "C06/pipeline-streams-all-stages.json"
+    },
+    {
+      "id": "C07-redirection-family",
+      "uc": [
+        "C07"
+      ],
+      "path": "C07/redirection-family.json"
+    },
+    {
+      "id": "C08-here-doc-and-here-string",
+      "uc": [
+        "C08"
+      ],
+      "path": "C08/here-doc-and-here-string.json"
+    },
+    {
+      "id": "C09-background-command-returns",
+      "uc": [
+        "C09"
+      ],
+      "path": "C09/background-command-returns.json"
+    },
+    {
       "id": "C10-short-circuit-followed-by-sequence",
-      "uc": ["C10"],
+      "uc": [
+        "C10"
+      ],
       "path": "C10/short-circuit-followed-by-sequence.json"
+    },
+    {
+      "id": "C11-temporary-command-environment",
+      "uc": [
+        "C11"
+      ],
+      "path": "C11/temporary-command-environment.json"
+    },
+    {
+      "id": "C12-approx-privileged-command-dispatch",
+      "uc": [
+        "C12"
+      ],
+      "path": "C12/approx-privileged-command-dispatch.json"
+    },
+    {
+      "id": "C13-glob-patterns-and-unmatched-path",
+      "uc": [
+        "C13"
+      ],
+      "path": "C13/glob-patterns-and-unmatched-path.json"
+    },
+    {
+      "id": "C14-tilde-and-brace-expansion",
+      "uc": [
+        "C14"
+      ],
+      "path": "C14/tilde-and-brace-expansion.json"
+    },
+    {
+      "id": "C15-approx-captured-command-value",
+      "uc": [
+        "C15"
+      ],
+      "path": "C15/approx-captured-command-value.json"
+    },
+    {
+      "id": "C16-approx-process-substitution-input",
+      "uc": [
+        "C16"
+      ],
+      "path": "C16/approx-process-substitution-input.json"
+    },
+    {
+      "id": "C17-approx-large-binary-and-invalid-utf8-output",
+      "uc": [
+        "C17"
+      ],
+      "path": "C17/approx-large-binary-and-invalid-utf8-output.json"
+    },
+    {
+      "id": "C18-approx-sigpipe-is-quiet",
+      "uc": [
+        "C18"
+      ],
+      "path": "C18/approx-sigpipe-is-quiet.json"
+    },
+    {
+      "id": "D01-approx-editor-tty",
+      "uc": [
+        "D01"
+      ],
+      "path": "D01/approx-editor-tty.json"
+    },
+    {
+      "id": "D02-approx-pager-tty",
+      "uc": [
+        "D02"
+      ],
+      "path": "D02/approx-pager-tty.json"
+    },
+    {
+      "id": "D03-approx-monitor-tty",
+      "uc": [
+        "D03"
+      ],
+      "path": "D03/approx-monitor-tty.json"
+    },
+    {
+      "id": "D04-approx-remote-tty",
+      "uc": [
+        "D04"
+      ],
+      "path": "D04/approx-remote-tty.json"
+    },
+    {
+      "id": "D05-approx-fzf-tty",
+      "uc": [
+        "D05"
+      ],
+      "path": "D05/approx-fzf-tty.json"
+    },
+    {
+      "id": "D06-approx-editor-child-tty",
+      "uc": [
+        "D06"
+      ],
+      "path": "D06/approx-editor-child-tty.json"
+    },
+    {
+      "id": "D07-approx-password-tty",
+      "uc": [
+        "D07"
+      ],
+      "path": "D07/approx-password-tty.json"
+    },
+    {
+      "id": "D08-approx-repl-tty",
+      "uc": [
+        "D08"
+      ],
+      "path": "D08/approx-repl-tty.json"
+    },
+    {
+      "id": "D10-approx-container-tty",
+      "uc": [
+        "D10"
+      ],
+      "path": "D10/approx-container-tty.json"
+    },
+    {
+      "id": "D11-approx-cooked-mode-after-crash",
+      "uc": [
+        "D11"
+      ],
+      "path": "D11/approx-cooked-mode-after-crash.json"
+    },
+    {
+      "id": "D12-ctrl-c-stops-foreground-child",
+      "uc": [
+        "D12"
+      ],
+      "path": "D12/ctrl-c-stops-foreground-child.json"
+    },
+    {
+      "id": "E01-ctrl-z-stops-redirected-foreground-job",
+      "uc": [
+        "E01"
+      ],
+      "path": "E01/ctrl-z-stops-redirected-foreground-job.json"
+    },
+    {
+      "id": "E02-fg-bg-and-jobs",
+      "uc": [
+        "E02"
+      ],
+      "path": "E02/fg-bg-and-jobs.json"
+    },
+    {
+      "id": "E03-kill-percent-one",
+      "uc": [
+        "E03"
+      ],
+      "path": "E03/kill-percent-one.json"
+    },
+    {
+      "id": "E04-disown-removes-job",
+      "uc": [
+        "E04"
+      ],
+      "path": "E04/disown-removes-job.json"
+    },
+    {
+      "id": "E05-wait-collects-background-status",
+      "uc": [
+        "E05"
+      ],
+      "path": "E05/wait-collects-background-status.json"
+    },
+    {
+      "id": "E06-completion-notification-and-removal",
+      "uc": [
+        "E06"
+      ],
+      "path": "E06/completion-notification-and-removal.json"
+    },
+    {
+      "id": "E07-pipeline-is-one-stopped-job",
+      "uc": [
+        "E07"
+      ],
+      "path": "E07/pipeline-is-one-stopped-job.json"
+    },
+    {
+      "id": "E08-ctrl-c-interrupts-whole-pipeline",
+      "uc": [
+        "E08"
+      ],
+      "path": "E08/ctrl-c-interrupts-whole-pipeline.json"
+    },
+    {
+      "id": "E09-script-job-state-updates",
+      "uc": [
+        "E09"
+      ],
+      "path": "E09/script-job-state-updates.json"
+    },
+    {
+      "id": "F01-approx-cooked-mode-after-crash",
+      "uc": [
+        "F01"
+      ],
+      "path": "F01/approx-cooked-mode-after-crash.json"
+    },
+    {
+      "id": "F05-approx-terminal-title-cwd",
+      "uc": [
+        "F05"
+      ],
+      "path": "F05/approx-terminal-title-cwd.json"
+    },
+    {
+      "id": "F06-approx-osc-7-cwd",
+      "uc": [
+        "F06"
+      ],
+      "path": "F06/approx-osc-7-cwd.json"
+    },
+    {
+      "id": "F07-approx-osc-133-prompt",
+      "uc": [
+        "F07"
+      ],
+      "path": "F07/approx-osc-133-prompt.json"
+    },
+    {
+      "id": "F08-large-bracketed-paste",
+      "uc": [
+        "F08"
+      ],
+      "path": "F08/approx-large-bracketed-paste.json"
+    },
+    {
+      "id": "F09-approx-mouse-report-default-off",
+      "uc": [
+        "F09"
+      ],
+      "path": "F09/approx-mouse-report-default-off.json"
+    },
+    {
+      "id": "F10-unicode-grapheme-cursor-edit",
+      "uc": [
+        "F10"
+      ],
+      "path": "F10/unicode-grapheme-cursor-edit.json"
+    },
+    {
+      "id": "F12-approx-term-dumb-command-line",
+      "uc": [
+        "F12"
+      ],
+      "path": "F12/approx-term-dumb-command-line.json"
+    },
+    {
+      "id": "G01-approx-emacs-case-transform",
+      "uc": [
+        "G01"
+      ],
+      "path": "G01/approx-emacs-case-transform.json"
+    },
+    {
+      "id": "G01-approx-emacs-transpose",
+      "uc": [
+        "G01"
+      ],
+      "path": "G01/approx-emacs-transpose.json"
+    },
+    {
+      "id": "G01-approx-emacs-word-delete",
+      "uc": [
+        "G01"
+      ],
+      "path": "G01/approx-emacs-word-delete.json"
+    },
+    {
+      "id": "G02-approx-vi-mode-editing",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/approx-vi-mode-editing.json"
+    },
+    {
+      "id": "G04-approx-kill-ring-yank",
+      "uc": [
+        "G04"
+      ],
+      "path": "G04/approx-kill-ring-yank.json"
+    },
+    {
+      "id": "G05-approx-multiline-buffer-navigation",
+      "uc": [
+        "G05"
+      ],
+      "path": "G05/approx-multiline-buffer-navigation.json"
+    },
+    {
+      "id": "G09-approx-balanced-parentheses-before-enter",
+      "uc": [
+        "G09"
+      ],
+      "path": "G09/approx-balanced-parentheses-before-enter.json"
+    },
+    {
+      "id": "G11-clear-screen-keeps-prompt",
+      "uc": [
+        "G11"
+      ],
+      "path": "G11/clear-screen-keeps-prompt.json"
+    },
+    {
+      "id": "G12-approx-grapheme-cursor-boundary",
+      "uc": [
+        "G12"
+      ],
+      "path": "G12/approx-grapheme-cursor-boundary.json"
+    },
+    {
+      "id": "G13-ctrl-y-yanks-killed-text",
+      "uc": [
+        "G13"
+      ],
+      "path": "G13/ctrl-y-yanks-killed-text.json"
+    },
+    {
+      "id": "H01-history-persists-after-exit",
+      "uc": [
+        "H01"
+      ],
+      "path": "H01/history-persists-after-exit.json"
+    },
+    {
+      "id": "H02-approx-seeded-session-history",
+      "uc": [
+        "H02"
+      ],
+      "path": "H02/approx-seeded-session-history.json"
+    },
+    {
+      "id": "H03-duplicate-entry-suppression",
+      "uc": [
+        "H03"
+      ],
+      "path": "H03/duplicate-entry-suppression.json"
+    },
+    {
+      "id": "H04-leading-space-is-not-saved",
+      "uc": [
+        "H04"
+      ],
+      "path": "H04/leading-space-is-not-saved.json"
+    },
+    {
+      "id": "H06-multiline-reverse-search",
+      "uc": [
+        "H06"
+      ],
+      "path": "H06/multiline-reverse-search.json"
+    },
+    {
+      "id": "H07-approx-history-cwd-and-exit-filters",
+      "uc": [
+        "H07"
+      ],
+      "path": "H07/approx-history-cwd-and-exit-filters.json"
+    },
+    {
+      "id": "H08-delete-history-entry",
+      "uc": [
+        "H08"
+      ],
+      "path": "H08/delete-history-entry.json"
+    },
+    {
+      "id": "H09-up-arrow-prefix-search",
+      "uc": [
+        "H09"
+      ],
+      "path": "H09/up-arrow-prefix-search.json"
+    },
+    {
+      "id": "H10-token-history-search",
+      "uc": [
+        "H10"
+      ],
+      "path": "H10/token-history-search.json"
+    },
+    {
+      "id": "H11-last-argument-insertion",
+      "uc": [
+        "H11"
+      ],
+      "path": "H11/last-argument-insertion.json"
+    },
+    {
+      "id": "H12-history-expansion",
+      "uc": [
+        "H12"
+      ],
+      "path": "H12/history-expansion.json"
+    },
+    {
+      "id": "H13-malformed-history-recovers",
+      "uc": [
+        "H13"
+      ],
+      "path": "H13/malformed-history-recovers.json"
+    },
+    {
+      "id": "H14-approx-history-timestamp-metadata",
+      "uc": [
+        "H14"
+      ],
+      "path": "H14/approx-history-timestamp-metadata.json"
+    },
+    {
+      "id": "H15-history-uses-xdg-state-home",
+      "uc": [
+        "H15"
+      ],
+      "path": "H15/history-uses-xdg-state-home.json"
+    },
+    {
+      "id": "I01-history-autosuggestion",
+      "uc": [
+        "I01"
+      ],
+      "path": "I01/history-autosuggestion.json"
+    },
+    {
+      "id": "I02-completion-autosuggestion",
+      "uc": [
+        "I02"
+      ],
+      "path": "I02/completion-autosuggestion.json"
+    },
+    {
+      "id": "I03-partial-word-suggestion-acceptance",
+      "uc": [
+        "I03"
+      ],
+      "path": "I03/partial-word-suggestion-acceptance.json"
+    },
+    {
+      "id": "I04-multiline-history-suggestion",
+      "uc": [
+        "I04"
+      ],
+      "path": "I04/multiline-history-suggestion.json"
+    },
+    {
+      "id": "I05-cwd-ranked-history-suggestion",
+      "uc": [
+        "I05"
+      ],
+      "path": "I05/cwd-ranked-history-suggestion.json"
+    },
+    {
+      "id": "I06-enter-does-not-accept-suggestion",
+      "uc": [
+        "I06"
+      ],
+      "path": "I06/enter-does-not-accept-suggestion.json"
+    },
+    {
+      "id": "I07-suggestion-keystrokes-remain-responsive",
+      "uc": [
+        "I07"
+      ],
+      "path": "I07/suggestion-keystrokes-remain-responsive.json"
+    },
+    {
+      "id": "J01-command-name",
+      "uc": [
+        "J01"
+      ],
+      "path": "J01/command-name.json"
+    },
+    {
+      "id": "J02-filename-variants",
+      "uc": [
+        "J02"
+      ],
+      "path": "J02/filename-variants.json"
+    },
+    {
+      "id": "J03-cd-and-cdpath",
+      "uc": [
+        "J03"
+      ],
+      "path": "J03/cd-and-cdpath.json"
+    },
+    {
+      "id": "J04-home-and-variable-path",
+      "uc": [
+        "J04"
+      ],
+      "path": "J04/home-and-variable-path.json"
+    },
+    {
+      "id": "J05-option-name-and-description",
+      "uc": [
+        "J05"
+      ],
+      "path": "J05/option-name-and-description.json"
+    },
+    {
+      "id": "J06-catalog-subcommands",
+      "uc": [
+        "J06"
+      ],
+      "path": "J06/catalog-subcommands.json"
+    },
+    {
+      "id": "J07-ssh-hostname",
+      "uc": [
+        "J07"
+      ],
+      "path": "J07/ssh-hostname.json"
+    },
+    {
+      "id": "J08-make-target",
+      "uc": [
+        "J08"
+      ],
+      "path": "J08/make-target.json"
+    },
+    {
+      "id": "J09-approx-kill-completion",
+      "uc": [
+        "J09"
+      ],
+      "path": "J09/approx-kill-completion.json"
+    },
+    {
+      "id": "J10-environment-variable-name",
+      "uc": [
+        "J10"
+      ],
+      "path": "J10/environment-variable-name.json"
+    },
+    {
+      "id": "J11-wrapper-command-completion",
+      "uc": [
+        "J11"
+      ],
+      "path": "J11/wrapper-command-completion.json"
+    },
+    {
+      "id": "J12-twenty-thousand-entry-directory",
+      "uc": [
+        "J12"
+      ],
+      "path": "J12/twenty-thousand-entry-directory.json"
+    },
+    {
+      "id": "J13-approx-completion-pager",
+      "uc": [
+        "J13"
+      ],
+      "path": "J13/approx-completion-pager.json"
+    },
+    {
+      "id": "J14-case-and-fuzzy-match",
+      "uc": [
+        "J14"
+      ],
+      "path": "J14/case-and-fuzzy-match.json"
+    },
+    {
+      "id": "J15-sexp-context",
+      "uc": [
+        "J15"
+      ],
+      "path": "J15/sexp-context.json"
+    },
+    {
+      "id": "J16-approx-user-defined-completion",
+      "uc": [
+        "J16"
+      ],
+      "path": "J16/approx-user-defined-completion.json"
+    },
+    {
+      "id": "J17-approx-unknown-command-learning-responsiveness",
+      "uc": [
+        "J17"
+      ],
+      "path": "J17/approx-unknown-command-learning-responsiveness.json"
+    },
+    {
+      "id": "J18-approx-completion-candidate-preview",
+      "uc": [
+        "J18"
+      ],
+      "path": "J18/approx-completion-candidate-preview.json"
+    },
+    {
+      "id": "K01-command-existence-colors",
+      "uc": [
+        "K01"
+      ],
+      "path": "K01/command-existence-colors.json"
+    },
+    {
+      "id": "K02-existing-path-is-underlined",
+      "uc": [
+        "K02"
+      ],
+      "path": "K02/existing-path-is-underlined.json"
+    },
+    {
+      "id": "K03-redirection-target-is-not-an-error",
+      "uc": [
+        "K03"
+      ],
+      "path": "K03/redirection-target-is-not-an-error.json"
+    },
+    {
+      "id": "K04-unbalanced-parenthesis-diagnostic",
+      "uc": [
+        "K04"
+      ],
+      "path": "K04/unbalanced-parenthesis-diagnostic.json"
+    },
+    {
+      "id": "K05-string-highlighting",
+      "uc": [
+        "K05"
+      ],
+      "path": "K05/string-highlighting.json"
+    },
+    {
+      "id": "K06-sexp-and-command-island-evaluation",
+      "uc": [
+        "K06"
+      ],
+      "path": "K06/sexp-and-command-island-evaluation.json"
+    },
+    {
+      "id": "K07-one-line-source-diagnostic",
+      "uc": [
+        "K07"
+      ],
+      "path": "K07/one-line-source-diagnostic.json"
+    },
+    {
+      "id": "K08-macro-expansion-error-location",
+      "uc": [
+        "K08"
+      ],
+      "path": "K08/macro-expansion-error-location.json"
+    },
+    {
+      "id": "L01-left-and-right-prompt",
+      "uc": [
+        "L01"
+      ],
+      "path": "L01/left-and-right-prompt.json"
+    },
+    {
+      "id": "L03-status-duration-jobs-prompt-segments",
+      "uc": [
+        "L03"
+      ],
+      "path": "L03/status-duration-jobs-prompt-segments.json"
+    },
+    {
+      "id": "L04-approx-transient-prompt-keeps-current-prompt",
+      "uc": [
+        "L04"
+      ],
+      "path": "L04/approx-transient-prompt-keeps-current-prompt.json"
+    },
+    {
+      "id": "L05-approx-custom-prompt-format",
+      "uc": [
+        "L05"
+      ],
+      "path": "L05/approx-custom-prompt-format.json"
+    },
+    {
+      "id": "L06-approx-narrow-terminal-redraw",
+      "uc": [
+        "L06"
+      ],
+      "path": "L06/approx-narrow-terminal-redraw.json"
+    },
+    {
+      "id": "L07-theme-can-be-selected",
+      "uc": [
+        "L07"
+      ],
+      "path": "L07/theme-can-be-selected.json"
+    },
+    {
+      "id": "M01-cd-dash",
+      "uc": [
+        "M01"
+      ],
+      "path": "M01/cd-dash.json"
+    },
+    {
+      "id": "M02-logical-pwd-and-pwd-variable",
+      "uc": [
+        "M02"
+      ],
+      "path": "M02/logical-pwd-and-pwd-variable.json"
+    },
+    {
+      "id": "M03-directory-history-prevd-nextd",
+      "uc": [
+        "M03"
+      ],
+      "path": "M03/directory-history-prevd-nextd.json"
+    },
+    {
+      "id": "M05-pushd-popd-stack-round-trip",
+      "uc": [
+        "M05"
+      ],
+      "path": "M05/pushd-popd-stack-round-trip.json"
+    },
+    {
+      "id": "M06-shell-continues-after-current-directory-is-removed",
+      "uc": [
+        "M06"
+      ],
+      "path": "M06/shell-continues-after-current-directory-is-removed.json"
+    },
+    {
+      "id": "N01-session-variable",
+      "uc": [
+        "N01"
+      ],
+      "path": "N01/session-variable.json"
+    },
+    {
+      "id": "N02-export-reaches-child-process",
+      "uc": [
+        "N02"
+      ],
+      "path": "N02/export-reaches-child-process.json"
+    },
+    {
+      "id": "N03-colon-separated-path-list",
+      "uc": [
+        "N03"
+      ],
+      "path": "N03/colon-separated-path-list.json"
+    },
+    {
+      "id": "N04-unset-removes-variable",
+      "uc": [
+        "N04"
+      ],
+      "path": "N04/unset-removes-variable.json"
+    },
+    {
+      "id": "N05-approx-lexical-let-scope",
+      "uc": [
+        "N05"
+      ],
+      "path": "N05/approx-lexical-let-scope.json"
+    },
+    {
+      "id": "N07-status-and-pipeline-status",
+      "uc": [
+        "N07"
+      ],
+      "path": "N07/status-and-pipeline-status.json"
+    },
+    {
+      "id": "O01-bare-line-sugar",
+      "uc": [
+        "O01"
+      ],
+      "path": "O01/O01-bare-line-sugar.json"
+    },
+    {
+      "id": "O02-command-island-evaluation",
+      "uc": [
+        "O02"
+      ],
+      "path": "O02/O02-command-island-evaluation.json"
+    },
+    {
+      "id": "O03-let-and-set",
+      "uc": [
+        "O03"
+      ],
+      "path": "O03/O03-let-and-set.json"
+    },
+    {
+      "id": "O04-control-forms",
+      "uc": [
+        "O04"
+      ],
+      "path": "O04/O04-control-forms.json"
+    },
+    {
+      "id": "O05-nested-command-definitions",
+      "uc": [
+        "O05"
+      ],
+      "path": "O05/O05-nested-command-definitions.json"
+    },
+    {
+      "id": "O06-macro-expansion",
+      "uc": [
+        "O06"
+      ],
+      "path": "O06/O06-macro-expansion.json"
+    },
+    {
+      "id": "O07-conditional-and-handler-case",
+      "uc": [
+        "O07"
+      ],
+      "path": "O07/O07-conditional-and-handler-case.json"
+    },
+    {
+      "id": "O07-interactive-command-failed-restart",
+      "uc": [
+        "O07"
+      ],
+      "path": "O07/O07-interactive-command-failed-restart.json"
+    },
+    {
+      "id": "O08-structured-pipeline",
+      "uc": [
+        "O08"
+      ],
+      "path": "O08/O08-structured-pipeline.json"
+    },
+    {
+      "id": "O09-json-tsv-lines-conversion",
+      "uc": [
+        "O09"
+      ],
+      "path": "O09/O09-json-tsv-lines-conversion.json"
+    },
+    {
+      "id": "O10-regex-and-string-library",
+      "uc": [
+        "O10"
+      ],
+      "path": "O10/O10-regex-and-string-library.json"
+    },
+    {
+      "id": "O11-native-arithmetic",
+      "uc": [
+        "O11"
+      ],
+      "path": "O11/O11-native-arithmetic.json"
+    },
+    {
+      "id": "O12-comments",
+      "uc": [
+        "O12"
+      ],
+      "path": "O12/O12-comments.json"
+    },
+    {
+      "id": "O13-script-shebang-and-source",
+      "uc": [
+        "O13"
+      ],
+      "path": "O13/approx-O13-script-shebang-and-source.json"
+    },
+    {
+      "id": "O14-function-directory-autoload",
+      "uc": [
+        "O14"
+      ],
+      "path": "O14/O14-function-directory-autoload.json"
+    },
+    {
+      "id": "O15-asdf-library-load",
+      "uc": [
+        "O15"
+      ],
+      "path": "O15/O15-asdf-library-load.json"
+    },
+    {
+      "id": "O16-preserve-case",
+      "uc": [
+        "O16"
+      ],
+      "path": "O16/O16-preserve-case.json"
+    },
+    {
+      "id": "O17-force-external-command",
+      "uc": [
+        "O17"
+      ],
+      "path": "O17/O17-force-external-command.json"
+    },
+    {
+      "id": "O18-alias-eval-and-string-execution",
+      "uc": [
+        "O18"
+      ],
+      "path": "O18/O18-alias-eval-and-string-execution.json"
+    },
+    {
+      "id": "P01-xdg-init-file",
+      "uc": [
+        "P01"
+      ],
+      "path": "P01/approx-P01-xdg-init-file.json"
+    },
+    {
+      "id": "P02-conf-d-order",
+      "uc": [
+        "P02"
+      ],
+      "path": "P02/approx-P02-conf-d-order.json"
+    },
+    {
+      "id": "P03-function-directory",
+      "uc": [
+        "P03"
+      ],
+      "path": "P03/approx-P03-function-directory.json"
+    },
+    {
+      "id": "P04-abbreviation-expansion",
+      "uc": [
+        "P04"
+      ],
+      "path": "P04/approx-P04-abbreviation-expansion.json"
+    },
+    {
+      "id": "P05-alias-expansion",
+      "uc": [
+        "P05"
+      ],
+      "path": "P05/P05-alias-expansion.json"
+    },
+    {
+      "id": "P06-key-binding",
+      "uc": [
+        "P06"
+      ],
+      "path": "P06/P06-key-binding.json"
+    },
+    {
+      "id": "P07-theme-selection",
+      "uc": [
+        "P07"
+      ],
+      "path": "P07/P07-theme-selection.json"
+    },
+    {
+      "id": "P08-prompt-format",
+      "uc": [
+        "P08"
+      ],
+      "path": "P08/approx-P08-prompt-format.json"
+    },
+    {
+      "id": "P10-completion-definition",
+      "uc": [
+        "P10"
+      ],
+      "path": "P10/P10-completion-definition.json"
+    },
+    {
+      "id": "P11-continue-after-config-error",
+      "uc": [
+        "P11"
+      ],
+      "path": "P11/approx-P11-continue-after-config-error.json"
+    },
+    {
+      "id": "Q01-no-debug-dump",
+      "uc": [
+        "Q01"
+      ],
+      "path": "Q01/Q01-no-debug-dump.json"
+    },
+    {
+      "id": "Q02-bounded-recursion-recovery",
+      "uc": [
+        "Q02"
+      ],
+      "path": "Q02/Q02-bounded-recursion-recovery.json"
+    },
+    {
+      "id": "Q04-cancel-completion",
+      "uc": [
+        "Q04"
+      ],
+      "path": "Q04/Q04-cancel-completion.json"
+    },
+    {
+      "id": "Q06-read-only-home-session",
+      "uc": [
+        "Q06"
+      ],
+      "path": "Q06/approx-Q06-read-only-home-session.json"
+    },
+    {
+      "id": "S01-ask-mode-cancel",
+      "uc": [
+        "S01"
+      ],
+      "path": "S01/approx-S01-ask-mode-cancel.json"
+    },
+    {
+      "id": "S05-noninteractive-ai-status",
+      "uc": [
+        "S05"
+      ],
+      "path": "S05/S05-noninteractive-ai-status.json"
+    },
+    {
+      "id": "S07-shell-without-claude",
+      "uc": [
+        "S07"
+      ],
+      "path": "S07/approx-S07-shell-without-claude.json"
+    },
+    {
+      "id": "T03-help-output",
+      "uc": [
+        "T03"
+      ],
+      "path": "T03/approx-T03-help-output.json"
+    },
+    {
+      "id": "T05-legacy-history-load",
+      "uc": [
+        "T05"
+      ],
+      "path": "T05/approx-T05-legacy-history-load.json"
+    },
+    {
+      "id": "U02-osc-133-markers",
+      "uc": [
+        "U02"
+      ],
+      "path": "U02/approx-U02-osc-133-markers.json"
+    },
+    {
+      "id": "U03-tmux-screen-terminal",
+      "uc": [
+        "U03"
+      ],
+      "path": "U03/approx-U03-tmux-screen-terminal.json"
     }
   ]
 }

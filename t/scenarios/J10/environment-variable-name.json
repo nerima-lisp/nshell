@@ -1,0 +1,35 @@
+{
+  "id": "J10-environment-variable-name",
+  "uc": [
+    "J10"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J10-environment-variable-name> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "set SCENARIO_COMPLETION_VALUE marker; complete -C \"echo $SCENARIO_COMPLETION_\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "SCENARIO_COMPLETION_VALUE"
+      ]
+    },
+    "exit_code": 0
+  }
+}

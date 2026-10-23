@@ -1,0 +1,38 @@
+{
+  "id": "M01-cd-dash",
+  "uc": [
+    "M01"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_M01-cd-dash> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "mkdir first second; cd first; cd ../second; cd -; touch returned.txt"
+  },
+  "expected": {
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "first/returned.txt",
+          "exists": true
+        }
+      ]
+    }
+  }
+}

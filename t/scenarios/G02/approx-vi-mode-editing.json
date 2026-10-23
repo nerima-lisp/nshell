@@ -1,0 +1,84 @@
+{
+  "id": "G02-approx-vi-mode-editing",
+  "uc": [
+    "G02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G02-approx-vi-mode-editing> ",
+      "G02_MESSAGE": "G02_VALUE",
+      "NSHELL_VI_MODE": "1"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "G02_VALUE"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $G02_MESSAGE"
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "key",
+      "key": "0"
+    },
+    {
+      "type": "key",
+      "key": "x"
+    },
+    {
+      "type": "key",
+      "key": "i"
+    },
+    {
+      "type": "keys",
+      "text": "e"
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "G02_VALUE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

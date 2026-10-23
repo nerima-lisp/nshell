@@ -235,6 +235,11 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual({scenario["id"] for scenario in selected}, {"C01-first", "C02-second"})
 
+    def test_repository_full_corpus_matches_manifest(self) -> None:
+        scenarios = runner._load_scenarios(runner.DEFAULT_SCENARIO_DIR, "all", set())
+
+        self.assertTrue(scenarios)
+
     def test_full_selection_rejects_scenario_id_change(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

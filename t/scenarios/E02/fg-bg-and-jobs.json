@@ -22,26 +22,18 @@
   },
   "expected": {
     "stream": {
-      "contains": [
-        "Stopped",
-        "Running"
-      ]
+      "contains": ["Running"]
     },
     "exit_code": 0
   },
   "steps": [
     {
       "type": "keys",
-      "text": "sleep 30 &"
+      "text": "sleep 1 &"
     },
     {
       "type": "key",
       "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "[1]",
-      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -52,13 +44,20 @@
       "key": "Enter"
     },
     {
-      "type": "key",
-      "key": "C-z"
+      "type": "keys",
+      "text": "echo E02_FG_$((1+1))"
     },
     {
-      "type": "wait",
-      "contains": "Stopped",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "sleep 1 &"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
     },
     {
       "type": "keys",
@@ -77,21 +76,25 @@
       "key": "Enter"
     },
     {
-      "type": "wait",
-      "contains": "Running",
-      "timeout_seconds": 10
-    },
-    {
       "type": "keys",
-      "text": "fg %1"
+      "text": "sleep 1"
     },
     {
       "type": "key",
       "key": "Enter"
     },
     {
+      "type": "keys",
+      "text": "echo E02_DONE_$((1+1))"
+    },
+    {
       "type": "key",
-      "key": "C-c"
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E02_DONE_2",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",

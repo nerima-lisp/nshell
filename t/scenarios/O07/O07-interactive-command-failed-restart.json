@@ -1,0 +1,80 @@
+{
+  "id": "O07-interactive-command-failed-restart",
+  "uc": [
+    "O07"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "O07> ",
+      "SCENARIO_MARKER": "O07_RESTART_CONTINUED_OK"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "(cat \"missing-o07-file\")"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "ignore and continue",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "1"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "(echo $SCENARIO_MARKER)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "O07_RESTART_CONTINUED_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "O07_RESTART_CONTINUED_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

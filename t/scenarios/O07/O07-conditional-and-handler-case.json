@@ -1,0 +1,38 @@
+{
+  "id": "O07-conditional-and-handler-case",
+  "uc": [
+    "O07"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(when (false) (echo O07_FALSE_BRANCH_WRONG))\n(handler-case (o07-command-that-does-not-exist) (command-failed () (echo O07_HANDLER_OK)))\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O07_HANDLER_OK"
+      ],
+      "excludes": [
+        "O07_FALSE_BRANCH_WRONG"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,14 +1,19 @@
 {
   "id": "A04-A05-login-path-handoff",
   "uc": ["A04", "A05"],
-  "mode": "batch",
+  "mode": "pty",
   "environment": {
     "variables": {
       "PATH": "/r04-login-path-seed",
-      "TERM": "dumb"
+      "TERM": "dumb",
+      "NSHELL_PROMPT": "A04-A05-login-path-handoff> "
     },
     "home": "home",
-    "cwd": "work"
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
   },
   "preconditions": {
     "files": [
@@ -18,20 +23,21 @@
       }
     ]
   },
-  "invocation": {
-    "kind": "argv",
-    "arguments": [
-      "-l",
-      "-c",
-      "case \":$PATH:\" in *:/r04-login-profile:*) ;; *) exit 89 ;; esac; if [ -r /etc/profile ] && [ -d /usr/bin ]; then case \":$PATH:\" in *:/usr/bin:*) ;; *) exit 90 ;; esac; fi; printf 'LOGIN_PATH_OK\\n'"
-    ]
-  },
+  "load_config": true,
+  "wait_for_prompt": false,
+  "arguments": [
+    "-l",
+    "-c",
+    "case \":$PATH:\" in *:/r04-login-profile:*) ;; *) exit 89 ;; esac; if [ -r /etc/profile ] && [ -d /usr/bin ]; then case \":$PATH:\" in *:/usr/bin:*) ;; *) exit 90 ;; esac; fi; printf 'LOGIN_PATH_OK\\n'"
+  ],
+  "steps": [
+    {
+      "type": "wait_exit"
+    }
+  ],
   "expected": {
-    "stdout": {
-      "equals": "LOGIN_PATH_OK\n"
-    },
-    "stderr": {
-      "equals": ""
+    "stream": {
+      "equals": "LOGIN_PATH_OK\r\n"
     },
     "exit_code": 0
   }

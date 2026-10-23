@@ -10,7 +10,9 @@
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "SCENARIO_I05-cwd-ranked-history-suggestion> ",
       "SCENARIO_VALUE_A": "I05_A_CWD",
-      "SCENARIO_VALUE_B": "I05_B_CWD"
+      "SCENARIO_VALUE_B": "I05_B_CWD",
+      "SCENARIO_A_FILE": "I05_A_FILE",
+      "SCENARIO_B_FILE": "I05_B_FILE"
     },
     "home": "home",
     "cwd": "work",
@@ -25,7 +27,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "mkdir -p a b; echo I05_$((1+1))"
+      "text": "mkdir -p a b; echo I05_SETUP_$((1+1))"
     },
     {
       "type": "key",
@@ -33,12 +35,12 @@
     },
     {
       "type": "wait",
-      "contains": "I05_2",
+      "contains": "I05_SETUP_2",
       "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "cd a; echo I05_$((1+2))"
+      "text": "cd a; touch $SCENARIO_A_FILE; rm $SCENARIO_A_FILE; echo I05_SETUP_$((1+2))"
     },
     {
       "type": "key",
@@ -46,12 +48,12 @@
     },
     {
       "type": "wait",
-      "contains": "I05_3",
+      "contains": "I05_SETUP_3",
       "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "echo $SCENARIO_VALUE_A"
+      "text": "cd ../b; touch $SCENARIO_B_FILE; rm $SCENARIO_B_FILE; echo I05_SETUP_$((2+2))"
     },
     {
       "type": "key",
@@ -59,12 +61,12 @@
     },
     {
       "type": "wait",
-      "contains": "I05_A_CWD",
+      "contains": "I05_SETUP_4",
       "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "cd ../b; echo I05_$((2+2))"
+      "text": "cd ../a; echo I05_SETUP_$((2+3))"
     },
     {
       "type": "key",
@@ -72,38 +74,12 @@
     },
     {
       "type": "wait",
-      "contains": "I05_4",
+      "contains": "I05_SETUP_5",
       "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "echo $SCENARIO_VALUE_B"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "I05_B_CWD",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "keys",
-      "text": "cd ../a; echo I05_$((2+3))"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "I05_5",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "keys",
-      "text": "echo $SCENARIO_VALUE_"
+      "text": "touch I05_"
     },
     {
       "type": "key",
@@ -114,8 +90,16 @@
       "key": "Enter"
     },
     {
+      "type": "keys",
+      "text": "echo I05_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "I05_A_CWD",
+      "contains": "I05_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -132,11 +116,25 @@
     }
   ],
   "expected": {
-    "stream": {
-      "contains": [
-        "I05_A_CWD"
+    "side_effects": {
+      "files": [
+        {
+          "path": "a/I05_A_FILE",
+          "exists": true
+        },
+        {
+          "path": "b/I05_B_FILE",
+          "exists": false
+        },
+        {
+          "path": "a/I05_",
+          "exists": false
+        }
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-E06 owns cwd-ranked history suggestions."
   }
 }

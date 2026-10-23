@@ -31,5 +31,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-B01 owns colon-separated list values such as PATH."
   }
 }

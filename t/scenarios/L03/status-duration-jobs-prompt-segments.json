@@ -1,0 +1,75 @@
+{
+  "id": "L03-status-duration-jobs-prompt-segments",
+  "uc": [
+    "L03"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_L03-status-duration-jobs-prompt-segments> ",
+      "TEST_PROMPT_FORMAT": "STATUS_{status}_EXIT_{exit}_DURATION_{duration}_JOBS_{jobs}"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "prompt left \"$TEST_PROMPT_FORMAT\"; echo L03_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "L03_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "false"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "STATUS_",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "STATUS_",
+        "EXIT_",
+        "DURATION_",
+        "JOBS_"
+      ]
+    },
+    "exit_code": 0
+  }
+}

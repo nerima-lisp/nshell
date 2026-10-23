@@ -4,6 +4,7 @@
     "E01"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.1,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -31,7 +32,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "sleep 30 > stopped.out"
+      "text": "sleep 3 > stopped.out"
     },
     {
       "type": "key",

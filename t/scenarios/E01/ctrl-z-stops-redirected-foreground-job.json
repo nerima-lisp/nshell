@@ -1,0 +1,83 @@
+{
+  "id": "E01-ctrl-z-stops-redirected-foreground-job",
+  "uc": [
+    "E01"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "E01-ctrl-z-stops-redirected-foreground-job> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "Stopped"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sleep 30 > stopped.out"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "C-z"
+    },
+    {
+      "type": "wait",
+      "contains": "Stopped",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "jobs"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Stopped",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "kill %1"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

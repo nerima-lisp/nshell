@@ -1,0 +1,35 @@
+{
+  "id": "N02-export-reaches-child-process",
+  "uc": [
+    "N02"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_N02-export-reaches-child-process> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "export SCENARIO_EXPORTED_VALUE=exported; env"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "SCENARIO_EXPORTED_VALUE=exported"
+      ]
+    },
+    "exit_code": 0
+  }
+}

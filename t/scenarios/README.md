@@ -34,11 +34,10 @@ Batch scenarios select `invocation.kind` as `command`, `stdin`, `script`, or
 `argv`. The `command` kind passes command text to `nshell --command`; `stdin`
 sends text to standard input; `script` writes text to `invocation.path`
 (relative to `environment.cwd`) and runs that file. The `argv` kind passes
-each string in `invocation.arguments` as one argument after the binary and
-sends `invocation.stdin` to standard input; omitted `stdin` means empty input.
-It does not add CLI flags or rewrite the argument strings. Batch expectations
-can check stdout, stderr, exit code, and files created under the scenario
-working directory.
+each string in `invocation.arguments` as one argument after a prepended
+`--no-config` flag. It sends `invocation.stdin` to standard input; omitted
+`stdin` means empty input. Batch expectations can check stdout, stderr, exit
+code, and files created under the scenario working directory.
 
 PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `paste` sends bracketed paste, `key` sends a key name accepted by tmux
@@ -48,8 +47,10 @@ for the shell to exit. Set a non-empty `environment.variables.NSHELL_PROMPT`
 marker that only the prompt displays.
 The optional top-level `arguments` array passes exact additional arguments to
 the binary.
-The runner sends Enter to make the initial prompt appear and waits for that
-marker before executing the scenario steps.
+By default, the runner sends Enter to make the initial prompt appear and waits
+for that marker before executing the scenario steps. Set the optional
+`wait_for_prompt` field to `false` for a PTY command that exits without an
+interactive prompt. This field is valid only for PTY scenarios.
 `load_config` is optional and defaults to `false`; it is valid only for PTY
 scenarios. Set it to `true` when a scenario needs to load startup configuration
 from its isolated home. With the default `environment.home`, add
@@ -133,10 +134,13 @@ home directory or exact machine environment.
   account-specific login shell behavior; the scenario does not change the
   account's login shell with `chsh`.
 - A04 and A05 share `t/scenarios/A04/login-path-handoff.json`. The scenario
-  starts with a synthetic PATH and always checks the fixture's `.profile`
-  marker. It also checks for `/usr/bin` when `/etc/profile` is readable and
-  `/usr/bin` exists. Linux `nix flake check` and the macOS batch scenario job
-  both run this scenario. The A04 manual check covers account-specific
+  runs `-l -c` in a PTY. It sets `load_config: true` to prevent the runner
+  from prepending `--no-config`, so the delegated login shell can read the
+  fixture's `.profile`. It sets `wait_for_prompt: false` because the command
+  exits without starting a REPL. The scenario starts with a synthetic PATH and
+  checks the profile's marker. It also checks for `/usr/bin` when `/etc/profile`
+  is readable and `/usr/bin` exists. The Linux and macOS PTY
+  scenario jobs run this scenario. The A04 manual check covers account-specific
   `path_helper`, nix-darwin, and Home Manager values; the A05 manual check
   covers host-specific values from `/etc/profile`.
 - A06 starts with `SHLVL=40` and checks that the delegated shell sees a larger
@@ -149,15 +153,18 @@ home directory or exact machine environment.
   retain their manual caller checks.
 - B07 and B08 share an interactive PTY startup scenario. It does not launch
   Emacs, VS Code, or JetBrains; their manual checks cover those callers.
-- B09 has three scenarios covering exact command arguments, including quotes,
+- B09 has four scenarios. Its batch command case runs the nshell `string`
+  builtin so the scenario fails if the runner sends the command to `/bin/sh`.
+  Three `argv` cases cover exact shell-command arguments, including quotes,
   spaces, a newline, `--`, a leading-dash value, an empty command, stdin,
   stdout, stderr, and status. They do not test a particular external caller.
-- B10 invokes the literal `-ilc env` argument vector with a temporary
-  `.nshellrc` that adds a unique PATH marker and emits a startup marker. It
-  checks for the PATH marker and verifies that the startup marker is absent
-  from stdout, and requires empty stderr. The broader configuration behavior
-  assigned to L07 (public Lisp, scripts, autoload, and hooks) remains outside
-  this fixture.
+- B10 runs `-ilc env` in a PTY with `load_config: true` and
+  `wait_for_prompt: false`. Its temporary
+  `.nshellrc` adds a unique PATH marker and emits a startup marker. A fixture
+  `env` prints a success marker only when PATH contains the configured value;
+  the exact PTY stream also rejects startup output and diagnostics. The broader
+  configuration behavior assigned to L07 (public Lisp, scripts, autoload, and
+  hooks) remains outside this fixture.
 
 ## Run scenarios
 

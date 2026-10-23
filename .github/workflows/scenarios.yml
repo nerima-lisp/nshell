@@ -1,0 +1,55 @@
+name: Scenario corpus
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scenarios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scenarios:
+    name: scenarios (${{ matrix.system }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            system: x86_64-linux
+          - runner: macos-15
+            system: aarch64-darwin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/nix-setup
+        with:
+          cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
+          cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
+
+      - name: Build and run the batch scenario check
+        run: >-
+          nix build --print-build-logs
+          ".#checks.${{ matrix.system }}.scenarios-batch"
+          --out-link "$RUNNER_TEMP/nshell-scenario-check"
+
+      - name: Build nshell
+        run: >-
+          nix build --print-build-logs
+          ".#packages.${{ matrix.system }}.default"
+          --out-link "$RUNNER_TEMP/nshell-scenario-binary"
+
+      - name: Run batch and PTY scenarios
+        run: >-
+          nix develop .#scenarios -c python3 scripts/run-scenarios.py
+          --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"
+          --repeat 3

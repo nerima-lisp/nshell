@@ -1,0 +1,43 @@
+{
+  "id": "C01-batch-command",
+  "uc": ["C01"],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "echo SCENARIO_BATCH_OK > result.txt; echo SCENARIO_BATCH_COMMAND_OK"
+  },
+  "expected": {
+    "stdout": {
+      "contains": ["SCENARIO_BATCH_COMMAND_OK"],
+      "excludes": ["SCENARIO_BATCH_OK"]
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "result.txt",
+          "exists": true,
+          "contains": ["SCENARIO_BATCH_OK"]
+        }
+      ]
+    }
+  }
+}

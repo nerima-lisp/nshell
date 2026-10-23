@@ -1,0 +1,33 @@
+{
+  "id": "C01-batch-stdin",
+  "uc": ["C01"],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "stdin",
+    "text": "echo SCENARIO_STDIN_OK\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": ["SCENARIO_STDIN_OK"]
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  }
+}

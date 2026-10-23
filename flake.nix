@@ -165,9 +165,11 @@
     let
       lib = nixpkgs.lib;
 
-      # CI and release checks target Ubuntu x86_64 only.
+      # Scenario checks cover Linux and Apple Silicon macOS; release checks
+      # remain on Ubuntu x86_64.
       systems = [
         "x86_64-linux"
+        "aarch64-darwin"
       ];
 
       meta = {
@@ -784,6 +786,7 @@
               echo ""
             '';
           });
+
         };
 
       # Granularity lives here, NOT in extra GitHub Actions jobs: `nix flake
@@ -807,6 +810,13 @@
           # repackaging of the same dumped image -- see its definition for
           # why the two cannot be the same derivation.
           packages.releaseBundle = releaseBundleFor ctx;
+
+          devShells.scenarios = ctx.pkgs.mkShell {
+            nativeBuildInputs = [
+              ctx.pkgs.python3
+              ctx.pkgs.tmux
+            ];
+          };
 
           checks = {
             # The focused cl-weave completion suite (nshell/weave), through the
@@ -856,6 +866,21 @@
 
             # Verify the delivered package compiles and the image dumps.
             build = delivery;
+
+            # Batch scenarios run inside the Nix sandbox; PTY scenarios need
+            # a controlling terminal and run in the non-sandboxed CI workflow.
+            scenarios-batch =
+              ctx.pkgs.runCommand "nshell-scenarios-batch"
+                {
+                  buildInputs = [ delivery ];
+                  nativeBuildInputs = [ ctx.pkgs.python3 ];
+                }
+                ''
+                  set -euo pipefail
+
+                  python3 ${self}/scripts/run-scenarios.py --binary ${bin} --mode batch
+                  touch "$out"
+                '';
 
             # Smoke test: the dumped image runs real shell operations. This is
             # the in-sandbox half; ci.yml's `binary` job repeats it outside the

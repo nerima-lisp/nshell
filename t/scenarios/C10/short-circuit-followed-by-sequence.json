@@ -1,0 +1,33 @@
+{
+  "id": "C10-short-circuit-followed-by-sequence",
+  "uc": ["C10"],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "false && echo a; echo next"
+  },
+  "expected": {
+    "stdout": {
+      "contains": ["next"]
+    },
+    "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "The current executor skips the command after a short-circuited sequence."
+  }
+}

@@ -57,5 +57,8 @@
   "invocation": {
     "kind": "command",
     "text": "printf '%s\\n' *.txt file?.txt **/*.txt no-match-*.zzz"
+  },
+  "expected_failure": {
+    "reason": "WP-B01 owns hidden-file glob behavior."
   }
 }

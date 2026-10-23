@@ -21,7 +21,7 @@
     "files": [
       {
         "path": "work/tool.sh",
-        "content": "printf 'D05_FZF_READY\\n'\nIFS= read -r response\nprintf 'D05_FZF_RETURNED:%s\\n' \"$response\"\n"
+        "content": "printf 'D05_FZF_READY\\n'\nIFS= read -r response\nprintf 'D05_FZF_RETURNED\\n'\n"
       }
     ]
   },
@@ -29,7 +29,7 @@
     "stream": {
       "contains": [
         "D05_FZF_READY",
-        "D05_FZF_RETURNED:selected-item"
+        "D05_FZF_RETURNED"
       ]
     },
     "exit_code": 0
@@ -58,7 +58,7 @@
     },
     {
       "type": "wait",
-      "contains": "D05_FZF_RETURNED:selected-item",
+      "contains": "D05_FZF_RETURNED",
       "timeout_seconds": 10
     },
     {

@@ -574,7 +574,9 @@
    (:file "perf/test-startup")
    ;; Appended rather than inserted next to helpers-runner: :serial t makes the
    ;; order load order, and every existing entry must keep its position.
-   (:file "main-test"))
+   (:file "main-test")
+   (:file "unit/static-check-allowlist")
+   (:file "unit/test-static-checks"))
    ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is
    ;; read by the plain CL reader before :depends-on is ever consulted, so any
    ;; PKG:SYMBOL token here must resolve against a package already in the image.

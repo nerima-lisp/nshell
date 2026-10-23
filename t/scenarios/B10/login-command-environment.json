@@ -1,14 +1,19 @@
 {
   "id": "B10-login-command-environment",
   "uc": ["B10"],
-  "mode": "batch",
+  "mode": "pty",
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "dumb",
+      "NSHELL_PROMPT": "B10-login-command-environment> "
     },
     "home": "home",
-    "cwd": "work"
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
   },
   "preconditions": {
     "files": [
@@ -18,22 +23,22 @@
       },
       {
         "path": "home/bin/env",
-        "content": "#!/bin/sh\nprintf 'PATH=%s\\n' \"$PATH\"\n",
+        "content": "#!/bin/sh\ncase \":$PATH:\" in *:/r04-config-path:*) printf 'B10_PATH_OK\\n' ;; *) exit 91 ;; esac\n",
         "executable": true
       }
     ]
   },
-  "invocation": {
-    "kind": "argv",
-    "arguments": ["-ilc", "env"]
-  },
+  "load_config": true,
+  "wait_for_prompt": false,
+  "arguments": ["-ilc", "env"],
+  "steps": [
+    {
+      "type": "wait_exit"
+    }
+  ],
   "expected": {
-    "stdout": {
-      "contains": ["PATH=/r04-config-path"],
-      "excludes": ["R04_CONFIG_OUTPUT_LEAK", "nshell:"]
-    },
-    "stderr": {
-      "equals": ""
+    "stream": {
+      "equals": "B10_PATH_OK\r\n"
     },
     "exit_code": 0
   }

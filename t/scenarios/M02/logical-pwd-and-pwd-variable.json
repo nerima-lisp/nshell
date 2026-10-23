@@ -1,0 +1,49 @@
+{
+  "id": "M02-logical-pwd-and-pwd-variable",
+  "uc": [
+    "M02"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_M02-logical-pwd-and-pwd-variable> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "other/marker.txt",
+        "content": "outside"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "ln -s ../other logical-link; cd logical-link/..; printf '<%s>\\n' \"$PWD\" > logical.txt; pwd >> logical.txt"
+  },
+  "expected": {
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "logical.txt",
+          "exists": true,
+          "contains": [
+            "work"
+          ],
+          "excludes": [
+            "work/>"
+          ]
+        }
+      ]
+    }
+  }
+}

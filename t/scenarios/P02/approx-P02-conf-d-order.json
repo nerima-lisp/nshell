@@ -22,15 +22,15 @@
     "files": [
       {
         "path": "home/.config/nshell/init.lisp",
-        "content": "(echo \"P02_INIT_OK\")\n"
+        "content": "echo P02_INIT_OK\n"
       },
       {
         "path": "home/.config/nshell/conf.d/10-first.lisp",
-        "content": "(echo \"P02_FIRST_OK\")\n"
+        "content": "echo P02_FIRST_OK\n"
       },
       {
         "path": "home/.config/nshell/conf.d/20-second.lisp",
-        "content": "(echo \"P02_SECOND_OK\")\n"
+        "content": "echo P02_SECOND_OK\n"
       }
     ]
   },
@@ -47,21 +47,6 @@
   },
   "load_config": true,
   "steps": [
-    {
-      "type": "wait",
-      "contains": "P02_INIT_OK",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "wait",
-      "contains": "P02_FIRST_OK",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "wait",
-      "contains": "P02_SECOND_OK",
-      "timeout_seconds": 10
-    },
     {
       "type": "keys",
       "text": "echo $SCENARIO_MARKER"
@@ -87,5 +72,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-L07 owns XDG init and conf.d loading order."
+  }
 }

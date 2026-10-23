@@ -1,0 +1,75 @@
+{
+  "id": "E08-ctrl-c-interrupts-whole-pipeline",
+  "uc": [
+    "E08"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "E08-ctrl-c-interrupts-whole-pipeline> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/after-pipeline.txt",
+        "content": "E08_PIPELINE_STOPPED\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "E08_PIPELINE_STOPPED"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sleep 30 | cat"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "cat after-pipeline.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E08_PIPELINE_STOPPED",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

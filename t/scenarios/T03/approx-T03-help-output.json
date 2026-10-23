@@ -1,0 +1,35 @@
+{
+  "id": "T03-help-output",
+  "uc": [
+    "T03"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "help echo\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "echo"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "K07-one-line-source-diagnostic",
+  "uc": [
+    "K07"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_K07-one-line-source-diagnostic> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "(\necho K07_AFTER_ERROR"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "error"
+      ]
+    },
+    "exit_code": 1
+  }
+}

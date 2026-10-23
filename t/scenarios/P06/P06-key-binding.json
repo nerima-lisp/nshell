@@ -1,0 +1,101 @@
+{
+  "id": "P06-key-binding",
+  "uc": [
+    "P06"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "P06> ",
+      "SCENARIO_MARKER": "P06_BIND_OK",
+      "SCENARIO_BOOTSTRAP": "P06_BIND_READY"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "bind ctrl-k clear-input"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_BOOTSTRAP"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P06_BIND_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "touch p06_should_not_run"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_MARKER"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P06_BIND_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "P06_BIND_OK"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "p06_should_not_run",
+          "exists": false
+        }
+      ]
+    }
+  }
+}

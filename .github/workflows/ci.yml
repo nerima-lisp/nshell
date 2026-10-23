@@ -16,15 +16,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # One Linux job on purpose. Granularity belongs in the flake's `checks.*`
-  # attributes, which `nix flake check` evaluates in parallel with build
-  # caching. Splitting these into separate GitHub jobs would duplicate that
-  # scheduling and lose cache sharing between them.
-  #
-  # Add a second job ONLY for work the Nix sandbox cannot do: network access,
-  # a real PTY/TTY, or artifact upload. "A different runner OS" is no longer
-  # one of them: the Linux target is the hosted release and integration gate.
-  # The two extra jobs below still qualify; see the comment on each.
+  # Run the native flake checks once per target. Granularity belongs in the
+  # flake's `checks.*` attributes, where Nix can share build results.
+  # The additional Linux jobs below cover real-PTY integration, coverage
+  # artifact upload, and binary execution outside the sandbox.
   check:
     name: nix flake check
     runs-on: ubuntu-latest
@@ -42,17 +37,41 @@ jobs:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
           cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
-      # Runs the SBCL test suite (checks.default), the cl-weave completion
-      # suite (checks.weave), the treefmt formatting gate (checks.formatting),
-      # the mkdocs --strict build (checks.docs), and the binary smoke test.
-      #
-      # No `--all-systems`: this hosted job is the sole declared target.
+      # Builds every check declared for this runner's native system.
       - name: Check flake
         run: nix flake check --print-build-logs
 
       # Catches stray conflict markers and whitespace errors that compile fine.
       - name: Check diff hygiene
         run: git diff --check
+
+  darwin-check:
+    name: test suite (aarch64-darwin)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/nix-setup
+        with:
+          cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
+          cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
+
+      - name: Verify native Apple Silicon target
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(nix eval --impure --raw --expr builtins.currentSystem)" = aarch64-darwin
+
+      - name: Run Darwin test suite
+        run: nix build --max-jobs 1 --no-link --print-build-logs .#checks.aarch64-darwin.default
+
+      - name: Build Darwin package and formatter
+        run: nix build --max-jobs 1 --no-link --print-build-logs .#packages.aarch64-darwin.default .#formatter.aarch64-darwin
+
+      - name: Build Darwin development shell
+        run: nix develop --max-jobs 1 .#devShells.aarch64-darwin.default -c true
 
   integration:
     # NOT movable into `checks.*`: this runs the FULL suite in a dev shell
@@ -61,7 +80,7 @@ jobs:
     # processes — get genuine coverage on a runner where those facilities
     # exist. The sandbox has no controlling terminal, so there is nothing for
     # those tests to attach to.
-    # One runner, no matrix: x86_64-linux is the sole declared and gated target.
+    # Keep the real-PTY integration suite on this single Linux runner.
     name: integration tests (x86_64-linux)
     runs-on: ubuntu-latest
     timeout-minutes: 45

@@ -1,0 +1,36 @@
+{
+  "id": "O18-alias-eval-and-string-execution",
+  "uc": [
+    "O18"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "alias o18_alias 'echo \"O18_ALIAS_OK\"'\no18_alias\n(eval 'echo O18_EVAL_OK')\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O18_ALIAS_OK",
+        "O18_EVAL_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

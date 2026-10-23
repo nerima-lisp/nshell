@@ -59,5 +59,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-R08 owns OSC 133 prompt markers."
   }
 }

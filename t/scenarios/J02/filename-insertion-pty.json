@@ -1,0 +1,76 @@
+{
+  "id": "J02-filename-insertion-pty",
+  "uc": ["J02"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J02-filename-insertion-pty> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/space name.txt",
+        "content": "J02_SPACE_INSERTION_OK\n"
+      },
+      {
+        "path": "work/café.txt",
+        "content": "J02_UNICODE_INSERTION_OK\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "cat space"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "keys",
+      "text": "; cat café"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "J02_UNICODE_INSERTION_OK"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit"
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "J02_SPACE_INSERTION_OK",
+        "J02_UNICODE_INSERTION_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

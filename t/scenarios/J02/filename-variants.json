@@ -52,8 +52,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-C01 owns file completion for hidden, unqualified, linked, spaced, and Unicode names."
   }
 }

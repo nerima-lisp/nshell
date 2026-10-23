@@ -31,5 +31,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L06 owns native arithmetic."
   }
 }

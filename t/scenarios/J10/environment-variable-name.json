@@ -31,5 +31,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-C04 owns environment-variable completion knowledge."
   }
 }

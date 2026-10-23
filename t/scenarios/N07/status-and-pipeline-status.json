@@ -1,0 +1,35 @@
+{
+  "id": "N07-status-and-pipeline-status",
+  "uc": [
+    "N07"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_N07-status-and-pipeline-status> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "false | true; printf \"<%s,%s,%s>\\n\" $status $pipestatus"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "<0,1,0>"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "id": "I05-cwd-ranked-history-suggestion",
+  "uc": [
+    "I05"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_I05-cwd-ranked-history-suggestion> ",
+      "SCENARIO_VALUE_A": "I05_A_CWD",
+      "SCENARIO_VALUE_B": "I05_B_CWD"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "mkdir -p a b; echo I05_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I05_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "cd a; echo I05_$((1+2))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I05_3",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_VALUE_A"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I05_A_CWD",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "cd ../b; echo I05_$((2+2))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I05_4",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_VALUE_B"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I05_B_CWD",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "cd ../a; echo I05_$((2+3))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I05_5",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_VALUE_"
+    },
+    {
+      "type": "key",
+      "key": "M-Right"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I05_A_CWD",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "I05_A_CWD"
+      ]
+    },
+    "exit_code": 0
+  }
+}

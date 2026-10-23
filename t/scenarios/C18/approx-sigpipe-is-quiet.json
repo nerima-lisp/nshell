@@ -1,0 +1,38 @@
+{
+  "id": "C18-approx-sigpipe-is-quiet",
+  "uc": [
+    "C18"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "equals": "y\n"
+    },
+    "stderr": {
+      "excludes": [
+        "broken pipe",
+        "SIGPIPE"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "yes | head -n 1"
+  }
+}

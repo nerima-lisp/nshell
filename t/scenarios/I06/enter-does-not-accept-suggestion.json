@@ -4,6 +4,7 @@
     "I06"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.1,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -33,6 +34,19 @@
     {
       "type": "wait",
       "contains": "I06_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "rm \"$SCENARIO_FILE\"; printf 'I06_MARKER_%s\\n' \"$((1+1))\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I06_MARKER_2",
       "timeout_seconds": 10
     },
     {
@@ -83,8 +97,5 @@
         }
       ]
     }
-  },
-  "expected_failure": {
-    "reason": "WP-E01 owns the rule that Enter executes only typed input."
   }
 }

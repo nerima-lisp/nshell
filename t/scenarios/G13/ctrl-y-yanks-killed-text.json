@@ -4,6 +4,7 @@
     "G13"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.1,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -79,8 +80,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-E01 owns Ctrl-Y yank behavior on macOS."
-  }
+  ]
 }

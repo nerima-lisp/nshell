@@ -1,0 +1,35 @@
+{
+  "id": "B02-approx-remote-shell-command-contract",
+  "uc": [
+    "B02"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "equals": "B02_REMOTE_COMMAND\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 23
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "printf \"B02_REMOTE_COMMAND\\n\"; exit 23"
+  }
+}

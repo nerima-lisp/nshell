@@ -27,10 +27,11 @@
     (nshell.domain.job-control:monitor-map-jobs
      job-monitor
      (lambda (job-id job)
-       (push (make-job-listing job-id
-                               (%status-label job)
-                               (%job-command-string job))
-             listings)))
+       (unless (nshell.domain.execution:job-completed-p job)
+         (push (make-job-listing job-id
+                                 (%status-label job)
+                                 (%job-command-string job))
+               listings))))
     (nreverse listings)))
 
 (defun format-job-listing (listing &optional stream)

@@ -32,9 +32,19 @@
                                         text))))))
 
   (define-output-event-handler %process-quit-output-event
-                               progn
-                               (setf *running* nil)
-                               nil)
+    progn
+    (reap-background-jobs)
+    (let ((warning
+            (nshell.application::%exit-warning-message-if-required
+             nshell.application:*job-monitor*)))
+      (if warning
+          (progn
+            (format t "~%~a" warning)
+            (reset-rendered-prompt-state)
+            (lambda () (render-prompt-cont)))
+          (progn
+            (setf *running* nil)
+            nil))))
 
   (define-output-event-handler %process-default-output-event
                                with-cleared-rendered-completions-and-prompt-cont)

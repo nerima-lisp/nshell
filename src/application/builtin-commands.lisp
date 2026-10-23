@@ -130,6 +130,28 @@
       (values (mod (parse-integer argument :junk-allowed nil) 256) t)
     (error ()
       (values nil nil))))
+(defvar *exit-warning-state* nil)
+(defun %exit-warning-message-if-required (job-monitor)
+  (let ((active-job-ids nil))
+    (when job-monitor
+      (nshell.domain.job-control:monitor-map-jobs
+       job-monitor
+       (lambda (job-id job)
+         (unless (nshell.domain.execution:job-completed-p job)
+           (push job-id active-job-ids)))))
+    (setf active-job-ids (nreverse active-job-ids))
+    (cond
+      ((null active-job-ids)
+       (setf *exit-warning-state* nil)
+       nil)
+      ((and *exit-warning-state*
+            (eq job-monitor (first *exit-warning-state*))
+            (equal active-job-ids (second *exit-warning-state*)))
+       (setf *exit-warning-state* nil)
+       nil)
+      (t
+       (setf *exit-warning-state* (list job-monitor active-job-ids))
+       (format nil "exit: there are active jobs. Exit again to leave.~%")))))
 
 (define-builtin %builtin-exit (context args) ()
   (cond
@@ -143,8 +165,14 @@
        (if valid-p
            (progn
              (setf (shell-context-last-exit-code context) status)
-             (%stop-shell-context context)
-             (values nil status))
+             (let ((warning
+                     (%exit-warning-message-if-required
+                      (shell-context-job-monitor context))))
+               (if warning
+                   (values warning status)
+                   (progn
+                     (%stop-shell-context context)
+                     (values nil status)))))
            (progn
              (setf (shell-context-last-exit-code context) 2)
              (values "exit: numeric argument required~%" 2)))))))

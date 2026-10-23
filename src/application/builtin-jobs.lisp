@@ -130,7 +130,10 @@
                 (wait-for-job job-id process-registry job-monitor)
                 (values nil nil))
           (if job
-              (setf last-code exit-code)
+              (progn
+                (setf last-code exit-code)
+                (nshell.domain.job-control:monitor-remove-job
+                 job-monitor job-id))
               (push (or job-spec "current") missing)))))
     (if missing
         (values

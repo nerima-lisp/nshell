@@ -111,42 +111,72 @@
               (expect (probe-file output) :to-be-truthy)
               (expect "bg-pipe" :to-equal (host-kit:read-file-string output)))))))
 
-  (it "reap-background-jobs-removes-only-completed-processes"
-    "Reaping should update completed jobs and leave live ones alone."
+  (it "reap-background-jobs-notifies-and-retains-completed-status"
+    "Reaping notifies once, then wait can read and consume the saved status."
     (with-repl-test-state
-        (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-               (completed-job (make-test-job 0 "sleep"))
-               (alive-job (make-test-job 1 "sleep"))
-               (completed-proc :completed)
-               (alive-proc :alive)
-               (completed-job-id (nshell.domain.job-control:monitor-add-job
-                                  monitor completed-job))
-               (alive-job-id (nshell.domain.job-control:monitor-add-job
-                              monitor alive-job)))
-          (let ((nshell.application:*job-monitor* monitor))
-            (repl-test-register-process-entry completed-job-id completed-proc)
-            (repl-test-register-process-entry alive-job-id alive-proc)
-            (let ((nshell.presentation::*background-proc-alive-p*
-                    (lambda (proc)
-                      (eq proc alive-proc)))
-                  (nshell.presentation::*background-proc-wait*
-                    (lambda (proc)
-                      (declare (ignore proc))))
-                  (nshell.presentation::*background-proc-exit-code*
-                    (lambda (proc)
-                      (declare (ignore proc))
-                      17)))
-              (nshell.presentation::reap-background-jobs))
+      (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+             (completed-job (make-test-job 0 "sleep"))
+             (alive-job (make-test-job 1 "sleep"))
+             (completed-proc :completed)
+             (alive-proc :alive)
+             (completed-job-id (nshell.domain.job-control:monitor-add-job
+                                monitor completed-job))
+             (alive-job-id (nshell.domain.job-control:monitor-add-job
+                            monitor alive-job)))
+        (let ((nshell.application:*job-monitor* monitor))
+          (repl-test-register-process-entry completed-job-id completed-proc)
+          (repl-test-register-process-entry alive-job-id alive-proc)
+          (let ((nshell.presentation::*background-proc-alive-p*
+                  (lambda (proc)
+                    (eq proc alive-proc)))
+                (nshell.presentation::*background-proc-wait*
+                  (lambda (proc)
+                    (declare (ignore proc))))
+                (nshell.presentation::*background-proc-exit-code*
+                  (lambda (proc)
+                    (declare (ignore proc))
+                    17))
+                (output nil)
+                (second-output nil))
+            (setf output
+                  (with-output-to-string (out)
+                    (let ((*standard-output* out))
+                      (nshell.presentation::reap-background-jobs))))
+            (setf second-output
+                  (with-output-to-string (out)
+                    (let ((*standard-output* out))
+                      (nshell.presentation::reap-background-jobs))))
+            (expect (format nil "[1] Done sleep~%") :to-equal output)
+            (expect "" :to-equal second-output)
             (expect (repl-test-process-entry completed-job-id) :to-be-null)
-            (expect alive-proc :to-be (repl-test-process-entry alive-job-id))
-            (expect :completed :to-be (nshell.domain.execution:job-state completed-job))
-            (expect 17 :to-equal (nshell.domain.execution:job-exit-code completed-job))
-            (expect :created :to-be (nshell.domain.execution:job-state alive-job))
-            (let ((output (with-output-to-string (out)
-                            (dolist (listing (nshell.application:jobs))
-                              (nshell.application:format-job-listing listing out)))))
-                (expect (search "[1] Done sleep" output) :to-be-truthy)
-                (expect (search "[2] Created sleep" output) :to-be-truthy))))))
+            (expect (repl-test-process-entry alive-job-id)
+                    :to-be alive-proc)
+            (expect (nshell.domain.job-control:monitor-find-job
+                     monitor completed-job-id)
+                    :to-be completed-job)
+            (expect (nshell.domain.execution:job-state completed-job)
+                    :to-be :completed)
+            (expect (nshell.domain.execution:job-exit-code completed-job)
+                    :to-equal 17)
+            (expect (nshell.domain.execution:job-state alive-job)
+                    :to-be :created)
+            (let ((listings (nshell.application:jobs monitor)))
+              (expect 1 :to-equal (length listings))
+              (expect alive-job-id :to-be
+                      (nshell.application:job-listing-id (first listings))))
+            (let ((context (make-test-shell-context :job-monitor monitor)))
+              (multiple-value-bind (wait-output wait-code)
+                  (call-builtin context "wait"
+                                (list (format nil "%~d" completed-job-id)))
+                (expect wait-output :to-be-null)
+                (expect 17 :to-equal wait-code))
+              (expect (nshell.domain.job-control:monitor-find-job
+                       monitor completed-job-id)
+                      :to-be-null)
+              (multiple-value-bind (jobs-output jobs-code)
+                  (call-builtin context "jobs" nil)
+                (expect (format nil "[2] Created sleep~%") :to-equal jobs-output)
+                (expect 0 :to-equal jobs-code))))))))
 
   (it "reap-background-jobs-handles-process-lists"
     "Reaping should treat process lists as a single background job entry."

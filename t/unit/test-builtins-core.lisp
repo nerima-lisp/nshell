@@ -171,12 +171,24 @@
             :output expected)))
       ))
 
-  (it "exit-stops-the-current-shell-context"
-    "exit mutates only the current application shell context running flag."
+  (it "exit-warns-once-before-stopping-with-active-jobs"
+    "exit warns once for active jobs, then exits with the requested status."
     (with-builtins-context (context)
-      (setf (nshell.application:shell-context-running context) t)
-      (assert-builtin-call (context "exit" nil) :code 0 :output-null t)
-      (expect (nshell.application:shell-context-running context) :to-be-falsy)))
+      (let ((monitor (nshell.application:shell-context-job-monitor context)))
+        (nshell.domain.job-control:monitor-add-job
+         monitor (make-test-job 0 "sleep"))
+        (setf (nshell.application:shell-context-running context) t)
+        (let ((nshell.application::*exit-warning-state* nil))
+          (assert-builtin-call (context "exit" '("7"))
+            :code 7
+            :output (format nil "exit: there are active jobs. Exit again to leave.~%"))
+          (expect (nshell.application:shell-context-running context)
+                  :to-be-truthy)
+          (assert-builtin-call (context "exit" '("7"))
+            :code 7
+            :output-null t)
+          (expect (nshell.application:shell-context-running context)
+                  :to-be-falsy)))))
 
   (it "exit-stops-the-assistant-and-still-ends-on-stop-failure"
     "exit must request model shutdown without allowing its failure to escape."
@@ -218,11 +230,15 @@
       (expect (nshell.application:shell-context-running context) :to-be-falsy)))
 
   (it "exit-without-a-status-reuses-the-last-status"
-    "exit without an argument uses the status of the preceding command."
+    "Completed jobs do not block exit, which retains the preceding status."
     (with-builtins-context (context)
-      (setf (nshell.application:shell-context-last-exit-code context) 23)
-      (assert-builtin-call (context "exit" nil) :code 23 :output-null t)
-      (expect (nshell.application:shell-context-running context) :to-be-falsy)))
+      (let* ((monitor (nshell.application:shell-context-job-monitor context))
+             (job-id (nshell.domain.job-control:monitor-add-job
+                      monitor (make-test-job 0 "completed"))))
+        (nshell.domain.job-control:complete-job monitor job-id 0)
+        (setf (nshell.application:shell-context-last-exit-code context) 23)
+        (assert-builtin-call (context "exit" nil) :code 23 :output-null t)
+        (expect (nshell.application:shell-context-running context) :to-be-falsy))))
 
   (it "exit-rejects-invalid-arguments-without-stopping"
     "Invalid exit arguments report an error while leaving the interactive shell running."
@@ -638,8 +654,8 @@
         :code 0
         :output (format nil "/opt/bin/mytool~%"))))
 
-  (it "wait-returns-the-completed-job-status"
-    "wait consumes an already completed job without touching process objects."
+  (it "wait-returns-and-consumes-the-completed-job-status"
+    "wait returns a completed job's saved status, then removes its listing and process entry."
     (let* ((context (make-test-builtins-context))
            (monitor (nshell.application:shell-context-job-monitor context))
            (job-id (nshell.domain.job-control:monitor-add-job
@@ -649,7 +665,10 @@
       (assert-builtin-call (context "wait" (list (format nil "%~d" job-id)))
         :code 7
         :output-null t)
-      (expect (gethash job-id registry) :to-be-null)))
+      (expect (gethash job-id registry) :to-be-null)
+      (expect (nshell.domain.job-control:monitor-find-job monitor job-id)
+              :to-be-null)
+      (assert-builtin-call (context "jobs" nil) :code 0 :output-empty t)))
 
   (it "jobs-reports-selected-and-missing-job-specs"
     "jobs renders found listings and reports every unresolved selector."
@@ -778,7 +797,7 @@
                                                      :active-only-p t))
       (multiple-value-bind (selected missing)
           (nshell.application::%select-job-listings monitor nil)
-        (expect 2 :to-equal (length selected))
+        (expect 1 :to-equal (length selected))
         (expect nil :to-equal missing))
       (multiple-value-bind (selected missing)
           (nshell.application::%select-job-listings

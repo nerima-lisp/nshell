@@ -25,15 +25,15 @@
                  (t (list entry)))))
          (when (and entry
                     (not (some *background-proc-alive-p* procs)))
-           (let ((job
-                   (nshell.domain.job-control:monitor-find-job
-                    nshell.application:*job-monitor*
-                    jid))
-                 (statuses
-                   (mapcar (lambda (proc)
-                             (funcall *background-proc-wait* proc)
-                             (or (funcall *background-proc-exit-code* proc) 0))
-                           procs)))
+           (let* ((job
+                    (nshell.domain.job-control:monitor-find-job
+                     nshell.application:*job-monitor*
+                     jid))
+                  (statuses
+                    (mapcar (lambda (proc)
+                              (funcall *background-proc-wait* proc)
+                              (or (funcall *background-proc-exit-code* proc) 0))
+                            procs)))
              (nshell.domain.job-control:complete-job
               nshell.application:*job-monitor*
               jid
@@ -44,6 +44,10 @@
                                statuses)
                       0)
                   (or (car (last statuses)) 0)))
+             (when job
+               (format t "[~d] Done ~a~%"
+                       jid
+                       (nshell.domain.execution:job-command-display-string job)))
              (push jid completed-jobs)))))
      *proc-registry*)
     (dolist (jid completed-jobs)

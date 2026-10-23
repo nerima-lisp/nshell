@@ -249,6 +249,39 @@
   nil)))
         (expect nil :to-be (nshell.presentation::read-key-cont))
         (expect nil :to-be nshell.presentation::*running*))))
+  (it "ctrl-d-warns-once-before-stopping-with-active-jobs"
+    "Ctrl-D warns while jobs are active and exits on the next attempt."
+    (with-repl-test-state
+      (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+             (job (make-test-job 0 "sleep"))
+             (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+             (first-continuation nil)
+             (second-continuation t)
+             (first-output nil)
+             (second-output nil))
+        (let ((nshell.application:*job-monitor* monitor)
+              (nshell.application::*exit-warning-state* nil))
+          (with-temporary-function
+              ('nshell.infrastructure.acl:consume-children-changed-p
+               (lambda () nil))
+            (setf first-output
+                  (with-output-to-string (out)
+                    (let ((*standard-output* out))
+                      (setf first-continuation
+                            (nshell.presentation::%process-quit-output-event)))))
+            (expect (search "exit: there are active jobs. Exit again to leave." first-output) :to-be-truthy)
+            (expect (functionp first-continuation) :to-be-truthy)
+            (expect t :to-be nshell.presentation::*running*)
+            (expect job :to-be
+                    (nshell.domain.job-control:monitor-find-job monitor job-id))
+            (setf second-output
+                  (with-output-to-string (out)
+                    (let ((*standard-output* out))
+                      (setf second-continuation
+                            (nshell.presentation::%process-quit-output-event)))))
+            (expect "" :to-equal second-output)
+            (expect nil :to-be second-continuation)
+            (expect nil :to-be nshell.presentation::*running*))))))
 
   (it "repl-eof-stops-the-assistant-before-terminal-cleanup"
     "EOF exits through the REPL unwind cleanup and requests model shutdown."

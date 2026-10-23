@@ -1,8 +1,8 @@
 (in-package #:nshell.presentation)
 
 (defun %reap-background-jobs-for-command (cmd)
-  (when (member cmd '("fg" "bg" "jobs" "disown" "wait" "kill")
-              :test #'string=)
+  (when (member cmd '("fg" "bg" "jobs" "disown" "exit" "kill")
+                :test #'string=)
     (reap-background-jobs)))
 
 (defun execute-builtin (ast)

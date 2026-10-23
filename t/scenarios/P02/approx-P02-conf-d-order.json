@@ -1,0 +1,91 @@
+{
+  "id": "P02-conf-d-order",
+  "uc": [
+    "P02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "P02> ",
+      "SCENARIO_MARKER": "P02_PROMPT_READY"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "(echo \"P02_INIT_OK\")\n"
+      },
+      {
+        "path": "home/.config/nshell/conf.d/10-first.lisp",
+        "content": "(echo \"P02_FIRST_OK\")\n"
+      },
+      {
+        "path": "home/.config/nshell/conf.d/20-second.lisp",
+        "content": "(echo \"P02_SECOND_OK\")\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "P02_INIT_OK",
+        "P02_FIRST_OK",
+        "P02_SECOND_OK",
+        "P02_PROMPT_READY"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true,
+  "steps": [
+    {
+      "type": "wait",
+      "contains": "P02_INIT_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait",
+      "contains": "P02_FIRST_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait",
+      "contains": "P02_SECOND_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_MARKER"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P02_PROMPT_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

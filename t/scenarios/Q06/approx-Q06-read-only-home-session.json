@@ -22,7 +22,7 @@
   "invocation": {
     "kind": "script",
     "path": "scenario.nsh",
-    "text": "(chmod a-w $HOME $XDG_CONFIG_HOME $XDG_CACHE_HOME $XDG_DATA_HOME $XDG_STATE_HOME)\n(echo Q06_READONLY_HOME_OK)\n(chmod u+w $HOME $XDG_CONFIG_HOME $XDG_CACHE_HOME $XDG_DATA_HOME $XDG_STATE_HOME)\n"
+    "text": "chmod a-w \"$HOME\" \"$XDG_CONFIG_HOME\" \"$XDG_CACHE_HOME\" \"$XDG_DATA_HOME\" \"$XDG_STATE_HOME\"\necho Q06_READONLY_HOME_OK\nchmod u+w \"$HOME\" \"$XDG_CONFIG_HOME\" \"$XDG_CACHE_HOME\" \"$XDG_DATA_HOME\" \"$XDG_STATE_HOME\"\n"
   },
   "expected": {
     "stdout": {

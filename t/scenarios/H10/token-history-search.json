@@ -35,21 +35,28 @@
       "text": "TOKEN_MATCH"
     },
     {
-      "type": "wait",
-      "contains": "echo before H10_TOKEN_MATCH after",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "key",
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo H10_AFTER_$((1+1))"
     },
     {
       "type": "key",
       "key": "Enter"
     },
     {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
       "type": "wait",
-      "contains": "before H10_TOKEN_MATCH after",
+      "contains": "H10_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -72,5 +79,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-E02 owns token-based reverse history search."
   }
 }

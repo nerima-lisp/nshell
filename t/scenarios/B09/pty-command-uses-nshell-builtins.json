@@ -1,0 +1,34 @@
+{
+  "id": "B09-pty-command-uses-nshell-builtins",
+  "uc": ["B09"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb",
+      "NSHELL_PROMPT": "B09-pty-command-uses-nshell-builtins> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "wait_for_prompt": false,
+  "arguments": ["--command", "string upper r04_nshell_pty_builtin_guard"],
+  "steps": [
+    {
+      "type": "wait_exit"
+    }
+  ],
+  "expected": {
+    "stream": {
+      "equals": "R04_NSHELL_PTY_BUILTIN_GUARD\r\n"
+    },
+    "exit_code": 0
+  }
+}

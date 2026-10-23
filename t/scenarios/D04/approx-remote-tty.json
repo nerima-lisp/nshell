@@ -1,0 +1,77 @@
+{
+  "id": "D04-approx-remote-tty",
+  "uc": [
+    "D04"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "D04-approx-remote-tty> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/tool.sh",
+        "content": "printf 'D04_REMOTE_READY\\n'\nIFS= read -r response\nprintf 'D04_REMOTE_RETURNED:%s\\n' \"$response\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "D04_REMOTE_READY",
+        "D04_REMOTE_RETURNED:remote-command"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh tool.sh"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D04_REMOTE_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "remote-command"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D04_REMOTE_RETURNED:remote-command",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

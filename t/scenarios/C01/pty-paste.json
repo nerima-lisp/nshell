@@ -60,7 +60,7 @@
     "exit_code": 0,
     "side_effects": {
       "history": {
-        "path": ".nshell_history",
+        "path": ".local/state/nshell/history",
         "contains": ["cat answer.txt"]
       }
     }

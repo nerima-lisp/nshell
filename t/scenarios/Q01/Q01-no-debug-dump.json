@@ -1,0 +1,44 @@
+{
+  "id": "Q01-no-debug-dump",
+  "uc": [
+    "Q01"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": ")\n"
+  },
+  "expected": {
+    "exit_code": 2,
+    "stdout": {
+      "excludes": [
+        "#S(",
+        "Backtrace",
+        "SB-DEBUG"
+      ]
+    },
+    "stderr": {
+      "excludes": [
+        "#S(",
+        "Backtrace",
+        "SB-DEBUG"
+      ]
+    }
+  }
+}

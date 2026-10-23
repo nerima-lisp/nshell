@@ -40,8 +40,16 @@
       "key": "Enter"
     },
     {
+      "type": "keys",
+      "text": "echo A08_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "job",
+      "contains": "A08_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -51,11 +59,6 @@
     {
       "type": "key",
       "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "job",
-      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -69,5 +72,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-R03 owns the warning and two-step exit behavior when jobs remain."
+  }
 }

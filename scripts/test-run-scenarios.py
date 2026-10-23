@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 
 RUNNER_PATH = Path(__file__).with_name("run-scenarios.py")
@@ -57,6 +58,30 @@ def _write_json(path: Path, value: Any) -> None:
 
 
 class ScenarioRunnerTests(unittest.TestCase):
+    def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
+        scenario = _batch_scenario("batch-extra-path")
+        scenario["environment"]["variables"] = {"PATH": "bin:/usr/bin:/bin"}
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.dict(runner.os.environ, {"NSHELL_SCENARIO_EXTRA_PATH": "/nix/tools/bin"}):
+                env, _, _ = runner._environment(scenario, Path(temporary))
+
+        self.assertEqual(env["PATH"], f"bin:/usr/bin:/bin{runner.os.pathsep}/nix/tools/bin")
+
+    def test_pty_environment_does_not_append_extra_path(self) -> None:
+        scenario = _pty_scenario(
+            "pty-extra-path",
+            [{"type": "wait_exit"}],
+            {"exit_code": 0},
+        )
+        scenario["environment"]["variables"]["PATH"] = "/usr/bin:/bin"
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.dict(runner.os.environ, {"NSHELL_SCENARIO_EXTRA_PATH": "/nix/tools/bin"}):
+                env, _, _ = runner._environment(scenario, Path(temporary))
+
+        self.assertEqual(env["PATH"], "/usr/bin:/bin")
+
     def test_load_config_controls_no_config_argument(self) -> None:
         binary = Path("/nix/store/nshell/bin/nshell")
         cases = [

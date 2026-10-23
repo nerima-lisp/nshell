@@ -883,7 +883,11 @@
               ctx.pkgs.runCommand "nshell-scenarios-batch"
                 {
                   buildInputs = [ delivery ];
-                  nativeBuildInputs = [ ctx.pkgs.python3 ];
+                  nativeBuildInputs = [ ctx.pkgs.python3 ctx.pkgs.coreutils ctx.pkgs.bash ];
+                  NSHELL_SCENARIO_EXTRA_PATH = ctx.pkgs.lib.makeBinPath [
+                    ctx.pkgs.coreutils
+                    ctx.pkgs.bash
+                  ];
                 }
                 ''
                   set -euo pipefail

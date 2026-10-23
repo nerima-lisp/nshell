@@ -33,6 +33,6 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "C11_VALUE=inside /usr/bin/env; printf \"C11_AFTER:%s\\n\" \"$C11_VALUE\""
+    "text": "C11_VALUE=inside env; printf \"C11_AFTER:%s\\n\" \"$C11_VALUE\""
   }
 }

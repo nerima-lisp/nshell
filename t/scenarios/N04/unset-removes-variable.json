@@ -1,0 +1,35 @@
+{
+  "id": "N04-unset-removes-variable",
+  "uc": [
+    "N04"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_N04-unset-removes-variable> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "set SCENARIO_REMOVE_VALUE present; unset SCENARIO_REMOVE_VALUE; set -q SCENARIO_REMOVE_VALUE; echo $status"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "1"
+      ]
+    },
+    "exit_code": 0
+  }
+}

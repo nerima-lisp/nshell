@@ -1,0 +1,35 @@
+{
+  "id": "C08-here-doc-and-here-string",
+  "uc": [
+    "C08"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "C08_HEREDOC",
+        "C08_HERESTRING"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "cat <<'C08_END'\nC08_HEREDOC\nC08_END\ncat <<< C08_HERESTRING"
+  }
+}

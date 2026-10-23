@@ -4,6 +4,7 @@
     "G02"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -30,11 +31,11 @@
   "expected": {
     "stream": {
       "contains": [
-        "G02_ESC_O"
+        "G02_ESC_X"
       ],
       "excludes": [
         "G02_ESCAPE_EDITOR_STARTED",
-        "G02_ESC_OX"
+        "G02_ESC_O"
       ]
     },
     "exit_code": 0
@@ -42,7 +43,27 @@
   "steps": [
     {
       "type": "keys",
-      "text": "printf '%s%s' G02_ESC_ OX"
+      "text": "printf '%s%s' G02_ESC_ O"
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "wait",
+      "contains": "\u001b[2 q"
+    },
+    {
+      "type": "key",
+      "key": "i"
+    },
+    {
+      "type": "wait",
+      "contains": "\u001b[6 q"
+    },
+    {
+      "type": "keys",
+      "text": "X"
     },
     {
       "type": "keys",
@@ -58,7 +79,7 @@
     },
     {
       "type": "wait",
-      "contains": "G02_ESC_O",
+      "contains": "G02_ESC_X",
       "timeout_seconds": 10
     },
     {

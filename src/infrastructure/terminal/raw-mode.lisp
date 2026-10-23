@@ -124,7 +124,8 @@ enable. RESTORE-TERMINAL-MODE removes an entry unless PRESERVE-SNAPSHOT-P is tru
 ICANON and ECHO give the editor character-at-a-time input and full control of
 what is displayed; IXON and IXOFF stop ^S/^Q from being eaten as flow control.
 Everything else -- notably ISIG and OPOST -- is left as the terminal had it; see
-the commentary at the top of this file."
+the commentary at the top of this file. On Darwin, VDSUSP is disabled so ^Y
+reaches the editor."
   (sb-sys:with-pinned-objects (termios)
     (let ((native (sb-alien:sap-alien (sb-sys:vector-sap termios)
                                     (* native-termios))))
@@ -137,7 +138,13 @@ the commentary at the top of this file."
                           #+linux 'local-flags #-linux 'sb-posix::lflag)
             (logand (sb-alien:slot (sb-alien:deref native)
                                   #+linux 'local-flags #-linux 'sb-posix::lflag)
-                    (lognot (logior sb-posix:icanon sb-posix:echo))))))
+                    (lognot (logior sb-posix:icanon sb-posix:echo))))
+      #+darwin
+      ;; VDSUSP is c_cc[11] on Darwin; disable this control character alone.
+      (setf (sb-alien:deref
+             (sb-alien:slot (sb-alien:deref native) 'sb-posix::cc)
+             11)
+            sb-posix:vdisable)))
   termios)
 
 (defun enable-raw-mode (&optional (fd 0))

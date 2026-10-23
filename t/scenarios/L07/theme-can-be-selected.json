@@ -1,0 +1,36 @@
+{
+  "id": "L07-theme-can-be-selected",
+  "uc": [
+    "L07"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_L07-theme-can-be-selected> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "theme use nshell; theme show"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "nshell",
+        "prompt-path"
+      ]
+    },
+    "exit_code": 0
+  }
+}

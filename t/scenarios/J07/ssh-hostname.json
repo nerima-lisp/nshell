@@ -36,5 +36,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-C04 owns third-party command completion knowledge."
   }
 }

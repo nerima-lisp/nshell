@@ -1,0 +1,40 @@
+{
+  "id": "A12-no-config-skips-startup",
+  "uc": [
+    "A12"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.nshellrc",
+        "content": "printf \"A12_CONFIG_WAS_LOADED\\n\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stdout": {
+      "equals": "A12_NO_CONFIG_OK\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "printf \"A12_NO_CONFIG_OK\\n\""
+  }
+}

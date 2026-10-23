@@ -1,0 +1,77 @@
+{
+  "id": "D03-approx-monitor-tty",
+  "uc": [
+    "D03"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "D03-approx-monitor-tty> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/tool.sh",
+        "content": "printf 'D03_MONITOR_READY\\n'\nIFS= read -r response\nprintf 'D03_MONITOR_RETURNED:%s\\n' \"$response\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "D03_MONITOR_READY",
+        "D03_MONITOR_RETURNED:q"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh tool.sh"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D03_MONITOR_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "q"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D03_MONITOR_RETURNED:q",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

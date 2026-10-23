@@ -1,0 +1,35 @@
+{
+  "id": "P10-completion-definition",
+  "uc": [
+    "P10"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "complete -c p10_command -f --p10-option\ncomplete -C \"p10_command --p10\"\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "--p10-option"
+      ]
+    },
+    "exit_code": 0
+  }
+}

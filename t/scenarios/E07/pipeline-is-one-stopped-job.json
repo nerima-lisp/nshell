@@ -24,9 +24,9 @@
   "expected": {
     "stream": {
       "contains": [
-          "E07_STARTED_5",
-          "E07_JOBS_CAPTURED_7",
-          "E07_AFTER_2"
+        "E07_STARTED_5",
+        "E07_JOBS_CAPTURED_7",
+        "E07_AFTER_2"
       ]
     },
       "exit_code": 0,

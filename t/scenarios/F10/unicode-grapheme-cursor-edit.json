@@ -1,0 +1,66 @@
+{
+  "id": "F10-unicode-grapheme-cursor-edit",
+  "uc": [
+    "F10"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "F10-unicode-grapheme-cursor-edit> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "AX👩‍💻"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo A👩‍💻"
+    },
+    {
+      "type": "key",
+      "key": "C-b"
+    },
+    {
+      "type": "keys",
+      "text": "X"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "AX👩‍💻",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

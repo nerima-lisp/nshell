@@ -1,0 +1,35 @@
+{
+  "id": "C02-quoted-unicode-arguments",
+  "uc": [
+    "C02"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "equals": "<a b>\n<雪だるま>\n<quote:\">\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "printf \"<%s>\\n\" \"a b\" \"雪だるま\" \"quote:\\\"\""
+  }
+}

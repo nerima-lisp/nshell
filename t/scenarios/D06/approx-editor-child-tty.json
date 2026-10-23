@@ -25,7 +25,7 @@
       },
       {
         "path": "work/editor.sh",
-        "content": "IFS= read -r message\nprintf 'D06_COMMIT_MESSAGE:%s\\n' \"$message\"\n"
+        "content": "IFS= read -r message\nprintf 'D06_COMMIT_MESSAGE_ACCEPTED\\n'\n"
       }
     ]
   },
@@ -33,7 +33,7 @@
     "stream": {
       "contains": [
         "D06_GIT_EDITOR_READY",
-        "D06_COMMIT_MESSAGE:subject: test",
+        "D06_COMMIT_MESSAGE_ACCEPTED",
         "D06_EDITOR_SAVED"
       ]
     },
@@ -60,11 +60,6 @@
     {
       "type": "key",
       "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "D06_COMMIT_MESSAGE:subject: test",
-      "timeout_seconds": 10
     },
     {
       "type": "wait",

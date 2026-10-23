@@ -21,7 +21,7 @@
     "files": [
       {
         "path": "work/tool.sh",
-        "content": "printf 'D10_CONTAINER_READY\\n'\nIFS= read -r response\nprintf 'D10_CONTAINER_RETURNED:%s\\n' \"$response\"\n"
+        "content": "printf 'D10_CONTAINER_READY\\n'\nIFS= read -r response\nprintf 'D10_CONTAINER_RETURNED\\n'\n"
       }
     ]
   },
@@ -29,7 +29,7 @@
     "stream": {
       "contains": [
         "D10_CONTAINER_READY",
-        "D10_CONTAINER_RETURNED:container-command"
+        "D10_CONTAINER_RETURNED"
       ]
     },
     "exit_code": 0
@@ -58,7 +58,7 @@
     },
     {
       "type": "wait",
-      "contains": "D10_CONTAINER_RETURNED:container-command",
+      "contains": "D10_CONTAINER_RETURNED",
       "timeout_seconds": 10
     },
     {

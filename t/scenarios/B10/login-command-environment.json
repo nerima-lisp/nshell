@@ -18,7 +18,7 @@
   "preconditions": {
     "files": [
       {
-        "path": "home/.nshellrc",
+        "path": "home/.config/nshell/init.lisp",
         "content": "echo R04_CONFIG_OUTPUT_LEAK\nexport PATH=/r04-config-path:$HOME/bin:$PATH\n"
       },
       {

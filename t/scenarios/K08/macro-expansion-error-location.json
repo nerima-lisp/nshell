@@ -21,7 +21,8 @@
     "files": []
   },
   "invocation": {
-    "kind": "command",
+    "kind": "script",
+    "path": "scenario.nsh",
     "text": "(define-macro bad-form () (error \"K08_EXPANSION_ERROR\"))\n(bad-form)"
   },
   "expected": {
@@ -33,5 +34,8 @@
       ]
     },
     "exit_code": 1
+  },
+  "expected_failure": {
+    "reason": "WP-E05 owns macro-expansion diagnostics."
   }
 }

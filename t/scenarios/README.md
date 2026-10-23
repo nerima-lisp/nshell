@@ -150,24 +150,29 @@ These scenarios exercise the `-l` and `-c` entry points on the real binary.
 They use controlled fixtures so the corpus does not depend on a developer's
 home directory or exact machine environment.
 
-- A03 runs a login command and checks its output. It does not change the
+- A03 runs a login command and checks its output. Its manual check covers the
+  account-specific login shell behavior; the scenario does not change the
   account's login shell with `chsh`.
-- A04 checks the macOS login environment and A05 checks the Linux login
-  environment. Both start with a synthetic PATH that lacks standard system
-  paths and check that login initialization supplies `/usr/bin`. They do not
-  assert the host's exact `path_helper`, nix-darwin, Home Manager, or
-  `/etc/profile` values.
+- A04 and A05 share `t/scenarios/A04/login-path-handoff.json`. The scenario
+  starts with a synthetic PATH that lacks standard system paths and checks
+  that login initialization supplies `/usr/bin`. The A04 manual check covers
+  account-specific `path_helper`, nix-darwin, and Home Manager values; the A05
+  manual check covers values from `/etc/profile`. Scenario CI runs the batch
+  check on Apple Silicon macOS; its Linux job runs PTY scenarios, so checking
+  Linux profile behavior remains manual.
 - A06 starts with `SHLVL=40` and checks that the delegated shell sees a larger
   value while preserving the supplied `USER` and `SHELL`.
 - A07 checks that a non-interactive login command produces no stdout or stderr.
-- B01 through B06 share a POSIX loop command as a shell-caller smoke test. The
-  scenario does not launch Vim, SSH, scp, rsync, Git, make, fzf, xargs, cron, or
-  launchd.
-- B07 and B08 exercise an interactive PTY startup. They do not launch Emacs,
-  VS Code, or JetBrains.
-- B09 checks exact command arguments, including quotes, spaces, a newline,
-  `--`, a leading-dash value, an empty command, stdin, stdout, stderr, and
-  status. It does not test a particular external caller.
+- B01 through B06 share a POSIX loop command as a generic child-shell smoke
+  test. B02, B03, and B06 also have separate approximation scenarios for
+  remote-shell, remote-copy, and `-c` behavior. These scenarios do not launch
+  Vim, SSH, scp, rsync, Git, make, fzf, xargs, cron, or launchd; B04 and B05
+  retain their manual caller checks.
+- B07 and B08 share an interactive PTY startup scenario. It does not launch
+  Emacs, VS Code, or JetBrains; their manual checks cover those callers.
+- B09 has three scenarios covering exact command arguments, including quotes,
+  spaces, a newline, `--`, a leading-dash value, an empty command, stdin,
+  stdout, stderr, and status. They do not test a particular external caller.
 - B10 invokes the literal `-ilc env` argument vector with a temporary
   `.nshellrc` that adds a unique PATH marker and emits a startup marker. It
   checks for the PATH marker and verifies that the startup marker is absent
@@ -198,6 +203,8 @@ Use `--mode batch` or `--mode pty` to select an executor,
 Repeat `--scenario-id` to select more than one scenario. For example:
 
 ```sh
+# Apple Silicon macOS
+binary=$(nix build .#packages.aarch64-darwin.default --no-link --print-out-paths)
 nix develop .#scenarios -c python3 scripts/run-scenarios.py \
   --binary "$binary/bin/nshell" \
   --scenario-id C10-short-circuit-followed-by-sequence

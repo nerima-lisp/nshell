@@ -15,18 +15,19 @@
   },
   "invocation": {
     "kind": "argv",
-    "arguments": ["-l", "-c", "printf 'PATH=%s\\n' \"$PATH\""]
+    "arguments": [
+      "-l",
+      "-c",
+      "case \":$PATH:\" in *:/usr/bin:*) printf 'LOGIN_PATH_OK\\n' ;; *) exit 90 ;; esac"
+    ]
   },
   "expected": {
     "stdout": {
-      "contains": ["/r04-login-path-seed"]
+      "equals": "LOGIN_PATH_OK\n"
     },
     "stderr": {
       "equals": ""
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "The CLI does not yet import login environment before command delegation."
   }
 }

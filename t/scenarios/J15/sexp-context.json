@@ -27,12 +27,12 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "complete -C \"(echo item\""
+    "text": "complete -C \"(progn (git st\""
   },
   "expected": {
     "stdout": {
       "contains": [
-        "item.txt"
+        "status"
       ]
     },
     "exit_code": 0

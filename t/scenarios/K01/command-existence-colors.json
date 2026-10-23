@@ -4,6 +4,7 @@
     "K01"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.3,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -22,7 +23,7 @@
   },
   "steps": [
     {
-      "type": "keys",
+      "type": "paste",
       "text": "nshell-command-that-does-not-exist"
     },
     {
@@ -41,12 +42,9 @@
   "expected": {
     "stream": {
       "contains": [
-        "\u001b[1;38;5;"
+        "\u001b[1;38;5;203m"
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-E05 owns command-existence highlighting."
   }
 }

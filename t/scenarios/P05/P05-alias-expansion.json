@@ -1,0 +1,35 @@
+{
+  "id": "P05-alias-expansion",
+  "uc": [
+    "P05"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "alias p05_alias 'echo P05_ALIAS_OK'\np05_alias\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "P05_ALIAS_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

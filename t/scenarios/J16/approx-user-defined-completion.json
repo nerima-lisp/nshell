@@ -52,6 +52,10 @@
       "key": "C-c"
     },
     {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
       "type": "keys",
       "text": "echo J16_AFTER_$((1+1))"
     },

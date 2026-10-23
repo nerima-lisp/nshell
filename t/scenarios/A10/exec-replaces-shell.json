@@ -1,0 +1,35 @@
+{
+  "id": "A10-exec-replaces-shell",
+  "uc": [
+    "A10"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "equals": "A10_EXEC_REPLACED\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "exec /bin/echo A10_EXEC_REPLACED"
+  }
+}

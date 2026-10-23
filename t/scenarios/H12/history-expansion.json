@@ -1,0 +1,85 @@
+{
+  "id": "H12-history-expansion",
+  "uc": [
+    "H12"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H12-history-expansion> ",
+      "SCENARIO_VALUE": "H12_EXPANSION_WORD"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H12_EXPANSION_WORD",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo !$"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H12_EXPANSION_WORD",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "!!"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H12_EXPANSION_WORD",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H12_EXPANSION_WORD"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "O13-script-shebang-and-source",
+  "uc": [
+    "O13"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/source-child.nsh",
+        "content": "(echo O13_SOURCE_OK)\n"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "#!/usr/bin/env nshell\n(source \"source-child.nsh\")\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O13_SOURCE_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

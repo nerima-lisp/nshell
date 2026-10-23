@@ -81,19 +81,19 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | F11 | manual | 0 | 1 | `t/scenarios/F11/manual.md` |
 | F12 | approximation, manual | 1 | 1 | `t/scenarios/F12/approx-term-dumb-command-line.json`, `t/scenarios/F12/manual.md` |
 | F13 | manual | 0 | 1 | `t/scenarios/F13/manual.md` |
-| G01 | approximation | 3 | 0 | `t/scenarios/G01/approx-emacs-case-transform.json`, `t/scenarios/G01/approx-emacs-transpose.json`, `t/scenarios/G01/approx-emacs-word-delete.json` |
-| G02 | approximation | 1 | 0 | `t/scenarios/G02/approx-vi-mode-editing.json` |
-| G03 | manual | 0 | 1 | `t/scenarios/G03/manual.md` |
-| G04 | approximation, manual | 1 | 1 | `t/scenarios/G04/approx-kill-ring-yank.json`, `t/scenarios/G04/manual.md` |
+| G01 | direct, approximation | 8 | 0 | `t/scenarios/G01/case-conversion.json`, `t/scenarios/G01/char-transpose.json`, `t/scenarios/G01/word-forward-motion.json`, `t/scenarios/G01/word-motion-deletion.json`, `t/scenarios/G01/word-transpose.json`, `t/scenarios/G01/approx-emacs-case-transform.json`, `t/scenarios/G01/approx-emacs-transpose.json`, `t/scenarios/G01/approx-emacs-word-delete.json` |
+| G02 | direct, approximation | 8 | 0 | `t/scenarios/G02/delete-a-word.json`, `t/scenarios/G02/delete-inner-word.json`, `t/scenarios/G02/goto-end.json`, `t/scenarios/G02/insert-command-cursor-shape.json`, `t/scenarios/G02/runtime-vi-toggle.json`, `t/scenarios/G02/undo-find-replace-repeat.json`, `t/scenarios/G02/yank-put-inner-word.json`, `t/scenarios/G02/approx-vi-mode-editing.json` |
+| G03 | direct, manual | 1 | 1 | `t/scenarios/G03/undo-redo.json`, `t/scenarios/G03/manual.md` |
+| G04 | direct, approximation, manual | 2 | 1 | `t/scenarios/G04/kill-ring-yank-pop.json`, `t/scenarios/G04/approx-kill-ring-yank.json`, `t/scenarios/G04/manual.md` |
 | G05 | approximation | 1 | 0 | `t/scenarios/G05/approx-multiline-buffer-navigation.json` |
 | G06 | manual | 0 | 1 | `t/scenarios/G06/manual.md` |
 | G07 | manual | 0 | 1 | `t/scenarios/G07/manual.md` |
 | G08 | manual | 0 | 1 | `t/scenarios/G08/manual.md` |
 | G09 | approximation | 1 | 0 | `t/scenarios/G09/approx-balanced-parentheses-before-enter.json` |
-| G10 | manual | 0 | 1 | `t/scenarios/G10/manual.md` |
-| G11 | direct | 1 | 0 | `t/scenarios/G11/clear-screen-keeps-prompt.json` |
-| G12 | approximation | 1 | 0 | `t/scenarios/G12/approx-grapheme-cursor-boundary.json` |
-| G13 | direct | 1 | 0 | `t/scenarios/G13/ctrl-y-yanks-killed-text.json` |
+| G10 | approximation, manual | 1 | 1 | `t/scenarios/G10/external-editor.json`, `t/scenarios/G10/manual.md` |
+| G11 | direct | 2 | 0 | `t/scenarios/G11/clear-screen.json`, `t/scenarios/G11/clear-screen-keeps-prompt.json` |
+| G12 | direct, approximation | 2 | 0 | `t/scenarios/G12/grapheme-boundary.json`, `t/scenarios/G12/approx-grapheme-cursor-boundary.json` |
+| G13 | direct | 2 | 0 | `t/scenarios/G13/ctrl-y-yank.json`, `t/scenarios/G13/ctrl-y-yanks-killed-text.json` |
 | G14 | manual | 0 | 1 | `t/scenarios/G14/manual.md` |
 | H01 | direct | 1 | 0 | `t/scenarios/H01/history-persists-after-exit.json` |
 | H02 | approximation | 1 | 0 | `t/scenarios/H02/approx-seeded-session-history.json` |
@@ -115,7 +115,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | I03 | direct | 1 | 0 | `t/scenarios/I03/partial-word-suggestion-acceptance.json` |
 | I04 | direct | 1 | 0 | `t/scenarios/I04/multiline-history-suggestion.json` |
 | I05 | direct | 1 | 0 | `t/scenarios/I05/cwd-ranked-history-suggestion.json` |
-| I06 | direct | 1 | 0 | `t/scenarios/I06/enter-does-not-accept-suggestion.json` |
+| I06 | direct | 3 | 0 | `t/scenarios/I06/enter-does-not-accept-suggestion.json`, `t/scenarios/I06/enter-typed-text-only.json`, `t/scenarios/I06/paste-enter-typed-text-only.json` |
 | I07 | direct | 1 | 0 | `t/scenarios/I07/suggestion-keystrokes-remain-responsive.json` |
 | J01 | direct | 1 | 0 | `t/scenarios/J01/command-name.json` |
 | J02 | direct | 1 | 0 | `t/scenarios/J02/filename-variants.json` |
@@ -217,4 +217,4 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 177 | 48 | — |
+| Total | expected corpus | 197 | 48 | — |

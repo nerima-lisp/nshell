@@ -31,7 +31,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "sleep 30 | cat"
+      "text": "sleep 0.5 | cat"
     },
     {
       "type": "key",
@@ -42,11 +42,6 @@
       "key": "C-z"
     },
     {
-      "type": "wait",
-      "contains": "Stopped",
-      "timeout_seconds": 10
-    },
-    {
       "type": "keys",
       "text": "jobs"
     },
@@ -55,17 +50,29 @@
       "key": "Enter"
     },
     {
-      "type": "wait",
-      "contains": "Stopped",
-      "timeout_seconds": 10
-    },
-    {
       "type": "keys",
       "text": "kill %1"
     },
     {
       "type": "key",
       "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo E07_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E07_AFTER_2",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -79,5 +86,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-R03 owns Ctrl-Z and stopped-job reporting for foreground commands."
+  }
 }

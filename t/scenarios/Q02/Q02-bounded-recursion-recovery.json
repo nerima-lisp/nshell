@@ -1,0 +1,94 @@
+{
+  "id": "Q02-bounded-recursion-recovery",
+  "uc": [
+    "Q02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "Q02> ",
+      "SCENARIO_MARKER": "Q02_CONTINUED"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "nshell",
+        "Q02_CONTINUED"
+      ],
+      "excludes": [
+        "Q02_DEPTH_REACHED",
+        "Backtrace",
+        "#S("
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "(defun q02_recurse (n) (if (= n 2000) (echo Q02_DEPTH_REACHED) (q02_recurse (+ n 1))))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "(echo Q02_DEF_$((1+1)))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q02_DEF_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "(q02_recurse 0)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "(echo $SCENARIO_MARKER)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q02_CONTINUED",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

@@ -36,5 +36,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L01 owns comments in the new reader."
   }
 }

@@ -1,0 +1,66 @@
+{
+  "id": "P11-continue-after-config-error",
+  "uc": [
+    "P11"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "SCENARIO_MARKER": "P11_CONFIG_CONTINUED",
+      "NSHELL_PROMPT": "P11> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "(echo P11_CONFIG_LOADED)\n(^nshell_p11_missing_command)\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "P11_CONFIG_LOADED",
+        "P11_CONFIG_CONTINUED"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true,
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_MARKER"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P11_CONFIG_CONTINUED",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

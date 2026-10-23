@@ -35,13 +35,42 @@
       "text": "SHARED_SEED"
     },
     {
-      "type": "wait",
-      "contains": "echo H02_SHARED_SEED",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "C-c"
     },
     {
       "type": "key",
-      "key": "Escape"
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo H02_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H02_AFTER_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo H02_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H02_AFTER_2",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -63,5 +92,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-R05 owns sharing history between running sessions."
   }
 }

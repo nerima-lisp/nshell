@@ -24,7 +24,7 @@ covers all three cases:
 |---|---|---|
 | `vim file` at an interactive prompt | real terminal | no — matches real-shell `exec`/foreground semantics; only the user (Ctrl-C) or the command itself ends it |
 | `long_cmd > out.txt`, even mid interactive session | file stream | yes — nothing is watching, so an unbounded wait is a real hang risk |
-| `nshell -c "..."` / scripts / piped stdout | non-interactive | yes |
+| `nshell --command "..."` / scripts / piped stdout | non-interactive | yes |
 
 Verified empirically, not just by inspection: `interactive-stream-p` returns
 `T` for SBCL's real `*standard-output*` under `script(1)` (a genuine PTY) and

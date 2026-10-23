@@ -279,7 +279,7 @@ The regular read timeout remains short for command-response assertions.")
                                 (list +main-usage-line+
                                       "With -c/--shell-command, nshell delegates COMMAND and ARGS to /bin/sh."
                                       "With --command, nshell executes COMMAND once in nshell; ARGS become $argv."
-                                      "With a SCRIPT file argument, nshell runs the script (ARGS are $argv).")
+                                      "With a SCRIPT file argument, nshell runs the script (ARGS become $argv).")
                                 0))
 
   (it "e2e-main-version-exits-cleanly"

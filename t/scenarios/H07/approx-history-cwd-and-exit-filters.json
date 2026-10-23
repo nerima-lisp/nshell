@@ -1,0 +1,67 @@
+{
+  "id": "H07-approx-history-cwd-and-exit-filters",
+  "uc": [
+    "H07"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H07-approx-history-cwd-and-exit-filters> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.local/state/nshell/history",
+        "content": "# nshell-history-v3 93\n(:text \"false\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 1 :duration-ms 1 :origin :typed)\n# nshell-history-v3 114\n(:text \"echo H07_OTHER_CWD_RECORD\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 1 :duration-ms 1 :origin :typed)\n# nshell-history-v3 112\n(:text \"echo H07_CURRENT_SUCCESS\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "history --failed --cwd=/scenario/work"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "false",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "false"
+      ],
+      "excludes": [
+        "H07_OTHER_CWD_RECORD",
+        "H07_CURRENT_SUCCESS"
+      ]
+    },
+    "exit_code": 0
+  }
+}

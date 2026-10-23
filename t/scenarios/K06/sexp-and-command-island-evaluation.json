@@ -1,0 +1,36 @@
+{
+  "id": "K06-sexp-and-command-island-evaluation",
+  "uc": [
+    "K06"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_K06-sexp-and-command-island-evaluation> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "(progn (echo K06_COMMAND_ISLAND) (+ 20 22))"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "K06_COMMAND_ISLAND",
+        "42"
+      ]
+    },
+    "exit_code": 0
+  }
+}

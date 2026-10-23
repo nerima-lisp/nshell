@@ -1,0 +1,61 @@
+{
+  "id": "C13-glob-patterns-and-unmatched-path",
+  "uc": [
+    "C13"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/plain.txt",
+        "content": "plain\n"
+      },
+      {
+        "path": "work/file1.txt",
+        "content": "one\n"
+      },
+      {
+        "path": "work/file2.txt",
+        "content": "two\n"
+      },
+      {
+        "path": "work/.hidden.txt",
+        "content": "hidden\n"
+      },
+      {
+        "path": "work/sub/deep.txt",
+        "content": "deep\n"
+      }
+    ]
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "file1.txt",
+        "plain.txt",
+        "sub/deep.txt",
+        "no-match-*.zzz"
+      ],
+      "excludes": [
+        ".hidden.txt"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "printf '%s\\n' *.txt file?.txt **/*.txt no-match-*.zzz"
+  }
+}

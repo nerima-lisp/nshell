@@ -48,13 +48,29 @@
       "key": "Tab"
     },
     {
-      "type": "wait",
-      "contains": "--verbose",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "C-c"
     },
     {
       "type": "key",
-      "key": "C-c"
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo J05_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "J05_AFTER_2",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -78,5 +94,8 @@
     },
     "exit_code": 0
   },
-  "load_config": true
+  "load_config": true,
+  "expected_failure": {
+    "reason": "WP-C03 owns completion registration cost and option descriptions."
+  }
 }

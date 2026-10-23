@@ -9,7 +9,6 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "G02-approx-vi-mode-editing> ",
-      "G02_MESSAGE": "G02_VALUE",
       "NSHELL_VI_MODE": "1"
     },
     "home": "home",
@@ -25,7 +24,7 @@
   "expected": {
     "stream": {
       "contains": [
-        "G02_VALUE"
+        "G02_2"
       ]
     },
     "exit_code": 0
@@ -33,7 +32,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo $G02_MESSAGE"
+      "text": "echo G02_$((1+1))"
     },
     {
       "type": "key",
@@ -41,23 +40,11 @@
     },
     {
       "type": "key",
-      "key": "0"
+      "key": "A"
     },
     {
       "type": "key",
-      "key": "x"
-    },
-    {
-      "type": "key",
-      "key": "i"
-    },
-    {
-      "type": "keys",
-      "text": "e"
-    },
-    {
-      "type": "key",
-      "key": "Escape"
+      "key": "Space"
     },
     {
       "type": "key",
@@ -65,7 +52,7 @@
     },
     {
       "type": "wait",
-      "contains": "G02_VALUE",
+      "contains": "G02_2",
       "timeout_seconds": 10
     },
     {

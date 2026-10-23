@@ -8,8 +8,7 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "SCENARIO_I07-suggestion-keystrokes-remain-responsive> ",
-      "SCENARIO_VALUE": "I07_INPUT_RESPONDED"
+      "NSHELL_PROMPT": "SCENARIO_I07-suggestion-keystrokes-remain-responsive> "
     },
     "home": "home",
     "cwd": "work",
@@ -19,16 +18,37 @@
     }
   },
   "preconditions": {
-    "files": []
+    "files": [
+      {
+        "path": "home/.local/state/nshell/history",
+        "content": "# nshell-history-v3 115\n(:text \"echo I07_HISTORY_SUGGESTION\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "I07_AFTER_2"
+      ]
+    },
+    "exit_code": 0
   },
   "steps": [
     {
       "type": "keys",
-      "text": "unknown-scenario-command "
+      "text": "echo I07_HISTORY"
     },
     {
       "type": "key",
-      "key": "Tab"
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-e"
+    },
+    {
+      "type": "key",
+      "key": "C-c"
     },
     {
       "type": "key",
@@ -36,7 +56,7 @@
     },
     {
       "type": "keys",
-      "text": "echo \"$SCENARIO_VALUE\""
+      "text": "echo I07_AFTER_$((1+1))"
     },
     {
       "type": "key",
@@ -44,7 +64,7 @@
     },
     {
       "type": "wait",
-      "contains": "I07_INPUT_RESPONDED",
+      "contains": "I07_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -59,13 +79,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected": {
-    "stream": {
-      "contains": [
-        "I07_INPUT_RESPONDED"
-      ]
-    },
-    "exit_code": 0
-  }
+  ]
 }

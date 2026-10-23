@@ -81,17 +81,69 @@
                 (expect '("t")
                         :to-equal
                         (nshell.domain.parsing:command-node-arg-values node))
+                (expect t
+                        :to-equal
+                        (nshell.domain.parsing::command-node-force-external-p node))
                 (expect
                  (eq node
-                     (nshell.domain.parsing::
-                      sexp-reader-prototype-command-metadata-command-node
+                     (nshell.domain.parsing::sexp-reader-prototype-command-metadata-command-node
                       (first metadata)))
                  :to-be-truthy)
                 (expect
-                 (nshell.domain.parsing::
-                  sexp-reader-prototype-command-metadata-force-external-p
+                 (nshell.domain.parsing::sexp-reader-prototype-command-metadata-force-external-p
                   (first metadata))
-                 :to-be-truthy)))
+                 :to-be-truthy))
+              (let ((node
+                     (nshell.domain.parsing::parse-sexp-reader-prototype "^echo t")))
+                (expect "echo"
+                        :to-equal
+                        (nshell.domain.parsing:command-node-command node))
+                (expect t
+                        :to-equal
+                        (nshell.domain.parsing::command-node-force-external-p node)))
+              (let ((node
+                     (nshell.domain.parsing::parse-sexp-reader-prototype "(echo t)")))
+                (expect nil
+                        :to-equal
+                        (nshell.domain.parsing::command-node-force-external-p node))))
+          (it "preserves-escaped-symbol-arguments-and-their-glob-boundary"
+              (let* ((node
+                      (nshell.domain.parsing::parse-sexp-reader-prototype
+                       "(echo |a*B| ordinary \"literal*\" 42 ,value)"
+                       :unquote-evaluator
+                       (lambda (kind form)
+                         (declare (ignore kind form))
+                         "quoted*")))
+                     (arguments (nshell.domain.parsing:command-node-args node)))
+                (expect '("a*B" "ordinary" "literal*" "42" "quoted*")
+                        :to-equal
+                        (nshell.domain.parsing:command-node-arg-values node))
+                (expect '(nil t nil nil nil)
+                        :to-equal
+                        (mapcar #'nshell.domain.parsing::command-arg-glob-p
+                                arguments)))
+              (let ((node
+                     (nshell.domain.parsing::parse-sexp-reader-prototype
+                      "(|^if| t)")))
+                (expect "^if"
+                        :to-equal
+                        (nshell.domain.parsing:command-node-command node))
+                (expect '("t")
+                        :to-equal
+                        (nshell.domain.parsing:command-node-arg-values node))
+                (expect nil
+                        :to-equal
+                        (nshell.domain.parsing::command-node-force-external-p node))))
+          (it "preserves-a-bare-pipe-as-a-command-argument"
+              (let* ((node
+                      (nshell.domain.parsing::parse-sexp-reader-prototype "(echo |)"))
+                     (argument (first (nshell.domain.parsing:command-node-args node))))
+                (expect '("|")
+                        :to-equal
+                        (nshell.domain.parsing:command-node-arg-values node))
+                (expect nil
+                        :to-equal
+                        (nshell.domain.parsing::command-arg-glob-p argument))))
           (it "builds-pipeline-and-sequence-factories-from-bare-line-operators"
               (let* ((input "printf %s one | cat && true || false; echo done")
                      (node

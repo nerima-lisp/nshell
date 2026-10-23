@@ -3,11 +3,13 @@
   "uc": [
     "Q06"
   ],
-  "mode": "batch",
+  "mode": "pty",
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "Q06_READONLY_PROMPT> ",
+      "Q06_MARKER": "Q06_READONLY_SESSION_OK"
     },
     "home": "home",
     "cwd": "work",
@@ -17,17 +19,46 @@
     }
   },
   "preconditions": {
-    "files": []
+    "files": [
+      {
+        "path": "home/.nshellrc",
+        "content": ""
+      }
+    ],
+    "read_only_directories": [
+      "home",
+      "home/.config",
+      "home/.cache",
+      "home/.local/share",
+      "home/.local/state"
+    ]
   },
-  "invocation": {
-    "kind": "script",
-    "path": "scenario.nsh",
-    "text": "chmod a-w \"$HOME\" \"$XDG_CONFIG_HOME\" \"$XDG_CACHE_HOME\" \"$XDG_DATA_HOME\" \"$XDG_STATE_HOME\"\necho Q06_READONLY_HOME_OK\nchmod u+w \"$HOME\" \"$XDG_CONFIG_HOME\" \"$XDG_CACHE_HOME\" \"$XDG_DATA_HOME\" \"$XDG_STATE_HOME\"\n"
-  },
+  "load_config": true,
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$Q06_MARKER\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q06_READONLY_SESSION_OK"
+    },
+    {
+      "type": "key",
+      "key": "C-d"
+    },
+    {
+      "type": "wait_exit"
+    }
+  ],
   "expected": {
-    "stdout": {
+    "stream": {
       "contains": [
-        "Q06_READONLY_HOME_OK"
+        "Q06_READONLY_SESSION_OK"
       ]
     },
     "exit_code": 0

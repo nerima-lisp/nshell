@@ -1010,6 +1010,10 @@ wrapped line's other rows on screen as stale duplicates."
           (%set-command-failure-state 1)
           (setf *running* nil)
           nil)
+        (storage-condition ()
+          (with-reset-rendered-prompt-state-and-prompt-cont
+            (format t "~%nshell: storage exhausted~%")
+            (%set-command-failure-state 1)))
         (error (condition)
                (with-reset-rendered-prompt-state-and-prompt-cont
                 (format t "~%nshell error: ~a~%" condition)

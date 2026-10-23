@@ -7,6 +7,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import stat
 import subprocess
 import sys
 import tempfile
@@ -563,6 +564,110 @@ class ScenarioRunnerTests(unittest.TestCase):
             (root / "escape").symlink_to(outside, target_is_directory=True)
             with self.assertRaisesRegex(runner.ScenarioError, "escapes"):
                 runner._write_preconditions(scenario, root)
+
+    def test_read_only_directory_validation_rejects_unsafe_paths(self) -> None:
+        unsafe_values = [
+            ("/outside", "must be relative"),
+            ("../outside", "must not contain '..'"),
+            ("home/../outside", "must not contain '..'"),
+            ("home\\..\\outside", "must not contain '..'"),
+            ("C:\\outside", "must be relative"),
+        ]
+        for value, message in unsafe_values:
+            with self.subTest(value=value):
+                scenario = _batch_scenario("read-only-directory-invalid")
+                scenario["preconditions"]["read_only_directories"] = [value]
+                with self.assertRaisesRegex(runner.ScenarioError, message):
+                    runner._validate_scenario(scenario, Path("read-only-directory-invalid.json"))
+
+        scenario = _batch_scenario("read-only-directory-invalid-shape")
+        scenario["preconditions"]["read_only_directories"] = "home"
+        with self.assertRaisesRegex(runner.ScenarioError, "must be an array"):
+            runner._validate_scenario(scenario, Path("read-only-directory-invalid-shape.json"))
+
+    def test_read_only_directory_rejects_symlink_escape(self) -> None:
+        scenario = _batch_scenario("read-only-directory-symlink-escape")
+        scenario["preconditions"]["read_only_directories"] = ["escape"]
+        with tempfile.TemporaryDirectory() as temporary, tempfile.TemporaryDirectory() as outside:
+            root = Path(temporary)
+            outside_directory = Path(outside) / "outside"
+            outside_directory.mkdir()
+            original_mode = stat.S_IMODE(outside_directory.stat().st_mode)
+            (root / "escape").symlink_to(outside_directory, target_is_directory=True)
+
+            with self.assertRaisesRegex(runner.ScenarioError, "escapes"):
+                with runner._read_only_directory_modes(scenario, root):
+                    self.fail("a symlink escape was accepted")
+
+            self.assertEqual(stat.S_IMODE(outside_directory.stat().st_mode), original_mode)
+
+    def test_read_only_directory_modes_restore_after_failure(self) -> None:
+        scenario = _batch_scenario("read-only-directory-restores-after-failure")
+        scenario["preconditions"]["read_only_directories"] = ["home"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            home.mkdir()
+            home.chmod(0o751)
+
+            with self.assertRaisesRegex(RuntimeError, "simulated scenario failure"):
+                with runner._read_only_directory_modes(scenario, root):
+                    self.assertEqual(stat.S_IMODE(home.stat().st_mode), 0o551)
+                    raise RuntimeError("simulated scenario failure")
+
+            self.assertEqual(stat.S_IMODE(home.stat().st_mode), 0o751)
+
+    def test_batch_timeout_restores_read_only_mode_before_temporary_cleanup(self) -> None:
+        scenario = _batch_scenario("read-only-directory-timeout")
+        scenario["preconditions"]["read_only_directories"] = ["home"]
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "scenario"
+            root.mkdir()
+            home = root / "home"
+            home.mkdir()
+            home.chmod(0o751)
+
+            class RecordingTemporaryDirectory:
+                mode_at_cleanup: int | None = None
+
+                def __enter__(self) -> Path:
+                    return root
+
+                def __exit__(self, *_args: Any) -> bool:
+                    self.mode_at_cleanup = stat.S_IMODE(home.stat().st_mode)
+                    return False
+
+            class TimeoutProcess:
+                returncode = 0
+                pid = 123
+
+                def __init__(self) -> None:
+                    self.attempts = 0
+
+                def communicate(self, *_args: Any, **_kwargs: Any) -> tuple[bytes, bytes]:
+                    self.attempts += 1
+                    if self.attempts == 1:
+                        raise subprocess.TimeoutExpired("nshell", timeout=1)
+                    return b"", b""
+
+                def poll(self) -> int:
+                    return self.returncode
+
+            temporary_directory = RecordingTemporaryDirectory()
+            read_only_mode_at_launch: list[int] = []
+
+            def start_process(*_args: Any, **_kwargs: Any) -> TimeoutProcess:
+                read_only_mode_at_launch.append(stat.S_IMODE(home.stat().st_mode))
+                return TimeoutProcess()
+
+            with patch.object(runner.tempfile, "TemporaryDirectory", return_value=temporary_directory):
+                with patch.object(runner.subprocess, "Popen", side_effect=start_process):
+                    with self.assertRaisesRegex(runner.ScenarioError, "exceeded"):
+                        runner._run_batch(scenario, Path("/unused/nshell"))
+
+            self.assertEqual(read_only_mode_at_launch, [0o551])
+            self.assertEqual(temporary_directory.mode_at_cleanup, 0o751)
 
     @staticmethod
     def _fake_process(stdout: bytes = b"OK\n", stderr: bytes = b"") -> Any:

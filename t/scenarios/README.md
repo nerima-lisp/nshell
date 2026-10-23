@@ -15,13 +15,23 @@ Every scenario JSON file must define `id`, a `uc` array, `mode` (`batch` or
 The runner creates an isolated temporary root for each scenario execution.
 Paths in `environment.home`, `environment.cwd`, and
 `preconditions.files[].path` are relative to that root.
+The runner rejects absolute paths and paths that resolve outside the root; a
+`..` component is allowed only when the resolved path stays inside it.
+`preconditions.read_only_directories` optionally names existing directories
+relative to the same root. After preparing the environment and file fixtures,
+the runner removes write permission bits from those directories before starting
+nshell. It restores each directory's original mode bits before removing the
+temporary root, including after launch failures and timeouts. Each listed
+directory path must be relative, cannot contain `..`, and must resolve within
+the scenario root; symlinks that resolve outside it are rejected.
 The runner defaults `environment.home` and `environment.cwd` to `home` and
 `work`, and the terminal size to 80 columns by 24 rows.
 Keys in `environment.variables` override matching variables in the runner's
 default environment, which is defined in `scripts/run-scenarios.py`.
-When the runner provides `NSHELL_SCENARIO_EXTRA_PATH`, batch scenarios append it
-to `PATH` by default. Set `environment.append_extra_path` to `false` when a
-scenario must keep its explicit `PATH`, such as a command-not-found check.
+If you set `NSHELL_SCENARIO_EXTRA_PATH` in the environment before launching the
+runner, batch scenarios append it to `PATH` by default. Set
+`environment.append_extra_path` to `false` when a scenario must keep its
+explicit `PATH`, such as a command-not-found check.
 If `preconditions.files` is omitted, no precondition files are created. Each
 file entry requires a relative `path` and can include string `content`, which
 defaults to empty text. Set `environment.terminal_size.columns` and
@@ -35,42 +45,59 @@ entry requires a scenario-relative `directory`, a non-empty `prefix`, and a
 `count` from 1 to 20,000; `suffix` and shared file `content` are optional.
 Generated names use a five-digit index starting at `00000`. The total number
 of generated files is limited to 20,000, and each name is limited to 255 UTF-8
-bytes. Paths must stay within the scenario root. Fixture paths cannot be
-duplicated or make one fixture path the parent directory of another.
+bytes. Shared file content is limited to 1,024 UTF-8 bytes. Paths must stay
+within the scenario root. Fixture paths cannot be duplicated or make one
+fixture path the parent directory of another.
 
 Batch scenarios select `invocation.kind` as `command`, `stdin`, or `script`.
 Every kind requires `invocation.text`; `script` also requires `invocation.path`,
 relative to `environment.cwd`. The runner passes command text to `nshell -c`,
 sends text to standard input, or writes script text to the path and starts
 `nshell` with that path as its script argument.
-Batch expectations can check stdout, stderr, exit code, and file side effects.
 
-J12 creates 20,000 files in one directory. The unit test
+Use case J12 creates 20,000 files in one directory. The unit test
 `filesystem-candidate-membership-probes-scale-linearly` counts candidate-set
 lookups for 2,000 and 20,000 entries and asserts that the count scales by the
 same factor as the input. This count-based check is independent of wall-clock
-load. For end-to-end timing, run `bash bench/completion-filesystem.sh
+load. Run the repository test suite, which includes this unit test, with
+`nix build .#checks.aarch64-darwin.default` on Apple Silicon macOS or
+`nix build .#checks.x86_64-linux.default` on Linux. For end-to-end timing, run
+`bash bench/completion-filesystem.sh
 <before-binary> <after-binary>` with binaries built from the baseline and
-change revisions. It verifies the fixture and byte-for-byte output parity,
-then uses hyperfine for two warmups and ten samples per arm in randomized
-order. The report includes host details and load average; the timing is
-informational and is not an absolute landing threshold.
+change revisions. In a checkout of each revision, build `nshell` with the
+matching platform command in [Run scenarios](#run-scenarios), then pass each
+output's `bin/nshell` path as the corresponding benchmark argument. The script
+verifies the fixture and byte-for-byte output parity, then uses hyperfine for
+two warmups and ten samples across three randomized arms: two baseline arms
+using the before binary and one change arm using the after binary. The report
+includes host details and load average; the timing is informational and is not
+an absolute landing threshold.
 
 PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `paste` sends bracketed paste, `key` sends a key name accepted by tmux
 `send-keys`, such as `Enter` or `C-d`, and `wait` waits for its `contains`
 string to appear in captured PTY output after the step starts. `wait_exit` waits
-for the shell to exit. Set a non-empty `environment.variables.NSHELL_PROMPT`
-marker that only the prompt displays.
-The runner sends Enter to make the initial prompt appear and waits for that
-marker before executing the scenario steps.
-`load_config` is optional and defaults to `false`; it is valid only for PTY
-scenarios. Set it to `true` when a scenario needs to load startup configuration
-from its isolated home. The runner sets `XDG_CONFIG_HOME` to `.config` under
-the scenario home by default, so add `home/.config/nshell/init.lisp` to
+for the shell to exit. For a single-session scenario, set a non-empty
+`environment.variables.NSHELL_PROMPT` marker that only the prompt displays.
+For a single-session scenario, the runner sends Enter to make the initial prompt
+appear and waits for that marker before executing its steps. In a multi-session
+scenario, it does this for each session's prompt before executing any session's
+steps.
+The top-level `load_config` field is optional and defaults to `false`; it is
+valid only for PTY scenarios. Set it to `true` when a scenario needs to load
+startup configuration from its isolated home. The runner sets
+`XDG_CONFIG_HOME` to `.config` under the scenario home by default, so add
+`home/.config/nshell/init.lisp` to
 `preconditions.files`; the file contains plain nshell commands. If
 `environment.home` changes, use that home directory in the fixture path. The
 runner otherwise passes `--no-config`.
+
+Use top-level `sessions` instead of `steps` when a scenario needs multiple
+shell sessions. The array must contain at least two entries, each with a unique
+non-empty `id`, a unique non-empty `prompt`, and its own ordered `steps` array.
+Each session's `prompt` supplies its `NSHELL_PROMPT`, so multi-session scenarios
+do not need `environment.variables.NSHELL_PROMPT`. The runner starts all sessions
+before executing their steps, and they share the scenario's temporary root.
 
 An input echo is the terminal displaying text or a key sequence sent by a
 `keys`, `paste`, or `key` step. A prompt redraw is the shell emitting
@@ -84,17 +111,26 @@ before launching:
 
 - `wait.contains` if an echo from an earlier input step or a prompt redraw
   contains the entire marker;
-- any non-empty value in `expected.stream.equals`, `expected.stream.contains`,
-  `expected.screen.equals`, or `expected.screen.contains` if an input echo or
-  prompt redraw contains the entire value.
+- a value in `expected.stream.contains` or `expected.screen.contains` if an
+  input echo or prompt redraw contains the entire value;
+- an `expected.stream.equals` or `expected.screen.equals` value if an input
+  echo or prompt redraw contains the entire expected string.
+
+This overlap check runs before the shell starts, so it applies the same
+substring rule to an `equals` value. It prevents terminal echo from satisfying
+an equality check by itself.
 
 `excludes` assertions require the checked text to be absent from its target,
 such as output, screen, file, or history contents. They are not subject to this
 rejection.
 
-End each PTY step sequence with `wait_exit` to synchronize with shell exit and
-record its status. `expected.stream` checks output captured from the PTY during
-the run, while `expected.screen` checks the visible pane contents at the end.
+Each PTY step sequence must end with `wait_exit`; it waits for the shell to exit
+so the runner can record the required status. `expected.stream` checks output
+captured from the PTY during the run, while `expected.screen` checks the visible
+pane contents at the end.
+For a multi-session scenario, each check combines all sessions in `sessions`
+array order, with a newline between sessions. The screen check includes each
+session's final pane.
 
 ## Output and side effects
 
@@ -106,7 +142,10 @@ are relative to `environment.cwd`. The optional
 fields and a path relative to `environment.home`.
 Text assertions for stdout, stderr, PTY stream, screen, file contents, and
 history contents use a string for `equals` and arrays of strings for `contains`
-and `excludes`.
+and `excludes`. Put batch output checks in `expected.stdout` and
+`expected.stderr`; put PTY output checks in `expected.stream` and
+`expected.screen`. Every listed `contains` string must appear, and every listed
+`excludes` string must be absent.
 
 The full-corpus manifest is `t/scenarios/expected-scenarios.json`. It requires
 the top-level fields `version: 1` and a non-empty `scenarios` array; other
@@ -126,10 +165,11 @@ without regard to array order.
 
 Each scenario's top-level `timeout_seconds` defaults to 30 seconds for batch
 and 45 seconds for PTY. Each PTY `wait` and `wait_exit` step has its own
-`timeout_seconds`, defaulting to 10 seconds. Scenario and step timeouts can be
-set up to 60 seconds. PTY stream capture is capped at 1 MiB; exceeding the cap
-fails the scenario. A batch timeout reports captured stdout and stderr; a PTY
-timeout reports the current pane screen.
+`timeout_seconds`, defaulting to 10 seconds. A PTY step ends when its own
+timeout or the remaining scenario timeout is reached, whichever comes first.
+Scenario and step timeouts can be set up to 60 seconds. PTY stream capture is
+capped at 1 MiB; exceeding the cap fails the scenario. A batch timeout reports
+captured stdout and stderr; a PTY timeout reports the current pane screen.
 
 ## Expected failures
 
@@ -178,6 +218,5 @@ Run the runner tests from the repository root with:
 nix develop .#scenarios -c python3 scripts/test-run-scenarios.py
 ```
 
-The suite includes `test_repository_full_corpus_matches_manifest`. The workflow
-runs PTY scenarios with `--mode pty --repeat 3` on both Linux and Apple Silicon
-macOS.
+The workflow runs PTY scenarios with `--mode pty --repeat 3` on both Linux and
+Apple Silicon macOS.

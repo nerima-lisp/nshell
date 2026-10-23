@@ -578,6 +578,32 @@ head insertion HISTORY-PREVIOUS relies on."
         (when (probe-file lock-path)
           (delete-file lock-path))
         (sb-posix:rmdir directory))))
+  (it "file-history-append-failure-is-reported-and-recoverable"
+    "A failed append reports its error and later appends still work."
+    (with-temporary-output-file (blocker :prefix "nshell-history-blocker")
+      (with-temporary-output-file (recovery-path :prefix "nshell-history-recovery")
+        (with-open-file (stream blocker :direction :output
+                                :if-exists :supersede
+                                :if-does-not-exist :create)
+          (write-string "blocker" stream))
+        (let ((diagnostics (make-string-output-stream)))
+          (let ((nshell.infrastructure.persistence:*history-file-path-override*
+                  (pathname (format nil "~a/child/history.lisp" blocker)))
+                (*error-output* diagnostics))
+            (expect nil :to-equal
+                    (nshell.infrastructure.persistence:append-history-entry
+                     "before failure"))
+            (let ((message (get-output-stream-string diagnostics)))
+              (expect (search "nshell: history: unable to append to" message) :to-be-truthy)
+              (expect nil :to-equal (search "#S(" message)))
+            (setf nshell.infrastructure.persistence:*history-file-path-override*
+                  (pathname recovery-path))
+            (nshell.infrastructure.persistence:append-history-entry "after failure")
+            (expect (list "after failure")
+                    :to-equal
+                    (mapcar
+                     (function nshell.infrastructure.persistence:history-record-text)
+                     (nshell.infrastructure.persistence:load-history-file))))))))
 
 
 

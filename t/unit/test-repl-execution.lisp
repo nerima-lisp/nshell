@@ -1170,3 +1170,116 @@ the source reader instead."
     (expect (nshell.application:function-definition-line-p
              "echo pre; function greet; echo hi; end")
             :to-be-truthy)))
+(describe "r06-runtime-robustness-tests"
+  (it "recursive-functions-stop-at-a-bound-and-the-repl-recovers"
+    (with-repl-test-state
+      (repl-test-define-function "q02_recurse" '("q02_recurse"))
+      (let ((error-output
+              (capture-standard-output
+                (nshell.presentation::%execute-command-line "q02_recurse"))))
+        (expect (search "recursion limit exceeded" error-output)
+                :to-be-truthy)
+        (expect (search "Backtrace" error-output) :to-be-null)
+        (expect (search "#S(" error-output) :to-be-null)
+        (expect 0 :to-equal nshell.application::*function-call-depth*))
+      (let ((recovery-output
+              (capture-standard-output
+                (nshell.presentation::%execute-command-line "echo Q02_AFTER_2"))))
+        (expect (search "Q02_AFTER_2" recovery-output) :to-be-truthy))
+      (expect t :to-equal nshell.presentation::*running*)))
+
+  (it "storage-conditions-are-reported-and-the-repl-recovers"
+    (with-repl-test-state
+      (let ((original-execute-ast
+              (symbol-function 'nshell.presentation::execute-ast))
+            (fail-once-p t))
+        (with-temporary-function
+            ('nshell.presentation::execute-ast
+             (lambda (ast)
+               (if fail-once-p
+                   (progn
+                     (setf fail-once-p nil)
+                     (signal (make-condition 'storage-condition)))
+                   (funcall original-execute-ast ast))))
+          (let ((error-output
+                  (capture-standard-output
+                    (nshell.presentation::%execute-command-line "true"))))
+            (expect (search "nshell: storage exhausted" error-output)
+                    :to-be-truthy)
+            (expect (search "Backtrace" error-output) :to-be-null)
+            (expect (search "#S(" error-output) :to-be-null))
+          (let ((recovery-output
+                  (capture-standard-output
+                    (nshell.presentation::%execute-command-line
+                     "echo Q03_CONTINUED"))))
+            (expect (search "Q03_CONTINUED" recovery-output)
+                    :to-be-truthy))
+          (expect t :to-equal nshell.presentation::*running*)))))
+
+  (it "key-processing-errors-preserve-input-and-allow-execution"
+    (with-repl-test-state
+      (let ((nshell.presentation::*input-state*
+              (nshell.presentation::make-repl-input-state
+               :buffer "echo Q08_" :cursor-pos 9))
+            (original-reducer
+              (symbol-function 'nshell.presentation::reduce-input-state)))
+        (with-temporary-functions
+            (('nshell.presentation::reduce-input-state
+              (lambda (state event)
+                (let ((event-type (nshell.domain.input:key-event-type event)))
+                  (cond
+                    ((eq :ctrl-f event-type)
+                     (error "injected key-handler failure"))
+                    ((eq :ctrl-b event-type)
+                     (signal (make-condition (quote storage-condition))))
+                    (t
+                     (funcall original-reducer state event))))))
+             ('nshell.presentation::process-output-event
+              (lambda (event)
+                (declare (ignore event))
+                nil))
+             ('nshell.infrastructure.persistence:append-history-entry
+              (lambda (text)
+                (declare (ignore text))))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () nil)))
+          (dolist (case
+                   (list
+                     (cons :ctrl-f "input processing failed; input was preserved")
+                     (cons :ctrl-b "storage exhausted; input was preserved")))
+            (let ((error-output
+                    (capture-standard-output
+                      (nshell.presentation::%process-input-event
+                       (nshell.domain.input:make-key-event (car case))))))
+              (expect (search (cdr case) error-output) :to-be-truthy)
+              (expect (search "Backtrace" error-output) :to-be-null)
+              (expect (search "#S(" error-output) :to-be-null))
+            (expect "echo Q08_" :to-equal
+                    (nshell.presentation:input-state-buffer
+                     nshell.presentation::*input-state*))
+            (expect 9 :to-equal
+                    (nshell.presentation:input-state-cursor-pos
+                     nshell.presentation::*input-state*)))
+          (expect "echo Q08_" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect 9 :to-equal
+                  (nshell.presentation:input-state-cursor-pos
+                   nshell.presentation::*input-state*))
+          (nshell.presentation::%process-input-event
+           (nshell.domain.input:make-key-event :char #\O))
+          (nshell.presentation::%process-input-event
+           (nshell.domain.input:make-key-event :char #\K))
+          (expect "echo Q08_OK" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect 11 :to-equal
+                  (nshell.presentation:input-state-cursor-pos
+                   nshell.presentation::*input-state*))
+          (let ((command-output
+                  (capture-standard-output
+                    (nshell.presentation::%execute-command-line
+                     (nshell.presentation:input-state-buffer
+                      nshell.presentation::*input-state*)))))
+            (expect (search "Q08_OK" command-output) :to-be-truthy))
+          (expect t :to-equal nshell.presentation::*running*))))))

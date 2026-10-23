@@ -100,23 +100,36 @@
             (process-output-event output-event))))))
 
 (defun %process-input-event (event)
-  (when (and *rerun-confirmation-pending-p*
-             (nshell.infrastructure.acl:consume-terminal-resize-p))
-    (return-from %process-input-event (%render-prompt-after-terminal-resize)))
-  (multiple-value-bind (new-state output-event)
-      (reduce-input-state *input-state* event)
-    (when (and (eq *assistant-command-origin* :proposal)
-               (not (string= (input-state-buffer *input-state*)
-                             (input-state-buffer new-state))))
-      (setf *assistant-command-confirmed-p* nil))
-    (when (and (not (eq output-event :rerun-last-command))
-               (or *rerun-confirmation-pending-p* *rerun-command-assessment*))
-      (setf *rerun-confirmation-pending-p* nil
-            *rerun-command-assessment* nil)
-      (clear-rendered-transient-panel))
-    (setf *assistant-last-cancel-at* nil
-          *input-state* new-state)
-    (process-output-event output-event)))
+  (let ((input-state-before *input-state*))
+    (handler-case
+        (progn
+          (when (and *rerun-confirmation-pending-p*
+                     (nshell.infrastructure.acl:consume-terminal-resize-p))
+            (return-from %process-input-event
+              (%render-prompt-after-terminal-resize)))
+          (multiple-value-bind (new-state output-event)
+              (reduce-input-state *input-state* event)
+            (when (and (eq *assistant-command-origin* :proposal)
+                       (not (string= (input-state-buffer *input-state*)
+                                     (input-state-buffer new-state))))
+              (setf *assistant-command-confirmed-p* nil))
+            (when (and (not (eq output-event :rerun-last-command))
+                       (or *rerun-confirmation-pending-p*
+                           *rerun-command-assessment*))
+              (setf *rerun-confirmation-pending-p* nil
+                    *rerun-command-assessment* nil)
+              (clear-rendered-transient-panel))
+            (setf *assistant-last-cancel-at* nil
+                  *input-state* new-state)
+            (process-output-event output-event)))
+      (storage-condition ()
+        (setf *input-state* input-state-before)
+        (with-cleared-rendered-completions-and-reset-prompt-cont
+          (format t "~%nshell: storage exhausted; input was preserved~%")))
+      (error ()
+        (setf *input-state* input-state-before)
+        (with-cleared-rendered-completions-and-reset-prompt-cont
+          (format t "~%nshell: input processing failed; input was preserved~%"))))))
 
 (defun %handle-pending-shell-termination ()
   (let ((status (nshell.infrastructure.acl:consume-shell-termination-status)))

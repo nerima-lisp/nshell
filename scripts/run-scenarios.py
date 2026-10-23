@@ -11,13 +11,16 @@ import select
 import shlex
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from pathlib import PureWindowsPath
+from typing import Any, Iterator
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -123,6 +126,96 @@ def _relative_path(root: Path, value: Any, label: str) -> Path:
         f"{label} escapes its scenario directory: {value!r}",
     )
     return resolved
+
+
+def _read_only_directory_path(root: Path, value: Any, label: str) -> Path:
+    _require(isinstance(value, str) and value != "", f"{label} must be a non-empty path")
+    _require("\x00" not in value, f"{label} must not contain a NUL byte")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ScenarioError(f"{label} must be valid UTF-8") from error
+    relative = Path(value)
+    windows_path = PureWindowsPath(value)
+    _require(
+        not relative.is_absolute() and not windows_path.is_absolute() and not windows_path.drive,
+        f"{label} must be relative: {value!r}",
+    )
+    _require(
+        ".." not in relative.parts and ".." not in windows_path.parts,
+        f"{label} must not contain '..': {value!r}",
+    )
+    try:
+        return _relative_path(root, value, label)
+    except (OSError, RuntimeError) as error:
+        raise ScenarioError(f"{label} could not be resolved") from error
+
+
+@contextmanager
+def _read_only_directory_modes(scenario: dict[str, Any], root: Path) -> Iterator[None]:
+    preconditions = scenario.get("preconditions", {})
+    directories = preconditions.get("read_only_directories", [])
+    opened: list[tuple[int, int, str]] = []
+    seen: set[tuple[int, int]] = set()
+    try:
+        for value in directories:
+            label = f"{scenario['id']}: read-only directory"
+            path = _read_only_directory_path(root, value, label)
+            flags = (
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+            )
+            try:
+                descriptor = os.open(path, flags)
+            except OSError as error:
+                raise ScenarioError(
+                    f"{scenario['id']}: cannot open read-only directory {value!r}"
+                ) from error
+            try:
+                details = os.fstat(descriptor)
+            except OSError as error:
+                os.close(descriptor)
+                raise ScenarioError(
+                    f"{scenario['id']}: cannot inspect read-only directory {value!r}"
+                ) from error
+            if not stat.S_ISDIR(details.st_mode):
+                os.close(descriptor)
+                raise ScenarioError(
+                    f"{scenario['id']}: read-only path is not a directory: {value!r}"
+                )
+            identity = (details.st_dev, details.st_ino)
+            if identity in seen:
+                os.close(descriptor)
+                continue
+            seen.add(identity)
+            opened.append((descriptor, stat.S_IMODE(details.st_mode), value))
+
+        for descriptor, mode, value in opened:
+            try:
+                os.fchmod(descriptor, mode & ~0o222)
+            except OSError as error:
+                raise ScenarioError(
+                    f"{scenario['id']}: cannot make read-only directory {value!r}"
+                ) from error
+        yield
+    finally:
+        restoration_errors = []
+        for descriptor, mode, value in reversed(opened):
+            try:
+                os.fchmod(descriptor, mode)
+            except OSError as error:
+                restoration_errors.append((value, error))
+            finally:
+                try:
+                    os.close(descriptor)
+                except OSError as error:
+                    restoration_errors.append((value, error))
+        if restoration_errors:
+            value, error = restoration_errors[0]
+            raise ScenarioError(
+                f"{scenario['id']}: cannot restore read-only directory {value!r}"
+            ) from error
 
 
 def _scenario_files(directory: Path) -> list[Path]:
@@ -282,6 +375,13 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
 
     preconditions = scenario.get("preconditions", {})
     _require(isinstance(preconditions, dict), f"{scenario_id}: preconditions must be an object")
+    read_only_directories = preconditions.get("read_only_directories", [])
+    _require(isinstance(read_only_directories, list),
+             f"{scenario_id}: preconditions.read_only_directories must be an array")
+    for directory in read_only_directories:
+        _read_only_directory_path(
+            Path("/scenario"), directory, f"{scenario_id}: read-only directory"
+        )
     fixtures = preconditions.get("files", [])
     _require(isinstance(fixtures, list), f"{scenario_id}: preconditions.files must be an array")
     fixture_paths: set[Path] = set()
@@ -706,32 +806,33 @@ def _run_batch(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, l
         _write_preconditions(scenario, root)
         arguments, stdin = _binary_args(scenario, cwd)
         timeout = scenario.get("timeout_seconds", 30)
-        try:
-            process = subprocess.Popen(
-                [str(binary), *arguments],
-                cwd=cwd,
-                env=env,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                start_new_session=True,
-            )
-        except OSError as error:
-            raise ScenarioError(f"{scenario['id']}: could not start nshell: {error}") from error
-        try:
-            stdout, stderr = process.communicate(stdin, timeout=timeout)
-        except subprocess.TimeoutExpired as error:
-            _kill_process_group(process)
-            stdout, stderr = process.communicate()
-            raise ScenarioError(
-                f"{scenario['id']}: batch process exceeded {timeout:g}s; "
-                f"stdout={(stdout or b'').decode('utf-8', errors='replace')[-2000:]!r}; "
-                f"stderr={(stderr or b'').decode('utf-8', errors='replace')[-2000:]!r}"
-            ) from error
-        stdout_text = stdout.decode("utf-8", errors="replace")
-        stderr_text = stderr.decode("utf-8", errors="replace")
-        failures = _check_expected(scenario, stdout_text, stderr_text, process.returncode, home, cwd)
-        return stdout_text, stderr_text, process.returncode, failures
+        with _read_only_directory_modes(scenario, root):
+            try:
+                process = subprocess.Popen(
+                    [str(binary), *arguments],
+                    cwd=cwd,
+                    env=env,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    start_new_session=True,
+                )
+            except OSError as error:
+                raise ScenarioError(f"{scenario['id']}: could not start nshell: {error}") from error
+            try:
+                stdout, stderr = process.communicate(stdin, timeout=timeout)
+            except subprocess.TimeoutExpired as error:
+                _kill_process_group(process)
+                stdout, stderr = process.communicate()
+                raise ScenarioError(
+                    f"{scenario['id']}: batch process exceeded {timeout:g}s; "
+                    f"stdout={(stdout or b'').decode('utf-8', errors='replace')[-2000:]!r}; "
+                    f"stderr={(stderr or b'').decode('utf-8', errors='replace')[-2000:]!r}"
+                ) from error
+            stdout_text = stdout.decode("utf-8", errors="replace")
+            stderr_text = stderr.decode("utf-8", errors="replace")
+            failures = _check_expected(scenario, stdout_text, stderr_text, process.returncode, home, cwd)
+            return stdout_text, stderr_text, process.returncode, failures
 
 
 def _nshell_command(binary: Path, scenario: dict[str, Any]) -> list[str]:
@@ -956,55 +1057,56 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
         root = Path(temporary)
         env, home, cwd = _environment(scenario, root)
         _write_preconditions(scenario, root)
-        sessions: list[tuple[TmuxSession, dict[str, Any]]] = []
-        exit_codes: list[int] = []
-        try:
-            for spec in _pty_sessions(scenario):
-                session_scenario = dict(scenario)
-                session_scenario["id"] = f"{scenario['id']}:{spec['id']}"
-                session_scenario["steps"] = spec["steps"]
-                session_environment = dict(scenario["environment"])
-                session_variables = dict(session_environment.get("variables", {}))
-                session_variables["NSHELL_PROMPT"] = spec["prompt"]
-                session_environment["variables"] = session_variables
-                session_scenario["environment"] = session_environment
-                session_env = env.copy()
-                session_env["NSHELL_PROMPT"] = spec["prompt"]
-                session = TmuxSession(session_scenario, binary, root, session_env, cwd)
-                sessions.append((session, spec))
-            for session, _ in sessions:
-                session.deadline = time.monotonic() + session.deadline_seconds
+        with _read_only_directory_modes(scenario, root):
+            sessions: list[tuple[TmuxSession, dict[str, Any]]] = []
+            exit_codes: list[int] = []
+            try:
+                for spec in _pty_sessions(scenario):
+                    session_scenario = dict(scenario)
+                    session_scenario["id"] = f"{scenario['id']}:{spec['id']}"
+                    session_scenario["steps"] = spec["steps"]
+                    session_environment = dict(scenario["environment"])
+                    session_variables = dict(session_environment.get("variables", {}))
+                    session_variables["NSHELL_PROMPT"] = spec["prompt"]
+                    session_environment["variables"] = session_variables
+                    session_scenario["environment"] = session_environment
+                    session_env = env.copy()
+                    session_env["NSHELL_PROMPT"] = spec["prompt"]
+                    session = TmuxSession(session_scenario, binary, root, session_env, cwd)
+                    sessions.append((session, spec))
+                for session, _ in sessions:
+                    session.deadline = time.monotonic() + session.deadline_seconds
 
-            for session, spec in sessions:
-                for step in spec["steps"]:
-                    kind = step["type"]
-                    if kind == "keys":
-                        session.send_text(step["text"])
-                    elif kind == "paste":
-                        session.paste(step["text"])
-                    elif kind == "key":
-                        session.send_key(step["key"])
-                    elif kind == "wait":
-                        session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
-                    elif kind == "wait_exit":
-                        exit_codes.append(session.wait_exit(step.get("timeout_seconds", 10)))
-                        session.drain()
-                    if kind in ("keys", "paste", "key"):
-                        session.wait_after_input(scenario.get("input_delay_seconds", 0))
-            total_output = sum(len(session.stream) for session, _ in sessions)
-            _require(total_output <= MAX_OUTPUT_BYTES, f"{scenario['id']}: PTY output limit exceeded")
-            stream = "\n".join(
-                bytes(session.stream).decode("utf-8", errors="replace") for session, _ in sessions
-            )
-            screen = "\n".join(session.capture_screen() for session, _ in sessions)
-            exit_code = next((code for code in exit_codes if code != 0), exit_codes[-1] if exit_codes else -1)
-            failures = _check_expected(
-                scenario, stream, screen, exit_code, home, cwd
-            )
-        finally:
-            for session, _ in reversed(sessions):
-                session.close()
-        return stream, screen, exit_code, failures
+                for session, spec in sessions:
+                    for step in spec["steps"]:
+                        kind = step["type"]
+                        if kind == "keys":
+                            session.send_text(step["text"])
+                        elif kind == "paste":
+                            session.paste(step["text"])
+                        elif kind == "key":
+                            session.send_key(step["key"])
+                        elif kind == "wait":
+                            session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
+                        elif kind == "wait_exit":
+                            exit_codes.append(session.wait_exit(step.get("timeout_seconds", 10)))
+                            session.drain()
+                        if kind in ("keys", "paste", "key"):
+                            session.wait_after_input(scenario.get("input_delay_seconds", 0))
+                total_output = sum(len(session.stream) for session, _ in sessions)
+                _require(total_output <= MAX_OUTPUT_BYTES, f"{scenario['id']}: PTY output limit exceeded")
+                stream = "\n".join(
+                    bytes(session.stream).decode("utf-8", errors="replace") for session, _ in sessions
+                )
+                screen = "\n".join(session.capture_screen() for session, _ in sessions)
+                exit_code = next((code for code in exit_codes if code != 0), exit_codes[-1] if exit_codes else -1)
+                failures = _check_expected(
+                    scenario, stream, screen, exit_code, home, cwd
+                )
+            finally:
+                for session, _ in reversed(sessions):
+                    session.close()
+            return stream, screen, exit_code, failures
 
 
 def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code: int,

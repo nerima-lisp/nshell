@@ -3,6 +3,7 @@
 
 (defvar *builtin-registry* (make-hash-table :test #'equal)
   "Registry mapping builtin command names to handler functions.")
+(defvar *function-call-depth* 0)
 
 (defun lookup-builtin (name)
   "Return the builtin handler registered for NAME, or NIL."
@@ -238,7 +239,10 @@ afterwards with any global write the callee made."
   ;; call scope is restored via unwind-protect (not %update-shell-environment,
   ;; which is not yet loaded at this point in the ASDF build) so a `return` or a
   ;; signalled error inside the body cannot leak a local into the caller.
-  (let ((nshell.domain.expansion:*positional-args* args))
+  (when (>= *function-call-depth* 128)
+    (error "function recursion limit exceeded"))
+  (let ((nshell.domain.expansion:*positional-args* args)
+        (*function-call-depth* (1+ *function-call-depth*)))
     (%call-with-function-scope
      context
      (lambda () (%source-lines context function-body)))))

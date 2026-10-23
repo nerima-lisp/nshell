@@ -227,6 +227,10 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
     _require(isinstance(load_config, bool), f"{scenario_id}: load_config must be a boolean")
     _require(not load_config or scenario["mode"] == "pty",
              f"{scenario_id}: load_config is supported only for pty scenarios")
+    private_mode = scenario.get("private_mode", False)
+    _require(isinstance(private_mode, bool), f"{scenario_id}: private_mode must be a boolean")
+    _require(not private_mode or scenario["mode"] == "pty",
+             f"{scenario_id}: private_mode is supported only for pty scenarios")
     _require(
         isinstance(scenario.get("uc"), list) and scenario["uc"],
         f"{scenario_id}: uc must be a non-empty array",
@@ -277,38 +281,40 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         if kind == "script":
             _relative_path(Path("/scenario"), invocation.get("path"), f"{scenario_id}: script path")
     else:
-        prompt = variables.get("NSHELL_PROMPT")
-        _require(isinstance(prompt, str) and prompt,
-                 f"{scenario_id}: PTY scenarios must set a unique NSHELL_PROMPT")
-        steps = scenario.get("steps")
-        _require(isinstance(steps, list) and steps, f"{scenario_id}: pty steps must be a non-empty array")
-        for step in steps:
-            _require(isinstance(step, dict), f"{scenario_id}: each pty step must be an object")
-            kind = step.get("type")
-            _require(kind in ("keys", "paste", "key", "wait", "wait_exit"),
-                     f"{scenario_id}: unsupported pty step type {kind!r}")
-            if kind in ("keys", "paste"):
-                _require(isinstance(step.get("text"), str), f"{scenario_id}: {kind} requires text")
-            if kind == "key":
-                key = step.get("key")
-                _require(isinstance(key, str) and TMUX_KEY.fullmatch(key),
-                         f"{scenario_id}: invalid tmux key {key!r}")
-            if kind == "wait":
-                _require(isinstance(step.get("contains"), str) and step["contains"],
-                         f"{scenario_id}: wait requires a non-empty contains string")
-            if kind in ("wait", "wait_exit"):
-                timeout = step.get("timeout_seconds", 10)
-                _require(
-                    isinstance(timeout, (int, float))
-                    and not isinstance(timeout, bool)
-                    and 0 < timeout <= MAX_TIMEOUT_SECONDS,
-                    f"{scenario_id}: step timeout_seconds must be in (0, {MAX_TIMEOUT_SECONDS}]",
-                )
-        _require(
-            steps[-1]["type"] in ("wait", "wait_exit")
-            and all(step["type"] != "wait_exit" for step in steps[:-1]),
-            f"{scenario_id}: end pty steps with wait or wait_exit, and make wait_exit last",
-        )
+        sessions = _pty_sessions(scenario)
+        for session in sessions:
+            _require(isinstance(session["prompt"], str) and session["prompt"],
+                     f"{scenario_id}: PTY sessions must set a unique prompt")
+            steps = session["steps"]
+            _require(isinstance(steps, list) and steps,
+                     f"{scenario_id}: pty steps must be a non-empty array")
+            for step in steps:
+                _require(isinstance(step, dict), f"{scenario_id}: each pty step must be an object")
+                kind = step.get("type")
+                _require(kind in ("keys", "paste", "key", "wait", "wait_exit"),
+                         f"{scenario_id}: unsupported pty step type {kind!r}")
+                if kind in ("keys", "paste"):
+                    _require(isinstance(step.get("text"), str), f"{scenario_id}: {kind} requires text")
+                if kind == "key":
+                    key = step.get("key")
+                    _require(isinstance(key, str) and TMUX_KEY.fullmatch(key),
+                             f"{scenario_id}: invalid tmux key {key!r}")
+                if kind == "wait":
+                    _require(isinstance(step.get("contains"), str) and step["contains"],
+                             f"{scenario_id}: wait requires a non-empty contains string")
+                if kind in ("wait", "wait_exit"):
+                    timeout = step.get("timeout_seconds", 10)
+                    _require(
+                        isinstance(timeout, (int, float))
+                        and not isinstance(timeout, bool)
+                        and 0 < timeout <= MAX_TIMEOUT_SECONDS,
+                        f"{scenario_id}: step timeout_seconds must be in (0, {MAX_TIMEOUT_SECONDS}]",
+                    )
+            _require(
+                steps[-1]["type"] in ("wait", "wait_exit")
+                and all(step["type"] != "wait_exit" for step in steps[:-1]),
+                f"{scenario_id}: end pty steps with wait or wait_exit, and make wait_exit last",
+            )
 
     expected_failure = scenario.get("expected_failure")
     if expected_failure is not None:
@@ -327,7 +333,15 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
     expected = scenario["expected"]
     _require("exit_code" in expected, f"{scenario_id}: expected.exit_code is required")
     if scenario["mode"] == "pty":
-        _validate_pty_match_sources(scenario)
+        for session in _pty_sessions(scenario):
+            session_scenario = dict(scenario)
+            session_scenario["steps"] = session["steps"]
+            session_environment = dict(scenario["environment"])
+            session_variables = dict(session_environment.get("variables", {}))
+            session_variables["NSHELL_PROMPT"] = session["prompt"]
+            session_environment["variables"] = session_variables
+            session_scenario["environment"] = session_environment
+            _validate_pty_match_sources(session_scenario)
     output_checks = {"stdout", "stderr"} if scenario["mode"] == "batch" else {"stream", "screen"}
     effects = expected.get("side_effects", {})
     _require(isinstance(effects, dict), f"{scenario_id}: side_effects must be an object")
@@ -342,15 +356,45 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                  f"{scenario_id}: expected.exit_code must be an integer")
         if scenario["mode"] == "pty":
             _require(
-                scenario["steps"][-1]["type"] == "wait_exit",
+                all(session["steps"][-1]["type"] == "wait_exit" for session in _pty_sessions(scenario)),
                 f"{scenario_id}: PTY exit-code checks require a final wait_exit step",
             )
+
+
+def _pty_sessions(scenario: dict[str, Any]) -> list[dict[str, Any]]:
+    sessions = scenario.get("sessions")
+    if sessions is None:
+        return [{
+            "id": "default",
+            "prompt": scenario.get("environment", {}).get("variables", {}).get("NSHELL_PROMPT"),
+            "steps": scenario.get("steps"),
+        }]
+
+    _require("steps" not in scenario, f"{scenario['id']}: use either pty steps or sessions")
+    _require(isinstance(sessions, list) and len(sessions) >= 2,
+             f"{scenario['id']}: sessions must contain at least two PTY sessions")
+    ids: set[str] = set()
+    prompts: set[str] = set()
+    for session in sessions:
+        _require(isinstance(session, dict), f"{scenario['id']}: each session must be an object")
+        session_id = session.get("id")
+        _require(isinstance(session_id, str) and session_id,
+                 f"{scenario['id']}: each session requires a non-empty id")
+        _require(session_id not in ids, f"{scenario['id']}: duplicate session id {session_id!r}")
+        ids.add(session_id)
+        prompt = session.get("prompt")
+        _require(isinstance(prompt, str) and prompt,
+                 f"{scenario['id']}: each session requires a non-empty prompt")
+        _require(prompt not in prompts, f"{scenario['id']}: PTY session prompts must be unique")
+        prompts.add(prompt)
+        _require(isinstance(session.get("steps"), list),
+                 f"{scenario['id']}: each session requires a steps array")
+    return sessions
 
 
 def _validate_pty_match_sources(scenario: dict[str, Any]) -> None:
     scenario_id = scenario["id"]
     prompt = scenario["environment"].get("variables", {}).get("NSHELL_PROMPT", "")
-    inputs: list[str] = []
 
     def reject_overlap(label: str, marker: str, sources: list[tuple[str, str]]) -> None:
         for source_name, source in sources:
@@ -360,6 +404,7 @@ def _validate_pty_match_sources(scenario: dict[str, Any]) -> None:
                     "use a marker unique to shell output"
                 )
 
+    inputs: list[str] = []
     for step in scenario["steps"]:
         if step["type"] == "wait":
             sources = [("input echo", text) for text in inputs]
@@ -599,6 +644,8 @@ def _nshell_command(binary: Path, scenario: dict[str, Any]) -> list[str]:
     command = [str(binary)]
     if not scenario.get("load_config", False):
         command.append("--no-config")
+    if scenario.get("private_mode", False):
+        command.append("--private")
     return command
 
 
@@ -640,7 +687,7 @@ class TmuxSession:
                 stderr=subprocess.PIPE,
             )
 
-            self.fifo_path = root / "pane-output"
+            self.fifo_path = root / f"pane-output-{self.socket}"
             os.mkfifo(self.fifo_path, 0o600)
             self.fifo_fd = os.open(self.fifo_path, os.O_RDWR | os.O_NONBLOCK)
             result = self._tmux([
@@ -800,32 +847,53 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
         root = Path(temporary)
         env, home, cwd = _environment(scenario, root)
         _write_preconditions(scenario, root)
-        session: TmuxSession | None = None
-        exit_code: int | None = None
+        sessions: list[tuple[TmuxSession, dict[str, Any]]] = []
+        exit_codes: list[int] = []
         try:
-            session = TmuxSession(scenario, binary, root, env, cwd)
-            for step in scenario["steps"]:
-                kind = step["type"]
-                if kind == "keys":
-                    session.send_text(step["text"])
-                elif kind == "paste":
-                    session.paste(step["text"])
-                elif kind == "key":
-                    session.send_key(step["key"])
-                elif kind == "wait":
-                    session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
-                elif kind == "wait_exit":
-                    exit_code = session.wait_exit(step.get("timeout_seconds", 10))
-                    session.drain()
-            stream = bytes(session.stream).decode("utf-8", errors="replace")
-            screen = session.capture_screen()
+            for spec in _pty_sessions(scenario):
+                session_scenario = dict(scenario)
+                session_scenario["id"] = f"{scenario['id']}:{spec['id']}"
+                session_scenario["steps"] = spec["steps"]
+                session_environment = dict(scenario["environment"])
+                session_variables = dict(session_environment.get("variables", {}))
+                session_variables["NSHELL_PROMPT"] = spec["prompt"]
+                session_environment["variables"] = session_variables
+                session_scenario["environment"] = session_environment
+                session_env = env.copy()
+                session_env["NSHELL_PROMPT"] = spec["prompt"]
+                session = TmuxSession(session_scenario, binary, root, session_env, cwd)
+                sessions.append((session, spec))
+            for session, _ in sessions:
+                session.deadline = time.monotonic() + session.deadline_seconds
+
+            for session, spec in sessions:
+                for step in spec["steps"]:
+                    kind = step["type"]
+                    if kind == "keys":
+                        session.send_text(step["text"])
+                    elif kind == "paste":
+                        session.paste(step["text"])
+                    elif kind == "key":
+                        session.send_key(step["key"])
+                    elif kind == "wait":
+                        session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
+                    elif kind == "wait_exit":
+                        exit_codes.append(session.wait_exit(step.get("timeout_seconds", 10)))
+                        session.drain()
+            total_output = sum(len(session.stream) for session, _ in sessions)
+            _require(total_output <= MAX_OUTPUT_BYTES, f"{scenario['id']}: PTY output limit exceeded")
+            stream = "\n".join(
+                bytes(session.stream).decode("utf-8", errors="replace") for session, _ in sessions
+            )
+            screen = "\n".join(session.capture_screen() for session, _ in sessions)
+            exit_code = next((code for code in exit_codes if code != 0), exit_codes[-1] if exit_codes else -1)
             failures = _check_expected(
-                scenario, stream, screen, -1 if exit_code is None else exit_code, home, cwd
+                scenario, stream, screen, exit_code, home, cwd
             )
         finally:
-            if session is not None:
+            for session, _ in reversed(sessions):
                 session.close()
-        return stream, screen, -1 if exit_code is None else exit_code, failures
+        return stream, screen, exit_code, failures
 
 
 def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code: int,

@@ -57,6 +57,21 @@ def _write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def _multi_pty_scenario(scenario_id: str = "shared-pty") -> dict[str, Any]:
+    scenario = _pty_scenario(
+        scenario_id,
+        [],
+        {"stream": {"contains": ["FIRST_SESSION_OUTPUT", "SECOND_SESSION_OUTPUT"]}, "exit_code": 0},
+    )
+    scenario.pop("steps")
+    scenario["environment"]["variables"].pop("NSHELL_PROMPT")
+    scenario["sessions"] = [
+        {"id": "first", "prompt": "FIRST_PROMPT> ", "steps": [{"type": "wait_exit"}]},
+        {"id": "second", "prompt": "SECOND_PROMPT> ", "steps": [{"type": "wait_exit"}]},
+    ]
+    return scenario
+
+
 class ScenarioRunnerTests(unittest.TestCase):
     def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
         scenario = _batch_scenario("batch-extra-path")
@@ -93,6 +108,69 @@ class ScenarioRunnerTests(unittest.TestCase):
         for scenario, expected in cases:
             with self.subTest(scenario=scenario):
                 self.assertEqual(runner._nshell_command(binary, scenario), expected)
+
+    def test_private_mode_adds_private_argument(self) -> None:
+        binary = Path("/nix/store/nshell/bin/nshell")
+        scenario = _pty_scenario("private", [{"type": "wait_exit"}], {"exit_code": 0})
+        scenario["private_mode"] = True
+
+        self.assertEqual(
+            runner._nshell_command(binary, scenario),
+            [str(binary), "--no-config", "--private"],
+        )
+
+    def test_multiple_sessions_validate_without_a_root_prompt(self) -> None:
+        scenario = _multi_pty_scenario()
+
+        self._load_one(scenario, "multi-pty.json")
+
+    def test_multiple_sessions_start_before_any_steps_run_and_share_a_root(self) -> None:
+        events: list[tuple[str, str, Path | None]] = []
+
+        class FakeSession:
+            def __init__(self, scenario: dict[str, Any], binary: Path, root: Path,
+                         env: dict[str, str], cwd: Path):
+                self.scenario = scenario
+                session_name = scenario["id"].rsplit(":", 1)[-1].upper()
+                self.stream = bytearray(f"{session_name}_SESSION_OUTPUT".encode())
+                self.deadline_seconds = 45
+                self.deadline = 0.0
+                events.append(("start", scenario["id"], root))
+
+            def wait_exit(self, timeout: float) -> int:
+                events.append(("step", self.scenario["id"], None))
+                return 0
+
+            def drain(self) -> None:
+                pass
+
+            def capture_screen(self) -> str:
+                return ""
+
+            def close(self) -> None:
+                events.append(("close", self.scenario["id"], None))
+
+        scenario = _multi_pty_scenario()
+        with patch.object(runner, "TmuxSession", FakeSession), patch.object(runner.shutil, "which", return_value="tmux"):
+            stream, _, exit_code, failures = runner._run_pty(scenario, Path("/unused/nshell"))
+
+        self.assertIn("FIRST_SESSION_OUTPUT", stream)
+        self.assertIn("SECOND_SESSION_OUTPUT", stream)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(failures, [])
+        starts = [event for event in events if event[0] == "start"]
+        steps = [event for event in events if event[0] == "step"]
+        self.assertEqual(len(starts), 2)
+        self.assertEqual(len(steps), 2)
+        self.assertLess(max(events.index(event) for event in starts), min(events.index(event) for event in steps))
+        self.assertEqual(starts[0][2], starts[1][2])
+
+    def test_multiple_sessions_reject_duplicate_prompts(self) -> None:
+        scenario = _multi_pty_scenario()
+        scenario["sessions"][1]["prompt"] = scenario["sessions"][0]["prompt"]
+
+        with self.assertRaisesRegex(runner.ScenarioError, "prompts must be unique"):
+            self._load_one(scenario, "duplicate-prompts.json")
 
     def test_tmux_exit_status_preserves_numeric_status_and_normalizes_signal(self) -> None:
         self.assertEqual(runner._pane_exit_status("23", "", "exit-status"), 23)

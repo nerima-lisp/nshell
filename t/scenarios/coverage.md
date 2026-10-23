@@ -1,6 +1,6 @@
 # Use-case coverage
 
-This index maps the UC IDs in the [requirements catalog](../../plan/requirements.md) to scenario files. See the [scenario format](README.md) for how each JSON scenario is structured.
+This index maps the UC IDs in the [requirements catalog](../../plan/requirements.md) to scenario files. Per-use-case counts include every JSON file that lists that UC, so a shared scenario appears in each applicable row. The Total row counts unique scenario files selected by the runner and should equal its `selected` count. See the [scenario format](README.md) for how each JSON scenario is structured.
 
 Each executable-scenario count is per UC, so a file mapped to multiple UCs appears in each row. The total counts unique manifest entries and matches `selected` in an unfiltered `--mode all` run.
 
@@ -10,27 +10,27 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | --- | --- | ---: | ---: | --- |
 | A01 | approximation | 1 | 0 | `t/scenarios/A01/approx-terminal-launch.json` |
 | A02 | approximation | 1 | 0 | `t/scenarios/A02/approx-tmux-pane-start.json` |
-| A03 | manual | 0 | 1 | `t/scenarios/A03/manual.md` |
-| A04 | manual | 0 | 1 | `t/scenarios/A04/manual.md` |
-| A05 | manual | 0 | 1 | `t/scenarios/A05/manual.md` |
-| A06 | manual | 0 | 1 | `t/scenarios/A06/manual.md` |
-| A07 | manual | 0 | 1 | `t/scenarios/A07/manual.md` |
+| A03 | direct, manual | 1 | 1 | `t/scenarios/A03/login-shell-command.json`, `t/scenarios/A03/manual.md` |
+| A04 | direct, manual | 1 | 1 | `t/scenarios/A04/login-path-handoff.json`, `t/scenarios/A04/manual.md` |
+| A05 | direct, manual | 1 | 1 | `t/scenarios/A04/login-path-handoff.json`, `t/scenarios/A05/manual.md` |
+| A06 | direct, manual | 1 | 1 | `t/scenarios/A06/login-environment.json`, `t/scenarios/A06/manual.md` |
+| A07 | direct, manual | 1 | 1 | `t/scenarios/A07/quiet-login-command.json`, `t/scenarios/A07/manual.md` |
 | A08 | direct | 2 | 0 | `t/scenarios/A08/ctrl-d-exits.json`, `t/scenarios/A08/exit-warns-about-job.json` |
 | A09 | approximation, manual | 1 | 1 | `t/scenarios/A09/WP-R01-hup-forwards-to-job.json`, `t/scenarios/A09/manual.md` |
 | A10 | direct | 1 | 0 | `t/scenarios/A10/exec-replaces-shell.json` |
 | A11 | manual | 0 | 1 | `t/scenarios/A11/manual.md` |
 | A12 | direct | 1 | 0 | `t/scenarios/A12/no-config-skips-startup.json` |
 | A13 | direct | 1 | 0 | `t/scenarios/A13/config-error-keeps-prompt.json` |
-| B01 | manual | 0 | 1 | `t/scenarios/B01/manual.md` |
-| B02 | approximation | 1 | 0 | `t/scenarios/B02/approx-remote-shell-command-contract.json` |
-| B03 | approximation | 1 | 0 | `t/scenarios/B03/approx-remote-copy-output-is-clean.json` |
-| B04 | manual | 0 | 1 | `t/scenarios/B04/manual.md` |
-| B05 | manual | 0 | 1 | `t/scenarios/B05/manual.md` |
-| B06 | approximation | 1 | 0 | `t/scenarios/B06/approx-shell-c-command-contract.json` |
-| B07 | manual | 0 | 1 | `t/scenarios/B07/manual.md` |
-| B08 | manual | 0 | 1 | `t/scenarios/B08/manual.md` |
-| B09 | direct | 1 | 0 | `t/scenarios/B09/command-stdio-and-status.json` |
-| B10 | manual | 0 | 1 | `t/scenarios/B10/manual.md` |
+| B01 | direct, manual | 1 | 1 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B01/manual.md` |
+| B02 | approximation | 2 | 0 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B02/approx-remote-shell-command-contract.json` |
+| B03 | approximation | 2 | 0 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B03/approx-remote-copy-output-is-clean.json` |
+| B04 | approximation, manual | 1 | 1 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B04/manual.md` |
+| B05 | approximation, manual | 1 | 1 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B05/manual.md` |
+| B06 | approximation | 2 | 0 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B06/approx-shell-c-command-contract.json` |
+| B07 | approximation, manual | 1 | 1 | `t/scenarios/B07/interactive-callers.json`, `t/scenarios/B07/manual.md` |
+| B08 | approximation, manual | 1 | 1 | `t/scenarios/B07/interactive-callers.json`, `t/scenarios/B08/manual.md` |
+| B09 | direct | 3 | 0 | `t/scenarios/B09/command-stdio-and-status.json`, `t/scenarios/B09/empty-shell-command.json`, `t/scenarios/B09/shell-command-argv.json` |
+| B10 | direct, manual | 1 | 1 | `t/scenarios/B10/login-command-environment.json`, `t/scenarios/B10/manual.md` |
 | C01 | direct | 4 | 0 | `t/scenarios/C01/batch-command.json`, `t/scenarios/C01/batch-script.json`, `t/scenarios/C01/batch-stdin.json`, `t/scenarios/C01/pty-paste.json` |
 | C02 | direct | 1 | 0 | `t/scenarios/C02/quoted-unicode-arguments.json` |
 | C03 | direct | 1 | 0 | `t/scenarios/C03/path-search-and-absolute-path.json` |

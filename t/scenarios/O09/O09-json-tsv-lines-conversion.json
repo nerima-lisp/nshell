@@ -1,0 +1,38 @@
+{
+  "id": "O09-json-tsv-lines-conversion",
+  "uc": [
+    "O09"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(echo ,(to-json (from-json \"{\\\"name\\\":\\\"Ada\\\"}\")))\n(echo ,(to-tsv (from-tsv \"name\\tAda\\n\")))\n(echo ,(to-lines (from-lines \"first\\nsecond\\n\")))\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "Ada",
+        "name",
+        "first",
+        "second"
+      ]
+    },
+    "exit_code": 0
+  }
+}

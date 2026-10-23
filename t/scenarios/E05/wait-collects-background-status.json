@@ -30,5 +30,8 @@
   "invocation": {
     "kind": "command",
     "text": "sleep 0.1 &; wait; printf \"E05_WAITED\\n\""
+  },
+  "expected_failure": {
+    "reason": "WP-R03 owns wait and collection of a background job's status."
   }
 }

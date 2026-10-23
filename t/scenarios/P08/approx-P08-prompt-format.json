@@ -1,0 +1,59 @@
+{
+  "id": "P08-prompt-format",
+  "uc": [
+    "P08"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "P08> ",
+      "SCENARIO_MARKER": "P08_CUSTOM_PROMPT_OK"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "prompt left \"$SCENARIO_MARKER\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P08_CUSTOM_PROMPT_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "P08_CUSTOM_PROMPT_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

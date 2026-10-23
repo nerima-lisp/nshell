@@ -1,0 +1,35 @@
+{
+  "id": "E09-script-job-state-updates",
+  "uc": [
+    "E09"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "E09_SCRIPT_DONE"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.sh",
+    "text": "sleep 0.1 &\nwait\nprintf \"E09_SCRIPT_DONE\\n\"\n"
+  }
+}

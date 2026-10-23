@@ -44,8 +44,20 @@
       "key": "Enter"
     },
     {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo I06_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "command not found",
+      "contains": "I06_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -71,5 +83,8 @@
         }
       ]
     }
+  },
+  "expected_failure": {
+    "reason": "WP-E01 owns the rule that Enter executes only typed input."
   }
 }

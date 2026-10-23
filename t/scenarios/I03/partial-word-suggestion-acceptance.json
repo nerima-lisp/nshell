@@ -25,7 +25,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "touch \"$SCENARIO_ALPHA\" \"$SCENARIO_BETA\"; echo I03_$((1+1))"
+      "text": "touch \"$SCENARIO_ALPHA\"; echo I03_$((1+1))"
     },
     {
       "type": "key",

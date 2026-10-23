@@ -30,5 +30,8 @@
   "invocation": {
     "kind": "command",
     "text": "sleep 30 &; disown %1; jobs"
+  },
+  "expected_failure": {
+    "reason": "WP-R03 owns disown and removal of a job from the active table."
   }
 }

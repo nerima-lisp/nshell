@@ -1,0 +1,76 @@
+{
+  "id": "S01-ask-mode-cancel",
+  "uc": [
+    "S01"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "S01> ",
+      "SCENARIO_MARKER": "S01_ASK_CANCEL_OK"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "\u001d"
+    },
+    {
+      "type": "wait",
+      "contains": "ask>",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "summarize the previous command"
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "(echo $SCENARIO_MARKER)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S01_ASK_CANCEL_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "S01_ASK_CANCEL_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

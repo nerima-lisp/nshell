@@ -1,0 +1,38 @@
+{
+  "id": "J11-wrapper-command-completion",
+  "uc": [
+    "J11"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J11-wrapper-command-completion> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "complete -C \"env cargo bu\"; complete -C \"nohup git st\"; complete -C \"time npm in\"; complete -C \"xargs cargo bu\"; complete -C \"sudo kubectl ge\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "build",
+        "status",
+        "install",
+        "get"
+      ]
+    },
+    "exit_code": 0
+  }
+}

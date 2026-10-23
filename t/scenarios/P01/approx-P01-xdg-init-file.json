@@ -1,0 +1,71 @@
+{
+  "id": "P01-xdg-init-file",
+  "uc": [
+    "P01"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "P01> ",
+      "SCENARIO_MARKER": "P01_PROMPT_READY"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "(echo \"P01_XDG_INIT_OK\")\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "P01_XDG_INIT_OK",
+        "P01_PROMPT_READY"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true,
+  "steps": [
+    {
+      "type": "wait",
+      "contains": "P01_XDG_INIT_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_MARKER"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P01_PROMPT_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

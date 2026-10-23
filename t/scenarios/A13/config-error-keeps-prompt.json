@@ -1,0 +1,69 @@
+{
+  "id": "A13-config-error-keeps-prompt",
+  "uc": [
+    "A13"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "A13-config-error-keeps-prompt> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": ")\n"
+      },
+      {
+        "path": "work/ready.txt",
+        "content": "A13_CONFIG_READY\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "init.lisp",
+        "A13_CONFIG_READY"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true,
+  "steps": [
+    {
+      "type": "keys",
+      "text": "cat ready.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "A13_CONFIG_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

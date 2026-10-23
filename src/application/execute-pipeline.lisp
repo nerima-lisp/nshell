@@ -85,8 +85,9 @@ spawns, so a stage's assignment reaches that stage's process alone.")
           (%abort-process-substitution-resources resources)))))
 
 (defun %execute-plain-command-node-in-context (context command-node)
-  (multiple-value-bind (expanded error resources)
-      (%expand-command-node-in-context context command-node)
+  (let ((terminal-runner *foreground-terminal-runner*))
+    (multiple-value-bind (expanded error resources)
+        (%expand-command-node-in-context context command-node)
       (when error
         (%abort-process-substitution-resources resources)
         (return-from %execute-plain-command-node-in-context (values error 127)))
@@ -96,29 +97,40 @@ spawns, so a stage's assignment reaches that stage's process alone.")
           (return-from %execute-plain-command-node-in-context
             (values (first gate) (second gate)))))
       (let* ((redirect-split (%extract-command-redirects expanded))
-           (clean-command
-             (nshell.domain.parsing:command-redirect-split-result-clean-command
-              redirect-split))
-           (redirects
-             (nshell.domain.parsing:command-redirect-split-result-redirects
-              redirect-split)))
-      (if resources
-          (if (%shell-internal-command-p context clean-command)
-              (progn
-                (%abort-process-substitution-resources resources)
-                (values
-                 (%process-substitution-error
-                  "requires an external command")
-                 127))
-          (%execute-external-pipeline-stage
-               clean-command nil redirects resources))
-          (if (and (not (%shell-internal-command-p context clean-command))
-                   (nshell.domain.parsing:redirects-require-shell-wrapper-p
-                    redirects))
-              (%execute-external-pipeline-stage
-               clean-command nil redirects)
-              (%execute-clean-command-node-in-context
-               context clean-command redirects))))))
+             (clean-command
+               (nshell.domain.parsing:command-redirect-split-result-clean-command
+                redirect-split))
+             (redirects
+               (nshell.domain.parsing:command-redirect-split-result-redirects
+                redirect-split)))
+        (if (and terminal-runner
+                 redirects
+                 (null resources)
+                 (not (%shell-internal-command-p context clean-command)))
+            (multiple-value-bind (output exit-code statuses)
+                (funcall terminal-runner
+                         (lambda ()
+                           (%run-terminal-pipeline
+                            context (list clean-command) (list redirects))))
+              (%record-pipeline-statuses context statuses)
+              (values output exit-code))
+            (if resources
+                (if (%shell-internal-command-p context clean-command)
+                    (progn
+                      (%abort-process-substitution-resources resources)
+                      (values
+                       (%process-substitution-error
+                        "requires an external command")
+                       127))
+                    (%execute-external-pipeline-stage
+                     clean-command nil redirects resources))
+                (if (and (not (%shell-internal-command-p context clean-command))
+                         (nshell.domain.parsing:redirects-require-shell-wrapper-p
+                          redirects))
+                    (%execute-external-pipeline-stage
+                     clean-command nil redirects)
+                    (%execute-clean-command-node-in-context
+                     context clean-command redirects))))))))
 
 ;; -- Pipeline node execution --------------------------------------------------
 

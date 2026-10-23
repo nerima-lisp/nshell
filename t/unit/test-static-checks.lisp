@@ -92,7 +92,7 @@
         (static-check-relative-path pathname root))
       (static-check-discovered-lisp-files root))
      (static-check-registered-lisp-files root)))
-  (defun static-check-read-forms (pathname)
+  (defun static-check-read-forms (pathname &key (allow-unknown-package nil))
     (with-open-file (stream pathname :direction :input :external-format :utf-8)
       (let ((*read-eval* nil)
             (*readtable* (copy-readtable nil))
@@ -111,11 +111,15 @@
                                  (symbol-name designator)
                                  designator))
                             (package (and (stringp name) (find-package name))))
-                       (unless package
-                         (error "Unknown package ~s while reading ~a."
-                                name
-                                pathname))
-                       (setf *package* package)))
+                       ;; The nested-test scan compares operator names; unknown packages use CL-USER.
+                       (cond
+                         (package (setf *package* package))
+                         (allow-unknown-package
+                          (setf *package* (find-package "CL-USER")))
+                         (t
+                          (error "Unknown package ~s while reading ~a."
+                                 name
+                                 pathname)))))
                    (push form forms)))
         (nreverse forms))))
   (defun static-check-top-level-forms-named (form operator-name)
@@ -542,7 +546,7 @@
              append (mapcan
                      (lambda (form)
                        (static-check-nested-test-sites-in-form form relative))
-                     (static-check-read-forms pathname)))
+                     (static-check-read-forms pathname :allow-unknown-package t)))
        #'string<
        :key
        #'prin1-to-string)))

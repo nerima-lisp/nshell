@@ -1,7 +1,7 @@
 (in-package #:nshell/test)
 
 (defparameter +main-usage-line+
-  "Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]")
+  "Usage: nshell [OPTIONS] [-c SHELL_COMMAND [ARGS...]] [--command COMMAND [ARGS...]] [SCRIPT [ARGS...]]")
 
 (defun %expected-substrings (expected)
   (cond ((null expected) nil)
@@ -249,11 +249,11 @@ The regular read timeout remains short for command-response assertions.")
 (describe "e2e-tests"
   (it "e2e-main-tty-batch-builtin-preserves-terminal"
     (skip-when-pty-unavailable "compares terminal settings around actual batch main"
-      (%assert-batch-preserves-terminal '("-c" "true"))))
+      (%assert-batch-preserves-terminal '("--command" "true"))))
   (it "e2e-main-tty-batch-external-preserves-terminal"
     (skip-when-pty-unavailable "compares terminal settings around actual batch main"
       (%assert-batch-preserves-terminal
-       (list "-c" (%resolve-real-external-executable "true")))))
+       (list "--command" (%resolve-real-external-executable "true")))))
   (it "e2e-main-tty-script-external-preserves-terminal"
     (skip-when-pty-unavailable "compares terminal settings around actual script main"
       (with-temporary-output-file (script-path :prefix "nshell-e2e-terminal-script")
@@ -275,9 +275,10 @@ The regular read timeout remains short for command-response assertions.")
 
   (it "e2e-main-help-exits-cleanly"
     "The entry point prints usage text and exits successfully for --help."
-    (%assert-nshell-main-result '("--help")
+    (%assert-nshell-main-result (list "--help")
                                 (list +main-usage-line+
-                                      "With -c/--command, nshell executes COMMAND once in batch mode (ARGS are $argv)."
+                                      "With -c/--shell-command, nshell delegates COMMAND and ARGS to /bin/sh."
+                                      "With --command, nshell executes COMMAND once in batch mode (ARGS are $argv)."
                                       "With a SCRIPT file argument, nshell runs the script (ARGS are $argv).")
                                 0))
 
@@ -290,7 +291,7 @@ The regular read timeout remains short for command-response assertions.")
   (it "e2e-main-background-pid-is-shell-visible"
     "A background command publishes its process ID through $!."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main '("-c" "true & echo $!"))
+        (%run-nshell-main '("--command" "true & echo $!"))
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (let ((pid (ignore-errors
@@ -301,14 +302,14 @@ The regular read timeout remains short for command-response assertions.")
   (it "e2e-main-wait-returns-background-status"
     "wait propagates a background command's final status."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main '("-c" "false & wait %1"))
+        (%run-nshell-main '("--command" "false & wait %1"))
       (expect 1 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (expect "" :to-equal stdout)))
   (it "e2e-main-wait-without-jobs-is-successful"
     "wait without job arguments succeeds when there are no jobs."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main '("-c" "wait"))
+        (%run-nshell-main '("--command" "wait"))
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (expect "" :to-equal stdout)))
@@ -316,7 +317,7 @@ The regular read timeout remains short for command-response assertions.")
   (it "e2e-main-status-variable-follows-last-command"
     "$status mirrors the most recent command exit code."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main (list "-c" "false; printf \"%s\\n\" $status"))
+        (%run-nshell-main (list "--command" "false; printf \"%s\\n\" $status"))
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (expect (format nil "1~%") :to-equal stdout)))
@@ -324,7 +325,7 @@ The regular read timeout remains short for command-response assertions.")
     "$pipestatus exposes each internal pipeline stage in source order."
     (multiple-value-bind (stdout stderr exit-code)
         (%run-nshell-main
-         (list "-c"
+         (list "--command"
                "false | true; printf \"<%s,%s>\\n\" $pipestatus"))
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
@@ -333,14 +334,14 @@ The regular read timeout remains short for command-response assertions.")
     "$pipestatus exposes each external pipeline stage in source order."
     (multiple-value-bind (stdout stderr exit-code)
         (%run-nshell-main
-         (list "-c"
+         (list "--command"
                "sh -c 'exit 3' | sh -c 'exit 0'; printf \"<%s,%s>\\n\" $pipestatus"))
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (expect (format nil "<3,0>~%") :to-equal stdout))))
-  (it "e2e-main-adjacent-quoted-fragments-concatenate" "Adjacent quoted and unquoted fragments form one shell word." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "-c" "printf \"%s\\n\" \"a\"b")) (expect (format nil "ab~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
-  (it "e2e-main-escaped-dollar-remains-literal" "A backslash protects a dollar from parameter expansion." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "-c" "printf \"%s\\n\" \\$HOME")) (expect (format nil "\$HOME~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
-  (it "e2e-main-heredoc-quoted-fragment-delimiter" "Quoted and unquoted delimiter fragments combine into one here-document marker." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "-c" (format nil "cat << E\"OF\"~%fragment-heredoc~%EOF~%"))) (expect (format nil "fragment-heredoc~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
+  (it "e2e-main-adjacent-quoted-fragments-concatenate" "Adjacent quoted and unquoted fragments form one shell word." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "--command" "printf \"%s\\n\" \"a\"b")) (expect (format nil "ab~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
+  (it "e2e-main-escaped-dollar-remains-literal" "A backslash protects a dollar from parameter expansion." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "--command" "printf \"%s\\n\" \\$HOME")) (expect (format nil "\$HOME~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
+  (it "e2e-main-heredoc-quoted-fragment-delimiter" "Quoted and unquoted delimiter fragments combine into one here-document marker." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "--command" (format nil "cat << E\"OF\"~%fragment-heredoc~%EOF~%"))) (expect (format nil "fragment-heredoc~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
 
   (it "e2e-main-interactive-pty-smoke"
     "The public entry point runs an interactive command loop under a real PTY."

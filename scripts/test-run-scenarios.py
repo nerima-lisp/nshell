@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
 import tempfile
 import unittest
 from pathlib import Path
@@ -260,6 +261,87 @@ class ScenarioRunnerTests(unittest.TestCase):
             selected = runner._load_scenarios(directory, "all", set())
 
         self.assertEqual({scenario["id"] for scenario in selected}, {"C01-first", "C02-second"})
+
+    def test_argv_batch_invocation_preserves_arguments_and_stdin(self) -> None:
+        arguments = [
+            "-ilc",
+            "",
+            "zero with spaces",
+            "single' and \"double\" quotes",
+            "line one\nline two",
+            "--",
+            "-leading",
+        ]
+        scenario = _batch_scenario("argv-batch")
+        scenario["invocation"] = {
+            "kind": "argv",
+            "arguments": arguments,
+            "stdin": "stdin line\n",
+        }
+
+        actual_arguments, actual_stdin = runner._binary_args(scenario, Path("/scenario/work"))
+
+        self.assertEqual(actual_arguments, arguments)
+        self.assertEqual(actual_stdin, b"stdin line\n")
+
+    def test_command_invocation_uses_the_long_nshell_command_option(self) -> None:
+        scenario = _batch_scenario("command-option")
+
+        arguments, stdin = runner._binary_args(scenario, Path("/scenario/work"))
+
+        self.assertEqual(arguments, ["--no-config", "--command", "echo OK"])
+        self.assertEqual(stdin, b"")
+
+    def test_pty_arguments_survive_tmux_shell_quoting(self) -> None:
+        arguments = ["-c", "", "zero with spaces", "line one\nline two", "--", "-leading"]
+        environment = {"PATH": "/usr/bin:/bin", "R04_VALUE": "space and $()"}
+        shell_command = runner._pty_shell_command(Path("/tmp/nshell binary"), environment, arguments)
+
+        self.assertTrue(shell_command.startswith("exec "))
+        self.assertEqual(
+            shlex.split(shell_command.removeprefix("exec ")),
+            [
+                "/usr/bin/env",
+                "-i",
+                "PATH=/usr/bin:/bin",
+                "R04_VALUE=space and $()",
+                "/tmp/nshell binary",
+                *arguments,
+            ],
+        )
+
+    def test_pty_arguments_default_to_no_config(self) -> None:
+        scenario = _pty_scenario("pty-default-arguments", [{"type": "wait_exit"}], {"exit_code": 0})
+
+        self.assertEqual(runner._pty_arguments(scenario), ["--no-config"])
+
+    def test_pty_arguments_preserve_exact_arguments_and_config_choice(self) -> None:
+        scenario = _pty_scenario("pty-arguments", [{"type": "wait_exit"}], {"exit_code": 0})
+        arguments = ["-ilc", "env", "", "value with spaces", "--"]
+        scenario["arguments"] = arguments
+
+        self.assertEqual(runner._pty_arguments(scenario), ["--no-config", *arguments])
+
+        scenario["load_config"] = True
+        self.assertEqual(runner._pty_arguments(scenario), arguments)
+
+    def test_argv_batch_validation_rejects_non_string_arguments(self) -> None:
+        scenario = _batch_scenario("argv-invalid")
+        scenario["invocation"] = {"kind": "argv", "arguments": ["-c", None]}
+
+        with self.assertRaisesRegex(runner.ScenarioError, "array of strings"):
+            runner._validate_scenario(scenario, Path("argv-invalid.json"))
+
+    def test_pty_validation_rejects_non_string_arguments(self) -> None:
+        scenario = _pty_scenario(
+            "pty-argv-invalid",
+            [{"type": "wait_exit"}],
+            {"exit_code": 0},
+        )
+        scenario["arguments"] = ["-ilc", 1]
+
+        with self.assertRaisesRegex(runner.ScenarioError, "pty arguments must be an array of strings"):
+            runner._validate_scenario(scenario, Path("pty-argv-invalid.json"))
 
     def test_repository_full_corpus_matches_manifest(self) -> None:
         scenarios = runner._load_scenarios(runner.DEFAULT_SCENARIO_DIR, "all", set())

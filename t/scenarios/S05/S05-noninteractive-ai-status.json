@@ -29,5 +29,8 @@
       "equals": "AI is disabled in non-interactive sessions\n"
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-A01 owns AI status output in non-interactive sessions."
   }
 }

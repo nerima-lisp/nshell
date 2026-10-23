@@ -1,0 +1,41 @@
+{
+  "id": "O16-preserve-case",
+  "uc": [
+    "O16"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/CaseSensitive.NSH",
+        "content": "fixture\n"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(echo -KeepCase *.NSH)\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "-KeepCase",
+        "CaseSensitive.NSH"
+      ]
+    },
+    "exit_code": 0
+  }
+}

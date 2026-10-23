@@ -1,0 +1,41 @@
+{
+  "id": "C14-tilde-and-brace-expansion",
+  "uc": [
+    "C14"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/home-marker.txt",
+        "content": "C14_HOME_VALUE\n"
+      }
+    ]
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "C14_HOME_VALUE",
+        "item-one",
+        "item-two"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "cat ~/home-marker.txt; printf '%s\\n' item-{one,two}"
+  }
+}

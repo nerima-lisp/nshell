@@ -1,0 +1,40 @@
+{
+  "id": "J08-make-target",
+  "uc": [
+    "J08"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J08-make-target> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/Makefile",
+        "content": "scenario-test:\n\t@echo ok\n"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "complete -C \"make scenario\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "scenario-test"
+      ]
+    },
+    "exit_code": 0
+  }
+}

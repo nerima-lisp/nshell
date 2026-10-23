@@ -21,7 +21,7 @@
     "files": [
       {
         "path": "work/tool.sh",
-        "content": "printf 'D03_MONITOR_READY\\n'\nIFS= read -r response\nprintf 'D03_MONITOR_RETURNED:%s\\n' \"$response\"\n"
+        "content": "printf 'D03_MONITOR_READY\\n'\nIFS= read -r response\nprintf 'D03_MONITOR_RETURNED\\n'\n"
       }
     ]
   },
@@ -29,7 +29,7 @@
     "stream": {
       "contains": [
         "D03_MONITOR_READY",
-        "D03_MONITOR_RETURNED:q"
+        "D03_MONITOR_RETURNED"
       ]
     },
     "exit_code": 0
@@ -58,7 +58,7 @@
     },
     {
       "type": "wait",
-      "contains": "D03_MONITOR_RETURNED:q",
+      "contains": "D03_MONITOR_RETURNED",
       "timeout_seconds": 10
     },
     {

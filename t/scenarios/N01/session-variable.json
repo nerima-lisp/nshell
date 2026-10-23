@@ -1,0 +1,35 @@
+{
+  "id": "N01-session-variable",
+  "uc": [
+    "N01"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_N01-session-variable> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "set SCENARIO_SESSION_VALUE hello; echo $SCENARIO_SESSION_VALUE"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "hello"
+      ]
+    },
+    "exit_code": 0
+  }
+}

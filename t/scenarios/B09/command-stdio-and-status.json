@@ -31,5 +31,8 @@
   "invocation": {
     "kind": "command",
     "text": "printf \"B09_STDOUT\\n\"; printf \"B09_STDERR\\n\" >&2; exit 23"
+  },
+  "expected_failure": {
+    "reason": "WP-R04 owns /bin/sh delegation and its stdio and exit-status contract."
   }
 }

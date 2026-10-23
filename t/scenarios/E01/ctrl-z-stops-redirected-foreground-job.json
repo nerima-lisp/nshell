@@ -19,24 +19,50 @@
     }
   },
   "preconditions": {
-    "files": []
+    "files": [
+      {
+        "path": "work/job.sh",
+        "content": "printf E01_STARTED_$((1+2)) > /dev/tty\nsleep 5\n"
+      }
+    ]
   },
   "expected": {
     "stream": {
       "contains": [
-        "Stopped"
+          "E01_STARTED_3",
+          "E01_CAPTURED_5"
       ]
     },
-    "exit_code": 0
+      "exit_code": 0,
+      "side_effects": {
+        "files": [
+          {
+            "path": "stopped.out",
+            "exists": true
+          },
+          {
+            "path": "stopped-jobs.txt",
+            "contains": [
+              "Stopped",
+              "sh job.sh"
+            ]
+          }
+        ]
+      }
   },
   "steps": [
     {
       "type": "keys",
-      "text": "sleep 3 > stopped.out"
+      "text": "sh job.sh > stopped.out"
     },
     {
       "type": "key",
       "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E01_STARTED_3",
+      "timeout_seconds": 10
     },
     {
       "type": "key",
@@ -44,23 +70,24 @@
     },
     {
       "type": "keys",
-      "text": "jobs"
+      "text": "jobs > stopped-jobs.txt; echo E01_CAPTURED_$((2+3))"
     },
     {
       "type": "key",
       "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E01_CAPTURED_5",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "kill %1"
+      "text": "kill %1; wait %1"
     },
     {
       "type": "key",
       "key": "Enter"
-    },
-    {
-      "type": "key",
-      "key": "C-c"
     },
     {
       "type": "keys",
@@ -87,8 +114,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-R03 owns Ctrl-Z and stopped-job reporting for foreground commands."
-  }
+  ]
 }

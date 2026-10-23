@@ -8,6 +8,7 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
+      "A08_SECONDS": "30",
       "NSHELL_PROMPT": "A08-ctrl-d-exits> "
     },
     "home": "home",
@@ -21,9 +22,26 @@
     "files": []
   },
   "expected": {
+    "stream": {
+      "contains": [
+        "there are active jobs"
+      ]
+    },
     "exit_code": 0
   },
   "steps": [
+    {
+      "type": "keys",
+      "text": "sleep $A08_SECONDS &"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "C-d"
+    },
     {
       "type": "key",
       "key": "C-d"

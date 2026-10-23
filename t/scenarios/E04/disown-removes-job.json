@@ -21,17 +21,30 @@
   },
   "expected": {
     "stdout": {
-      "excludes": [
-        "sleep 30"
+      "contains": [
+        "E04_DISOWNED_7"
       ]
     },
     "exit_code": 0
+    ,"side_effects": {
+      "files": [
+        {
+          "path": "e04-before.txt",
+          "contains": [
+            "Running",
+            "sleep 5"
+          ]
+        },
+        {
+          "path": "e04-after.txt",
+          "exists": true,
+          "equals": ""
+        }
+      ]
+    }
   },
   "invocation": {
     "kind": "command",
-    "text": "sleep 30 &; disown %1; jobs"
-  },
-  "expected_failure": {
-    "reason": "WP-R03 owns disown and removal of a job from the active table."
+    "text": "sleep 5 & jobs > e04-before.txt; disown %1; jobs > e04-after.txt; printf \"E04_DISOWNED_$((2+5))\\n\""
   }
 }

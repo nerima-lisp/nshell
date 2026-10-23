@@ -22,16 +22,22 @@
   "expected": {
     "stdout": {
       "contains": [
-        "E03_KILLED"
+        "E03_KILLED_5"
       ]
     },
-    "exit_code": 0
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "e03-jobs.txt",
+          "exists": true,
+          "equals": ""
+        }
+      ]
+    }
   },
   "invocation": {
     "kind": "command",
-    "text": "sleep 30 &; kill %1; wait; printf \"E03_KILLED\\n\""
-  },
-  "expected_failure": {
-    "reason": "WP-R03 owns job selection and kill-by-job-spec behavior."
+    "text": "sleep 5 & kill %1; wait %1; test $? -ne 0 && jobs > e03-jobs.txt && printf \"E03_KILLED_$((2+3))\\n\""
   }
 }

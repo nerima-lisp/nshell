@@ -23,7 +23,9 @@
   "expected": {
     "stream": {
       "contains": [
-        "Done"
+          "Done",
+          "E06_WORK_DONE_6",
+          "E06_AFTER_DONE_7"
       ]
     },
     "exit_code": 0,
@@ -40,7 +42,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "sleep 0.1 &"
+      "text": "sleep 1 &"
     },
     {
       "type": "key",
@@ -48,7 +50,7 @@
     },
     {
       "type": "keys",
-      "text": "wait; jobs > completed-jobs.txt; echo E06_$((2+4))"
+      "text": "sleep 2; echo E06_WORK_DONE_$((2+4))"
     },
     {
       "type": "key",
@@ -56,7 +58,20 @@
     },
     {
       "type": "wait",
-      "contains": "E06_6",
+      "contains": "E06_WORK_DONE_6",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "jobs > completed-jobs.txt; echo E06_AFTER_DONE_$((3+4))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E06_AFTER_DONE_7",
       "timeout_seconds": 10
     },
     {
@@ -71,8 +86,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-R03 owns completion notification and removal of completed jobs."
-  }
+  ]
 }

@@ -24,8 +24,8 @@
   "expected": {
     "stream": {
       "contains": [
-        "sleep 30",
-        "job"
+        "there are active jobs. Exit again to leave.",
+        "A08_CONTINUED_8"
       ]
     },
     "exit_code": 0
@@ -48,13 +48,21 @@
       "key": "Enter"
     },
     {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "A08_AFTER_2",
+      "contains": "Exit again to leave.",
       "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "exit"
+      "text": "echo A08_CONTINUED_$((3+5))"
     },
     {
       "type": "key",
@@ -72,8 +80,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-R03 owns the warning and two-step exit behavior when jobs remain."
-  }
+  ]
 }

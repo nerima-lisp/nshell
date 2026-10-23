@@ -22,14 +22,30 @@
   "expected": {
     "stdout": {
       "contains": [
-        "E09_SCRIPT_DONE"
+        "E09_SCRIPT_DONE_3"
       ]
     },
-    "exit_code": 0
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "e09-before.txt",
+          "contains": [
+            "Running",
+            "sleep 5"
+          ]
+        },
+        {
+          "path": "e09-after.txt",
+          "exists": true,
+          "equals": ""
+        }
+      ]
+    }
   },
   "invocation": {
     "kind": "script",
     "path": "scenario.sh",
-    "text": "sleep 0.1 &\nwait\nprintf \"E09_SCRIPT_DONE\\n\"\n"
+    "text": "sleep 5 &\njobs > e09-before.txt\nwait %1\ntest $? -eq 0 && jobs > e09-after.txt && printf \"E09_SCRIPT_DONE_$((1+2))\\n\"\n"
   }
 }

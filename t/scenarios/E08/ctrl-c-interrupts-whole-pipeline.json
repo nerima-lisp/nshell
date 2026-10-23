@@ -29,6 +29,7 @@
   "expected": {
     "stream": {
       "contains": [
+          "E08_PIPELINE_STARTED_8",
         "E08_PIPELINE_STOPPED"
       ]
     },
@@ -37,11 +38,16 @@
   "steps": [
     {
       "type": "keys",
-      "text": "sleep 30 | cat"
+      "text": "sh -c 'printf E08_PIPELINE_STARTED_$((4+4)); sleep 30' | cat"
     },
     {
       "type": "key",
       "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E08_PIPELINE_STARTED_8",
+      "timeout_seconds": 10
     },
     {
       "type": "key",

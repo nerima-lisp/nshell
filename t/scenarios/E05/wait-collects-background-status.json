@@ -22,16 +22,26 @@
   "expected": {
     "stdout": {
       "contains": [
-        "E05_WAITED"
+        "E05_CHILD_DONE"
       ]
     },
-    "exit_code": 0
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "e05-child.txt",
+          "equals": "E05_CHILD_DONE"
+        },
+        {
+          "path": "e05-jobs.txt",
+          "exists": true,
+          "equals": ""
+        }
+      ]
+    }
   },
   "invocation": {
     "kind": "command",
-    "text": "sleep 0.1 &; wait; printf \"E05_WAITED\\n\""
-  },
-  "expected_failure": {
-    "reason": "WP-R03 owns wait and collection of a background job's status."
+    "text": "sh -c 'sleep 2; printf E05_CHILD_DONE > e05-child.txt; exit 7' & wait %1; test $? -eq 7 && cat e05-child.txt && jobs > e05-jobs.txt"
   }
 }

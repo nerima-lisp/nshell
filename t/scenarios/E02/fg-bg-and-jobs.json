@@ -22,70 +22,45 @@
   },
   "expected": {
     "stream": {
-      "contains": ["Running"]
+      "contains": [
+        "E02_STARTED_2",
+        "E02_STOPPED_JOBS_3",
+        "E02_BG_JOBS_4",
+        "E02_FG_RETURNED_5"
+      ]
     },
-    "exit_code": 0
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "e02-stopped.txt",
+          "contains": [
+            "Stopped",
+            "sleep 5"
+          ]
+        },
+        {
+          "path": "e02-running.txt",
+          "contains": [
+            "Running",
+            "sleep 5"
+          ]
+        },
+        {
+          "path": "e02-child.txt",
+          "equals": "E02_CHILD_DONE"
+        },
+        {
+          "path": "e02-final-jobs.txt",
+          "equals": ""
+        }
+      ]
+    }
   },
   "steps": [
     {
       "type": "keys",
-      "text": "sleep 1 &"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "keys",
-      "text": "fg %1"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "keys",
-      "text": "echo E02_FG_$((1+1))"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "keys",
-      "text": "sleep 1 &"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "keys",
-      "text": "bg %1"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "keys",
-      "text": "jobs"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "keys",
-      "text": "sleep 1"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "keys",
-      "text": "echo E02_DONE_$((1+1))"
+      "text": "sh -c 'printf E02_STARTED_$((1+1)); sleep 5; printf E02_CHILD_DONE > e02-child.txt'"
     },
     {
       "type": "key",
@@ -93,7 +68,50 @@
     },
     {
       "type": "wait",
-      "contains": "E02_DONE_2",
+      "contains": "E02_STARTED_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-z"
+    },
+    {
+      "type": "keys",
+      "text": "jobs > e02-stopped.txt; echo E02_STOPPED_JOBS_$((1+2))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E02_STOPPED_JOBS_3",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "bg %1; jobs > e02-running.txt; echo E02_BG_JOBS_$((2+2))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E02_BG_JOBS_4",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "fg %1; cat e02-child.txt; jobs > e02-final-jobs.txt; echo E02_FG_RETURNED_$((2+3))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E02_FG_RETURNED_5",
       "timeout_seconds": 10
     },
     {

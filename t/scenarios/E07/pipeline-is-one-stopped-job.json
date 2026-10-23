@@ -24,19 +24,41 @@
   "expected": {
     "stream": {
       "contains": [
-        "Stopped"
+          "E07_STARTED_5",
+          "E07_JOBS_CAPTURED_7",
+          "E07_AFTER_2"
       ]
     },
-    "exit_code": 0
+      "exit_code": 0,
+      "side_effects": {
+        "files": [
+          {
+            "path": "stopped-pipeline-jobs.txt",
+            "contains": [
+              "Stopped",
+              "| cat"
+            ]
+          },
+          {
+            "path": "stopped-pipeline-count.txt",
+            "equals": "1\n"
+          }
+        ]
+      }
   },
   "steps": [
     {
       "type": "keys",
-      "text": "sleep 0.5 | cat"
+      "text": "sh -c 'printf E07_STARTED_$((2+3)); sleep 5' | cat"
     },
     {
       "type": "key",
       "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E07_STARTED_5",
+      "timeout_seconds": 10
     },
     {
       "type": "key",
@@ -44,23 +66,16 @@
     },
     {
       "type": "keys",
-      "text": "jobs"
+      "text": "jobs > stopped-pipeline-jobs.txt; grep -c Stopped stopped-pipeline-jobs.txt > stopped-pipeline-count.txt; kill %1; wait %1; echo E07_JOBS_CAPTURED_$((3+4))"
     },
     {
       "type": "key",
       "key": "Enter"
     },
     {
-      "type": "keys",
-      "text": "kill %1"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "key",
-      "key": "C-c"
+      "type": "wait",
+      "contains": "E07_JOBS_CAPTURED_7",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",

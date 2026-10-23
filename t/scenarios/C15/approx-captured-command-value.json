@@ -1,0 +1,34 @@
+{
+  "id": "C15-approx-captured-command-value",
+  "uc": [
+    "C15"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "C15_VALUE"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "value=$(printf C15_VALUE); printf \"%s\\n\" \"$value\""
+  }
+}

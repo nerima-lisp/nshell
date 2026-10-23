@@ -38,8 +38,12 @@
       "timeout_seconds": 10
     },
     {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
       "type": "key",
-      "key": "C-d"
+      "key": "Enter"
     },
     {
       "type": "wait_exit",

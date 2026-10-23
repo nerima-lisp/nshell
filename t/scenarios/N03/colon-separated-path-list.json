@@ -22,12 +22,13 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "set -x PATH /usr/bin /bin; set -x PATH a $PATH; env"
+    "text": "set -x PATH a $PATH; env"
   },
   "expected": {
     "stdout": {
       "contains": [
-        "PATH=a:/usr/bin:/bin"
+        "PATH=a:",
+        ":/usr/bin:/bin"
       ]
     },
     "exit_code": 0

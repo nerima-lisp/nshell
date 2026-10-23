@@ -341,6 +341,11 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
     )
     _require(input_delay == 0 or scenario["mode"] == "pty",
              f"{scenario_id}: input_delay_seconds is supported only for pty scenarios")
+    if "wait_for_prompt" in scenario:
+        _require(scenario["mode"] == "pty",
+                 f"{scenario_id}: wait_for_prompt is supported only for pty scenarios")
+        _require(isinstance(scenario["wait_for_prompt"], bool),
+                 f"{scenario_id}: wait_for_prompt must be a boolean")
     _require(
         isinstance(scenario.get("uc"), list) and scenario["uc"],
         f"{scenario_id}: uc must be a non-empty array",
@@ -799,7 +804,7 @@ def _binary_args(scenario: dict[str, Any], cwd: Path) -> tuple[list[str], bytes]
     if kind == "stdin":
         return ["--no-config"], invocation["text"].encode("utf-8")
     if kind == "argv":
-        return invocation["arguments"], invocation.get("stdin", "").encode("utf-8")
+        return ["--no-config", *invocation["arguments"]], invocation.get("stdin", "").encode("utf-8")
     script = _relative_path(cwd, invocation["path"], f"{scenario['id']}: script path")
     script.parent.mkdir(parents=True, exist_ok=True)
     script.write_text(invocation["text"], encoding="utf-8")
@@ -918,10 +923,11 @@ class TmuxSession:
             _require(self.pane.startswith("%"), f"{scenario['id']}: tmux did not return a pane id")
             self._tmux(["pipe-pane", "-o", "-t", self.pane, f"cat > {shlex.quote(str(self.fifo_path))}"])
 
-            prompt = env["NSHELL_PROMPT"]
-            start = len(self.stream)
-            self.send_key("Enter")
-            self.wait_for(prompt, start, 10)
+            if scenario.get("wait_for_prompt", True):
+                prompt = env["NSHELL_PROMPT"]
+                start = len(self.stream)
+                self.send_key("Enter")
+                self.wait_for(prompt, start, 10)
         except BaseException as error:
             try:
                 self.close()

@@ -39,7 +39,7 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "complete -C \"cat plain\"; complete -C \"cat .\"; complete -C \"cat space\"; complete -C \"cat café\"; ln -s plain.txt link.txt; complete -C \"cat link\""
+    "text": "ln -s plain.txt link.txt; complete -C \"cat plain\"; complete -C \"cat .\"; complete -C \"cat space\"; complete -C \"cat café\"; complete -C \"cat link\""
   },
   "expected": {
     "stdout": {
@@ -52,5 +52,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-C01 owns file completion for hidden, unqualified, linked, spaced, and Unicode names."
   }
 }

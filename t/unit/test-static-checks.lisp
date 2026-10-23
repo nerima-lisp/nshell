@@ -446,7 +446,16 @@
              (stringp (first entry))
              (stringp (second entry))
              (plusp (length (second entry)))))
-      (static-check-allowlist-entries :builtin-document-omissions))))
+      (static-check-allowlist-entries :builtin-document-omissions))
+     (every
+      (lambda (entry)
+        (and (= (length entry) 4)
+             (stringp (first entry))
+             (stringp (second entry))
+             (stringp (third entry))
+             (stringp (fourth entry))
+             (plusp (length (fourth entry)))))
+      (static-check-allowlist-entries :nested-test-declarations))))
   (defun static-check-builtin-source-names (&optional
                                             (root (static-check-project-root)))
     (let* ((pathname
@@ -530,7 +539,11 @@
                    (unless (string= (or operator "") "QUOTE")
                      (append
                       (when (and inside-test-p declaration-p)
-                        (list (list pathname operator)))
+                        (list
+                         (list pathname operator
+                               (if (stringp (second node))
+                                   (second node)
+                                   (prin1-to-string (second node))))))
                       (walk-list (cdr node) (or inside-test-p test-p))))))))
       (walk form nil)))
   (defun static-check-nested-test-sites (&optional
@@ -675,13 +688,31 @@
                  '(:missing-from-documentation ("new-command")
                                                :unknown-in-documentation
                                                nil))))
-          (it "rejects test declarations nested inside an it body"
-              (expect (static-check-nested-test-sites) :to-equal nil)
-              (expect
-               (static-check-nested-test-sites-in-form
-                '(describe "root"
-                           (it "outer suite" (describe "nested" (it "inner" nil)))
-                           (it "outer test" (it "nested test" nil)))
-                "fixture.lisp")
-               :to-equal
-               '(("fixture.lisp" "DESCRIBE") ("fixture.lisp" "IT") ("fixture.lisp" "IT")))))
+          (it "rejects unallowlisted test declarations in test bodies"
+              (let* ((expected
+                       (sort
+                        (mapcar
+                         (lambda (entry) (subseq entry 0 3))
+                         (static-check-allowlist-entries
+                          :nested-test-declarations))
+                        #'string<
+                        :key
+                        #'prin1-to-string))
+                     (actual
+                       (sort
+                        (copy-list (static-check-nested-test-sites))
+                        #'string<
+                        :key
+                        #'prin1-to-string)))
+                (expect (static-check-allowlist-reasons-present-p) :to-equal t)
+                (expect actual :to-equal expected)
+                (expect
+                 (static-check-nested-test-sites-in-form
+                  '(describe "root"
+                             (it "outer suite" (describe "nested" (it "inner" nil)))
+                             (it "outer test" (it "nested test" nil)))
+                  "fixture.lisp")
+                 :to-equal
+                 '(("fixture.lisp" "DESCRIBE" "nested")
+                   ("fixture.lisp" "IT" "inner")
+                   ("fixture.lisp" "IT" "nested test"))))))

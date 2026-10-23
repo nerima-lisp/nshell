@@ -28,4 +28,32 @@
     (("."
       "The source alias for source is intentionally omitted from the short builtin inventory.")
      ("["
-      "The test alias is described alongside test in the prose section and omitted from the short inventory."))))
+      "The test alias is described alongside test in the prose section and omitted from the short inventory."))
+    :nested-test-declarations
+    (("t/integration/test-assistant-export.lisp" "IT"
+      "does not create state files for batch or script execution"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
+     ("t/unit/test-east-asian-width.lisp" "IT"
+      "matches-only-locale-language-prefixes"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
+     ("t/unit/test-east-asian-width.lisp" "IT"
+      "respects-explicit-width-in-batch-initialization"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
+     ("t/unit/test-east-asian-width.lisp" "IT"
+      "uses-locale-fallback-in-batch-auto-mode"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
+     ("t/unit/test-east-asian-width.lisp" "IT"
+      "preserves-ordinary-input-when-querying-cpr"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
+     ("t/unit/test-east-asian-width.lisp" "IT"
+      "parses-cpr-and-honors-the-short-timeout"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
+     ("t/unit/test-east-asian-width.lisp" "IT"
+      "returns-three-states-for-terminal-probe"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
+     ("t/unit/test-repl-output-transient-panel.lisp" "IT"
+      "resets-transient-panel-state-on-commit-only-once"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
+     ("t/unit/test-repl-output-transient-panel.lisp" "IT"
+      "does-not-commit-when-the-panel-is-not-displayed"
+      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception."))))

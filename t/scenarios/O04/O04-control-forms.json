@@ -1,0 +1,45 @@
+{
+  "id": "O04-control-forms",
+  "uc": [
+    "O04"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(if (= 1 1) (echo O04_IF_OK) (echo O04_IF_WRONG))\n(when (= 1 1) (echo O04_WHEN_OK))\n(unless (= 1 2) (echo O04_UNLESS_OK))\n(cond ((= 1 2) (echo O04_COND_WRONG)) ((= 2 2) (echo O04_COND_OK)))\n(case 2 ((1) (echo O04_CASE_WRONG)) ((2) (echo O04_CASE_OK)))\n(dotimes (o04_i 2) (echo O04_LOOP_OK))\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O04_IF_OK",
+        "O04_WHEN_OK",
+        "O04_UNLESS_OK",
+        "O04_COND_OK",
+        "O04_CASE_OK",
+        "O04_LOOP_OK"
+      ],
+      "excludes": [
+        "O04_IF_WRONG",
+        "O04_COND_WRONG",
+        "O04_CASE_WRONG"
+      ]
+    },
+    "exit_code": 0
+  }
+}

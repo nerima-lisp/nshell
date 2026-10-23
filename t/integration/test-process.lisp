@@ -1029,3 +1029,104 @@ is 0 (a full 10-second sleep) rather than 130."
             sb-unix:sigint))
           (ignore-errors (sb-thread:join-thread worker :timeout 15)))
         (setf nshell.infrastructure.acl::*foreground-pgid* 0))))
+  (it "terminate-pipeline-rechecks-process-group-before-sigkill"
+    "A changed process group cannot receive SIGKILL after the SIGTERM wait."
+    (let* ((processes
+             (nshell.infrastructure.acl:spawn-pipeline-async
+              (list (nshell.domain.parsing:make-command-node "sleep" '("30")))))
+           (proc (first processes))
+           (pid (when proc (sb-ext:process-pid proc)))
+           (original-kill (symbol-function 'sb-ext:process-kill))
+           (original-wait (symbol-function 'nshell.infrastructure.acl::%wait-sbcl-process))
+           (group-signals nil)
+           (events nil)
+           (ownership-checks 0))
+      (unwind-protect
+           (progn
+             (expect 1 :to-equal (length processes))
+             (expect t :to-equal (sb-ext:process-alive-p proc))
+             (expect t :to-equal
+                     (nshell.infrastructure.acl::%pipeline-process-group-owned-p
+                      processes pid))
+             (with-rebound-function
+                 (nshell.infrastructure.acl::%pipeline-process-group-owned-p
+                  (lambda (candidate-procs expected-pgid)
+                    (expect processes :to-be candidate-procs)
+                    (expect pid :to-equal expected-pgid)
+                    (incf ownership-checks)
+                    (push (list :ownership-check ownership-checks) events)
+                    (= ownership-checks 1)))
+               (with-rebound-function
+                   (nshell.infrastructure.acl::%send-process-group-signal
+                    (lambda (pgid signal)
+                      (push (list pgid signal) group-signals)
+                      (push (list :group-signal pgid signal) events)))
+                 (with-rebound-function
+                     (nshell.infrastructure.acl::%wait-pipeline-exit-with-timeout
+                      (lambda (procs seconds)
+                        (declare (ignore procs))
+                        (push (list :bounded-wait seconds) events)
+                        nil))
+                   (with-rebound-function
+                       (nshell.infrastructure.acl::%wait-sbcl-process
+                        (lambda (&rest arguments)
+                          (declare (ignore arguments))
+                          nil))
+                     (nshell.infrastructure.acl::%terminate-pipeline-processes
+                      processes)))))
+             (expect 2 :to-equal ownership-checks)
+             (expect (list (list pid sb-unix:sigterm))
+                     :to-equal (reverse group-signals))
+             (expect (list (list :ownership-check 1)
+                           (list :group-signal pid sb-unix:sigterm)
+                           (list :bounded-wait 0.5)
+                           (list :ownership-check 2)
+                           (list :bounded-wait 0.5))
+                     :to-equal (reverse events)))
+        (when proc
+          (ignore-errors (funcall original-kill proc sb-unix:sigkill))
+          (ignore-errors (funcall original-wait proc))
+          (ignore-errors (sb-ext:process-close proc))))))
+  (it "terminate-pipeline-uses-bounded-wait-after-sigkill"
+    "Pipeline termination returns after the post-SIGKILL bounded wait."
+    (let* ((processes
+             (nshell.infrastructure.acl:spawn-pipeline-async
+              (list (nshell.domain.parsing:make-command-node "sleep" '("30")))))
+           (proc (first processes))
+           (pid (when proc (sb-ext:process-pid proc)))
+           (original-kill (symbol-function 'sb-ext:process-kill))
+           (original-wait (symbol-function 'nshell.infrastructure.acl::%wait-sbcl-process))
+           (events nil)
+           (unbounded-waits 0))
+      (unwind-protect
+           (progn
+             (expect 1 :to-equal (length processes))
+             (expect t :to-equal (sb-ext:process-alive-p proc))
+             (with-rebound-function
+                 (nshell.infrastructure.acl::%send-process-group-signal
+                  (lambda (pgid signal)
+                    (push (list :group-signal pgid signal) events)))
+               (with-rebound-function
+                   (nshell.infrastructure.acl::%wait-pipeline-exit-with-timeout
+                    (lambda (procs seconds)
+                      (declare (ignore procs))
+                      (push (list :bounded-wait seconds) events)
+                      nil))
+                 (with-rebound-function
+                     (nshell.infrastructure.acl::%wait-sbcl-process
+                      (lambda (&rest arguments)
+                        (declare (ignore arguments))
+                        (incf unbounded-waits)
+                        nil))
+                   (nshell.infrastructure.acl::%terminate-pipeline-processes
+                    processes))))
+             (expect (list (list :group-signal pid sb-unix:sigterm)
+                           (list :bounded-wait 0.5)
+                           (list :group-signal pid sb-unix:sigkill)
+                           (list :bounded-wait 0.5))
+                     :to-equal (reverse events))
+             (expect 0 :to-equal unbounded-waits))
+        (when proc
+          (ignore-errors (funcall original-kill proc sb-unix:sigkill))
+          (ignore-errors (funcall original-wait proc))
+          (ignore-errors (sb-ext:process-close proc))))))

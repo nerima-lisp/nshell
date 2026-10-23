@@ -13,31 +13,35 @@
       (push (process-exit-status-code proc) statuses))
     (values (%pipeline-exit-status statuses pipefail-p)
             statuses)))
+(defun %pipeline-process-group-owned-p (procs pgid)
+  (and (integerp pgid)
+       (plusp pgid)
+       (some (lambda (proc)
+               (and (sb-ext:process-alive-p proc)
+                    (eql pgid
+                         (ignore-errors
+                           (sb-posix:getpgid (sb-ext:process-pid proc))))))
+             procs)))
 
 (defun %terminate-pipeline-processes (procs)
   (when procs
     (let* ((first-proc (car (last procs)))
-           (pgid (sb-ext:process-pid first-proc))
-           (owns-process-group-p
-            (and (integerp pgid)
-                 (plusp pgid)
-                 (some (lambda (proc)
-                         (and (sb-ext:process-alive-p proc)
-                              (eql pgid (ignore-errors
-                                          (sb-posix:getpgid
-                                           (sb-ext:process-pid proc))))))
-                       procs))))
-      (flet ((terminate (signal)
-               (if owns-process-group-p
-                   (ignore-errors (%send-process-group-signal pgid signal))
-                   (dolist (proc procs)
-                     (when (sb-ext:process-alive-p proc)
-                       (ignore-errors (sb-ext:process-kill proc signal)))))))
+           (pgid (sb-ext:process-pid first-proc)))
+      (labels
+          ((terminate (signal)
+             (if (%pipeline-process-group-owned-p procs pgid)
+                 (ignore-errors (%send-process-group-signal pgid signal))
+                 (dolist (proc procs)
+                   (when (sb-ext:process-alive-p proc)
+                     (ignore-errors
+                       (sb-ext:process-kill proc signal)))))))
         (terminate sb-unix:sigterm)
         (%wait-pipeline-exit-with-timeout procs 0.5)
         (terminate sb-unix:sigkill)
+        (%wait-pipeline-exit-with-timeout procs 0.5)
         (dolist (proc procs)
-          (ignore-errors (%wait-sbcl-process proc)))))))
+          (unless (sb-ext:process-alive-p proc)
+            (ignore-errors (%wait-sbcl-process proc))))))))
 
 (defun %wait-pipeline-exit-with-timeout (procs timeout-seconds)
   (let ((deadline (+ (get-internal-real-time)

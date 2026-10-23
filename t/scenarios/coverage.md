@@ -14,7 +14,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | A06 | manual | 0 | 1 | `t/scenarios/A06/manual.md` |
 | A07 | manual | 0 | 1 | `t/scenarios/A07/manual.md` |
 | A08 | direct | 2 | 0 | `t/scenarios/A08/ctrl-d-exits.json`, `t/scenarios/A08/exit-warns-about-job.json` |
-| A09 | manual | 0 | 1 | `t/scenarios/A09/manual.md` |
+| A09 | approximation, manual | 1 | 1 | `t/scenarios/A09/WP-R01-hup-forwards-to-job.json`, `t/scenarios/A09/manual.md` |
 | A10 | direct | 1 | 0 | `t/scenarios/A10/exec-replaces-shell.json` |
 | A11 | manual | 0 | 1 | `t/scenarios/A11/manual.md` |
 | A12 | direct | 1 | 0 | `t/scenarios/A12/no-config-skips-startup.json` |
@@ -70,7 +70,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | E09 | direct | 1 | 0 | `t/scenarios/E09/script-job-state-updates.json` |
 | F01 | approximation | 1 | 0 | `t/scenarios/F01/approx-cooked-mode-after-crash.json` |
 | F02 | manual | 0 | 1 | `t/scenarios/F02/manual.md` |
-| F03 | manual | 0 | 1 | `t/scenarios/F03/manual.md` |
+| F03 | direct, manual | 1 | 1 | `t/scenarios/F03/WP-R01-sigterm-exit-status.json`, `t/scenarios/F03/manual.md` |
 | F04 | manual | 0 | 1 | `t/scenarios/F04/manual.md` |
 | F05 | approximation, manual | 1 | 1 | `t/scenarios/F05/approx-terminal-title-cwd.json`, `t/scenarios/F05/manual.md` |
 | F06 | approximation | 1 | 0 | `t/scenarios/F06/approx-osc-7-cwd.json` |

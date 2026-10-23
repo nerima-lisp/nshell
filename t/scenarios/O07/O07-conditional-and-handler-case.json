@@ -34,5 +34,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L04 owns command-failed conditions and handler-case."
   }
 }

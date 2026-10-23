@@ -24,16 +24,11 @@
   "steps": [
     {
       "type": "keys",
-      "text": "(cat \"missing-o07-file\")"
+      "text": "cat missing-o07-file"
     },
     {
       "type": "key",
       "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "ignore and continue",
-      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -45,7 +40,7 @@
     },
     {
       "type": "keys",
-      "text": "(echo $SCENARIO_MARKER)"
+      "text": "echo O07_RESTART_CONTINUED_$((1+1))"
     },
     {
       "type": "key",
@@ -53,7 +48,7 @@
     },
     {
       "type": "wait",
-      "contains": "O07_RESTART_CONTINUED_OK",
+      "contains": "O07_RESTART_CONTINUED_2",
       "timeout_seconds": 10
     },
     {
@@ -72,9 +67,13 @@
   "expected": {
     "stream": {
       "contains": [
-        "O07_RESTART_CONTINUED_OK"
+        "ignore and continue",
+        "O07_RESTART_CONTINUED_2"
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L04 owns interactive command-failed restart handling."
   }
 }

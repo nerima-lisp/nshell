@@ -4,6 +4,7 @@
     "E07"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -86,8 +87,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-R03 owns Ctrl-Z and stopped-job reporting for foreground commands."
-  }
+  ]
 }

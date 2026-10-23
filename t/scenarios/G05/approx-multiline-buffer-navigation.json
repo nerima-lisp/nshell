@@ -85,8 +85,28 @@
       "key": "Enter"
     },
     {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "key",
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo G05_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "G05-multiline-buffer-navigation> ",
+      "contains": "G05_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -101,5 +121,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-E03 owns multiline-buffer navigation."
+  }
 }

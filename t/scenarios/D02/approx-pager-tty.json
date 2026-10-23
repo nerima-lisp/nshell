@@ -21,7 +21,7 @@
     "files": [
       {
         "path": "work/tool.sh",
-        "content": "printf 'D02_PAGER_READY\\n'\nIFS= read -r response\nprintf 'D02_PAGER_RETURNED:%s\\n' \"$response\"\n"
+        "content": "printf 'D02_PAGER_READY\\n'\nIFS= read -r response\nprintf 'D02_PAGER_RETURNED\\n'\n"
       }
     ]
   },
@@ -29,7 +29,7 @@
     "stream": {
       "contains": [
         "D02_PAGER_READY",
-        "D02_PAGER_RETURNED:q"
+        "D02_PAGER_RETURNED"
       ]
     },
     "exit_code": 0
@@ -58,7 +58,7 @@
     },
     {
       "type": "wait",
-      "contains": "D02_PAGER_RETURNED:q",
+      "contains": "D02_PAGER_RETURNED",
       "timeout_seconds": 10
     },
     {

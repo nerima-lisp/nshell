@@ -25,7 +25,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "(format t \"~a~%\" $SCENARIO_PRIME)"
+      "text": "printf Q04_READY_$((1+1))"
     },
     {
       "type": "key",
@@ -33,7 +33,7 @@
     },
     {
       "type": "wait",
-      "contains": "Q04_READY",
+      "contains": "Q04_READY_2",
       "timeout_seconds": 10
     },
     {
@@ -45,17 +45,12 @@
       "key": "Tab"
     },
     {
-      "type": "wait",
-      "contains": "ho",
-      "timeout_seconds": 10
-    },
-    {
       "type": "key",
       "key": "C-c"
     },
     {
       "type": "keys",
-      "text": "(format t \"~a~%\" $SCENARIO_MARKER)"
+      "text": "printf Q04_AFTER_CTRL_C_$((1+1))"
     },
     {
       "type": "key",
@@ -63,7 +58,7 @@
     },
     {
       "type": "wait",
-      "contains": "Q04_AFTER_CTRL_C_OK",
+      "contains": "Q04_AFTER_CTRL_C_2",
       "timeout_seconds": 10
     },
     {
@@ -82,7 +77,8 @@
   "expected": {
     "stream": {
       "contains": [
-        "Q04_AFTER_CTRL_C_OK"
+        "ho",
+        "Q04_AFTER_CTRL_C_2"
       ]
     },
     "exit_code": 0

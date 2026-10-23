@@ -106,7 +106,7 @@
   (unless (ast-node-p form)
     (error "Process-substitution form must be an AST node: ~S" form))
   (%make-redirect-procsub-target :direction direction :form form))
-(define-value-struct redirect-entry
+(define-value-struct ast-redirect-entry
     ((kind :input-file
            :type (member :input-file :output-file :append-output-file
                          :force-output-file :error-file :append-error-file
@@ -122,7 +122,7 @@
      (source-span nil :type (or null list) :copy %validated-source-span)
      (source-order 0 :type (integer 0 *)))
   :keyword-constructor t)
-(defun make-redirect-entry (kind file-descriptor target source-span source-order)
+(defun make-ast-redirect-entry (kind file-descriptor target source-span source-order)
   (unless (member kind
                   (list :input-file :output-file :append-output-file
                         :force-output-file :error-file :append-error-file
@@ -138,7 +138,7 @@
               (redirect-heredoc-target-p target)
               (redirect-procsub-target-p target))
     (error "Redirect target has an unsupported type: ~S" target))
-  (%make-redirect-entry
+  (%make-ast-redirect-entry
    :kind kind
    :file-descriptor (%validated-redirect-file-descriptor file-descriptor)
    :target target

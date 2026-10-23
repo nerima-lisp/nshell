@@ -99,7 +99,7 @@
       (progn
         (unless (and (listp redirects)
                      (every (lambda (redirect)
-                              (redirect-entry-p redirect))
+                              (ast-redirect-entry-p redirect))
                             redirects))
           (error "Command redirects must be a list of redirect entries: ~S"
                  redirects))

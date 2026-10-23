@@ -100,10 +100,10 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:evaluated-command-arg #:evaluated-command-arg-p
            #:make-evaluated-command-arg #:evaluated-command-arg-value
            #:evaluated-command-arg-source-span #:evaluated-command-arg-glob-p
-           #:redirect-entry #:redirect-entry-p #:make-redirect-entry
-           #:redirect-entry-kind #:redirect-entry-file-descriptor
-           #:redirect-entry-target #:redirect-entry-source-span
-           #:redirect-entry-source-order
+           ast-redirect-entry ast-redirect-entry-p make-ast-redirect-entry
+           ast-redirect-entry-kind ast-redirect-entry-file-descriptor
+           ast-redirect-entry-target ast-redirect-entry-source-span
+           ast-redirect-entry-source-order
            #:redirect-fd-target #:redirect-fd-target-p
            #:make-redirect-fd-target #:redirect-fd-target-file-descriptor
            #:redirect-fd-close-target #:redirect-fd-close-target-p
@@ -135,7 +135,7 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:parse-result-ast #:parse-result-incomplete
            #:parse-diagnostic-kind #:parse-diagnostic-kind-p #:parse-diagnostic-message
            #:parse-diagnostic-start #:parse-diagnostic-end
-           #:parse-diagnostic-token))
+           #:parse-diagnostic-token #:make-sequence-node #:command-arg-here-doc-literal-p))
 
 (defpackage #:nshell.domain.environment
   (:documentation

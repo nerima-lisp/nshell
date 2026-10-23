@@ -1,0 +1,33 @@
+{
+  "id": "S05-noninteractive-ai-status",
+  "uc": [
+    "S05"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "ai status\n"
+  },
+  "expected": {
+    "stdout": {
+      "equals": "AI is disabled in non-interactive sessions\n"
+    },
+    "exit_code": 0
+  }
+}

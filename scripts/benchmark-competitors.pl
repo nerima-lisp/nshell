@@ -27,7 +27,7 @@ my $batch_commands = $ENV{NSHELL_COMPARE_BATCH_COMMANDS} // 100;
 abort('NSHELL_COMPARE_BATCH_COMMANDS must be a positive integer')
   unless $batch_commands =~ /\A\d+\z/ && $batch_commands > 0;
 
-my @fixture_arguments = ('-c', 'echo nshell-bench-sentinel');
+my $fixture_command = 'echo nshell-bench-sentinel';
 my $batch_command = "printf nshell-bench-sentinel\n";
 my $batch_input = $batch_command x $batch_commands;
 my $batch_output = 'nshell-bench-sentinel' x $batch_commands;
@@ -51,7 +51,10 @@ for my $definition (@definitions) {
     my $path = $ENV{$variable};
     next unless defined($path) && length($path);
     abort("$variable must name an executable under /nix/store") unless nix_store_executable($path);
-    push @candidates, { name => $name, path => $path, arguments => \@fixture_arguments };
+    my $arguments = $name eq 'nshell'
+      ? [ '--no-config', '--command', $fixture_command ]
+      : [ '-c', $fixture_command ];
+    push @candidates, { name => $name, path => $path, arguments => $arguments };
 }
 abort('set at least one NSHELL_BENCH_*_BIN candidate') unless @candidates;
 
@@ -91,9 +94,16 @@ sub run_sample {
     return ((time - $start) * 1000, undef);
 }
 
+sub scenario_arguments {
+    my ($candidate, $scenario) = @_;
+    return $scenario->{name} eq 'cli-sentinel'
+      ? $candidate->{arguments}
+      : $scenario->{arguments};
+}
+
 my @scenarios = (
     {
-        name => 'cli-sentinel', arguments => \@fixture_arguments, stdin => '',
+        name => 'cli-sentinel', stdin => '',
         expected_stdout => "nshell-bench-sentinel\n",
         benchmark => 'shell-competitor-process-launch',
         scope => 'fresh process per sample; warm OS filesystem and executable caches',
@@ -132,7 +142,8 @@ my (undef, undef, undef, undef, $machine) = uname();
 my %probe_failure;
 for my $scenario (@scenarios) {
 for my $candidate (@candidates) {
-    my (undef, $reason) = run_sample($candidate, $scenario->{arguments}, $scenario->{stdin}, $scenario->{expected_stdout});
+    my $arguments = scenario_arguments($candidate, $scenario);
+    my (undef, $reason) = run_sample($candidate, $arguments, $scenario->{stdin}, $scenario->{expected_stdout});
     $probe_failure{"$scenario->{name}/$candidate->{name}"} = "preflight: $reason" if defined $reason;
 }
 }
@@ -142,10 +153,11 @@ for my $repetition (1 .. $repetitions) {
 for my $scenario (@scenarios) {
 for my $candidate (@candidates) {
     my (@raw, $failure);
+    my $arguments = scenario_arguments($candidate, $scenario);
     $failure = $probe_failure{"$scenario->{name}/$candidate->{name}"};
     for (1 .. $samples) {
         last if $failure;
-        my ($elapsed, $reason) = run_sample($candidate, $scenario->{arguments}, $scenario->{stdin}, $scenario->{expected_stdout});
+        my ($elapsed, $reason) = run_sample($candidate, $arguments, $scenario->{stdin}, $scenario->{expected_stdout});
         if (defined($reason)) { $failure = $reason; last }
         push @raw, $scenario->{name} eq 'resident-batch-throughput'
           ? $elapsed / $batch_commands : $elapsed;
@@ -163,7 +175,7 @@ for my $candidate (@candidates) {
         fixture => $scenario->{fixture},
         configured_samples => 0 + $samples, timeout_seconds => 0 + $timeout,
         subject => $candidate->{name}, executable_path => $candidate->{path},
-        command_argv => [ $candidate->{path}, @{$scenario->{arguments}} ],
+        command_argv => [ $candidate->{path}, @$arguments ],
         environment_policy => 'allowlist-v1',
         environment => { map { $_ => ($_ eq 'HOME' ? '<temporary-directory>' : $isolated_environment{$_}) } sort keys %isolated_environment },
         raw_samples_ms => \@raw,
@@ -177,7 +189,8 @@ for my $candidate (@candidates) {
 
 for my $scenario (@scenarios) {
 for my $candidate (@candidates) {
-    my (undef, $reason) = run_sample($candidate, $scenario->{arguments}, $scenario->{stdin}, $scenario->{expected_stdout});
+    my $arguments = scenario_arguments($candidate, $scenario);
+    my (undef, $reason) = run_sample($candidate, $arguments, $scenario->{stdin}, $scenario->{expected_stdout});
     $probe_failure{"$scenario->{name}/$candidate->{name}"} = "postflight: $reason" if defined $reason;
 }
 }
@@ -188,7 +201,7 @@ for my $record (@results) {
     $record->{comparable} = $eligible ? JSON::PP::true : JSON::PP::false;
     $record->{ranking_eligible} = $eligible ? JSON::PP::true : JSON::PP::false;
     $record->{comparison_reason} = $eligible
-      ? 'identical argv and verified observable result across all candidates before and after measurement'
+      ? 'equivalent command and verified observable result across all candidates before and after measurement'
       : 'fixture equivalence not established for every candidate and repetition';
     print {$jsonl} encode_json($record), "\n" or abort("cannot write $output_path: $!");
 }

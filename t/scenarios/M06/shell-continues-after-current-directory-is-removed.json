@@ -1,0 +1,72 @@
+{
+  "id": "M06-shell-continues-after-current-directory-is-removed",
+  "uc": [
+    "M06"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_M06-shell-continues-after-current-directory-is-removed> ",
+      "SCENARIO_VALUE": "M06_SHELL_ALIVE"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "/bin/sh -c 'cd .. && rmdir work'; echo M06_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "M06_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "M06_SHELL_ALIVE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "M06_SHELL_ALIVE"
+      ]
+    },
+    "exit_code": 0
+  }
+}

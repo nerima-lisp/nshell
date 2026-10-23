@@ -117,32 +117,62 @@
   `(unwind-protect (progn ,@body)
      (%join-process-output-copiers ,copiers)))
 
-(defun %wait-process-with-copiers (proc copiers timeout-seconds success-fn timeout-fn)
-  (let ((copiers (remove nil copiers))
-        (callback success-fn)
+(defun %wait-processes-with-output-copiers (procs copiers timeout-seconds terminate-fn)
+  (let ((deadline (when timeout-seconds
+                    (+ (funcall *process-output-clock*)
+                       (round (* timeout-seconds internal-time-units-per-second)))))
         (timed-out-p nil)
-        (deadline (when timeout-seconds
-                    (+ (get-internal-real-time)
-                       (round (* timeout-seconds internal-time-units-per-second))))))
+        (copiers-joined-p nil))
     (unwind-protect
          (progn
-           (loop while (or (sb-ext:process-alive-p proc)
+           (loop while (or (some #'sb-ext:process-alive-p procs)
                            (some #'sb-thread:thread-alive-p copiers))
-                 do (when (and deadline (>= (get-internal-real-time) deadline))
-                      (when (sb-ext:process-alive-p proc)
-                        (%terminate-process proc))
-                      (setf callback timeout-fn
-                            timed-out-p t)
+                 do (when (and deadline
+                               (>= (funcall *process-output-clock*) deadline))
+                      (setf timed-out-p t)
+                      (funcall terminate-fn)
+                      (let ((drain-deadline
+                              (+ (funcall *process-output-clock*)
+                                 (round (* 0.5 internal-time-units-per-second)))))
+                        (loop while (some #'sb-thread:thread-alive-p copiers)
+                              do (when (>= (funcall *process-output-clock*)
+                                           drain-deadline)
+                                   (dolist (copier copiers)
+                                     (when (sb-thread:thread-alive-p copier)
+                                       (ignore-errors
+                                         (sb-thread:terminate-thread copier))))
+                                   (return))
+                                 (sb-sys:serve-all-events 0.01)))
                       (return))
                     (sb-sys:serve-all-events 0.01))
-           (unless timed-out-p
-             (%wait-sbcl-process proc)))
-      ;; Descendants may keep output pipes open after the owned process exits.
-      (dolist (copier copiers)
-        (when (sb-thread:thread-alive-p copier)
-          (sb-thread:terminate-thread copier))
-        (%join-stream-copier copier)))
-    (funcall callback)))
+           (let ((copier-results (mapcar #'%join-stream-copier copiers)))
+             (setf copiers-joined-p t)
+             (values timed-out-p
+                     (every (lambda (result) (eq :eof result)) copier-results))))
+      (unless copiers-joined-p
+        (dolist (copier copiers)
+          (when (sb-thread:thread-alive-p copier)
+            (ignore-errors (sb-thread:terminate-thread copier)))
+          (%join-stream-copier copier))))))
+
+(defun %wait-process-with-copiers (proc copiers timeout-seconds success-fn timeout-fn)
+  (let ((copiers (remove nil copiers)))
+    (multiple-value-bind (timed-out-p output-complete-p)
+        (%wait-processes-with-output-copiers
+         (list proc) copiers timeout-seconds
+         (lambda ()
+           (when (sb-ext:process-alive-p proc)
+             (%terminate-process proc))))
+      (unless output-complete-p
+        (if timed-out-p
+            (format *error-output*
+                    "nshell: output capture incomplete after timeout~%")
+            (error "Process output copier did not reach EOF")))
+      (if timed-out-p
+          (funcall timeout-fn)
+          (progn
+            (%wait-sbcl-process proc)
+            (funcall success-fn))))))
 
 (defun %wait-process-with-copiers-or-stop (proc copiers success-fn stop-fn)
   "Wait for PROC while allowing a stopped process to be continued."

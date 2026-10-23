@@ -48,10 +48,7 @@
     (not (some #'sb-ext:process-alive-p procs))))
 
 (defun %wait-pipeline-with-output (procs timeout-seconds timeout-fn pipefail-p)
-  (let ((copiers nil)
-        (deadline (when timeout-seconds
-                    (+ (get-internal-real-time)
-                       (round (* timeout-seconds internal-time-units-per-second))))))
+  (let ((copiers nil))
     (unwind-protect
          (progn
            (push (%start-process-output-copier (car procs) *standard-output*) copiers)
@@ -60,18 +57,20 @@
                                       "nshell pipeline error copier")
                  copiers)
            (setf copiers (remove nil copiers))
-           (loop while (or (some #'sb-ext:process-alive-p procs)
-                           (some #'sb-thread:thread-alive-p copiers))
-                 do (when (and deadline (>= (get-internal-real-time) deadline))
-                      (%terminate-pipeline-processes procs)
-                      (let ((code (funcall timeout-fn)))
-                        (return-from %wait-pipeline-with-output
-                          (values code (list code)))))
-                    (sleep 0.01))
-           (%wait-pipeline-processes procs pipefail-p))
-      ;; Descendants can retain a pipe after every owned stage has exited.
-      ;; Do not let their missing EOF turn a timeout into an unbounded join.
+           (multiple-value-bind (timed-out-p output-complete-p)
+               (%wait-processes-with-output-copiers
+                procs copiers timeout-seconds
+                (lambda () (%terminate-pipeline-processes procs)))
+             (unless output-complete-p
+               (if timed-out-p
+                   (format *error-output*
+                           "nshell: pipeline output capture incomplete after timeout~%")
+                   (error "Pipeline output copier did not reach EOF")))
+             (if timed-out-p
+                 (let ((code (funcall timeout-fn)))
+                   (values code (list code)))
+                 (%wait-pipeline-processes procs pipefail-p))))
       (dolist (copier copiers)
         (when (sb-thread:thread-alive-p copier)
-          (sb-thread:terminate-thread copier))
+          (ignore-errors (sb-thread:terminate-thread copier)))
         (%join-stream-copier copier)))))

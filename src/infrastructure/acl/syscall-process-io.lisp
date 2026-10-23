@@ -15,21 +15,24 @@
           (signal (+ 128 signal))
           (t 0))))
 
-(defun %copy-process-output (input output)
+(defvar *process-output-clock* (function get-internal-real-time))
+(defun %copy-process-output (input output read-function)
   (let ((buffer (make-string 4096)))
-    (loop for count = (read-sequence buffer input)
+    (loop for count = (funcall read-function buffer input)
           while (plusp count)
           do (write-string buffer output :end count))
     (when (streamp output)
-      (ignore-errors
-       (finish-output output)))))
+      (finish-output output))
+    :eof))
 
-(defun %start-stream-copier (input output name)
+(defun %start-stream-copier (input output name
+                                   &optional
+                                   (read-function (function read-sequence)))
   (when input
     (sb-thread:make-thread
      (lambda ()
        (ignore-errors
-        (%copy-process-output input output)))
+        (%copy-process-output input output read-function)))
      :name name)))
 
 (defun %start-process-output-copier (proc output)

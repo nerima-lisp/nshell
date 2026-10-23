@@ -22,7 +22,7 @@
                   (lambda (thread)
                     (expect copier :to-equal thread)
                     (expect nil :to-equal (sb-thread:thread-alive-p thread))
-                    (incf joins))))
+                    (progn (incf joins) :eof))))
               (expect failure :to-equal
                       (handler-case
                           (nshell.infrastructure.acl::%wait-process-with-copiers
@@ -68,7 +68,7 @@
                     (expect copier :to-equal thread)
                     (expect nil :to-equal (sb-thread:thread-alive-p thread))
                     (incf joins)
-                    (write-string "complete" buffer))))
+                    (progn (write-string "complete" buffer) :eof))))
               (flet ((collect-output ()
                        (values (get-output-stream-string buffer) 7)))
                 (multiple-value-bind (output code)
@@ -685,6 +685,156 @@
         (expect 124 :to-equal code)
         (expect "ready" :to-equal stdout)
         (expect (search "timed out after" stderr) :to-be-truthy))))
+  (it "timeout-drains-copier-output-before-terminating-the-copier"
+    "A timeout drains unread child-pipe bytes before returning status 124."
+    (host-kit:with-temporary-directory (directory)
+      (let* ((marker (merge-pathnames "pipe-written" directory))
+             (output (make-string-output-stream))
+             (reader-entered (sb-thread:make-semaphore :count 0))
+             (release-reader (sb-thread:make-semaphore :count 0))
+             (drain-entered (sb-thread:make-semaphore :count 0))
+             (drain-release (sb-thread:make-semaphore :count 0))
+             (clock-calls 0)
+             (process nil)
+             (copier nil)
+             (controller nil)
+             (nshell.infrastructure.acl::*process-output-clock*
+               (lambda ()
+                 (incf clock-calls)
+                 (case clock-calls
+                   (1 0)
+                   ((2 3) (* 2 internal-time-units-per-second))
+                   (otherwise
+                    (sb-thread:signal-semaphore drain-entered)
+                    (unless (sb-thread:wait-on-semaphore drain-release :timeout 3)
+                      (error "Timed out waiting for the pipe drain test"))
+                    (* 3 internal-time-units-per-second)))))
+             (reader
+               (let ((first-read-p t))
+                 (lambda (buffer input)
+                   (when first-read-p
+                     (setf first-read-p nil)
+                     (sb-thread:signal-semaphore reader-entered)
+                     (unless (sb-thread:wait-on-semaphore release-reader :timeout 3)
+                       (error "Timed out waiting to release the pipe reader")))
+                   (read-sequence buffer input)))))
+        (unwind-protect
+             (progn
+               (setf process
+                     (sb-ext:run-program
+                      "/bin/sh"
+                      (list "-c"
+                            "printf tail; : > \"$1\"; exec sleep 5"
+                            "nshell-pipe-drain"
+                            (namestring marker))
+                      :output :stream
+                      :error :output
+                      :search t
+                      :wait nil))
+               (setf copier
+                     (nshell.infrastructure.acl::%start-stream-copier
+                      (sb-ext:process-output process)
+                      output
+                      "timeout pipe drain copier"
+                      reader))
+               (unless (sb-thread:wait-on-semaphore reader-entered :timeout 2)
+                 (error "The pipe reader did not reach its gate"))
+               (loop repeat 200
+                     until (probe-file marker)
+                     do (sleep 0.01))
+               (expect (probe-file marker) :to-be-truthy)
+               (setf controller
+                     (sb-thread:make-thread
+                      (lambda ()
+                        (unless (sb-thread:wait-on-semaphore drain-entered :timeout 3)
+                          (error "The timeout did not reach the drain window"))
+                        (sb-thread:signal-semaphore release-reader)
+                        (loop repeat 200
+                              while (sb-thread:thread-alive-p copier)
+                              do (sleep 0.001))
+                        (loop repeat 10 do (sb-thread:signal-semaphore drain-release)))))
+               (multiple-value-bind (captured code)
+                   (nshell.infrastructure.acl::%wait-process-with-copiers
+                    process
+                    (list copier)
+                    0.1
+                    (lambda () (values "success" 0))
+                    (lambda () (values (get-output-stream-string output) 124)))
+                 (expect "tail" :to-equal captured)
+                 (expect 124 :to-equal code))
+               (sb-thread:join-thread controller))
+          (when process
+            (when (sb-ext:process-alive-p process)
+              (nshell.infrastructure.acl::%terminate-process process)))
+          (when controller
+            (sb-thread:signal-semaphore drain-entered)
+            (sb-thread:signal-semaphore release-reader)
+            (loop repeat 10 do (sb-thread:signal-semaphore drain-release))
+            (when (sb-thread:thread-alive-p controller)
+              (sb-thread:join-thread controller)))
+          (when (and copier (sb-thread:thread-alive-p copier))
+            (sb-thread:signal-semaphore release-reader)
+            (sb-thread:terminate-thread copier))
+          (when process
+            (let ((stream (sb-ext:process-output process)))
+              (when (streamp stream)
+                (ignore-errors (close stream)))))))))
+  (it "timeout-reports-incomplete-output-when-copier-does-not-reach-eof"
+    "A timeout preserves ready bytes and reports truncation when the reader misses EOF."
+    (let* ((input (make-string-input-stream "ready"))
+           (output (make-string-output-stream))
+           (error-output (make-string-output-stream))
+           (reader-entered (sb-thread:make-semaphore :count 0))
+           (release-reader (sb-thread:make-semaphore :count 0))
+           (clock-calls 0)
+           (process-alive t)
+           (copier nil)
+           (nshell.infrastructure.acl::*process-output-clock*
+             (lambda ()
+               (incf clock-calls)
+               (case clock-calls
+                 (1 0)
+                 ((2 3) (* 2 internal-time-units-per-second))
+                 (otherwise (* 3 internal-time-units-per-second)))))
+           (reader
+             (let ((read-count 0))
+               (lambda (buffer stream)
+                 (incf read-count)
+                 (when (= read-count 2)
+                   (sb-thread:signal-semaphore reader-entered)
+                   (unless (sb-thread:wait-on-semaphore release-reader :timeout 3)
+                     (error "Timed out waiting to release the incomplete reader")))
+                 (read-sequence buffer stream)))))
+      (unwind-protect
+           (let ((*error-output* error-output))
+             (sb-ext:without-package-locks
+               (with-temporary-functions
+                   (((quote sb-ext:process-alive-p)
+                     (lambda (process)
+                       (declare (ignore process))
+                       process-alive))
+                    ((quote nshell.infrastructure.acl::%terminate-process)
+                     (lambda (process)
+                       (declare (ignore process))
+                       (setf process-alive nil))))
+                 (setf copier
+                       (nshell.infrastructure.acl::%start-stream-copier
+                        input output "incomplete timeout test copier" reader))
+                 (unless (sb-thread:wait-on-semaphore reader-entered :timeout 2)
+                   (error "The reader did not reach the post-ready barrier"))
+                 (multiple-value-bind (captured code)
+                     (nshell.infrastructure.acl::%wait-process-with-copiers
+                      :test-process (list copier) 0.1
+                      (lambda () (values "success" 0))
+                      (lambda () (values (get-output-stream-string output) 124)))
+                   (expect "ready" :to-equal captured)
+                   (expect 124 :to-equal code)
+                   (expect (search "output capture incomplete after timeout"
+                                   (get-output-stream-string error-output))
+                           :to-be-truthy)))))
+        (sb-thread:signal-semaphore release-reader)
+        (when (and copier (sb-thread:thread-alive-p copier))
+          (sb-thread:terminate-thread copier)))))
 
   (it "trim-command-substitution-output-strips-trailing-newlines"
     "Trailing \\n and \\r characters are removed; nil input becomes empty string."

@@ -531,6 +531,28 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
       (expect 0 :to-equal exit)
       (expect (make-string size :initial-element #\x) :to-equal output)
       (expect (make-string size :initial-element #\y) :to-equal error-output)))
+  (it "run-external-exec-timeout-preserves-large-stdout-and-stderr"
+    (let* ((size 131072)
+           (nshell.infrastructure.acl:*external-command-timeout* 2.0)
+           (exit nil)
+           (output nil)
+           (error-output
+             (with-output-to-string (*error-output*)
+               (setf output
+                     (capture-standard-output
+                       (setf exit
+                             (nshell.infrastructure.acl:run-external-exec
+                              (current-sbcl-executable)
+                              (%process-test-sbcl-argv
+                               (format nil
+                                       "(progn (write-string (make-string ~d :initial-element #\\x)) (write-string (make-string ~d :initial-element #\\y) *error-output*) (finish-output) (finish-output *error-output*) (sleep 5))"
+                                       size size)))))))))
+      (expect 124 :to-equal exit)
+      (expect (make-string size :initial-element #\x) :to-equal output)
+      (expect (make-string size :initial-element #\y)
+              :to-equal (subseq error-output 0 size))
+      (expect (search "timed out after" (subseq error-output size))
+              :to-be-truthy)))
 
   (it "run-external-timeout-terminates-descendant-processes"
     "Timeout cleanup should kill descendants that inherited stdout."
@@ -706,18 +728,26 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
       (expect 0 :to-equal exit)
       (expect (format nil "inline-doc~%") :to-equal output)))
 
-  (it "spawn-pipeline-times-out-and-returns"
-    "Synchronous pipelines should time out and terminate started processes."
-    (let* ((nshell.infrastructure.acl:*external-command-timeout* 0.2)
-           (sleeper (%process-test-sbcl-command-node "(sleep 5)"))
-           (exit nil)
+  (it "spawn-pipeline-times-out-with-intermediate-stage-still-running"
+    "Timeout stops a live intermediate stage and returns the timeout status."
+    (let* ((nshell.infrastructure.acl:*external-command-timeout* 2.0)
+           (source (nshell.domain.parsing:make-command-node
+                    "/bin/sh" (list "-c" "printf source")))
+           (blocked (nshell.domain.parsing:make-command-node
+                     "/bin/sh" (list "-c" "sleep 5")))
+           (sink (nshell.domain.parsing:make-command-node
+                  "/bin/sh" (list "-c" "printf tail; sleep 5")))
+           (output-stream (make-string-output-stream))
+           (status nil)
            (error-output
              (with-output-to-string (*error-output*)
-               (let ((*standard-output* (make-string-output-stream)))
-                 (setf exit
+               (let ((*standard-output* output-stream))
+                 (setf status
                        (nshell.infrastructure.acl:spawn-pipeline
-                        (list sleeper)))))))
-      (expect 124 :to-equal exit)
+                        (list source blocked sink))))))
+           (output (get-output-stream-string output-stream)))
+      (expect 124 :to-equal status)
+      (expect "tail" :to-equal output)
       (expect (search "pipeline timed out" error-output) :to-be-truthy)))
 
   (it "spawn-pipeline-redirect-dup-before-stdout-redirect-keeps-stderr-on-pipe"

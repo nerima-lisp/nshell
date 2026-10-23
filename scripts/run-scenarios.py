@@ -270,6 +270,8 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         _relative_path(Path("/scenario"), fixture.get("path"), f"{scenario_id}: precondition file")
         _require(isinstance(fixture.get("content", ""), str),
                  f"{scenario_id}: precondition file content must be a string")
+        _require(isinstance(fixture.get("executable", False), bool),
+                 f"{scenario_id}: precondition file executable must be a boolean")
 
     if scenario["mode"] == "batch":
         invocation = scenario.get("invocation")
@@ -522,6 +524,8 @@ def _write_preconditions(scenario: dict[str, Any], root: Path) -> None:
         path = _relative_path(root, fixture["path"], f"{scenario['id']}: precondition file")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(fixture.get("content", ""), encoding="utf-8")
+        if fixture.get("executable", False):
+            path.chmod(0o755)
 
 
 def _assert_text(label: str, actual: str, expected: Any, failures: list[str]) -> None:

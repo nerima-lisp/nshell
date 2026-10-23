@@ -1,0 +1,82 @@
+{
+  "id": "J05-option-name-and-description",
+  "uc": [
+    "J05"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J05-option-name-and-description> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "complete -c scenario-tool -l verbose -d \"Verbose output\"\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "true; echo J05_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "J05_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "scenario-tool --v"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "wait",
+      "contains": "--verbose",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "--verbose",
+        "Verbose output"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true
+}

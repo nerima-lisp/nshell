@@ -1,0 +1,36 @@
+{
+  "id": "N05-approx-lexical-let-scope",
+  "uc": [
+    "N05"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_N05-approx-lexical-let-scope> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "set lexical_scope outer; function scope_probe; set -l lexical_scope inner; echo $lexical_scope; end; scope_probe; echo $lexical_scope"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "inner",
+        "outer"
+      ]
+    },
+    "exit_code": 0
+  }
+}

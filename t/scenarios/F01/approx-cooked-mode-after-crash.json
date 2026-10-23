@@ -1,0 +1,75 @@
+{
+  "id": "F01-approx-cooked-mode-after-crash",
+  "uc": [
+    "F01"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "F01-approx-cooked-mode-after-crash> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/crash-terminal.sh",
+        "content": "#!/bin/sh\nstty -echo\nkill -KILL $$\n"
+      },
+      {
+        "path": "work/after-crash.txt",
+        "content": "F01_COOKED_READY\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "F01_COOKED_READY"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh crash-terminal.sh"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "cat after-crash.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "F01_COOKED_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

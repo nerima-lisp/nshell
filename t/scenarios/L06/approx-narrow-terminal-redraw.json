@@ -1,0 +1,67 @@
+{
+  "id": "L06-approx-narrow-terminal-redraw",
+  "uc": [
+    "L06"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_L06-approx-narrow-terminal-redraw> ",
+      "SCENARIO_VALUE": "L06_LONG_LINE_REDRAW"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 20,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Home"
+    },
+    {
+      "type": "key",
+      "key": "End"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "L06_LONG_LINE_REDRAW",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "L06_LONG_LINE_REDRAW"
+      ]
+    },
+    "exit_code": 0
+  }
+}

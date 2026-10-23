@@ -1,0 +1,35 @@
+{
+  "id": "B06-approx-shell-c-command-contract",
+  "uc": [
+    "B06"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "equals": "B06_SHELL_C\n"
+    },
+    "stderr": {
+      "equals": "B06_STDERR\n"
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "printf \"B06_SHELL_C\\n\"; printf \"B06_STDERR\\n\" >&2"
+  }
+}

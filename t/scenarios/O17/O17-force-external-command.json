@@ -1,0 +1,35 @@
+{
+  "id": "O17-force-external-command",
+  "uc": [
+    "O17"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(^printf O17_EXTERNAL_OK)\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O17_EXTERNAL_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

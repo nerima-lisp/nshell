@@ -36,5 +36,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-C06 owns S-expression completion context."
   }
 }

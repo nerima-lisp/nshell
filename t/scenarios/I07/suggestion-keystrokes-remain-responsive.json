@@ -28,10 +28,14 @@
   "expected": {
     "stream": {
       "contains": [
+        "I07_HISTORY_SUGGESTION",
         "I07_AFTER_2"
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-E06 owns history suggestions and responsive key input."
   },
   "steps": [
     {
@@ -63,17 +67,8 @@
       "key": "Enter"
     },
     {
-      "type": "wait",
-      "contains": "I07_AFTER_2",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "keys",
-      "text": "exit"
-    },
-    {
       "type": "key",
-      "key": "Enter"
+      "key": "C-d"
     },
     {
       "type": "wait_exit",

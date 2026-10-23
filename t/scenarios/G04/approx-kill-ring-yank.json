@@ -77,8 +77,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-E01 owns kill-ring yank behavior."
-  }
+  ]
 }

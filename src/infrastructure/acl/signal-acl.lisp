@@ -10,6 +10,8 @@
 (defvar *children-changed* nil)
 (defvar *sigint-received* nil)
 
+(defvar *pending-shell-termination-signal* nil)
+
 (defun os-signal->domain (os-signal)
   (let ((sig-map `((:sigint . ,sb-unix:sigint)
                    (:sigterm . ,sb-unix:sigterm)
@@ -111,7 +113,7 @@
     ;; stopping with the terminal still raw is recoverable, because the parent
     ;; shell reinstates its own settings and shell-sigcont-handler re-enables
     ;; raw mode on resume.
-    (ignore-errors (nshell.infrastructure.terminal:restore-terminal-mode))
+    (ignore-errors (nshell.infrastructure.terminal:restore-terminal-mode 0 :preserve-snapshot-p t))
     (sb-sys:enable-interrupt sb-unix:sigtstp :default)
     (kill-process (current-process-id) sb-unix:sigtstp)))
 
@@ -157,14 +159,36 @@
   (ignore-errors (nshell.infrastructure.terminal:enable-raw-mode))
   (ignore-errors (set-foreground-pgroup (current-process-id))))
 
+(defun %request-shell-termination (signal)
+  (sb-sys:without-interrupts
+    (unless *pending-shell-termination-signal*
+      (setf *pending-shell-termination-signal* signal)))
+  (%signal-foreground-process-group signal))
+
+(defun shell-sighup-handler (signal info context)
+  (declare (ignore signal info context))
+  (%request-shell-termination sb-unix:sighup))
+
+(defun shell-sigterm-handler (signal info context)
+  (declare (ignore signal info context))
+  (%request-shell-termination sb-unix:sigterm))
+
+(defun consume-shell-termination-status ()
+  (let ((signal (prog1 *pending-shell-termination-signal*
+                  (setf *pending-shell-termination-signal* nil))))
+    (when signal (+ 128 signal))))
+
 (defun install-signal-handlers ()
   "Install shell signal handlers for job-control aware interactive operation."
-  (setf *shell-pgid* (current-process-id))
-  (sb-sys:enable-interrupt sb-unix:sigint #'shell-sigint-handler)
-  (sb-sys:enable-interrupt sb-unix:sigtstp #'shell-sigtstp-handler)
-  (sb-sys:enable-interrupt sb-unix:sigchld #'shell-sigchld-handler)
-  (sb-sys:enable-interrupt sb-unix:sigwinch #'shell-sigwinch-handler)
-  (sb-sys:enable-interrupt sb-unix:sigcont #'shell-sigcont-handler)
+  (setf *shell-pgid* (current-process-id)
+        *pending-shell-termination-signal* nil)
+  (sb-sys:enable-interrupt sb-unix:sighup (function shell-sighup-handler))
+  (sb-sys:enable-interrupt sb-unix:sigint (function shell-sigint-handler))
+  (sb-sys:enable-interrupt sb-unix:sigterm (function shell-sigterm-handler))
+  (sb-sys:enable-interrupt sb-unix:sigtstp (function shell-sigtstp-handler))
+  (sb-sys:enable-interrupt sb-unix:sigchld (function shell-sigchld-handler))
+  (sb-sys:enable-interrupt sb-unix:sigwinch (function shell-sigwinch-handler))
+  (sb-sys:enable-interrupt sb-unix:sigcont (function shell-sigcont-handler))
   (sb-sys:enable-interrupt sb-unix:sigttou :ignore)
   (sb-sys:enable-interrupt sb-unix:sigttin :ignore)
   t)

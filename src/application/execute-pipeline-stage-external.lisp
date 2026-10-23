@@ -135,19 +135,19 @@ dropping Ctrl-Z for waits that cannot observe a stop."
                            (stderr-buffer
                              (unless merge-stderr-p
                                (make-string-output-stream)))
-                           (process (sb-ext:run-program
-                                     effective-command
-                                     effective-args
-                                     :input stdin
-                                     :output :stream
-                                     :error (if merge-stderr-p
-                                                :output
-                                                :stream)
-                                     :wait nil
-                                     :search t
-                                     :environment
-                                     (nshell.infrastructure.acl:external-command-environment)
-                                     :preserve-fds preserve-fds)))
+                           (process
+                             (multiple-value-bind (resolved-command environment)
+                                 (nshell.infrastructure.acl::%prepare-external-command
+                                  effective-command
+                                  (nshell.infrastructure.acl:external-command-environment))
+                               (unless resolved-command
+                                 (error "External command is unavailable: ~a" effective-command))
+                               (nshell.infrastructure.acl::%spawn-external-command
+                                resolved-command effective-args environment
+                                :input stdin
+                                :output :stream
+                                :error (if merge-stderr-p :output :stream)
+                                :preserve-fds preserve-fds))))
                       (setf process-started t)
                       (%release-process-substitution-resources
                        process-substitution-resources)

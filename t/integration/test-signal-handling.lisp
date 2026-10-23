@@ -65,6 +65,69 @@
   (it "install-signal-handlers-does-not-crash"
     "Installing signal handlers should complete without killing the shell."
     (expect t :to-be (nshell.infrastructure.acl:install-signal-handlers)))
+  (it "sighup-handler-preserves-first-status-on-repeated-signals"
+    "A later SIGTERM cannot replace an already pending SIGHUP exit status."
+    (let ((calls nil)
+          (nshell.infrastructure.acl::*shell-pgid* 1000)
+          (nshell.infrastructure.acl::*foreground-pgid* 4321)
+          (nshell.infrastructure.acl::*pending-shell-termination-signal* nil))
+      (with-temporary-function
+          ((quote nshell.infrastructure.acl::%send-process-group-signal)
+           (lambda (pgid signal)
+             (push (list pgid signal) calls)))
+        (nshell.infrastructure.acl::shell-sighup-handler nil nil nil)
+        (nshell.infrastructure.acl::shell-sigterm-handler nil nil nil)
+        (expect (list (list 4321 sb-unix:sigterm)
+                      (list 4321 sb-unix:sighup))
+                :to-equal calls)
+        (expect 129 :to-equal
+                (nshell.infrastructure.acl:consume-shell-termination-status)))))
+  (it "sigterm-handler-returns-status-143"
+    "SIGTERM forwards to the foreground group and records status 143."
+    (let ((calls nil)
+          (nshell.infrastructure.acl::*shell-pgid* 1000)
+          (nshell.infrastructure.acl::*foreground-pgid* 4321)
+          (nshell.infrastructure.acl::*pending-shell-termination-signal* nil))
+      (with-temporary-function
+          ((quote nshell.infrastructure.acl::%send-process-group-signal)
+           (lambda (pgid signal)
+             (push (list pgid signal) calls)))
+        (nshell.infrastructure.acl::shell-sigterm-handler nil nil nil)
+        (expect (list (list 4321 sb-unix:sigterm)) :to-equal calls)
+        (expect 143 :to-equal
+                (nshell.infrastructure.acl:consume-shell-termination-status)))))
+  (it "sighup-main-loop-signals-live-background-groups-before-exit"
+    "Pending SIGHUP signals live jobs and stops the REPL with status 129."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (active-job (nshell.domain.job-control:monitor-add-background-job
+                        monitor (list 4321) "active"))
+           (finished-job (nshell.domain.job-control:monitor-add-background-job
+                          monitor (list 5432) "finished"))
+           (registry (make-hash-table))
+           (calls nil)
+           (nshell.application:*job-monitor* monitor)
+           (nshell.application:*shell-pgid* 1000)
+           (nshell.presentation::*proc-registry* registry)
+           (nshell.presentation::*running* t)
+           (nshell.presentation::*last-exit-code* 0)
+           (nshell.infrastructure.acl::*pending-shell-termination-signal* nil)
+           (nshell.infrastructure.acl::*foreground-pgid* 0))
+      (setf (gethash active-job registry) :alive
+            (gethash finished-job registry) :finished)
+      (with-temporary-functions
+          (((quote nshell.infrastructure.acl:process-alive-p)
+            (lambda (process) (eq process :alive)))
+           ((quote nshell.infrastructure.acl:kill-process)
+            (lambda (pid signal) (push (list pid signal) calls))))
+        (nshell.infrastructure.acl::shell-sighup-handler nil nil nil)
+        (expect :shell-termination :to-equal
+                (nshell.presentation::%handle-pending-shell-termination))
+        (expect 129 :to-equal nshell.presentation::*last-exit-code*)
+        (expect nil :to-be nshell.presentation::*running*)
+        (expect (list (list -4321 :sighup)) :to-equal calls)
+        (expect nil :to-be
+                (nshell.presentation::%handle-pending-shell-termination))
+        (expect (list (list -4321 :sighup)) :to-equal calls))))
 
   (it "sigwinch-notification-is-consumed-once"
     "Terminal resize notifications are delivered to the main loop once."
@@ -156,7 +219,8 @@ by the kernel and never reaches this handler."
               (declare (ignore signal))
               nil))
            ('nshell.infrastructure.terminal:restore-terminal-mode
-            (lambda () (push :restore-terminal calls)))
+            (lambda (&optional (fd 0) &key preserve-snapshot-p)
+              (push (list :restore-terminal fd preserve-snapshot-p) calls)))
            ('nshell.infrastructure.acl:kill-process
             (lambda (pid signal)
               (push (list :self pid signal) calls)))
@@ -166,7 +230,7 @@ by the kernel and never reaches this handler."
         (expect 2 :to-be (length calls))
         (expect t :to-be
                 (some (lambda (call)
-                        (equal :restore-terminal call))
+                        (equal (list :restore-terminal 0 t) call))
                       calls)))
         (expect t :to-be
                 (some (lambda (call)

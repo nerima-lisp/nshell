@@ -50,6 +50,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
            #:restore-redirects #:domain-signal->os
             #:install-signal-handlers #:consume-children-changed-p #:consume-sigint-received-p
             #:consume-terminal-resize-p
+            #:consume-shell-termination-status
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream

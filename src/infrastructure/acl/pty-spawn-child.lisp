@@ -122,7 +122,9 @@
                  (when (> slave-fd 2)
                    (sb-posix:close slave-fd)
                    (setf slave-fd nil))
-                 (%execve program argv envp)
+                 (progn
+                   (sb-sys:enable-interrupt sb-unix:sigpipe :default)
+                   (%execve program argv envp))
                  (%signal-pty-child-ready ready-fd +pty-child-ready-error+)
                  (setf ready-fd nil)
                  (%pty-child-fail))

@@ -114,7 +114,8 @@
           (when *preserve-transient-panel-on-next-prompt-p*
             *transient-panel-content*)))
     (setf *preserve-transient-panel-on-next-prompt-p* nil)
-    (unless *running*
+    (when (or (%handle-pending-shell-termination)
+              (not *running*))
       (return-from render-prompt-cont nil))
     (reap-background-jobs)
     (%export-prompt-state)

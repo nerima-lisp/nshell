@@ -205,6 +205,14 @@
       # spans systems and hands each callback the system it is building for.
       # Called from three arguments below; identical arguments produce an
       # identical derivation, so the sibling is built once.
+      processKitSourceFor =
+        ctx:
+        ctx.pkgs.applyPatches {
+          name = "cl-process-kit-sigpipe-default";
+          src = cl-process-kit;
+          patches = [ ./nix/patches/cl-process-kit-sigpipe-default.patch ];
+        };
+
       siblingsFor =
         ctx:
         let
@@ -312,7 +320,7 @@
           };
           clProcessKit = sibling {
             name = "cl-process-kit";
-            source = cl-process-kit;
+            source = processKitSourceFor ctx;
             dependencies = [
               clBoundaryKit
               clLogKit
@@ -361,7 +369,7 @@
           dontUnpack = true;
           buildPhase = ''
             runHook preBuild
-            $CC -std=c11 -O2 -Wall -Wextra -Werror ${cl-process-kit}/native/spawn.c -o cl-process-kit-spawn
+            $CC -std=c11 -O2 -Wall -Wextra -Werror ${processKitSourceFor ctx}/native/spawn.c -o cl-process-kit-spawn
             runHook postBuild
           '';
           installPhase = ''

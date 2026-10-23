@@ -39,16 +39,54 @@
   (format *error-output* "~a" (%external-command-not-found-message command)))
 
 (defun %spawn-external-command
-    (resolved-cmd args environment &key input output (error nil error-supplied-p))
-  (sb-ext:run-program
-   resolved-cmd args
-   :input input
-   :output output
-   :error (if error-supplied-p error
-              (if *redirected-stderr* *error-output* :output))
-   :wait nil
-   :search nil
-   :environment environment))
+    (resolved-cmd args environment &key input output (error nil error-supplied-p)
+                  preserve-fds)
+  (let* ((host-environment (sb-ext:posix-environ))
+         (helper (or (%environment-value "CL_PROCESS_KIT_SPAWN" host-environment)
+                     (%resolve-external-command "cl-process-kit-spawn"
+                                                host-environment))))
+    (unless helper (error "cl-process-kit-spawn is unavailable"))
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (let ((proc nil) (error-stream nil) (complete nil))
+        (unwind-protect
+             (progn
+               (setf error-stream
+                     (sb-sys:make-fd-stream
+                      read-fd :input t :element-type (quote (unsigned-byte 8))
+                      :auto-close t)
+                     read-fd nil)
+               (setf proc
+                     (sb-ext:run-program
+                      helper
+                      (append
+                       (list "--error-fd" (write-to-string write-fd)
+                             "--pgroup" "0")
+                       (loop for fd in preserve-fds
+                             append (list "--pass" (write-to-string fd)))
+                       (list "--" resolved-cmd)
+                       args)
+                      :input input
+                      :output output
+                      :error (if error-supplied-p error
+                                 (if *redirected-stderr* *error-output* :output))
+                      :wait nil
+                      :search nil
+                      :environment environment
+                      :preserve-fds (cons write-fd preserve-fds)))
+               (sb-posix:close write-fd)
+               (setf write-fd nil)
+               (when (read-byte error-stream nil nil)
+                 (error "cl-process-kit-spawn failed before exec"))
+               (setf complete t)
+               proc)
+          (unless complete
+            (when proc
+              (ignore-errors (sb-ext:process-kill proc sb-unix:sigkill))
+              (ignore-errors (sb-ext:process-wait proc))
+              (ignore-errors (sb-ext:process-close proc))))
+          (when error-stream (close error-stream))
+          (when read-fd (sb-posix:close read-fd))
+          (when write-fd (sb-posix:close write-fd)))))))
 
 (defun %resolve-input-redirect (redirects register)
   "Return the standard-input stream REDIRECTS ask for, calling REGISTER on any

@@ -118,63 +118,92 @@
           *input-state* new-state)
     (process-output-event output-event)))
 
+(defun %handle-pending-shell-termination ()
+  (let ((status (nshell.infrastructure.acl:consume-shell-termination-status)))
+    (when status
+      (when (= status (+ 128 sb-unix:sighup))
+        (maphash
+         (lambda (job-id entry)
+           (let* ((processes (cond
+                               ((null entry) nil)
+                               ((listp entry) entry)
+                               (t (list entry))))
+                  (job (nshell.domain.job-control:monitor-find-job
+                        nshell.application:*job-monitor*
+                        job-id))
+                  (pgid (and job
+                             (nshell.domain.execution:job-control-pgid job))))
+             (when (and pgid
+                        (not (and (integerp nshell.application:*shell-pgid*)
+                                  (= pgid nshell.application:*shell-pgid*)))
+                        (some (function nshell.infrastructure.acl:process-alive-p)
+                              processes))
+               (ignore-errors
+                 (nshell.infrastructure.acl:kill-process (- pgid) :sighup)))))
+         *proc-registry*))
+      (setf *last-exit-code* status
+            *running* nil)
+      :shell-termination)))
+
 (defun read-key-cont ()
   (if (nshell.infrastructure.acl:consume-terminal-resize-p)
       (lambda () (%render-prompt-after-terminal-resize))
-      (let* ((raw-event
-               (nshell.infrastructure.terminal:read-key-event
-                :interrupt-predicate
-                (lambda ()
-                  (or (when (nshell.infrastructure.acl:consume-sigint-received-p)
-                        t)
-                      (%poll-assistant-model-event)))))
-             (event (unless (nshell.feature.assistant:assistant-model-event-p
-                              raw-event)
-                      (%map-rendered-mouse-event-to-buffer raw-event))))
-        (cond
-          ((and *rerun-confirmation-pending-p*
-                (nshell.infrastructure.acl:consume-terminal-resize-p))
-           (lambda () (%render-prompt-after-terminal-resize)))
-          ((nshell.feature.assistant:assistant-model-event-p raw-event)
-           (lambda ()
-             (when (eql *assistant-turn-generation*
-                        (nshell.feature.assistant:assistant-model-event-generation
-                         raw-event))
-               (setf *last-assistant-model-event* raw-event)
-               (when (functionp *assistant-model-event-handler*)
-                 (funcall *assistant-model-event-handler* raw-event)))
-             (read-key-cont)))
-          ((and event *rerun-confirmation-pending-p*)
-           (lambda () (%process-input-event event)))
-          ((and event *command-not-found-fallback-text*)
-           (lambda () (%process-command-not-found-fallback-event event)))
-          ((and event (%transient-panel-expand-event-p event))
-           (lambda ()
-             (commit-transient-panel-to-scrollback)
-             (reset-rendered-prompt-state)
-             (render-prompt-cont)))
-          ((and event *failure-explain-available-p*)
-           (lambda () (%process-failure-explain-event event)))
-          ((and event *assistant-explain-candidates*)
-           (lambda () (%process-explain-panel-event event)))
-          ((and event
-                (eq *assistant-request-kind* :agent)
-                (functionp *assistant-model-event-handler*))
-           (lambda ()
-             (if (eq :ctrl-c (nshell.domain.input:key-event-type event))
-                 (process-output-event :ask-cancel-turn)
-                 (read-key-cont))))
-          ((and event *agent-session*)
-           (lambda () (%process-agent-panel-event event)))
-          ((%assistant-repeat-cancel-event-p event)
-           (lambda () (process-output-event :ask-cancel-turn)))
-          (event
-           (lambda () (%process-input-event event)))
-          ((nshell.infrastructure.acl:consume-terminal-resize-p)
-           (lambda () (%render-prompt-after-terminal-resize)))
-          (t
-           (setf *running* nil)
-           nil)))))
+    (let* ((raw-event
+            (nshell.infrastructure.terminal:read-key-event
+             :interrupt-predicate
+             (lambda ()
+               (or (%handle-pending-shell-termination)
+                   (when (nshell.infrastructure.acl:consume-sigint-received-p)
+                     t)
+                   (%poll-assistant-model-event)))))
+           (event (unless (nshell.feature.assistant:assistant-model-event-p
+                           raw-event)
+                    (%map-rendered-mouse-event-to-buffer raw-event))))
+      (cond
+       ((or (not *running*)
+            (and *rerun-confirmation-pending-p*
+                 (nshell.infrastructure.acl:consume-terminal-resize-p)))
+        (lambda () (%render-prompt-after-terminal-resize)))
+       ((nshell.feature.assistant:assistant-model-event-p raw-event)
+        (lambda ()
+          (when (eql *assistant-turn-generation*
+                     (nshell.feature.assistant:assistant-model-event-generation
+                      raw-event))
+            (setf *last-assistant-model-event* raw-event)
+            (when (functionp *assistant-model-event-handler*)
+              (funcall *assistant-model-event-handler* raw-event)))
+          (read-key-cont)))
+       ((and event *rerun-confirmation-pending-p*)
+        (lambda () (%process-input-event event)))
+       ((and event *command-not-found-fallback-text*)
+        (lambda () (%process-command-not-found-fallback-event event)))
+       ((and event (%transient-panel-expand-event-p event))
+        (lambda ()
+          (commit-transient-panel-to-scrollback)
+          (reset-rendered-prompt-state)
+          (render-prompt-cont)))
+       ((and event *failure-explain-available-p*)
+        (lambda () (%process-failure-explain-event event)))
+       ((and event *assistant-explain-candidates*)
+        (lambda () (%process-explain-panel-event event)))
+       ((and event
+             (eq *assistant-request-kind* :agent)
+             (functionp *assistant-model-event-handler*))
+        (lambda ()
+          (if (eq :ctrl-c (nshell.domain.input:key-event-type event))
+              (process-output-event :ask-cancel-turn)
+            (read-key-cont))))
+       ((and event *agent-session*)
+        (lambda () (%process-agent-panel-event event)))
+       ((%assistant-repeat-cancel-event-p event)
+        (lambda () (process-output-event :ask-cancel-turn)))
+       (event
+        (lambda () (%process-input-event event)))
+       ((nshell.infrastructure.acl:consume-terminal-resize-p)
+        (lambda () (%render-prompt-after-terminal-resize)))
+       (t
+        (setf *running* nil)
+        nil)))))
 
 ;; REPL Entry
 (defun run-repl (&key (load-config-p t) config-path (history-p t) greeting-p)

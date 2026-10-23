@@ -1,0 +1,63 @@
+{
+  "id": "F01-foreground-child-restores-terminal-output",
+  "uc": [
+    "F01"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "F01_TERMIO> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "F01_TERMIO_DONE"
+      ]
+    },
+    "screen": {
+      "contains": [
+        "F01_TERMIO_ONE\nF01_TERMIO_TWO\nF01_TERMIO_DONE"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "/bin/stty -opost; printf '%s\\n' 'F01_TERMIO_'ONE 'F01_TERMIO_'TWO 'F01_TERMIO_'DONE"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "F01_TERMIO_DONE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

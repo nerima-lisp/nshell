@@ -124,9 +124,8 @@ settings rather than inheriting the editor's mode."
       (nshell.infrastructure.terminal:restore-terminal-mode fd)))
 
   (it "raw-mode-retains-snapshot-across-simulated-child-changes"
-    "Simulate a foreground command changing PTY flags during a cooked interval.
-Re-enable raw mode, then restore without PRESERVE-SNAPSHOT-P and check the
-initial flags."
+    "Simulate a foreground child changing PTY flags, then re-enable raw mode
+from the startup settings and check that final restoration returns those flags."
     #-(or darwin linux)
     (skip "PTY-backed terminal tests are only supported on Darwin and Linux")
     #+(or darwin linux)
@@ -160,11 +159,13 @@ initial flags."
                (expect (equal startup-lflag child-lflag) :to-be-falsy)
                (expect (equal startup-iflag child-iflag) :to-be-falsy)
                (expect (equal startup-oflag child-oflag) :to-be-falsy)
+               (nshell.infrastructure.terminal:restore-terminal-mode
+                fd :preserve-snapshot-p t)
                (nshell.infrastructure.terminal:enable-raw-mode fd)
                (expect (%flag-set-p (%lflag fd) sb-posix:icanon) :to-be-falsy)
                (expect (%flag-set-p (%lflag fd) sb-posix:echo) :to-be-falsy)
                (expect (%flag-set-p (%iflag fd) sb-posix:ixon) :to-be-falsy)
-               (expect child-oflag :to-equal (%oflag fd))
+               (expect startup-oflag :to-equal (%oflag fd))
                (nshell.infrastructure.terminal:restore-terminal-mode fd)
                (expect startup-lflag :to-equal (%settings-lflag fd))
                (expect startup-iflag :to-equal (%iflag fd))

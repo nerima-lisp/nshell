@@ -43,6 +43,8 @@
   (finish-output)
   (nshell.infrastructure.terminal:restore-terminal-mode 0 :preserve-snapshot-p t)
   (unwind-protect (funcall thunk)
+    (nshell.infrastructure.terminal:restore-terminal-mode
+     0 :preserve-snapshot-p t)
     (nshell.infrastructure.terminal:enable-raw-mode)
     (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
     (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)

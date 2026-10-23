@@ -43,9 +43,13 @@
       (setf current (move-word-left current)))))
 
 (defun %vi-counted-word-end-position (buffer position count)
-  (%vi-counted-position position count
-                        (lambda (current)
-                          (max current (1- (next-kill-word-end buffer current))))))
+  (%vi-counted-position
+   (%vi-grapheme-floor buffer position)
+   count
+   (lambda (current)
+     (%vi-grapheme-floor
+      buffer
+      (max current (1- (next-kill-word-end buffer current)))))))
 
 (defun %vi-counted-kill-word-end (buffer position count)
   (%vi-counted-position position count

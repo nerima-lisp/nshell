@@ -1,0 +1,77 @@
+{
+  "id": "G02-vi-e-nfd-grapheme-boundary",
+  "uc": [
+    "G02",
+    "G12"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G02_VI_NFD> ",
+      "NSHELL_VI_MODE": "1"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "input_delay_seconds": 0.05,
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "G02_NFD_OK"
+      ],
+      "excludes": [
+        "G02_NFD_OKe",
+        "G02_NFD_OKé"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "printf '%s' 'G02_NFD_'OKé"
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "key",
+      "key": "e"
+    },
+    {
+      "type": "key",
+      "key": "x"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "G02_NFD_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

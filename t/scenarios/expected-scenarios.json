@@ -1400,6 +1400,21 @@
         "J12"
       ],
       "path": "J12/large-directory-completion.json"
+    },
+    {
+      "id": "F01-foreground-child-restores-terminal-output",
+      "uc": [
+        "F01"
+      ],
+      "path": "F01/foreground-child-restores-terminal-output.json"
+    },
+    {
+      "id": "G02-vi-e-nfd-grapheme-boundary",
+      "uc": [
+        "G02",
+        "G12"
+      ],
+      "path": "G02/vi-e-nfd-grapheme-boundary.json"
     }
   ]
 }

@@ -220,7 +220,7 @@
         (is-input-state sub :buffer "acdef" :mode :insert :cursor-pos 1))))
 
   (it "vi-e-and-caret-motions"
-    "e moves to word-end position; ^ moves unconditionally to column 0."
+    "e moves to word ends on grapheme boundaries; ^ moves to column 0."
     (with-vi-command-state (cmd (input-state :buffer "one two three" :cursor-pos 0))
       ;; e: advance to last char of first word (index 2).
       (with-reduced-input-state (end1) (reduce-once cmd :char #\e)
@@ -228,7 +228,25 @@
       ;; ^ is always line-start (contrast with 0, which accumulates count when active).
       (with-vi-command-state (mid (input-state :buffer "hello" :cursor-pos 4))
         (with-reduced-input-state (start) (reduce-once mid :char #\^)
-          (is-vi-command-state start :cursor-pos 0)))))
+          (is-vi-command-state start :cursor-pos 0))))
+    (with-vi-command-state
+        (nfd-command (input-state :buffer "echo é" :cursor-pos 7))
+      (with-reduced-input-states nfd-command
+          (((end) :char #\e)
+           ((deleted) :char #\x))
+        (expect 5 :to-equal
+                (nshell.presentation:input-state-cursor-pos end))
+        (expect "echo " :to-equal
+                (nshell.presentation:input-state-buffer deleted))))
+    (with-vi-command-state
+        (word-motion (input-state :buffer "é one" :cursor-pos 0))
+      (with-reduced-input-states word-motion
+          (((forward) :char #\w)
+           ((backward) :char #\b))
+        (expect 3 :to-equal
+                (nshell.presentation:input-state-cursor-pos forward))
+        (expect 0 :to-equal
+                (nshell.presentation:input-state-cursor-pos backward)))))
 
   (it "vi-visual-insert-exits-visual-before-entering-insert"
     "i and a in visual mode cancel the selection and enter insert mode."

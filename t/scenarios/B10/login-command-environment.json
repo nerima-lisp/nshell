@@ -14,7 +14,12 @@
     "files": [
       {
         "path": "home/.nshellrc",
-        "content": "echo R04_CONFIG_OUTPUT_LEAK\nexport PATH=/r04-config-path:$PATH\n"
+        "content": "echo R04_CONFIG_OUTPUT_LEAK\nexport PATH=/r04-config-path:$HOME/bin:$PATH\n"
+      },
+      {
+        "path": "home/bin/env",
+        "content": "#!/bin/sh\nprintf 'PATH=%s\\n' \"$PATH\"\n",
+        "executable": true
       }
     ]
   },

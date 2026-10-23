@@ -1,0 +1,77 @@
+{
+  "id": "D10-approx-container-tty",
+  "uc": [
+    "D10"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "D10-approx-container-tty> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/tool.sh",
+        "content": "printf 'D10_CONTAINER_READY\\n'\nIFS= read -r response\nprintf 'D10_CONTAINER_RETURNED:%s\\n' \"$response\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "D10_CONTAINER_READY",
+        "D10_CONTAINER_RETURNED:container-command"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh tool.sh"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D10_CONTAINER_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "container-command"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D10_CONTAINER_RETURNED:container-command",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

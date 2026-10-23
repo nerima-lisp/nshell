@@ -878,6 +878,7 @@
                 ''
                   set -euo pipefail
 
+                  python3 ${self}/scripts/test-run-scenarios.py
                   python3 ${self}/scripts/run-scenarios.py --binary ${bin} --mode batch
                   touch "$out"
                 '';

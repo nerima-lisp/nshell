@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "C01-batch-command",
+      "uc": ["C01"],
+      "path": "C01/batch-command.json"
+    },
+    {
+      "id": "C01-batch-script",
+      "uc": ["C01"],
+      "path": "C01/batch-script.json"
+    },
+    {
+      "id": "C01-batch-stdin",
+      "uc": ["C01"],
+      "path": "C01/batch-stdin.json"
+    },
+    {
+      "id": "C01-pty-paste",
+      "uc": ["C01"],
+      "path": "C01/pty-paste.json"
+    },
+    {
+      "id": "C10-short-circuit-followed-by-sequence",
+      "uc": ["C10"],
+      "path": "C10/short-circuit-followed-by-sequence.json"
+    }
+  ]
+}

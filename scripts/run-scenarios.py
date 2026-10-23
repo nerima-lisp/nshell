@@ -22,11 +22,62 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SCENARIO_DIR = ROOT / "t" / "scenarios"
+EXPECTED_SCENARIOS_FILE = "expected-scenarios.json"
 MAX_TIMEOUT_SECONDS = 60
 MAX_REPEAT = 10
 MAX_OUTPUT_BYTES = 1_048_576
 ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 TMUX_KEY = re.compile(r"[A-Za-z0-9+-]+\Z")
+SHIFTED_KEY_TEXT = {
+    "1": "!",
+    "2": "@",
+    "3": "#",
+    "4": "$",
+    "5": "%",
+    "6": "^",
+    "7": "&",
+    "8": "*",
+    "9": "(",
+    "0": ")",
+    "-": "_",
+    "+": "*",
+}
+TMUX_KEY_ECHO_TEXT = {
+    "Space": " ",
+    "Tab": "\t",
+    "Enter": "\r\n",
+    "Escape": "\x1b",
+    "BSpace": "\x7f",
+    "BTab": "\x1b[Z",
+    "Up": "\x1b[A",
+    "Down": "\x1b[B",
+    "Right": "\x1b[C",
+    "Left": "\x1b[D",
+    "Home": "\x1b[H",
+    "End": "\x1b[F",
+    "IC": "\x1b[2~",
+    "Insert": "\x1b[2~",
+    "DC": "\x1b[3~",
+    "Delete": "\x1b[3~",
+    "PPage": "\x1b[5~",
+    "PageUp": "\x1b[5~",
+    "PgUp": "\x1b[5~",
+    "NPage": "\x1b[6~",
+    "PageDown": "\x1b[6~",
+    "PgDn": "\x1b[6~",
+    "F1": "\x1bOP",
+    "F2": "\x1bOQ",
+    "F3": "\x1bOR",
+    "F4": "\x1bOS",
+    "F5": "\x1b[15~",
+    "F6": "\x1b[17~",
+    "F7": "\x1b[18~",
+    "F8": "\x1b[19~",
+    "F9": "\x1b[20~",
+    "F10": "\x1b[21~",
+    "F11": "\x1b[23~",
+    "F12": "\x1b[24~",
+}
 
 
 class ScenarioError(Exception):
@@ -53,13 +104,80 @@ def _relative_path(root: Path, value: Any, label: str) -> Path:
 
 def _scenario_files(directory: Path) -> list[Path]:
     _require(directory.is_dir(), f"scenario directory does not exist: {directory}")
-    paths = sorted(path for path in directory.rglob("*.json") if path.is_file())
+    manifest = (directory / EXPECTED_SCENARIOS_FILE).resolve()
+    paths = sorted(
+        path for path in directory.rglob("*.json")
+        if path.is_file() and path.resolve() != manifest
+    )
     _require(paths, f"scenario directory contains no JSON scenarios: {directory}")
     return paths
 
 
+def _verify_expected_scenarios(directory: Path, scenarios_by_path: dict[Path, dict[str, Any]]) -> None:
+    manifest_path = directory / EXPECTED_SCENARIOS_FILE
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ScenarioError(f"cannot read expected-scenarios manifest {manifest_path}: {error}") from error
+    _require(isinstance(manifest, dict), f"{manifest_path} must contain a JSON object")
+    _require(manifest.get("version") == 1, f"{manifest_path}: version must be 1")
+    entries = manifest.get("scenarios")
+    _require(isinstance(entries, list) and entries,
+             f"{manifest_path}: scenarios must be a non-empty array")
+
+    expected_by_path: dict[Path, dict[str, Any]] = {}
+    expected_ids: set[str] = set()
+    for entry in entries:
+        _require(isinstance(entry, dict), f"{manifest_path}: each scenario entry must be an object")
+        _require(set(entry) == {"id", "uc", "path"},
+                 f"{manifest_path}: each entry must define exactly id, uc, and path")
+        scenario_id = entry["id"]
+        _require(isinstance(scenario_id, str) and scenario_id,
+                 f"{manifest_path}: scenario id must be a non-empty string")
+        _require(scenario_id not in expected_ids,
+                 f"{manifest_path}: duplicate scenario id: {scenario_id}")
+        expected_ids.add(scenario_id)
+        uc_ids = entry["uc"]
+        _require(isinstance(uc_ids, list) and uc_ids,
+                 f"{manifest_path}: {scenario_id}: uc must be a non-empty array")
+        _require(all(isinstance(uc, str) and uc for uc in uc_ids),
+                 f"{manifest_path}: {scenario_id}: each uc must be a non-empty string")
+        _require(len(set(uc_ids)) == len(uc_ids),
+                 f"{manifest_path}: {scenario_id}: duplicate uc id")
+        scenario_path = _relative_path(directory, entry["path"], f"{manifest_path}: scenario path")
+        _require(scenario_path.suffix == ".json" and scenario_path.is_file(),
+                 f"{manifest_path}: {scenario_id}: scenario file does not exist: {entry['path']!r}")
+        _require(scenario_path not in expected_by_path,
+                 f"{manifest_path}: duplicate scenario path: {entry['path']!r}")
+        expected_by_path[scenario_path] = entry
+
+    actual_paths = set(scenarios_by_path)
+    expected_paths = set(expected_by_path)
+    missing_paths = sorted(path.relative_to(directory).as_posix() for path in expected_paths - actual_paths)
+    unexpected_paths = sorted(path.relative_to(directory).as_posix() for path in actual_paths - expected_paths)
+    _require(
+        not missing_paths and not unexpected_paths,
+        "scenario file set does not match expected-scenarios manifest: "
+        f"missing={missing_paths}, unexpected={unexpected_paths}",
+    )
+    _require(
+        len(scenarios_by_path) == len(entries),
+        f"scenario count was {len(scenarios_by_path)}, expected {len(entries)}",
+    )
+    actual_ids = {scenario["id"] for scenario in scenarios_by_path.values()}
+    _require(actual_ids == expected_ids,
+             f"scenario id set does not match manifest: expected={sorted(expected_ids)}, actual={sorted(actual_ids)}")
+    for scenario_path, scenario in scenarios_by_path.items():
+        expected = expected_by_path[scenario_path]
+        _require(scenario["id"] == expected["id"],
+                 f"{scenario_path}: id was {scenario['id']!r}, expected {expected['id']!r}")
+        _require(set(scenario["uc"]) == set(expected["uc"]),
+                 f"{scenario_path}: uc was {sorted(scenario['uc'])}, expected {sorted(expected['uc'])}")
+
+
 def _load_scenarios(directory: Path, mode: str, selected_ids: set[str]) -> list[dict[str, Any]]:
     scenarios: list[dict[str, Any]] = []
+    scenarios_by_path: dict[Path, dict[str, Any]] = {}
     ids: set[str] = set()
     for path in _scenario_files(directory):
         try:
@@ -72,6 +190,7 @@ def _load_scenarios(directory: Path, mode: str, selected_ids: set[str]) -> list[
         _require(scenario_id not in ids, f"duplicate scenario id: {scenario_id}")
         ids.add(scenario_id)
         _validate_scenario(scenario, path)
+        scenarios_by_path[path.resolve()] = scenario
         if mode != "all" and scenario["mode"] != mode:
             continue
         if selected_ids and scenario_id not in selected_ids:
@@ -80,6 +199,8 @@ def _load_scenarios(directory: Path, mode: str, selected_ids: set[str]) -> list[
 
     missing_ids = selected_ids - ids
     _require(not missing_ids, f"unknown scenario id(s): {', '.join(sorted(missing_ids))}")
+    if mode == "all" and not selected_ids:
+        _verify_expected_scenarios(directory.resolve(), scenarios_by_path)
     _require(scenarios, "scenario selection is empty")
     return scenarios
 
@@ -185,6 +306,9 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         f"{scenario_id}: timeout_seconds must be in (0, {MAX_TIMEOUT_SECONDS}]",
     )
     expected = scenario["expected"]
+    _require("exit_code" in expected, f"{scenario_id}: expected.exit_code is required")
+    if scenario["mode"] == "pty":
+        _validate_pty_match_sources(scenario)
     output_checks = {"stdout", "stderr"} if scenario["mode"] == "batch" else {"stream", "screen"}
     effects = expected.get("side_effects", {})
     _require(isinstance(effects, dict), f"{scenario_id}: side_effects must be an object")
@@ -202,6 +326,85 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                 scenario["steps"][-1]["type"] == "wait_exit",
                 f"{scenario_id}: PTY exit-code checks require a final wait_exit step",
             )
+
+
+def _validate_pty_match_sources(scenario: dict[str, Any]) -> None:
+    scenario_id = scenario["id"]
+    prompt = scenario["environment"].get("variables", {}).get("NSHELL_PROMPT", "")
+    inputs: list[str] = []
+
+    def reject_overlap(label: str, marker: str, sources: list[tuple[str, str]]) -> None:
+        for source_name, source in sources:
+            if marker and marker in source:
+                raise ScenarioError(
+                    f"{scenario_id}: PTY {label} marker {marker!r} can be satisfied by {source_name}; "
+                    "use a marker unique to shell output"
+                )
+
+    for step in scenario["steps"]:
+        if step["type"] == "wait":
+            sources = [("input echo", text) for text in inputs]
+            sources.append(("prompt redraw", prompt))
+            reject_overlap("wait", step["contains"], sources)
+        if step["type"] in ("keys", "paste"):
+            inputs.append(step["text"])
+        elif step["type"] == "key":
+            inputs.extend(_tmux_key_echo_sources(step["key"]))
+
+    sources = [("input echo", text) for text in inputs]
+    sources.append(("prompt redraw", prompt))
+    expected = scenario["expected"]
+    for output_name in ("stream", "screen"):
+        check = expected.get(output_name)
+        if not isinstance(check, dict):
+            continue
+        matches: list[str] = []
+        equals = check.get("equals")
+        if isinstance(equals, str):
+            matches.append(equals)
+        contains = check.get("contains", [])
+        if isinstance(contains, list):
+            matches.extend(value for value in contains if isinstance(value, str))
+        for marker in matches:
+            reject_overlap(f"{output_name} expectation", marker, sources)
+
+
+def _tmux_key_echo_sources(key: str) -> list[str]:
+    modifiers = []
+    base_key = key
+    while "-" in base_key:
+        modifier, remainder = base_key.split("-", 1)
+        if modifier not in ("C", "M", "S"):
+            break
+        modifiers.append(modifier)
+        base_key = remainder
+
+    text = base_key if len(base_key) == 1 else TMUX_KEY_ECHO_TEXT.get(base_key)
+    if text is None:
+        return []
+
+    if "S" in modifiers and len(text) == 1:
+        text = text.upper() if text.isalpha() else SHIFTED_KEY_TEXT.get(text, text)
+    if "C" in modifiers:
+        if len(text) != 1:
+            return []
+        codepoint = ord(text.upper())
+        if codepoint > 95:
+            return []
+        text = chr(codepoint & 0x1F)
+    if "M" in modifiers:
+        text = "\x1b" + text
+
+    sources = [text]
+    if text.startswith("\x1b"):
+        sources.append("^[" + text[1:])
+    if text == "\t":
+        sources.append("^I")
+    if text == "\x7f":
+        sources.append("^?")
+    if len(text) == 1 and 0 < ord(text) < 32:
+        sources.append("^" + chr(ord(text) + 64))
+    return sources
 
 
 def _environment(scenario: dict[str, Any], root: Path) -> tuple[dict[str, str], Path, Path]:

@@ -1,0 +1,68 @@
+{
+  "id": "H06-multiline-reverse-search",
+  "uc": [
+    "H06"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H06-multiline-reverse-search> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.local/state/nshell/history",
+        "content": "# nshell-history-v3 128\n(:text \"echo H06_FIRST_LINE\necho H06_SECOND_LINE\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "SECOND_LINE"
+    },
+    {
+      "type": "wait",
+      "contains": "echo H06_FIRST_LINE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H06_FIRST_LINE",
+        "H06_SECOND_LINE"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "id": "I06-enter-does-not-accept-suggestion",
+  "uc": [
+    "I06"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_I06-enter-does-not-accept-suggestion> ",
+      "SCENARIO_FILE": "I06_SUGGESTION_WOULD_RUN"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "touch \"$SCENARIO_FILE\"; echo I06_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I06_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "touc"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "command not found",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "I06_SUGGESTION_WOULD_RUN",
+          "exists": false
+        }
+      ]
+    }
+  }
+}

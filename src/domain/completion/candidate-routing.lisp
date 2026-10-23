@@ -48,10 +48,17 @@
    (%runtime-name-candidates function-table prefix "function")))
 
 (defun %query-candidates (query command-candidates-fn argument-candidates-fn)
-  (cond
-    ((%completion-query-command-position-p query) (funcall command-candidates-fn))
-    ((completion-query-filesystem-candidates query) (completion-query-filesystem-candidates query))
-    (t (funcall argument-candidates-fn))))
+  (if (%completion-query-command-position-p query)
+      (funcall command-candidates-fn)
+      (let ((filesystem-candidates
+              (completion-query-filesystem-candidates query)))
+        (if filesystem-candidates
+            (%merge-candidates
+             filesystem-candidates
+             (remove "" (funcall argument-candidates-fn)
+                     :key (function candidate-text)
+                     :test (function string=)))
+            (funcall argument-candidates-fn)))))
 
 (defun %knowledge-base-candidates (kb query path &key home-directory)
   (let ((command (completion-query-command query))

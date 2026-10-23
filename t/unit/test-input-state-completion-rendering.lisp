@@ -296,16 +296,53 @@
                         :suggestion nil))))
 
   (it "completion-insertion-text-escapes-by-quote-context"
-    "insertion-text adds backslashes for unquoted/double; single handles apostrophes specially."
+    "insertion text preserves filename characters in each quote context."
     (flet ((ins (text &key (ctx nil))
-             (nshell.presentation::%completion-insertion-text text :quote-context ctx)))
+             (nshell.presentation::%completion-insertion-text text :quote-context ctx))
+           (word-value (input)
+             (nshell.domain.parsing:token-value
+              (second (nshell.domain.parsing:tokenization-result-tokens
+                       (nshell.domain.parsing:tokenize input))))))
       (expect "foo" :to-equal (ins "foo"))
       (expect "foo\\ bar" :to-equal (ins "foo bar"))
       (expect "foo\\$bar" :to-equal (ins "foo$bar"))
       (expect "foo bar" :to-equal (ins "foo bar" :ctx :double))
       (expect "foo\\$bar" :to-equal (ins "foo$bar" :ctx :double))
       (expect "foo'\\''bar" :to-equal (ins "foo'bar" :ctx :single))
-      (expect "foo bar" :to-equal (ins "foo bar" :ctx :single))))
+      (expect "foo bar" :to-equal (ins "foo bar" :ctx :single))
+      (expect (format nil "'foo~cbar'" #\Newline)
+              :to-equal (ins (format nil "foo~cbar" #\Newline)))
+      (expect (format nil "foo~cbar" #\Newline)
+              :to-equal (ins (format nil "foo~cbar" #\Newline) :ctx :double))
+      (expect (format nil "foo~cbar" #\Newline)
+              :to-equal (ins (format nil "foo~cbar" #\Newline) :ctx :single))
+      (let* ((control-text (format nil "tab~creturn~cend" #\Tab #\Return))
+             (escaped-control-text
+               (format nil "tab\\~creturn\\~cend" #\Tab #\Return))
+             (linefeed-text (format nil "line'!~cfeed" #\Newline))
+             (linefeed-insertion (ins linefeed-text))
+             (input (concatenate 'string "echo " linefeed-insertion))
+             (context (nshell.presentation::%completion-token-context
+                       input (length input)))
+             (double-linefeed (format nil "double~cquoted" #\Newline))
+             (double-insertion (ins double-linefeed :ctx :double)))
+        (expect escaped-control-text :to-equal (ins control-text))
+        (expect control-text :to-equal (ins control-text :ctx :double))
+        (expect control-text :to-equal (word-value
+                                        (concatenate 'string
+                                                     "echo "
+                                                     escaped-control-text)))
+        (expect linefeed-text :to-equal (word-value input))
+        (expect linefeed-text
+                :to-equal
+                (nshell.presentation::completion-token-context-raw-token
+                 context))
+        (expect double-linefeed
+                :to-equal
+                (word-value (concatenate 'string
+                                         "echo \""
+                                         double-insertion
+                                         "\""))))))
 
   (it "completion-unescape-token-strips-backslashes-by-context"
     "unescape-token strips \\ in unquoted/double only for escapable chars."

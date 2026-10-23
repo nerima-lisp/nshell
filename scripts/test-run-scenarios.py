@@ -3,12 +3,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 from unittest.mock import patch
 
 
@@ -483,6 +488,129 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual([scenario["id"] for scenario in batch_only], ["batch-only"])
         self.assertEqual([scenario["id"] for scenario in id_only], ["pty-only"])
+
+    def test_file_set_fixture_validation_rejects_unsafe_or_unbounded_values(self) -> None:
+        valid = _batch_scenario("file-set-valid")
+        valid["preconditions"]["file_sets"] = [
+            {"directory": "work", "prefix": "entry_", "suffix": ".txt", "count": 3}
+        ]
+        runner._validate_scenario(valid, Path("file-set-valid.json"))
+
+        invalid_sets = [
+            ({"directory": "../outside", "prefix": "entry", "count": 1}, "escapes"),
+            ({"directory": "work\ud800", "prefix": "entry", "count": 1}, "valid UTF-8"),
+            ({"directory": "work", "prefix": "../entry", "count": 1}, "filename components"),
+            ({"directory": "work", "prefix": "entry", "count": True}, "count"),
+            ({"directory": "work", "prefix": "entry", "count": 0}, "count"),
+            ({"directory": "work", "prefix": "entry", "count": runner.MAX_FILE_SET_FILES + 1}, "count"),
+            ({"directory": "work", "prefix": "entry\ud800", "count": 1}, "valid UTF-8"),
+            ({"directory": "work", "prefix": "entry", "suffix": "\ud800", "count": 1},
+             "valid UTF-8"),
+            ({"directory": "work", "prefix": "x" * 10_000, "count": 1}, "filename exceeds"),
+            ({"directory": "work", "prefix": "日" * 100, "count": 1}, "filename exceeds"),
+            ({"directory": "work", "prefix": "entry", "count": 1, "content": "x" * 10_000},
+             "content exceeds"),
+            ({"directory": "work", "prefix": "entry", "count": 1, "content": "日" * 400},
+             "content exceeds"),
+            ({"directory": "work", "prefix": "entry", "count": 1, "content": "\ud800"},
+             "valid UTF-8"),
+            ({"directory": "work", "prefix": "entry", "count": 1, "extra": "field"}, "fields"),
+        ]
+        for file_set, message in invalid_sets:
+            with self.subTest(file_set=file_set):
+                scenario = _batch_scenario("file-set-invalid")
+                scenario["preconditions"]["file_sets"] = [file_set]
+                with self.assertRaisesRegex(runner.ScenarioError, message):
+                    runner._validate_scenario(scenario, Path("file-set-invalid.json"))
+
+        scenario = _batch_scenario("file-set-total-limit")
+        scenario["preconditions"]["file_sets"] = [
+            {"directory": "first", "prefix": "entry", "count": runner.MAX_FILE_SET_FILES},
+            {"directory": "second", "prefix": "entry", "count": 1},
+        ]
+        with self.assertRaisesRegex(runner.ScenarioError, "at most"):
+            runner._validate_scenario(scenario, Path("file-set-total-limit.json"))
+
+    def test_file_set_fixture_writer_creates_exact_bounded_files(self) -> None:
+        scenario = _batch_scenario("file-set-write")
+        scenario["preconditions"]["file_sets"] = [
+            {
+                "directory": "work/generated",
+                "prefix": "entry_",
+                "suffix": ".txt",
+                "count": 3,
+                "content": "fixture",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runner._write_preconditions(scenario, root)
+            files = sorted((root / "work" / "generated").iterdir())
+            names = [path.name for path in files]
+            contents = [path.read_text(encoding="utf-8") for path in files]
+
+        self.assertEqual([f"entry_{index:05d}.txt" for index in range(3)],
+                         names)
+        self.assertEqual(["fixture"] * 3, contents)
+
+    def test_file_set_fixture_writer_rejects_symlink_escape(self) -> None:
+        scenario = _batch_scenario("file-set-symlink-escape")
+        scenario["preconditions"]["file_sets"] = [
+            {"directory": "escape", "prefix": "entry", "count": 1}
+        ]
+        with tempfile.TemporaryDirectory() as temporary, tempfile.TemporaryDirectory() as outside:
+            root = Path(temporary)
+            (root / "escape").symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(runner.ScenarioError, "escapes"):
+                runner._write_preconditions(scenario, root)
+
+    @staticmethod
+    def _fake_process(stdout: bytes = b"OK\n", stderr: bytes = b"") -> Any:
+        class FakeProcess:
+            returncode = 0
+            pid = 123
+
+            def communicate(self, *_args: Any, **_kwargs: Any) -> tuple[bytes, bytes]:
+                return stdout, stderr
+
+        return FakeProcess()
+
+    def test_process_timeout_stays_fail_with_expected_failure_marker(self) -> None:
+        scenario = _batch_scenario("timeout-stays-fail")
+        scenario["expected_failure"] = {"reason": "process timed out"}
+        scenario["timeout_seconds"] = 1
+
+        class TimeoutProcess:
+            returncode = 0
+            pid = 123
+            calls = 0
+
+            def communicate(self, *_args: Any, **_kwargs: Any) -> tuple[bytes, bytes]:
+                self.calls += 1
+                if self.calls == 1:
+                    raise subprocess.TimeoutExpired("nshell", 1)
+                return b"", b""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scenario_dir = root / "scenarios"
+            _write_json(scenario_dir / "J12/timeout.json", scenario)
+            binary = root / "nshell"
+            binary.write_text("placeholder", encoding="utf-8")
+            binary.chmod(0o755)
+            output = io.StringIO()
+            with mock.patch.object(sys, "argv", [
+                    "run-scenarios.py", "--binary", str(binary),
+                    "--scenario-dir", str(scenario_dir), "--mode", "batch",
+                ]), \
+                    mock.patch.object(runner.subprocess, "Popen", return_value=TimeoutProcess()), \
+                    mock.patch.object(runner, "_kill_process_group"), \
+                    contextlib.redirect_stdout(output):
+                exit_code = runner.main()
+
+        self.assertEqual(1, exit_code)
+        self.assertIn("FAIL timeout-stays-fail", output.getvalue())
+        self.assertNotIn("XFAIL timeout-stays-fail", output.getvalue())
 
 
 if __name__ == "__main__":

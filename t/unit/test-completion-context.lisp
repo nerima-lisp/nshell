@@ -515,4 +515,88 @@
              (texts (completion-texts candidates)))
         (expect '("tool") :to-equal texts)
         (expect :file :to-be (nshell.domain.completion:candidate-kind
-                       (first candidates)))))))
+                       (first candidates))))))
+
+  (it "filesystem-candidate-set-indexes-and-reuses-accumulator"
+    (dolist (size (list 81 289 1089))
+      (let ((set (nshell.domain.completion::%make-empty-filesystem-candidate-set)))
+        (expect (eq set
+                    (nshell.domain.completion::%filesystem-candidate-set-add
+                     set nil))
+                :to-be-truthy)
+        (expect 0 :to-equal
+                (hash-table-count
+                 (nshell.domain.completion::%filesystem-candidate-set-seen set)))
+        (expect nil :to-be
+                (nshell.domain.completion::%filesystem-candidate-set-candidates set))
+        (dotimes (index size)
+          (let* ((text (format nil "entry-~D" index))
+                 (candidate (nshell.domain.completion:make-candidate text :kind :file))
+                 (result (nshell.domain.completion::%filesystem-candidate-set-add
+                          set candidate)))
+            (expect (eq set result) :to-be-truthy)))
+        (expect (hash-table-p
+                 (nshell.domain.completion::%filesystem-candidate-set-seen set))
+                :to-be-truthy)
+        (expect size :to-equal
+                (hash-table-count
+                 (nshell.domain.completion::%filesystem-candidate-set-seen set)))
+        (let ((candidates
+                (nshell.domain.completion::%filesystem-candidate-set-candidates set)))
+          (expect size :to-equal (length candidates))
+          (expect (format nil "entry-~D" (1- size)) :to-equal
+                  (nshell.domain.completion:candidate-text (first candidates)))
+          (let* ((first-text (format nil "entry-~D" 0))
+                 (duplicate
+                   (nshell.domain.completion:make-candidate
+                    (copy-seq first-text)
+                    :kind :directory))
+                 (result
+                   (nshell.domain.completion::%filesystem-candidate-set-add
+                    set duplicate)))
+            (expect (eq set result) :to-be-truthy)
+            (expect size :to-equal
+                    (hash-table-count
+                     (nshell.domain.completion::%filesystem-candidate-set-seen set)))
+            (let* ((candidates-after-duplicate
+                     (nshell.domain.completion::%filesystem-candidate-set-candidates set))
+                   (retained-first (car (last candidates-after-duplicate))))
+              (expect size :to-equal (length candidates-after-duplicate))
+              (expect first-text :to-equal
+                      (nshell.domain.completion:candidate-text retained-first))
+              (expect :file :to-be
+                      (nshell.domain.completion:candidate-kind retained-first))))))))
+  (it "filesystem-candidate-membership-probes-scale-linearly"
+    (let ((probe-count 0)
+          (original-probe
+            (symbol-function
+             (quote nshell.domain.completion::%filesystem-candidate-set-contains-p))))
+      (labels ((run-size (size)
+                 (let ((entries
+                         (loop for index below size
+                               collect (format nil "entry-~D" index))))
+                   (with-test-filesystem
+                       (:directory-files
+                        (lambda (directory)
+                          (declare (ignore directory))
+                          entries)
+                        :subdirectories (constantly nil))
+                     (let ((before probe-count)
+                           (candidates
+                             (nshell.domain.completion::%file-candidates-from-directory
+                              *completion-test-filesystem*
+                              ""
+                              :include-files t
+                              :include-directories nil)))
+                       (expect size :to-equal (length candidates))
+                       (- probe-count before))))))
+        (with-rebound-function
+            (nshell.domain.completion::%filesystem-candidate-set-contains-p
+             (lambda (set text)
+               (incf probe-count)
+               (funcall original-probe set text)))
+          (let ((small-probes (run-size 2000))
+                (large-probes (run-size 20000)))
+            (expect 2000 :to-equal small-probes)
+            (expect 20000 :to-equal large-probes)
+            (expect (* 10 small-probes) :to-equal large-probes)))))))

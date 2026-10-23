@@ -468,6 +468,7 @@
     (:file "unit/test-completion-knowledge-base-behavior")
     (:file "unit/test-completion-properties")
     (:file "unit/test-completion-context")
+    (:file "unit/test-filesystem-file-completion")
    (:file "unit/test-repl")
    (:file "unit/test-repl-output-transient-panel")
    (:file "unit/test-repl-assistant-poll")

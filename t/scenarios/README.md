@@ -30,12 +30,31 @@ must define `expected.exit_code`. See
 the [batch example](C01/batch-command.json) and
 [PTY example](C01/pty-paste.json).
 
+Use `preconditions.file_sets` to generate bounded file collections. Each
+entry requires a scenario-relative `directory`, a non-empty `prefix`, and a
+`count` from 1 to 20,000; `suffix` and shared file `content` are optional.
+Generated names use a five-digit index starting at `00000`. The total number
+of generated files is limited to 20,000, and each name is limited to 255 UTF-8
+bytes. Paths must stay within the scenario root. Fixture paths cannot be
+duplicated or make one fixture path the parent directory of another.
+
 Batch scenarios select `invocation.kind` as `command`, `stdin`, or `script`.
 Every kind requires `invocation.text`; `script` also requires `invocation.path`,
 relative to `environment.cwd`. The runner passes command text to `nshell -c`,
 sends text to standard input, or writes script text to the path and starts
 `nshell` with that path as its script argument.
 Batch expectations can check stdout, stderr, exit code, and file side effects.
+
+J12 creates 20,000 files in one directory. The unit test
+`filesystem-candidate-membership-probes-scale-linearly` counts candidate-set
+lookups for 2,000 and 20,000 entries and asserts that the count scales by the
+same factor as the input. This count-based check is independent of wall-clock
+load. For end-to-end timing, run `bash bench/completion-filesystem.sh
+<before-binary> <after-binary>` with binaries built from the baseline and
+change revisions. It verifies the fixture and byte-for-byte output parity,
+then uses hyperfine for two warmups and ten samples per arm in randomized
+order. The report includes host details and load average; the timing is
+informational and is not an absolute landing threshold.
 
 PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `paste` sends bracketed paste, `key` sends a key name accepted by tmux

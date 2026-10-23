@@ -1,0 +1,34 @@
+{
+  "id": "J02-bare-file-completion",
+  "uc": ["J02"],
+  "mode": "batch",
+  "environment": {
+    "home": "home",
+    "cwd": "work",
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    }
+  },
+  "preconditions": {
+    "files": [
+      {"path": "work/space name.txt", "content": "SPACE_FILE"},
+      {"path": "work/日本語.txt", "content": "UNICODE_FILE"},
+      {"path": "work/ordinary.txt", "content": "ORDINARY_FILE"},
+      {"path": "work/.hidden.txt", "content": "HIDDEN_FILE"},
+      {"path": "work/.hidden-dir/item", "content": "HIDDEN_DIRECTORY"},
+      {"path": "work/folder/item", "content": "VISIBLE_DIRECTORY"}
+    ]
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "ln -s ordinary.txt file-link.txt; ln -s folder directory-link; ln -s missing.txt broken-link; complete -C 'cat space'; complete -C 'cat 日'; complete -C 'cat o'; complete -C 'ls f'; complete -C 'cat file'; complete -C 'ls dir'; complete -C 'cat bro'; complete -C 'ls .'"
+  },
+  "expected": {
+    "stdout": {
+      "contains": ["space name.txt", "日本語.txt", "ordinary.txt", "folder/", "file-link.txt", "directory-link/", "broken-link", ".hidden.txt", ".hidden-dir/"]
+    },
+    "stderr": {"equals": ""},
+    "exit_code": 0
+  }
+}

@@ -1379,6 +1379,20 @@
         "I06"
       ],
       "path": "I06/paste-enter-typed-text-only.json"
+    },
+    {
+      "id": "J02-bare-file-completion",
+      "uc": [
+        "J02"
+      ],
+      "path": "J02/bare-file-completion.json"
+    },
+    {
+      "id": "J12-large-directory-completion",
+      "uc": [
+        "J12"
+      ],
+      "path": "J12/large-directory-completion.json"
     }
   ]
 }

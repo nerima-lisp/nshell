@@ -1,18 +1,18 @@
 (in-package #:nshell.presentation)
 
 (defun %completion-escape-character-p (ch)
-  (or (member ch '(#\Space #\Tab #\\ #\' #\" #\; #\| #\& #\(
+  (or (<= 0 (char-code ch) 31)
+      (= (char-code ch) 127)
+      (member ch '(#\Space #\\ #\' #\" #\; #\| #\& #\(
                    #\) #\< #\> #\$ #\` #\* #\? #\[ #\] #\{
                    #\} #\! #\#)
-              :test #'char=)
-      (char= ch #\Newline)))
+              :test #'char=)))
 
 (defun %completion-double-quoted-escape-character-p (ch)
   (or (char= ch #\\)
       (char= ch #\")
       (char= ch #\$)
-      (char= ch #\`)
-      (char= ch #\Newline)))
+      (char= ch #\`)))
 
 (defun %completion-quote-context (input start end)
   (declare (ignore end))
@@ -60,8 +60,17 @@
              do (when (,predicate ch) (write-char #\\ out))
                 (write-char ch out)))))
 
-(%define-escape-formatter %completion-unquoted-insertion-text
-  %completion-escape-character-p)
+(defun %completion-unquoted-insertion-text (text)
+  (if (position #\Newline text)
+      (concatenate 'string
+                   "'"
+                   (%completion-single-quoted-insertion-text text)
+                   "'")
+      (with-output-to-string (out)
+        (loop for ch across text
+              do (when (%completion-escape-character-p ch)
+                   (write-char #\\ out))
+                 (write-char ch out)))))
 
 (%define-escape-formatter %completion-double-quoted-insertion-text
   %completion-double-quoted-escape-character-p)
@@ -74,17 +83,35 @@
 
 (defun %completion-unescape-token (text &key quote-context)
   (with-output-to-string (out)
-    (let ((escaped nil))
-      (loop for ch across text
+    (let ((escaped nil)
+          (index 0)
+          (limit (length text)))
+      (loop while (< index limit)
+            for ch = (char text index)
             do (cond
+                 ((and (eq quote-context :single)
+                       (<= (+ index 4) limit)
+                       (char= ch #\')
+                       (char= (char text (1+ index)) #\\)
+                       (char= (char text (+ index 2)) #\')
+                       (char= (char text (+ index 3)) #\'))
+                  (write-char #\' out)
+                  (incf index 4))
                  (escaped
-                  (if (or (null quote-context)
-                          (and (eq quote-context :double)
-                               (%completion-double-quoted-escape-character-p ch)))
-                      (write-char ch out)
-                      (progn (write-char #\\ out) (write-char ch out)))
-                  (setf escaped nil))
+                  (unless (char= ch #\Newline)
+                    (if (or (null quote-context)
+                            (and (eq quote-context :double)
+                                 (%completion-double-quoted-escape-character-p ch)))
+                        (write-char ch out)
+                        (progn
+                          (write-char #\\ out)
+                          (write-char ch out))))
+                  (setf escaped nil)
+                  (incf index))
                  ((and (char= ch #\\) (not (eq quote-context :single)))
-                  (setf escaped t))
-                 (t (write-char ch out))))
+                  (setf escaped t)
+                  (incf index))
+                 (t
+                  (write-char ch out)
+                  (incf index))))
       (when escaped (write-char #\\ out)))))

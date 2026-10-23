@@ -1,4 +1,5 @@
 (in-package #:nshell.infrastructure.acl)
+(eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
 
 ;;; Completion lists a directory on every keystroke, so a directory with
 ;;; thousands of entries (a busy /tmp) costs a full listing per character. The
@@ -49,9 +50,49 @@ grow it without bound.")
 (defun cached-subdirectories (directory)
   (%cached-directory-listing :subdirectories directory #'host-kit:subdirectories))
 
-(defun make-host-filesystem ()
-  (nshell.domain.filesystem:make-filesystem
-   :directory-files #'cached-directory-files
-   :subdirectories #'cached-subdirectories
-   :executable-p #'executable-file-p
-   :directory-map #'map-path-command-directories))
+(progn
+  (defun %filesystem-completion-entry-lists (directory)
+    (let ((files nil)
+          (subdirectories nil))
+      (host-kit:call-with-directory-entries
+       (lambda (entry metadata)
+         (case (host-kit:file-metadata-kind metadata)
+           (:regular-file
+            (push entry files))
+           (:directory
+            (push (host-kit:ensure-directory-pathname entry) subdirectories))
+           (:symbolic-link
+            (handler-case
+                (let ((mode (sb-posix:stat-mode
+                             (sb-posix:stat (namestring entry)))))
+                  (cond
+                    ((sb-posix:s-isdir mode)
+                     (push (host-kit:ensure-directory-pathname entry) subdirectories))
+                    ((sb-posix:s-isreg mode)
+                     (push entry files))))
+              (sb-posix:syscall-error (condition)
+                (if (member (sb-posix:syscall-errno condition)
+                            (list sb-posix:enoent sb-posix:enotdir))
+                    (push entry files)
+                    (error condition)))))))
+       directory
+       :follow-symlinks nil)
+      (cons (nreverse files) (nreverse subdirectories))))
+
+  (defun %cached-filesystem-completion-entry-lists (directory)
+    (%cached-directory-listing :filesystem-completion-entries
+                               directory
+                               #'%filesystem-completion-entry-lists))
+
+  (defun cached-completion-directory-files (directory)
+    (car (%cached-filesystem-completion-entry-lists directory)))
+
+  (defun cached-completion-subdirectories (directory)
+    (cdr (%cached-filesystem-completion-entry-lists directory)))
+
+  (defun make-host-filesystem ()
+    (nshell.domain.filesystem:make-filesystem
+     :directory-files #'cached-completion-directory-files
+     :subdirectories #'cached-completion-subdirectories
+     :executable-p #'executable-file-p
+     :directory-map #'map-path-command-directories)))

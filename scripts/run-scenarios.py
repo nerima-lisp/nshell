@@ -27,6 +27,8 @@ MAX_TIMEOUT_SECONDS = 60
 MAX_INPUT_DELAY_SECONDS = 1.0
 MAX_REPEAT = 10
 MAX_OUTPUT_BYTES = 1_048_576
+MAX_FILE_SET_FILES = 20_000
+MAX_FILE_SET_CONTENT_BYTES = 1_024
 ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 TMUX_KEY = re.compile(r"[A-Za-z0-9+-]+\Z")
 SHIFTED_KEY_TEXT = {
@@ -107,6 +109,11 @@ def _pane_exit_status(status: str, dead_signal: str, scenario_id: str) -> int:
 
 def _relative_path(root: Path, value: Any, label: str) -> Path:
     _require(isinstance(value, str) and value != "", f"{label} must be a non-empty path")
+    _require("\x00" not in value, f"{label} must not contain a NUL byte")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ScenarioError(f"{label} must be valid UTF-8") from error
     relative = Path(value)
     _require(not relative.is_absolute(), f"{label} must be relative: {value!r}")
     resolved_root = root.resolve()
@@ -277,11 +284,70 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
     _require(isinstance(preconditions, dict), f"{scenario_id}: preconditions must be an object")
     fixtures = preconditions.get("files", [])
     _require(isinstance(fixtures, list), f"{scenario_id}: preconditions.files must be an array")
+    fixture_paths: set[Path] = set()
     for fixture in fixtures:
         _require(isinstance(fixture, dict), f"{scenario_id}: each precondition file must be an object")
-        _relative_path(Path("/scenario"), fixture.get("path"), f"{scenario_id}: precondition file")
+        fixture_path = _relative_path(
+            Path("/scenario"), fixture.get("path"), f"{scenario_id}: precondition file"
+        )
+        _require(fixture_path not in fixture_paths,
+                 f"{scenario_id}: duplicate precondition file path: {fixture.get('path')!r}")
+        fixture_paths.add(fixture_path)
         _require(isinstance(fixture.get("content", ""), str),
                  f"{scenario_id}: precondition file content must be a string")
+
+    file_sets = preconditions.get("file_sets", [])
+    _require(isinstance(file_sets, list), f"{scenario_id}: preconditions.file_sets must be an array")
+    total_file_set_files = 0
+    for file_set in file_sets:
+        _require(isinstance(file_set, dict), f"{scenario_id}: each precondition file set must be an object")
+        _require(set(file_set) <= {"directory", "prefix", "suffix", "count", "content"},
+                 f"{scenario_id}: file-set fields must be directory, prefix, suffix, count, and content")
+        directory = _relative_path(
+            Path("/scenario"), file_set.get("directory"), f"{scenario_id}: file-set directory"
+        )
+        prefix = file_set.get("prefix")
+        suffix = file_set.get("suffix", "")
+        count = file_set.get("count")
+        content = file_set.get("content", "")
+        _require(isinstance(prefix, str) and prefix,
+                 f"{scenario_id}: file-set prefix must be a non-empty string")
+        _require(isinstance(suffix, str), f"{scenario_id}: file-set suffix must be a string")
+        _require(
+            all(separator not in component for component in (prefix, suffix)
+                for separator in ("/", "\\", "\x00")),
+            f"{scenario_id}: file-set prefix and suffix must be safe filename components",
+        )
+        _require(
+            isinstance(count, int) and not isinstance(count, bool)
+            and 1 <= count <= MAX_FILE_SET_FILES,
+            f"{scenario_id}: file-set count must be between 1 and {MAX_FILE_SET_FILES}",
+        )
+        total_file_set_files += count
+        _require(total_file_set_files <= MAX_FILE_SET_FILES,
+                 f"{scenario_id}: file sets may create at most {MAX_FILE_SET_FILES} files")
+        _require(isinstance(content, str), f"{scenario_id}: file-set content must be a string")
+        try:
+            content_bytes = content.encode("utf-8")
+            prefix_bytes = prefix.encode("utf-8")
+            suffix_bytes = suffix.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise ScenarioError(
+                f"{scenario_id}: file-set names and content must be valid UTF-8"
+            ) from error
+        _require(len(content_bytes) <= MAX_FILE_SET_CONTENT_BYTES,
+                 f"{scenario_id}: file-set content exceeds {MAX_FILE_SET_CONTENT_BYTES} bytes")
+        _require(len(prefix_bytes) + 5 + len(suffix_bytes) <= 255,
+                 f"{scenario_id}: generated filename exceeds 255 bytes")
+        for index in range(count):
+            filename = f"{prefix}{index:05d}{suffix}"
+            file_path = directory / filename
+            _require(file_path not in fixture_paths,
+                     f"{scenario_id}: duplicate precondition file path: {file_path}")
+            fixture_paths.add(file_path)
+    for file_path in fixture_paths:
+        _require(not any(parent in fixture_paths for parent in file_path.parents),
+                 f"{scenario_id}: a precondition file path is also a directory")
 
     if scenario["mode"] == "batch":
         invocation = scenario.get("invocation")
@@ -381,8 +447,6 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                 all(session["steps"][-1]["type"] == "wait_exit" for session in _pty_sessions(scenario)),
                 f"{scenario_id}: PTY exit-code checks require a final wait_exit step",
             )
-
-
 def _pty_sessions(scenario: dict[str, Any]) -> list[dict[str, Any]]:
     sessions = scenario.get("sessions")
     if sessions is None:
@@ -412,8 +476,6 @@ def _pty_sessions(scenario: dict[str, Any]) -> list[dict[str, Any]]:
         _require(isinstance(session.get("steps"), list),
                  f"{scenario['id']}: each session requires a steps array")
     return sessions
-
-
 def _validate_pty_match_sources(scenario: dict[str, Any]) -> None:
     scenario_id = scenario["id"]
     prompt = scenario["environment"].get("variables", {}).get("NSHELL_PROMPT", "")
@@ -532,6 +594,16 @@ def _write_preconditions(scenario: dict[str, Any], root: Path) -> None:
         path = _relative_path(root, fixture["path"], f"{scenario['id']}: precondition file")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(fixture.get("content", ""), encoding="utf-8")
+    for file_set in scenario.get("preconditions", {}).get("file_sets", []):
+        directory = _relative_path(root, file_set["directory"], f"{scenario['id']}: file-set directory")
+        directory.mkdir(parents=True, exist_ok=True)
+        content = file_set.get("content", "")
+        for index in range(file_set["count"]):
+            filename = f"{file_set['prefix']}{index:05d}{file_set.get('suffix', '')}"
+            path = _relative_path(directory, filename, f"{scenario['id']}: generated file")
+            _require(path.parent == directory,
+                     f"{scenario['id']}: generated file escaped its file-set directory")
+            path.write_text(content, encoding="utf-8")
 
 
 def _assert_text(label: str, actual: str, expected: Any, failures: list[str]) -> None:

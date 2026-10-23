@@ -128,10 +128,14 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
      include-directories)))
 
 (defun %file-completion-entry-candidate (entry kind query)
-  (let ((name (%entry-path-name entry)))
+  (let* ((name (%entry-path-name entry))
+         (name-prefix (%file-completion-query-name-prefix query)))
     (when (and name
                (not (string= name ""))
-               (%starts-with-p (%file-completion-query-name-prefix query) name))
+               (or (and (plusp (length name-prefix))
+                        (char= (char name-prefix 0) #\.))
+                   (char/= (char name 0) #\.))
+               (%starts-with-p name-prefix name))
       (let* ((raw-text (concatenate 'string
                                     (%file-completion-query-directory-prefix query)
                                     name))
@@ -185,9 +189,7 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
 
 (defun %path-like-completion-prefix-p (prefix)
   "Return true when PREFIX syntactically denotes a filesystem path."
-  (or (position-if #'%path-separator-p prefix)
-      (and (plusp (length prefix))
-           (find (char prefix 0) '(#\. #\~) :test #'char=))))
+  (plusp (length prefix)))
 
 (defparameter +directory-only-completion-commands+ '("cd" "pushd" "popd" "rmdir")
   "Commands whose path argument may only name a directory.")

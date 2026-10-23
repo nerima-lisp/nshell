@@ -8,19 +8,23 @@ nshell is a fish-inspired interactive shell written in Common Lisp for SBCL.
 It provides syntax highlighting, history-aware autosuggestions, abbreviations,
 and context-aware completion.
 
-> **Status: development preview (0.6.x).** CI tests the interactive editor and
-> pipeline execution on `x86_64-linux`. The shell language implements a subset
-> of POSIX/fish semantics; it is not a script-compatible `/bin/sh` replacement.
+> **Status: development preview (0.6.x).** CI runs the Nix test suite on
+> `x86_64-linux` and `aarch64-darwin`; real-PTY integration runs on
+> `x86_64-linux`. The shell language implements a subset of POSIX/fish
+> semantics; it is not a script-compatible `/bin/sh` replacement.
 
 Documentation source lives in [docs/src/](docs/src/).
 
 ## Quick Start
 
-The release and Nix flake support `x86_64-linux` only. With
-[Nix](https://nixos.org/download) and flakes enabled:
+`nix run` builds from the flake on `x86_64-linux` and `aarch64-darwin`;
+downloadable release bundles target `x86_64-linux` only. With
+[Nix](https://nixos.org/download) installed, run this command. It enables the
+required Nix features for this invocation:
 
 ```sh
-nix run github:nerima-lisp/nshell/v0.6.6
+nix --extra-experimental-features 'nix-command flakes' \
+  run github:nerima-lisp/nshell/v0.6.6
 ```
 
 At the prompt, enter `string upper hello`. Commands and paths colorize live, and a
@@ -54,9 +58,10 @@ the file is moved aside. `--no-history` disables persistence.
 
 The interactive `agent` builtin proposes commands for review. Every proposal,
 including one classified as safe, requires Enter before execution; blocked
-commands cannot be approved. The assistant refuses to start if its sidecar
-reports tools or MCP servers outside the permitted initialization contract.
-See [Use the assistant](docs/src/guide/recipes.md#use-the-assistant) for controls
+commands cannot be approved. Its configuration sidecar must report only the
+`StructuredOutput` tool (or no tools) and no MCP servers, or the assistant
+refuses to start. See
+[Use the assistant](docs/src/guide/recipes.md#use-the-assistant) for controls
 and session settings.
 
 ## Install
@@ -84,8 +89,17 @@ verification and installation procedure.
 
 ## Development
 
+Start an interactive development shell with:
+
 ```sh
-nix develop          # SBCL with CL_SOURCE_REGISTRY already set (x86_64-linux)
+nix develop
+```
+
+The command examples below use Bash or zsh syntax. If `nix develop` opens fish,
+start Bash inside that shell before running them. Run individual checks from
+the development shell or another Bash or zsh shell with Nix and flakes enabled:
+
+```sh
 perl -e 'alarm 300; exec @ARGV' nix build .#checks.$(nix eval --raw --impure --expr 'builtins.currentSystem').default --no-link  # run the test suite
 perl -e 'alarm 300; exec @ARGV' nix flake check      # time-limited local hermetic check
 nix fmt              # format Nix sources (treefmt)

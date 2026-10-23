@@ -48,5 +48,8 @@
         }
       ]
     }
+  },
+  "expected_failure": {
+    "reason": "WP-C06 owns completion context for cd and CDPATH."
   }
 }

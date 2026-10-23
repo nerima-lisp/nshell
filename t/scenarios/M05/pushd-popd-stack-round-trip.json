@@ -1,0 +1,41 @@
+{
+  "id": "M05-pushd-popd-stack-round-trip",
+  "uc": [
+    "M05"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_M05-pushd-popd-stack-round-trip> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "mkdir a b; pushd a; pushd ../b; popd; pwd > stack.txt"
+  },
+  "expected": {
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "stack.txt",
+          "exists": true,
+          "contains": [
+            "a"
+          ]
+        }
+      ]
+    }
+  }
+}

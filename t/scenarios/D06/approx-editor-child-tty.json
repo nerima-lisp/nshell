@@ -1,0 +1,87 @@
+{
+  "id": "D06-approx-editor-child-tty",
+  "uc": [
+    "D06"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "D06-approx-editor-child-tty> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/git-editor.sh",
+        "content": "printf 'D06_GIT_EDITOR_READY\\n'\nsh editor.sh\nprintf 'D06_EDITOR_SAVED\\n'\n"
+      },
+      {
+        "path": "work/editor.sh",
+        "content": "IFS= read -r message\nprintf 'D06_COMMIT_MESSAGE:%s\\n' \"$message\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "D06_GIT_EDITOR_READY",
+        "D06_COMMIT_MESSAGE:subject: test",
+        "D06_EDITOR_SAVED"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh git-editor.sh"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D06_GIT_EDITOR_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "subject: test"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D06_COMMIT_MESSAGE:subject: test",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait",
+      "contains": "D06_EDITOR_SAVED",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

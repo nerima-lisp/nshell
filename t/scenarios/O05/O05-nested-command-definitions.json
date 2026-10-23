@@ -1,0 +1,36 @@
+{
+  "id": "O05-nested-command-definitions",
+  "uc": [
+    "O05"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(defun o05_greet (name) (echo $name))\n(o05_greet \"O05_TOPLEVEL_OK\")\n(when t (defun o05_nested (name) (echo $name)))\n(o05_nested \"O05_NESTED_OK\")\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O05_TOPLEVEL_OK",
+        "O05_NESTED_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

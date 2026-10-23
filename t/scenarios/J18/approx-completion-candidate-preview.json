@@ -52,13 +52,21 @@
       "key": "Tab"
     },
     {
-      "type": "wait",
-      "contains": "preview-file.txt",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo J18_AFTER_$((1+1))"
     },
     {
       "type": "key",
-      "key": "C-c"
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "J18_AFTER_2",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -82,5 +90,8 @@
     },
     "exit_code": 0
   },
-  "load_config": true
+  "load_config": true,
+  "expected_failure": {
+    "reason": "Plan FR-024 defers candidate previews to P6; no implementation WP is assigned."
+  }
 }

@@ -1,0 +1,40 @@
+{
+  "id": "C03-path-search-and-absolute-path",
+  "uc": [
+    "C03"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "bin:/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/bin/scenario-tool",
+        "content": "#!/bin/sh\nprintf \"C03_PATH_FOUND\\n\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "C03_PATH_FOUND",
+        "C03_ABSOLUTE"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "chmod +x bin/scenario-tool; scenario-tool; /bin/echo C03_ABSOLUTE"
+  }
+}

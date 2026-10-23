@@ -151,16 +151,25 @@ printf 'verification=each timed run captures output and compares it byte-for-byt
   --command-name baseline-b "$before_command" \
   --command-name after "$after_command"
 
-baseline_a_median_ms=$(jq -r '(.results[0].median * 1000)' "$hyperfine_json")
-baseline_a_stddev_ms=$(jq -r '(.results[0].stddev * 1000)' "$hyperfine_json")
-baseline_a_range_ms=$(jq -r '((.results[0].max - .results[0].min) * 1000)' "$hyperfine_json")
-baseline_b_median_ms=$(jq -r '(.results[1].median * 1000)' "$hyperfine_json")
-baseline_b_stddev_ms=$(jq -r '(.results[1].stddev * 1000)' "$hyperfine_json")
-baseline_b_range_ms=$(jq -r '((.results[1].max - .results[1].min) * 1000)' "$hyperfine_json")
-after_median_ms=$(jq -r '(.results[2].median * 1000)' "$hyperfine_json")
-after_stddev_ms=$(jq -r '(.results[2].stddev * 1000)' "$hyperfine_json")
-after_range_ms=$(jq -r '((.results[2].max - .results[2].min) * 1000)' "$hyperfine_json")
-baseline_median_delta_ms=$(jq -r '(.results[0].median - .results[1].median | if . < 0 then -. else . end) * 1000' "$hyperfine_json")
+jq -e '
+  .schema_version == 2 and
+  (.results | length == 3) and
+  all(.results[]; .summary.time_wall_clock.median != null and
+                  .summary.time_wall_clock.stddev != null and
+                  .summary.time_wall_clock.min != null and
+                  .summary.time_wall_clock.max != null)
+' "$hyperfine_json" >/dev/null
+
+baseline_a_median_ms=$(jq -r '(.results[0].summary.time_wall_clock.median * 1000)' "$hyperfine_json")
+baseline_a_stddev_ms=$(jq -r '(.results[0].summary.time_wall_clock.stddev * 1000)' "$hyperfine_json")
+baseline_a_range_ms=$(jq -r '((.results[0].summary.time_wall_clock.max - .results[0].summary.time_wall_clock.min) * 1000)' "$hyperfine_json")
+baseline_b_median_ms=$(jq -r '(.results[1].summary.time_wall_clock.median * 1000)' "$hyperfine_json")
+baseline_b_stddev_ms=$(jq -r '(.results[1].summary.time_wall_clock.stddev * 1000)' "$hyperfine_json")
+baseline_b_range_ms=$(jq -r '((.results[1].summary.time_wall_clock.max - .results[1].summary.time_wall_clock.min) * 1000)' "$hyperfine_json")
+after_median_ms=$(jq -r '(.results[2].summary.time_wall_clock.median * 1000)' "$hyperfine_json")
+after_stddev_ms=$(jq -r '(.results[2].summary.time_wall_clock.stddev * 1000)' "$hyperfine_json")
+after_range_ms=$(jq -r '((.results[2].summary.time_wall_clock.max - .results[2].summary.time_wall_clock.min) * 1000)' "$hyperfine_json")
+baseline_median_delta_ms=$(jq -r '(.results[0].summary.time_wall_clock.median - .results[1].summary.time_wall_clock.median | if . < 0 then -. else . end) * 1000' "$hyperfine_json")
 printf 'hyperfine_baseline_a_median_ms=%s stddev_ms=%s range_ms=%s\n' \
   "$baseline_a_median_ms" "$baseline_a_stddev_ms" "$baseline_a_range_ms"
 printf 'hyperfine_baseline_b_median_ms=%s stddev_ms=%s range_ms=%s\n' \

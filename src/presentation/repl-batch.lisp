@@ -61,15 +61,26 @@
       (setf *last-exit-code* 1))))
 
 (defun run-repl-batch (&key line script-args)
-  "Batch (non-interactive) mode: read lines, execute commands, print raw output.
-SCRIPT-ARGS are exposed as $argv for `nshell -c COMMAND ARGS...'."
+  "Batch mode for stdin or the nshell-specific --command option.
+SCRIPT-ARGS are exposed as $argv for --command."
   (%initialize-batch-state)
   (let ((nshell.domain.expansion:*positional-args* script-args))
-         (if line
-             (%run-batch-source-lines (list line))
-             (%run-batch-source-lines
-              (nshell.application:collect-source-lines *standard-input*))))
+    (if line
+        (%run-batch-source-lines (list line))
+        (%run-batch-source-lines
+         (nshell.application:collect-source-lines *standard-input*))))
   *last-exit-code*)
+(defun run-repl-shell-command (command arguments
+                              &key (load-config-p t) config-path)
+  "Load the interactive startup configuration and delegate COMMAND to /bin/sh."
+  (let ((*standard-output* (make-broadcast-stream))
+        (*error-output* (make-broadcast-stream)))
+    (initialize-repl-state :load-config-p load-config-p
+                           :config-path config-path
+                           :history-p nil))
+  (sync-exported-environment)
+  (nshell.infrastructure.acl:run-shell-command
+   command arguments (exported-environment-strings)))
 
 (defun run-repl-script (path &optional script-args)
   "Execute the script file at PATH (multiline blocks supported, via the same

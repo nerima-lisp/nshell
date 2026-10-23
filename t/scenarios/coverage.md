@@ -29,7 +29,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | B06 | approximation | 2 | 0 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B06/approx-shell-c-command-contract.json` |
 | B07 | approximation, manual | 1 | 1 | `t/scenarios/B07/interactive-callers.json`, `t/scenarios/B07/manual.md` |
 | B08 | approximation, manual | 1 | 1 | `t/scenarios/B07/interactive-callers.json`, `t/scenarios/B08/manual.md` |
-| B09 | direct | 3 | 0 | `t/scenarios/B09/command-stdio-and-status.json`, `t/scenarios/B09/empty-shell-command.json`, `t/scenarios/B09/shell-command-argv.json` |
+| B09 | direct | 5 | 0 | `t/scenarios/B09/batch-command-uses-nshell-builtins.json`, `t/scenarios/B09/command-stdio-and-status.json`, `t/scenarios/B09/empty-shell-command.json`, `t/scenarios/B09/pty-command-uses-nshell-builtins.json`, `t/scenarios/B09/shell-command-argv.json` |
 | B10 | direct, manual | 1 | 1 | `t/scenarios/B10/login-command-environment.json`, `t/scenarios/B10/manual.md` |
 | C01 | direct | 4 | 0 | `t/scenarios/C01/batch-command.json`, `t/scenarios/C01/batch-script.json`, `t/scenarios/C01/batch-stdin.json`, `t/scenarios/C01/pty-paste.json` |
 | C02 | direct | 1 | 0 | `t/scenarios/C02/quoted-unicode-arguments.json` |
@@ -219,4 +219,4 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 208 | 48 | — |
+| Total | expected corpus | 218 | 48 | — |

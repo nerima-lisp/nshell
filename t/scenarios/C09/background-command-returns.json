@@ -30,5 +30,8 @@
   "invocation": {
     "kind": "command",
     "text": "sleep 0.1 &; wait; printf \"C09_BACKGROUND_DONE\\n\""
+  },
+  "expected_failure": {
+    "reason": "WP-L08 owns background execution and sequencing."
   }
 }

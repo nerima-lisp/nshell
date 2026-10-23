@@ -1,0 +1,42 @@
+{
+  "id": "M03-directory-history-prevd-nextd",
+  "uc": [
+    "M03"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_M03-directory-history-prevd-nextd> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "mkdir a b; cd a; cd ../b; prevd; pwd > visits.txt; nextd; pwd >> visits.txt"
+  },
+  "expected": {
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "visits.txt",
+          "exists": true,
+          "contains": [
+            "a",
+            "b"
+          ]
+        }
+      ]
+    }
+  }
+}

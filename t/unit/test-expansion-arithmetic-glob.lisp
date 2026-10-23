@@ -515,8 +515,108 @@ survives the fix and is not accidentally stripped too."
         ((a (gen-shell-variable-name :min-length 1 :max-length 6) #'shrink-shell-word)
          (b (gen-shell-variable-name :min-length 1 :max-length 6) #'shrink-shell-word))
       (let ((path (concatenate 'string a "/" b)))
-        (and (nshell.domain.expansion:glob-match-p "**" path)
-             (not (nshell.domain.expansion:glob-match-p "*" path))))))
+        (and
+             (nshell.domain.expansion:glob-match-p "**" path)
+             (not (nshell.domain.expansion:glob-match-p "*" path))
+             (nshell.domain.expansion:glob-match-p "*" ".hidden")
+             (nshell.domain.expansion:glob-match-p "**" ".hidden/file")))))
+  (it "expand-glob-star-and-question-skip-hidden-names"
+    "Pathname wildcards skip dot-prefixed files unless the component starts with a literal dot."
+    (let ((filesystem
+            (make-test-filesystem
+             :directory-files
+             (lambda (directory)
+               (declare (ignore directory))
+               (list #p"/tmp/.secret.txt" #p"/tmp/visible.txt"
+                     #p"/tmp/.foo" #p"/tmp/afoo"))
+             :subdirectories (constantly nil))))
+      (expect '("/tmp/visible.txt")
+              :to-equal
+              (nshell.domain.expansion:expand-glob "/tmp/*.txt" filesystem))
+      (expect '("/tmp/afoo")
+              :to-equal
+              (nshell.domain.expansion:expand-glob "/tmp/?foo" filesystem))))
+  (it "expand-glob-double-star-skips-hidden-components"
+    "Recursive path expansion skips hidden files and directories by default."
+    (let* ((visited nil)
+           (filesystem
+             (make-test-filesystem
+              :directory-files
+              (lambda (directory)
+                (push (namestring directory) visited)
+                (cond
+                  ((string= "/tmp/" (namestring directory))
+                   (list #p"/tmp/.root.txt" #p"/tmp/root.txt"))
+                  ((string= "/tmp/visible/" (namestring directory))
+                   (list #p"/tmp/visible/.secret.txt"
+                         #p"/tmp/visible/visible.txt"))
+                  ((string= "/tmp/.hidden/" (namestring directory))
+                   (list #p"/tmp/.hidden/hidden.txt"))
+                  ((string= "/tmp/visible/.nested/" (namestring directory))
+                   (list #p"/tmp/visible/.nested/nested.txt"))
+                  (t nil)))
+              :subdirectories
+              (lambda (directory)
+                (cond
+                  ((string= "/tmp/" (namestring directory))
+                   (list #p"/tmp/.hidden/" #p"/tmp/visible/"))
+                  ((string= "/tmp/visible/" (namestring directory))
+                   (list #p"/tmp/visible/.nested/"))
+                  (t nil))))))
+      (expect '("/tmp/root.txt" "/tmp/visible/visible.txt")
+              :to-equal
+              (nshell.domain.expansion:expand-glob "/tmp/**/*.txt" filesystem))
+      (expect '("/tmp/" "/tmp/visible/")
+              :to-equal
+              (nreverse visited))))
+  (it "expand-glob-explicit-dot-patterns-match-hidden-paths"
+    "Literal dot components match hidden files and directories."
+    (let* ((visited nil)
+           (filesystem
+             (make-test-filesystem
+              :directory-files
+              (lambda (directory)
+                (let ((name (namestring directory)))
+                  (push name visited)
+                  (cond
+                    ((string= "./" name) (list #p"./.root.txt"))
+                    ((string= "dir/" name) (list #p"dir/.local.txt"))
+                    ((string= "/tmp/" name) (list #p"/tmp/.root.txt"))
+                    ((string= "/tmp/.hidden/" name)
+                     (list #p"/tmp/.hidden/root.txt"))
+                    ((string= "/tmp/dir/" name)
+                     (list #p"/tmp/dir/.local.txt"))
+                    ((string= "/tmp/visible/" name)
+                     (list #p"/tmp/visible/visible.txt"))
+                    ((string= "/tmp/visible/.hidden/" name)
+                     (list #p"/tmp/visible/.hidden/nested.txt"))
+                    ((string= "/tmp/visible/.other/" name)
+                     (list #p"/tmp/visible/.other/ignored.txt"))
+                    (t nil))))
+              :subdirectories
+              (lambda (directory)
+                (cond
+                  ((string= "/tmp/" (namestring directory))
+                   (list #p"/tmp/.hidden/" #p"/tmp/dir/" #p"/tmp/visible/"))
+                  ((string= "/tmp/visible/" (namestring directory))
+                   (list #p"/tmp/visible/.hidden/" #p"/tmp/visible/.other/"))
+                  (t nil))))))
+      (expect '(".root.txt")
+              :to-equal
+              (nshell.domain.expansion:expand-glob ".*" filesystem))
+      (expect '("dir/.local.txt")
+              :to-equal
+              (nshell.domain.expansion:expand-glob "dir/.*" filesystem))
+      (setf visited nil)
+      (expect '("/tmp/.hidden/root.txt"
+                "/tmp/visible/.hidden/nested.txt")
+              :to-equal
+              (nshell.domain.expansion:expand-glob
+               "/tmp/**/.hidden/*.txt" filesystem))
+      (expect '("/tmp/" "/tmp/.hidden/" "/tmp/dir/" "/tmp/visible/"
+                "/tmp/visible/.hidden/")
+              :to-equal
+              (nreverse visited))))
 
   (it "pbt-brace-without-braces-is-identity"
     "A string with no brace group expands to exactly itself."

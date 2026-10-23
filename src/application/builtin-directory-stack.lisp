@@ -1,10 +1,8 @@
 (in-package #:nshell.application)
 
 ;;; `dirs` / `pushd` / `popd` / `prevd` / `nextd` (fish's directory stack and
-;;; directory history). There is no natural shell-context slot for either --
-;;; shell-context.lisp is owned by another agent -- so both live as specials
-;;; here, matching how *LAST-EXIT-CODE*'s presentation-layer counterparts and
-;;; other application-level session state already work.
+;;; directory history). The shell context has no slot for either, so both live
+;;; as specials, like the other application-level session state.
 
 (defvar *directory-stack* nil
   "Stack of directories pushed by `pushd`, most-recently-pushed first.")
@@ -34,12 +32,9 @@ a textual one, so \"/home\" doesn't swallow \"/home2\") avoids that."
       (t path))))
 
 (defun %directory-stack-record-cd (old-cwd new-cwd)
-  "Append NEW-CWD to *DIRECTORY-HISTORY* as the current position, discarding
-any forward (redo) entries left over from a previous `prevd`. `cd` should call
-this too (see this agent's report for the one-line hook builtin-commands.lisp
-needs) so `prevd`/`nextd` see every directory the session has visited."
-  (let ((old (namestring old-cwd))
-        (new (namestring new-cwd)))
+  "Record a logical directory transition, truncating any redo entries."
+  (let ((old (%normalize-directory-path old-cwd))
+        (new (%normalize-directory-path new-cwd)))
     (when (null *directory-history*)
       (setf *directory-history* (list old)
             *directory-history-index* 0))
@@ -53,19 +48,26 @@ needs) so `prevd`/`nextd` see every directory the session has visited."
 working directory. RECORD-P is NIL for `prevd`/`nextd`, which move the
 existing history pointer rather than extending the history."
   (let* ((environment (shell-context-environment context))
-         (old-cwd (host-kit:getcwd)))
-    (host-kit:chdir target)
-    (let ((new-cwd (host-kit:getcwd)))
-      (%update-directory-environment context environment old-cwd new-cwd)
-      (when record-p
-        (%directory-stack-record-cd old-cwd new-cwd))
-      new-cwd)))
+         (old-cwd
+           (%logical-current-directory
+            environment
+            (ignore-errors (host-kit:getcwd))))
+         (new-cwd (%normalize-directory-path target old-cwd)))
+    (host-kit:chdir new-cwd)
+    (%update-directory-environment context environment old-cwd new-cwd)
+    (when record-p
+      (%directory-stack-record-cd old-cwd new-cwd))
+    new-cwd))
 
 (defun %dirs-format-stack (context)
   (let ((environment (shell-context-environment context)))
     (format nil "~{~a~^ ~}~%"
             (mapcar (lambda (path) (%directory-stack-tilde-collapse path environment))
-                    (cons (namestring (host-kit:getcwd)) *directory-stack*)))))
+                    (cons
+                      (%logical-current-directory
+                       environment
+                       (ignore-errors (host-kit:getcwd)))
+                      *directory-stack*)))))
 
 (define-builtin %builtin-dirs (context args) ()
   (if args
@@ -76,7 +78,10 @@ existing history pointer rather than extending the history."
   (cond
     ((rest args) (%builtin-usage "pushd" "pushd [DIRECTORY]" 2))
     (args
-     (let ((current (namestring (host-kit:getcwd))))
+     (let ((current
+             (%logical-current-directory
+              (shell-context-environment context)
+              (ignore-errors (host-kit:getcwd)))))
        (handler-case
            (progn
              (%directory-stack-chdir context (first args))
@@ -86,9 +91,11 @@ existing history pointer rather than extending the history."
     ((null *directory-stack*)
      (values (format nil "pushd: no other directory~%") 1))
     (t
-     ;; No-arg pushd swaps the current directory with the top of the stack.
      (let ((target (first *directory-stack*))
-           (current (namestring (host-kit:getcwd))))
+           (current
+             (%logical-current-directory
+              (shell-context-environment context)
+              (ignore-errors (host-kit:getcwd)))))
        (handler-case
            (progn
              (%directory-stack-chdir context target)

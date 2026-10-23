@@ -22,17 +22,12 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "set -x PATH /bin /usr/bin; echo $PATH"
+    "text": "set -x PATH /usr/bin /bin; set -x PATH a $PATH; /usr/bin/printenv PATH"
   },
   "expected": {
     "stdout": {
-      "contains": [
-        "/bin:/usr/bin"
-      ]
+      "equals": "a:/usr/bin:/bin\n"
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-B01 owns colon-separated list values such as PATH."
   }
 }

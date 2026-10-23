@@ -5,8 +5,8 @@
            (multiple-value-list (,function ,@arguments))))
 
 (describe "builtin-tests"
-  (it "count-reports-number-of-arguments"
-    "count prints the argument count, exiting 0 when non-empty and 1 when empty."
+  (it "count-counts-stdin-when-no-arguments-are-given"
+    "count reads stdin lines without arguments and retains argument counting."
     (with-builtins-context (context)
       (assert-builtin-call (context "count" '("a" "b" "c"))
         :code 0
@@ -14,9 +14,19 @@
       (assert-builtin-call (context "count" '("only"))
         :code 0
         :output (format nil "1~%"))
-      (assert-builtin-call (context "count" '())
-        :code 1
-        :output (format nil "0~%"))))
+      (with-input-from-string (*standard-input* (format nil "one~%two~%"))
+        (assert-builtin-call (context "count" nil)
+          :code 0
+          :output (format nil "2~%")))
+      (with-input-from-string (*standard-input* "")
+        (assert-builtin-call (context "count" nil)
+          :code 1
+          :output (format nil "0~%")))
+      (with-input-from-string (*standard-input* "pending")
+        (assert-builtin-call (context "count" '("a" "b"))
+          :code 0
+          :output (format nil "2~%"))
+        (expect "pending" :to-equal (read-line *standard-input* nil nil)))))
 
   (it "seq-prints-integer-sequences"
     "seq prints integer ranges with optional first/step, one per line."

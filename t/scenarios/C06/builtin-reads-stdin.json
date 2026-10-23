@@ -1,0 +1,35 @@
+{
+  "id": "C06-builtin-reads-stdin",
+  "uc": [
+    "C06"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "printf \"abc\\n\" | string upper; printf \"one\\ntwo\\n\" | count"
+  },
+  "expected": {
+    "stdout": {
+      "equals": "ABC\n2\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  }
+}

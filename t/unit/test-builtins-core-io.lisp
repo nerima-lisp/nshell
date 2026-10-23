@@ -44,7 +44,7 @@
       (with-builtins-context (context)
         (assert-builtin-call (context "pwd" nil)
           :code 0
-          :output (format nil "/tmp/~%")))))
+          :output (format nil "/tmp~%")))))
 
   (it "cd-with-no-args-uses-home"
     "cd with no arguments resolves HOME from the shell context environment."
@@ -99,8 +99,8 @@
         :code 1
         :contains '("cd:" "OLDPWD is not set"))))
 
-  (it "cd-maintains-pwd-and-oldpwd-and-supports-dash"
-    "cd updates PWD and OLDPWD, and cd - returns to the previous directory."
+  (it "cd-maintains-logical-pwd-and-supports-dash"
+    "cd keeps PWD and OLDPWD slash-free and normalizes logical paths."
     (with-builtins-context-environment
         (context (make-test-builtins-context)
                  ("HOME" "/home/test"))
@@ -114,13 +114,20 @@
             :output-null t)
           (let ((environment (nshell.application:shell-context-environment context)))
             (expect "/work" :to-equal (nshell.domain.environment:env-get environment "PWD"))
-            (expect "/tmp/" :to-equal (nshell.domain.environment:env-get environment "OLDPWD")))
+            (expect "/tmp" :to-equal (nshell.domain.environment:env-get environment "OLDPWD")))
           (assert-builtin-call (context "cd" '("-"))
             :code 0
-            :output (format nil "/tmp/~%"))
+            :output (format nil "/tmp~%"))
           (let ((environment (nshell.application:shell-context-environment context)))
-            (expect "/tmp/" :to-equal (nshell.domain.environment:env-get environment "PWD"))
-            (expect "/work" :to-equal (nshell.domain.environment:env-get environment "OLDPWD")))))))
+            (expect "/tmp" :to-equal (nshell.domain.environment:env-get environment "PWD"))
+            (expect "/work" :to-equal (nshell.domain.environment:env-get environment "OLDPWD")))
+          (assert-builtin-call (context "cd" '("link/.."))
+            :code 0
+            :output-null t)
+          (expect "/tmp" :to-equal current-cwd)
+          (let ((environment (nshell.application:shell-context-environment context)))
+            (expect "/tmp" :to-equal (nshell.domain.environment:env-get environment "PWD"))
+            (expect "/tmp" :to-equal (nshell.domain.environment:env-get environment "OLDPWD")))))))
 
   (it "cd-surfaces-filesystem-errors"
     "cd returns exit 1 and an error message when :chdir signals an error."

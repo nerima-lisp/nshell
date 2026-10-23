@@ -199,6 +199,32 @@
         (expect (nshell.domain.environment:env-get env "NSHELL_TEST_EXPORTED") :to-be-null)
         (expect (nshell.domain.environment:env-get env "NSHELL_TEST_LOCAL") :to-be-null)
         (expect (nshell.domain.environment:env-get env "NSHELL_TEST_EMPTY") :to-be-null))))
+  (it "set-appends-expanded-path-values-with-colons"
+    "set -x keeps the expanded PATH list and exports it as a colon-separated value."
+    (let ((context (make-test-builtins-context :path "/bin::/usr/bin:")))
+      (assert-builtin-call
+          (context "set" '("-x" "PATH" "a" "/bin" "" "/usr/bin" ""))
+        :code 0
+        :output-null t)
+      (let* ((environment (nshell.application:shell-context-environment context))
+             (entry (find "PATH"
+                          (nshell.domain.environment:env-list environment)
+                          :key #'nshell.domain.environment:env-entry-name
+                          :test #'string=)))
+        (expect '("a" "/bin" "" "/usr/bin" "")
+                :to-equal
+                (nshell.domain.environment:env-get-values environment "PATH"))
+        (expect "a:/bin::/usr/bin:"
+                :to-equal
+                (nshell.domain.environment:env-get environment "PATH"))
+        (expect (nshell.domain.environment:env-exported-p environment "PATH")
+                :to-be-truthy)
+        (expect "a:/bin::/usr/bin:"
+                :to-equal
+                (nshell.domain.environment:env-entry-value entry)))
+      (assert-builtin-call (context "set" nil)
+        :code 0
+        :contains '("set -x PATH a:/bin::/usr/bin:"))))
 
   (it "set-toggles-pipefail"
     "set -o/+o pipefail toggles the pipeline policy in the current context."

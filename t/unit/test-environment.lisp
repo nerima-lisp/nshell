@@ -85,6 +85,60 @@
         (nshell.domain.environment:env-get-values updated "FILES"))
       (expect (nshell.domain.environment:env-get-values env "FILES") :to-be-null)))
   (it
+    "env-path-values-use-colons-and-preserve-empty-elements"
+    "PATH imports, scalar views, and exported values retain empty path elements."
+    (let* ((env (nshell.domain.environment:make-environment))
+           (imported
+             (nshell.domain.environment:inject-os-environment
+              env
+              (list "PATH=/opt/bin::/usr/bin:")
+              (lambda () #p"/tmp/")))
+           (entry
+             (find "PATH"
+                   (nshell.domain.environment:env-list imported)
+                   :key #'nshell.domain.environment:env-entry-name
+                   :test #'string=)))
+      (expect '("/opt/bin" "" "/usr/bin" "")
+              :to-equal
+              (nshell.domain.environment:env-get-values imported "PATH"))
+      (expect "/opt/bin::/usr/bin:"
+              :to-equal
+              (nshell.domain.environment:env-get imported "PATH"))
+      (expect "/opt/bin::/usr/bin:"
+              :to-equal
+              (nshell.domain.environment:env-entry-value entry))
+      (let* ((empty (nshell.domain.environment:env-set env "PATH" "" t))
+             (empty-entry
+               (find "PATH"
+                     (nshell.domain.environment:env-list empty)
+                     :key #'nshell.domain.environment:env-entry-name
+                     :test #'string=))
+             (unset (nshell.domain.environment:env-unset empty "PATH")))
+        (expect '("") :to-equal
+                (nshell.domain.environment:env-get-values empty "PATH"))
+        (expect "" :to-equal (nshell.domain.environment:env-get empty "PATH"))
+        (expect "" :to-equal
+                (nshell.domain.environment:env-entry-value empty-entry))
+        (expect (nshell.domain.environment:env-defined-p empty "PATH")
+                :to-be-truthy)
+        (expect (nshell.domain.environment:env-get unset "PATH") :to-be-null)
+        (expect (nshell.domain.environment:env-defined-p unset "PATH")
+                :to-be-falsy)
+        (expect (find "PATH"
+                      (nshell.domain.environment:env-list unset)
+                      :key #'nshell.domain.environment:env-entry-name
+                      :test #'string=)
+                :to-be-null))
+      (let ((assigned
+              (nshell.domain.environment:env-set env "PATH" "/bin:/usr/bin" t)))
+        (expect "/sbin::/bin"
+                :to-equal
+                (nshell.domain.environment:env-assign-default!
+                 assigned "PATH" "/sbin::/bin"))
+        (expect '("/sbin" "" "/bin")
+                :to-equal
+                (nshell.domain.environment:env-get-values assigned "PATH")))))
+  (it
     "env-var-structure-is-not-public-api"
     "Internal variable records stay behind the environment aggregate API."
     (dolist (name
@@ -341,7 +395,7 @@
         (nshell.domain.environment:env-defined-p result "MALFORMED")
         :to-be-falsy)
       (expect
-        "/tmp/nshell-bulk/"
+        "/tmp/nshell-bulk"
         :to-equal
         (nshell.domain.environment:env-get result "PWD"))))
   (it

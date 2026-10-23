@@ -29,6 +29,31 @@
         ('("trim" "  hi  ")
          :code 0
          :output (format nil "hi~%")))))
+  (it "string-line-builtin-reads-stdin-when-text-is-omitted"
+    "String line subcommands transform stdin lines when text arguments are omitted."
+    (with-builtins-context (context)
+      (with-input-from-string (*standard-input* (format nil "alpha~%~%BeTa"))
+        (assert-string-builtin-cases (context)
+          ((list "upper")
+           :code 0
+           :output (format nil "ALPHA~%~%BETA~%"))))
+      (with-input-from-string (*standard-input* "")
+        (assert-string-builtin-cases (context)
+          ((list "lower")
+           :code 1
+           :output-empty t)))
+      (with-input-from-string (*standard-input* (format nil "unused~%"))
+        (assert-string-builtin-cases (context)
+          ((list "upper" "explicit")
+           :code 0
+           :output (format nil "EXPLICIT~%")))
+        (expect "unused" :to-equal (read-line *standard-input* nil nil)))
+      (with-input-from-string (*standard-input* (format nil "unused~%"))
+        (assert-string-builtin-cases (context)
+          ((list "join")
+           :code 1
+           :contains (list "usage")))
+        (expect "unused" :to-equal (read-line *standard-input* nil nil)))))
   (it "string-builtin-covers-empty-separators-and-unknown-subcommands"
     "string handles empty separators and reports unsupported subcommands."
     (with-builtins-context (context)

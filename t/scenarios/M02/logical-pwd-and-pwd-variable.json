@@ -45,8 +45,5 @@
         }
       ]
     }
-  },
-  "expected_failure": {
-    "reason": "WP-B01 owns logical pwd and PWD behavior."
   }
 }

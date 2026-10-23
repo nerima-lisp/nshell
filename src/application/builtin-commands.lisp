@@ -5,16 +5,78 @@
   (values (format nil "~{~a~^ ~}~%" args) 0))
 
 
-(define-builtin %builtin-pwd (context args) (context args)
-  (values (format nil "~a~%" (namestring (host-kit:getcwd))) 0))
+(defun %normalize-directory-path (path &optional base)
+  (let* ((path (etypecase path
+                 (string path)
+                 (pathname (namestring path))))
+         (absolute-p (and (plusp (length path))
+                          (char= (char path 0) #\/)))
+         (base (unless absolute-p
+                 (or base (namestring (host-kit:getcwd)))))
+         (combined (concatenate 'string
+                                (if absolute-p
+                                    path
+                                    (concatenate 'string
+                                                 (string-right-trim "/" base)
+                                                 "/" path))
+                                "/"))
+         (components nil)
+         (start 1))
+    (loop for separator = (position #\/ combined :start start)
+          while separator
+          for component = (subseq combined start separator)
+          do (cond
+               ((or (string= component "") (string= component ".")))
+               ((string= component "..")
+                (when components (pop components)))
+               (t (push component components)))
+             (setf start (1+ separator)))
+    (format nil "/~{~a~^/~}" (nreverse components))))
+
+(defun %directory-paths-equivalent-p (left right)
+  (let ((left (%normalize-directory-path left))
+        (right (%normalize-directory-path right)))
+    (or (string= left right)
+        (let ((canonical-left
+                (ignore-errors
+                  (%normalize-directory-path (truename left))))
+              (canonical-right
+                (ignore-errors
+                  (%normalize-directory-path (truename right)))))
+          (and canonical-left
+               canonical-right
+               (string= canonical-left canonical-right))))))
+
+(defun %logical-current-directory (environment physical-cwd)
+  (let ((physical (and physical-cwd
+                       (%normalize-directory-path physical-cwd)))
+        (pwd (and environment
+                  (nshell.domain.environment:env-get environment "PWD"))))
+    (cond
+      ((and pwd physical
+            (%directory-paths-equivalent-p pwd physical))
+       (%normalize-directory-path pwd))
+      (physical physical)
+      (pwd (%normalize-directory-path pwd))
+      (t (error "The current directory is unavailable")))))
+
+(define-builtin %builtin-pwd (context args) (args)
+  (values
+    (format nil "~a~%"
+            (%logical-current-directory
+             (shell-context-environment context)
+             (ignore-errors (host-kit:getcwd))))
+    0))
 
 (defun %update-directory-environment (context environment old-cwd new-cwd)
   (when environment
-    (let* ((environment
+    (let* ((old-cwd (%normalize-directory-path old-cwd))
+           (new-cwd (%normalize-directory-path new-cwd))
+           (environment
              (nshell.domain.environment:env-set
               environment
               "OLDPWD"
-              (namestring old-cwd)
+              old-cwd
               (if (nshell.domain.environment:env-defined-p environment "OLDPWD")
                   (nshell.domain.environment:env-exported-p environment "OLDPWD")
                   t)))
@@ -22,7 +84,7 @@
              (nshell.domain.environment:env-set
               environment
               "PWD"
-              (namestring new-cwd)
+              new-cwd
               (if (nshell.domain.environment:env-defined-p environment "PWD")
                   (nshell.domain.environment:env-exported-p environment "PWD")
                   t))))
@@ -43,20 +105,23 @@
 
 (defun %cd-output (args new-cwd)
   (when (and args (string= (first args) "-"))
-    (format nil "~a~%" (namestring new-cwd))))
+    (format nil "~a~%" (%normalize-directory-path new-cwd))))
 
 (define-builtin %builtin-cd (context args) ()
   (handler-case
       (if (> (length args) 1)
           (%builtin-usage "cd" "cd [directory]")
           (let* ((environment (shell-context-environment context))
-                 (old-cwd (host-kit:getcwd))
-                 (target (%cd-target environment args)))
-            (host-kit:chdir target)
-            (let ((new-cwd (host-kit:getcwd)))
-              (%update-directory-environment context environment old-cwd new-cwd)
-              (%directory-stack-record-cd old-cwd new-cwd)
-              (values (%cd-output args new-cwd) 0))))
+                 (old-cwd
+                   (%logical-current-directory
+                    environment
+                    (ignore-errors (host-kit:getcwd))))
+                 (target (%cd-target environment args))
+                 (new-cwd (%normalize-directory-path target old-cwd)))
+            (host-kit:chdir new-cwd)
+            (%update-directory-environment context environment old-cwd new-cwd)
+            (%directory-stack-record-cd old-cwd new-cwd)
+            (values (%cd-output args new-cwd) 0)))
     (error (condition)
       (values (format nil "cd: ~a~%" condition) 1))))
 
@@ -184,9 +249,14 @@
                  (if indexes 0 1)))))))
 
 (define-builtin %builtin-count (context args) (context)
-  "Print the number of ARGS (like fish's count). Exit status is 0 when there is
-at least one argument, otherwise 1 -- which makes `count $argv` usable in tests."
-  (let ((n (length args)))
+  "With arguments, count prints their number. With no arguments, it counts
+lines read from *STANDARD-INPUT*. Exit status is 0 when the count is positive,
+otherwise 1."
+  (let ((n (if args
+               (length args)
+               (loop for line = (read-line *standard-input* nil nil)
+                     while line
+                     count t))))
     (values (format nil "~d~%" n) (if (plusp n) 0 1))))
 
 (defun %seq-parse-args (args)

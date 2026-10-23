@@ -8,9 +8,9 @@
                           (getf spec ,key)))))
 
   (defmacro define-string-line-builtin (name transform)
-    "Define a string subcommand that takes only positional text arguments.
-Leading arguments starting with `-' are rejected as unknown options, since
-none of these subcommands defines any flag of its own."
+    "Define a string subcommand that transforms positional text or lines from standard input.
+It reads standard input when no positional text remains. Leading hyphen
+arguments are rejected as unknown options."
     `(defun ,name (context args)
        (declare (ignore context))
        (multiple-value-bind (remaining error)
@@ -19,8 +19,14 @@ none of these subcommands defines any flag of its own."
                                         (%string-integer-option-handler (name parsed next-remaining)))
          (if error
              (values error 1)
-             (values (%string-emit-lines remaining :transform ,transform)
-                     (if remaining 0 1)))))))
+             (let ((texts
+                    (if remaining
+                        remaining
+                        (loop for line = (read-line *standard-input* nil nil)
+                              while line
+                              collect line))))
+               (values (%string-emit-lines texts :transform ,transform)
+                       (if texts 0 1))))))))
 
 (define-plist-accessors
   (%builtin-string-spec-name :name)

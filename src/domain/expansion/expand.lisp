@@ -85,23 +85,91 @@ Unknown users and incomplete environment data remain literal."
 (defun expand-glob (pattern &optional filesystem)
   "Expand PATTERN containing *, ?, [abc], or ** into matching path strings.
 Returns a one-element list containing PATTERN when it has no glob syntax or no matches."
-  (unless (glob-pattern-p pattern)
-    (return-from expand-glob (list pattern)))
-  (let* ((root (%decode-fragment-data (glob-root pattern)))
-         (files (%glob-candidate-files pattern root filesystem))
-         (matches nil))
-    (dolist (file files)
-      (let ((candidate (%encode-fragment-data (%glob-file-candidate pattern root file))))
-        (when (glob-match-p pattern candidate)
-          (push candidate matches))))
-    (if matches
-        (sort matches #'string< :key #'%decode-fragment-data)
-        (list pattern))))
+  (labels ((matches-path-p (candidate)
+             (let* ((pattern-components (%glob-path-components pattern))
+                    (candidate-components (%glob-path-components candidate)))
+               (or (and (glob-match-p pattern candidate)
+                        (or (notany (lambda (component)
+                                      (%glob-hidden-component-p component))
+                                    candidate-components)
+                            (match-path-components pattern-components
+                                                   candidate-components)))
+                   (and (member "**" (butlast pattern-components)
+                                :test (function string=))
+                        (match-path-components pattern-components
+                                               candidate-components)))))
+           (match-path-components (pattern-components candidate-components)
+             (cond
+               ((null pattern-components) (null candidate-components))
+               ((string= (first pattern-components) "**")
+                (or (match-path-components (rest pattern-components) candidate-components)
+                    (and candidate-components
+                         (not (%glob-hidden-component-p (first candidate-components)))
+                         (match-path-components pattern-components
+                                                (rest candidate-components)))))
+               ((null candidate-components) nil)
+               ((and (%glob-hidden-component-p (first candidate-components))
+                     (not (and (%glob-hidden-component-p (first pattern-components))
+                               (glob-match-p (first pattern-components)
+                                             (first candidate-components)))))
+                nil)
+               ((glob-match-p (first pattern-components)
+                              (first candidate-components))
+                (match-path-components (rest pattern-components)
+                                       (rest candidate-components)))
+               (t nil))))
+    (unless (glob-pattern-p pattern)
+      (return-from expand-glob (list pattern)))
+    (let* ((root (%decode-fragment-data (glob-root pattern)))
+           (files (%glob-candidate-files pattern root filesystem))
+           (matches nil))
+      (dolist (file files)
+        (let ((candidate (%encode-fragment-data
+                          (%glob-file-candidate pattern root file))))
+          (when (matches-path-p candidate)
+            (push candidate matches))))
+      (if matches
+          (sort matches #'string< :key #'%decode-fragment-data)
+          (list pattern)))))
 
 (defun %glob-candidate-files (pattern root filesystem)
   "Return filesystem candidates for PATTERN from ROOT using the glob recursion policy."
   (if (search "**" pattern)
-      (recursive-directory-files root filesystem)
+      (if filesystem
+          (ignore-errors
+            (let* ((directory-files
+                     (nshell.domain.filesystem:filesystem-directory-files filesystem))
+                   (subdirectories
+                     (nshell.domain.filesystem:filesystem-subdirectories filesystem))
+                   (suffix (if (string= root "./")
+                               pattern
+                               (subseq pattern (length root))))
+                   (dot-directory-patterns
+                     (loop for component in
+                               (butlast (%glob-path-components suffix))
+                           when (%glob-hidden-component-p component)
+                             collect component))
+                   (filtered-filesystem
+                     (nshell.domain.filesystem:make-filesystem
+                      :directory-files directory-files
+                      :subdirectories
+                      (lambda (directory)
+                        (remove-if
+                         (lambda (subdirectory)
+                           (let* ((components
+                                    (pathname-directory (pathname subdirectory)))
+                                  (name (find-if #'stringp (reverse components))))
+                             (and (%glob-hidden-component-p name)
+                                  (notany (lambda (component)
+                                            (glob-match-p component name))
+                                          dot-directory-patterns))))
+                         (funcall subdirectories directory)))
+                      :executable-p
+                      (nshell.domain.filesystem:filesystem-executable-p filesystem)
+                      :directory-map
+                      (nshell.domain.filesystem:filesystem-directory-map filesystem))))
+              (recursive-directory-files root filtered-filesystem)))
+          nil)
       (immediate-directory-files root filesystem)))
 
 (defun %glob-file-candidate (pattern root file)
@@ -139,3 +207,15 @@ namestring surviving into output after matching stripped it)."
           (mapcar (lambda (entry)
                     (concatenate 'string prefix entry))
                   expanded)))))
+(defun %glob-hidden-component-p (component)
+  (and (stringp component)
+       (> (length component) 0)
+       (char= (%decode-fragment-character (char component 0)) #\.)))
+(defun %glob-path-components (path)
+  (let ((components nil)
+        (start 0))
+    (loop for slash = (position #\/ path :start start)
+          do (push (subseq path start slash) components)
+             (unless slash (return))
+             (setf start (1+ slash)))
+    (nreverse components)))

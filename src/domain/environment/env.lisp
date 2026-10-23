@@ -22,6 +22,13 @@
     (check-type value string))
   (copy-list values))
 
+(defun %split-path-value (value)
+  (loop with start = 0
+        for separator = (position #\: value :start start)
+        collect (subseq value start (or separator (length value)))
+        while separator
+        do (setf start (1+ separator))))
+
 (defun %make-env-var-with-invariants (name values &optional exported-p)
   "Create a shell environment variable from structured VALUES.
 The scalar string view is derived from VALUES on demand."
@@ -30,7 +37,10 @@ The scalar string view is derived from VALUES on demand."
 
 (defun %env-var-value (var)
   "Return the scalar string view of VAR."
-  (format nil "~{~a~^ ~}" (%env-var-values var)))
+  (let ((values (%env-var-values var)))
+    (if (string= (%env-var-name var) "PATH")
+        (format nil "~{~a~^:~}" values)
+        (format nil "~{~a~^ ~}" values))))
 
 (define-value-struct
   env-binding
@@ -53,8 +63,11 @@ The scalar string view is derived from VALUES on demand."
     (not (null exported-p))))
 
 (defun env-binding-value (binding)
-  "Return BINDING's scalar string value."
-  (format nil "~{~a~^ ~}" (%env-binding-values binding)))
+  "Return the scalar string value of BINDING."
+  (let ((values (%env-binding-values binding)))
+    (if (string= (%env-binding-name binding) "PATH")
+        (format nil "~{~a~^:~}" values)
+        (format nil "~{~a~^ ~}" values))))
 
 (define-value-struct
   env-entry
@@ -134,9 +147,9 @@ already defining NAME, falling back to the innermost scope for a new name."
 
 (defun env-set-values (env name values exported &key scope)
   "Return ENV updated with NAME set to VALUES in the scope SCOPE selects.
-The structured VALUES list is the source of truth; scalar accessors derive
-their result by joining VALUES with spaces. SCOPE is :LOCAL, :GLOBAL, or NIL
-for the fish default described at %ENVIRONMENT-WRITE-INDEX."
+The scalar string view joins PATH elements with colons and other lists with
+spaces. SCOPE is :LOCAL, :GLOBAL, or NIL for the fish default described at
+%ENVIRONMENT-WRITE-INDEX."
   (check-type name string)
   (let* ((copied (%copy-environment-scopes (%environment-scopes env)))
          (index (%environment-write-index copied name scope))
@@ -145,17 +158,23 @@ for the fish default described at %ENVIRONMENT-WRITE-INDEX."
     (%allocate-environment copied)))
 
 (defun env-set (env name value exported &key scope)
-  "Return ENV updated with NAME set to scalar VALUE.
+  "Return ENV updated with scalar VALUE.
+A PATH value is split at colons; other values remain one list element.
 EXPORTED controls whether the variable appears in ENV-LIST; SCOPE is as in
 ENV-SET-VALUES."
   (check-type value string)
-  (env-set-values env name (list value) exported :scope scope))
+  (env-set-values env name
+                  (if (string= name "PATH")
+                      (%split-path-value value)
+                      (list value))
+                  exported
+                  :scope scope))
 
 (defun %make-default-environment-var-table ()
   "Return a new variable table seeded with fallback environment values."
-  (let ((vars (make-hash-table :test #'equal)))
+  (let ((vars (make-hash-table :test (function equal))))
     (setf (gethash "HOME" vars) (%make-env-var-with-invariants "HOME" (list "/") t))
-    (setf (gethash "PATH" vars) (%make-env-var-with-invariants "PATH" (list "/bin:/usr/bin") t))
+    (setf (gethash "PATH" vars) (%make-env-var-with-invariants "PATH" (list "/bin" "/usr/bin") t))
     (setf (gethash "USER" vars) (%make-env-var-with-invariants "USER" (list "nobody") t))
     (setf (gethash "PWD" vars) (%make-env-var-with-invariants "PWD" (list "/") t))
     (setf (gethash "SHELL" vars) (%make-env-var-with-invariants "SHELL" (list "/bin/sh") t))
@@ -193,19 +212,32 @@ Pure domain function - callers should provide OS values via inject-os-environmen
     (when (and separator (plusp separator))
       (let ((name (subseq entry 0 separator))
             (value (subseq entry (1+ separator))))
-        (setf (gethash name vars) (%make-env-var-with-invariants name (list value) t))))))
+        (setf (gethash name vars)
+              (%make-env-var-with-invariants
+               name
+               (if (string= name "PATH")
+                   (%split-path-value value)
+                   (list value))
+               t))))))
 
 (defun %inject-os-environment-entries (env entries getcwd)
   (let* ((scopes (%copy-environment-scopes (%environment-scopes env)))
          (global (car (last scopes))))
     (dolist (entry entries)
       (%inject-os-environment-entry global entry))
-    (let ((pwd
-          (handler-case (namestring (funcall getcwd))
-            (error ()
-              (let ((var (gethash "PWD" global)))
-                (and var (%env-var-value var)))))))
-      (setf (gethash "PWD" global) (%make-env-var-with-invariants "PWD" (list pwd) t)))
+    (let* ((raw-pwd
+             (handler-case (namestring (funcall getcwd))
+               (error ()
+                 (let ((var (gethash "PWD" global)))
+                   (and var (%env-var-value var))))))
+           (trimmed-pwd (and raw-pwd (string-right-trim "/" raw-pwd)))
+           (pwd (and raw-pwd
+                     (if (and (plusp (length raw-pwd))
+                              (string= trimmed-pwd ""))
+                         "/"
+                         trimmed-pwd))))
+      (setf (gethash "PWD" global)
+            (%make-env-var-with-invariants "PWD" (list pwd) t)))
     (%allocate-environment scopes)))
 
 (defun inject-os-environment (env entries getcwd)
@@ -268,18 +300,18 @@ returned unchanged, since the outermost (global) scope is never popped."
         env)))
 
 (defun env-assign-default! (env name value)
-  "Assign VALUE to NAME inside ENV, preserving NAME's export state.
-This operation is intentionally destructive for parameter expansion
-assignments, which apply to the active shell environment object. NAME is
-assigned in whichever scope already defines it, or in the innermost scope
-when it is not yet defined anywhere, matching ENV-SET-VALUES's fish default."
+  "Assign scalar VALUE to NAME in ENV, preserving its export state.
+PATH values are split at colons; other values remain one list element."
   (check-type name string)
   (check-type value string)
   (let* ((scopes (%environment-scopes env))
          (index (%environment-write-index scopes name nil))
          (table (nth index scopes))
-         (exported (let ((var (gethash name table))) (and var (%env-var-exported-p var)))))
-    (setf (gethash name table) (%make-env-var-with-invariants name (list value) exported)))
+         (exported (let ((var (gethash name table))) (and var (%env-var-exported-p var))))
+         (values (if (string= name "PATH")
+                     (%split-path-value value)
+                     (list value))))
+    (setf (gethash name table) (%make-env-var-with-invariants name values exported)))
   value)
 
 (defun env-bindings (env)

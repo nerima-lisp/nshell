@@ -442,7 +442,7 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual({scenario["id"] for scenario in selected}, {"C01-first", "C02-second"})
 
-    def test_argv_batch_invocation_preserves_arguments_and_stdin(self) -> None:
+    def test_argv_batch_invocation_disables_config_and_preserves_arguments(self) -> None:
         arguments = [
             "-ilc",
             "",
@@ -461,8 +461,16 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         actual_arguments, actual_stdin = runner._binary_args(scenario, Path("/scenario/work"))
 
-        self.assertEqual(actual_arguments, arguments)
+        self.assertEqual(actual_arguments, ["--no-config", *arguments])
         self.assertEqual(actual_stdin, b"stdin line\n")
+
+    def test_argv_batch_invocation_cannot_opt_in_to_config(self) -> None:
+        scenario = _batch_scenario("argv-config-opt-in")
+        scenario["invocation"] = {"kind": "argv", "arguments": ["--version"]}
+        scenario["load_config"] = True
+
+        with self.assertRaisesRegex(runner.ScenarioError, "load_config is supported only for pty"):
+            runner._validate_scenario(scenario, Path("argv-config-opt-in.json"))
 
     def test_command_invocation_uses_the_long_nshell_command_option(self) -> None:
         scenario = _batch_scenario("command-option")
@@ -504,6 +512,20 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         scenario["load_config"] = True
         self.assertEqual(runner._pty_arguments(scenario), arguments)
+
+    def test_wait_for_prompt_is_boolean_and_pty_only(self) -> None:
+        pty = _pty_scenario("pty-no-startup-prompt", [{"type": "wait_exit"}], {"exit_code": 0})
+        pty["wait_for_prompt"] = False
+        runner._validate_scenario(pty, Path("pty-no-startup-prompt.json"))
+
+        pty["wait_for_prompt"] = "no"
+        with self.assertRaisesRegex(runner.ScenarioError, "wait_for_prompt must be a boolean"):
+            runner._validate_scenario(pty, Path("pty-no-startup-prompt.json"))
+
+        batch = _batch_scenario("batch-no-startup-prompt")
+        batch["wait_for_prompt"] = False
+        with self.assertRaisesRegex(runner.ScenarioError, "wait_for_prompt is supported only for pty"):
+            runner._validate_scenario(batch, Path("batch-no-startup-prompt.json"))
 
     def test_argv_batch_validation_rejects_non_string_arguments(self) -> None:
         scenario = _batch_scenario("argv-invalid")

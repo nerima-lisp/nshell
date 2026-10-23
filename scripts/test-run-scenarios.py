@@ -57,6 +57,21 @@ def _write_json(path: Path, value: Any) -> None:
 
 
 class ScenarioRunnerTests(unittest.TestCase):
+    def test_tmux_exit_status_preserves_numeric_status_and_normalizes_signal(self) -> None:
+        self.assertEqual(runner._pane_exit_status("23", "", "exit-status"), 23)
+        self.assertEqual(runner._pane_exit_status("", "hup", "signal-exit"), 129)
+        self.assertEqual(runner._pane_exit_status("", "term", "term-exit"), 143)
+
+    def test_tmux_exit_status_rejects_missing_or_unknown_exit_information(self) -> None:
+        for status, dead_signal, message in [
+            ("", "", "invalid exit status"),
+            ("", "unknown", "invalid exit signal"),
+            ("invalid", "", "invalid exit status"),
+        ]:
+            with self.subTest(status=status, dead_signal=dead_signal):
+                with self.assertRaisesRegex(runner.ScenarioError, message):
+                    runner._pane_exit_status(status, dead_signal, "bad-exit")
+
     def _load_one(self, scenario: dict[str, Any], filename: str) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

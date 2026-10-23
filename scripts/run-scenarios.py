@@ -89,6 +89,21 @@ def _require(condition: bool, message: str) -> None:
         raise ScenarioError(message)
 
 
+def _pane_exit_status(status: str, dead_signal: str, scenario_id: str) -> int:
+    if status:
+        try:
+            return int(status)
+        except ValueError as error:
+            raise ScenarioError(f"{scenario_id}: tmux reported an invalid exit status") from error
+    if dead_signal:
+        try:
+            signum = signal.Signals[f"SIG{dead_signal.upper()}"].value
+        except KeyError as error:
+            raise ScenarioError(f"{scenario_id}: tmux reported an invalid exit signal") from error
+        return 128 + signum
+    raise ScenarioError(f"{scenario_id}: tmux reported an invalid exit status")
+
+
 def _relative_path(root: Path, value: Any, label: str) -> Path:
     _require(isinstance(value, str) and value != "", f"{label} must be a non-empty path")
     relative = Path(value)
@@ -733,11 +748,13 @@ class TmuxSession:
         _require(self.exit_waiter.returncode == 0,
                  f"{self.scenario['id']}: tmux exit wait failed: "
                  f"{stderr.decode('utf-8', errors='replace').strip()}")
-        result = self._tmux(["display-message", "-p", "-t", self.pane, "#{pane_dead_status}"])
-        try:
-            return int(result.stdout.decode("ascii").strip())
-        except ValueError as error:
-            raise ScenarioError(f"{self.scenario['id']}: tmux reported an invalid exit status") from error
+        result = self._tmux([
+            "display-message", "-p", "-t", self.pane,
+            "#{pane_dead_status} #{pane_dead_signal}",
+        ])
+        status, separator, dead_signal = result.stdout.decode("ascii").rstrip("\r\n").partition(" ")
+        _require(bool(separator), f"{self.scenario['id']}: tmux reported an invalid exit status")
+        return _pane_exit_status(status, dead_signal, self.scenario["id"])
 
     def capture_screen(self) -> str:
         return self._capture()

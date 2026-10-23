@@ -63,5 +63,8 @@
         ]
       }
     }
+  },
+  "expected_failure": {
+    "reason": "WP-R05 owns XDG state placement for history."
   }
 }

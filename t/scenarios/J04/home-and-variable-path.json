@@ -1,0 +1,40 @@
+{
+  "id": "J04-home-and-variable-path",
+  "uc": [
+    "J04"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J04-home-and-variable-path> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/target/note.txt",
+        "content": "note"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "set TARGET=$HOME/target; complete -C \"cat $TARGET/\"; complete -C \"cat ~/target/\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "note.txt"
+      ]
+    },
+    "exit_code": 0
+  }
+}

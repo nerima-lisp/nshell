@@ -1,0 +1,36 @@
+{
+  "id": "O03-let-and-set",
+  "uc": [
+    "O03"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(set o03_shared \"outer\")\n(let ((o03_local \"inner\")) (echo $o03_local))\n(echo $o03_shared)\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "inner",
+        "outer"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "id": "G09-approx-balanced-parentheses-before-enter",
+  "uc": [
+    "G09"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G09-approx-balanced-parentheses-before-enter> ",
+      "G09_MESSAGE": "G09_BALANCED"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "G09_BALANCED"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $G09_MESSAGE ("
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": ")"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "G09_BALANCED",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

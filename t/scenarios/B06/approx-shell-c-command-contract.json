@@ -31,5 +31,8 @@
   "invocation": {
     "kind": "command",
     "text": "printf \"B06_SHELL_C\\n\"; printf \"B06_STDERR\\n\" >&2"
+  },
+  "expected_failure": {
+    "reason": "WP-R04 owns /bin/sh delegation for non-interactive -c invocations."
   }
 }

@@ -1,0 +1,38 @@
+{
+  "id": "C11-temporary-command-environment",
+  "uc": [
+    "C11"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "C11_VALUE=inside",
+        "C11_AFTER:"
+      ],
+      "excludes": [
+        "C11_AFTER:inside"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "C11_VALUE=inside /usr/bin/env; printf \"C11_AFTER:%s\\n\" \"$C11_VALUE\""
+  }
+}

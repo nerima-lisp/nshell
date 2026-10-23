@@ -63,5 +63,8 @@
         ]
       }
     }
+  },
+  "expected_failure": {
+    "reason": "WP-R05 owns history persistence and XDG placement."
   }
 }

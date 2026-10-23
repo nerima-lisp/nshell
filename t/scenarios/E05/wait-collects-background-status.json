@@ -1,0 +1,34 @@
+{
+  "id": "E05-wait-collects-background-status",
+  "uc": [
+    "E05"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "E05_WAITED"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "sleep 0.1 &; wait; printf \"E05_WAITED\\n\""
+  }
+}

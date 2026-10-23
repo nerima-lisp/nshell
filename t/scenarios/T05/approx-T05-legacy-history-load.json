@@ -1,0 +1,72 @@
+{
+  "id": "T05-legacy-history-load",
+  "uc": [
+    "T05"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "T05> ",
+      "SCENARIO_MARKER": "T05_HISTORY_IMPORTED_OK"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.nshell_history",
+        "content": "# nshell-history-v2 28\necho T05_HISTORY_IMPORTED_OK\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "history search --contains imported"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "echo T05_HISTORY_IMPORTED_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "T05_HISTORY_IMPORTED_OK"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "history": {
+        "path": ".local/state/nshell/history",
+        "contains": [
+          "T05_HISTORY_IMPORTED_OK"
+        ]
+      }
+    }
+  }
+}

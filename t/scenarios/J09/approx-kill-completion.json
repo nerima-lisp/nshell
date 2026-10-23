@@ -1,0 +1,36 @@
+{
+  "id": "J09-approx-kill-completion",
+  "uc": [
+    "J09"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J09-approx-kill-completion> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "complete -C \"kill -\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "-TERM",
+        "-KILL"
+      ]
+    },
+    "exit_code": 0
+  }
+}

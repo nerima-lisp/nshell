@@ -19,7 +19,7 @@
       "rows": 24
     }
   },
-  "input_delay_seconds": 0.05,
+  "input_delay_seconds": 0.12,
   "preconditions": {
     "files": []
   },
@@ -43,6 +43,10 @@
     {
       "type": "key",
       "key": "Escape"
+    },
+    {
+      "type": "wait",
+      "contains": "\u001b[2 q"
     },
     {
       "type": "key",

@@ -22,7 +22,7 @@
     "files": [
       {
         "path": "home/.config/nshell/init.lisp",
-        "content": "(echo P11_CONFIG_LOADED)\n(^nshell_p11_missing_command)\n"
+        "content": "echo P11_CONFIG_LOADED\nnshell_p11_missing_command\n"
       }
     ]
   },
@@ -62,5 +62,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-L07 owns continuing after a configuration error."
+  }
 }

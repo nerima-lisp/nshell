@@ -1,0 +1,63 @@
+{
+  "id": "U02-osc-133-markers",
+  "uc": [
+    "U02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "U02> ",
+      "SCENARIO_MARKER": "U02_COMMAND_OK"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_MARKER"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "U02_COMMAND_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "U02_COMMAND_OK",
+        "\u001b]133;A",
+        "\u001b]133;B",
+        "\u001b]133;C",
+        "\u001b]133;D"
+      ]
+    },
+    "exit_code": 0
+  }
+}

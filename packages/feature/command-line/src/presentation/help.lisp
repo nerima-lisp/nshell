@@ -10,12 +10,18 @@
    "stdin is a terminal and reads batch input from stdin otherwise.~%")
   (format
    stream
-   "With -c/--command, nshell executes COMMAND once in batch mode (ARGS are $argv).~%")
+   "With -c/--shell-command, nshell delegates COMMAND and ARGS to /bin/sh.~%")
   (format
    stream
-   "With a SCRIPT file argument, nshell runs the script (ARGS are $argv).~%")
+   "With --command, nshell executes COMMAND once in nshell; ARGS become $argv.~%")
+  (format
+   stream
+   "With a SCRIPT file argument, nshell runs the script (ARGS become $argv).~%")
   (format stream "~%Options:~%")
   (format stream "  -i, --interactive  Force the interactive line editor.~%")
+  (format stream "  -l, --login        Load the login environment.~%")
+  (format stream "  -c, --shell-command  Delegate COMMAND and ARGS to /bin/sh.~%")
+  (format stream "      --command      Execute COMMAND in nshell batch mode.~%")
   (format stream "      --no-config    Do not load the interactive startup file.~%")
   (format stream "      --config PATH  Load PATH instead of the XDG nshell/init.lisp default.~%")
   (format stream "      --no-history   Disable history reads and writes; private mode still suppresses assistant state.~%")

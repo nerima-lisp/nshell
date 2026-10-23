@@ -1,0 +1,59 @@
+{
+  "id": "I04-multiline-history-suggestion",
+  "uc": [
+    "I04"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_I04-multiline-history-suggestion> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.local/state/nshell/history",
+        "content": "# nshell-history-v3 123\n(:text \"if true\necho I04_MULTILINE_TAIL\nend\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "if"
+    },
+    {
+      "type": "wait",
+      "contains": "I04_MULTILINE_TAIL",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "I04_MULTILINE_TAIL"
+      ]
+    },
+    "exit_code": 0
+  }
+}

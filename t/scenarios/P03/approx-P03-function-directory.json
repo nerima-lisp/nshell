@@ -44,8 +44,20 @@
       "key": "Enter"
     },
     {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo P03_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "P03_FUNCTION_DIRECTORY_OK",
+      "contains": "P03_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -60,5 +72,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-L07 owns autoloading functions from the configured function directory."
+  }
 }

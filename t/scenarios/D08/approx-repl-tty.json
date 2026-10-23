@@ -1,0 +1,77 @@
+{
+  "id": "D08-approx-repl-tty",
+  "uc": [
+    "D08"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "D08-approx-repl-tty> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/tool.sh",
+        "content": "printf 'D08_REPL_READY\\n'\nIFS= read -r response\nprintf 'D08_REPL_RETURNED:%s\\n' \"$response\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "D08_REPL_READY",
+        "D08_REPL_RETURNED:1 + 1"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh tool.sh"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D08_REPL_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "1 + 1"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D08_REPL_RETURNED:1 + 1",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

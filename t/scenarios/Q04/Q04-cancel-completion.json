@@ -1,0 +1,90 @@
+{
+  "id": "Q04-cancel-completion",
+  "uc": [
+    "Q04"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "Q04> ",
+      "SCENARIO_MARKER": "Q04_AFTER_CTRL_C_OK",
+      "SCENARIO_PRIME": "Q04_READY"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "(format t \"~a~%\" $SCENARIO_PRIME)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q04_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "ec"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "wait",
+      "contains": "ho",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "(format t \"~a~%\" $SCENARIO_MARKER)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q04_AFTER_CTRL_C_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "Q04_AFTER_CTRL_C_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

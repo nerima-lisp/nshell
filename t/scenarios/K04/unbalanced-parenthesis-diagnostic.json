@@ -30,13 +30,21 @@
       "key": "Enter"
     },
     {
-      "type": "wait",
-      "contains": "> ",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo K04_AFTER_$((1+1))"
     },
     {
       "type": "key",
-      "key": "C-c"
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "K04_AFTER_2",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -66,5 +74,8 @@
         }
       ]
     }
+  },
+  "expected_failure": {
+    "reason": "WP-E05 owns diagnostics for unbalanced parentheses."
   }
 }

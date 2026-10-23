@@ -1,0 +1,35 @@
+{
+  "id": "Q06-read-only-home-session",
+  "uc": [
+    "Q06"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(chmod a-w $HOME $XDG_CONFIG_HOME $XDG_CACHE_HOME $XDG_DATA_HOME $XDG_STATE_HOME)\n(echo Q06_READONLY_HOME_OK)\n(chmod u+w $HOME $XDG_CONFIG_HOME $XDG_CACHE_HOME $XDG_DATA_HOME $XDG_STATE_HOME)\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "Q06_READONLY_HOME_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

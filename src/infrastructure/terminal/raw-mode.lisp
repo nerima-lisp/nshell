@@ -22,7 +22,8 @@
 ;;;
 ;;; cl-tty-kit has no option to keep those bits, so the flag work stays here.
 ;;;
-;;;   - the saved settings are keyed by fd rather than held in one global, and
+;;;   - the startup settings are saved per fd; RESTORE-TERMINAL-MODE retains
+;;;     them across cooked-mode intervals only with PRESERVE-SNAPSHOT-P, and
 ;;;   - a failed tcgetattr/tcsetattr signals instead of being swallowed by
 ;;;     `ignore-errors', which used to leave the terminal in an unknown state
 ;;;     with no indication that anything had gone wrong.
@@ -32,14 +33,11 @@
 ;;; continues from UNWIND-PROTECT cleanup, and signal handlers swallow it in
 ;;; asynchronous context.
 ;;;
-;;; Note the saved state is guarded rather than depth-counted.  cl-tty-kit
-;;; counts nesting depth because its callers pair enable/disable.  nshell's do
-;;; not: shell-sigcont-handler re-enables raw mode with no matching disable, so
-;;; a depth counter would only ever climb and the terminal would never be
-;;; restored.  Making ENABLE-RAW-MODE idempotent -- snapshot only when no
-;;; snapshot is held -- is the behaviour this caller actually needs, and it
-;;; fixes the bug where a second enable overwrote the saved cooked settings
-;;; with the raw ones and made restoration impossible.
+;;; The snapshot is presence-guarded rather than depth-counted. Foreground
+;;; commands restore cooked mode, and shell-sigcont-handler can re-enable raw
+;;; mode without a matching restore. A depth count would keep increasing across
+;;; resumes, so ENABLE-RAW-MODE saves settings only when *SAVED-TERMIOS* has no
+;;; entry for FD.
 
 (define-condition terminal-mode-operation-failed (error)
   ((operation :initarg :operation
@@ -54,9 +52,8 @@
              (terminal-mode-operation-failed-reason condition)))))
 
 (defvar *saved-termios* nil
-  "Alist of (FD . TERMIOS) holding the settings in effect before ENABLE-RAW-MODE
-first switched FD to raw mode. An fd is present exactly while nshell believes it
-has put that fd into raw mode.")
+  "Alist of (FD . TERMIOS) holding settings saved before each FD's first raw-mode
+enable. RESTORE-TERMINAL-MODE removes an entry unless PRESERVE-SNAPSHOT-P is true.")
 
 (defun %saved-termios (fd)
   (cdr (assoc fd *saved-termios* :test #'eql)))
@@ -145,10 +142,10 @@ the commentary at the top of this file."
 
 (defun enable-raw-mode (&optional (fd 0))
   "Switch FD to nshell's raw mode for character-by-character input.
-Remembers the settings FD had beforehand so RESTORE-TERMINAL-MODE can put them
-back. Calling this again while FD is already raw re-applies the mode without
-disturbing the remembered settings. Signals TERMINAL-MODE-OPERATION-FAILED if
-the terminal cannot be queried or reconfigured."
+Remembers the settings FD had before its first raw-mode enable so
+RESTORE-TERMINAL-MODE can put them back. Calling this again while FD is already
+raw re-applies the mode without disturbing the remembered settings. Signals
+TERMINAL-MODE-OPERATION-FAILED if the terminal cannot be queried or reconfigured."
   (handler-case
       (let ((raw (%raw-termios (%read-termios fd))))
         ;; The drain is deliberately OUTSIDE the guard below, and has to stay
@@ -197,11 +194,12 @@ the terminal cannot be queried or reconfigured."
       (error 'terminal-mode-operation-failed
              :operation :enable :fd fd :reason condition))))
 
-(defun restore-terminal-mode (&optional (fd 0))
+(defun restore-terminal-mode (&optional (fd 0) &key preserve-snapshot-p)
   "Restore the settings ENABLE-RAW-MODE saved for FD.
-Returns NIL when FD was never put into raw mode. Signals
-TERMINAL-MODE-OPERATION-FAILED if the restore itself fails, rather than leaving
-the terminal in an unknown state silently."
+When PRESERVE-SNAPSHOT-P is true, keep that snapshot across a cooked interval so
+later raw-mode enables cannot replace it with settings left by a child. Without
+it, remove the snapshot after restoring. Returns NIL when FD has no snapshot.
+Signals TERMINAL-MODE-OPERATION-FAILED if restore fails."
   (let ((saved (%saved-termios fd)))
     (when saved
       (handler-case
@@ -220,7 +218,8 @@ the terminal in an unknown state silently."
             ;; only way back. The terminal is stranded raw for good.
             (sb-sys:without-interrupts
               (%apply-termios fd saved)
-              (%forget-termios fd)
+              (unless preserve-snapshot-p
+                (%forget-termios fd))
               t))
         (error (condition)
           (error 'terminal-mode-operation-failed

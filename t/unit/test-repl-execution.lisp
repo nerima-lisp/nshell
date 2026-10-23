@@ -395,7 +395,7 @@
              ('nshell.presentation::install-interactive-terminal (lambda () t))
              ('nshell.presentation::restore-interactive-terminal
               (lambda () (setf restored t)))
-             ('nshell.infrastructure.terminal:restore-terminal-mode (lambda (&optional fd) (declare (ignore fd))))
+             ('nshell.infrastructure.terminal:restore-terminal-mode (lambda (&optional fd &key preserve-snapshot-p) (declare (ignore fd preserve-snapshot-p))))
              ('nshell.infrastructure.terminal:enable-raw-mode
               (lambda (&optional fd)
                 (declare (ignore fd))

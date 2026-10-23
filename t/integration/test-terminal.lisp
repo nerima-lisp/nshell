@@ -123,20 +123,53 @@ settings rather than inheriting the editor's mode."
       (expect (%flag-set-p (%oflag fd) sb-posix:opost) :to-be-truthy)
       (nshell.infrastructure.terminal:restore-terminal-mode fd)))
 
-  (it "raw-mode-enable-is-idempotent"
-    "A second enable does not overwrite the saved settings, so one restore
-still returns the terminal to how it started. shell-sigcont-handler re-enables
-raw mode with no matching restore, which is exactly this case."
+  (it "raw-mode-retains-snapshot-across-simulated-child-changes"
+    "Simulate a foreground command changing PTY flags during a cooked interval.
+Re-enable raw mode, then restore without PRESERVE-SNAPSHOT-P and check the
+initial flags."
     #-(or darwin linux)
     (skip "PTY-backed terminal tests are only supported on Darwin and Linux")
     #+(or darwin linux)
     (with-pty-slave (fd)
-      (let ((original-lflag (%settings-lflag fd)))
-        (nshell.infrastructure.terminal:enable-raw-mode fd)
-        (nshell.infrastructure.terminal:enable-raw-mode fd)
-        (expect (%flag-set-p (%lflag fd) sb-posix:icanon) :to-be-falsy)
-        (nshell.infrastructure.terminal:restore-terminal-mode fd)
-        (expect original-lflag :to-equal (%settings-lflag fd)))))
+      (let ((nshell.infrastructure.terminal::*saved-termios* nil)
+            (startup-lflag (%settings-lflag fd))
+            (startup-iflag (%iflag fd))
+            (startup-oflag (%oflag fd))
+            child-lflag child-iflag child-oflag)
+        ;; Give this PTY a fresh startup snapshot, independent of prior tests.
+        (cl-weave:expect-assertions 13)
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.terminal:enable-raw-mode fd)
+               (nshell.infrastructure.terminal:restore-terminal-mode
+                fd :preserve-snapshot-p t)
+               (expect startup-lflag :to-equal (%settings-lflag fd))
+               (expect startup-iflag :to-equal (%iflag fd))
+               (expect startup-oflag :to-equal (%oflag fd))
+               (let ((child (sb-posix:tcgetattr fd)))
+                 (setf (sb-posix:termios-lflag child)
+                       (logxor (sb-posix:termios-lflag child) sb-posix:echo)
+                       (sb-posix:termios-iflag child)
+                       (logxor (sb-posix:termios-iflag child) sb-posix:ixon)
+                       (sb-posix:termios-oflag child)
+                       (logxor (sb-posix:termios-oflag child) sb-posix:opost))
+                 (sb-posix:tcsetattr fd sb-posix:tcsanow child))
+               (setf child-lflag (%settings-lflag fd)
+                     child-iflag (%iflag fd)
+                     child-oflag (%oflag fd))
+               (expect (equal startup-lflag child-lflag) :to-be-falsy)
+               (expect (equal startup-iflag child-iflag) :to-be-falsy)
+               (expect (equal startup-oflag child-oflag) :to-be-falsy)
+               (nshell.infrastructure.terminal:enable-raw-mode fd)
+               (expect (%flag-set-p (%lflag fd) sb-posix:icanon) :to-be-falsy)
+               (expect (%flag-set-p (%lflag fd) sb-posix:echo) :to-be-falsy)
+               (expect (%flag-set-p (%iflag fd) sb-posix:ixon) :to-be-falsy)
+               (expect child-oflag :to-equal (%oflag fd))
+               (nshell.infrastructure.terminal:restore-terminal-mode fd)
+               (expect startup-lflag :to-equal (%settings-lflag fd))
+               (expect startup-iflag :to-equal (%iflag fd))
+               (expect startup-oflag :to-equal (%oflag fd)))
+          (nshell.infrastructure.terminal:restore-terminal-mode fd)))))
 
   (it "raw-mode-preserves-native-baud-rates-through-repeated-enable-and-restore"
     #-(or darwin linux)

@@ -1,0 +1,40 @@
+{
+  "id": "J07-ssh-hostname",
+  "uc": [
+    "J07"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J07-ssh-hostname> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.ssh/config",
+        "content": "Host scenario-build-host\n  HostName build.invalid\n"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "complete -C \"ssh scenario-\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "scenario-build-host"
+      ]
+    },
+    "exit_code": 0
+  }
+}

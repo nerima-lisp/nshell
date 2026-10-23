@@ -35,8 +35,5 @@
       "equals": ""
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "The current -c CLI does not preserve /bin/sh command argv and standard streams."
   }
 }

@@ -5,8 +5,7 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb",
-      "NSHELL_PROMPT": "R04_INIT_PROMPT_LEAK"
+      "TERM": "dumb"
     },
     "home": "home",
     "cwd": "work"
@@ -15,7 +14,7 @@
     "files": [
       {
         "path": "home/.nshellrc",
-        "content": "export PATH=/r04-config-path:$PATH\n"
+        "content": "echo R04_CONFIG_OUTPUT_LEAK\nexport PATH=/r04-config-path:$PATH\n"
       }
     ]
   },
@@ -26,14 +25,11 @@
   "expected": {
     "stdout": {
       "contains": ["PATH=/r04-config-path"],
-      "excludes": ["R04_INIT_PROMPT_LEAK", "nshell:"]
+      "excludes": ["R04_CONFIG_OUTPUT_LEAK", "nshell:"]
     },
     "stderr": {
       "equals": ""
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "The -ilc path does not yet load .nshellrc environment before handing env to /bin/sh."
   }
 }

@@ -92,7 +92,7 @@ nshell ignores a legacy `~/.nshellrc` and prints a one-line notice.
 ### One-off command
 
 ```sh
-nshell -c 'string upper hello'
+nshell --command 'string upper hello'
 ```
 
 ### Run a script
@@ -111,16 +111,20 @@ runnable sample.
 ### Command line
 
 ```
-Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]
+Usage: nshell [OPTIONS] [-c SHELL_COMMAND [ARGS...]] [--command COMMAND [ARGS...]] [SCRIPT [ARGS...]]
 
 Without arguments, nshell starts an interactive shell when stdin is a terminal
 and reads batch input from stdin otherwise.
-With -c/--command, nshell executes COMMAND once in batch mode; trailing ARGS
-are available as $argv.
+With -c, nshell delegates SHELL_COMMAND and trailing ARGS to /bin/sh.
+With --command, nshell executes COMMAND once in batch mode; trailing ARGS are
+available as $argv.
 With SCRIPT, nshell runs the script file; trailing ARGS are available as $argv.
 
 Options:
   -i, --interactive  Force the interactive line editor.
+  -l, --login        Load the login environment.
+  -c, --shell-command  Delegate COMMAND and ARGS to /bin/sh.
+      --command      Execute a command in nshell.
       --no-config    Do not load the interactive startup file.
       --config PATH  Load PATH instead of the XDG nshell/init.lisp default.
       --no-history   Disable history reads and writes; private mode still suppresses assistant state.

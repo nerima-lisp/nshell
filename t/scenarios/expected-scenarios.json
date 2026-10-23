@@ -16,6 +16,35 @@
       "path": "A02/approx-tmux-pane-start.json"
     },
     {
+      "id": "A03-login-shell-command",
+      "uc": [
+        "A03"
+      ],
+      "path": "A03/login-shell-command.json"
+    },
+    {
+      "id": "A04-A05-login-path-handoff",
+      "uc": [
+        "A04",
+        "A05"
+      ],
+      "path": "A04/login-path-handoff.json"
+    },
+    {
+      "id": "A06-login-environment",
+      "uc": [
+        "A06"
+      ],
+      "path": "A06/login-environment.json"
+    },
+    {
+      "id": "A07-quiet-login-command",
+      "uc": [
+        "A07"
+      ],
+      "path": "A07/quiet-login-command.json"
+    },
+    {
       "id": "A08-ctrl-d-exits",
       "uc": [
         "A08"
@@ -58,6 +87,18 @@
       "path": "A13/config-error-keeps-prompt.json"
     },
     {
+      "id": "B01-B06-shell-caller-handoff",
+      "uc": [
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06"
+      ],
+      "path": "B01/shell-caller-handoff.json"
+    },
+    {
       "id": "B02-approx-remote-shell-command-contract",
       "uc": [
         "B02"
@@ -79,11 +120,40 @@
       "path": "B06/approx-shell-c-command-contract.json"
     },
     {
+      "id": "B07-B08-interactive-callers",
+      "uc": [
+        "B07",
+        "B08"
+      ],
+      "path": "B07/interactive-callers.json"
+    },
+    {
       "id": "B09-command-stdio-and-status",
       "uc": [
         "B09"
       ],
       "path": "B09/command-stdio-and-status.json"
+    },
+    {
+      "id": "B09-empty-shell-command",
+      "uc": [
+        "B09"
+      ],
+      "path": "B09/empty-shell-command.json"
+    },
+    {
+      "id": "B09-shell-command-argv",
+      "uc": [
+        "B09"
+      ],
+      "path": "B09/shell-command-argv.json"
+    },
+    {
+      "id": "B10-login-command-environment",
+      "uc": [
+        "B10"
+      ],
+      "path": "B10/login-command-environment.json"
     },
     {
       "id": "C01-batch-command",

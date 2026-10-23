@@ -1,0 +1,67 @@
+{
+  "id": "H02-approx-seeded-session-history",
+  "uc": [
+    "H02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H02-approx-seeded-session-history> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.local/state/nshell/history",
+        "content": "# nshell-history-v3 108\n(:text \"echo H02_SHARED_SEED\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "SHARED_SEED"
+    },
+    {
+      "type": "wait",
+      "contains": "echo H02_SHARED_SEED",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H02_SHARED_SEED"
+      ]
+    },
+    "exit_code": 0
+  }
+}

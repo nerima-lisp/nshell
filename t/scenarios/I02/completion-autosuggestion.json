@@ -1,0 +1,73 @@
+{
+  "id": "I02-completion-autosuggestion",
+  "uc": [
+    "I02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_I02-completion-autosuggestion> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "complete -c suggest-tool -a \"--blue --bold\"\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "true; echo I02_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I02_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "suggest-tool --b"
+    },
+    {
+      "type": "wait",
+      "contains": "--blue",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "--blue"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true
+}

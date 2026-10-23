@@ -1,0 +1,32 @@
+{
+  "id": "C16-approx-process-substitution-input",
+  "uc": [
+    "C16"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "equals": "C16_PROCESS_VALUE"
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "cat <(printf 'C16_PROCESS_VALUE')"
+  }
+}

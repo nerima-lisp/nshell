@@ -1,0 +1,35 @@
+{
+  "id": "B03-approx-remote-copy-output-is-clean",
+  "uc": [
+    "B03"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "equals": "B03_MACHINE_OUTPUT\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "printf \"B03_MACHINE_OUTPUT\\n\""
+  }
+}

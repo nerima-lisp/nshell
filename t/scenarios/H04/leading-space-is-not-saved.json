@@ -1,0 +1,67 @@
+{
+  "id": "H04-leading-space-is-not-saved",
+  "uc": [
+    "H04"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H04-leading-space-is-not-saved> ",
+      "SCENARIO_VALUE": "H04_PRIVATE_PREFIX"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": " echo \"$SCENARIO_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H04_PRIVATE_PREFIX",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H04_PRIVATE_PREFIX"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "history": {
+        "path": ".local/state/nshell/history",
+        "excludes": [
+          " echo \"$SCENARIO_VALUE\""
+        ]
+      }
+    }
+  }
+}

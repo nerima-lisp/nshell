@@ -90,10 +90,10 @@ Returns NIL when BODY/FINAL is not an SGR mouse report."
 (defun decode-control-key (ch)
   (key-event-from-spec (char-code ch) +control-key-specs+))
 
-(defun decode-character-key (ch)
+(defun decode-character-key (ch &key vi-insert-mode-p)
   (cond
     ((char= ch +escape+)
-     (read-escape-key-event))
+     (read-escape-key-event :vi-insert-mode-p vi-insert-mode-p))
     ((decode-control-key ch))
     ((printable-char-p ch) (make-key-event :char ch))
     (t (make-key-event :unknown ch))))

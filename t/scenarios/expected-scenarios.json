@@ -1450,6 +1450,13 @@
         "G12"
       ],
       "path": "G02/vi-e-nfd-grapheme-boundary.json"
+    },
+    {
+      "id": "G02-vi-insert-escape-e-same-write",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/vi-insert-escape-e-same-write.json"
     }
   ]
 }

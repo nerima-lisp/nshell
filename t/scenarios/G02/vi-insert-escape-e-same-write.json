@@ -1,0 +1,77 @@
+{
+  "id": "G02-vi-insert-escape-e-same-write",
+  "uc": [
+    "G02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G02_VI_ESCAPE> ",
+      "NSHELL_VI_MODE": "1",
+      "NSHELL_EDITOR": "sh editor.sh"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/editor.sh",
+        "content": "printf '%s\\n' 'G02_ESCAPE_EDITOR_STARTED'\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "G02_ESC_O"
+      ],
+      "excludes": [
+        "G02_ESCAPE_EDITOR_STARTED",
+        "G02_ESC_OX"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "printf '%s%s' G02_ESC_ OX"
+    },
+    {
+      "type": "keys",
+      "text": "\u001be"
+    },
+    {
+      "type": "key",
+      "key": "x"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "G02_ESC_O",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

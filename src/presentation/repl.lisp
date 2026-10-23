@@ -10,6 +10,17 @@
   (let ((*preserve-transient-panel-on-next-prompt-p* t))
     (render-prompt-cont)))
 
+(defun %read-key-event-for-current-mode (interrupt-predicate)
+  "Read a key with vi insert Escape handling when that mode is active."
+  (if (and *vi-mode-enabled*
+           *input-state*
+           (eq (input-state-mode *input-state*) :insert))
+      (nshell.infrastructure.terminal:read-key-event
+       :interrupt-predicate interrupt-predicate
+       :vi-insert-mode-p t)
+      (nshell.infrastructure.terminal:read-key-event
+       :interrupt-predicate interrupt-predicate)))
+
 (defun %assistant-repeat-cancel-event-p (event)
   (let ((last-cancel-at *assistant-last-cancel-at*)
         (now (boundary-monotonic)))
@@ -162,8 +173,7 @@
   (if (nshell.infrastructure.acl:consume-terminal-resize-p)
       (lambda () (%render-prompt-after-terminal-resize))
     (let* ((raw-event
-            (nshell.infrastructure.terminal:read-key-event
-             :interrupt-predicate
+            (%read-key-event-for-current-mode
              (lambda ()
                (or (%handle-pending-shell-termination)
                    (when (nshell.infrastructure.acl:consume-sigint-received-p)

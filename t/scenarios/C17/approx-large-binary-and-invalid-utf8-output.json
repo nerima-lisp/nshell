@@ -1,0 +1,35 @@
+{
+  "id": "C17-approx-large-binary-and-invalid-utf8-output",
+  "uc": [
+    "C17"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "C17_LARGE",
+        "C17_BINARY"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "yes C17_LARGE | head -n 10000; printf '\\000C17_BINARY\\377'"
+  }
+}

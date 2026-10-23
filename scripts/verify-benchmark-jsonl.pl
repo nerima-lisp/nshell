@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 use B qw(SVp_IOK SVp_NOK svref_2object);
-use JSON::PP qw(decode_json);
+use JSON::PP qw(decode_json encode_json);
 use POSIX qw(isfinite);
 use File::Temp qw(tempfile);
 
@@ -184,6 +184,27 @@ sub verify_process {
     }
 }
 
+sub comparable_competitor_arguments {
+    my ($record) = @_;
+    my @actual = @{$record->{command_argv}};
+    shift @actual;
+    if ($record->{scenario} eq 'resident-batch-throughput') {
+        fail('resident batch command must use stdin only') if @actual;
+        return [];
+    }
+
+    my $subject = $record->{subject};
+    my $command = 'echo nshell-bench-sentinel';
+    my @expected = $subject eq 'nshell'
+      ? ('--no-config', '--command', $command)
+      : ($subject eq 'bash' || $subject eq 'zsh')
+        ? ('-c', $command)
+        : fail("unsupported competitor subject $subject");
+    fail("$subject command_argv does not match its command mode")
+      unless join("\0", @actual) eq join("\0", @expected);
+    return [ '-c', $command ];
+}
+
 sub verify_competitor_process {
     my ($record) = @_;
     common_metadata($record, 1);
@@ -237,6 +258,7 @@ sub verify_competitor_process {
     fail('command_argv must not be empty') unless @$argv;
     string($argv->[$_], "command_argv[$_]") for 0 .. $#$argv;
     fail('command_argv[0] must equal executable_path') unless $argv->[0] eq $path;
+    comparable_competitor_arguments($record);
     fail('environment_policy must be allowlist-v1')
       unless string($record->{environment_policy}, 'environment_policy') eq 'allowlist-v1';
     my $environment = object($record->{environment}, 'environment');
@@ -303,7 +325,7 @@ sub verify_handle {
         my %subjects = map { $_->{subject} => 1 } @run;
         fail("run $run_id needs at least two candidates") unless keys(%subjects) >= 2;
         my $canonical = JSON::PP->new->canonical;
-        my $reference = $canonical->encode({ argv => [ @{$run[0]->{command_argv}}[1 .. $#{$run[0]->{command_argv}}] ], environment => $run[0]->{environment}, fixture => $run[0]->{fixture} });
+        my $reference = $canonical->encode({ argv => comparable_competitor_arguments($run[0]), environment => $run[0]->{environment}, fixture => $run[0]->{fixture} });
         for my $subject (keys %subjects) {
             my @subject = grep { $_->{subject} eq $subject } @run;
             my $repetitions = $subject[0]->{configured_repetitions};
@@ -313,8 +335,8 @@ sub verify_handle {
               unless join(',', sort { $a <=> $b } keys %indices) eq join(',', 1 .. $repetitions);
             for my $record (@subject) {
                 fail("run $run_id eligible record is not successful") unless $record->{status} eq 'ok';
-                my $signature = $canonical->encode({ argv => [ @{$record->{command_argv}}[1 .. $#{$record->{command_argv}}] ], environment => $record->{environment}, fixture => $record->{fixture} });
-                fail("run $run_id does not use identical fixture, argv, and environment") unless $signature eq $reference;
+                my $signature = $canonical->encode({ argv => comparable_competitor_arguments($record), environment => $record->{environment}, fixture => $record->{fixture} });
+                fail("run $run_id does not use equivalent command, fixture, and environment") unless $signature eq $reference;
             }
         }
       }
@@ -372,6 +394,17 @@ sub competitor_fixture {
     };
 }
 
+sub nshell_competitor_fixture {
+    my $record = competitor_fixture();
+    $record->{subject} = 'nshell';
+    $record->{executable_path} = '/nix/store/00000000000000000000000000000000-nshell/bin/nshell';
+    $record->{command_argv} = [
+        $record->{executable_path}, '--no-config', '--command', 'echo nshell-bench-sentinel',
+    ];
+    $record->{repetition_run_id} = 'run-1/nshell';
+    return $record;
+}
+
 sub competitor_batch_fixture {
     my $record = competitor_fixture();
     $record->{benchmark} = 'shell-competitor-resident-batch';
@@ -390,7 +423,7 @@ sub self_test {
     $failed_competitor->{raw_samples_ms} = [];
     $failed_competitor->{failure_reason} = 'fixture command failed';
     delete $failed_competitor->{statistics_ms};
-    my @valid = (completion_fixture(), process_fixture(), competitor_fixture(), competitor_batch_fixture(), $failed_competitor);
+    my @valid = (completion_fixture(), process_fixture(), competitor_fixture(), nshell_competitor_fixture(), competitor_batch_fixture(), $failed_competitor);
     verify_record($_) for @valid;
 
     my @invalid;
@@ -403,6 +436,7 @@ sub self_test {
     push @invalid, sub { my $r = process_fixture(); $r->{ranking_eligible} = JSON::PP::true; verify_record($r) };
     push @invalid, sub { my $r = process_fixture(); $r->{configured_samples} = 99; verify_record($r) };
     push @invalid, sub { my $r = competitor_fixture(); $r->{executable_path} = '/bin/bash'; verify_record($r) };
+    push @invalid, sub { my $r = nshell_competitor_fixture(); $r->{command_argv} = [$r->{executable_path}, '-c', 'echo nshell-bench-sentinel']; verify_record($r) };
     push @invalid, sub { my $r = competitor_fixture(); $r->{environment}{PATH} = '/bin'; verify_record($r) };
     push @invalid, sub { my $r = competitor_fixture(); $r->{status} = 'failed'; delete $r->{statistics_ms}; verify_record($r) };
     push @invalid, sub { my $r = competitor_batch_fixture(); $r->{fixture}{command_count} = 0; verify_record($r) };
@@ -410,6 +444,25 @@ sub self_test {
     for my $case (@invalid) {
         fail('self-test accepted an invalid record') if eval { $case->(); 1 };
     }
+
+    my ($group, $group_path) = tempfile();
+    for my $repetition (1 .. 2) {
+        for my $subject (qw(nshell bash)) {
+            my $record = $subject eq 'nshell' ? nshell_competitor_fixture() : competitor_fixture();
+            $record->{run_id} = 'equivalent-command-self-test';
+            $record->{repetition_run_id} = "equivalent-command-self-test/$repetition/$subject";
+            $record->{repetition_index} = $repetition;
+            $record->{comparable} = JSON::PP::true;
+            $record->{ranking_eligible} = JSON::PP::true;
+            $record->{comparison_reason} = 'equivalent command and verified observable result';
+            print {$group} encode_json($record), "\n";
+        }
+    }
+    close $group or fail("cannot close self-test file: $!");
+    open my $group_input, '<', $group_path or fail("cannot open self-test file: $!");
+    my $group_count = verify_handle($group_input, 'equivalent-command-self-test');
+    close $group_input;
+    fail('self-test did not verify all equivalent-command records') unless $group_count == 4;
 
     my ($empty, $empty_path) = tempfile();
     close $empty;

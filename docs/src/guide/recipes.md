@@ -177,11 +177,12 @@ NSHELL_COMPARE_RUN_ID=local-01 NSHELL_COMPARE_REPETITIONS=2 NSHELL_COMPARE_SAMPL
 perl scripts/verify-benchmark-jsonl.pl competitors.jsonl
 ```
 
-The harness uses identical `-c 'echo nshell-bench-sentinel'` arguments. `echo`
-is implemented as a builtin by every candidate, and the harness checks stdout,
-stderr, and exit status before and after measurement. A run is ranking-eligible
-only when at least two candidates complete every one of at least two
-repetitions; the verifier independently checks the complete run group.
+The nshell candidate uses `--no-config --command`; Bash and Zsh use `-c` with
+the same `echo nshell-bench-sentinel` command. `echo` is a builtin in every
+candidate. The harness checks stdout, stderr, and exit status before and after
+measurement. A run is ranking-eligible only when at least two candidates
+complete every one of at least two repetitions; the verifier independently
+checks the complete run group.
 
 The cache classification is `fresh-process-warm-fs`: each sample is a fresh
 process, but the harness does not claim to flush filesystem or executable

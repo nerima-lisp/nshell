@@ -1,0 +1,39 @@
+{
+  "id": "J06-catalog-subcommands",
+  "uc": [
+    "J06"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J06-catalog-subcommands> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "complete -C \"git st\"; complete -C \"jj st\"; complete -C \"nix b\"; complete -C \"cargo b\"; complete -C \"docker p\"; complete -C \"kubectl g\"; complete -C \"gh pr\"; complete -C \"npm i\"; complete -C \"pnpm i\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "status",
+        "build",
+        "ps",
+        "get",
+        "install"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "O14-function-directory-autoload",
+  "uc": [
+    "O14"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/functions/o14_greet.nsh",
+        "content": "(defun o14_greet () (echo O14_AUTOLOAD_OK))\n"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "o14_greet\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O14_AUTOLOAD_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -32,5 +32,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L03 owns alias and eval execution without reparsing errors."
   }
 }

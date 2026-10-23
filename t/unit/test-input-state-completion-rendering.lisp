@@ -300,9 +300,9 @@
     (flet ((ins (text &key (ctx nil))
              (nshell.presentation::%completion-insertion-text text :quote-context ctx))
            (word-value (input)
-             (nshell.domain.parsing:token-value
-              (second (nshell.domain.parsing:tokenization-result-tokens
-                       (nshell.domain.parsing:tokenize input))))))
+             (with-complete-command-line (result ast input)
+               (declare (ignore result))
+               (first (nshell.domain.parsing:command-node-arg-values ast)))))
       (expect "foo" :to-equal (ins "foo"))
       (expect "foo\\ bar" :to-equal (ins "foo bar"))
       (expect "foo\\$bar" :to-equal (ins "foo$bar"))

@@ -1,0 +1,40 @@
+{
+  "id": "J15-sexp-context",
+  "uc": [
+    "J15"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J15-sexp-context> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/item.txt",
+        "content": "item"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "complete -C \"(echo item\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "item.txt"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -65,5 +65,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-R05 owns XDG configuration placement and its diagnostics."
+  }
 }

@@ -135,6 +135,13 @@
       "path": "B09/batch-command-uses-nshell-builtins.json"
     },
     {
+      "id": "B09-pty-command-uses-nshell-builtins",
+      "uc": [
+        "B09"
+      ],
+      "path": "B09/pty-command-uses-nshell-builtins.json"
+    },
+    {
       "id": "B09-command-stdio-and-status",
       "uc": [
         "B09"

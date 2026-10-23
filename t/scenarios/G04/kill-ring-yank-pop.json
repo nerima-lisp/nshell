@@ -2,6 +2,7 @@
   "id": "G04-kill-ring-yank-pop",
   "uc": ["G04"],
   "mode": "pty",
+  "input_delay_seconds": 0.1,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",

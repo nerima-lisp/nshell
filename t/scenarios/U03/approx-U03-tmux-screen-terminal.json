@@ -1,0 +1,59 @@
+{
+  "id": "U03-tmux-screen-terminal",
+  "uc": [
+    "U03"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "screen-256color",
+      "NSHELL_PROMPT": "U03> ",
+      "SCENARIO_MARKER": "U03_TMUX_SCREEN_OK"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_MARKER"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "U03_TMUX_SCREEN_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "U03_TMUX_SCREEN_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

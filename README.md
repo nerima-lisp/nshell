@@ -51,10 +51,29 @@ the edited line to nshell. Save and quit the editor, then press Enter in nshell
 to execute it. See [History expansion](docs/src/guide/concepts.md#history-expansion-is-explicit)
 for the expansion forms.
 
-History is stored in `~/.nshell_history` with owner-only permissions. Symlinks,
-hard links, and files owned by another user are rejected. A malformed tail is
-reported without discarding existing bytes; further appends are refused until
-the file is moved aside. `--no-history` disables persistence.
+History is stored in `$XDG_DATA_HOME/nshell/history` when `XDG_DATA_HOME` is an
+absolute path, or `~/.local/share/nshell/history` otherwise. If that file does
+not exist, nshell imports legacy records from `~/.nshell_history` and leaves
+the source file unchanged. Imported command text is deduplicated, and later
+starts read the new file instead of importing again. History files have
+owner-only permissions. Symlinks, hard links, nonregular files, and files
+owned by another user are rejected. Malformed or truncated records are
+reported. The reader keeps valid records before damaged data and resumes at
+the next valid record frame when it finds one. On the next successful append,
+nshell repairs the file with valid unique records, adds the command if it is
+not already present, and discards damaged bytes.
+
+The interactive startup file is `$XDG_CONFIG_HOME/nshell/init.lisp` when
+`XDG_CONFIG_HOME` is an absolute path, or `~/.config/nshell/init.lisp`
+otherwise. `--config PATH` selects another file, and `--no-config` skips it.
+When using the default path, the legacy `~/.nshellrc` is ignored with a
+one-line notice.
+
+Use `--no-history` to disable history reads and writes, including in-session
+history recording. In an interactive session with history reads enabled,
+`--private` keeps existing history available but does not save that session's
+commands. It also suppresses local assistant transcript, snapshot, and audit
+persistence.
 
 The interactive `agent` builtin proposes commands for review. Every proposal,
 including one classified as safe, requires Enter before execution; blocked

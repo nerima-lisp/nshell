@@ -1,5 +1,5 @@
 {
-  "id": "H15-history-uses-xdg-state-home",
+  "id": "H15-history-uses-xdg-data-home",
   "uc": [
     "H15"
   ],
@@ -8,7 +8,7 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "SCENARIO_H15-history-uses-xdg-state-home> ",
+      "NSHELL_PROMPT": "SCENARIO_H15-history-uses-xdg-data-home> ",
       "SCENARIO_VALUE": "H15_XDG_HISTORY"
     },
     "home": "home",
@@ -57,14 +57,11 @@
     "exit_code": 0,
     "side_effects": {
       "history": {
-        "path": ".local/state/nshell/history",
+        "path": ".local/share/nshell/history",
         "contains": [
-          "echo \"$SCENARIO_VALUE\""
+          "echo \\\"$SCENARIO_VALUE\\\""
         ]
       }
     }
-  },
-  "expected_failure": {
-    "reason": "WP-R05 owns XDG state placement for history."
   }
 }

@@ -135,5 +135,5 @@ values.")
            #:history-record-add #:history-record-for-entry
            #:history-record-matches-p #:history-record-filter-token
            #:*history-record-to-append*
-           #:load-config #:save-config))
+           #:load-config #:save-config #:config-file-path))
 )

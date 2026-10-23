@@ -1,0 +1,144 @@
+{
+  "id": "T05-legacy-history-import-is-idempotent",
+  "uc": [
+    "T05"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "SCENARIO_DONE": "T05_SESSION_DONE"
+    },
+    "home": "home",
+    "cwd": "home",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.nshell_history",
+        "content": "# nshell-history-v2 28\necho T05_HISTORY_IMPORTED_OK\n"
+      }
+    ]
+  },
+  "sessions": [
+    {
+      "id": "first-start",
+      "prompt": "T05-A> ",
+      "steps": [
+        {
+          "type": "key",
+          "key": "C-r"
+        },
+        {
+          "type": "keys",
+          "text": "T05_"
+        },
+        {
+          "type": "key",
+          "key": "C-c"
+        },
+        {
+          "type": "key",
+          "key": "C-a"
+        },
+        {
+          "type": "key",
+          "key": "C-k"
+        },
+        {
+          "type": "keys",
+          "text": "sh -c 'needle=\"echo T05_\"; needle=\"${needle}HISTORY_IMPORTED_OK\"; grep -F -c \"$needle\" \"$HOME/.local/share/nshell/history\" | grep -Fx 1 && printf \"%s%s\" T05_IMPORT_ APPEARS_ONCE'"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "keys",
+          "text": "echo \"$SCENARIO_DONE\""
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "T05_SESSION_DONE",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "exit"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait_exit",
+          "timeout_seconds": 10
+        }
+      ]
+    },
+    {
+      "id": "second-start",
+      "prompt": "T05-B> ",
+      "steps": [
+        {
+          "type": "keys",
+          "text": "echo \"$SCENARIO_DONE\""
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "T05_SESSION_DONE",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "exit"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait_exit",
+          "timeout_seconds": 10
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "echo T05_HISTORY_IMPORTED_OK",
+        "T05_IMPORT_APPEARS_ONCE",
+        "T05_SESSION_DONE"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": ".nshell_history",
+          "equals": "# nshell-history-v2 28\necho T05_HISTORY_IMPORTED_OK\n"
+        }
+      ],
+      "history": {
+        "path": ".local/share/nshell/history",
+        "contains": [
+          "echo T05_HISTORY_IMPORTED_OK"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "id": "H02-live-history-shared-between-sessions",
+  "uc": [
+    "H02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "SCENARIO_VALUE": "H02_READER",
+      "SCENARIO_READY": "H02_WRITER_READY",
+      "SCENARIO_DONE": "H02_WRITER_DONE",
+      "SCENARIO_READER_READY": "H02_READER_READY",
+      "SCENARIO_READER_DONE": "H02_READER_DONE"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "sessions": [
+    {
+      "id": "writer",
+      "prompt": "H02-WRITER> ",
+      "steps": [
+        {
+          "type": "keys",
+          "text": "sh -c ': SCENARIO_READER_ONLY; test -z \"$H02_READER_FLAG\" || printf \"%s%s\" \"$SCENARIO_VALUE\" \"_VALUE\"; echo \"$SCENARIO_READY\"'"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "H02_WRITER_READY",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "echo \"$SCENARIO_DONE\""
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "H02_WRITER_DONE",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "exit"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait_exit",
+          "timeout_seconds": 10
+        }
+      ]
+    },
+    {
+      "id": "reader",
+      "prompt": "H02-READER> ",
+      "steps": [
+        {
+          "type": "keys",
+          "text": "export H02_READER_FLAG=1 && echo \"$SCENARIO_READER_READY\""
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "H02_READER_READY",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "key",
+          "key": "C-r"
+        },
+        {
+          "type": "keys",
+          "text": "SCENARIO_READER_ONLY"
+        },
+        {
+          "type": "key",
+          "key": "Right"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "keys",
+          "text": "echo \"$SCENARIO_READER_DONE\""
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "H02_READER_DONE",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "exit"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait_exit",
+          "timeout_seconds": 10
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H02_WRITER_DONE",
+        "H02_READER_READY",
+        "H02_READER_VALUE",
+        "H02_READER_DONE"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "history": {
+        "path": ".local/share/nshell/history",
+        "contains": [
+          "SCENARIO_READER_ONLY"
+        ]
+      }
+    }
+  }
+}

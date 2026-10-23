@@ -66,9 +66,10 @@ The runner sends Enter to make the initial prompt appear and waits for that
 marker before executing the scenario steps.
 `load_config` is optional and defaults to `false`; it is valid only for PTY
 scenarios. Set it to `true` when a scenario needs to load startup configuration
-from its isolated home. With the default `environment.home`, add
-`home/.nshellrc` to `preconditions.files`; the file contains plain nshell
-commands. If `environment.home` changes, place `.nshellrc` there instead. The
+from its isolated home. The runner sets `XDG_CONFIG_HOME` to `.config` under
+the scenario home by default, so add `home/.config/nshell/init.lisp` to
+`preconditions.files`; the file contains plain nshell commands. If
+`environment.home` changes, use that home directory in the fixture path. The
 runner otherwise passes `--no-config`.
 
 An input echo is the terminal displaying text or a key sequence sent by a
@@ -87,8 +88,9 @@ before launching:
   `expected.screen.equals`, or `expected.screen.contains` if an input echo or
   prompt redraw contains the entire value.
 
-`excludes` assertions require the text to be absent from output and are not
-subject to this rejection.
+`excludes` assertions require the checked text to be absent from its target,
+such as output, screen, file, or history contents. They are not subject to this
+rejection.
 
 End each PTY step sequence with `wait_exit` to synchronize with shell exit and
 record its status. `expected.stream` checks output captured from the PTY during

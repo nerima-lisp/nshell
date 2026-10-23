@@ -3,15 +3,18 @@
 nshell colors the prompt, syntax highlighting, and completion menu from a
 single **theme**: a mapping from named roles (`command`, `prompt-path`,
 `completion-file`, and so on) to a style. The `theme` builtin lets you switch
-between built-in presets or override individual roles. `~/.nshellrc` runs
-plain nshell commands at interactive startup. `--no-config` skips the file,
-and `--config PATH` selects another file. Batch and script runs do not load it.
+between built-in presets or override individual roles. The interactive startup
+file is `$XDG_CONFIG_HOME/nshell/init.lisp` when `XDG_CONFIG_HOME` is an
+absolute path, or `~/.config/nshell/init.lisp` otherwise. It runs plain nshell
+commands at startup. `--no-config` skips it, and `--config PATH` selects another
+file. Batch and script runs do not load it. With default path selection,
+`~/.nshellrc` is ignored and nshell prints a one-line notice.
 
 ## East Asian ambiguous character width
 
 Some Unicode characters, such as `·`, `…`, and `○`, have an East Asian
 ambiguous width. Set `NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH` to `auto` (the
-default), `narrow`, or `wide` in `~/.nshellrc` or the environment:
+default), `narrow`, or `wide` in the startup file or the environment:
 
 ```
 set -x NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH wide
@@ -95,9 +98,8 @@ terminal's default foreground plus those flags.
 nshell detects the terminal's color depth (truecolor, 256-color, or the
 16-color ANSI palette) and downsamples every hex color automatically: to the
 nearest 256-color entry, or on a 16-color terminal to the palette slot with
-the same hue (low-saturation colors become the grays). A preset written for
-truecolor still renders sensibly over a plain ANSI connection. Setting `NO_COLOR` to a nonempty value
-disables color output entirely, regardless of the active theme.
+the same hue (low-saturation colors become the grays). Setting `NO_COLOR` to a
+nonempty value disables color output entirely, regardless of the active theme.
 
 ### Presets
 
@@ -165,7 +167,7 @@ line and exits 1.
 
 Setting `NSHELL_PROMPT` and `NSHELL_RIGHT_PROMPT` in the environment supplies
 the corresponding format at session start; a `prompt left`/`prompt right`
-line in `~/.nshellrc` overrides the variable, since the rc file runs later.
+line in the startup file overrides the variable, since the file runs later.
 
 ## Customizing key bindings
 
@@ -211,7 +213,7 @@ $ bind -e ctrl-t
 An unknown key name or action name exits with status 2 and lists the valid
 names; `bind` with anything else prints a usage line and exits 1. A key name
 is spelled the way it is typed, in lowercase and hyphen-separated (`ctrl-r`,
-`alt-e`, `right`, `shift-tab`). Put `bind` lines in `~/.nshellrc` to apply
+`alt-e`, `right`, `shift-tab`). Put `bind` lines in the startup file to apply
 custom bindings at interactive startup, the same way `theme` lines do.
 
 ### Capturing the previous command's output
@@ -237,17 +239,14 @@ in normal mode and a steady bar while inserting. `set +o vi` restores the
 terminal's default cursor shape. These changes require no extra configuration
 and apply only in an interactive terminal.
 
-## In `~/.nshellrc`
+## The startup file
 
-`.nshellrc` is not a separate configuration format: it is a file of plain
-nshell commands, sourced once at interactive startup before the first prompt
-unless `--no-config` or `--config PATH` changes this behavior. Put a `theme`
-command there to select your preset:
+Put a `theme` command there to select your preset:
 
 ```sh
 theme use tokyo-night
 theme set prompt-git-dirty yellow --bold
 ```
 
-See [examples/nshellrc.example](https://github.com/nerima-lisp/nshell/blob/main/examples/nshellrc.example)
+See [examples/init.lisp.example](https://github.com/nerima-lisp/nshell/blob/main/examples/init.lisp.example)
 for a complete starting point.

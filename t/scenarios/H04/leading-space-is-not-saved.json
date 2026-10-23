@@ -9,7 +9,8 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "SCENARIO_H04-leading-space-is-not-saved> ",
-      "SCENARIO_VALUE": "H04_PRIVATE_PREFIX"
+      "SCENARIO_VALUE": "H04_PRIVATE_PREFIX",
+      "SCENARIO_SAVED_VALUE": "H04_SAVED_ENTRY"
     },
     "home": "home",
     "cwd": "work",
@@ -37,6 +38,19 @@
     },
     {
       "type": "keys",
+      "text": "echo \"$SCENARIO_SAVED_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H04_SAVED_ENTRY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
       "text": "exit"
     },
     {
@@ -51,20 +65,21 @@
   "expected": {
     "stream": {
       "contains": [
-        "H04_PRIVATE_PREFIX"
+        "H04_PRIVATE_PREFIX",
+        "H04_SAVED_ENTRY"
       ]
     },
     "exit_code": 0,
     "side_effects": {
       "history": {
-        "path": ".local/state/nshell/history",
+        "path": ".local/share/nshell/history",
+        "contains": [
+          "echo \\\"$SCENARIO_SAVED_VALUE\\\""
+        ],
         "excludes": [
-          " echo \"$SCENARIO_VALUE\""
+          " echo \\\"$SCENARIO_VALUE\\\""
         ]
       }
     }
-  },
-  "expected_failure": {
-    "reason": "WP-R05 owns history persistence and XDG placement."
   }
 }

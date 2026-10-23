@@ -469,6 +469,156 @@
                  (setf persisted text)))
             (capture-process-output-event :execute))))
       (expect "echo from-history" :to-equal persisted)))
+  (it "private-repl-state-loads-history-without-assistant-exports"
+    (with-repl-test-state
+      (multiple-value-bind (history record)
+          (nshell.infrastructure.persistence:history-record-add
+           (history-kit:make-history) "stored command")
+        (declare (ignore history))
+        (let ((load-count 0)
+              (export-count 0))
+          (with-temporary-functions
+              (('nshell.infrastructure.persistence:load-history-file
+                (lambda ()
+                  (incf load-count)
+                  (list record record)))
+               ('nshell.application:export-assistant-transcript
+                (lambda (&rest arguments)
+                  (declare (ignore arguments))
+                  (incf export-count)))
+               ('nshell.application:export-assistant-snapshot
+                (lambda (&rest arguments)
+                  (declare (ignore arguments))
+                  (incf export-count))))
+            (nshell.presentation::initialize-repl-state
+             :load-config-p nil :history-p t :private-p t)
+            (expect 1 :to-be load-count)
+            (expect '("stored command")
+                    :to-equal
+                    (history-kit:history-entry-texts
+                     (history-kit:history-entries
+                      nshell.presentation::*history*)))
+            (expect nil :to-be nshell.presentation::*assistant-session-id*)
+            (expect nil :to-be
+                    nshell.presentation::*history-persistence-enabled-p*)
+            (setf nshell.presentation::*interactive-terminal-installed-p* t)
+            (nshell.presentation::%export-prompt-state)
+            (expect 0 :to-be export-count))))))
+  (it "private-no-history-mode-skips-history-and-assistant-persistence"
+    (with-repl-test-state
+      (let ((load-count 0)
+            (append-count 0)
+            (export-count 0)
+            (audit-count 0))
+        (with-temporary-functions
+            (('nshell.infrastructure.persistence:load-history-file
+              (lambda ()
+                (incf load-count)
+                nil))
+             ('nshell.infrastructure.persistence:append-history-entry
+              (lambda (text)
+                (declare (ignore text))
+                (incf append-count)))
+             ('nshell.presentation::execute-ast
+              (lambda (ast)
+                (declare (ignore ast))
+                0))
+             ('nshell.application:export-assistant-transcript
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (incf export-count)))
+             ('nshell.application:export-assistant-snapshot
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (incf export-count)))
+             ('nshell.feature.assistant:append-assistant-audit-entry
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (incf audit-count)))
+             ('nshell.presentation::%assistant-context
+              (lambda () nil))
+             ('nshell.presentation::render-prompt-cont
+              (lambda () nil))
+             ('nshell.presentation::render-assistant-progress-panel
+              (lambda (started-at)
+                (declare (ignore started-at))
+                nil)))
+          (let ((nshell.presentation::*history-loading-enabled-p* nil))
+            (nshell.presentation::initialize-repl-state
+             :load-config-p nil :history-p nil :private-p t)
+            (expect 0 :to-be load-count)
+            (expect nil :to-be nshell.presentation::*assistant-session-id*)
+            (expect nil :to-be
+                    nshell.presentation::*history-persistence-enabled-p*)
+            (nshell.presentation::%execute-complete-command nil "echo private")
+            (expect 0 :to-be append-count)
+            (setf nshell.presentation::*interactive-terminal-installed-p* t)
+            (nshell.presentation::%export-prompt-state)
+            (expect 0 :to-be export-count)
+            (with-repl-input-state (:mode :ask-waiting
+                                    :buffer "private question"
+                                    :cursor-pos 16)
+              (setf nshell.presentation::*assistant-request-kind* :ask
+                    nshell.feature.assistant:*assistant-boundaries*
+                      (nshell.feature.assistant:make-assistant-boundary-context
+                       (nshell.feature.assistant:make-assistant-model-boundary
+                        :start-fn (lambda () t)
+                        :request-fn
+                        (lambda (generation payload)
+                          (declare (ignore generation payload))
+                          t)
+                        :poll-fn (lambda (generation)
+                                   (declare (ignore generation))
+                                   (values nil nil))
+                        :stop-fn (lambda () t))))
+              (expect
+               (functionp
+                (nshell.presentation::%process-ask-submit-output-event))
+               :to-be-truthy)
+              (expect 0 :to-be audit-count)))))))
+  (it "private-cli-option-and-environment-select-private-mode"
+    (multiple-value-bind (invocation usage-error-p)
+        (nshell::%parse-cli-arguments '("--private" "--no-history"))
+      (expect nil :to-be usage-error-p)
+      (multiple-value-bind (interactive-p no-config-p config-path
+                           no-history-p private-p)
+          (nshell::%parsed-startup-options invocation)
+        (expect t :to-be no-history-p)
+        (expect t :to-be private-p)
+        (let ((captured nil))
+          (with-temporary-functions
+              (('host-kit:getenv
+                (lambda (name)
+                  (and (string= name "NSHELL_HISTORY_PRIVATE") "1")))
+               ('nshell::tty-p (lambda () t))
+               ('nshell.presentation:run-repl
+                (lambda (&key history-p private-p &allow-other-keys)
+                  (setf captured (list history-p private-p))
+                  0)))
+            (nshell::%run-default-invocation
+             :interactive-p interactive-p
+             :load-config-p (not no-config-p)
+             :config-path config-path
+             :history-p (not no-history-p)
+             :private-p private-p)
+            (expect (list nil t) :to-equal captured)
+            (setf captured nil)
+            (nshell::%run-default-invocation :history-p nil)
+            (expect (list nil t) :to-equal captured))))))
+  (it "repl-execute-expands-history-designator-before-parsing"
+    "Interactive execution expands history references before parsing and persistence."
+    (let ((persisted nil))
+      (with-repl-test-state
+        (history-kit:history-add
+         nshell.presentation::*history*
+         "echo from-history")
+        (with-repl-input-state (:buffer "!!" :cursor-pos 2)
+          (with-temporary-function
+              ('nshell.infrastructure.persistence:append-history-entry
+               (lambda (text)
+                 (setf persisted text)))
+            (capture-process-output-event :execute))))
+      (expect "echo from-history" :to-equal persisted)))
   (it "repl-editor-command-parser-preserves-quoted-and-escaped-arguments"
     "The editor command parser should retain quoted and escaped argument boundaries."
     (expect

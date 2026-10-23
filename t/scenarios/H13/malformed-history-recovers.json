@@ -9,7 +9,9 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "SCENARIO_H13-malformed-history-recovers> ",
-      "SCENARIO_VALUE": "H13_RECOVERY_OK"
+      "SCENARIO_VALUE": "H13_RECOVERY_OK",
+      "SCENARIO_BEFORE_RESULT": "H13_BEFORE_REPLAY_RESULT",
+      "SCENARIO_AFTER_RESULT": "H13_AFTER_REPLAY_RESULT"
     },
     "home": "home",
     "cwd": "work",
@@ -21,12 +23,44 @@
   "preconditions": {
     "files": [
       {
-        "path": "home/.local/state/nshell/history",
-        "content": "# nshell-history-v3 999\n(:text \"broken\""
+        "path": "home/.local/share/nshell/history",
+        "content": "# nshell-history-v3 144\n(:text \"echo \\\"$SCENARIO_BEFORE_RESULT\\\" # H13_BEFORE_CORRUPTION\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n# nshell-history-v3 15\n(:text \"broken\"\n# nshell-history-v3 142\n(:text \"echo \\\"$SCENARIO_AFTER_RESULT\\\" # H13_AFTER_CORRUPTION\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
       }
     ]
   },
   "steps": [
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "H13_BEFORE_CORRUPTION"
+    },
+    {
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "H13_AFTER_CORRUPTION"
+    },
+    {
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
     {
       "type": "keys",
       "text": "echo \"$SCENARIO_VALUE\""
@@ -56,9 +90,22 @@
   "expected": {
     "stream": {
       "contains": [
+        "nshell: history: unable to read",
+        "H13_BEFORE_REPLAY_RESULT",
+        "H13_AFTER_REPLAY_RESULT",
         "H13_RECOVERY_OK"
       ]
     },
-    "exit_code": 0
+    "exit_code": 0,
+    "side_effects": {
+      "history": {
+        "path": ".local/share/nshell/history",
+        "contains": [
+          "echo \\\"$SCENARIO_BEFORE_RESULT\\\" # H13_BEFORE_CORRUPTION",
+          "echo \\\"$SCENARIO_AFTER_RESULT\\\" # H13_AFTER_CORRUPTION",
+          "echo \\\"$SCENARIO_VALUE\\\""
+        ]
+      }
+    }
   }
 }

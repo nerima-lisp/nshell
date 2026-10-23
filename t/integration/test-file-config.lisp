@@ -2,11 +2,11 @@
 
 (describe "file-config-tests"
   (it "file-config-default-path"
-    "The default config path is derived from the user's home directory."
+    "The public config path matches the default when no override is set."
     (let ((nshell.infrastructure.persistence::*config-file-path-override* nil))
       (expect (nshell.infrastructure.persistence::%default-config-file-path)
               :to-equal
-              (nshell.infrastructure.persistence::%config-file-path))))
+              (nshell.infrastructure.persistence:config-file-path))))
 
   (it "file-config-missing-file"
     "Loading a missing config file returns NIL."
@@ -43,7 +43,7 @@
           (delete-file test-path)))))
 
   (it "interactive-startup-sources-config"
-    "Interactive initialization applies .nshellrc through the normal source boundary."
+    "Interactive initialization applies the setting from the selected config file."
     (let* ((config-path (format nil "/tmp/nshell-test-startup-config-~d.lisp"
                                 (random 1000000)))
            (history-path (format nil "/tmp/nshell-test-startup-history-~d"
@@ -79,13 +79,107 @@
       (let ((message
               (with-output-to-string (*error-output*)
                 (nshell.presentation::%load-interactive-config))))
-        (expect (format nil "nshell: .nshellrc exited with status 7~%") :to-equal message))))
+        (expect (format nil "nshell: ~a exited with status 7~%" (namestring (nshell.infrastructure.persistence:config-file-path))) :to-equal message))))
   (it "interactive-config-reports-loading-errors"
-    "An error while loading .nshellrc is reported on standard error."
+    "An error while loading the selected config is reported on standard error."
     (with-temporary-function
         ((quote nshell.infrastructure.persistence:load-config)
          (lambda () (error "broken config")))
       (let ((message
               (with-output-to-string (*error-output*)
                 (nshell.presentation::%load-interactive-config))))
-        (expect (format nil "nshell: .nshellrc: broken config~%") :to-equal message)))))
+        (expect (format nil "nshell: ~a: broken config~%" (namestring (nshell.infrastructure.persistence:config-file-path))) :to-equal message))))
+  (it "file-config-xdg-path-and-override"
+    "The public config path follows XDG_CONFIG_HOME and explicit overrides."
+    (let* ((old-home
+             (nshell.infrastructure.acl:current-environment-value "HOME"))
+           (old-xdg
+             (nshell.infrastructure.acl:current-environment-value
+              "XDG_CONFIG_HOME"))
+           (home (format nil "/tmp/nshell-config-home-~d/" (random 1000000)))
+           (xdg (format nil "/tmp/nshell-config-xdg-~d/" (random 1000000))))
+      (unwind-protect
+           (progn
+             (sb-posix:setenv "HOME" home 1)
+             (sb-posix:setenv "XDG_CONFIG_HOME" xdg 1)
+             (expect (merge-pathnames #P"nshell/init.lisp"
+                                      (uiop:ensure-directory-pathname xdg))
+                     :to-equal
+                     (nshell.infrastructure.persistence:config-file-path))
+             (sb-posix:setenv "XDG_CONFIG_HOME" "" 1)
+             (expect (merge-pathnames #P".config/nshell/init.lisp"
+                                      (user-homedir-pathname))
+                     :to-equal
+                     (nshell.infrastructure.persistence:config-file-path))
+             (sb-posix:setenv "XDG_CONFIG_HOME" "relative/config" 1)
+             (expect (merge-pathnames #P".config/nshell/init.lisp"
+                                      (user-homedir-pathname))
+                     :to-equal
+                     (nshell.infrastructure.persistence:config-file-path))
+             (let ((nshell.infrastructure.persistence::*config-file-path-override*
+                     #P"/tmp/nshell-explicit-config.lisp"))
+               (expect #P"/tmp/nshell-explicit-config.lisp"
+                       :to-equal
+                       (nshell.infrastructure.persistence:config-file-path))))
+        (if old-home
+            (sb-posix:setenv "HOME" old-home 1)
+            (sb-posix:unsetenv "HOME"))
+        (if old-xdg
+            (sb-posix:setenv "XDG_CONFIG_HOME" old-xdg 1)
+            (sb-posix:unsetenv "XDG_CONFIG_HOME")))))
+  (it "file-config-legacy-notice-is-single-line"
+    "The legacy rc notice stays on one line while the selected XDG config loads."
+    (let* ((old-home
+             (nshell.infrastructure.acl:current-environment-value "HOME"))
+           (old-xdg
+             (nshell.infrastructure.acl:current-environment-value
+              "XDG_CONFIG_HOME"))
+           (home (format nil "/tmp/nshell-config-legacy-home-~d/"
+                         (random 1000000)))
+           (xdg (format nil "/tmp/nshell-config-legacy-~d~%/"
+                        (random 1000000)))
+           (legacy (merge-pathnames ".nshellrc" (pathname home)))
+           (config (merge-pathnames #P"nshell/init.lisp"
+                                    (uiop:ensure-directory-pathname xdg))))
+      (unwind-protect
+           (progn
+             (sb-posix:setenv "HOME" home 1)
+             (sb-posix:setenv "XDG_CONFIG_HOME" xdg 1)
+             (ensure-directories-exist legacy)
+             (ensure-directories-exist config)
+             (with-open-file (stream legacy :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+               (write-line "legacy config" stream))
+             (with-open-file (stream config :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+               (write-line "xdg config" stream))
+             (let* ((nshell.infrastructure.persistence::*config-file-path-override*
+                      nil)
+                    (capture (make-string-output-stream))
+                    (loaded (let ((*error-output* capture))
+                              (nshell.infrastructure.persistence:load-config)))
+                    (notice (get-output-stream-string capture)))
+               (expect '("xdg config") :to-equal loaded)
+               (expect (search "legacy ~/.nshellrc found" notice) :to-be-truthy)
+               (expect 1 :to-equal (count (code-char 10) notice))))
+        (if old-home
+            (sb-posix:setenv "HOME" old-home 1)
+            (sb-posix:unsetenv "HOME"))
+        (if old-xdg
+            (sb-posix:setenv "XDG_CONFIG_HOME" old-xdg 1)
+            (sb-posix:unsetenv "XDG_CONFIG_HOME"))
+        (when (probe-file config)
+          (delete-file config))
+        (when (probe-file legacy)
+          (delete-file legacy))
+        (ignore-errors
+          (sb-posix:rmdir
+           (namestring
+            (merge-pathnames #P"nshell/"
+                             (uiop:ensure-directory-pathname xdg)))))
+        (ignore-errors
+          (sb-posix:rmdir (namestring (uiop:ensure-directory-pathname xdg))))
+        (ignore-errors
+          (sb-posix:rmdir (namestring (uiop:ensure-directory-pathname home))))))))

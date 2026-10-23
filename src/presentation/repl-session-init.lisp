@@ -2,7 +2,10 @@
 (in-package #:nshell.presentation)
 
 (defparameter *history-persistence-enabled-p* t
-  "Whether interactive commands are loaded from and appended to history.")
+  "Whether commands entered during this session are added to in-memory and persisted history.")
+(defparameter *history-loading-enabled-p* nil
+  "Whether a running REPL refreshes history from disk.")
+(defvar *history-seen-command-texts* (make-hash-table :test #'equal))
 
 (defvar *assistant-session-sequence* 0)
 
@@ -15,9 +18,9 @@
 
 (defun session-greeting-text ()
   "The greeting line for this session, or NIL for silence. NSHELL_GREETING
-names it; an unset variable keeps the version banner, which is how a first
-session learns what it is running, and an empty one turns it off. Read after
-the startup file has run, so a line in ~/.nshellrc decides it."
+overrides the default version banner. An empty value disables the greeting.
+The variable is read after the configured startup file runs, so that file can
+set it."
   (let ((greeting (nshell.domain.environment:env-get (ensure-environment)
                                                      "NSHELL_GREETING")))
     (cond
@@ -34,9 +37,10 @@ the startup file has run, so a line in ~/.nshellrc decides it."
       (finish-output))))
 
 (defun %config-source-name (path)
-  (if path
-      (namestring (pathname path))
-      ".nshellrc"))
+  (namestring
+   (pathname
+    (or path
+        (nshell.infrastructure.persistence:config-file-path)))))
 
 (defun %load-interactive-config (&key (enabled-p t) path)
   (when enabled-p
@@ -107,27 +111,42 @@ the startup file has run, so a line in ~/.nshellrc decides it."
            :east-asian-ambiguous-width configured))
     (setf cl-tty-kit:*east-asian-ambiguous-wide* (not (null wide-p)))
     wide-p))
+(defun %merge-history-records (history records)
+  "Add unseen persisted records to HISTORY in oldest-first order."
+  (let ((added-p nil))
+    (dolist (entry (history-kit:history-entries history))
+      (setf (gethash (history-kit:history-entry-text entry)
+                     *history-seen-command-texts*)
+            t))
+    (dolist (record records)
+      (let ((text (nshell.infrastructure.persistence:history-record-text record)))
+        (unless (gethash text *history-seen-command-texts*)
+          (nshell.infrastructure.persistence:history-record-add
+           history
+           text
+           :timestamp
+           (nshell.infrastructure.persistence:history-record-timestamp record)
+           :cwd (nshell.infrastructure.persistence:history-record-cwd record)
+           :exit-code
+           (nshell.infrastructure.persistence:history-record-exit-code record)
+           :duration-ms
+           (nshell.infrastructure.persistence:history-record-duration-ms record)
+           :origin (nshell.infrastructure.persistence:history-record-origin record))
+          (setf (gethash text *history-seen-command-texts*) t
+                added-p t))))
+    (when added-p
+      (history-kit:history-reset-navigation history))
+    added-p))
 (defun %seed-history-from-file (history)
-  "Load persisted entries into HISTORY so recall starts at the newest one.
-
-LOAD-HISTORY-FILE already returns entries oldest first (see its docstring),
-which is exactly the order HISTORY-ADD wants: each call records its argument
-as the newest entry, so adding oldest-to-last makes the last (newest) file
-entry the newest entry in HISTORY too. Do not reverse the loaded list here --
-that would hand HISTORY-ADD the newest entry first, burying it under every
-older entry added afterward and inverting recall order."
-  (dolist (record (nshell.infrastructure.persistence:load-history-file))
-    (nshell.infrastructure.persistence:history-record-add
-     history
-     (nshell.infrastructure.persistence:history-record-text record)
-     :timestamp
-     (nshell.infrastructure.persistence:history-record-timestamp record)
-     :cwd (nshell.infrastructure.persistence:history-record-cwd record)
-     :exit-code
-     (nshell.infrastructure.persistence:history-record-exit-code record)
-     :duration-ms
-     (nshell.infrastructure.persistence:history-record-duration-ms record)
-     :origin (nshell.infrastructure.persistence:history-record-origin record))))
+  "Load persisted entries oldest first so the newest record is most recent in HISTORY."
+  (%merge-history-records
+   history
+   (nshell.infrastructure.persistence:load-history-file)))
+(defun %refresh-history-from-file ()
+  (when (and *history-loading-enabled-p* *history*)
+    (%merge-history-records
+     *history*
+     (nshell.infrastructure.persistence:load-history-file))))
 
 (defun %vi-mode-flag-enabled-p (flag)
   (and flag
@@ -135,12 +154,14 @@ older entry added afterward and inverting recall order."
                     (list "" "0" "false" "no")
                     :test (function string-equal)))))
 
-(defun initialize-repl-state (&key (load-config-p t) config-path (history-p t))
-  "Initialize an interactive session with explicit startup persistence policy.
+(defun initialize-repl-state (&key (load-config-p t) config-path (history-p t)
+                                   private-p)
+  "Initialize an interactive session with explicit startup policy.
 
-CONFIG-PATH overrides the default .nshellrc path when LOAD-CONFIG-P is true.
-HISTORY-P controls both loading the existing history and appending commands
-entered during this session."
+CONFIG-PATH overrides the startup file when LOAD-CONFIG-P is true. HISTORY-P
+controls history reads and writes. PRIVATE-P prevents this session's commands
+and assistant state from being written. When HISTORY-P is true, existing
+history remains available in private mode."
   (setf *boundaries* (make-real-boundary-context)
         *running* t
         *last-exit-code* 0
@@ -152,7 +173,8 @@ entered during this session."
         *rerun-confirmation-pending-p* nil
         *rerun-command-assessment* nil
         *failure-explain-available-p* nil
-        *history-persistence-enabled-p* history-p
+        *history-persistence-enabled-p* (and history-p (not private-p))
+        *history-seen-command-texts* (make-hash-table :test #'equal)
         *history* (history-kit:make-history)
         *config* (nshell.domain.configuration:default-config)
         *kb* (nshell.domain.completion:make-empty-knowledge-base)
@@ -167,7 +189,7 @@ entered during this session."
         *assistant-explain-candidates* nil
         *assistant-explain-candidate-index* 0
         *agent-session* nil
-        *assistant-session-id* (%new-assistant-session-id)
+        *assistant-session-id* (unless private-p (%new-assistant-session-id))
         *assistant-pending-transcript* nil
         nshell.application:*agent-start-handler* #'start-agent-session
         nshell.application:*ai-reset-handler* #'reset-ai-session

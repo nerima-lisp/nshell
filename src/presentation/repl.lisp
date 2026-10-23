@@ -206,36 +206,42 @@
         nil)))))
 
 ;; REPL Entry
-(defun run-repl (&key (load-config-p t) config-path (history-p t) greeting-p)
+(defun run-repl (&key (load-config-p t) config-path (history-p t) private-p
+                      greeting-p)
   "Run the interactive REPL and return the process exit code.
 
-LOAD-CONFIG-P, CONFIG-PATH, and HISTORY-P make startup persistence explicit
-for callers such as the executable's command-line policy.
+LOAD-CONFIG-P and CONFIG-PATH control startup configuration. HISTORY-P controls
+history reads and writes. PRIVATE-P prevents this session's commands and
+assistant state from being written. When HISTORY-P is true, existing history
+remains available in private mode.
 
-INSTALL-INTERACTIVE-TERMINAL is called from INSIDE the UNWIND-PROTECT on
-purpose. It changes the process group, the signal handlers, the terminal mode
-and the ANSI modes in that order, so a failure part-way through still leaves
-state to undo; installing outside the cleanup would skip the undo entirely and
-hand the user's next shell a terminal with SGR mouse reporting still on."
-  (initialize-repl-state
-   :load-config-p load-config-p
-   :config-path config-path
-   :history-p history-p)
-  (when greeting-p
-    (print-session-greeting))
-  (unwind-protect
-      (if (setf *interactive-terminal-installed-p*
-                (install-interactive-terminal))
-          (progn
-            (with-cps-trampoline (render-prompt-cont))
-            *last-exit-code*)
+INSTALL-INTERACTIVE-TERMINAL runs inside the UNWIND-PROTECT because it changes
+the process group, signal handlers, terminal mode, and ANSI modes. If setup
+fails part-way through, the cleanup must still restore that state; otherwise
+the next shell could start with SGR mouse reporting still on."
+  (let ((*history-loading-enabled-p* history-p)
+        (*history-persistence-enabled-p* (and history-p (not private-p)))
+        (*history-seen-command-texts* (make-hash-table :test #'equal)))
+    (initialize-repl-state
+     :load-config-p load-config-p
+     :config-path config-path
+     :history-p history-p
+     :private-p private-p)
+    (when greeting-p
+      (print-session-greeting))
+    (unwind-protect
+        (if (setf *interactive-terminal-installed-p*
+                  (install-interactive-terminal))
+            (progn
+              (with-cps-trampoline (render-prompt-cont))
+              *last-exit-code*)
           ;; Raw mode is a precondition for the line editor and could not be
           ;; entered; INSTALL-INTERACTIVE-TERMINAL has already said so on
           ;; stderr. Running the editor against a cooked terminal anyway is the
           ;; one outcome worth avoiding, so end the session instead.
           1)
-    (setf *interactive-terminal-installed-p* nil)
-    (unwind-protect
-         (ignore-errors (nshell.feature.assistant:assistant-model-stop))
-      (restore-interactive-terminal))
-    (format t "Goodbye!~%")))
+      (setf *interactive-terminal-installed-p* nil)
+      (unwind-protect
+          (ignore-errors (nshell.feature.assistant:assistant-model-stop))
+        (restore-interactive-terminal))
+      (format t "Goodbye!~%"))))

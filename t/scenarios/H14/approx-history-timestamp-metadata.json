@@ -57,15 +57,11 @@
     "exit_code": 0,
     "side_effects": {
       "history": {
-        "path": ".local/state/nshell/history",
+        "path": ".local/share/nshell/history",
         "contains": [
-          "# nshell-history-v3",
-          "echo \"$SCENARIO_VALUE\""
+          "echo \\\"$SCENARIO_VALUE\\\""
         ]
       }
     }
-  },
-  "expected_failure": {
-    "reason": "WP-R05 owns history migration and metadata placement."
   }
 }

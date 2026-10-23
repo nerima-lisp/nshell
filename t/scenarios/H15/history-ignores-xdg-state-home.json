@@ -1,0 +1,73 @@
+{
+  "id": "H15-history-ignores-xdg-state-home",
+  "uc": [
+    "H15"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H15-history-ignores-xdg-state-home> ",
+      "SCENARIO_VALUE": "H15_XDG_HISTORY"
+    },
+    "home": "home",
+    "cwd": "home",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H15_XDG_HISTORY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H15_XDG_HISTORY"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": ".local/state/nshell/history",
+          "exists": false
+        }
+      ],
+      "history": {
+        "path": ".local/share/nshell/history",
+        "contains": [
+          "echo \\\"$SCENARIO_VALUE\\\""
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "id": "H05-private-mode-does-not-save-history",
+  "uc": [
+    "H05"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_HISTORY_PRIVATE": "1",
+      "NSHELL_PROMPT": "H05-PRIVATE> ",
+      "SCENARIO_PRIVATE": "H05_PRIVATE_ENTRY"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.local/share/nshell/history",
+        "content": "# nshell-history-v3 111\n(:text \"echo H05_EXISTING_ENTRY\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "H05_"
+    },
+    {
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_PRIVATE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H05_PRIVATE_ENTRY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-l"
+    },
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "SCENARIO_PRIVATE"
+    },
+    {
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H05_EXISTING_ENTRY",
+        "H05_PRIVATE_ENTRY"
+      ]
+    },
+    "screen": {
+      "excludes": [
+        "echo \"$SCENARIO_PRIVATE\""
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "history": {
+        "path": ".local/share/nshell/history",
+        "equals": "# nshell-history-v3 111\n(:text \"echo H05_EXISTING_ENTRY\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    }
+  }
+}

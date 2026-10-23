@@ -4,6 +4,7 @@
   (it "preserves ordinary settings in the actual request and audit payload"
     (cl-weave:expect-assertions 14)
     (with-repl-test-state
+      (setf nshell.presentation::*assistant-session-id* "test-session")
       (repl-test-set-env "NSHELL_AI_MAX_STEPS" "1" t)
       (repl-test-set-env "?" "0")
       (repl-test-set-env "status" "0")

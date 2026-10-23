@@ -41,8 +41,40 @@
                         :duration-ms duration-ms
                         :origin origin))
 
-(defun %default-history-file-path ()
-  (merge-pathnames ".nshell_history" (user-homedir-pathname)))
+  (defun %legacy-history-file-path ()
+    (merge-pathnames ".nshell_history" (user-homedir-pathname)))
+
+  (defun %xdg-data-home ()
+    (let ((value
+            (nshell.infrastructure.acl:current-environment-value
+             "XDG_DATA_HOME")))
+      (when (and value (plusp (length value)))
+        (let ((path (pathname value)))
+          (when (eq :absolute (first (pathname-directory path)))
+            path)))))
+
+  (defun %default-history-file-path ()
+    (let ((xdg (%xdg-data-home)))
+      (if xdg
+          (merge-pathnames #P"nshell/history"
+                           (uiop:ensure-directory-pathname xdg))
+          (merge-pathnames #P".local/share/nshell/history"
+                           (user-homedir-pathname)))))
+
+
+  (defun %history-lock-path (path)
+    (pathname (concatenate 'string (namestring path) ".lock")))
+
+  (defun %history-file-present-p (path)
+    (handler-case
+        (progn
+          (sb-posix:lstat (namestring path))
+          t)
+      (sb-posix:syscall-error (condition)
+        (if (= (sb-posix:syscall-errno condition) sb-posix:enoent)
+            nil
+            (error condition)))))
+
 
 (defun history-file-path ()
   "Return the path used to persist command history."
@@ -54,12 +86,15 @@
                (string= prefix header :end1 prefix-length :end2 prefix-length))
       (let ((length-text (subseq header prefix-length)))
         (when (and (plusp (length length-text))
-                   (every #'digit-char-p length-text))
+                   (every (lambda (character)
+                            (char<= #\0 character #\9))
+                          length-text))
           (handler-case
               (let ((length (parse-integer length-text :junk-allowed nil)))
                 (when (<= length +max-history-entry-length+)
                   length))
             (error () nil)))))))
+
 
 (defun %history-record-header (header)
   (let ((v3-length (%history-record-length-for-prefix
@@ -84,26 +119,43 @@
 
 (defun %history-record-payload-value (payload)
   (handler-case
-      (let ((*read-eval* nil))
-        (multiple-value-bind (value position)
+      (let ((*read-eval* nil)
+            (*read-circle* nil))
+        (multiple-value-bind (payload-value position)
             (read-from-string payload nil nil)
-          (declare (ignore position))
-          (when (and (listp value)
-                     (stringp (getf value :text))
-                     (typep (getf value :timestamp) '(or null integer))
-                     (typep (getf value :cwd) '(or null string))
-                     (typep (getf value :exit-code) '(or null integer))
-                     (typep (getf value :duration-ms) '(or null integer))
-                     (member (getf value :origin)
-                             '(nil :typed :proposal :agent)
-                             :test #'eq))
-            (%make-history-record-from-values
-             :text (getf value :text)
-             :timestamp (getf value :timestamp)
-             :cwd (getf value :cwd)
-             :exit-code (getf value :exit-code)
-             :duration-ms (getf value :duration-ms)
-             :origin (getf value :origin)))))
+          (let ((keys
+                  (and (listp payload-value)
+                       (ignore-errors
+                         (and (evenp (list-length payload-value))
+                              (loop for tail on payload-value by #'cddr
+                                    collect (first tail)))))))
+            (when (and keys
+                       (= (length keys) (length (remove-duplicates keys :test #'eq)))
+                       (every (lambda (key)
+                                (member key '(:text :timestamp :cwd :exit-code
+                                              :duration-ms :origin)
+                                        :test #'eq))
+                              keys)
+                       (member :text keys :test #'eq)
+                       (every (lambda (character)
+                                (find character '(#\Space #\Tab #\Newline
+                                                  #\Return #\Page)))
+                              (subseq payload position))
+                       (stringp (getf payload-value :text))
+                       (typep (getf payload-value :timestamp) '(or null integer))
+                       (typep (getf payload-value :cwd) '(or null string))
+                       (typep (getf payload-value :exit-code) '(or null integer))
+                       (typep (getf payload-value :duration-ms) '(or null integer))
+                       (member (getf payload-value :origin)
+                               '(nil :typed :proposal :agent)
+                               :test #'eq))
+              (%make-history-record-from-values
+               :text (getf payload-value :text)
+               :timestamp (getf payload-value :timestamp)
+               :cwd (getf payload-value :cwd)
+               :exit-code (getf payload-value :exit-code)
+               :duration-ms (getf payload-value :duration-ms)
+               :origin (getf payload-value :origin))))))
     (error () nil)))
 
 (defun %read-history-record (stream)
@@ -128,19 +180,66 @@
                     (values nil :truncated)))
               (values nil :invalid))))))
 
-(defun %read-history-records (stream)
-  (loop with entries = nil
-        do (multiple-value-bind (entry status) (%read-history-record stream)
-             (case status
-               (:eof (return (values (nreverse entries) nil)))
-               (:entry (push entry entries))
-               (:invalid (return (values (nreverse entries) :invalid)))
-               (:truncated (return (values (nreverse entries) :truncated)))))))
+  (defun %next-history-record-position (stream damaged-position)
+    (when (integerp damaged-position)
+      (file-position stream damaged-position)
+      (read-line stream nil nil)
+      (loop for candidate-position = (file-position stream)
+            for header = (read-line stream nil :eof)
+            until (eq header :eof)
+            when (nth-value 1 (%history-record-header header))
+              return candidate-position)))
 
-(defun %report-history-error (operation path condition)
-  (format *error-output*
-          "nshell: history: unable to ~a ~a: ~a~%"
-          operation path condition))
+  (defun %read-history-records (stream)
+    (loop with entries = nil
+          with problem = nil
+          do (let ((start (file-position stream)))
+               (multiple-value-bind (entry status) (%read-history-record stream)
+                 (case status
+                   (:eof
+                    (return (values (nreverse entries) problem)))
+                   (:entry
+                    (push entry entries))
+                   ((:invalid :truncated)
+                    (setf problem (or problem status))
+                    (let ((next (%next-history-record-position stream start)))
+                      (if next
+                          (file-position stream next)
+                          (return (values (nreverse entries) problem))))))))))
+
+  (defun %dedupe-history-records (records)
+    (let ((seen (make-hash-table :test #'equal)))
+      (loop with unique = nil
+            for record in records
+            for text = (history-record-text record)
+            unless (gethash text seen)
+              do (setf (gethash text seen) t)
+                 (push record unique)
+            finally (return (nreverse unique)))))
+
+
+  (defun %single-line-history-message (value)
+    (let* ((text (princ-to-string value))
+           (limit (min 240 (length text))))
+      (with-output-to-string (stream)
+        (loop for index below limit
+              for character = (char text index)
+              do (write-char
+                  (if (or (< (char-code character) 32)
+                          (= (char-code character) 127))
+                      #\Space
+                      character)
+                  stream))
+        (when (> (length text) limit)
+          (write-string "..." stream)))))
+
+  (defun %report-history-error (operation path condition)
+    (format *error-output*
+            "nshell: history: unable to ~a ~a: ~a~%"
+            operation
+            (%single-line-history-message (namestring path))
+            (%single-line-history-message condition)))
+
 
 (defun %append-history-record (stream record)
   (let ((payload (%history-record-payload record)))
@@ -152,47 +251,138 @@
             (length payload)
             payload)))
 
-(defun %open-history-stream (path &key append)
-  (let ((fd (handler-case
-                (if append
-                    (handler-case
-                        (sb-posix:open (namestring path)
-                                       (logior sb-posix:o-rdwr sb-posix:o-creat
-                                               sb-posix:o-excl sb-posix:o-nofollow
-                                               sb-posix:o-nonblock)
-                                       #o600)
-                      (sb-posix:syscall-error (condition)
-                        (if (= (sb-posix:syscall-errno condition) sb-posix:eexist)
-                            (sb-posix:open (namestring path)
-                                           (logior sb-posix:o-rdwr sb-posix:o-nofollow
-                                                   sb-posix:o-nonblock))
-                            (error condition))))
-                    (sb-posix:open (namestring path)
-                                   (logior sb-posix:o-rdonly sb-posix:o-nofollow
-                                           sb-posix:o-nonblock)))
-              (sb-posix:syscall-error (condition)
-                (if (and (not append)
-                         (= (sb-posix:syscall-errno condition) sb-posix:enoent))
-                    nil
-                    (error condition))))))
+  (defun %validate-history-descriptor (fd path &key (secure-mode-p t))
+    (let ((stat (sb-posix:fstat fd)))
+      (unless (and (sb-posix:s-isreg (sb-posix:stat-mode stat))
+                   (= (sb-posix:stat-uid stat) (sb-posix:getuid))
+                   (= (sb-posix:stat-nlink stat) 1))
+        (error "History path ~s must be a regular, singly-linked file owned by this user."
+               (namestring path)))
+      (when secure-mode-p
+        (sb-posix:fchmod fd #o600))))
+
+  (defun %open-history-descriptor (path flags &key create-p)
+    (let* ((safe-flags (logior flags sb-posix:o-nofollow sb-posix:o-nonblock))
+           (create-flags (logior safe-flags sb-posix:o-creat)))
+      (if create-p
+          (handler-case
+              (sb-posix:open (namestring path)
+                             (logior create-flags sb-posix:o-excl)
+                             #o600)
+            (sb-posix:syscall-error (condition)
+              (if (= (sb-posix:syscall-errno condition) sb-posix:eexist)
+                  (sb-posix:open (namestring path) create-flags #o600)
+                  (error condition))))
+          (sb-posix:open (namestring path) safe-flags))))
+
+  (defun %open-history-stream (path &key append (fix-mode-p t))
+  (let* ((fd
+           (handler-case
+               (%open-history-descriptor
+                path
+                (if append sb-posix:o-rdwr sb-posix:o-rdonly)
+                :create-p append)
+             (sb-posix:syscall-error (condition)
+               (if (and (not append)
+                        (= (sb-posix:syscall-errno condition)
+                           sb-posix:enoent))
+                   nil
+                   (error condition)))))
+         (stream nil))
     (when fd
       (handler-case
-          (let ((stat (sb-posix:fstat fd)))
-            (unless (and (sb-posix:s-isreg (sb-posix:stat-mode stat))
-                         (= (sb-posix:stat-uid stat) (sb-posix:getuid))
-                         (= (sb-posix:stat-nlink stat) 1))
-              (error "History must be a regular, singly-linked file owned by this user."))
-            (sb-posix:fchmod fd #o600)
-            ;; Never wait on another shell while handling interactive input.
-            ;; The descriptor starts at zero, so a zero-length lock covers the file.
-            (when append (sb-posix:lockf fd sb-posix:f-tlock 0))
-            (sb-sys:make-fd-stream fd :input t :output append
-                                     :element-type 'character
-                                     :external-format :utf-8 :auto-close t
-                                     :pathname (pathname path)))
+          (progn
+            (%validate-history-descriptor fd path :secure-mode-p fix-mode-p)
+            (setf stream
+                  (sb-sys:make-fd-stream
+                   fd :input t :output append
+                   :element-type 'character
+                   :external-format '(:utf-8 :replacement #\Replacement_Character)
+                   :auto-close t
+                   :pathname (pathname path))))
         (error (condition)
           (sb-posix:close fd)
-          (error condition))))))
+          (error condition))))
+    stream))
+
+
+  (defun %open-history-lock (path)
+    (let* ((lock-path (%history-lock-path path))
+           (fd (%open-history-descriptor lock-path sb-posix:o-rdwr
+                                         :create-p t)))
+      (handler-case
+          (progn
+            (%validate-history-descriptor fd lock-path)
+            (sb-posix:lockf fd sb-posix:f-lock 0)
+            fd)
+        (condition (condition)
+          (sb-posix:close fd)
+          (error condition)))))
+
+  (defun %call-with-history-file-lock (path function)
+    (sb-thread:with-mutex (*history-file-lock*)
+      (let ((fd (%open-history-lock path)))
+        (unwind-protect
+             (funcall function)
+          (sb-posix:close fd)))))
+
+  (defun %create-history-temporary-file (path)
+    (loop repeat 32
+          for candidate =
+            (pathname
+             (format nil "~a.~d.~36r.tmp"
+                     (namestring path) (sb-posix:getpid)
+                     (random most-positive-fixnum)))
+          do (handler-case
+                 (return
+                   (values candidate
+                           (sb-posix:open
+                            (namestring candidate)
+                            (logior sb-posix:o-wronly sb-posix:o-creat
+                                    sb-posix:o-excl sb-posix:o-nofollow
+                                    sb-posix:o-nonblock)
+                            #o600)))
+               (sb-posix:syscall-error (condition)
+                 (unless (= (sb-posix:syscall-errno condition)
+                            sb-posix:eexist)
+                   (error condition))))
+          finally (error "Unable to allocate a temporary history file.")))
+
+  (defun %write-history-records-atomically (path records)
+    (multiple-value-bind (temporary-path fd)
+        (%create-history-temporary-file path)
+      (let ((published-p nil)
+            (fd-open-p t))
+        (unwind-protect
+             (progn
+               (%validate-history-descriptor fd temporary-path)
+               (let ((stream
+                       (sb-sys:make-fd-stream
+                        fd :output t :element-type 'character
+                        :external-format :utf-8 :auto-close t
+                        :pathname temporary-path)))
+                 (setf fd-open-p nil)
+                 (unwind-protect
+                      (progn
+                        (dolist (record records)
+                          (%append-history-record stream record))
+                        (finish-output stream)
+                        (sb-posix:fsync fd))
+                   (close stream)))
+               (sb-posix:rename (namestring temporary-path)
+                                (namestring path))
+               (setf published-p t))
+          (when fd-open-p
+            (sb-posix:close fd))
+          (unless published-p
+            (handler-case
+                (sb-posix:unlink (namestring temporary-path))
+              (sb-posix:syscall-error (condition)
+                (unless (= (sb-posix:syscall-errno condition)
+                           sb-posix:enoent)
+                  (error condition))))))
+        published-p)))
+
 
 (defun %history-record-table (history)
   (or (gethash history *history-record-tables*)
@@ -269,47 +459,109 @@
          (list :origin (intern (string-upcase value) :keyword)))))
     (t nil)))
 
-(defun load-history-file ()
-  "Return v3 records oldest first, promoting v2 records with NIL metadata."
-  (let ((path (history-file-path)))
-    (handler-case
-        ;; Closing any descriptor releases this process's POSIX file locks.
-        (sb-thread:with-mutex (*history-file-lock*)
-          (let ((stream (%open-history-stream path)))
-            (when stream
-              (with-open-stream (f stream)
-                (multiple-value-bind (records status) (%read-history-records f)
-                  (when status
-                    (%report-history-error "read" path
-                                           (format nil "~a history record" status)))
-                  records)))))
-      (condition (condition)
-        (%report-history-error "read" path condition)
-        nil))))
+  (defun %read-history-path (path &key (fix-mode-p t))
+    (let ((stream (%open-history-stream path :fix-mode-p fix-mode-p)))
+      (if stream
+          (with-open-stream (file stream)
+            (%read-history-records file))
+          (values nil nil))))
 
-(defun append-history-entry (text &key timestamp cwd exit-code duration-ms origin)
-  (let ((path (history-file-path)))
-    (handler-case
-        (sb-thread:with-mutex (*history-file-lock*)
-          (ensure-directories-exist path)
-          (let ((record (or *history-record-to-append*
-                            (%make-history-record-from-values
-                             :text text
-                             :timestamp timestamp
-                             :cwd cwd
-                             :exit-code exit-code
-                             :duration-ms duration-ms
-                             :origin origin))))
-            (unless (string= text (history-record-text record))
-              (error "History record text does not match the appended command."))
-            (with-open-stream (f (%open-history-stream path :append t))
-              (multiple-value-bind (records status) (%read-history-records f)
-                (declare (ignore records))
-                (when status
-                  (error "~a history record; existing bytes were preserved." status)))
-              (file-position f :end)
-              (%append-history-record f record)
-              (finish-output f))))
-      (condition (condition)
-        (%report-history-error "append to" path condition)
-        nil))))
+  (defun %load-history-under-lock (path legacy-path)
+    (if (%history-file-present-p path)
+        (%read-history-path path)
+        (if (and legacy-path (%history-file-present-p legacy-path))
+            (multiple-value-bind (records status)
+                (%read-history-path legacy-path :fix-mode-p nil)
+              (let ((records (%dedupe-history-records records)))
+                (when (or records (null status))
+                  (%write-history-records-atomically path records))
+                (values records status)))
+            (values nil nil))))
+
+  (defun load-history-file ()
+    "Return v3 records oldest first, promoting v2 records with NIL metadata."
+    (let ((path (history-file-path)))
+      (handler-case
+          (let* ((legacy-path
+                   (unless *history-file-path-override*
+                     (%legacy-history-file-path)))
+                 (destination-present (%history-file-present-p path))
+                 (legacy-present
+                   (and legacy-path
+                        (%history-file-present-p legacy-path))))
+            (if (not (or destination-present legacy-present))
+                nil
+                (progn
+                  (when (and legacy-present (not destination-present))
+                    (ensure-directories-exist path))
+                  (multiple-value-bind (records status)
+                      (%call-with-history-file-lock
+                       path
+                       (lambda ()
+                         (%load-history-under-lock path legacy-path)))
+                    (when status
+                      (%report-history-error
+                       "read" path
+                       (format nil "~a history record" status)))
+                    records))))
+        (error (condition)
+          (%report-history-error "read" path condition)
+          nil))))
+
+  (defun %append-history-record-under-lock (path record)
+    (let ((stream (%open-history-stream path :append t))
+          (closed-p nil))
+      (unwind-protect
+           (multiple-value-bind (records status)
+               (%read-history-records stream)
+             (let* ((unique (%dedupe-history-records records))
+                    (repaired-p (or status
+                                    (/= (length unique) (length records))))
+                    (already-present
+                      (find (history-record-text record) unique
+                            :key #'history-record-text
+                            :test #'string=)))
+               (cond
+                 (repaired-p
+                  (close stream)
+                  (setf closed-p t)
+                  (%write-history-records-atomically
+                   path
+                   (if already-present
+                       unique
+                       (append unique (list record)))))
+                 (already-present
+                  t)
+                 (t
+                  (file-position stream :end)
+                  (%append-history-record stream record)
+                  (finish-output stream)
+                  t))))
+        (unless closed-p
+          (close stream)))))
+
+  (defun append-history-entry (text &key timestamp cwd exit-code duration-ms origin)
+    (let ((path (history-file-path)))
+      (handler-case
+          (progn
+            (ensure-directories-exist path)
+            (let ((record (or *history-record-to-append*
+                              (%make-history-record-from-values
+                               :text text
+                               :timestamp timestamp
+                               :cwd cwd
+                               :exit-code exit-code
+                               :duration-ms duration-ms
+                               :origin origin))))
+              (unless (string= text (history-record-text record))
+                (error "History record text does not match the appended command."))
+              (%call-with-history-file-lock
+               path
+               (lambda ()
+                 (%append-history-record-under-lock path record)))
+              t)) (error (condition)
+          (%report-history-error "append to" path condition)
+          nil))))
+
+
+

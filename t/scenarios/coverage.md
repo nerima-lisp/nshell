@@ -96,10 +96,10 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | G13 | direct | 2 | 0 | `t/scenarios/G13/ctrl-y-yank.json`, `t/scenarios/G13/ctrl-y-yanks-killed-text.json` |
 | G14 | manual | 0 | 1 | `t/scenarios/G14/manual.md` |
 | H01 | direct | 1 | 0 | `t/scenarios/H01/history-persists-after-exit.json` |
-| H02 | approximation | 1 | 0 | `t/scenarios/H02/approx-seeded-session-history.json` |
+| H02 | direct, approximation | 2 | 0 | `t/scenarios/H02/live-history-shared-between-sessions.json`, `t/scenarios/H02/approx-seeded-session-history.json` |
 | H03 | direct | 1 | 0 | `t/scenarios/H03/duplicate-entry-suppression.json` |
 | H04 | direct | 1 | 0 | `t/scenarios/H04/leading-space-is-not-saved.json` |
-| H05 | manual | 0 | 1 | `t/scenarios/H05/manual.md` |
+| H05 | direct | 1 | 1 | `t/scenarios/H05/private-mode-does-not-save-history.json`, `t/scenarios/H05/manual.md` |
 | H06 | direct | 1 | 0 | `t/scenarios/H06/multiline-reverse-search.json` |
 | H07 | approximation | 1 | 0 | `t/scenarios/H07/approx-history-cwd-and-exit-filters.json` |
 | H08 | direct | 1 | 0 | `t/scenarios/H08/delete-history-entry.json` |
@@ -108,8 +108,8 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | H11 | direct | 1 | 0 | `t/scenarios/H11/last-argument-insertion.json` |
 | H12 | direct | 1 | 0 | `t/scenarios/H12/history-expansion.json` |
 | H13 | direct | 1 | 0 | `t/scenarios/H13/malformed-history-recovers.json` |
-| H14 | approximation | 1 | 0 | `t/scenarios/H14/approx-history-timestamp-metadata.json` |
-| H15 | direct | 1 | 0 | `t/scenarios/H15/history-uses-xdg-state-home.json` |
+| H14 | direct, approximation | 2 | 0 | `t/scenarios/H14/history-persists-timestamp-metadata.json`, `t/scenarios/H14/approx-history-timestamp-metadata.json` |
+| H15 | direct | 2 | 0 | `t/scenarios/H15/history-uses-xdg-data-home.json`, `t/scenarios/H15/history-ignores-xdg-state-home.json` |
 | I01 | direct | 1 | 0 | `t/scenarios/I01/history-autosuggestion.json` |
 | I02 | direct | 1 | 0 | `t/scenarios/I02/completion-autosuggestion.json` |
 | I03 | direct | 1 | 0 | `t/scenarios/I03/partial-word-suggestion-acceptance.json` |
@@ -118,7 +118,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | I06 | direct | 3 | 0 | `t/scenarios/I06/enter-does-not-accept-suggestion.json`, `t/scenarios/I06/enter-typed-text-only.json`, `t/scenarios/I06/paste-enter-typed-text-only.json` |
 | I07 | direct | 1 | 0 | `t/scenarios/I07/suggestion-keystrokes-remain-responsive.json` |
 | J01 | direct | 1 | 0 | `t/scenarios/J01/command-name.json` |
-| J02 | direct | 1 | 0 | `t/scenarios/J02/filename-variants.json` |
+| J02 | direct | 2 | 0 | `t/scenarios/J02/filename-variants.json`, `t/scenarios/J02/bare-file-completion.json` |
 | J03 | direct | 1 | 0 | `t/scenarios/J03/cd-and-cdpath.json` |
 | J04 | direct | 1 | 0 | `t/scenarios/J04/home-and-variable-path.json` |
 | J05 | direct | 1 | 0 | `t/scenarios/J05/option-name-and-description.json` |
@@ -128,7 +128,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | J09 | approximation | 1 | 0 | `t/scenarios/J09/approx-kill-completion.json` |
 | J10 | direct | 1 | 0 | `t/scenarios/J10/environment-variable-name.json` |
 | J11 | direct | 1 | 0 | `t/scenarios/J11/wrapper-command-completion.json` |
-| J12 | direct | 1 | 0 | `t/scenarios/J12/twenty-thousand-entry-directory.json` |
+| J12 | direct | 2 | 0 | `t/scenarios/J12/twenty-thousand-entry-directory.json`, `t/scenarios/J12/large-directory-completion.json` |
 | J13 | approximation | 1 | 0 | `t/scenarios/J13/approx-completion-pager.json` |
 | J14 | direct | 1 | 0 | `t/scenarios/J14/case-and-fuzzy-match.json` |
 | J15 | direct | 1 | 0 | `t/scenarios/J15/sexp-context.json` |
@@ -212,9 +212,9 @@ A direct JSON scenario exercises the stated behavior and asserts a result throug
 | T02 | manual | 0 | 1 | `t/scenarios/T02/manual.md` |
 | T03 | approximation | 1 | 0 | `t/scenarios/T03/approx-T03-help-output.json` |
 | T04 | manual | 0 | 1 | `t/scenarios/T04/manual.md` |
-| T05 | approximation | 1 | 0 | `t/scenarios/T05/approx-T05-legacy-history-load.json` |
+| T05 | direct, approximation | 2 | 0 | `t/scenarios/T05/legacy-history-import-is-idempotent.json`, `t/scenarios/T05/approx-T05-legacy-history-load.json` |
 | T06 | manual | 0 | 1 | `t/scenarios/T06/manual.md` |
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 197 | 48 | — |
+| Total | expected corpus | 204 | 48 | — |

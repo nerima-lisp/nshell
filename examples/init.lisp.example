@@ -1,6 +1,6 @@
-# Example ~/.nshellrc. This is a plain nshell script sourced once at
-# startup, before the first prompt is drawn; copy what you want into your
-# own ~/.nshellrc.
+# Example startup file, normally ~/.config/nshell/init.lisp. When
+# XDG_CONFIG_HOME is absolute, use "$XDG_CONFIG_HOME/nshell/init.lisp" instead.
+# This plain nshell script is sourced once at startup, before the first prompt.
 
 # Switch the whole shell (syntax highlighting, prompt, completion menu) to
 # one of the built-in presets. Run `theme list` to see every preset name.

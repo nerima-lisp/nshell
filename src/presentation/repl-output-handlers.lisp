@@ -477,11 +477,12 @@ wrapped line's other rows on screen as stale duplicates."
          (format nil "AI 未接続: ~a"
                  (%assistant-boundary-failure-message
                   start-result "assistant model boundary is unavailable")))))
-    (nshell.feature.assistant:append-assistant-audit-entry
-     payload nil
-     :denylist-values
-     (%assistant-environment-denylist-values
-      (nshell.domain.environment:env-bindings (ensure-environment))))
+    (when *assistant-session-id*
+      (nshell.feature.assistant:append-assistant-audit-entry
+       payload nil
+       :denylist-values
+       (%assistant-environment-denylist-values
+        (nshell.domain.environment:env-bindings (ensure-environment)))))
     (let ((request-result
             (nshell.feature.assistant:assistant-model-request
              generation payload)))
@@ -594,90 +595,94 @@ wrapped line's other rows on screen as stale duplicates."
 
 (defun %execute-complete-command (ast text)
   (with-reset-rendered-prompt-state-and-prompt-cont
-    (format t "~%")
-    (sync-exported-environment)
-    ;; Time the command through the clock boundary (real clock == monotonic
-    ;; get-internal-real-time), so a fake clock makes duration deterministic.
-    (let ((start-time (boundary-monotonic))
-          (timestamp (get-universal-time))
-          (cwd (boundary-current-directory))
-          (exit-code nil))
-      (unwind-protect
-           (let ((nshell.infrastructure.acl:*command-not-found-hook*
-                   (lambda (command)
-                     (setf *command-not-found-command* command)))
-                 (nshell.application:*execution-origin*
-                   *assistant-command-origin*)
-                 (nshell.application:*execution-confirmed-p*
-                   *assistant-command-confirmed-p*))
-             (setf *command-not-found-command* nil)
-             (setf *last-command-output* nil)
-             (setf exit-code (or (execute-ast ast) 0)))
-        (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
-          (let ((duration-ms (%elapsed-command-duration-ms
-                              start-time
-                              (boundary-monotonic))))
-            (setf *last-exit-code* recorded-exit-code
-                  *last-command-duration-ms* duration-ms
-                  *failure-explain-available-p* (not (zerop recorded-exit-code)))
-            (if (and (= recorded-exit-code 127)
-                     *command-not-found-command*
-                     (not *agent-session*))
-                (progn
-                  (let ((corrections (%repl-command-corrections
-                                      *command-not-found-command*)))
-                    (when corrections
-                      (format t "nshell: did you mean: ~{~a~^, ~}?~%" corrections)))
-                  (setf *command-not-found-fallback-text* text
-                        *preserve-transient-panel-on-next-prompt-p* t
-                        *transient-panel-content* '("⌃] で AI に聞く")))
-                (progn
-                  (when (and *agent-session*
-                             (= recorded-exit-code 127)
-                             *command-not-found-command*)
-                    (setf *last-command-output*
-                          (or *last-command-output*
-                              (format nil "nshell: ~a: command not found~%"
-                                      *command-not-found-command*))
-                          *command-not-found-fallback-text* nil)
-                    (write-string *last-command-output*))
-                  (when *history-persistence-enabled-p*
-                    (multiple-value-bind (history record)
-                        (nshell.infrastructure.persistence:history-record-add
-                         *history* text
-                         :timestamp timestamp
-                         :cwd cwd
-                         :exit-code recorded-exit-code
-                         :duration-ms duration-ms
-                         :origin *assistant-command-origin*)
-                      (declare (ignore history))
-                      (history-kit:history-reset-navigation *history*)
-                      (let ((nshell.infrastructure.persistence:*history-record-to-append*
-                              record))
-                        (nshell.infrastructure.persistence:append-history-entry text))))))
-            (setf *last-command-text* text
-                  *assistant-pending-transcript*
-                    (list :session-id *assistant-session-id*
-                          :timestamp timestamp
-                          :cwd cwd
-                          :text text
-                          :exit recorded-exit-code
-                          :duration-ms duration-ms
-                          :origin *assistant-command-origin*
-                          :output-head *last-command-output*
-                          :denylist-paths
-                          nshell.feature.assistant:+assistant-default-denylist-paths+
-                          :denylist-commands
-                          nshell.feature.assistant:+assistant-default-denylist-commands+
-                          :denylist-values
-                          (%assistant-environment-denylist-values
-                           (nshell.domain.environment:env-bindings
-                            (ensure-environment)))))
-            (setf *command-not-found-command* nil))))
-      (unless *agent-session*
-        (setf *assistant-command-origin* :typed
-              *assistant-command-confirmed-p* nil)
-        (setf *input-state* (make-repl-input-state))))))
+   (format t "~%")
+   (%refresh-history-from-file)
+   (sync-exported-environment)
+   ;; Time the command through the clock boundary (real clock == monotonic
+   ;; get-internal-real-time), so a fake clock makes duration deterministic.
+   (let ((start-time (boundary-monotonic))
+         (timestamp (get-universal-time))
+         (cwd (boundary-current-directory))
+         (exit-code nil))
+     (unwind-protect
+         (let ((nshell.infrastructure.acl:*command-not-found-hook*
+                (lambda (command)
+                  (setf *command-not-found-command* command)))
+               (nshell.application:*execution-origin*
+                *assistant-command-origin*)
+               (nshell.application:*execution-confirmed-p*
+                *assistant-command-confirmed-p*))
+           (setf *command-not-found-command* nil)
+           (setf *last-command-output* nil)
+           (setf exit-code (or (execute-ast ast) 0)))
+       (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
+         (let ((duration-ms (%elapsed-command-duration-ms
+                             start-time
+                             (boundary-monotonic))))
+           (setf *last-exit-code* recorded-exit-code
+                 *last-command-duration-ms* duration-ms
+                 *failure-explain-available-p* (not (zerop recorded-exit-code)))
+           (if (and (= recorded-exit-code 127)
+                    *command-not-found-command*
+                    (not *agent-session*))
+               (progn
+                 (let ((corrections (%repl-command-corrections
+                                     *command-not-found-command*)))
+                   (when corrections
+                     (format t "nshell: did you mean: ~{~a~^, ~}?~%" corrections)))
+                 (setf *command-not-found-fallback-text* text
+                       *preserve-transient-panel-on-next-prompt-p* t
+                       *transient-panel-content* '("⌃] で AI に聞く")))
+             (progn
+               (when (and *agent-session*
+                          (= recorded-exit-code 127)
+                          *command-not-found-command*)
+                 (setf *last-command-output*
+                       (or *last-command-output*
+                           (format nil "nshell: ~a: command not found~%"
+                                   *command-not-found-command*))
+                       *command-not-found-fallback-text* nil)
+                 (write-string *last-command-output*))
+               (when (and *history-persistence-enabled-p*
+                          (not (and (plusp (length text))
+                                    (char= (char text 0) #\Space))))
+                 (multiple-value-bind (history record)
+                     (nshell.infrastructure.persistence:history-record-add
+                      *history* text
+                      :timestamp timestamp
+                      :cwd cwd
+                      :exit-code recorded-exit-code
+                      :duration-ms duration-ms
+                      :origin *assistant-command-origin*)
+                   (declare (ignore history))
+                   (history-kit:history-reset-navigation *history*)
+                   (let ((nshell.infrastructure.persistence:*history-record-to-append*
+                          record))
+                     (nshell.infrastructure.persistence:append-history-entry text)))
+                 (setf (gethash text *history-seen-command-texts*) t))))
+           (setf *last-command-text* text
+                 *assistant-pending-transcript*
+                 (list :session-id *assistant-session-id*
+                       :timestamp timestamp
+                       :cwd cwd
+                       :text text
+                       :exit recorded-exit-code
+                       :duration-ms duration-ms
+                       :origin *assistant-command-origin*
+                       :output-head *last-command-output*
+                       :denylist-paths
+                       nshell.feature.assistant:+assistant-default-denylist-paths+
+                       :denylist-commands
+                       nshell.feature.assistant:+assistant-default-denylist-commands+
+                       :denylist-values
+                       (%assistant-environment-denylist-values
+                        (nshell.domain.environment:env-bindings
+                         (ensure-environment)))))
+           (setf *command-not-found-command* nil))))
+     (unless *agent-session*
+       (setf *assistant-command-origin* :typed
+             *assistant-command-confirmed-p* nil)
+       (setf *input-state* (make-repl-input-state))))))
 
 (defun %execute-parse-error (result)
   (with-reset-rendered-prompt-state-and-prompt-cont
@@ -1038,6 +1043,7 @@ wrapped line's other rows on screen as stale duplicates."
 
 (define-output-event-handler %process-history-search-output-event
     with-cleared-rendered-completions-and-prompt-cont
+    (%refresh-history-from-file)
     (let* ((query (input-state-search-query *input-state*))
            (entries (nshell.application:interactive-history-search-use-case
                      *history* query))
@@ -1047,21 +1053,23 @@ wrapped line's other rows on screen as stale duplicates."
 
 (define-output-event-handler %process-history-prev-output-event
     with-cleared-rendered-completions-and-prompt-cont
-  (let ((entry (history-kit:history-previous
-                 *history*
-                 (input-state-buffer *input-state*))))
-    (when entry
-      (setf *input-state*
-            (make-repl-input-state :buffer entry :cursor-pos (length entry)))
-      (refresh-current-input-state-suggestion))))
+    (%refresh-history-from-file)
+    (let ((entry (history-kit:history-previous
+                  *history*
+                  (input-state-buffer *input-state*))))
+      (when entry
+        (setf *input-state*
+              (make-repl-input-state :buffer entry :cursor-pos (length entry)))
+        (refresh-current-input-state-suggestion))))
 
 (define-output-event-handler %process-history-next-output-event
     with-cleared-rendered-completions-and-prompt-cont
-  (let ((entry (history-kit:history-next *history*)))
-    (when entry
-      (setf *input-state*
-            (make-repl-input-state :buffer entry :cursor-pos (length entry)))
-      (refresh-current-input-state-suggestion))))
+    (%refresh-history-from-file)
+    (let ((entry (history-kit:history-next *history*)))
+      (when entry
+        (setf *input-state*
+              (make-repl-input-state :buffer entry :cursor-pos (length entry)))
+        (refresh-current-input-state-suggestion))))
 
   (define-output-event-handler %process-clear-screen-output-event
                                with-reset-rendered-prompt-state-and-prompt-cont

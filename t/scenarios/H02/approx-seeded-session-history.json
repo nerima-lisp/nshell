@@ -20,7 +20,7 @@
   "preconditions": {
     "files": [
       {
-        "path": "home/.local/state/nshell/history",
+        "path": "home/.local/share/nshell/history",
         "content": "# nshell-history-v3 108\n(:text \"echo H02_SHARED_SEED\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
       }
     ]
@@ -92,8 +92,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-R05 owns sharing history between running sessions."
   }
 }

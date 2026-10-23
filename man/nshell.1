@@ -1,4 +1,4 @@
-.TH NSHELL 1 "2026-09-30" "nshell 0.6.5" "User Commands"
+.TH NSHELL 1 "2026-09-30" "nshell 0.6.6" "User Commands"
 .SH NAME
 nshell \- a fish-inspired interactive shell written in Common Lisp
 .SH SYNOPSIS
@@ -10,6 +10,7 @@ nshell \- a fish-inspired interactive shell written in Common Lisp
 .RB [ \-\-config
 .IR PATH ]
 .RB [ \-\-no\-history ]
+.RB [ \-\-private ]
 .RB [ \-c
 .IR COMMAND
 .RI [ ARGS .\|.\|.]]
@@ -64,11 +65,25 @@ Do not load the interactive startup file.
 .BI \-\-config " PATH"
 Load
 .I PATH
-instead of
-.BR ~/.nshellrc .
+instead of the default
+.I $XDG_CONFIG_HOME/nshell/init.lisp
+when
+.B XDG_CONFIG_HOME
+is absolute, or
+.I ~/.config/nshell/init.lisp
+otherwise. With the default path, a legacy
+.I ~/.nshellrc
+is ignored with a one-line notice.
 .TP
 .B \-\-no\-history
 Do not load or save the history file, or record commands in in-session history.
+.TP
+.B \-\-private
+Unless
+.B \-\-no\-history
+is also set, an interactive session reads existing history without saving its
+commands. Private mode also suppresses local assistant transcript, snapshot,
+and audit persistence.
 .SH KEY BINDINGS
 The default Emacs-style bindings use \fBC\-\fR for Ctrl
 and \fBM\-\fR for Alt (Meta).
@@ -258,18 +273,50 @@ to inspect assistant state and
 .B ai set
 to change session settings.
 .SH HISTORY FILE
-.I ~/.nshell_history
-is created with owner-only permissions. Symlinks, hard links, nonregular files,
-and files owned by another user are rejected.
+The default path is
+.I $XDG_DATA_HOME/nshell/history
+when
+.B XDG_DATA_HOME
+is absolute, or
+.I ~/.local/share/nshell/history
+otherwise. The file is created with owner-only permissions. Symlinks, hard
+links, nonregular files, and files owned by another user are rejected.
 .PP
-A malformed or truncated record is reported. Earlier complete records remain
-readable, but new records are not appended until the file is moved aside.
-Existing bytes are not discarded automatically.
+If the default file does not exist, nshell imports records from the legacy
+.I ~/.nshell_history
+file. It leaves that source unchanged, deduplicates imported command text,
+and reads the new file on later starts.
+.PP
+Malformed or truncated records are reported. Complete records before damaged
+data remain readable, and the reader resumes at a later valid record frame
+when one is present. On the next successful append, nshell repairs the file
+with valid unique records, adds the command if it is not already present, and
+discards damaged data.
 .PP
 Use
 .B \-\-no\-history
-to disable history persistence.
+to disable history reads and writes, including in-session history recording.
+Use
+.B \-\-private
+to keep existing history available without saving this session's commands;
+unless
+.B \-\-no\-history
+is also set. Private mode also suppresses local assistant transcript, snapshot,
+and audit persistence.
 .SH ENVIRONMENT
+.TP
+.B XDG_CONFIG_HOME
+An absolute path selects
+.I $XDG_CONFIG_HOME/nshell/init.lisp
+as the default interactive startup file. If unset, empty, or relative, nshell
+uses
+.IR ~/.config/nshell/init.lisp .
+.TP
+.B XDG_DATA_HOME
+An absolute path selects
+.I $XDG_DATA_HOME/nshell/history
+as the history file. If unset, empty, or relative, nshell uses
+.IR ~/.local/share/nshell/history .
 .TP
 .B NSHELL_VI_MODE
 When set to a non-empty value other than 0, false, or no (case-insensitive),
@@ -281,9 +328,8 @@ enable and disable them during a session.
 .TP
 .B NSHELL_GREETING
 Printed at interactive startup in place of the version banner. An empty value
-starts the session silently. Read after the startup file runs, so
-.I ~/.nshellrc
-can set it.
+starts the session silently. Read after the selected startup file runs, so
+that file can set it.
 .TP
 .B NSHELL_PROMPT
 Sets the left prompt's format string at session start. See
@@ -291,7 +337,9 @@ Sets the left prompt's format string at session start. See
 A
 .B prompt left
 line in
-.B ~/.nshellrc
+.I $XDG_CONFIG_HOME/nshell/init.lisp
+or the default
+.I ~/.config/nshell/init.lisp
 overrides it.
 .TP
 .B NSHELL_RIGHT_PROMPT

@@ -19,7 +19,7 @@
   "preconditions": {
     "files": [
       {
-        "path": "home/.nshellrc",
+        "path": "home/.config/nshell/init.lisp",
         "content": "printf \"A12_CONFIG_WAS_LOADED\\n\"\n"
       }
     ]

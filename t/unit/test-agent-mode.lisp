@@ -536,6 +536,7 @@
 
   (it "redacts-agent-step-output-before-request-and-audit"
     (with-repl-test-state
+      (setf nshell.presentation::*assistant-session-id* "test-session")
       (setf *agent-test-request-payload* nil)
       (setf nshell.presentation::*last-command-output*
               (format nil "cat /tmp/private.env~%ghp_agent-secret-token"))

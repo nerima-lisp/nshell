@@ -62,14 +62,11 @@
     "exit_code": 0,
     "side_effects": {
       "history": {
-        "path": ".local/state/nshell/history",
+        "path": ".local/share/nshell/history",
         "contains": [
           "T05_HISTORY_IMPORTED_OK"
         ]
       }
     }
-  },
-  "expected_failure": {
-    "reason": "WP-R05 owns legacy history migration."
   }
 }

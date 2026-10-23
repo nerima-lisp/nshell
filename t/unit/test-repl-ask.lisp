@@ -54,6 +54,7 @@
 (describe "repl-ask-request-tests"
   (it "starts-the-model-and-sends-the-natural-language-payload"
     (with-repl-test-state
+      (setf nshell.presentation::*assistant-session-id* "test-session")
       (repl-test-set-env "API_TOKEN" "secret-value" t)
       (add-history-record nshell.presentation::*history*
                           "printf sk-12345678901234567890"
@@ -551,6 +552,7 @@
 
   (it "sends-only-redacted-explain-context-to-the-model-and-audit"
     (with-repl-test-state
+      (setf nshell.presentation::*assistant-session-id* "test-session")
       (repl-test-set-env "API_TOKEN" "secret-value" t)
       (setf nshell.presentation::*last-exit-code* 7
             nshell.presentation::*last-command-duration-ms* 42

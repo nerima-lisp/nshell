@@ -31,9 +31,12 @@ result representation."
     (cl-cli:make-option :key :no-config :name "no-config" :kind :flag
                         :description "Do not load the interactive startup file.")
     (cl-cli:make-option :key :config :name "config" :kind :value
-                        :description "Load PATH instead of ~/.nshellrc.")
+                        :description "Load PATH instead of the XDG nshell/init.lisp default.")
     (cl-cli:make-option :key :no-history :name "no-history" :kind :flag
-                        :description "Do not read or write interactive history.")
+                        :description "Disable history reads and writes; private mode still suppresses assistant state.")
+    (cl-cli:make-option :key :private :name "private" :kind :flag
+                        :description
+                        "Read history without saving this session's commands.")
     (cl-cli:make-option :key :command :name "command" :short #\c :kind :value
                         :stop-parsing-p t
                         :description
@@ -69,40 +72,61 @@ presentation do not depend on cl-cli's condition hierarchy."
   (format *error-output* "Fatal error: ~a~%" error)
   1)
 
-(defun %run-interactive (&key config-path load-config-p history-p greeting-p)
+(defun %run-interactive (&key config-path load-config-p history-p private-p greeting-p)
   "Run the interactive entry point while preserving the no-option call path."
-  (if (and load-config-p (null config-path) history-p (not greeting-p))
+  (if (and load-config-p
+           (null config-path)
+           history-p
+           (not private-p)
+           (not greeting-p))
       (nshell.presentation:run-repl)
-      (nshell.presentation:run-repl
-       :load-config-p load-config-p
-       :config-path config-path
-       :history-p history-p
-       :greeting-p greeting-p)))
+      (if private-p
+          (nshell.presentation:run-repl
+           :load-config-p load-config-p
+           :config-path config-path
+           :history-p history-p
+           :private-p t
+           :greeting-p greeting-p)
+          (nshell.presentation:run-repl
+           :load-config-p load-config-p
+           :config-path config-path
+           :history-p history-p
+           :greeting-p greeting-p))))
 
 (defun %run-default-invocation (&key (interactive-p nil)
                                      (load-config-p t)
                                      config-path
-                                     (history-p t))
-  "Dispatch nshell's default invocation and explicit startup policy."
-  (if (or interactive-p (tty-p))
-      (%run-interactive
-       :config-path config-path
-       :load-config-p load-config-p
-       :history-p history-p
-       ;; A plain interactive start greets; an explicitly configured one
-       ;; (-i, --config, --no-config, --no-history) stays quiet, as before.
-       :greeting-p (and (tty-p)
-                        (not interactive-p)
-                        load-config-p
-                        (null config-path)
-                        history-p))
-    (nshell.presentation:run-repl-batch)))
+                                     (history-p t)
+                                     (private-p nil))
+  "Use interactive mode when requested or when input is a terminal."
+  (let* ((private-p
+          (or private-p
+              (let ((value (host-kit:getenv "NSHELL_HISTORY_PRIVATE")))
+                (and value
+                     (not (member value
+                                  (list "" "0" "false" "no")
+                                  :test (function string-equal))))))))
+    (if (or interactive-p (tty-p))
+        (%run-interactive
+         :config-path config-path
+         :load-config-p load-config-p
+         :history-p history-p
+         :private-p private-p
+         ;; Show the greeting only for the default interactive invocation.
+         :greeting-p (and (tty-p)
+                          (not interactive-p)
+                          load-config-p
+                          (null config-path)
+                          history-p
+                          (not private-p)))
+      (nshell.presentation:run-repl-batch))))
 
 (defun %parsed-startup-options (invocation)
   (values (not (null (cl-cli:option-value invocation :interactive)))
           (not (null (cl-cli:option-value invocation :no-config)))
           (cl-cli:option-value invocation :config)
-          (not (null (cl-cli:option-value invocation :no-history)))))
+          (not (null (cl-cli:option-value invocation :no-history)))
+          (not (null (cl-cli:option-value invocation :private)))))
 
 (defun %print-startup-option-error (message)
   (format *error-output* "nshell: ~a~%" message)
@@ -110,7 +134,7 @@ presentation do not depend on cl-cli's condition hierarchy."
   1)
 
 (defun %run-parsed-invocation (invocation)
-  "Dispatch a parsed command-line INVOCATION to the matching entry point."
+  "Dispatch a parsed CLI INVOCATION to the matching entry point."
   (cond
     ((cl-cli:option-value invocation :show-help)
      (%print-usage) 0)
@@ -119,7 +143,7 @@ presentation do not depend on cl-cli's condition hierarchy."
     ((cl-cli:option-value invocation :mcp)
      (nshell.feature.assistant:run-assistant-mcp-server))
     (t
-     (multiple-value-bind (interactive-p no-config-p config-path no-history-p)
+     (multiple-value-bind (interactive-p no-config-p config-path no-history-p private-p)
          (%parsed-startup-options invocation)
        (cond
          ((and no-config-p config-path)
@@ -130,7 +154,7 @@ presentation do not depend on cl-cli's condition hierarchy."
           (%print-startup-option-error
            "--interactive cannot be combined with --command"))
          ((cl-cli:option-value invocation :command)
-          ;; `-c` consumes COMMAND; the rest positional holds the literal tail.
+          ;; -c consumes COMMAND; the rest positional holds the literal tail.
           (nshell.presentation:run-repl-batch
            :line (cl-cli:option-value invocation :command)
            :script-args
@@ -146,7 +170,8 @@ presentation do not depend on cl-cli's condition hierarchy."
            :interactive-p interactive-p
            :load-config-p (not no-config-p)
            :config-path config-path
-           :history-p (not no-history-p))))))))
+           :history-p (not no-history-p)
+           :private-p private-p)))))))
 
 (defparameter *main-exit-function*
   (lambda (&key unix-status)

@@ -527,6 +527,13 @@
       "path": "H02/approx-seeded-session-history.json"
     },
     {
+      "id": "H02-live-history-shared-between-sessions",
+      "uc": [
+        "H02"
+      ],
+      "path": "H02/live-history-shared-between-sessions.json"
+    },
+    {
       "id": "H03-duplicate-entry-suppression",
       "uc": [
         "H03"
@@ -539,6 +546,13 @@
         "H04"
       ],
       "path": "H04/leading-space-is-not-saved.json"
+    },
+    {
+      "id": "H05-private-mode-does-not-save-history",
+      "uc": [
+        "H05"
+      ],
+      "path": "H05/private-mode-does-not-save-history.json"
     },
     {
       "id": "H06-multiline-reverse-search",
@@ -604,11 +618,25 @@
       "path": "H14/approx-history-timestamp-metadata.json"
     },
     {
-      "id": "H15-history-uses-xdg-state-home",
+      "id": "H14-history-persists-timestamp-metadata",
+      "uc": [
+        "H14"
+      ],
+      "path": "H14/history-persists-timestamp-metadata.json"
+    },
+    {
+      "id": "H15-history-ignores-xdg-state-home",
       "uc": [
         "H15"
       ],
-      "path": "H15/history-uses-xdg-state-home.json"
+      "path": "H15/history-ignores-xdg-state-home.json"
+    },
+    {
+      "id": "H15-history-uses-xdg-data-home",
+      "uc": [
+        "H15"
+      ],
+      "path": "H15/history-uses-xdg-data-home.json"
     },
     {
       "id": "I01-history-autosuggestion",
@@ -1225,6 +1253,13 @@
         "T05"
       ],
       "path": "T05/approx-T05-legacy-history-load.json"
+    },
+    {
+      "id": "T05-legacy-history-import-is-idempotent",
+      "uc": [
+        "T05"
+      ],
+      "path": "T05/legacy-history-import-is-idempotent.json"
     },
     {
       "id": "U02-osc-133-markers",

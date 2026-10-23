@@ -1,0 +1,68 @@
+{
+  "id": "A09-wp-r01-hup-forwards-to-job",
+  "uc": ["A09"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "R01> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 100,
+      "rows": 30
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh -c 'trap \"printf %s%s A09_JOB_ HUP > a09-job-hup.txt; exit 0\" HUP; printf %s%s A09_JOB_ READY; sleep 10' &"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "A09_JOB_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "sh -c 'printf %s%s A09_SENDER_ READY; sleep 2; kill -HUP \"$PPID\"' &"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "A09_SENDER_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": ["A09_JOB_READY"]
+    },
+    "exit_code": 129,
+    "side_effects": {
+      "files": [
+        {
+          "path": "a09-job-hup.txt",
+          "exists": true,
+          "contains": ["A09_JOB_HUP"]
+        }
+      ]
+    }
+  }
+}

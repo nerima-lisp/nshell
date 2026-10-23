@@ -30,6 +30,13 @@
       "path": "A08/exit-warns-about-job.json"
     },
     {
+      "id": "A09-wp-r01-hup-forwards-to-job",
+      "uc": [
+        "A09"
+      ],
+      "path": "A09/WP-R01-hup-forwards-to-job.json"
+    },
+    {
       "id": "A10-exec-replaces-shell",
       "uc": [
         "A10"
@@ -371,6 +378,13 @@
         "F01"
       ],
       "path": "F01/approx-cooked-mode-after-crash.json"
+    },
+    {
+      "id": "F03-wp-r01-sigterm-exit-status",
+      "uc": [
+        "F03"
+      ],
+      "path": "F03/WP-R01-sigterm-exit-status.json"
     },
     {
       "id": "F05-approx-terminal-title-cwd",

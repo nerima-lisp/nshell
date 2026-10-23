@@ -3,11 +3,12 @@
   "uc": [
     "C18"
   ],
-  "mode": "batch",
+  "mode": "pty",
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "C18> "
     },
     "home": "home",
     "cwd": "work",
@@ -20,19 +21,37 @@
     "files": []
   },
   "expected": {
-    "stdout": {
-      "equals": "y\n"
-    },
-    "stderr": {
-      "excludes": [
-        "broken pipe",
-        "SIGPIPE"
-      ]
+    "stream": {
+      "contains": ["y\r\n"],
+      "excludes": ["Broken pipe"]
     },
     "exit_code": 0
   },
-  "invocation": {
-    "kind": "command",
-    "text": "yes | head -n 1"
-  }
+  "steps": [
+    {
+      "type": "keys",
+      "text": "yes | head -1"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "y\r\n",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
 }

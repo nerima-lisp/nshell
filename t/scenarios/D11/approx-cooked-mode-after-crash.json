@@ -21,7 +21,7 @@
     "files": [
       {
         "path": "work/crash-terminal.sh",
-        "content": "#!/bin/sh\nstty -echo\nkill -KILL $$\n"
+        "content": "#!/bin/sh\nstty raw -echo\nkill -KILL $$\n"
       },
       {
         "path": "work/after-crash.txt",
@@ -32,7 +32,11 @@
   "expected": {
     "stream": {
       "contains": [
-        "D11_COOKED_READY"
+        "D11_COOKED_READY",
+        "D11_CANON_OK",
+        "D11_ISIG_OK",
+        "D11_ECHO_OK",
+        "D11_CHECK_DONE"
       ]
     },
     "exit_code": 0
@@ -57,6 +61,19 @@
     {
       "type": "wait",
       "contains": "D11_COOKED_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "sh -c 'stty -a | grep -Eq \"(^|[[:space:];])icanon([[:space:];]|$)\" && printf \"%s%s\" D11_CANON_ OK; stty -a | grep -Eq \"(^|[[:space:];])isig([[:space:];]|$)\" && printf \"%s%s\" D11_ISIG_ OK; stty -a | grep -Eq \"(^|[[:space:];])echo([[:space:];]|$)\" && printf \"%s%s\" D11_ECHO_ OK; printf \"%s%s\" D11_CHECK_ DONE'"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D11_CHECK_DONE",
       "timeout_seconds": 10
     },
     {

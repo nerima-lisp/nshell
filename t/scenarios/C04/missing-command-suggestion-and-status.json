@@ -1,0 +1,34 @@
+{
+  "id": "C04-missing-command-suggestion-and-status",
+  "uc": [
+    "C04"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stderr": {
+      "contains": [
+        "not found"
+      ]
+    },
+    "exit_code": 127
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "echp C04"
+  }
+}

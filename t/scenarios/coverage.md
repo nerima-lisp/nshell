@@ -84,7 +84,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | F12 | approximation, manual | 1 | 1 | `t/scenarios/F12/approx-term-dumb-command-line.json`, `t/scenarios/F12/manual.md` |
 | F13 | manual | 0 | 1 | `t/scenarios/F13/manual.md` |
 | G01 | direct, approximation | 8 | 0 | `t/scenarios/G01/case-conversion.json`, `t/scenarios/G01/char-transpose.json`, `t/scenarios/G01/word-forward-motion.json`, `t/scenarios/G01/word-motion-deletion.json`, `t/scenarios/G01/word-transpose.json`, `t/scenarios/G01/approx-emacs-case-transform.json`, `t/scenarios/G01/approx-emacs-transpose.json`, `t/scenarios/G01/approx-emacs-word-delete.json` |
-| G02 | direct, approximation | 9 | 0 | `t/scenarios/G02/delete-a-word.json`, `t/scenarios/G02/delete-inner-word.json`, `t/scenarios/G02/goto-end.json`, `t/scenarios/G02/insert-command-cursor-shape.json`, `t/scenarios/G02/runtime-vi-toggle.json`, `t/scenarios/G02/undo-find-replace-repeat.json`, `t/scenarios/G02/yank-put-inner-word.json`, `t/scenarios/G02/approx-vi-mode-editing.json`, `t/scenarios/G02/vi-e-nfd-grapheme-boundary.json` |
+| G02 | direct, approximation | 10 | 0 | `t/scenarios/G02/delete-a-word.json`, `t/scenarios/G02/delete-inner-word.json`, `t/scenarios/G02/goto-end.json`, `t/scenarios/G02/insert-command-cursor-shape.json`, `t/scenarios/G02/runtime-vi-toggle.json`, `t/scenarios/G02/undo-find-replace-repeat.json`, `t/scenarios/G02/yank-put-inner-word.json`, `t/scenarios/G02/approx-vi-mode-editing.json`, `t/scenarios/G02/vi-e-nfd-grapheme-boundary.json`, `t/scenarios/G02/vi-insert-escape-e-same-write.json` |
 | G03 | direct, manual | 1 | 1 | `t/scenarios/G03/undo-redo.json`, `t/scenarios/G03/manual.md` |
 | G04 | direct, approximation, manual | 2 | 1 | `t/scenarios/G04/kill-ring-yank-pop.json`, `t/scenarios/G04/approx-kill-ring-yank.json`, `t/scenarios/G04/manual.md` |
 | G05 | approximation | 1 | 0 | `t/scenarios/G05/approx-multiline-buffer-navigation.json` |
@@ -219,4 +219,4 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 207 | 48 | — |
+| Total | expected corpus | 208 | 48 | — |

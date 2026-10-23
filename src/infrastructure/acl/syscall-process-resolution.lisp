@@ -132,15 +132,13 @@ process's own stdout, calling REGISTER on any stream opened here."
   (check-type arguments list)
   (check-type environment list)
   (let ((process
-          (sb-ext:run-program
+          (%spawn-external-command
            "/bin/sh"
            (cons "-c" (cons command arguments))
+           environment
            :input t
            :output t
-           :error t
-           :wait nil
-           :search nil
-           :environment environment)))
+           :error t)))
     (sb-ext:process-wait process)
     (let ((code (sb-ext:process-exit-code process)))
       (if (and code (eq (sb-ext:process-status process) :signaled))

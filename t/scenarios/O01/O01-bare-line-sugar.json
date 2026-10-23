@@ -1,0 +1,36 @@
+{
+  "id": "O01-bare-line-sugar",
+  "uc": [
+    "O01"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(echo O01_SEXP_FORM_OK)\necho O01_BARE_LINE_OK\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "O01_SEXP_FORM_OK",
+        "O01_BARE_LINE_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

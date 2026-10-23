@@ -1,0 +1,72 @@
+{
+  "id": "S07-shell-without-claude",
+  "uc": [
+    "S07"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "S07> ",
+      "SCENARIO_MARKER": "S07_NORMAL_SHELL_OK"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "agent \"try to run echo S07_UNAPPROVED\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "agent:",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "(echo $SCENARIO_MARKER)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S07_NORMAL_SHELL_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "S07_NORMAL_SHELL_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

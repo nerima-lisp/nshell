@@ -8,7 +8,8 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "K04_READY "
+      "NSHELL_PROMPT": "K04_READY ",
+      "NSHELL_RIGHT_PROMPT": "{time}"
     },
     "home": "home",
     "cwd": "work",
@@ -32,6 +33,11 @@
     {
       "type": "key",
       "key": "C-c"
+    },
+    {
+      "type": "wait",
+      "contains": ":",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",

@@ -28,6 +28,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "The current executor skips the command after a short-circuited sequence."
+    "reason": "Plan C3 records that a short-circuited &&/|| chain prevents later sequence commands; implementation is assigned to WP-L08."
   }
 }

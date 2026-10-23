@@ -1,0 +1,76 @@
+{
+  "id": "H10-token-history-search",
+  "uc": [
+    "H10"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H10-token-history-search> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.local/state/nshell/history",
+        "content": "# nshell-history-v3 121\n(:text \"echo before H10_TOKEN_MATCH after\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "TOKEN_MATCH"
+    },
+    {
+      "type": "wait",
+      "contains": "echo before H10_TOKEN_MATCH after",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "before H10_TOKEN_MATCH after",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "before H10_TOKEN_MATCH after"
+      ]
+    },
+    "exit_code": 0
+  }
+}

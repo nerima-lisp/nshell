@@ -28,7 +28,17 @@ The command-line feature's pure option
 policy, application contract, and help presentation live in
 `packages/feature/command-line/src/`. `src/main.lisp` constructs and parses
 the CLI with `cl-cli`, delegates option policy and help to the feature, and
-dispatches interactive, command, script, or stdin execution. `nshell.asd`
+dispatches interactive, `--command`, script, or stdin execution. The packaged
+launcher loads the OS login environment for `-l`/`--login` invocations. On
+macOS it loads nix-darwin's session environment when present and `/etc/profile`
+(which invokes `/usr/libexec/path_helper` on standard macOS setups); on Linux
+it loads `/etc/profile`. It also loads Home Manager session variables and
+`~/.profile` when available, without printing their startup output. Leading
+`-c` and `-lc` invocations go to `/bin/sh` before the Lisp image loads, keeping
+plain shell-command startup independent of nshell initialization. The launcher
+sends `-ilc` and separated `-i -l -c` invocations through the image so nshell's
+startup configuration (by default `~/.nshellrc`) can add exported values
+before the command is delegated to `/bin/sh`. `nshell.asd`
 declares the runtime and feature modules and their load order.
 
 ## Assistant feature

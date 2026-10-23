@@ -1,0 +1,32 @@
+{
+  "id": "A03-login-shell-command",
+  "uc": ["A03"],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "argv",
+    "arguments": ["-l", "-c", "printf 'A03_LOGIN_OK\\n'"]
+  },
+  "expected": {
+    "stdout": {
+      "equals": "A03_LOGIN_OK\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "The CLI does not yet accept login-shell mode before delegating the command."
+  }
+}

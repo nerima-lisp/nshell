@@ -164,6 +164,87 @@
     }:
     let
       lib = nixpkgs.lib;
+      loginEnvironment = ''
+        nshell_login_environment() {
+          nshell_saved_user_set=''${USER+x}
+          nshell_saved_user=''${USER-}
+          nshell_saved_shell_set=''${SHELL+x}
+          nshell_saved_shell=''${SHELL-}
+          nshell_saved_shlvl=$SHLVL
+          nix_darwin_environment=
+
+          if [ -r /etc/zshenv ]; then
+            while IFS= read -r line; do
+              case "$line" in
+                *". /nix/store/"*-set-environment)
+                  candidate=''${line#*". "}
+                  case "$candidate" in
+                    /nix/store/*-set-environment)
+                      nix_darwin_environment=$candidate
+                      break
+                      ;;
+                  esac
+                  ;;
+              esac
+            done < /etc/zshenv
+          fi
+          if [ -n "''${nix_darwin_environment-}" ] && [ -r "$nix_darwin_environment" ]; then
+            . "$nix_darwin_environment" >/dev/null 2>&1
+          fi
+          if [ -r /etc/profile ]; then
+            . /etc/profile >/dev/null 2>&1
+          fi
+
+          if [ -n "''${USER-}" ] && [ -r "/etc/profiles/per-user/$USER/etc/profile.d/hm-session-vars.sh" ]; then
+            . "/etc/profiles/per-user/$USER/etc/profile.d/hm-session-vars.sh" >/dev/null 2>&1
+          elif [ -n "''${HOME-}" ] && [ -r "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" ]; then
+            . "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" >/dev/null 2>&1
+          fi
+          if [ -n "''${HOME-}" ] && [ -r "$HOME/.profile" ]; then
+            . "$HOME/.profile" >/dev/null 2>&1
+          fi
+
+          if [ "$nshell_saved_user_set" = x ]; then
+            USER=$nshell_saved_user
+            export USER
+          fi
+          if [ "$nshell_saved_shell_set" = x ]; then
+            SHELL=$nshell_saved_shell
+            export SHELL
+          fi
+          SHLVL=$nshell_saved_shlvl
+          export SHLVL
+        }
+      '';
+      deliveryRun = lib.escapeShellArg ''
+        ${loginEnvironment}
+        case "''${1-}" in
+          -c)
+            exec /bin/sh "$@"
+            ;;
+          -lc)
+            nshell_login_environment
+            shift
+            set -- -c "$@"
+            exec /bin/sh "$@"
+            ;;
+          -ilc)
+            nshell_login_environment
+            ;;
+          -l|--login)
+            nshell_login_environment
+            if [ "''${2-}" = -c ]; then
+              shift
+              exec /bin/sh "$@"
+            fi
+            ;;
+          -i)
+            case "''${2-}" in
+              -l|--login) nshell_login_environment ;;
+            esac
+            ;;
+        esac
+      '';
 
       # Scenario checks cover Linux and Apple Silicon macOS; release checks
       # remain on Ubuntu x86_64.
@@ -415,6 +496,7 @@
         ctx.executable.overrideAttrs (previous: {
           buildCommand = previous.buildCommand + ''
             wrapProgram "$out/bin/nshell" --inherit-argv0 \
+              --run ${deliveryRun} \
               --prefix PATH : ${ctx.pkgs.lib.makeBinPath [ (spawnHelperFor ctx) ]}
             mkdir -p "$out/share/man/man1" "$out/LICENSES"
             cp ${./README.md} "$out/README.md"
@@ -592,6 +674,49 @@
                 *) program=nshell ;;
               esac
               export PATH="$root/bin:$PATH"
+              ${loginEnvironment}
+              if [ "$program" = nshell ]; then
+                if [ -z "''${BASH_VERSION-}" ] \
+                  && [ -z "''${ZSH_VERSION-}" ] \
+                  && [ -z "''${KSH_VERSION-}" ]; then
+                  shlvl="''${SHLVL-0}"
+                  case "$shlvl" in
+                    *[!0-9]*) shlvl=0 ;;
+                  esac
+                  while [ "$shlvl" != "''${shlvl#0}" ]; do
+                    shlvl="''${shlvl#0}"
+                  done
+                  [ -n "$shlvl" ] || shlvl=0
+                  SHLVL=$((shlvl + 1))
+                  export SHLVL
+                fi
+                case "''${1-}" in
+                  -c)
+                    exec /bin/sh "$@"
+                    ;;
+                  -lc)
+                    nshell_login_environment
+                    shift
+                    set -- -c "$@"
+                    exec /bin/sh "$@"
+                    ;;
+                  -ilc)
+                    nshell_login_environment
+                    ;;
+                  -l|--login)
+                    nshell_login_environment
+                    if [ "''${2-}" = -c ]; then
+                      shift
+                      exec /bin/sh "$@"
+                    fi
+                    ;;
+                  -i)
+                    case "''${2-}" in
+                      -l|--login) nshell_login_environment ;;
+                    esac
+                    ;;
+                esac
+              fi
               exec "$root/lib/ld-linux-x86-64.so.2" \
                 --library-path "$root/lib" --argv0 "$root/libexec/$program" \
                 "$root/libexec/$program" "$@"

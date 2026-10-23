@@ -235,7 +235,7 @@ that prior success status through unchanged without running anything."
 
 (describe "builtin-history-nil-tests"
   (it "history-subcommands-treat-a-nil-history-as-empty-rather-than-crashing"
-    "Batch mode (`nshell -c ...`) builds a context with no history object;
+    "Batch mode (`nshell --command ...`) builds a context with no history object;
 every subcommand must degrade to empty results instead of signalling."
     (let ((context (make-test-shell-context :history nil)))
       (assert-builtin-call (context "history" nil)

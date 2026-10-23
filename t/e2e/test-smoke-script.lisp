@@ -51,21 +51,52 @@
         (expect (search "should-not-run" stdout) :to-be-falsy)
         (expect "" :to-equal stderr))))
 
-  (it "e2e-main-command-executes-once"
-    "The entry point executes a single batch command with -c."
-    (%assert-nshell-main-result '("-c" "echo hello")
-                                "hello"
-                                0))
+  (it "e2e-main-shell-command-delegates-with-argv-and-login-config"
+    "The entry point delegates -c to /bin/sh and -ilc hands off config exports."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main
+         (list "-c"
+               "printf \"<%s>\\n\" \"$0\" \"$1\" \"$2\" \"$3\"; exit 37"
+               "arg zero" "" "space arg" "--"))
+      (expect (format nil "<arg zero>~%<>~%<space arg>~%<-->~%")
+              :to-equal stdout)
+      (expect "" :to-equal stderr)
+      (expect 37 :to-equal exit-code))
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main (list "-c" ""))
+      (expect "" :to-equal stdout)
+      (expect "" :to-equal stderr)
+      (expect 0 :to-equal exit-code))
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main (list "-c" "cat")
+                          :input (format nil "shell-stdin~%"))
+      (expect (format nil "shell-stdin~%") :to-equal stdout)
+      (expect "" :to-equal stderr)
+      (expect 0 :to-equal exit-code))
+    (with-temporary-output-file (config-path :prefix "nshell-login-config")
+      (with-open-file (stream config-path :direction :output
+                                          :if-exists :supersede
+                                          :if-does-not-exist :create)
+        (write-line "echo config-output" stream)
+        (write-line "set -x NSHELL_R04_CONFIG_SETTING from-config" stream))
+      (multiple-value-bind (stdout stderr exit-code)
+          (%run-nshell-main
+           (list "--config" config-path "-ilc" "env"))
+        (expect 0 :to-equal exit-code)
+        (expect (search "NSHELL_R04_CONFIG_SETTING=from-config" stdout)
+                :to-be-truthy)
+        (expect (search "config-output" stdout) :to-be-falsy)
+        (expect "" :to-equal stderr))))
 
   (it "e2e-main-agent-rejects-noninteractive-execution"
-    "The -c path rejects agent before any interactive model boundary can start."
-    (%assert-nshell-main-result '("-c" "agent run tests")
+    "The --command path rejects agent before any interactive model boundary can start."
+    (%assert-nshell-main-result '("--command" "agent run tests")
                                 "agent: interactive terminal required"
                                 2))
 
   (it "e2e-main-command-exposes-trailing-argv"
-    "Command-mode arguments after -c are exposed as $argv."
-    (%assert-nshell-main-result '("-c" "echo first=$argv[1]; echo second=$argv[2]; echo all=$argv"
+    "Arguments after --command are exposed as $argv."
+    (%assert-nshell-main-result '("--command" "echo first=$argv[1]; echo second=$argv[2]; echo all=$argv"
                                   "alpha" "beta")
                                    (list "first=alpha"
                                          "second=beta"
@@ -79,22 +110,22 @@
                                 0))
 
   (it "e2e-main-command-supports-inline-function-definition"
-    "The -c command path supports source-reader function definitions."
-    (%assert-nshell-main-result '("-c" "function greet; echo hi $argv[1]; end; greet World")
+    "The --command path supports source-reader function definitions."
+    (%assert-nshell-main-result '("--command" "function greet; echo hi $argv[1]; end; greet World")
                                 "hi World"
                                 0))
 
   (it "e2e-main-command-supports-inline-function-definition-after-prefix-command"
-    "The -c path executes a prefix command before a same-line function block."
-    (%assert-nshell-main-result '("-c" "echo hi; function f; echo hi; end; f")
+    "The --command path executes a prefix command before a same-line function block."
+    (%assert-nshell-main-result '("--command" "echo hi; function f; echo hi; end; f")
                                 (format nil "hi~%hi")
                                 0))
 
   (it "e2e-main-command-supports-inline-control-flow"
-    "The -c command path supports inline source-reader control-flow forms."
+    "The --command path supports inline source-reader control-flow forms."
     (multiple-value-bind (stdout stderr exit-code)
         (%run-nshell-main
-         '("-c" "for i in (seq 1 2); echo n=$i; end; if true; echo conditional; end; switch yes; case yes; echo switched; end; begin; echo grouped; end; while false; echo should-not-run; end; echo after-while"))
+         '("--command" "for i in (seq 1 2); echo n=$i; end; if true; echo conditional; end; switch yes; case yes; echo switched; end; begin; echo grouped; end; while false; echo should-not-run; end; echo after-while"))
       (expect 0 :to-equal exit-code)
       (expect (search "n=1" stdout) :to-be-truthy)
       (expect (search "n=2" stdout) :to-be-truthy)
@@ -106,44 +137,44 @@
       (expect "" :to-equal stderr)))
 
   (it "e2e-main-command-expands-command-substitutions"
-    "The -c command path expands POSIX-style and fish-style command substitutions."
-    (%assert-nshell-main-result '("-c" "echo posix=$(echo hi); echo fish=(echo bye); echo \"dq=$(echo quoted)\"")
+    "The --command path expands POSIX-style and fish-style command substitutions."
+    (%assert-nshell-main-result '("--command" "echo posix=$(echo hi); echo fish=(echo bye); echo \"dq=$(echo quoted)\"")
                                 '("posix=hi" "fish=bye" "dq=quoted")
                                 0))
 
   (it "e2e-main-command-merges-stderr-with-pipe-and-ampersand"
-    "The public -c path supports |& by feeding the left stage's stderr downstream."
+    "The public --command path supports |& by feeding the left stage's stderr downstream."
     (%assert-nshell-main-result
-     '("-c" "sh -c 'printf out; printf err >&2' |& cat")
+     '("--command" "sh -c 'printf out; printf err >&2' |& cat")
      "outerr"
      0))
 
   (it "e2e-main-command-applies-pipefail"
-    "The public -c path returns an earlier non-zero pipeline status when pipefail is enabled."
+    "The public --command path returns an earlier non-zero pipeline status when pipefail is enabled."
     (%assert-nshell-main-result
-     '("-c" "set -o pipefail; sh -c 'exit 7' | sh -c 'exit 0'")
+     '("--command" "set -o pipefail; sh -c 'exit 7' | sh -c 'exit 0'")
      nil
      7))
 
   (it "e2e-main-command-expands-process-substitution"
-    "The -c command path materializes input process substitutions."
+    "The --command path materializes input process substitutions."
     (%assert-nshell-main-result
-     (list "-c" (format nil "cat <(~a process-ok)"
+     (list "--command" (format nil "cat <(~a process-ok)"
                         (%resolve-real-external-executable "printf")))
      "process-ok"
      0))
 
   (it "e2e-main-command-expands-output-process-substitution"
-    "The -c command path materializes output process substitutions."
+    "The --command path materializes output process substitutions."
     (%assert-nshell-main-result
-     '("-c" "sh -c 'printf output-ok > \"$1\"' sh >(cat)")
+     '("--command" "sh -c 'printf output-ok > \"$1\"' sh >(cat)")
      "output-ok"
      0))
 
   (it "e2e-main-command-expands-documented-core-forms"
-    "The -c command path expands arithmetic, parameter, and brace forms documented for scripts."
+    "The --command path expands arithmetic, parameter, and brace forms documented for scripts."
     (%assert-nshell-main-result
-     '("-c" "set FOO bar; echo arith=$((1 + 2 * 3)); echo param=${FOO:-fallback}; echo alt=${FOO:+yes}; echo sub=${FOO:1:2}; echo brace=a{b,c}; echo range={1..3}")
+     '("--command" "set FOO bar; echo arith=$((1 + 2 * 3)); echo param=${FOO:-fallback}; echo alt=${FOO:+yes}; echo sub=${FOO:1:2}; echo brace=a{b,c}; echo range={1..3}")
      '("arith=7"
        "param=bar"
        "alt=yes"
@@ -155,7 +186,7 @@
   (it "e2e-main-command-expands-list-indexes-and-ranges"
     "The public batch path preserves fish-style list variable indexing and range expansion."
     (%assert-nshell-main-result
-     '("-c" "set LIST alpha beta gamma; echo idx=$LIST[2]; echo range=$LIST[1..2]; echo compound=pre-$LIST[1..2].txt")
+     '("--command" "set LIST alpha beta gamma; echo idx=$LIST[2]; echo range=$LIST[1..2]; echo compound=pre-$LIST[1..2].txt")
      '("idx=beta"
        "range=alpha range=beta"
        "compound=pre-alpha.txt compound=pre-beta.txt")
@@ -180,7 +211,7 @@
              (with-open-file (out log-file :direction :output :if-does-not-exist :create)
                (write-string "beta" out))
              (multiple-value-bind (stdout stderr exit-code)
-                 (%run-nshell-main (list "-c" (format nil "echo glob=~A*.txt" root)))
+                 (%run-nshell-main (list "--command" (format nil "echo glob=~A*.txt" root)))
                (expect 0 :to-equal exit-code)
                (expect (search "glob=" stdout) :to-be-truthy)
                (expect (search "alpha.txt" stdout) :to-be-truthy)
@@ -201,12 +232,12 @@
             (host-kit:delete-directory-tree root-path :validate t))))))
 
   (it "e2e-main-command-applies-fd-redirections"
-    "The -c command path applies fd redirections to external command stdout and stderr."
+    "The --command path applies fd redirections to external command stdout and stderr."
     (with-temporary-output-file (amp-target :prefix "nshell-main-amp-redir")
       (with-temporary-output-file (merge-target :prefix "nshell-main-merge-redir")
         (multiple-value-bind (stdout stderr exit-code)
             (%run-nshell-main
-             (list "-c"
+             (list "--command"
                    (format nil
                            "sh -c 'echo out; echo err >&2' &> ~A; sh -c 'echo merge-out; echo merge-err >&2' > ~A 2>&1"
                            amp-target
@@ -222,11 +253,11 @@
             (expect (search "merge-err" merge-content) :to-be-truthy))))))
 
   (it "e2e-main-command-preserves-dynamic-fd-dup-order"
-    "The public command path preserves left-to-right semantics for 1>&2 followed by stdout redirection."
+    "The public --command path preserves left-to-right semantics for 1>&2 followed by stdout redirection."
     (with-temporary-output-file (target :prefix "nshell-main-dynamic-fd-dup")
       (multiple-value-bind (stdout stderr exit-code)
           (%run-nshell-main
-           (list "-c"
+           (list "--command"
                  (format nil
                          "sh -c 'echo out; echo err >&2' 1>&2 > ~A"
                          target)))
@@ -237,11 +268,11 @@
         (expect (format nil "out~%") :to-equal (host-kit:read-file-string target)))))
 
   (it "e2e-main-command-preserves-arbitrary-fd-dup-order"
-    "The public command path keeps fd 3 on the original stdout while stdout is redirected later."
+    "The public --command path keeps fd 3 on the original stdout while stdout is redirected later."
     (with-temporary-output-file (target :prefix "nshell-main-arbitrary-fd-dup")
       (multiple-value-bind (stdout stderr exit-code)
           (%run-nshell-main
-           (list "-c"
+           (list "--command"
                  (format nil
                          "sh -c 'printf out; printf fd3 >&3' 3>&1 1>~A"
                          target)))
@@ -251,9 +282,9 @@
         (expect "out" :to-equal (host-kit:read-file-string target)))))
 
   (it "e2e-main-command-reports-internal-fd-redirect-errors"
-    "The public command path turns unsupported builtin fd redirects into a shell status."
+    "The public --command path turns unsupported builtin fd redirects into a shell status."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main (list "-c" "echo builtin 3>&1"))
+        (%run-nshell-main (list "--command" "echo builtin 3>&1"))
       (expect "" :to-equal stdout)
       (expect 1 :to-equal exit-code)
       (expect (not (null (search "Unsupported file-descriptor duplication 3>&1"
@@ -262,13 +293,13 @@
 
   (it "e2e-main-command-reports-signal-exit-status"
     "External commands killed by a signal report the shell-compatible 128+signal status."
-    (%assert-nshell-main-result '("-c" "sh -c 'kill -TERM $$'")
+    (%assert-nshell-main-result '("--command" "sh -c 'kill -TERM $$'")
                                 nil
                                 143))
 
   (it "e2e-main-pipeline-reports-last-signal-exit-status"
     "A pipeline reports 128+signal when its last external stage is killed by a signal."
-    (%assert-nshell-main-result '("-c" "echo ignored | sh -c 'kill -TERM $$'")
+    (%assert-nshell-main-result '("--command" "echo ignored | sh -c 'kill -TERM $$'")
                                 nil
                                 143))
 
@@ -290,26 +321,26 @@
 
   (it "e2e-main-here-string-feeds-external-stdin"
     "The batch command path should feed here-strings to external stdin."
-    (%assert-nshell-main-result '("-c" "cat <<< hello")
+    (%assert-nshell-main-result '("--command" "cat <<< hello")
                                 (format nil "hello~%")
                                 0))
 
   (it "e2e-main-here-document-feeds-external-stdin"
     "The batch command path should feed here-documents to external stdin."
-    (%assert-nshell-main-result (list "-c" (format nil "cat << EOF~%hello~%EOF"))
+    (%assert-nshell-main-result (list "--command" (format nil "cat << EOF~%hello~%EOF"))
                                 (format nil "hello~%")
                                 0))
 
   (it "e2e-main-here-document-quoted-delimiter-keeps-body-literal"
     "The public batch command path must not expand a quoted here-document body."
     (%assert-nshell-main-result
-     (list "-c" (format nil "cat << \"EOF\"~%$HOME $(printf substituted)~%EOF"))
+     (list "--command" (format nil "cat << \"EOF\"~%$HOME $(printf substituted)~%EOF"))
      (format nil "$HOME $(printf substituted)~%")
      0))
 
   (it "e2e-main-type-command-executes-cleanly"
-    "The entry point executes type through the batch command path."
-    (%assert-nshell-main-result '("-c" "type echo")
+    "The entry point executes type through the --command path."
+    (%assert-nshell-main-result '("--command" "type echo")
                                 "echo is a shell builtin"
                                 0))
 
@@ -317,7 +348,7 @@
     "The command builtin reports builtin, function, and external resolutions."
     (let ((real-echo (%resolve-real-external-executable "echo")))
       (%assert-nshell-main-result
-       (list "-c"
+       (list "--command"
              (format nil
                      "function greet; echo function-body; end; command -v echo; command -v greet; command -V greet; command -v ~a; command greet"
                      real-echo))
@@ -327,20 +358,20 @@
   (it "e2e-main-eval-runs-in-the-current-context"
     "The eval builtin parses one command string and keeps its environment changes."
     (%assert-nshell-main-result
-     '("-c" "eval 'set EVAL_VALUE ready'; echo $EVAL_VALUE")
+     '("--command" "eval 'set EVAL_VALUE ready'; echo $EVAL_VALUE")
      "ready"
      0))
 
   (it "e2e-main-eval-propagates-the-command-status"
     "The eval builtin returns the status produced by its parsed command list."
     (%assert-nshell-main-result
-     '("-c" "eval 'echo before-eval; false'")
+     '("--command" "eval 'echo before-eval; false'")
      "before-eval"
      1))
 
   (it "e2e-main-eval-updates-last-exit-status"
     "The eval builtin exposes its command status through the current context."
     (%assert-nshell-main-result
-     '("-c" "eval 'false'; echo eval-status=$?")
+     '("--command" "eval 'false'; echo eval-status=$?")
      "eval-status=1"
      0)))

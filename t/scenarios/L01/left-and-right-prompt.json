@@ -1,0 +1,89 @@
+{
+  "id": "L01-left-and-right-prompt",
+  "uc": [
+    "L01"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_L01-left-and-right-prompt> ",
+      "TEST_LEFT": "LEFT_L01",
+      "TEST_RIGHT": "RIGHT_L01",
+      "TEST_READY": "L01_PROMPT_READY"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "prompt left \"$TEST_LEFT\"; echo L01_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "L01_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "prompt right \"$TEST_RIGHT\"; echo L01_$((1+2))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "L01_3",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo \"$TEST_READY\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "L01_PROMPT_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "LEFT_L01",
+        "RIGHT_L01",
+        "L01_PROMPT_READY"
+      ]
+    },
+    "exit_code": 0
+  }
+}

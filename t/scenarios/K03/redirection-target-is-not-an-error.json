@@ -1,0 +1,81 @@
+{
+  "id": "K03-redirection-target-is-not-an-error",
+  "uc": [
+    "K03"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_K03-redirection-target-is-not-an-error> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo K03_$((1+1)) > redirected.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "cat redirected.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "K03_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "K03_2"
+      ],
+      "excludes": [
+        "command not found",
+        "redirection target"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "redirected.txt",
+          "exists": true,
+          "contains": [
+            "K03_2"
+          ]
+        }
+      ]
+    }
+  }
+}

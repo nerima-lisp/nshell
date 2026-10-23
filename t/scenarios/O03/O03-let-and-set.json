@@ -32,5 +32,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L02 owns let and set evaluation."
   }
 }

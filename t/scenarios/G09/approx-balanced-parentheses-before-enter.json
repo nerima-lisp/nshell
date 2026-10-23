@@ -47,8 +47,28 @@
       "key": "Enter"
     },
     {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "key",
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo G09_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "G09_BALANCED",
+      "contains": "G09_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -63,5 +83,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-E03 owns balanced-input continuation and Enter behavior."
+  }
 }

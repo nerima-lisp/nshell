@@ -1,0 +1,35 @@
+{
+  "id": "O08-structured-pipeline",
+  "uc": [
+    "O08"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(echo ,(length (-> '((:state \"stopped\" :id 7 :command \"demo\") (:state \"running\" :id 8 :command \"other\")) (where (= :state \"stopped\")) (select :id :command))))\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "1"
+      ]
+    },
+    "exit_code": 0
+  }
+}

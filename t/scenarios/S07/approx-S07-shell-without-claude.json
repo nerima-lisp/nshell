@@ -30,12 +30,9 @@
       "key": "Enter"
     },
     {
-      "type": "key",
-      "key": "C-c"
-    },
-    {
-      "type": "key",
-      "key": "C-c"
+      "type": "wait",
+      "contains": "COMMAND-NOT-FOUND",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",

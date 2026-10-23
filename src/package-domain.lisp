@@ -73,41 +73,62 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:token-type #:token-value #:token-start #:token-end #:token-quote-style
            #:token-fragments #:make-token
            #:ast-node-type #:make-command-node #:make-pipeline-node
-                #:command-node-p #:pipeline-node-p #:sequence-node-p
-                #:command-node-command #:command-node-command-quote-style
-                #:command-node-command-fragments #:command-node-args
-                #:sequence-node-commands #:pipeline-node-commands
-                #:sequence-node-separators
-                #:command-node-arg-values #:split-command-node-redirects
-                #:command-redirect-split-result-p
-                #:command-redirect-split-result-clean-command
-                #:command-redirect-split-result-redirects
-                #:split-command-nodes-redirects
-                #:command-list-redirect-split-result-p
-                #:command-list-redirect-split-result-clean-commands
-                #:command-list-redirect-split-result-redirects
-                #:ast-node->command-line
-           #:ast-node-span
-           #:%balanced-substitution-end
-           #:+control-flow-keywords+
-                #:command-arg #:command-arg-p #:make-command-arg
-                #:command-arg-value #:command-arg-quote-style #:command-arg-fragments
-                #:command-fragment #:command-fragment-p #:make-command-fragment
-                #:command-fragment-value #:command-fragment-quote-style
-                #:command-fragment-escaped-positions
-                #:arg-value #:arg-quote-style #:arg-here-doc-literal-p
-                #:sequence-node-command-separator
-                #:sequence-node-command-separator-p
-                #:sequence-node-command-separator-command
-                #:sequence-node-command-separator-separator
-                #:sequence-node-command-separators
-             #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch
-             #:for-node-p #:for-node-var-name #:for-node-in-values #:for-node-body
-             #:while-node-p #:while-node-condition #:while-node-body
-             #:case-clause #:case-clause-p #:make-case-clause
-             #:case-clause-pattern #:case-clause-body
-             #:case-node-p #:case-node-value #:case-node-clauses
-             #:begin-end-node-p #:begin-end-node-body
+           #:command-node-p #:pipeline-node-p #:sequence-node-p
+           #:command-node-command #:command-node-command-quote-style
+           #:command-node-command-fragments #:command-node-args
+           #:command-node-redirects #:command-node-force-external-p
+           #:sequence-node-commands #:pipeline-node-commands #:pipeline-node-edges
+           #:pipeline-edge #:pipeline-edge-p #:make-pipeline-edge
+           #:pipeline-edge-kind #:pipeline-edge-source-span
+           #:sequence-node-separators
+           #:command-node-arg-values #:split-command-node-redirects
+           #:command-redirect-split-result-p
+           #:command-redirect-split-result-clean-command
+           #:command-redirect-split-result-redirects
+           #:split-command-nodes-redirects
+           #:command-list-redirect-split-result-p
+           #:command-list-redirect-split-result-clean-commands
+           #:command-list-redirect-split-result-redirects
+           #:ast-node->command-line #:ast-node-span
+           #:%balanced-substitution-end #:+control-flow-keywords+
+           #:command-arg #:command-arg-p #:make-command-arg
+           #:command-arg-value #:command-arg-quote-style #:command-arg-fragments
+           #:command-arg-source-span #:command-arg-glob-p
+           #:command-fragment #:command-fragment-p #:make-command-fragment
+           #:command-fragment-value #:command-fragment-quote-style
+           #:command-fragment-escaped-positions
+           #:evaluated-command-arg #:evaluated-command-arg-p
+           #:make-evaluated-command-arg #:evaluated-command-arg-value
+           #:evaluated-command-arg-source-span #:evaluated-command-arg-glob-p
+           #:redirect-entry #:redirect-entry-p #:make-redirect-entry
+           #:redirect-entry-kind #:redirect-entry-file-descriptor
+           #:redirect-entry-target #:redirect-entry-source-span
+           #:redirect-entry-source-order
+           #:redirect-fd-target #:redirect-fd-target-p
+           #:make-redirect-fd-target #:redirect-fd-target-file-descriptor
+           #:redirect-fd-close-target #:redirect-fd-close-target-p
+           #:make-redirect-fd-close-target
+           #:redirect-heredoc-target #:redirect-heredoc-target-p
+           #:make-redirect-heredoc-target #:redirect-heredoc-target-delimiter
+           #:redirect-heredoc-target-body #:redirect-heredoc-target-expand-p
+           #:redirect-heredoc-target-strip-tabs-p
+           #:redirect-heredoc-target-body-span
+           #:redirect-procsub-target #:redirect-procsub-target-p
+           #:make-redirect-procsub-target #:redirect-procsub-target-direction
+           #:redirect-procsub-target-form
+           #:arg-value #:arg-quote-style #:arg-here-doc-literal-p
+           #:sequence-node-command-separator
+           #:sequence-node-command-separator-p
+           #:sequence-node-command-separator-command
+           #:sequence-node-command-separator-separator
+           #:sequence-node-command-separators
+           #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch
+           #:for-node-p #:for-node-var-name #:for-node-in-values #:for-node-body
+           #:while-node-p #:while-node-condition #:while-node-body
+           #:case-clause #:case-clause-p #:make-case-clause
+           #:case-clause-pattern #:case-clause-body
+           #:case-node-p #:case-node-value #:case-node-clauses
+           #:begin-end-node-p #:begin-end-node-body
            #:with-parsed-command-line #:with-parsed-command-line-case #:with-complete-command-line
            #:parse-complete-p #:parse-result-state #:parse-errors
            #:parse-error-messages #:format-parse-error-messages

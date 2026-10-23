@@ -1,0 +1,67 @@
+{
+  "id": "H01-history-persists-after-exit",
+  "uc": [
+    "H01"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H01-history-persists-after-exit> ",
+      "SCENARIO_VALUE": "H01_PERSISTED_ENTRY"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H01_PERSISTED_ENTRY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H01_PERSISTED_ENTRY"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "history": {
+        "path": ".local/state/nshell/history",
+        "contains": [
+          "echo \"$SCENARIO_VALUE\""
+        ]
+      }
+    }
+  }
+}

@@ -1,4 +1,5 @@
 (in-package #:nshell.application)
+(defvar *vi-mode-handler* nil)
 
 (defun %update-shell-environment (context update-fn &rest args)
   (setf (shell-context-environment context)
@@ -42,7 +43,7 @@
 (defun %set-usage ()
   (%builtin-usage
    "set"
-   "set [-x|--export] [-l|--local|-g|--global] name value... | set [-e|--erase] name... | set [-q|--query] name... | set [-o|+o] pipefail"))
+   "set [-x|--export] [-l|--local|-g|--global] name value... | set [-e|--erase] name... | set [-q|--query] name... | set [-o|+o] pipefail | set [-o|+o] vi"))
 
 (defun %set-export-option-p (arg)
   (%builtin-option-p arg '("-x" "--export")))
@@ -90,7 +91,7 @@
        (unless (second args)
          (return-from %builtin-set (values (%set-usage) 1)))
        (%update-shell-environment context
-                                  #'nshell.domain.environment:env-set-values
+                                  (function nshell.domain.environment:env-set-values)
                                   (second args)
                                   (cddr args)
                                   t)
@@ -101,7 +102,7 @@
        (unless (second args)
          (return-from %builtin-set (values (%set-usage) 1)))
        (%update-shell-environment context
-                                  #'nshell.domain.environment:env-set-values
+                                  (function nshell.domain.environment:env-set-values)
                                   (second args)
                                   (cddr args)
                                   t
@@ -111,7 +112,7 @@
        (unless (second args)
          (return-from %builtin-set (values (%set-usage) 1)))
        (%update-shell-environment context
-                                  #'nshell.domain.environment:env-set-values
+                                  (function nshell.domain.environment:env-set-values)
                                   (second args)
                                   (cddr args)
                                   t
@@ -121,7 +122,7 @@
        (unless (second args)
          (return-from %builtin-set (values (%set-usage) 1)))
        (%update-shell-environment context
-                                  #'nshell.domain.environment:env-set-values
+                                  (function nshell.domain.environment:env-set-values)
                                   (second args)
                                   (cddr args)
                                   nil
@@ -131,7 +132,7 @@
        (unless (second args)
          (return-from %builtin-set (values (%set-usage) 1)))
        (%update-shell-environment context
-                                  #'nshell.domain.environment:env-set-values
+                                  (function nshell.domain.environment:env-set-values)
                                   (second args)
                                   (cddr args)
                                   nil
@@ -143,7 +144,14 @@
       ((%set-query-option-p (first args))
        (with-set-name-argument "-q"
          (%query-set-variables context (rest args))))
-      ((and (member (first args) '("-o" "+o") :test #'string=)
+      ((and (member (first args) (list "-o" "+o") :test (function string=))
+            (second args)
+            (string= (second args) "vi")
+            (null (cddr args)))
+       (when (functionp *vi-mode-handler*)
+         (funcall *vi-mode-handler* (string= (first args) "-o")))
+       (values nil 0))
+      ((and (member (first args) (list "-o" "+o") :test (function string=))
             (string= (second args) "pipefail")
             (null (cddr args)))
        (setf (shell-context-pipefail-p context)
@@ -153,7 +161,7 @@
        (values (%set-usage) 1))
       (t
        (%update-shell-environment context
-                                  #'nshell.domain.environment:env-set-values
+                                  (function nshell.domain.environment:env-set-values)
                                   (first args)
                                   (rest args)
                                   nil)

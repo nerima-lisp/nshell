@@ -231,10 +231,11 @@ This is useful when the previous command's output was not retained for `?`
 
 ### Vi-mode cursor shape
 
-When `NSHELL_VI_MODE` is enabled (see the man page's KEY BINDINGS section),
-the cursor shape follows the vi mode: a steady block in normal mode, a
-steady bar while inserting. This needs no configuration and does nothing
-when vi mode is off or the terminal is not interactive.
+When `NSHELL_VI_MODE` is enabled, or after `set -o vi` enables vi mode during an
+interactive session, the cursor shape follows the editor mode: a steady block
+in normal mode and a steady bar while inserting. `set +o vi` restores the
+terminal's default cursor shape. These changes require no extra configuration
+and apply only in an interactive terminal.
 
 ## In `~/.nshellrc`
 

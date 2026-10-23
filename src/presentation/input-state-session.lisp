@@ -128,8 +128,8 @@
   "Apply KEY-EVENT to INPUT-STATE and return two values.
 
 The first value is a fresh INPUT-STATE. The second value is an OUTPUT-EVENT
-keyword for the impure REPL shell to interpret. This function performs no I/O
-  and mutates neither STATE nor KEY-EVENT."
+keyword for the outer, effectful REPL shell to interpret. This function performs
+no I/O and mutates neither STATE nor KEY-EVENT."
   (with-normalized-input-state (state state)
     (let* ((mouse-event-p
              (eq :mouse (nshell.domain.input:key-event-type key-event)))
@@ -143,6 +143,18 @@ keyword for the impure REPL shell to interpret. This function performs no I/O
              (finalize-input-state-transition
               working-state
               (input-session-reduction-state reduction)
-              key-event)))
-        (values (record-undo-transition state final-state output key-event)
-                output))))
+              key-event))
+           (undo-state (record-undo-transition state final-state output key-event))
+           (vi-tracking-p
+             (or (member (input-state-mode state)
+                         (list :vi-command :vi-visual :vi-d :vi-c)
+                         :test (function eq))
+                 (member (input-state-mode undo-state)
+                         (list :vi-command :vi-visual :vi-d :vi-c)
+                         :test (function eq))
+                 (%vi-session-value state :recording-change)
+                 (%vi-session-value state :count-events))))
+      (values (if vi-tracking-p
+                  (record-vi-input-transition state undo-state key-event output)
+                  undo-state)
+              output))))

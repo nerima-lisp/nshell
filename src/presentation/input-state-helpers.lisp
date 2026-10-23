@@ -107,12 +107,8 @@
 
 (defun finalize-enter-input-state (state)
   (with-normalized-input-state (state state)
-    (let ((suggestion (and (input-state-at-eol-p state)
-                           (input-state-suggestion state)))
-          (state (expand-abbreviation-before-cursor state)))
-      (when suggestion
-        (setf state (append-suggestion-to-input-state state suggestion)))
-      (values state :execute))))
+    (values (copy-input-state-clearing-completion (expand-abbreviation-before-cursor state))
+            :execute)))
 
 (defun insert-char-with-abbreviation-expansion (state ch)
   (if (nshell.domain.abbreviation:abbreviation-boundary-p ch)

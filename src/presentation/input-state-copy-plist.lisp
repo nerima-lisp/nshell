@@ -113,6 +113,8 @@ current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
                                              mode
                                              vi-count-supplied-p
                                              vi-count
+                                             vi-session-supplied-p
+                                             vi-session
                                              vi-visual-anchor-supplied-p
                                              vi-visual-anchor
                                              mouse-selection-anchor-supplied-p
@@ -162,7 +164,7 @@ current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
                 (input-state-copy-optional-value-override kill-ring)
                 (input-state-kill-ring state)))
    (%input-state-copy-args state
-     vi-count
+     vi-count vi-session
      last-yank-start last-yank-end last-yank-index
      last-argument-start last-argument-end last-argument-index)))
 

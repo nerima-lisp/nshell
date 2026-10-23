@@ -15,16 +15,17 @@
                                                               completion-base-cursor-supplied-p)
                                       (last-candidates nil
                                                        last-candidates-supplied-p)
-                                       (suggestion nil suggestion-supplied-p)
-                                       mode
-                                       (vi-count nil vi-count-supplied-p)
-                                       (vi-visual-anchor nil
-                                                         vi-visual-anchor-supplied-p)
-                                       (mouse-selection-anchor nil
-                                                               mouse-selection-anchor-supplied-p)
-                                       (mouse-selection-end nil
-                                                            mouse-selection-end-supplied-p)
-                                       abbreviation-expander kill-ring
+                                      (suggestion nil suggestion-supplied-p)
+                                      mode
+                                      (vi-count nil vi-count-supplied-p)
+                                      (vi-session nil vi-session-supplied-p)
+                                      (vi-visual-anchor nil
+                                                        vi-visual-anchor-supplied-p)
+                                      (mouse-selection-anchor nil
+                                                              mouse-selection-anchor-supplied-p)
+                                      (mouse-selection-end nil
+                                                           mouse-selection-end-supplied-p)
+                                      abbreviation-expander kill-ring
                                       (last-yank-start nil
                                                        last-yank-start-supplied-p)
                                       (last-yank-end nil
@@ -59,6 +60,7 @@
             (%copy-input-state-transient-initargs
              state new-buffer mode
              vi-count-supplied-p vi-count
+             vi-session-supplied-p vi-session
              vi-visual-anchor-supplied-p vi-visual-anchor
              mouse-selection-anchor-supplied-p mouse-selection-anchor
              mouse-selection-end-supplied-p mouse-selection-end

@@ -398,7 +398,7 @@
           :execute
           (:buffer "echo hi"))))
 
-  (it "input-state-enter-accepts-suggestion-at-eol-before-execute"
+  (it "input-state-enter-does-not-accept-suggestion-at-eol"
     (let ((state (completion-session-state
                   :buffer "echo"
                   :cursor-pos 4
@@ -408,12 +408,12 @@
           state
           (reduce-once state :enter)
           :execute
-          (:buffer "echo hello"
-           :cursor-pos 10
+          (:buffer "echo"
+           :cursor-pos 4
            :completion-index -1
            :suggestion nil))))
 
-  (it "input-state-enter-expands-abbreviation-before-execute"
+  (it "input-state-enter-expands-abbreviation-without-accepting-suggestion"
     (let ((state (completion-session-state
                   :buffer "gco"
                   :cursor-pos 3
@@ -427,8 +427,8 @@
           state
           (reduce-once state :enter)
           :execute
-          (:buffer "git checkout ignored"
-           :cursor-pos 20
+          (:buffer "git checkout"
+           :cursor-pos 12
            :completion-index -1
            :suggestion nil))))
 

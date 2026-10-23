@@ -1,0 +1,38 @@
+{
+  "id": "G03-undo-redo",
+  "uc": ["G03"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G03> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  proof) printf '%s\\n' 'G03_UNDO_REDO_OK' ;;\nesac\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "sh checker.sh proof"},
+    {"type": "keys", "text": "x"},
+    {"type": "keys", "text": "\u001f"},
+    {"type": "key", "key": "M-r"},
+    {"type": "keys", "text": "\u001f"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G03_UNDO_REDO_OK"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {"contains": ["G03_UNDO_REDO_OK"]},
+    "exit_code": 0
+  }
+}

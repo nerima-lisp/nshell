@@ -172,8 +172,10 @@
                               :terminal-width (terminal-width)))
     (when (eq (input-state-mode *input-state*) :search)
       (render-current-history-search-panel))
-    (when (and *vi-mode-enabled* *interactive-terminal-installed-p*)
-      (nshell.infrastructure.terminal:ansi-set-vi-mode-cursor-shape
-       (eq (input-state-mode *input-state*) :insert)))
+    (when *interactive-terminal-installed-p*
+      (if *vi-mode-enabled*
+          (nshell.infrastructure.terminal:ansi-set-vi-mode-cursor-shape
+           (eq (input-state-mode *input-state*) :insert))
+          (write-string (cl-tty-kit:ansi-set-cursor-style :default))))
     (finish-output)
     (lambda () (read-key-cont))))

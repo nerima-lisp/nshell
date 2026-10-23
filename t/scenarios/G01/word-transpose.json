@@ -1,0 +1,36 @@
+{
+  "id": "G01-word-transpose",
+  "uc": ["G01"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G01V> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "if [ \"$1\" = first ] && [ \"$2\" = second ]; then printf '%s\\n' 'G01_WORD_TRANSPOSE_OK'; fi\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "sh checker.sh second first"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-t"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G01_WORD_TRANSPOSE_OK"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {"contains": ["G01_WORD_TRANSPOSE_OK"]},
+    "exit_code": 0
+  }
+}

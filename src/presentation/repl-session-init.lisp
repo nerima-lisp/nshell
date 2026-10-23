@@ -196,6 +196,9 @@ entered during this session."
         (function nshell.infrastructure.acl:get-git-status)
         nshell.application:*theme-apply-handler* (function apply-repl-theme)
         nshell.application:*bind-table-handler* (function bind-dispatch-handler)
+        nshell.application::*vi-mode-handler*
+          (lambda (enabled)
+            (setf *vi-mode-enabled* (not (null enabled))))
         nshell.application:*prompt-format-apply-handler* (function apply-prompt-format)
         nshell.application:*prompt-format-query-handler* (function current-prompt-format)
         nshell.application:*prompt-preview-handler* (function preview-prompt-format))

@@ -1,0 +1,26 @@
+{
+  "id": "G11-clear-screen",
+  "uc": ["G11"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G11> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {"files": []},
+  "steps": [
+    {"type": "key", "key": "C-l"},
+    {"type": "wait", "contains": "\u001b[2J"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {"contains": ["\u001b[2J"]},
+    "exit_code": 0
+  }
+}

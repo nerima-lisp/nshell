@@ -539,7 +539,7 @@ The regular read timeout remains short for command-response assertions.")
                     :cols 100))
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
                (%e2e-pty-await-ready fd)
-               ;; Enter accepts autosuggestions; this probe must execute exactly cat.
+               ;; This probe must execute the submitted pipeline exactly as entered.
                (%e2e-pty-write-line
                 fd
                 (format nil "~A~C"

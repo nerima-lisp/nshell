@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SCENARIO_DIR = ROOT / "t" / "scenarios"
 EXPECTED_SCENARIOS_FILE = "expected-scenarios.json"
 MAX_TIMEOUT_SECONDS = 60
+MAX_INPUT_DELAY_SECONDS = 1.0
 MAX_REPEAT = 10
 MAX_OUTPUT_BYTES = 1_048_576
 ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -231,6 +232,15 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
     _require(isinstance(private_mode, bool), f"{scenario_id}: private_mode must be a boolean")
     _require(not private_mode or scenario["mode"] == "pty",
              f"{scenario_id}: private_mode is supported only for pty scenarios")
+    input_delay = scenario.get("input_delay_seconds", 0)
+    _require(
+        isinstance(input_delay, (int, float))
+        and not isinstance(input_delay, bool)
+        and 0 <= input_delay <= MAX_INPUT_DELAY_SECONDS,
+        f"{scenario_id}: input_delay_seconds must be between 0 and {MAX_INPUT_DELAY_SECONDS}",
+    )
+    _require(input_delay == 0 or scenario["mode"] == "pty",
+             f"{scenario_id}: input_delay_seconds is supported only for pty scenarios")
     _require(
         isinstance(scenario.get("uc"), list) and scenario["uc"],
         f"{scenario_id}: uc must be a non-empty array",
@@ -332,6 +342,16 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         and 0 < timeout <= MAX_TIMEOUT_SECONDS,
         f"{scenario_id}: timeout_seconds must be in (0, {MAX_TIMEOUT_SECONDS}]",
     )
+    if scenario["mode"] == "pty":
+        input_count = sum(
+            step["type"] in ("keys", "paste", "key")
+            for session in _pty_sessions(scenario)
+            for step in session["steps"]
+        )
+        _require(
+            input_delay * input_count < timeout,
+            f"{scenario_id}: configured input delays must fit within timeout_seconds",
+        )
     expected = scenario["expected"]
     _require("exit_code" in expected, f"{scenario_id}: expected.exit_code is required")
     if scenario["mode"] == "pty":
@@ -799,6 +819,21 @@ class TmuxSession:
                 )
             self._read(remaining)
 
+    def wait_after_input(self, delay: float) -> None:
+        if delay <= 0:
+            return
+        remaining = self.deadline - time.monotonic()
+        _require(
+            delay < remaining,
+            f"{self.scenario['id']}: input delay would exceed scenario deadline",
+        )
+        time.sleep(delay)
+        _require(
+            time.monotonic() < self.deadline,
+            f"{self.scenario['id']}: input delay exceeded scenario deadline",
+        )
+        self.capture_screen()
+
     def wait_exit(self, timeout: float) -> int:
         _require(self.exit_waiter is not None, f"{self.scenario['id']}: tmux exit waiter is missing")
         try:
@@ -882,6 +917,8 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                     elif kind == "wait_exit":
                         exit_codes.append(session.wait_exit(step.get("timeout_seconds", 10)))
                         session.drain()
+                    if kind in ("keys", "paste", "key"):
+                        session.wait_after_input(scenario.get("input_delay_seconds", 0))
             total_output = sum(len(session.stream) for session, _ in sessions)
             _require(total_output <= MAX_OUTPUT_BYTES, f"{scenario['id']}: PTY output limit exceeded")
             stream = "\n".join(

@@ -185,7 +185,7 @@
       (with-reduced-input-states visual (((counted) :char #\2)
                                          ((moved) :char #\l)
                                          ((yanked copy-output) :char #\y))
-        (expect :copy :to-be copy-output)
+        (expect :redraw :to-be copy-output)
         (is-input-state yanked
                         :buffer "abcdef"
                         :cursor-pos 0
@@ -403,6 +403,166 @@
                             :buffer "abcdef"
                             :cursor-pos 3
                             :vi-visual-anchor 3)))))
+(describe "vi G02 behavior"
+  (it "repeats counted character-find motions and their reverse"
+    (let ((state (input-state :buffer "abacaba"
+                              :cursor-pos 0
+                              :mode :vi-command)))
+      (with-reduced-input-states state (((count) :char #\2)
+                                        ((pending) :char #\f)
+                                        ((found) :char #\a)
+                                        ((repeated) :char #\;)
+                                        ((reversed) :char #\,)
+                                        ((t-pending) :char #\T)
+                                        ((t-found) :char #\a))
+        (expect 4 :to-equal (nshell.presentation:input-state-cursor-pos found))
+        (expect 6 :to-equal (nshell.presentation:input-state-cursor-pos repeated))
+        (expect 4 :to-equal (nshell.presentation:input-state-cursor-pos reversed))
+        (expect 3 :to-equal (nshell.presentation:input-state-cursor-pos t-found))))
+    (let ((state (input-state :buffer "abacaba"
+                              :cursor-pos 0
+                              :mode :vi-command)))
+      (with-reduced-input-states state (((pending) :char #\t)
+                                        ((found) :char #\a)
+                                        ((back-pending) :char #\F)
+                                        ((back-found) :char #\a))
+        (expect 1 :to-equal (nshell.presentation:input-state-cursor-pos found))
+        (expect 0 :to-equal (nshell.presentation:input-state-cursor-pos back-found)))))
+
+  (it "keeps find motions on the current physical line"
+    (let ((state (input-state :buffer "abc
+def"
+                              :cursor-pos 0
+                              :mode :vi-command)))
+      (with-reduced-input-states state (((pending) :char #\f)
+                                        ((not-found) :char #\d))
+        (expect 0 :to-equal (nshell.presentation:input-state-cursor-pos not-found))
+        (expect :vi-command :to-be (nshell.presentation:input-state-mode not-found)))))
+
+  (it "moves to counted and default physical lines with gg and G"
+    (let ((state (input-state :buffer "one
+two
+three"
+                              :cursor-pos 6
+                              :mode :vi-command)))
+      (with-reduced-input-states state (((pending) :char #\g)
+                                        ((top) :char #\g)
+                                        ((last) :char #\G))
+        (expect 0 :to-equal (nshell.presentation:input-state-cursor-pos top))
+        (expect 12 :to-equal (nshell.presentation:input-state-cursor-pos last)))
+      (with-reduced-input-states state (((count) :char #\2)
+                                        ((pending) :char #\g)
+                                        ((second) :char #\g))
+        (expect 4 :to-equal (nshell.presentation:input-state-cursor-pos second)))))
+
+  (it "yanks, deletes, and puts characterwise and linewise text"
+    (let ((state (input-state :buffer "one two"
+                              :cursor-pos 1
+                              :mode :vi-command)))
+      (with-reduced-input-states state (((pending) :char #\y)
+                                        ((yanked) :char #\w))
+        (expect "one two" :to-equal (nshell.presentation:input-state-buffer yanked))
+        (expect "ne" :to-equal (first (nshell.presentation:input-state-kill-ring yanked))))
+      (with-reduced-input-states state (((pending) :char #\y)
+                                        ((line-yanked) :char #\y)
+                                        ((pasted) :char #\p))
+        (expect "one two
+one two
+" :to-equal (nshell.presentation:input-state-buffer pasted)))
+      (with-reduced-input-states state (((pending) :char #\y)
+                                        ((line-yanked) :char #\y)
+                                        ((before) :char #\P))
+        (expect "one two
+one two" :to-equal (nshell.presentation:input-state-buffer before))))
+    (let ((state (input-state :buffer "ab"
+                              :cursor-pos 0
+                              :mode :vi-command
+                              :kill-ring '("X"))))
+      (with-reduced-input-state (pasted) (reduce-once state :char #\p)
+        (expect "aXb" :to-equal (nshell.presentation:input-state-buffer pasted)))
+      (with-reduced-input-state (pasted) (reduce-once state :char #\P)
+        (expect "Xab" :to-equal (nshell.presentation:input-state-buffer pasted)))))
+
+  (it "applies inner and around word and paired text objects"
+    (let ((state (input-state :buffer "one two"
+                              :cursor-pos 1
+                              :mode :vi-command)))
+      (with-reduced-input-states state (((operator) :char #\d)
+                                        ((object) :char #\i)
+                                        ((deleted) :char #\w))
+        (expect " two" :to-equal (nshell.presentation:input-state-buffer deleted)))
+      (with-reduced-input-states state (((operator) :char #\d)
+                                        ((object) :char #\a)
+                                        ((deleted) :char #\w))
+        (expect "two" :to-equal (nshell.presentation:input-state-buffer deleted))))
+    (let ((state (input-state :buffer "say (hi) now"
+                              :cursor-pos 6
+                              :mode :vi-command)))
+      (with-reduced-input-states state (((operator) :char #\c)
+                                        ((object) :char #\i)
+                                        ((pair) :char #\()
+                                        ((inserted) :char #\X))
+        (expect "say (X) now" :to-equal (nshell.presentation:input-state-buffer inserted))
+        (expect :insert :to-be (nshell.presentation:input-state-mode inserted)))))
+
+  (it "replaces whole graphemes and keeps vi cursors on grapheme boundaries"
+    (let* ((family "👨‍👩‍👧‍👦")
+           (buffer (concatenate 'string "a" family "b"))
+           (state (input-state :buffer buffer :cursor-pos 1 :mode :vi-command)))
+      (with-reduced-input-state (moved) (reduce-once state :char #\l)
+        (expect (+ 1 (length family))
+                :to-equal (nshell.presentation:input-state-cursor-pos moved))
+        (with-reduced-input-state (deleted) (reduce-once state :char #\x)
+          (expect "ab" :to-equal (nshell.presentation:input-state-buffer deleted)))))
+    (let ((state (input-state :buffer "éx" :cursor-pos 0 :mode :vi-command)))
+      (with-reduced-input-states state (((pending) :char #\r)
+                                        ((replaced) :char #\X))
+        (expect "Xx" :to-equal (nshell.presentation:input-state-buffer replaced)))))
+
+  (it "groups insert changes for undo, redo, and dot repeat"
+    (let ((nshell.presentation::*vi-mode-enabled* t)
+          (state (input-state :buffer "ab" :cursor-pos 0 :mode :vi-command)))
+      (with-reduced-input-states state (((insert-mode) :char #\i)
+                                        ((first) :char #\X)
+                                        ((second) :char #\Y)
+                                        ((command) :escape)
+                                        ((undone) :char #\u)
+                                        ((redone) :ctrl-r)
+                                        ((repeated) :char #\.))
+        (expect "XYab" :to-equal (nshell.presentation:input-state-buffer command))
+        (expect "ab" :to-equal (nshell.presentation:input-state-buffer undone))
+        (expect "XYab" :to-equal (nshell.presentation:input-state-buffer redone))
+        (expect "XXYYab" :to-equal (nshell.presentation:input-state-buffer repeated))))
+    (let ((state (input-state :buffer "abc" :cursor-pos 0 :mode :vi-command)))
+      (with-reduced-input-states state (((deleted) :char #\x)
+                                        ((repeated) :char #\.)
+                                        ((undone) :char #\u))
+        (expect "c" :to-equal (nshell.presentation:input-state-buffer repeated))
+        (expect "bc" :to-equal (nshell.presentation:input-state-buffer undone)))))
+
+  (it "routes runtime vi mode toggles through the registered application callback"
+    (let* ((context (nshell.application:make-shell-context))
+          (calls nil)
+          (nshell.application::*vi-mode-handler* (lambda (enabled) (push enabled calls))))
+      (multiple-value-bind (output status)
+          (nshell.application::%builtin-set context '("-o" "vi"))
+        (expect output :to-be-null)
+        (expect 0 :to-equal status))
+      (multiple-value-bind (output status)
+          (nshell.application::%builtin-set context '("+o" "vi"))
+        (expect output :to-be-null)
+        (expect 0 :to-equal status))
+      (expect '(nil t) :to-equal calls)))
+
+  (it "emits mode cursor shapes and a terminal default reset"
+    (let ((bar (with-output-to-string (stream)
+                 (nshell.infrastructure.terminal:ansi-set-vi-mode-cursor-shape t stream)))
+          (block (with-output-to-string (stream)
+                   (nshell.infrastructure.terminal:ansi-set-vi-mode-cursor-shape nil stream)))
+          (default (cl-tty-kit:ansi-set-cursor-style :default)))
+      (expect (cl-tty-kit:ansi-set-cursor-style :steady-bar) :to-equal bar)
+      (expect (cl-tty-kit:ansi-set-cursor-style :steady-block) :to-equal block)
+      (expect (format nil "~c[0 q" #\Esc) :to-equal default))))
 
   (it "vi-operator-motions-cover-word-back-line-start-and-unknown"
     (let* ((state (input-state :buffer "one two three"

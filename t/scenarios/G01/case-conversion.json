@@ -1,0 +1,48 @@
+{
+  "id": "G01-case-conversion",
+  "uc": ["G01"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G01C> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  UPCASE) printf '%s\\n' 'G01_UPCASE_OK' ;;\n  lower) printf '%s\\n' 'G01_DOWNCASE_OK' ;;\n  Title) printf '%s\\n' 'G01_CAPITALIZE_OK' ;;\nesac\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "sh checker.sh upcase"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-u"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G01_UPCASE_OK"},
+    {"type": "keys", "text": "sh checker.sh LOWER"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-l"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G01_DOWNCASE_OK"},
+    {"type": "keys", "text": "sh checker.sh tITLE"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-c"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G01_CAPITALIZE_OK"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {
+      "contains": ["G01_UPCASE_OK", "G01_DOWNCASE_OK", "G01_CAPITALIZE_OK"]
+    },
+    "exit_code": 0
+  }
+}

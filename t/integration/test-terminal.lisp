@@ -171,6 +171,26 @@ initial flags."
                (expect startup-oflag :to-equal (%oflag fd)))
           (nshell.infrastructure.terminal:restore-terminal-mode fd)))))
 
+  (it "raw-mode-disables-vdsusp-and-restores-it"
+    "Raw mode disables the Darwin terminal driver VDSUSP for the line editor and
+restores it afterward."
+    #-(or darwin)
+    (skip "VDSUSP is a Darwin-only terminal control character")
+    #+darwin
+    (with-pty-slave (fd)
+      (let ((original-vdsusp
+              (aref (sb-posix:termios-cc (sb-posix:tcgetattr fd)) 11)))
+        (expect (= original-vdsusp sb-posix:vdisable) :to-be-falsy)
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.terminal:enable-raw-mode fd)
+               (expect (aref (sb-posix:termios-cc (sb-posix:tcgetattr fd)) 11)
+                       :to-equal sb-posix:vdisable)
+               (nshell.infrastructure.terminal:restore-terminal-mode fd)
+               (expect (aref (sb-posix:termios-cc (sb-posix:tcgetattr fd)) 11)
+                       :to-equal original-vdsusp))
+          (nshell.infrastructure.terminal:restore-terminal-mode fd)))))
+
   (it "raw-mode-preserves-native-baud-rates-through-repeated-enable-and-restore"
     #-(or darwin linux)
     (skip "PTY-backed terminal tests are only supported on Darwin and Linux")

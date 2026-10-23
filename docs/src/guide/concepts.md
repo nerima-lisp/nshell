@@ -101,11 +101,12 @@ full layer map.
 
 ## Vi mode
 
-Setting `NSHELL_VI_MODE=1` switches the line editor to vi key bindings:
-normal-mode motions, counts, operators (`dd`, `cw`, …), char-wise visual
-selection with yank/delete/change, and insert/append. It is the same reducer
-with a different key dispatch table, so undo, kill-ring, and completion behave
-identically in both modes.
+Set `NSHELL_VI_MODE=1` to start with vi key bindings. At an interactive prompt,
+`set -o vi` enables them and `set +o vi` disables them for the current session.
+Normal mode supports motions, character finds, counts, operators, text objects,
+character-wise visual selection, and insert/append. `j` and `k` navigate
+history. These bindings edit the input buffer; they do not change how nshell
+parses or executes commands.
 
 ## A function call gets its own variable scope
 

@@ -1,0 +1,44 @@
+{
+  "id": "G02-delete-a-word",
+  "uc": ["G02"],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G02A> ",
+      "NSHELL_VI_MODE": "1"
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  proof) printf '%s\\n' 'G02_A_WORD_OBJECT_OK' ;;\nesac\nprintf '%s\\n' 'G02_COMMAND_FINISHED'\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "sh checker.sh decoy proof"},
+    {"type": "key", "key": "Escape"},
+    {"type": "wait", "contains": "\u001b[2 q"},
+    {"type": "key", "key": "0"},
+    {"type": "key", "key": "w"},
+    {"type": "key", "key": "w"},
+    {"type": "key", "key": "d"},
+    {"type": "key", "key": "a"},
+    {"type": "key", "key": "w"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G02_COMMAND_FINISHED"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {"contains": ["G02_A_WORD_OBJECT_OK"]},
+    "exit_code": 0
+  }
+}

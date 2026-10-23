@@ -1,0 +1,41 @@
+{
+  "id": "G01-word-forward-motion",
+  "uc": ["G01"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G01F> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1:$2\" in\n  wrong:proof) printf '%s\\n' 'G01_WORD_FORWARD_OK' ;;\nesac\nprintf '%s\\n' 'G01_COMMAND_FINISHED'\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "sh checker.sh wrong proof"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-f"},
+    {"type": "key", "key": "C-k"},
+    {"type": "keys", "text": " proof"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G01_COMMAND_FINISHED"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {
+      "contains": ["G01_WORD_FORWARD_OK"]
+    },
+    "exit_code": 0
+  }
+}

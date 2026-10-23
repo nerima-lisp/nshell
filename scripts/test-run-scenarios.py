@@ -203,6 +203,45 @@ class ScenarioRunnerTests(unittest.TestCase):
             _write_json(directory / filename, scenario)
             runner._load_scenarios(directory, scenario["mode"], {scenario["id"]})
 
+    def test_pty_input_delay_is_bounded_by_delay_and_scenario_deadline(self) -> None:
+        scenario = _pty_scenario(
+            "paced-input",
+            [{"type": "keys", "text": "echo PACED_INPUT"}, {"type": "wait_exit"}],
+            {"exit_code": 0},
+        )
+        scenario["input_delay_seconds"] = 0.12
+        self._load_one(scenario, "paced-input.json")
+
+        scenario["input_delay_seconds"] = runner.MAX_INPUT_DELAY_SECONDS + 0.01
+        with self.assertRaisesRegex(runner.ScenarioError, "input_delay_seconds"):
+            self._load_one(scenario, "paced-input.json")
+
+        scenario["steps"] = [
+            {"type": "keys", "text": "first"},
+            {"type": "keys", "text": "second"},
+            {"type": "wait_exit"},
+        ]
+        scenario["input_delay_seconds"] = 0.6
+        scenario["timeout_seconds"] = 1.2
+        with self.assertRaisesRegex(runner.ScenarioError, "fit within timeout_seconds"):
+            self._load_one(scenario, "paced-input.json")
+
+    def test_pty_input_delay_checks_remaining_deadline(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.deadline = 10.0
+        session.scenario = {"id": "paced-input"}
+
+        with (
+            patch.object(runner.time, "monotonic", side_effect=[9.0, 10.0]),
+            patch.object(runner.time, "sleep") as sleep,
+            patch.object(runner.TmuxSession, "capture_screen") as capture_screen,
+        ):
+            with self.assertRaisesRegex(runner.ScenarioError, "input delay exceeded scenario deadline"):
+                session.wait_after_input(0.5)
+
+        sleep.assert_called_once_with(0.5)
+        capture_screen.assert_not_called()
+
     def test_t3_echo_only_input_is_rejected(self) -> None:
         scenario = _pty_scenario(
             "echo-only",

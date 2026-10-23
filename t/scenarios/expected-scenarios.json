@@ -1239,6 +1239,146 @@
         "U03"
       ],
       "path": "U03/approx-U03-tmux-screen-terminal.json"
+    },
+    {
+      "id": "G01-case-conversion",
+      "uc": [
+        "G01"
+      ],
+      "path": "G01/case-conversion.json"
+    },
+    {
+      "id": "G01-char-transpose",
+      "uc": [
+        "G01"
+      ],
+      "path": "G01/char-transpose.json"
+    },
+    {
+      "id": "G01-word-motion-deletion",
+      "uc": [
+        "G01"
+      ],
+      "path": "G01/word-motion-deletion.json"
+    },
+    {
+      "id": "G01-word-forward-motion",
+      "uc": [
+        "G01"
+      ],
+      "path": "G01/word-forward-motion.json"
+    },
+    {
+      "id": "G01-word-transpose",
+      "uc": [
+        "G01"
+      ],
+      "path": "G01/word-transpose.json"
+    },
+    {
+      "id": "G02-delete-a-word",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/delete-a-word.json"
+    },
+    {
+      "id": "G02-delete-inner-word",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/delete-inner-word.json"
+    },
+    {
+      "id": "G02-goto-end",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/goto-end.json"
+    },
+    {
+      "id": "G02-insert-command-cursor-shape",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/insert-command-cursor-shape.json"
+    },
+    {
+      "id": "G02-runtime-vi-toggle",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/runtime-vi-toggle.json"
+    },
+    {
+      "id": "G02-undo-find-replace-repeat",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/undo-find-replace-repeat.json"
+    },
+    {
+      "id": "G02-yank-put-inner-word",
+      "uc": [
+        "G02"
+      ],
+      "path": "G02/yank-put-inner-word.json"
+    },
+    {
+      "id": "G03-undo-redo",
+      "uc": [
+        "G03"
+      ],
+      "path": "G03/undo-redo.json"
+    },
+    {
+      "id": "G04-kill-ring-yank-pop",
+      "uc": [
+        "G04"
+      ],
+      "path": "G04/kill-ring-yank-pop.json"
+    },
+    {
+      "id": "G10-external-editor",
+      "uc": [
+        "G10"
+      ],
+      "path": "G10/external-editor.json"
+    },
+    {
+      "id": "G11-clear-screen",
+      "uc": [
+        "G11"
+      ],
+      "path": "G11/clear-screen.json"
+    },
+    {
+      "id": "G12-grapheme-boundary",
+      "uc": [
+        "G12"
+      ],
+      "path": "G12/grapheme-boundary.json"
+    },
+    {
+      "id": "G13-ctrl-y-yank",
+      "uc": [
+        "G13"
+      ],
+      "path": "G13/ctrl-y-yank.json"
+    },
+    {
+      "id": "I06-enter-typed-text-only",
+      "uc": [
+        "I06"
+      ],
+      "path": "I06/enter-typed-text-only.json"
+    },
+    {
+      "id": "I06-paste-enter-typed-text-only",
+      "uc": [
+        "I06"
+      ],
+      "path": "I06/paste-enter-typed-text-only.json"
     }
   ]
 }

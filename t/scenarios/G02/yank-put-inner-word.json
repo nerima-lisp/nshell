@@ -1,0 +1,42 @@
+{
+  "id": "G02-yank-put-inner-word",
+  "uc": ["G02"],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G02Y> ",
+      "NSHELL_VI_MODE": "1"
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  aa) printf '%s\\n' 'G02_YANK_PUT_OK' ;;\nesac\nprintf '%s\\n' 'G02_COMMAND_FINISHED'\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "sh checker.sh a"},
+    {"type": "key", "key": "Escape"},
+    {"type": "wait", "contains": "\u001b[2 q"},
+    {"type": "key", "key": "y"},
+    {"type": "key", "key": "i"},
+    {"type": "key", "key": "w"},
+    {"type": "key", "key": "p"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G02_COMMAND_FINISHED"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {"contains": ["G02_YANK_PUT_OK"]},
+    "exit_code": 0
+  }
+}

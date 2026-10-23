@@ -41,4 +41,5 @@
    (ask-original-buffer "")
    (ask-original-cursor nil)
    (undo-stack nil)
-   (redo-stack nil)))
+   (redo-stack nil)
+   (vi-session nil)))

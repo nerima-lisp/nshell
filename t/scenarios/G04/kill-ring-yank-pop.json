@@ -1,0 +1,40 @@
+{
+  "id": "G04-kill-ring-yank-pop",
+  "uc": ["G04"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G04> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  wrong) printf '%s\\n' 'G04_KILL_RING_YANK_POP_OK' ;;\nesac\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "sh checker.sh unused wrong"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-d"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-d"},
+    {"type": "key", "key": "C-y"},
+    {"type": "key", "key": "M-y"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G04_KILL_RING_YANK_POP_OK"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {"contains": ["G04_KILL_RING_YANK_POP_OK"]},
+    "exit_code": 0
+  }
+}

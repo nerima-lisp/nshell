@@ -1,0 +1,37 @@
+{
+  "id": "G13-ctrl-y-yank",
+  "uc": ["G13"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G13> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  proof) printf '%s\\n' 'G13_CTRL_Y_YANK_OK' ;;\nesac\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "sh checker.sh proof"},
+    {"type": "key", "key": "C-a"},
+    {"type": "key", "key": "C-k"},
+    {"type": "key", "key": "C-y"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G13_CTRL_Y_YANK_OK"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {"contains": ["G13_CTRL_Y_YANK_OK"]},
+    "exit_code": 0
+  }
+}

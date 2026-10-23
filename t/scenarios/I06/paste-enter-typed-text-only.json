@@ -1,0 +1,42 @@
+{
+  "id": "I06-paste-enter-typed-text-only",
+  "uc": ["I06"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "I06P> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.nshell_history",
+        "content": "# nshell-history-v2 23\nsh checker.sh suggested\n"
+      },
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  s) printf '%s\\n' 'I06_PASTE_COMMAND_FINISHED' 'I06_PASTE_TYPED_PROOF' ;;\n  suggested) printf '%s\\n' 'I06_PASTE_COMMAND_FINISHED' 'I06_PASTE_SUGGESTION_EXECUTED' ;;\nesac\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "paste", "text": "sh checker.sh s"},
+    {"type": "wait", "contains": "uggested"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "I06_PASTE_COMMAND_FINISHED"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {
+      "contains": ["I06_PASTE_TYPED_PROOF"],
+      "excludes": ["I06_PASTE_SUGGESTION_EXECUTED"]
+    },
+    "exit_code": 0
+  }
+}

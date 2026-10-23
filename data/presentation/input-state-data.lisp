@@ -29,15 +29,15 @@ operator-pending states after pressing d or c in normal mode."
                                             (completion-index -1)
                                             (completion-base-buffer nil)
                                             (completion-base-cursor nil)
-                                             (last-candidates nil)
-                                             suggestion
-                                             (mode :insert)
-                                             (vi-count nil)
-                                             (vi-visual-anchor nil)
-                                             (mouse-selection-anchor nil)
-                                             (mouse-selection-end nil)
-                                             (abbreviation-expander nil)
-                                             (kill-ring nil)
+                                            (last-candidates nil)
+                                            suggestion
+                                            (mode :insert)
+                                            (vi-count nil)
+                                            (vi-visual-anchor nil)
+                                            (mouse-selection-anchor nil)
+                                            (mouse-selection-end nil)
+                                            (abbreviation-expander nil)
+                                            (kill-ring nil)
                                             (last-yank-start nil)
                                             (last-yank-end nil)
                                             (last-yank-index nil)
@@ -51,7 +51,8 @@ operator-pending states after pressing d or c in normal mode."
                                             (ask-original-buffer "")
                                             (ask-original-cursor nil)
                                             (undo-stack nil)
-                                            (redo-stack nil))))
+                                            (redo-stack nil)
+                                            (vi-session nil))))
   "Pure line editor state.
 
 BUFFER is the current editable text. CURSOR-POS is an index between 0 and
@@ -97,4 +98,5 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
   (ask-original-buffer "" :type string)
   (ask-original-cursor nil :type (or null integer))
   (undo-stack nil :type list)
-  (redo-stack nil :type list))
+  (redo-stack nil :type list)
+  (vi-session nil :type list))

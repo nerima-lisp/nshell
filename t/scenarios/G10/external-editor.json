@@ -1,0 +1,41 @@
+{
+  "id": "G10-external-editor",
+  "uc": ["G10"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G10> ",
+      "NSHELL_EDITOR": "python3 rewrite_editor.py"
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  proof) printf '%s\\n' 'G10_EXTERNAL_EDITOR_OK' ;;\nesac\n"
+      },
+      {
+        "path": "work/rewrite_editor.py",
+        "content": "from pathlib import Path\nimport sys\n\nPath(sys.argv[1]).write_text(\"sh checker.sh proof\", encoding=\"utf-8\")\nprint(\"G10_EDITOR_READY\", flush=True)\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "discard-this-line"},
+    {"type": "key", "key": "M-e"},
+    {"type": "wait", "contains": "\u001b[?2004h"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G10_EXTERNAL_EDITOR_OK"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {"contains": ["G10_EXTERNAL_EDITOR_OK"]},
+    "exit_code": 0
+  }
+}

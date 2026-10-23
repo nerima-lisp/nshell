@@ -93,12 +93,21 @@ restores the line that was being typed.
 Setting the environment variable
 .B NSHELL_VI_MODE
 to a non-empty value other than 0, false, or no (case-insensitive)
-enables vi key bindings: press
+enables vi key bindings at startup. Use
+.B set -o vi
+or
+.B set +o vi
+at an interactive prompt to enable or disable them during the session. Press
 .B ESC
 to enter normal mode, which supports motions (\fBh l 0 ^ $ w b e\fR), insert
-entries (\fBi a I A\fR), edits (\fBx D C s\fR), counts, operators
-(\fBdd cc dw cw\fR), char-wise visual selection (\fBv\fR), and \fBj\fR/\fBk\fR
-for history.
+entries (\fBi a I A\fR), edits (\fBx D C s r\fR), character finds
+(\fBf F t T\fR, repeated with \fB;\fR or \fB,\fR), and \fBgg\fR/\fBG\fR
+for input positions. Counts combine with motions and operators. The \fBd\fR,
+\fBc\fR, and \fBy\fR operators work with motions and text objects, including
+\fBiw\fR/\fBaw\fR and quoted or paired text. Use \fBp\fR/\fBP\fR to put text,
+\fBu\fR to undo, \fBC\-r\fR to redo, and \fB.\fR to repeat the last change.
+The \fBv\fR command starts character-wise visual selection, and \fBj\fR/\fBk\fR
+navigate history.
 .PP
 Press \fBM\-e\fR (\fBAlt\-E\fR) to open the current line in the external editor
 selected by \fBNSHELL_EDITOR\fR, \fBVISUAL\fR, or \fBEDITOR\fR, falling back to
@@ -117,7 +126,8 @@ The
 builtin lists, sets, erases, and resets these bindings; run
 .B bind
 with no arguments to see the current table. In vi mode, the cursor changes
-shape with the mode: a block in normal mode, a bar while inserting.
+shape with the mode: a block in normal mode, a bar while inserting. Disabling
+vi mode restores the terminal's default cursor shape.
 .SH EXPANSIONS
 .B nshell
 performs, in order, brace expansion (\fB{a,b}\fR, \fB{1..5}\fR), tilde
@@ -263,7 +273,11 @@ to disable history persistence.
 .TP
 .B NSHELL_VI_MODE
 When set to a non-empty value other than 0, false, or no (case-insensitive),
-enables vi key bindings.
+enables vi key bindings at startup. The interactive commands
+.B set -o vi
+and
+.B set +o vi
+enable and disable them during a session.
 .TP
 .B NSHELL_GREETING
 Printed at interactive startup in place of the version banner. An empty value

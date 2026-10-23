@@ -1,0 +1,56 @@
+{
+  "id": "G02-runtime-vi-toggle",
+  "uc": ["G02"],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G02V> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/checker.sh",
+        "content": "case \"$1\" in\n  proof) printf '%s\\n' 'G02_RUNTIME_VI_ON_OK' ;;\nesac\nprintf '%s\\n' 'G02_COMMAND_FINISHED'\n"
+      },
+      {
+        "path": "work/checker-off.sh",
+        "content": "case \"$1\" in\n  proof) printf '%s\\n' 'G02_RUNTIME_VI_OFF_OK' ;;\nesac\nprintf '%s\\n' 'G02_COMMAND_FINISHED'\n"
+      }
+    ]
+  },
+  "steps": [
+    {"type": "keys", "text": "set -o vi"},
+    {"type": "key", "key": "Enter"},
+    {"type": "keys", "text": "sh checker.sh proof"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G02_COMMAND_FINISHED"},
+    {"type": "keys", "text": "set +o vi"},
+    {"type": "key", "key": "Enter"},
+    {"type": "keys", "text": "sh checker-off.sh remove proof"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "M-d"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "G02_COMMAND_FINISHED"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "\u001b[6 q",
+        "\u001b[0 q",
+        "G02_RUNTIME_VI_ON_OK",
+        "G02_RUNTIME_VI_OFF_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

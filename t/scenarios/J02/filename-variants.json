@@ -1,0 +1,56 @@
+{
+  "id": "J02-filename-variants",
+  "uc": [
+    "J02"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J02-filename-variants> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/plain.txt",
+        "content": "plain"
+      },
+      {
+        "path": "work/.hidden.txt",
+        "content": "hidden"
+      },
+      {
+        "path": "work/space name.txt",
+        "content": "space"
+      },
+      {
+        "path": "work/café.txt",
+        "content": "unicode"
+      }
+    ]
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "complete -C \"cat plain\"; complete -C \"cat .\"; complete -C \"cat space\"; complete -C \"cat café\"; ln -s plain.txt link.txt; complete -C \"cat link\""
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "plain.txt",
+        ".hidden.txt",
+        "space name.txt",
+        "café.txt",
+        "link.txt"
+      ]
+    },
+    "exit_code": 0
+  }
+}

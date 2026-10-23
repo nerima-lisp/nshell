@@ -24,7 +24,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "abbr -a -p command p04 '(echo $SCENARIO_MARKER)'"
+      "text": "abbr -a -p command p04 'echo $SCENARIO_MARKER'"
     },
     {
       "type": "key",

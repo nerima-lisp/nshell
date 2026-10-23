@@ -130,12 +130,12 @@ home directory or exact machine environment.
   account-specific login shell behavior; the scenario does not change the
   account's login shell with `chsh`.
 - A04 and A05 share `t/scenarios/A04/login-path-handoff.json`. The scenario
-  starts with a synthetic PATH that lacks standard system paths and checks
-  that login initialization supplies `/usr/bin`. The A04 manual check covers
-  account-specific `path_helper`, nix-darwin, and Home Manager values; the A05
-  manual check covers values from `/etc/profile`. Scenario CI runs the batch
-  check on Apple Silicon macOS; its Linux job runs PTY scenarios, so checking
-  Linux profile behavior remains manual.
+  starts with a synthetic PATH and always checks the fixture's `.profile`
+  marker. It also checks for `/usr/bin` when `/etc/profile` is readable and
+  `/usr/bin` exists. Linux `nix flake check` and the macOS batch scenario job
+  both run this scenario. The A04 manual check covers account-specific
+  `path_helper`, nix-darwin, and Home Manager values; the A05 manual check
+  covers host-specific values from `/etc/profile`.
 - A06 starts with `SHLVL=40` and checks that the delegated shell sees a larger
   value while preserving the supplied `USER` and `SHELL`.
 - A07 checks that a non-interactive login command produces no stdout or stderr.

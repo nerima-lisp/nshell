@@ -31,8 +31,20 @@
       "text": "if"
     },
     {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo I04_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "I04_MULTILINE_TAIL",
+      "contains": "I04_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -55,5 +67,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-E06 owns multiline suggestions."
   }
 }

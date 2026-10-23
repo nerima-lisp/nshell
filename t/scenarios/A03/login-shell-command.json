@@ -25,8 +25,5 @@
       "equals": ""
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "The CLI does not yet accept login-shell mode before delegating the command."
   }
 }

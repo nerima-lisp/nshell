@@ -29,8 +29,5 @@
       "equals": ""
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "The current -c path parses nshell syntax instead of passing shell command text to /bin/sh."
   }
 }

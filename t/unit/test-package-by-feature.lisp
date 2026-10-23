@@ -22,7 +22,7 @@
             :to-be-truthy)
     (expect (nshell.feature.command-line:flag-argument-p "script.nsh")
             :to-be-falsy)
-    (expect "Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
+    (expect "Usage: nshell [OPTIONS] [-c SHELL_COMMAND [ARGS...]] [--command COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
              :to-equal
              (nshell.feature.command-line:usage-synopsis)))
 

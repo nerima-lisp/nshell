@@ -54,5 +54,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-E05 owns path highlighting."
   }
 }

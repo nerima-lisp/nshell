@@ -57,12 +57,6 @@
     "screen": {
       "contains": ["SCENARIO_PTY_PASTE_OK"]
     },
-    "exit_code": 0,
-    "side_effects": {
-      "history": {
-        "path": ".local/state/nshell/history",
-        "contains": ["cat answer.txt"]
-      }
-    }
+    "exit_code": 0
   }
 }

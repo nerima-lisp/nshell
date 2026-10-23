@@ -353,12 +353,24 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         invocation = scenario.get("invocation")
         _require(isinstance(invocation, dict), f"{scenario_id}: invocation must be an object")
         kind = invocation.get("kind")
-        _require(kind in ("command", "stdin", "script"),
-                 f"{scenario_id}: invocation.kind must be command, stdin, or script")
-        _require(isinstance(invocation.get("text"), str), f"{scenario_id}: invocation.text must be a string")
+        _require(kind in ("command", "stdin", "script", "argv"),
+                 f"{scenario_id}: invocation.kind must be command, stdin, script, or argv")
+        if kind in ("command", "stdin", "script"):
+            _require(isinstance(invocation.get("text"), str),
+                     f"{scenario_id}: invocation.text must be a string")
         if kind == "script":
             _relative_path(Path("/scenario"), invocation.get("path"), f"{scenario_id}: script path")
+        if kind == "argv":
+            arguments = invocation.get("arguments")
+            _require(isinstance(arguments, list) and all(isinstance(arg, str) for arg in arguments),
+                     f"{scenario_id}: argv invocation.arguments must be an array of strings")
+            _require("stdin" not in invocation or isinstance(invocation["stdin"], str),
+                     f"{scenario_id}: argv invocation.stdin must be a string")
     else:
+        arguments = scenario.get("arguments")
+        _require(arguments is None or (isinstance(arguments, list)
+                                      and all(isinstance(arg, str) for arg in arguments)),
+                 f"{scenario_id}: pty arguments must be an array of strings")
         sessions = _pty_sessions(scenario)
         for session in sessions:
             _require(isinstance(session["prompt"], str) and session["prompt"],
@@ -678,15 +690,31 @@ def _assert_side_effects(expected: dict[str, Any], cwd: Path, home: Path,
 def _binary_args(scenario: dict[str, Any], cwd: Path) -> tuple[list[str], bytes]:
     invocation = scenario["invocation"]
     kind = invocation["kind"]
-    text = invocation["text"]
     if kind == "command":
-        return ["--no-config", "-c", text], b""
+        return ["--no-config", "--command", invocation["text"]], b""
     if kind == "stdin":
-        return ["--no-config"], text.encode("utf-8")
+        return ["--no-config"], invocation["text"].encode("utf-8")
+    if kind == "argv":
+        return invocation["arguments"], invocation.get("stdin", "").encode("utf-8")
     script = _relative_path(cwd, invocation["path"], f"{scenario['id']}: script path")
     script.parent.mkdir(parents=True, exist_ok=True)
-    script.write_text(text, encoding="utf-8")
+    script.write_text(invocation["text"], encoding="utf-8")
     return [str(script)], b""
+
+
+def _pty_shell_command(binary: Path, env: dict[str, str], arguments: list[str]) -> str:
+    command = ["/usr/bin/env", "-i"]
+    command.extend(f"{name}={value}" for name, value in sorted(env.items()))
+    command.extend([str(binary), *arguments])
+    return "exec " + shlex.join(command)
+
+
+def _pty_arguments(scenario: dict[str, Any]) -> list[str]:
+    arguments = scenario.get("arguments", [])
+    prefix = [] if scenario.get("load_config", False) else ["--no-config"]
+    if scenario.get("private_mode", False):
+        prefix.append("--private")
+    return [*prefix, *arguments]
 
 
 def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
@@ -735,12 +763,7 @@ def _run_batch(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, l
 
 
 def _nshell_command(binary: Path, scenario: dict[str, Any]) -> list[str]:
-    command = [str(binary)]
-    if not scenario.get("load_config", False):
-        command.append("--no-config")
-    if scenario.get("private_mode", False):
-        command.append("--private")
-    return command
+    return [str(binary), *_pty_arguments(scenario)]
 
 
 class TmuxSession:
@@ -763,10 +786,7 @@ class TmuxSession:
 
         environment = scenario.get("environment", {})
         size = environment.get("terminal_size", {"columns": 80, "rows": 24})
-        command = ["/usr/bin/env", "-i"]
-        command.extend(f"{name}={value}" for name, value in sorted(env.items()))
-        command.extend(_nshell_command(binary, scenario))
-        shell_command = "exec " + shlex.join(command)
+        shell_command = _pty_shell_command(binary, env, _nshell_command(binary, scenario)[1:])
 
         try:
             self._tmux(["start-server", ";", "set-option", "-s", "exit-empty", "off"])

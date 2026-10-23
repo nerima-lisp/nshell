@@ -30,9 +30,12 @@
       "key": "Enter"
     },
     {
-      "type": "wait",
-      "contains": "agent:",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "key",
+      "key": "C-c"
     },
     {
       "type": "keys",

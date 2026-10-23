@@ -19,7 +19,7 @@ result representation."
    :summary "fish-inspired shell in Common Lisp"
    :auto-help nil
    :global-options
-    (list
+   (list
     (cl-cli:make-option :key :show-help :name "help" :short #\h :kind :flag
                         :description "Show usage and exit.")
     (cl-cli:make-option :key :show-version :name "version" :short #\V :kind :flag
@@ -28,19 +28,24 @@ result representation."
                         :description "Run the stdio MCP server.")
     (cl-cli:make-option :key :interactive :name "interactive" :short #\i :kind :flag
                         :description "Force the interactive line editor.")
+    (cl-cli:make-option :key :login :name "login" :short #\l :kind :flag
+                        :description "Load the login environment.")
     (cl-cli:make-option :key :no-config :name "no-config" :kind :flag
                         :description "Do not load the interactive startup file.")
     (cl-cli:make-option :key :config :name "config" :kind :value
                         :description "Load PATH instead of ~/.nshellrc.")
     (cl-cli:make-option :key :no-history :name "no-history" :kind :flag
                         :description "Do not read or write interactive history.")
-    (cl-cli:make-option :key :command :name "command" :short #\c :kind :value
+    (cl-cli:make-option :key :shell-command :name "shell-command" :short #\c
+                        :kind :value :stop-parsing-p t
+                        :description "Delegate COMMAND and ARGS to /bin/sh.")
+    (cl-cli:make-option :key :command :name "command" :kind :value
                         :stop-parsing-p t
                         :description
-                        "Execute COMMAND once in batch mode; ARGS become $argv."))
+                        "Execute COMMAND once in nshell; ARGS become $argv."))
    :positionals
-   ;; The same rest positional carries -c arguments or a script path and its
-   ;; arguments. A leading non-flag script is still handled before parsing so
+   ;; The same rest positional carries command arguments or a script path and
+   ;; its arguments. A leading non-flag script is handled before parsing so
    ;; script arguments that look like options remain literal.
    (list (cl-cli:make-positional :key :command-args :rest-p t))))
 
@@ -51,13 +56,21 @@ result representation."
 (defun %parse-cli-arguments (arguments)
   "Parse ARGUMENTS and return the invocation plus a usage-error flag.
 
-The second value is true when cl-cli rejected the arguments as a usage error.
-The condition is handled at this composition boundary so shell policy and
-presentation do not depend on cl-cli's condition hierarchy."
-  (handler-case
-      (values (cl-cli:parse-argv (%build-cli-app) (cons "nshell" arguments)) nil)
-    (cl-cli:cli-usage-error ()
-      (values nil t))))
+The combined login command spelling expands only its flag token; COMMAND and
+the remaining argv elements pass unchanged to the parser. The second value is
+true when cl-cli rejected the arguments as a usage error."
+  (let ((normalized-arguments
+          (if (and (stringp (first arguments))
+                   (string= (first arguments) "-ilc"))
+              (append '("-i" "-l" "-c") (rest arguments))
+              arguments)))
+    (handler-case
+        (values (cl-cli:parse-argv
+                 (%build-cli-app)
+                 (cons "nshell" normalized-arguments))
+                nil)
+      (cl-cli:cli-usage-error ()
+        (values nil t)))))
 
 (defun %print-usage (&optional (stream *standard-output*))
   (nshell.feature.command-line:print-usage stream))
@@ -121,32 +134,42 @@ presentation do not depend on cl-cli's condition hierarchy."
     (t
      (multiple-value-bind (interactive-p no-config-p config-path no-history-p)
          (%parsed-startup-options invocation)
-       (cond
-         ((and no-config-p config-path)
-          (%print-startup-option-error
-           "--config and --no-config cannot be used together"))
-         ((and (cl-cli:option-value invocation :command)
-               interactive-p)
-          (%print-startup-option-error
-           "--interactive cannot be combined with --command"))
-         ((cl-cli:option-value invocation :command)
-          ;; `-c` consumes COMMAND; the rest positional holds the literal tail.
-          (nshell.presentation:run-repl-batch
-           :line (cl-cli:option-value invocation :command)
-           :script-args
-           (cl-cli:positional-value invocation :command-args)))
-         ((and (cl-cli:positional-value invocation :command-args)
-               (first (cl-cli:positional-value invocation :command-args)))
-          (let ((arguments (cl-cli:positional-value invocation :command-args)))
+       (let ((shell-command
+               (cl-cli:option-value invocation :shell-command))
+             (command-args
+               (cl-cli:positional-value invocation :command-args)))
+         (cond
+           ((and no-config-p config-path)
+            (%print-startup-option-error
+             "--config and --no-config cannot be used together"))
+           ((and (cl-cli:option-value invocation :command)
+                 interactive-p)
+            (%print-startup-option-error
+             "--interactive cannot be combined with --command"))
+           (shell-command
+            (if interactive-p
+                (nshell.presentation:run-repl-shell-command
+                 shell-command command-args
+                 :load-config-p (not no-config-p)
+                 :config-path config-path)
+                (nshell.infrastructure.acl:run-shell-command
+                 shell-command command-args
+                 (nshell.infrastructure.acl:current-environment-entries))))
+           ((cl-cli:option-value invocation :command)
+            ;; --command executes nshell syntax; -c is reserved for /bin/sh.
+            (nshell.presentation:run-repl-batch
+             :line (cl-cli:option-value invocation :command)
+             :script-args command-args))
+           ((and command-args (first command-args))
             (nshell.presentation:run-repl-script
-             (first arguments)
-             (rest arguments))))
-         (t
-          (%run-default-invocation
-           :interactive-p interactive-p
-           :load-config-p (not no-config-p)
-           :config-path config-path
-           :history-p (not no-history-p))))))))
+             (first command-args)
+             (rest command-args)))
+           (t
+            (%run-default-invocation
+             :interactive-p interactive-p
+             :load-config-p (not no-config-p)
+             :config-path config-path
+             :history-p (not no-history-p)))))))))
 
 (defparameter *main-exit-function*
   (lambda (&key unix-status)

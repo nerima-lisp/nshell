@@ -1,7 +1,7 @@
 ;;; Tests for src/main.lisp: the command-line surface of the nshell binary.
 (in-package #:nshell/test)
 
-(defparameter +usage-synopsis-line+ "Usage: nshell [OPTIONS] [-c COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
+(defparameter +usage-synopsis-line+ "Usage: nshell [OPTIONS] [-c SHELL_COMMAND [ARGS...]] [--command COMMAND [ARGS...]] [SCRIPT [ARGS...]]"
   "The synopsis %PRINT-USAGE must emit verbatim.
 
 Held as a constant because the literal is longer than the 100-column line
@@ -10,51 +10,58 @@ changing its value.")
 
 (describe "nshell-tests"
   (it "main-cli-action"
-    "The command-line feature should classify flags, commands, and invalid inputs."
+    "The command-line feature distinguishes /bin/sh delegation from nshell commands."
     (labels ((parse (args)
-               (nth-value 0
-                          (nshell::%parse-cli-arguments args)))
+               (nth-value 0 (nshell::%parse-cli-arguments args)))
              (usage-error-p (args)
-               (nth-value 1
-                          (nshell::%parse-cli-arguments args))))
-      ;; Help / version flags (short and long).
-      (expect (cl-cli:option-value
-               (parse '("--help")) :show-help) :to-be-truthy)
-      (expect (cl-cli:option-value
-               (parse '("-h")) :show-help) :to-be-truthy)
-      (expect (cl-cli:option-value
-               (parse '("--version")) :show-version) :to-be-truthy)
-      (expect (cl-cli:option-value
-               (parse '("-V")) :show-version) :to-be-truthy)
-      ;; -c / --command carry the command string; the tail becomes $argv.
+               (nth-value 1 (nshell::%parse-cli-arguments args))))
+      (expect (cl-cli:option-value (parse (list "--help")) :show-help)
+              :to-be-truthy)
+      (expect (cl-cli:option-value (parse (list "-h")) :show-help)
+              :to-be-truthy)
+      (expect (cl-cli:option-value (parse (list "--version")) :show-version)
+              :to-be-truthy)
+      (expect (cl-cli:option-value (parse (list "-V")) :show-version)
+              :to-be-truthy)
       (expect "echo hello" :to-equal
-              (cl-cli:option-value
-               (parse '("-c" "echo hello")) :command))
+              (cl-cli:option-value (parse (list "--command" "echo hello"))
+                                   :command))
       (expect "echo hello" :to-equal
-              (cl-cli:option-value
-               (parse '("--command" "echo hello")) :command))
-      (expect '("a" "b") :to-equal
+              (cl-cli:option-value (parse (list "-c" "echo hello"))
+                                   :shell-command))
+      (expect (list "arg0" "space arg" "") :to-equal
               (cl-cli:positional-value
-               (parse '("-c" "cmd" "a" "b")) :command-args))
-      ;; No arguments: no flags set (MAIN then chooses interactive vs batch).
-      (expect (cl-cli:option-value
-               (parse nil) :command) :to-be-falsy)
-      ;; A leading non-flag argument is a SCRIPT, handled before cl-cli parsing.
+               (parse (list "-c" "cmd" "arg0" "space arg" "")) :command-args))
+      (let ((invocation (parse (list "-ilc" "env" "" "space arg" "--"))))
+        (expect (cl-cli:option-value invocation :interactive) :to-be-truthy)
+        (expect (cl-cli:option-value invocation :login) :to-be-truthy)
+        (expect "env" :to-equal
+                (cl-cli:option-value invocation :shell-command))
+        (expect (list "" "space arg" "--") :to-equal
+                (cl-cli:positional-value invocation :command-args)))
+      (let ((invocation (parse (list "-i" "-l" "-c" "env"))))
+        (expect (cl-cli:option-value invocation :interactive) :to-be-truthy)
+        (expect (cl-cli:option-value invocation :login) :to-be-truthy)
+        (expect "env" :to-equal
+                (cl-cli:option-value invocation :shell-command)))
       (expect (nshell::%flag-argument-p "script") :to-be-falsy)
       (expect (nshell::%flag-argument-p "script.nsh") :to-be-falsy)
-      ;; Missing -c value and unknown flags are usage errors (exit 1 in MAIN).
-      (expect (usage-error-p '("-c")) :to-be-truthy)
-      (expect (usage-error-p '("--unknown")) :to-be-truthy)))
+      (expect (cl-cli:option-value (parse nil) :command) :to-be-falsy)
+      (expect (usage-error-p (list "--command")) :to-be-truthy)
+      (expect (usage-error-p (list "-c")) :to-be-truthy)
+      (expect (usage-error-p (list "--unknown")) :to-be-truthy)))
 
   (it "main-cli-output"
-    "Top-level text should include a usage line and version banner."
+    "Top-level text should distinguish shell and nshell command modes."
     (let ((usage (with-output-to-string (stream)
                    (nshell::%print-usage stream)))
           (version (with-output-to-string (stream)
                      (nshell::%print-version stream))))
       (expect (search +usage-synopsis-line+ usage) :to-be-truthy)
       (expect (search "stdin is a terminal" usage) :to-be-truthy)
-      (expect (search "With -c/--command" usage) :to-be-truthy)
+      (expect (search "With -c/--shell-command" usage) :to-be-truthy)
+      (expect (search "With --command" usage) :to-be-truthy)
+      (expect (search "-l, --login" usage) :to-be-truthy)
       (expect (search "nshell v" version) :to-be-truthy)))
 
   (it "main-invocation-dispatch"
@@ -80,7 +87,7 @@ changing its value.")
              23))
         (expect 23 :to-equal
                 (nshell::%run-parsed-invocation
-                 (parse (list "-c" "echo ready" "literal" "--not-an-option"))))
+                 (parse (list "--command" "echo ready" "literal" "--not-an-option"))))
         (expect (list "echo ready" (list "literal" "--not-an-option"))
                 :to-equal batch-call)))
     (with-temporary-function
@@ -103,7 +110,7 @@ changing its value.")
                       (nshell::%run-parsed-invocation
                        (nth-value 0
                                   (nshell::%parse-cli-arguments
-                                   (list "--interactive" "-c" "echo no"))))))))
+                                   (list "--interactive" "--command" "echo no"))))))))
       (expect (search "--interactive cannot be combined" error-output) :to-be-truthy))
   (let ((repl-call :uncalled))
     (with-temporary-function

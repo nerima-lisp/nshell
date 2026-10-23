@@ -43,6 +43,9 @@ Expectations can check the PTY stream, captured screen, exit code, created
 files, and shell history. File side-effect paths are relative to
 `environment.cwd`; the history path is relative to `environment.home`. Text
 expectations accept `equals`, `contains`, and `excludes`.
+Set `load_config` to `true` only when a PTY scenario needs to test startup
+configuration from its isolated home; otherwise the runner passes
+`--no-config`.
 
 The full-corpus manifest is `t/scenarios/expected-scenarios.json`. It requires
 the top-level fields `version: 1` and a non-empty `scenarios` array; other

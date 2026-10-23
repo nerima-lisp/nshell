@@ -223,6 +223,10 @@ def _load_scenarios(directory: Path, mode: str, selected_ids: set[str]) -> list[
 def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
     scenario_id = scenario.get("id", path.name)
     _require(scenario.get("mode") in ("batch", "pty"), f"{scenario_id}: mode must be batch or pty")
+    load_config = scenario.get("load_config", False)
+    _require(isinstance(load_config, bool), f"{scenario_id}: load_config must be a boolean")
+    _require(not load_config or scenario["mode"] == "pty",
+             f"{scenario_id}: load_config is supported only for pty scenarios")
     _require(
         isinstance(scenario.get("uc"), list) and scenario["uc"],
         f"{scenario_id}: uc must be a non-empty array",
@@ -588,6 +592,13 @@ def _run_batch(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, l
         return stdout_text, stderr_text, process.returncode, failures
 
 
+def _nshell_command(binary: Path, scenario: dict[str, Any]) -> list[str]:
+    command = [str(binary)]
+    if not scenario.get("load_config", False):
+        command.append("--no-config")
+    return command
+
+
 class TmuxSession:
     def __init__(self, scenario: dict[str, Any], binary: Path, root: Path,
                  env: dict[str, str], cwd: Path):
@@ -610,7 +621,7 @@ class TmuxSession:
         size = environment.get("terminal_size", {"columns": 80, "rows": 24})
         command = ["/usr/bin/env", "-i"]
         command.extend(f"{name}={value}" for name, value in sorted(env.items()))
-        command.extend([str(binary), "--no-config"])
+        command.extend(_nshell_command(binary, scenario))
         shell_command = "exec " + shlex.join(command)
 
         try:

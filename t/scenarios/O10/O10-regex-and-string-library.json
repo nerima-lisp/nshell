@@ -1,0 +1,35 @@
+{
+  "id": "O10-regex-and-string-library",
+  "uc": [
+    "O10"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "string match -r \"^[a-z]+$\" nshell\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "nshell"
+      ]
+    },
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "id": "G05-approx-multiline-buffer-navigation",
+  "uc": [
+    "G05"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G05-approx-multiline-buffer-navigation> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "side_effects": {
+      "files": [
+        {
+          "path": "G05_FIRSTX",
+          "exists": true
+        },
+        {
+          "path": "G05_SECOND",
+          "exists": true
+        }
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "begin"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "touch G05_FIRST"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "touch G05_SECOND"
+    },
+    {
+      "type": "key",
+      "key": "Up"
+    },
+    {
+      "type": "key",
+      "key": "C-e"
+    },
+    {
+      "type": "keys",
+      "text": "X"
+    },
+    {
+      "type": "key",
+      "key": "Down"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "end"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "G05-multiline-buffer-navigation> ",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

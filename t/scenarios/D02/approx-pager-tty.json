@@ -1,0 +1,77 @@
+{
+  "id": "D02-approx-pager-tty",
+  "uc": [
+    "D02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "D02-approx-pager-tty> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/tool.sh",
+        "content": "printf 'D02_PAGER_READY\\n'\nIFS= read -r response\nprintf 'D02_PAGER_RETURNED:%s\\n' \"$response\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "D02_PAGER_READY",
+        "D02_PAGER_RETURNED:q"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh tool.sh"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D02_PAGER_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "q"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D02_PAGER_RETURNED:q",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

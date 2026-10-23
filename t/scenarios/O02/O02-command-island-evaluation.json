@@ -1,0 +1,36 @@
+{
+  "id": "O02-command-island-evaluation",
+  "uc": [
+    "O02"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(set o02_value \"preserved\")\n(echo $o02_value ,(+ 2 3))\n"
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "preserved",
+        "5"
+      ]
+    },
+    "exit_code": 0
+  }
+}

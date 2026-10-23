@@ -1,0 +1,71 @@
+{
+  "id": "I07-suggestion-keystrokes-remain-responsive",
+  "uc": [
+    "I07"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_I07-suggestion-keystrokes-remain-responsive> ",
+      "SCENARIO_VALUE": "I07_INPUT_RESPONDED"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "unknown-scenario-command "
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "I07_INPUT_RESPONDED",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "I07_INPUT_RESPONDED"
+      ]
+    },
+    "exit_code": 0
+  }
+}

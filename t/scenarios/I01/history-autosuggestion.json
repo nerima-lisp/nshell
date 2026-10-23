@@ -1,0 +1,59 @@
+{
+  "id": "I01-history-autosuggestion",
+  "uc": [
+    "I01"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_I01-history-autosuggestion> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.local/state/nshell/history",
+        "content": "# nshell-history-v3 115\n(:text \"echo I01_HISTORY_SUGGESTION\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo I01_HISTORY"
+    },
+    {
+      "type": "wait",
+      "contains": "I01_HISTORY_SUGGESTION",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "I01_HISTORY_SUGGESTION"
+      ]
+    },
+    "exit_code": 0
+  }
+}

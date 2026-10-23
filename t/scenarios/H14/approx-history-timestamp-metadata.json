@@ -64,5 +64,8 @@
         ]
       }
     }
+  },
+  "expected_failure": {
+    "reason": "WP-R05 owns history migration and metadata placement."
   }
 }

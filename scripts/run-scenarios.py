@@ -454,6 +454,9 @@ def _environment(scenario: dict[str, Any], root: Path) -> tuple[dict[str, str], 
         "XDG_STATE_HOME": str(home / ".local" / "state"),
     }
     env.update(settings.get("variables", {}))
+    extra_path = os.environ.get("NSHELL_SCENARIO_EXTRA_PATH")
+    if scenario["mode"] == "batch" and extra_path:
+        env["PATH"] = os.pathsep.join((env["PATH"], extra_path))
     return env, home, cwd
 
 

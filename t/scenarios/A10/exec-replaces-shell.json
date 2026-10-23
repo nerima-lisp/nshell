@@ -30,6 +30,6 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "exec /bin/echo A10_EXEC_REPLACED"
+    "text": "exec echo A10_EXEC_REPLACED"
   }
 }

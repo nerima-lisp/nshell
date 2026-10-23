@@ -21,6 +21,10 @@
       {
         "path": "work/bin/scenario-tool",
         "content": "#!/bin/sh\nprintf \"C03_PATH_FOUND\\n\"\n"
+      },
+      {
+        "path": "work/bin/absolute-tool",
+        "content": "#!/bin/sh\nprintf \"C03_ABSOLUTE\\n\"\n"
       }
     ]
   },
@@ -35,6 +39,6 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "chmod +x bin/scenario-tool; scenario-tool; /bin/echo C03_ABSOLUTE"
+    "text": "chmod +x bin/scenario-tool bin/absolute-tool; scenario-tool; \"$HOME/../work/bin/absolute-tool\""
   }
 }

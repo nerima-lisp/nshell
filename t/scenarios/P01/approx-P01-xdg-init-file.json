@@ -8,8 +8,7 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "P01> ",
-      "SCENARIO_MARKER": "P01_PROMPT_READY"
+      "NSHELL_PROMPT": "P01> "
     },
     "home": "home",
     "cwd": "work",
@@ -22,7 +21,7 @@
     "files": [
       {
         "path": "home/.config/nshell/init.lisp",
-        "content": "echo P01_XDG_INIT_OK\n"
+        "content": "(format t \"P01_XDG_INIT_OK~%\")\n"
       }
     ]
   },
@@ -30,16 +29,25 @@
     "stream": {
       "contains": [
         "P01_XDG_INIT_OK",
-        "P01_PROMPT_READY"
+        "42"
       ]
     },
     "exit_code": 0
   },
   "load_config": true,
+  "input_delay_seconds": 0.12,
   "steps": [
     {
       "type": "keys",
-      "text": "echo $SCENARIO_MARKER"
+      "text": "(format t \"~d~%\" (* 6 7))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo P01_SYNC_$((9+8))"
     },
     {
       "type": "key",
@@ -47,7 +55,7 @@
     },
     {
       "type": "wait",
-      "contains": "P01_PROMPT_READY",
+      "contains": "P01_SYNC_17",
       "timeout_seconds": 10
     },
     {
@@ -62,8 +70,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-L07 owns loading the XDG init file."
-  }
+  ]
 }

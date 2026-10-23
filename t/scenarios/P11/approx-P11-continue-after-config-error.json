@@ -8,7 +8,6 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "SCENARIO_MARKER": "P11_CONFIG_CONTINUED",
       "NSHELL_PROMPT": "P11> "
     },
     "home": "home",
@@ -22,7 +21,7 @@
     "files": [
       {
         "path": "home/.config/nshell/init.lisp",
-        "content": "echo P11_CONFIG_LOADED\nnshell_p11_missing_command\n"
+        "content": "(format t \"P11_CONFIG_LOADED~%\")\n(nshell-p11-missing-command)\n"
       }
     ]
   },
@@ -30,16 +29,25 @@
     "stream": {
       "contains": [
         "P11_CONFIG_LOADED",
-        "P11_CONFIG_CONTINUED"
+        "42"
       ]
     },
     "exit_code": 0
   },
   "load_config": true,
+  "input_delay_seconds": 0.12,
   "steps": [
     {
       "type": "keys",
-      "text": "echo $SCENARIO_MARKER"
+      "text": "(format t \"~d~%\" (* 6 7))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo P11_SYNC_$((9+8))"
     },
     {
       "type": "key",
@@ -47,7 +55,7 @@
     },
     {
       "type": "wait",
-      "contains": "P11_CONFIG_CONTINUED",
+      "contains": "P11_SYNC_17",
       "timeout_seconds": 10
     },
     {
@@ -62,8 +70,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-L07 owns continuing after a configuration error."
-  }
+  ]
 }

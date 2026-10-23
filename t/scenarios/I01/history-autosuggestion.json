@@ -31,8 +31,20 @@
       "text": "echo I01_HISTORY"
     },
     {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo I01_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
       "type": "wait",
-      "contains": "I01_HISTORY_SUGGESTION",
+      "contains": "I01_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -55,5 +67,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-E06 owns history-based suggestions."
   }
 }

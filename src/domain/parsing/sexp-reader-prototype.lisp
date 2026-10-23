@@ -7,6 +7,7 @@
 (defstruct %sexp-reader-prototype-unquote
   kind
   form)
+(defstruct %sexp-reader-prototype-escaped-symbol (name "" :type string))
 
 (defun %sexp-reader-prototype-unquote-reader (kind)
   (lambda (stream character)
@@ -41,7 +42,8 @@
                  (find next
                        '(#\Space #\Tab #\Newline #\Return #\( #\) #\;)))
              :pipeline
-             (intern
+             (make-%sexp-reader-prototype-escaped-symbol
+              :name
               (with-output-to-string (name)
                 (loop for current = (read-char stream nil nil)
                       do (cond
@@ -54,8 +56,7 @@
                               (unless escaped
                                 (error "Unterminated escaped symbol escape."))
                               (write-char escaped name)))
-                           (t (write-char current name)))))
-              *package*))))
+                           (t (write-char current name)))))))))
      nil
      readtable)
     readtable))
@@ -90,7 +91,9 @@
 (defun %sexp-reader-prototype-atom-string (value)
   (typecase value
     (string value)
-    (symbol (symbol-name value))
+    (%sexp-reader-prototype-escaped-symbol
+     (%sexp-reader-prototype-escaped-symbol-name value))
+    (symbol (if (eq value :pipeline) "|" (symbol-name value)))
     (number (princ-to-string value))
     (t (error "Unsupported command island atom: ~S" value))))
 
@@ -245,7 +248,11 @@
                         (stringp value)
                         (numberp value))
                     :single
-                    nil)))
+                    nil)
+                nil
+                nil
+                nil
+                (and (symbolp value) (not (eq value :pipeline)))))
              (command-quote-style (value)
                (if (or (%sexp-reader-prototype-unquote-p value)
                        (stringp value)
@@ -275,7 +282,10 @@
                                  command
                                  args
                                  span
-                                 (command-quote-style head))))
+                                 (command-quote-style head)
+                                 nil
+                                 nil
+                                 force-external-p)))
                      (values node
                              (%sexp-reader-prototype-command-metadata
                               node
@@ -353,13 +363,18 @@
                     command
                     arguments
                     span
-                    (token-quote-style command-token))
+                    (token-quote-style command-token)
+                    nil
+                    nil
+                    force-external-p)
                    (make-command-node
                     command
                     arguments
                     span
                     (token-quote-style command-token)
-                    (token-fragments command-token)))))
+                    (token-fragments command-token)
+                    nil
+                    nil))))
         (values node
                 (%sexp-reader-prototype-command-metadata
                  node

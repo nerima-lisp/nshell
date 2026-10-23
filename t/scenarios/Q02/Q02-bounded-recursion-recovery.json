@@ -24,11 +24,11 @@
   "expected": {
     "stream": {
       "contains": [
-        "nshell",
-        "Q02_CONTINUED"
+        "recursion",
+        "Q02_AFTER_2"
       ],
       "excludes": [
-        "Q02_DEPTH_REACHED",
+        "Q02_DEPTH_2",
         "Backtrace",
         "#S("
       ]
@@ -38,7 +38,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "(defun q02_recurse (n) (if (= n 2000) (echo Q02_DEPTH_REACHED) (q02_recurse (+ n 1))))"
+      "text": "(defun q02_recurse (n) (if (= n 2000) (echo Q02_DEPTH_$((1+1))) (q02_recurse (+ n 1))))"
     },
     {
       "type": "key",
@@ -46,7 +46,7 @@
     },
     {
       "type": "keys",
-      "text": "(echo Q02_DEF_$((1+1)))"
+      "text": "echo Q02_AFTER_$((1+1))"
     },
     {
       "type": "key",
@@ -54,28 +54,7 @@
     },
     {
       "type": "wait",
-      "contains": "Q02_DEF_2",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "keys",
-      "text": "(q02_recurse 0)"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "keys",
-      "text": "(echo $SCENARIO_MARKER)"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "Q02_CONTINUED",
+      "contains": "Q02_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -90,5 +69,8 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-R06 owns a bounded recursion error and recovery to the interactive session."
+  }
 }

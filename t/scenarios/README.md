@@ -3,11 +3,10 @@
 Each scenario JSON file defines one executable scenario. Keep scenarios under
 `t/scenarios/<UC>/` and register each one in the shared manifest described
 below. UC means use case. Get UC IDs from the request that assigns the scenario.
-If it omits them, ask the person who assigned it before adding the scenario.
-The manifest records scenario mappings but is not the UC catalog.
-For a scenario covering multiple use cases, place it under the UC whose
-behavior its assertions primarily verify, and list every covered ID in its
-`uc` array.
+If the task omits them, ask the person who assigned it before adding the
+scenario.
+For a scenario covering multiple use cases, choose the directory for its
+primary assertion and list every covered ID in its `uc` array.
 
 ## Scenario format
 
@@ -16,8 +15,8 @@ Every scenario JSON file must define `id`, a `uc` array, `mode` (`batch` or
 The runner creates an isolated temporary root for each scenario execution.
 Paths in `environment.home`, `environment.cwd`, and
 `preconditions.files[].path` are relative to that root.
-The runner defaults `environment.home`, `environment.cwd`, and
-`environment.terminal_size` to `home`, `work`, and 80 by 24, respectively.
+The runner defaults `environment.home` and `environment.cwd` to `home` and
+`work`, and the terminal size to 80 columns by 24 rows.
 Keys in `environment.variables` override matching variables in the runner's
 default environment, which is defined in `scripts/run-scenarios.py`.
 If `preconditions.files` is omitted, no precondition files are created. Each
@@ -33,15 +32,14 @@ Every kind requires `invocation.text`; `script` also requires `invocation.path`,
 relative to `environment.cwd`. The runner passes command text to `nshell -c`,
 sends text to standard input, or writes script text to the path and starts
 `nshell` with that path as its script argument.
-Batch expectations can check stdout, stderr, exit code, and files created under
-the scenario working directory.
+Batch expectations can check stdout, stderr, exit code, and file side effects.
 
 PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `paste` sends bracketed paste, `key` sends a key name accepted by tmux
-`send-keys`, such as `Enter` or `C-d`, and `wait` waits for matching text in
-the captured PTY output after that step starts. `wait_exit` waits for the shell
-to exit. Set a non-empty `environment.variables.NSHELL_PROMPT` marker that only
-the prompt displays.
+`send-keys`, such as `Enter` or `C-d`, and `wait` waits for its `contains`
+string to appear in captured PTY output after the step starts. `wait_exit` waits
+for the shell to exit. Set a non-empty `environment.variables.NSHELL_PROMPT`
+marker that only the prompt displays.
 The runner sends Enter to make the initial prompt appear and waits for that
 marker before executing the scenario steps.
 `load_config` is optional and defaults to `false`; it is valid only for PTY
@@ -57,15 +55,15 @@ An input echo is the terminal displaying text or a key sequence sent by a
 
 Before launching, the runner derives input echoes from `keys` and `paste` text
 plus recognized tmux key sequences for `key` steps. The key sequences it
-recognizes are defined in `scripts/run-scenarios.py`. The runner rejects these
-overlaps with the derived echoes and prompt before launching so terminal echo
-cannot falsely satisfy a wait or output assertion:
+recognizes are defined in `scripts/run-scenarios.py`. The runner rejects
+positive markers that could be satisfied by terminal echo or a prompt redraw
+before launching:
 
-- a `wait.contains` marker if an echo from an earlier input step or a prompt
-  redraw contains that entire marker;
-- any non-empty string in `expected.stream.equals`, `expected.stream.contains`,
+- `wait.contains` if an echo from an earlier input step or a prompt redraw
+  contains the entire marker;
+- any non-empty value in `expected.stream.equals`, `expected.stream.contains`,
   `expected.screen.equals`, or `expected.screen.contains` if an input echo or
-  prompt redraw contains that entire string.
+  prompt redraw contains the entire value.
 
 `excludes` assertions require the text to be absent from output and are not
 subject to this rejection.
@@ -73,11 +71,17 @@ subject to this rejection.
 End each PTY step sequence with `wait_exit` to synchronize with shell exit and
 record its status. `expected.stream` checks output captured from the PTY during
 the run, while `expected.screen` checks the visible pane contents at the end.
-`expected.side_effects.files` is an array of file checks. Each check requires a
-`path` and can set `exists` (default `true`) and text assertions. The optional
-`expected.side_effects.history` object checks a history file with the same
-fields. File paths are relative to `environment.cwd`; the history path is
-relative to `environment.home`. Text assertions accept `equals`, `contains`,
+
+## Output and side effects
+
+In either mode, `expected.side_effects.files` is an array of file checks. Each
+check requires a `path` and can set `exists` (default `true`) and text
+assertions. Set `exists` to `false` to assert that a file is absent. File paths
+are relative to `environment.cwd`. The optional
+`expected.side_effects.history` object checks the history file with the same
+fields and a path relative to `environment.home`.
+Text assertions for stdout, stderr, PTY stream, screen, file contents, and
+history contents use a string for `equals` and arrays of strings for `contains`
 and `excludes`.
 
 The full-corpus manifest is `t/scenarios/expected-scenarios.json`. It requires
@@ -125,8 +129,6 @@ nix build .#packages.aarch64-darwin.default --out-link result
 # x86_64 Linux
 nix build .#packages.x86_64-linux.default --out-link result
 ```
-
-After either build, run the scenario runner:
 
 ```sh
 nix develop .#scenarios -c python3 scripts/run-scenarios.py --binary "$PWD/result/bin/nshell"

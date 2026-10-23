@@ -1,0 +1,64 @@
+{
+  "id": "P03-function-directory",
+  "uc": [
+    "P03"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "P03> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/functions/p03_greet.nsh",
+        "content": "(defun p03_greet () (echo P03_FUNCTION_DIRECTORY_OK))\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "P03_FUNCTION_DIRECTORY_OK"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true,
+  "steps": [
+    {
+      "type": "keys",
+      "text": "p03_greet"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P03_FUNCTION_DIRECTORY_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

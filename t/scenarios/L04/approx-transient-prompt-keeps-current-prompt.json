@@ -1,0 +1,73 @@
+{
+  "id": "L04-approx-transient-prompt-keeps-current-prompt",
+  "uc": [
+    "L04"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_L04-approx-transient-prompt-keeps-current-prompt> ",
+      "SCENARIO_VALUE_A": "L04_FIRST",
+      "SCENARIO_VALUE_B": "L04_SECOND"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE_A\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "L04_FIRST",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE_B\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "L04_SECOND",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "L04_SECOND"
+      ]
+    },
+    "exit_code": 0
+  }
+}

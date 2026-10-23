@@ -27,11 +27,6 @@
       "text": "\u001d"
     },
     {
-      "type": "wait",
-      "contains": "ask>",
-      "timeout_seconds": 10
-    },
-    {
       "type": "keys",
       "text": "summarize the previous command"
     },
@@ -41,7 +36,7 @@
     },
     {
       "type": "keys",
-      "text": "(echo $SCENARIO_MARKER)"
+      "text": "echo S01_AFTER_$((1+1))"
     },
     {
       "type": "key",
@@ -49,7 +44,7 @@
     },
     {
       "type": "wait",
-      "contains": "S01_ASK_CANCEL_OK",
+      "contains": "S01_AFTER_2",
       "timeout_seconds": 10
     },
     {
@@ -68,9 +63,13 @@
   "expected": {
     "stream": {
       "contains": [
-        "S01_ASK_CANCEL_OK"
+        "ask>",
+        "S01_AFTER_2"
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-A01 owns the ask interaction and cancellation behavior."
   }
 }

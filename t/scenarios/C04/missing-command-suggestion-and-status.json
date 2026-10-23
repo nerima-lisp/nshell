@@ -5,6 +5,7 @@
   ],
   "mode": "batch",
   "environment": {
+    "append_extra_path": false,
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "dumb"

@@ -19,6 +19,9 @@ The runner defaults `environment.home` and `environment.cwd` to `home` and
 `work`, and the terminal size to 80 columns by 24 rows.
 Keys in `environment.variables` override matching variables in the runner's
 default environment, which is defined in `scripts/run-scenarios.py`.
+When the runner provides `NSHELL_SCENARIO_EXTRA_PATH`, batch scenarios append it
+to `PATH` by default. Set `environment.append_extra_path` to `false` when a
+scenario must keep its explicit `PATH`, such as a command-not-found check.
 If `preconditions.files` is omitted, no precondition files are created. Each
 file entry requires a relative `path` and can include string `content`, which
 defaults to empty text. Set `environment.terminal_size.columns` and

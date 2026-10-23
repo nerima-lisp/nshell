@@ -240,6 +240,8 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
 
     environment = scenario.get("environment", {})
     _require(isinstance(environment, dict), f"{scenario_id}: environment must be an object")
+    _require(isinstance(environment.get("append_extra_path", True), bool),
+             f"{scenario_id}: environment.append_extra_path must be a boolean")
     variables = environment.get("variables", {})
     _require(isinstance(variables, dict), f"{scenario_id}: environment.variables must be an object")
     for name, value in variables.items():
@@ -500,8 +502,7 @@ def _environment(scenario: dict[str, Any], root: Path) -> tuple[dict[str, str], 
     }
     env.update(settings.get("variables", {}))
     extra_path = os.environ.get("NSHELL_SCENARIO_EXTRA_PATH")
-    has_explicit_path = "PATH" in settings.get("variables", {})
-    if scenario["mode"] == "batch" and extra_path and not has_explicit_path:
+    if scenario["mode"] == "batch" and extra_path and settings.get("append_extra_path", True):
         env["PATH"] = os.pathsep.join((env["PATH"], extra_path))
     return env, home, cwd
 

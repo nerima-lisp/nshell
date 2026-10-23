@@ -35,13 +35,42 @@
       "text": "SECOND_LINE"
     },
     {
-      "type": "wait",
-      "contains": "echo H06_FIRST_LINE",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "C-c"
     },
     {
       "type": "key",
-      "key": "Escape"
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo H06_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H06_AFTER_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo H06_AFTER_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H06_AFTER_2",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",
@@ -64,5 +93,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-E02 owns Ctrl-R display of multiline history entries."
   }
 }

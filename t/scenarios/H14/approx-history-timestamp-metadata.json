@@ -1,0 +1,68 @@
+{
+  "id": "H14-approx-history-timestamp-metadata",
+  "uc": [
+    "H14"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H14-approx-history-timestamp-metadata> ",
+      "SCENARIO_VALUE": "H14_TIMESTAMP_ENTRY"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$SCENARIO_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H14_TIMESTAMP_ENTRY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H14_TIMESTAMP_ENTRY"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "history": {
+        "path": ".local/state/nshell/history",
+        "contains": [
+          "# nshell-history-v3",
+          "echo \"$SCENARIO_VALUE\""
+        ]
+      }
+    }
+  }
+}

@@ -31,5 +31,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "Plan FR-024 defers fuzzy and case-insensitive completion to P6; no implementation WP is assigned."
   }
 }

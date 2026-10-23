@@ -1,0 +1,58 @@
+{
+  "id": "K02-existing-path-is-underlined",
+  "uc": [
+    "K02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_K02-existing-path-is-underlined> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/known-path.txt",
+        "content": "known"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo ./known-path.txt"
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "\u001b[4m"
+      ]
+    },
+    "exit_code": 0
+  }
+}

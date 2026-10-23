@@ -27,12 +27,15 @@ must define `expected.exit_code`. See
 the [batch example](C01/batch-command.json) and
 [PTY example](C01/pty-paste.json).
 
-Batch scenarios select `invocation.kind` as `command`, `stdin`, or `script`.
-Every kind requires `invocation.text`; `script` also requires `invocation.path`,
-relative to `environment.cwd`. The runner passes command text to `nshell -c`,
-sends text to standard input, or writes script text to the path and starts
-`nshell` with that path as its script argument.
-Batch expectations can check stdout, stderr, exit code, and file side effects.
+Batch scenarios select `invocation.kind` as `command`, `stdin`, `script`, or
+`argv`. The `command` kind passes command text to `nshell --command`; `stdin`
+sends text to standard input; `script` writes text to `invocation.path`
+(relative to `environment.cwd`) and runs that file. The `argv` kind passes
+each string in `invocation.arguments` as one argument after the binary and
+sends `invocation.stdin` to standard input; omitted `stdin` means empty input.
+It does not add CLI flags or rewrite the argument strings. Batch expectations
+can check stdout, stderr, exit code, and files created under the scenario
+working directory.
 
 PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `paste` sends bracketed paste, `key` sends a key name accepted by tmux
@@ -40,6 +43,8 @@ PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 string to appear in captured PTY output after the step starts. `wait_exit` waits
 for the shell to exit. Set a non-empty `environment.variables.NSHELL_PROMPT`
 marker that only the prompt displays.
+The optional top-level `arguments` array passes exact additional arguments to
+the binary.
 The runner sends Enter to make the initial prompt appear and waits for that
 marker before executing the scenario steps.
 `load_config` is optional and defaults to `false`; it is valid only for PTY
@@ -115,33 +120,66 @@ pass, the runner reports `XPASS` and exits nonzero so the obsolete marker can
 be removed. Scenario validation errors, launch errors, and timeouts remain
 failures.
 
+## Login and shell-caller coverage
+
+These scenarios exercise the `-l` and `-c` entry points on the real binary.
+They use controlled fixtures so the corpus does not depend on a developer's
+home directory or exact machine environment.
+
+- A03 runs a login command and checks its output. It does not change the
+  account's login shell with `chsh`.
+- A04 checks the macOS login environment and A05 checks the Linux login
+  environment. Both start with a synthetic PATH that lacks standard system
+  paths and check that login initialization supplies `/usr/bin`. They do not
+  assert the host's exact `path_helper`, nix-darwin, Home Manager, or
+  `/etc/profile` values.
+- A06 starts with `SHLVL=40` and checks that the delegated shell sees a larger
+  value while preserving the supplied `USER` and `SHELL`.
+- A07 checks that a non-interactive login command produces no stdout or stderr.
+- B01 through B06 share a POSIX loop command as a shell-caller smoke test. The
+  scenario does not launch Vim, SSH, scp, rsync, Git, make, fzf, xargs, cron, or
+  launchd.
+- B07 and B08 exercise an interactive PTY startup. They do not launch Emacs,
+  VS Code, or JetBrains.
+- B09 checks exact command arguments, including quotes, spaces, a newline,
+  `--`, a leading-dash value, an empty command, stdin, stdout, stderr, and
+  status. It does not test a particular external caller.
+- B10 invokes the literal `-ilc env` argument vector with a temporary
+  `.nshellrc` that adds a unique PATH marker and emits a startup marker. It
+  checks for the PATH marker and verifies that the startup marker is absent
+  from stdout, and requires empty stderr. The broader configuration behavior
+  assigned to L07 (public Lisp, scripts, autoload, and hooks) remains outside
+  this fixture.
+
 ## Run scenarios
 
-Run these commands from the repository root. The `scenarios` Nix shell supplies
-Python and tmux for the scenario runner.
+Build the binary for your platform, then run the corpus in the Nix scenario
+shell. These commands do not create a `result` symlink. The scenario shell
+provides Python and tmux.
 
 ```sh
 # Apple Silicon macOS
-nix build .#packages.aarch64-darwin.default --out-link result
+binary=$(nix build .#packages.aarch64-darwin.default --no-link --print-out-paths)
+nix develop .#scenarios -c python3 scripts/run-scenarios.py --binary "$binary/bin/nshell"
 ```
 
 ```sh
 # x86_64 Linux
-nix build .#packages.x86_64-linux.default --out-link result
+binary=$(nix build .#packages.x86_64-linux.default --no-link --print-out-paths)
+nix develop .#scenarios -c python3 scripts/run-scenarios.py --binary "$binary/bin/nshell"
 ```
+
+Use `--mode batch` or `--mode pty` to select an executor,
+`--scenario-id` to select a scenario, and `--repeat 3` to repeat the selection.
+Repeat `--scenario-id` to select more than one scenario. For example:
 
 ```sh
-nix develop .#scenarios -c python3 scripts/run-scenarios.py --binary "$PWD/result/bin/nshell"
+nix develop .#scenarios -c python3 scripts/run-scenarios.py \
+  --binary "$binary/bin/nshell" \
+  --scenario-id C10-short-circuit-followed-by-sequence
 ```
 
-Add `--scenario-id` to run one scenario. Repeat the option to select more than
-one scenario:
-
-```sh
-nix develop .#scenarios -c python3 scripts/run-scenarios.py --binary "$PWD/result/bin/nshell" --scenario-id C10-short-circuit-followed-by-sequence
-```
-
-Use `--repeat 3` to repeat the selected corpus. Batch scenarios also run in a
+Batch scenarios also run in a
 Nix batch-only check. Run it with
 `nix build .#checks.aarch64-darwin.scenarios-batch` on Apple Silicon or
 `nix build .#checks.x86_64-linux.scenarios-batch` on Linux. This check runs the

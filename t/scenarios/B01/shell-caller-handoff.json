@@ -1,0 +1,36 @@
+{
+  "id": "B01-B06-shell-caller-handoff",
+  "uc": ["B01", "B02", "B03", "B04", "B05", "B06"],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb",
+      "SHELL": "/bin/sh"
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "argv",
+    "arguments": [
+      "-c",
+      "for marker in EDITOR SSH TRANSFER GIT MAKE AUTOMATION; do printf 'R04_CALLER_%s\\n' \"$marker\"; done"
+    ]
+  },
+  "expected": {
+    "stdout": {
+      "equals": "R04_CALLER_EDITOR\nR04_CALLER_SSH\nR04_CALLER_TRANSFER\nR04_CALLER_GIT\nR04_CALLER_MAKE\nR04_CALLER_AUTOMATION\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "The current -c path parses nshell syntax instead of passing shell command text to /bin/sh."
+  }
+}

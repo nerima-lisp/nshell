@@ -1,0 +1,34 @@
+{
+  "id": "E03-kill-percent-one",
+  "uc": [
+    "E03"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stdout": {
+      "contains": [
+        "E03_KILLED"
+      ]
+    },
+    "exit_code": 0
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "sleep 30 &; kill %1; wait; printf \"E03_KILLED\\n\""
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "id": "B07-B08-interactive-callers",
+  "uc": ["B07", "B08"],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "R04_CALLER> ",
+      "R04_INTERACTIVE_MARKER": "R04_INTERACTIVE_CALLER_OK"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "arguments": ["-i"],
+  "steps": [
+    {
+      "type": "keys",
+      "text": "printf '%s\\n' \"$R04_INTERACTIVE_MARKER\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "R04_INTERACTIVE_CALLER_OK"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit"
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": ["R04_INTERACTIVE_CALLER_OK"]
+    },
+    "exit_code": 0
+  }
+}

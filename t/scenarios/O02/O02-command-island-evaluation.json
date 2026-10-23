@@ -32,5 +32,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L01 owns command-island evaluation in the new reader."
   }
 }

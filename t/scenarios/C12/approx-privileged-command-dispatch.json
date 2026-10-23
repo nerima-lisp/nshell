@@ -1,0 +1,72 @@
+{
+  "id": "C12-approx-privileged-command-dispatch",
+  "uc": [
+    "C12"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "bin:/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "C12_SUDO_OUTPUT": "C12_SUDO_OK",
+      "C12_DOAS_OUTPUT": "C12_DOAS_OK",
+      "NSHELL_PROMPT": "C12-approx-privileged-command-dispatch> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/bin/sudo",
+        "content": "#!/bin/sh\nprintf '%s\\n' C12_SUDO_WRAPPER\nexec \"$@\"\n"
+      },
+      {
+        "path": "work/bin/doas",
+        "content": "#!/bin/sh\nprintf '%s\\n' C12_DOAS_WRAPPER\nexec \"$@\"\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "C12_SUDO_WRAPPER",
+        "C12_DOAS_WRAPPER",
+        "C12_SUDO_OK",
+        "C12_DOAS_OK"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "chmod +x bin/sudo bin/doas; sudo echo $C12_SUDO_OUTPUT; doas echo $C12_DOAS_OUTPUT; echo C12_$((6*2))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "C12_12",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

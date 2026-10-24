@@ -344,7 +344,11 @@
     (let* ((context (make-test-shell-context))
            (splice-form
              (nshell.domain.parsing:make-command-value-form
-              :splice (quote (cl:cons "one" "tail")) (quote (1 2))))
+              :splice
+              (quote
+               (cl:cons (cl:car (cl:quote (one)))
+                        (cl:car (cl:quote (tail)))))
+              (quote (1 2))))
            (reader-result
              (%make-sexp-evaluator-test-reader-result "()")))
       (%call-with-sexp-evaluator-test-boundaries

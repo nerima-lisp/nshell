@@ -33,6 +33,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L01 owns the external-command escape syntax."
+    "reason": "WP-X01 connects the new reader to script submissions after P5."
   }
 }

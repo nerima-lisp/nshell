@@ -342,27 +342,19 @@
                       (cdar redirect-values)))))))))
   (it "rejects-dotted-command-splice-values"
     (let* ((context (make-test-shell-context))
-           (counter
-             (intern "L02-EVALUATOR-SPLICE-COUNTER"
-                     (find-package "NSHELL.USER")))
            (splice-form
              (nshell.domain.parsing:make-command-value-form
-              :splice '(cl:cons "one" "tail") '(1 2)))
-           (node
-             (nshell.domain.parsing:make-command-node
-              "echo" nil '(0 6) nil nil nil nil (list splice-form)))
-           (source-form `(cl:let ((,counter 0)) ,node ,counter))
+              :splice (quote (cl:cons "one" "tail")) (quote (1 2))))
            (reader-result
-             (%make-sexp-evaluator-test-reader-result
-              "(let ((counter 0)) (echo))" source-form)))
+             (%make-sexp-evaluator-test-reader-result "()")))
       (%call-with-sexp-evaluator-test-boundaries
        context
        (lambda ()
          (expect
           (lambda ()
-            (nshell.application:evaluate-reader-result-in-context
-             context reader-result))
-          :to-throw 'nshell.application:sexp-evaluation-syntax-error)
+            (nshell.application::%evaluate-command-value-form
+             context splice-form reader-result nil))
+          :to-throw (quote nshell.application:sexp-evaluation-syntax-error))
          (expect nil :to-equal *sexp-evaluator-test-calls*))))))
 (describe "sexp-evaluator-set"
   (it "routes-set-through-the-builtin-boundary"

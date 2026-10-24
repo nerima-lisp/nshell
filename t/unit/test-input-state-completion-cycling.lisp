@@ -104,4 +104,13 @@
                (string= common
                         (nshell.presentation:input-state-buffer new-state))
                (= (length common)
-                  (nshell.presentation:input-state-cursor-pos new-state))))))))
+                  (nshell.presentation:input-state-cursor-pos new-state)))))))
+  (it "completion-common-prefix-extension-handles-empty-token"
+    "Completion extends an empty token without invalid sequence bounds."
+    (let ((state (input-state :buffer "echo " :cursor-pos 5))
+          (candidates (list "alpha" "alpine")))
+      (multiple-value-bind (new-state extended-p)
+          (nshell.presentation::maybe-extend-completion-common-prefix state candidates)
+        (and extended-p
+             (string= "echo alp" (nshell.presentation:input-state-buffer new-state))
+             (= 8 (nshell.presentation:input-state-cursor-pos new-state)))))))

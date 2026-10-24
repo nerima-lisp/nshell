@@ -100,7 +100,7 @@
                                 (or (alphanumericp character)
                                     (char= character #\_)))
                               raw-token
-                              :start name-start)))
+                              :start (min name-start length))))
                        (slash-position
                          (if braced-p
                              (and name-end (1+ name-end))

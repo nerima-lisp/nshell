@@ -93,13 +93,23 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
          (columns (max 1 (floor terminal-width column-width))))
     (values columns column-width formatted)))
 
+(defun %completion-footer-visible-p (candidate-count footer-p max-rows)
+  (and footer-p
+       (or (null max-rows)
+           (and (plusp max-rows)
+                (or (> max-rows 1)
+                    (zerop candidate-count))))))
 (defun %completion-render-line-count (columns formatted &key max-rows footer-p)
   (let* ((total-rows (if formatted
                          (ceiling (length formatted) columns)
                          0))
-         (footer-lines (if (and footer-p (or (null max-rows) (plusp max-rows)))
-                           1
-                           0))
+         (footer-lines
+          (if (%completion-footer-visible-p
+               (length formatted)
+               footer-p
+               max-rows)
+              1
+              0))
          (content-limit (if max-rows
                             (max 0 (- max-rows footer-lines))
                             total-rows)))
@@ -129,7 +139,7 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
   (multiple-value-bind (columns column-width formatted)
       (%compute-columns candidates :terminal-width terminal-width)
     (let* ((candidate-count (length candidates))
-           (footer-visible-p (and footer (or (null max-rows) (plusp max-rows))))
+           (footer-visible-p (%completion-footer-visible-p candidate-count footer max-rows))
            (total-rows (if formatted (ceiling candidate-count columns) 0))
            (content-budget (if max-rows
                                (max 0 (- max-rows

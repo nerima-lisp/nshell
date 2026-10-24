@@ -461,7 +461,6 @@
       (expect "legacy" :to-equal (nshell.domain.parsing:arg-value plain-string))
       (expect nil :to-equal (nshell.domain.parsing:arg-quote-style plain-string))
       (expect nil :to-equal (nshell.domain.parsing:arg-here-doc-literal-p plain-string)))))
-
 (describe "owner-interface-contracts"
   (it "keeps-expansion-eligibility-separate-from-quote-style"
     (let* ((quoted
@@ -540,3 +539,27 @@
     (expect t :to-equal
             (not (null
                   (find-class 'nshell.application:value-conversion-error nil))))))
+
+(describe "shared-sexp-environment-assignment-contracts"
+  (it "preserves-command-scoped-environment-assignments"
+    (let* ((assignment
+             (nshell.domain.parsing:make-command-arg
+              "FOO=1" nil nil nil '(0 5) nil nil))
+           (command
+             (nshell.domain.parsing:make-command-node
+              "cmd" nil '(0 9) nil nil nil nil nil (list assignment))))
+      (expect (list assignment) :to-equal
+              (nshell.domain.parsing:command-node-environment-assignments
+               command))
+      (expect nil :to-equal
+              (nshell.domain.parsing:command-node-args command))
+      (expect nil :to-equal
+              (nshell.domain.parsing:command-arg-expand-p assignment))
+      (expect "FOO=1 cmd" :to-equal
+              (nshell.domain.parsing:ast-node->command-line command))))
+  (it "rejects-non-command-arg-environment-assignments"
+    (expect
+     (lambda ()
+       (nshell.domain.parsing:make-command-node
+        "cmd" nil nil nil nil nil nil nil (list "FOO=1")))
+     :to-throw (quote error))))

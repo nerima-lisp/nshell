@@ -96,6 +96,25 @@ top-level `|` groups command forms into a byte-stream pipeline, while `;`,
 `&&`, `||`, and `&` form sequence nodes. The interactive experience keeps bare
 command entry.
 
+Bare-line operators use longest-match tokenization, so adjacent spellings such
+as `|&`, `&&`, `||`, `&>>`, `&>`, `<<-`, and `<<<` remain single operators.
+Quotes and backslash escapes suppress operator recognition while active.
+Adjacent quoted and unquoted pieces concatenate into one argument. An unquoted
+`#` starts a comment only at an argument boundary; `name#suffix` is data. A
+trailing backslash or unterminated quote is incomplete input. Argument spans
+include their source spelling, including quote and escape characters; the
+command span excludes surrounding whitespace, trailing comment text, and a
+terminal `;` that does not separate another item.
+
+In bare-line input, `$x` and an entire double-quoted token such as `"$HOME"`
+produce one `command-value-form` of kind `:value`. The `$` operand is read as a
+single value form. This is not string interpolation: `$` inside a larger token,
+inside single quotes, or beside other text remains literal. A leading
+`NAME=value` word is stored in `command-node.environment-assignments` only when
+a command head follows it. The prefix applies to that command only, retains its
+source spelling and span, and is excluded from positional arguments. An
+assignment-only line is not lifted by L01.
+
 The first non-whitespace character selects the submission mode before history
 expansion: a top-level S-expression submission must begin with `(`. A
 submission that begins with an atom remains bare-line command syntax. Once `(`
@@ -185,8 +204,16 @@ The production reader allows standard dispatch forms `#\`, `#'`, `#(`, `#A`,
 `#B`, `#C`, `#O`, `#P`, `#R`, `#S`, `#X`, `#*`, `#+`, `#-`, and `#:`; nested
 `#| ... |#` comments are also allowed. It rejects `#.` and shared or circular
 reader labels (`#n=` and `#n#`) with `sexp-reader-error` at the dispatch span.
-Unknown implementation-specific dispatch forms are rejected. A shared object
-can occur at multiple source positions, but `form-span-map` is keyed by `eq`
+The reader consumes `#S` payload syntax but retains the complete spelling as
+an opaque source marker; it never invokes a structure constructor. Unknown
+implementation-specific dispatch handlers are never invoked. In a
+command-island token, an otherwise unrecognized `#` spelling is preserved as
+an opaque source marker and consumed only as direct argument data; an
+unresolved marker in a host form is rejected by WP-L02 before evaluation. A
+standalone `.` is also retained as a source marker so command conversion can
+preserve it as an argument; WP-L02 restores it to dotted-list syntax in host
+forms. A shared object can occur at multiple source positions, but
+`form-span-map` is keyed by `eq`
 and stores only one origin span per object; circular forms also cannot be
 represented as source-backed syntax trees. `#\` character literals remain
 valid in host-form positions, and `#` remains data inside command islands.
@@ -195,9 +222,19 @@ pathname or string), `source-map` (nullable origin vector), and
 `symbol-origins` (an `eq` hash table keyed by fresh uninterned symbol markers).
 `sexp-reader-error` carries the same `source-path` and `source-map` metadata in
 addition to `source-span` and `cause`. The origin map records each symbol's
-exact source name, `escaped-p`, explicit package qualifier when present, and
-half-open source span. Evaluation resolves markers at evaluation time; reading
-does not intern user symbols or map `nil` to `CL:NIL`.
+exact source name, `escaped-p`, explicit package qualifier when present,
+half-open source span, and applicable marker flags such as
+`opaque-dispatch-p` or `opaque-dot-p`. Evaluation resolves ordinary markers
+at evaluation time; reading does not intern user symbols or map `nil` to
+`CL:NIL`.
+The reader caps recursive datum nesting at 256 levels. A datum at level 257 is
+rejected with `sexp-reader-error` on its first source character before it is
+consumed.
+
+`#+` and `#-` use the active Common Lisp feature set without evaluating source.
+An included conditional form's span begins at the dispatch prefix and includes
+the feature expression and payload; an excluded form produces no
+`reader-result`.
 
 For interactive S-expression input with multiple results, the REPL evaluates
 each result in source order and calls L04's
@@ -310,9 +347,13 @@ vertical-bar-delimited symbol is escaped; an ordinary symbol token is not.
 Package-qualified names use their explicit canonical package and name. No
 user symbol is interned while reading.
 
-The prototype still uses a temporary package and rejects `#` dispatch. Those
-prototype limits do not define the production reader contract. The reader is
+The prototype still uses a temporary package and rejects `#` dispatch; those
+limitations do not apply to the production contract. The production reader is
 not a sandbox for untrusted source.
+
+`escaped-p` records only Common Lisp vertical-bar symbol syntax such as
+`|MiXeD|`. Bare-line quote delimiters and backslash escapes are represented by
+command argument fragments and do not set this symbol-origin field.
 
 ### Quote handling
 
@@ -340,11 +381,14 @@ String literals are opaque. Concatenation is explicit.
 (echo "branch is" $branch)
 ```
 
-### Globbing
+### Pathname expansion
 
-For an external command or a `:argv` builtin, glob metacharacters in an
-eligible **symbol** inside an island expand. `:value` builtins receive the
-original value without globbing. String literals never expand.
+For an external command or a `:argv` builtin, an ordinary unquoted and
+unescaped command-island word is eligible for pathname expansion. WP-L03
+applies brace, tilde, then glob expansion to its original source spelling when
+`expand-p` is true. `:value` builtins receive the original value
+without pathname expansion. String literals, escaped symbols, numeric-looking
+tokens, and evaluated values are not eligible.
 
 ```lisp
 (ls *.lisp)                   ; expands
@@ -352,8 +396,9 @@ original value without globbing. String literals never expand.
 (echo "*.lisp")               ; literal
 ```
 
-This is the one deliberate hole in "bare symbols are strings". It is accepted
-because glob expansion at the command line is not negotiable for daily use.
+An eligible source word remains one AST argument even when pathname expansion
+produces multiple paths. This is the deliberate exception to treating every
+bare symbol as a single string value.
 
 ## Pipelines and structured data
 
@@ -774,7 +819,14 @@ splice only when its result is a proper list. A `:quoted` datum is passed as a
 value without evaluation. `command-node.args` remains the compatibility
 projection containing only `command-arg` elements. Existing positional
 `make-command-node` calls keep their argument order; the new optional
-`argument-forms` slot is appended. If omitted, it is derived from `args`.
+`environment-assignments` argument follows `argument-forms`. If
+`argument-forms` is omitted, it is derived from `args`.
+
+A `(| ...)` or `(|& ...)` form used as a value argument is stored in a
+`:value` `command-value-form` with the raw source-backed pipeline form. It
+remains in `argument-forms` and is not projected into `args`. WP-L02 uses the
+reader result's span map to convert and evaluate that nested pipeline in value
+position.
 
 ### Values, stream positions, and builtin calls
 
@@ -848,7 +900,7 @@ position before invoking the binding owned by WP-L03.
 | `glob-p` | boolean | Whether the source form permits glob expansion; evaluated values use `nil`. |
 | `expand-p` | boolean | Whether the source argument permits brace, tilde, and glob expansion; evaluated values use `nil`. |
 
-Each source span is a two-element list of nonnegative character offsets with `start <= end`; its end is exclusive. Existing AST span slots keep this representation. WP-L00b adds the argument type and accessors; WP-L01 records spans and source glob eligibility; WP-L02 constructs evaluated arguments; WP-L03 consumes them at the builtin and process boundaries.
+Each source span is a two-element list of nonnegative character offsets with `start <= end`; its end is exclusive. Existing AST span slots keep this representation. WP-L00b adds the argument type and accessors; WP-L01 records spans and pathname-expansion eligibility; WP-L02 constructs evaluated arguments; WP-L03 consumes them at the builtin and process boundaries.
 
 `,x` contributes exactly one evaluated argument, including when `x` returns `nil` or a list. Its source span covers the complete reader-prefix form, including the comma. `,@xs` is allowed only in a direct command-island argument list and splices a proper list into separate command arguments; it does not add splicing to host-function argument lists. Each spliced argument keeps the span of the complete `,@` form. `,@nil` contributes zero arguments, and a non-list value is an error. In particular, `,nil` is one `nil` value, not zero arguments.
 
@@ -1095,7 +1147,7 @@ the value and its source span to `argv-scalar-string` and appends exactly one
 newline before connecting it to the destination descriptor. The target is not
 split or glob-expanded.
 
-`command-node.redirects` is a list of `ast-redirect-entry` values in source order, including standalone process-substitution entries. `command-node.force-external-p` is a boolean defaulting to `nil`. `make-command-node` keeps all existing positional arguments and appends optional `redirects`, `force-external-p`, and `argument-forms` arguments. `make-pipeline-node` keeps its existing calls; when an edge list is supplied, it contains one `pipeline-edge` for each adjacent pair of commands. `nil` edges on a legacy node mean ordinary stdout-only pipes.
+`command-node.redirects` is a list of `ast-redirect-entry` values in source order, including standalone process-substitution entries. `command-node.force-external-p` is a boolean defaulting to `nil`. `command-node.environment-assignments` is a list of `command-arg` values in source order, defaulting to `nil`; it holds only the leading bare-line `NAME=value` words that precede a command head. These words retain their spelling and spans, do not appear in positional arguments, and have `expand-p` set to `nil`. `make-command-node` keeps all existing positional arguments and appends optional `redirects`, `force-external-p`, `argument-forms`, and `environment-assignments` arguments. `make-pipeline-node` keeps its existing calls; when an edge list is supplied, it contains one `pipeline-edge` for each adjacent pair of commands. `nil` edges on a legacy node mean ordinary stdout-only pipes.
 
 WP-L08 prepares process substitutions in pipeline stage order from left to
 right, then by ascending `source-order` within each stage. `source-order` is
@@ -1669,7 +1721,7 @@ rebuilding shared structures:
 |---|---|---|---|
 | R02 | WP-R02-owned `posix_spawn` infrastructure files and tests; that WP selects their exact paths | The NFR-03 process-spawn implementation (1,000 external commands in ≤5 s) | Land the `posix_spawn` layer before L05 changes pipeline spawning. |
 | L00b | `src/domain/parsing/ast.lisp`, `src/domain/parsing/ast-arguments.lisp`, `t/unit/test-sexp-ast-contracts.lisp`, `src/package-user.lisp`, AST exports in `src/package-domain.lisp`, nshell.asd entries for L00b-owned files, and package exports for L00b-owned symbols | Shared AST types, `NSHELL.USER` package creation, and the common interface condition/helper | L00b fixes shared type names, constructor validation, and AST accessors/tests. It creates `NSHELL.USER` during package-definition loading before L01. L00b owns only `src/application/contracts/wp-interface-errors.lisp` among interface skeleton files; each other interface file belongs to the WP in its name. |
-| L01 | `src/domain/parsing/sexp-reader.lisp`, `src/domain/parsing/sexp-scanner.lisp`, `src/domain/parsing/sexp-reader-prototype.lisp`, matching reader/scanner tests, and `nshell.asd` entries | `reader-result` (`form`, `source`, `source-span`, `form-span-map`, `source-path`, `source-map`, `symbol-origins`), `sexp-reader-error` (`source-span`, `source-path`, `source-map`, `cause`), `scan-token`, `scan-result`, `delimiter-frame`, `delimiter-pair`, reader-private types; `command-form->ast` | `sexp-reader.lisp` owns context-free `read-submission`, bare-line tokenization and spans, and source-backed AST construction. L01 places the reader/scanner API and type skeletons in its first commit. It preserves each unquoted island word spelling and explicitly sets `command-arg.expand-p`; it does not infer eligibility from quote-style. The caller supplies active `head-classifier`; the helper does not reclassify the already-classified outer command, evaluate arguments, or expand macros. Pipeline and process-substitution stages must be command-island forms. The scanner owns the editor full-buffer structural scan, `next-indent` calculation, and matching scanner tests; it does not construct AST. Construct shared AST values through WP-L00b accessors and constructors. L01 is the only follow-on WP allowed to amend shared AST files; it must first document any new field and accessor. |
+| L01 | `src/domain/parsing/sexp-reader.lisp`, `src/domain/parsing/sexp-scanner.lisp`, `src/domain/parsing/sexp-reader-prototype.lisp`, shared AST changes in `src/domain/parsing/ast.lisp` and `src/domain/parsing/ast-arguments.lisp`, the AST export in `src/package-domain.lisp`, matching reader/scanner and shared-AST tests, and `nshell.asd` entries | `reader-result` (`form`, `source`, `source-span`, `form-span-map`, `source-path`, `source-map`, `symbol-origins`), `sexp-reader-error` (`source-span`, `source-path`, `source-map`, `cause`), `scan-token`, `scan-result`, `delimiter-frame`, `delimiter-pair`, reader-private types; `command-form->ast`; `command-node.environment-assignments` | `sexp-reader.lisp` owns context-free `read-submission`, bare-line tokenization and spans, and source-backed AST construction. L01 places the reader/scanner API and type skeletons in its first commit. It preserves each unquoted island word spelling and explicitly sets `command-arg.expand-p`; it does not infer eligibility from quote-style. The caller supplies active `head-classifier`; the helper does not reclassify the already-classified outer command, evaluate arguments, or expand macros. Pipeline and process-substitution stages must be command-island forms. The scanner owns the editor full-buffer structural scan, `next-indent` calculation, and matching scanner tests; it does not construct AST. Construct shared AST values through WP-L00b accessors and constructors. L01 is the only follow-on WP allowed to amend shared AST files; it must first document any new field and accessor, including the bare-line assignment prefix. |
 | L02 | `src/application/sexp-evaluator.lisp`, `src/application/contracts/l02-evaluator.lisp`, evaluator data files, evaluator tests, and `nshell.asd` entries | `evaluated-command-stage`; `evaluate-reader-result-in-context`; `evaluate-command-stage-in-context`; `classify-sexp-head`; `command-macro-syntax-error` in `nshell.application` | Use `evaluated-command-arg`, registry accessors, and `reader-result.form-span-map` for macro origins; copy both `expand-p` and `glob-p` only from source `command-arg` values, leaving evaluated values ineligible. Pass `reader-result.source` to source-backed AST conversion. Expose the side-effect-free classifier to L01 and E03; classify via `peek-shell-function` so scanning never autoloads, and resolve again at evaluation time after earlier forms may have changed the active shell scope. Evaluate stage arguments and redirect values once, then pass a stage-evaluator closure to L08's `execute-reader-ast-in-context`; report its plan errors at their source spans. Do not evaluate forms during scanning. |
 | L03 | `src/application/contracts/l03-builtin.lisp`, `src/application/builtin-runtime.lisp`, `data/application/builtin-spec-data.lisp`, `src/application/execute-pipeline-expansion.lisp`, `src/application/execute-command-substitution.lisp`, `src/application/builtins.lisp`, matching tests, and `nshell.asd` entries | `builtin-binding` and builtin dispatch types; `command-argv-strings`; C13 globbing and C14 tilde/brace expansion | Own `register-builtin`, `lookup-builtin-binding`, `dispatch-builtin`, and `command-argv-strings`. At argv conversion, expand only marked source arguments in brace, tilde, glob order using `expand-p` and `glob-p`; evaluated values and `:value` builtin arguments do not expand. Own C13 and C14. Keep legacy `+builtin-registry-specs+`, installer, and `lookup-builtin` handler semantics unchanged until WP-X01; register new bindings only in the new table. Own the command-substitution implementation while it is migrated to the new value path. Consume AST through accessors; do not edit AST definitions. |
 | L04 | `src/application/contracts/l04-command-failure.lisp`, `src/application/command-failed.lisp` and failure-policy files, `src/presentation/contracts/l04-command-failure.lisp`, `src/presentation/repl-output-handlers.lisp` restart wrapper, restart-mode data and tests | `command-failed` and condition-policy types; the three special variables in `nshell.application` | Owns condition slots, policy, and `call-with-command-failure-restarts(thunk)`. The application and presentation contract files hold the initial skeletons; the presentation implementation may live in `repl-output-handlers.lisp`. Consume the pipeline result interface supplied by L05; do not change pipeline or AST structures or E03-owned submission functions. |
@@ -1711,7 +1763,7 @@ Every owner may add private value types in its owned files. A WP that needs a fi
 
 The prototype at `src/domain/parsing/sexp-reader-prototype.lisp` remains isolated from the default input path. Existing legacy execution tests keep their expectations; new prototype tests cover the AST fields and do not replace legacy-reader tests. WP-L00b adds AST fields with defaults that preserve old constructor behavior.
 
-The prototype tests the command and pipeline AST boundary. It records escaped-symbol glob eligibility, keeps argument-position `|` and `|&` literal, and sets `command-node.force-external-p`. It does not implement the production scanner, package resolution, command-island redirect extraction, or typed `|&` edges.
+The prototype tests the command and pipeline AST boundary. It records legacy escaped-symbol glob eligibility, keeps argument-position `|` and `|&` literal, and sets `command-node.force-external-p`. It does not implement the production scanner, package resolution, command-island redirect extraction, or typed `|&` edges.
 
 The migration order remains L01 reader/scanner, L02 evaluator, then parallel L03/L04/L06/L07, followed by L05/L08. P4 consumers can implement against the scanner and AST contracts after L01. No P3/P4 WP changes the default reader before WP-X01.
 

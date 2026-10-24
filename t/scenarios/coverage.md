@@ -1,8 +1,8 @@
 # Use-case coverage
 
-This index maps UC IDs in the
-[requirements catalog](../../plan/requirements.md) to scenario files. Shared
-scenarios can appear on multiple UC rows and may be stored under a different
+This index maps use-case (UC) IDs from the run requirements catalog, supplied
+with the orchestration materials, to scenario files.
+Shared scenarios can appear on multiple UC rows and may be stored under a different
 UC's directory. A05 uses A04's login-path handoff scenario, and B02–B06 use
 B01's shell-caller handoff scenario. The Total row counts unique manifest
 entries as executable scenarios; that count matches the runner summary's

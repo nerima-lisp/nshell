@@ -1,6 +1,8 @@
 ;;; Core data model for the pure REPL input reducer.
 
 (in-package #:nshell.presentation)
+(progn (defvar *repl-new-reader-route-enabled-p* nil) (declaim (ftype function %repl-reader-context-for-source %repl-input-scan-result)))
+(defconstant +editor-indent-width+ 2)
 
 (defmacro define-input-state-constructor (fields)
   (let ((lambda-list '())
@@ -16,6 +18,7 @@
 (define-input-state-constructor
   ((buffer "")
    (cursor-pos 0)
+   (preferred-visual-column nil)
    (completion-index -1)
    (completion-base-buffer nil)
    (completion-base-cursor nil)

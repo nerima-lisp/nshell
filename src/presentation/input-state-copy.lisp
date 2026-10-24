@@ -7,10 +7,12 @@
 (in-package #:nshell.presentation)
 
 (defun copy-input-state-with (state &key buffer cursor-pos
+                                      (preferred-visual-column nil
+                                                               preferred-visual-column-supplied-p)
                                       (completion-index nil
                                                         completion-index-supplied-p)
                                       (completion-base-buffer nil
-                                                              completion-base-supplied-p)
+                                                              completion-base-buffer-supplied-p)
                                       (completion-base-cursor nil
                                                               completion-base-cursor-supplied-p)
                                       (last-candidates nil
@@ -44,16 +46,24 @@
                                       ask-original-buffer ask-original-cursor
                                       (undo-stack nil undo-stack-supplied-p)
                                       (redo-stack nil redo-stack-supplied-p))
-  (let* ((new-buffer (or buffer (input-state-buffer state)))
-         (new-cursor (clamp-cursor (or cursor-pos (input-state-cursor-pos state))
-                                   new-buffer)))
+  (let* ((old-buffer (input-state-buffer state))
+         (old-cursor (input-state-cursor-pos state))
+         (new-buffer (or buffer old-buffer))
+         (new-cursor (clamp-cursor (or cursor-pos old-cursor) new-buffer))
+         (preferred-column
+           (if preferred-visual-column-supplied-p
+               preferred-visual-column
+               (unless (or (not (string= new-buffer old-buffer))
+                           (/= new-cursor old-cursor))
+                 (input-state-preferred-visual-column state)))))
     (apply #'make-input-state
            (append
-            (list :buffer new-buffer :cursor-pos new-cursor)
+            (list :buffer new-buffer :cursor-pos new-cursor
+                  :preferred-visual-column preferred-column)
             (%copy-input-state-completion-initargs
              state
              completion-index-supplied-p completion-index
-             completion-base-supplied-p completion-base-buffer
+             completion-base-buffer-supplied-p completion-base-buffer
              completion-base-cursor-supplied-p completion-base-cursor
              last-candidates-supplied-p last-candidates
              suggestion-supplied-p suggestion)

@@ -599,7 +599,7 @@ wrapped line's other rows on screen as stale duplicates."
    (list "AI proposal requires confirmation; press Enter again to execute."))
   (lambda () (render-prompt-cont)))
 
-(defun %execute-complete-command (ast text)
+(defun %execute-complete-command (ast text &optional evaluator)
   (with-reset-rendered-prompt-state-and-prompt-cont
    (progn
      (format t "~%")
@@ -627,7 +627,7 @@ wrapped line's other rows on screen as stale duplicates."
                 *assistant-command-confirmed-p*))
            (setf *command-not-found-command* nil)
            (setf *last-command-output* nil)
-           (setf exit-code (or (execute-ast ast) 0)))
+           (setf exit-code (or (if evaluator (funcall evaluator) (execute-ast ast)) 0)))
        (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
          (let ((duration-ms (%elapsed-command-duration-ms
                              start-time
@@ -1001,7 +1001,7 @@ wrapped line's other rows on screen as stale duplicates."
                  (let ((*capture-command-output-p* t))
                    (%process-execute-output-event)))))))))
 
-(defun %execute-command-line (text)
+(defun %execute-command-line-legacy (text)
   (if (%assistant-proposal-confirmation-required-p)
       (%confirm-assistant-proposal)
       (handler-case
@@ -1043,6 +1043,24 @@ wrapped line's other rows on screen as stale duplicates."
                (with-reset-rendered-prompt-state-and-prompt-cont
                 (format t "~%nshell error: ~a~%" condition)
                 (%set-command-failure-state 1))))))
+(defun %execute-command-line (text)
+  (cond
+    ((%assistant-proposal-confirmation-required-p)
+     (%confirm-assistant-proposal))
+    (*repl-new-reader-route-enabled-p*
+     (if (every (lambda (character)
+                  (find character (list #\Space #\Tab #\Newline #\Return)))
+                text)
+         (%execute-empty-input)
+         (%execute-complete-command
+          nil
+          text
+          (lambda ()
+            (%evaluate-repl-reader-submission
+             text
+             (%repl-reader-context-for-source text))))))
+    (t
+     (%execute-command-line-legacy text))))
 
   (defun %process-execute-output-event ()
     (clear-rendered-completions)

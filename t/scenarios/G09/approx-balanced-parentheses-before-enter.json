@@ -9,7 +9,8 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "G09-approx-balanced-parentheses-before-enter> ",
-      "G09_MESSAGE": "G09_BALANCED"
+      "G09_MESSAGE": "G09_BALANCED",
+      "G09_READY": "G09_READY_MARKER"
     },
     "home": "home",
     "cwd": "work",
@@ -32,7 +33,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo $G09_MESSAGE ("
+      "text": "echo $G09_MESSAGE $(echo G09_SUB"
     },
     {
       "type": "key",
@@ -47,8 +48,26 @@
       "key": "Enter"
     },
     {
+      "type": "wait",
+      "contains": "G09_BALANCED G09_SUB",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo $G09_READY"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "G09_READY_MARKER",
+      "timeout_seconds": 10
     },
     {
       "type": "key",
@@ -84,7 +103,5 @@
       "timeout_seconds": 10
     }
   ],
-  "expected_failure": {
-    "reason": "WP-E03 owns balanced-input continuation and Enter behavior."
-  }
+  "input_delay_seconds": 0.2
 }

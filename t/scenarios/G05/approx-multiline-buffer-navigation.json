@@ -122,7 +122,5 @@
       "timeout_seconds": 10
     }
   ],
-  "expected_failure": {
-    "reason": "WP-E03 owns multiline-buffer navigation."
-  }
+  "input_delay_seconds": 0.2
 }

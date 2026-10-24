@@ -1,4 +1,46 @@
 (in-package #:nshell.presentation)
+(progn
+  (defun %repl-reader-context-for-source (source)
+    (if (not *repl-new-reader-route-enabled-p*)
+        :bare-line
+        (let ((first-nonwhite
+                (position-if-not
+                 (lambda (character)
+                   (find character (list #\Space #\Tab #\Newline #\Return)))
+                 source)))
+          (if (and first-nonwhite
+                   (char= (char source first-nonwhite) (code-char 40)))
+              :sexp
+              :bare-line))))
+  (defun %repl-input-scan-result (source cursor reader-context)
+    (let ((context
+            (and (eq reader-context :sexp)
+                 (%make-repl-shell-context))))
+      (nshell.domain.parsing:scan-input
+       source
+       :cursor cursor
+       :reader-context reader-context
+       :indent-width +editor-indent-width+
+       :head-classifier
+       (and context
+            (lambda (head-source)
+              (nshell.application:classify-sexp-head context head-source))))))
+  (defun %evaluate-repl-reader-submission (source reader-context)
+  (let ((context (%make-repl-shell-context))
+        (reader-results
+          (nshell.domain.parsing:read-submission
+           source
+           :reader-context reader-context)))
+    (loop with status = 0
+          for reader-result in reader-results
+          do (multiple-value-bind (value result-status)
+                 (call-with-command-failure-restarts
+                  (lambda ()
+                    (nshell.application:evaluate-reader-result-in-context
+                     context reader-result)))
+               (declare (ignore value))
+               (setf status result-status))
+          finally (return status)))))
 
 (define-value-struct source-text-request
     ((lines nil :type list :copy :list))

@@ -1,0 +1,104 @@
+{
+  "id": "G07-nested-continuation-indentation-and-single-execution",
+  "uc": [
+    "G07"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "G07> ",
+      "G07_READY": "G07_READY_MARKER"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/G07_COUNT",
+        "content": ""
+      }
+    ]
+  },
+  "expected": {
+    "screen": {
+      "ordered_contains": [
+        "                        )",
+        "                 )",
+        "G07_ONCE G07_SUB"
+      ]
+    },
+    "side_effects": {
+      "files": [
+        {
+          "path": "G07_COUNT",
+          "equals": "x"
+        }
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo G07_ONCE $(echo $(printf x >> G07_COUNT; echo G07_SUB"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": ")"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": ")"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "G07_ONCE G07_SUB",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo $G07_READY"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "G07_READY_MARKER",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "input_delay_seconds": 0.2
+}

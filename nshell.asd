@@ -340,6 +340,7 @@
    (:file "presentation/repl-boundaries")
    (:file "presentation/terminal-size")
    (:file "presentation/prompt-display")
+   (:file "presentation/input-state-vertical-navigation")
    (:file "presentation/completion-ui")
    (:file "presentation/autosuggest")
    (:file "presentation/highlight-data"
@@ -499,6 +500,7 @@
    (:file "unit/test-repl-background")
    (:file "unit/test-repl-state")
    (:file "unit/test-repl-execution")
+   (:file "unit/test-repl-submission")
    (:file "unit/test-agent-mode")
    (:file "unit/test-repl-rendering")
    (:file "unit/test-repl-rendering-layout")
@@ -522,6 +524,7 @@
    (:file "unit/test-input-state-session")
    (:file "unit/test-input-state-insertion")
    (:file "unit/test-input-state-navigation")
+   (:file "unit/test-input-state-continuation")
    (:file "unit/test-input-state-kill-yank")
    (:file "unit/test-input-state-commands")
    (:file "unit/test-input-state-case-undo")

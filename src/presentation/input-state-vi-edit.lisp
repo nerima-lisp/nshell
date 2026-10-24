@@ -741,7 +741,7 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
           (mode (input-state-mode state)))
       (case type
         (:ctrl-right-bracket (%start-ask-input-state state))
-        (:enter (finalize-enter-input-state (%vi-insert-state state)))
+        (:enter (%enter-input-state (%vi-insert-state state)))
         (:ctrl-c (clear-input-state state))
         (:ctrl-l (%vi-values-clearing-count state :clear-screen))
         (:ctrl-r (%vi-redo state))

@@ -6,8 +6,32 @@
           (end (input-state-mouse-selection-end *input-state*)))
       (when (and (integerp anchor) (integerp end))
         (list (min anchor end) (max anchor end))))))
+(defun %active-matching-delimiter-spans ()
+  (when *input-state*
+    (let* ((source (input-state-buffer *input-state*))
+           (cursor (input-state-cursor-pos *input-state*))
+           (reader-context (%repl-reader-context-for-source source))
+           (scan-result (%repl-input-scan-result
+                         source cursor reader-context))
+           (pair
+             (find-if
+              (lambda (candidate)
+                (or (= cursor
+                       (first
+                        (nshell.domain.parsing:delimiter-pair-open-span
+                         candidate)))
+                    (= cursor
+                       (first
+                        (nshell.domain.parsing:delimiter-pair-close-span
+                         candidate)))))
+              (nshell.domain.parsing:scan-result-delimiter-pairs
+               scan-result))))
+      (when pair
+        (list (nshell.domain.parsing:delimiter-pair-open-span pair)
+              (nshell.domain.parsing:delimiter-pair-close-span pair))))))
 
-(defun %render-edit-buffer-line (line absolute-start theme selection-start selection-end)
+(defun %render-edit-buffer-line
+    (line absolute-start theme selection-start selection-end matching-spans)
   (loop with local-start = 0
         with line-length = (length line)
         while (< local-start line-length)
@@ -16,29 +40,43 @@
                                    (integerp selection-end)
                                    (<= selection-start absolute-index)
                                    (< absolute-index selection-end)))
+                  (matching-p
+                    (some (lambda (span)
+                            (= absolute-index (first span)))
+                          matching-spans))
                   (local-end
                     (or (loop for candidate from (1+ local-start) below line-length
+                              for candidate-index = (+ absolute-start candidate)
                               for candidate-selected-p =
                                 (and (integerp selection-start)
                                      (integerp selection-end)
-                                     (<= selection-start
-                                         (+ absolute-start candidate))
-                                     (< (+ absolute-start candidate)
-                                        selection-end))
-                              when (not (eql selected-p candidate-selected-p))
+                                     (<= selection-start candidate-index)
+                                     (< candidate-index selection-end))
+                              for candidate-matching-p =
+                                (some (lambda (span)
+                                        (= candidate-index (first span)))
+                                      matching-spans)
+                              when (or (not (eql selected-p candidate-selected-p))
+                                       (not (eql matching-p candidate-matching-p)))
                                 do (return candidate))
                         line-length))
                   (segment (subseq line local-start local-end)))
-             (if selected-p
-                 (%write-styled segment :selection theme)
-                 (handler-case
-                     (format t "~a"
-                             (highlight->ansi (highlight-line segment) segment theme))
-                   (error ()
-                     (format t "~a" segment))))
+             (cond
+               (selected-p
+                (%write-styled segment :selection theme))
+               (matching-p
+                (format t "~c[7m~a~c[0m"
+                        (code-char 27) segment (code-char 27)))
+               (t
+                (handler-case
+                    (format t "~a"
+                            (highlight->ansi (highlight-line segment) segment theme))
+                  (error ()
+                    (format t "~a" segment)))))
              (setf local-start local-end))))
 
-(defun render-edit-buffer (text theme &key selection-start selection-end)
+(defun render-edit-buffer
+    (text theme &key selection-start selection-end matching-spans)
   (loop with start = 0
         with absolute-start = 0
         with first-line = t
@@ -50,7 +88,8 @@
                (%write-styled "> " :prompt-continuation theme))
              (let ((line (subseq text start (or newline-pos (length text)))))
                (%render-edit-buffer-line line absolute-start theme
-                                         selection-start selection-end))
+                                         selection-start selection-end
+                                         matching-spans))
              (setf first-line nil)
              (if newline-pos
                  (setf start (1+ newline-pos)
@@ -148,7 +187,8 @@
                                      '(:ask :ask-waiting)
                                      :test #'eq)
                         "ask>"))
-           (selection-range (%active-mouse-selection-range)))
+           (selection-range (%active-mouse-selection-range))
+           (matching-spans (%active-matching-delimiter-spans)))
       (when ask-suffix
         (format t " ")
         (%write-styled ask-suffix :prompt-assistant theme)
@@ -157,9 +197,7 @@
         (when (eq *osc133-state* :prompt)
           (%emit-terminal-integration-sequence :osc133 "B")
           (setf *osc133-state* :input))
-        (render-edit-buffer text theme
-                            :selection-start (first selection-range)
-                            :selection-end (second selection-range)))
+        (render-edit-buffer text theme :selection-start (first selection-range) :selection-end (second selection-range) :matching-spans matching-spans))
       (when (and suggestion (> (length suggestion) 0))
         (%write-styled suggestion :autosuggestion theme))
       (%move-cursor-to-rendered-position text

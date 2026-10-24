@@ -39,14 +39,38 @@
 
 (defun %move-cursor-to-eol-or-accept-suggestion (state)
   (with-normalized-input-state (state state)
-    (if (input-state-at-eol-p state)
-        (accept-suggestion-at-eol state)
-        (values (copy-input-state-with state
-                                       :cursor-pos (length (input-state-buffer state)))
-                :redraw))))
+    (cond
+      ((and (find #\Newline (input-state-buffer state))
+            (input-state-at-eol-p state))
+       (accept-suggestion-at-eol state))
+      ((find #\Newline (input-state-buffer state))
+       (values (move-input-state-to-physical-line-end state) :redraw))
+      ((input-state-at-eol-p state)
+       (accept-suggestion-at-eol state))
+      (t
+       (values (copy-input-state-with state
+                                      :cursor-pos (length (input-state-buffer state)))
+               :redraw)))))
 
 (defun %redraw-input-state (state)
   (values state :redraw))
+(defun %enter-input-state (state)
+  (let* ((raw-source (input-state-buffer state))
+         (reader-context (%repl-reader-context-for-source raw-source))
+         (prepared-state
+           (if *repl-new-reader-route-enabled-p*
+               (clear-completion-session-state state)
+               (nth-value 0 (finalize-enter-input-state state))))
+         (result
+           (%repl-input-scan-result
+            (input-state-buffer prepared-state)
+            (input-state-cursor-pos prepared-state)
+            reader-context)))
+    (if (eq (nshell.domain.parsing:scan-result-status result) :incomplete)
+        (insert-newline-at-cursor
+         prepared-state
+         :indent (nshell.domain.parsing:scan-result-next-indent result))
+        (values prepared-state :execute))))
 
 (defun %kill-to-eol (state)
   (with-normalized-cleared-completion-state (state state)
@@ -175,7 +199,9 @@ presentation package."
       (:paste (from (insert-paste-at-cursor
                      state
                      (input-dispatch-action-value action))))
-      (:enter (from (finalize-enter-input-state state)))
+      (:enter (from (%enter-input-state state)))
+      (:move-line-up (from (%move-input-state-vertically state :up)))
+      (:move-line-down (from (%move-input-state-vertically state :down)))
       (:cycle-completion (from (cycle-completion-state
                                 state
                                 (input-dispatch-action-value action))))

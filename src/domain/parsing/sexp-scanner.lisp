@@ -1270,7 +1270,8 @@
         ((eq (%depth-scan-state-mode state) :sexp)
          (or (%depth-scan-open-indent cursor indent-width) 0))
         (t
-         (or (%depth-scan-bare-continuation-indent tokens cursor indent-width)
+         (or (%depth-scan-open-indent cursor indent-width)
+             (%depth-scan-bare-continuation-indent tokens cursor indent-width)
              0))))))
 
   (defun scan-input (source &key (cursor (length source))

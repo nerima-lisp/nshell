@@ -611,6 +611,20 @@
       "path": "G05/approx-multiline-buffer-navigation.json"
     },
     {
+      "id": "G06-nested-matching-delimiters",
+      "uc": [
+        "G06"
+      ],
+      "path": "G06/nested-matching-delimiters.json"
+    },
+    {
+      "id": "G07-nested-continuation-indentation-and-single-execution",
+      "uc": [
+        "G07"
+      ],
+      "path": "G07/nested-continuation-indentation-and-single-execution.json"
+    },
+    {
       "id": "G09-approx-balanced-parentheses-before-enter",
       "uc": [
         "G09"

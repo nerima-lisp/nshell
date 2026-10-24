@@ -26,6 +26,7 @@ operator-pending states after pressing d or c in normal mode."
 (defstruct (input-state (:constructor %make-input-state
                                       (&key (buffer "")
                                             (cursor-pos 0)
+                                            (preferred-visual-column nil)
                                             (completion-index -1)
                                             (completion-base-buffer nil)
                                             (completion-base-cursor nil)
@@ -73,6 +74,7 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
   snapshots for fish/readline-style local editing undo."
   (buffer "" :type string)
   (cursor-pos 0 :type integer)
+  (preferred-visual-column nil :type (or null integer))
   (completion-index -1 :type integer)
   (completion-base-buffer nil :type (or null string))
   (completion-base-cursor nil :type (or null integer))

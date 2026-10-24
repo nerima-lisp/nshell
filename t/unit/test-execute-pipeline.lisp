@@ -17,7 +17,8 @@
                     (when (eq phase :wait-error) (error failure))
                     nil))
                  ('nshell.infrastructure.acl::%wait-sbcl-process
-                  (lambda (process) (declare (ignore process))))
+                  (lambda (process &optional check-for-stopped)
+                    (declare (ignore process check-for-stopped))))
                  ('nshell.infrastructure.acl::%join-stream-copier
                   (lambda (thread)
                     (expect copier :to-equal thread)

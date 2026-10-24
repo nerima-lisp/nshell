@@ -242,7 +242,7 @@ which are skipped rather than parsed."
                             line))
                          (sexp-p
                            (and first-nonwhite
-                                (char= (char line first-nonwhite) #\())))
+                                (char= (char line first-nonwhite) (code-char 40))))
                          (text line)
                          (scan-result (%source-reader-scan-result context line))
                          (parse-result
@@ -275,7 +275,7 @@ which are skipped rather than parsed."
                             code exit-code)
                       (%record-last-exit-code context code)
                       (when (not (shell-context-running context))
-                        (return))))))
+                        (return)))))))
       (values (apply #'concatenate 'string (nreverse output)) code)))
 
     (defun source-lines (context lines &optional source-path)

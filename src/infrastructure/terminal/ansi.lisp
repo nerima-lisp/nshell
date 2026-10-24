@@ -81,37 +81,36 @@
 (defun %write-host-clipboard (text)
   (let ((environment (nshell.infrastructure.acl:current-environment-entries)))
     (loop for command in +host-clipboard-commands+
-          for program = (ignore-errors
-                          (let ((found (host-kit:find-program (first command))))
-                            (typecase found
-                              (string found)
-                              (pathname (namestring found)))))
-          when program
-            thereis
-            (handler-case
-                (let ((input (make-string-input-stream text))
-                      (process nil)
-                      (input-transferred-p nil))
-                  (unwind-protect
-                      (multiple-value-bind (spawned transferred-p)
-                          (nshell.infrastructure.acl::%spawn-external-command
-                           program (rest command) environment
-                           :input input :output nil :error nil
-                           :process-group :new :input-source-owned-p t)
-                        (setf process spawned
-                              input-transferred-p transferred-p)
-                        (nshell.infrastructure.acl:%wait-process-with-copiers
-                         process nil 2d0
-                         (lambda ()
-                           (zerop
-                            (nshell.infrastructure.acl:process-exit-status-code
-                             process)))
-                         (lambda () nil)))
-                    (when process
-                      (nshell.infrastructure.acl:process-close process))
-                    (unless input-transferred-p
-                      (ignore-errors (close input)))))
-              (error () nil)))))
+      for program = (ignore-errors
+                      (let ((found (host-kit:find-program (first command))))
+                        (typecase found
+                          (string found)
+                          (pathname (namestring found)))))
+      thereis (and program
+                   (handler-case
+                       (let ((input (make-string-input-stream text))
+                             (process nil)
+                             (input-transferred-p nil))
+                         (unwind-protect
+                             (multiple-value-bind (spawned transferred-p)
+                                 (nshell.infrastructure.acl::%spawn-external-command
+                                  program (rest command) environment
+                                  :input input :output nil :error nil
+                                  :process-group :new :input-source-owned-p t)
+                               (setf process spawned
+                                     input-transferred-p transferred-p)
+                               (nshell.infrastructure.acl:%wait-process-with-copiers
+                                process nil 2d0
+                                (lambda ()
+                                  (zerop
+                                   (nshell.infrastructure.acl:process-exit-status-code
+                                    process)))
+                                (lambda () nil)))
+                           (when process
+                             (nshell.infrastructure.acl:process-close process))
+                           (unless input-transferred-p
+                             (ignore-errors (close input)))))
+                     (error () nil))))))
 
 (defvar *clipboard-host-writer* #'%write-host-clipboard)
 

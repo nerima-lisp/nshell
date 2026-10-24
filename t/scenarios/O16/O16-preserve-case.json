@@ -39,6 +39,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L01 owns case-preserving reader behavior."
+    "reason": "WP-L03 owns pathname expansion; WP-X01 connects the new reader after P5."
   }
 }

@@ -512,6 +512,8 @@
    (:file "unit/test-parser-control-flow-sequence")
    (:file "unit/test-parser-properties")
    (:file "unit/test-sexp-reader-prototype")
+   (:file "unit/test-sexp-reader")
+   (:file "unit/test-sexp-scanner")
    (:file "unit/test-sexp-ast-contracts")
    (:file "unit/test-cps")
    (:file "unit/test-input-state")

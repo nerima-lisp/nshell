@@ -134,6 +134,14 @@ to write inline."
     (expect "QUI=" :to-equal (encoded 65 66))
     (expect "QUJD" :to-equal (encoded 65 66 67))))
  (it
+  "host-clipboard-feeds-input-to-native-process"
+  "Host clipboard commands receive their input through the process layer."
+  (skip-in-sandbox "Host clipboard integration requires an available cat command."
+    (let ((nshell.infrastructure.terminal::+host-clipboard-commands+
+            '(("cat"))))
+      (expect t :to-equal
+        (nshell.infrastructure.terminal::%write-host-clipboard "clipboard text")))))
+ (it
   "terminal-ansi-color-code-falls-back-for-unknown-colors"
   "Known highlight colors use their configured code and unknown colors use the default."
   (expect 1 :to-equal (nshell.infrastructure.terminal:ansi-color-code "FF0000"))

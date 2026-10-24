@@ -37,6 +37,7 @@ exported predicates below are goals callers may query directly.")
              #:rule-complete
              #:complete
              #:completion-context-for #:completion-context-command
+             #:completion-context-for-scan #:complete-in-context
              #:completion-context-argument-prefix
              #:completion-context-argument-words
              #:completion-context-command-position-p

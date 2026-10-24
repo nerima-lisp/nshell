@@ -62,14 +62,14 @@
 (defun %start-external-process-copiers (process stdout-buffer stderr-buffer)
   (let ((stdout-thread
           (nshell.infrastructure.acl:%start-stream-copier
-           (sb-ext:process-output process)
+           (nshell.infrastructure.acl:process-output process)
            stdout-buffer
            "nshell process stdout copier"))
         (stderr-thread nil))
     (when stderr-buffer
       (setf stderr-thread
             (nshell.infrastructure.acl:%start-stream-copier
-             (sb-ext:process-error process)
+             (nshell.infrastructure.acl:process-error process)
              stderr-buffer
              "nshell process stderr copier")))
     (remove nil (list stdout-thread stderr-thread))))
@@ -147,11 +147,12 @@ dropping Ctrl-Z for waits that cannot observe a stop."
                                 :input stdin
                                 :output :stream
                                 :error (if merge-stderr-p :output :stream)
-                                :preserve-fds preserve-fds))))
+                                :preserve-fds preserve-fds
+                                :process-group :new))))
                       (setf process-started t)
                       (%release-process-substitution-resources
                        process-substitution-resources)
-                      (let* ((pid (sb-ext:process-pid process))
+                      (let* ((pid (nshell.infrastructure.acl:process-pid process))
                              (pgid (and (integerp pid) (plusp pid) pid)))
                         ;; Isolate the child in its own process group and hand
                         ;; the terminal to it for the duration of the wait, so
@@ -162,9 +163,6 @@ dropping Ctrl-Z for waits that cannot observe a stop."
                         ;; wrapped in IGNORE-ERRORS, so this is a no-op when
                         ;; there is no controlling terminal (batch mode, a
                         ;; redirected pipeline stage, `-c`/script execution).
-                        (when pgid
-                          (nshell.infrastructure.acl:%assign-process-group
-                           pid pgid))
                         (flet ((finish-process ()
                                  (%finish-external-pipeline-process
                                   process stdout-buffer stderr-buffer

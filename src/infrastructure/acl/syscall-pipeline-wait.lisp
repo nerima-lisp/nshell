@@ -9,7 +9,7 @@
 (defun %wait-pipeline-processes (procs &optional (pipefail-p nil))
   (let ((statuses nil))
     (dolist (proc procs)
-      (%wait-sbcl-process proc)
+      (process-wait proc)
       (push (process-exit-status-code proc) statuses))
     (values (%pipeline-exit-status statuses pipefail-p)
             statuses)))
@@ -17,46 +17,46 @@
   (and (integerp pgid)
        (plusp pgid)
        (some (lambda (proc)
-               (and (sb-ext:process-alive-p proc)
+               (and (process-alive-p proc)
                     (eql pgid
                          (ignore-errors
-                           (sb-posix:getpgid (sb-ext:process-pid proc))))))
+                           (sb-posix:getpgid (process-pid proc))))))
              procs)))
 
 (defun %terminate-pipeline-processes (procs)
   (when procs
     (let* ((first-proc (car (last procs)))
-           (pgid (sb-ext:process-pid first-proc)))
+           (pgid (process-pid first-proc)))
       (labels
           ((terminate (signal)
              (if (%pipeline-process-group-owned-p procs pgid)
                  (ignore-errors (%send-process-group-signal pgid signal))
                  (dolist (proc procs)
-                   (when (sb-ext:process-alive-p proc)
+                   (when (process-alive-p proc)
                      (ignore-errors
-                       (sb-ext:process-kill proc signal)))))))
+                       (kill-process (process-pid proc) signal)))))))
         (terminate sb-unix:sigterm)
         (%wait-pipeline-exit-with-timeout procs 0.5)
         (terminate sb-unix:sigkill)
         (%wait-pipeline-exit-with-timeout procs 0.5)
         (dolist (proc procs)
-          (unless (sb-ext:process-alive-p proc)
-            (ignore-errors (%wait-sbcl-process proc))))))))
+          (unless (process-alive-p proc)
+            (ignore-errors (process-wait proc))))))))
 
 (defun %wait-pipeline-exit-with-timeout (procs timeout-seconds)
   (let ((deadline (+ (get-internal-real-time)
                      (round (* timeout-seconds internal-time-units-per-second)))))
-    (loop while (and (some #'sb-ext:process-alive-p procs)
+    (loop while (and (some #'process-alive-p procs)
                      (< (get-internal-real-time) deadline))
           do (sleep 0.01))
-    (not (some #'sb-ext:process-alive-p procs))))
+    (not (some #'process-alive-p procs))))
 
 (defun %wait-pipeline-with-output (procs timeout-seconds timeout-fn pipefail-p)
   (let ((copiers nil))
     (unwind-protect
          (progn
            (push (%start-process-output-copier (car procs) *standard-output*) copiers)
-           (push (%start-stream-copier (sb-ext:process-error (car procs))
+           (push (%start-stream-copier (process-error (car procs))
                                       *standard-output*
                                       "nshell pipeline error copier")
                  copiers)

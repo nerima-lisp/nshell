@@ -22,7 +22,7 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "set USER scenario-user; set LOGNAME scenario-user; set SCENARIO_COMPLETION_VALUE marker; complete -C \"echo $SCENARIO_COMPLETION_\"; complete -C \"cd ~scenario\""
+    "text": "set USER scenario-user; set LOGNAME scenario-user; set SCENARIO_COMPLETION_VALUE marker; complete -C 'echo $SCENARIO_COMPLETION_'; complete -C 'cd ~scenario'"
   },
   "expected": {
     "stdout": {

@@ -74,7 +74,7 @@
      (%seed-bounded-lines (%seed-home-file home-directory ".ssh/known_hosts") 1048576 4096)))
 
   (defun %seed-make-targets (directory)
-    (when (stringp directory)
+    (when (or (stringp directory) (pathnamep directory))
       (let ((base (uiop:ensure-directory-pathname directory)))
         (nshell.domain.completion::%makefile-target-names
          (loop for name in '("GNUmakefile" "Makefile" "makefile")

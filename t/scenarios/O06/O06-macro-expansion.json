@@ -34,6 +34,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L02 owns macro expansion."
+    "reason": "WP-L07 owns the shell-function registry required for command-head classification; CONTEXT-SHELL-FUNCTION-REGISTRY is unimplemented."
   }
 }

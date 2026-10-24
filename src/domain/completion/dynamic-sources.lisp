@@ -337,29 +337,38 @@ rename's arrow to its destination path."
           finally (return nil)))
 
   (defun %unwrap-completion-context (context)
-    (let ((wrapper (nshell.domain.completion:completion-context-command context)))
-      (when (member wrapper +completion-wrappers+ :test #'string=)
-        (let* ((words (nshell.domain.completion:completion-context-argument-words context))
-               (index (%wrapper-command-index wrapper words)))
-          (if (or (null index) (>= index (length words)))
-              (%make-completion-context :command ""
-                                        :command-position-p t
-                                        :redirection-target-p
-                                        (nshell.domain.completion:completion-context-redirection-target-p context))
-              (let* ((command (nth index words))
-                     (current-command-p
-                       (and (= index (1- (length words)))
-                            (not (string= ""
-                                          (nshell.domain.completion:completion-context-argument-prefix
-                                           context)))))
-                     (arguments (nthcdr (1+ index) words)))
-                (%make-completion-context
-                 :command command
-                 :argument-prefix
-                 (if current-command-p ""
-                     (nshell.domain.completion:completion-context-argument-prefix context))
-                 :argument-words (if current-command-p nil arguments)
-                 :command-position-p current-command-p
-                 :redirection-target-p
-                 (nshell.domain.completion:completion-context-redirection-target-p context)))))))))
+    (let ((wrapper
+            (nshell.domain.completion:completion-context-command context)))
+      (or
+       (when (member wrapper +completion-wrappers+ :test (function string=))
+         (let* ((words
+                  (nshell.domain.completion:completion-context-argument-words context))
+                (index (%wrapper-command-index wrapper words)))
+           (if (or (null index) (>= index (length words)))
+               (%make-completion-context
+                :command ""
+                :command-position-p t
+                :redirection-target-p
+                (nshell.domain.completion:completion-context-redirection-target-p context))
+               (let* ((command (nth index words))
+                      (current-command-p
+                        (and (= index (1- (length words)))
+                             (not (string=
+                                   ""
+                                   (nshell.domain.completion:completion-context-argument-prefix
+                                    context)))))
+                      (arguments (nthcdr (1+ index) words)))
+                 (%make-completion-context
+                  :command command
+                  :argument-prefix
+                  (if current-command-p
+                      ""
+                      (nshell.domain.completion:completion-context-argument-prefix
+                       context))
+                  :argument-words (if current-command-p nil arguments)
+                  :command-position-p current-command-p
+                  :redirection-target-p
+                  (nshell.domain.completion:completion-context-redirection-target-p
+                   context))))))
+       context))))
 

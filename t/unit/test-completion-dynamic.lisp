@@ -180,12 +180,12 @@ this agent's report for the NSHELL.DOMAIN.COMPLETION export it still needs."
                "@revoked |1|revoked-host ssh-ed25519 placeholder-key"))))
 
   (it "parses-make-targets-without-recipes-phony-patterns-or-assignments"
-    (expect '("build" "scenario-test") :to-equal
+    (expect '("build" "deploy" "scenario-test") :to-equal
             (nshell.domain.completion::%makefile-target-names
-             '(".PHONY: scenario-test"
+             (list ".PHONY: scenario-test"
                "scenario-test: dependency"
                "build deploy:"
-               "\t@echo ignored-target:"
+               (concatenate 'string (string #\Tab) "@echo ignored-target:")
                "%.o: %.c"
                "SOURCE := generated"
                "# ignored: comment"))))

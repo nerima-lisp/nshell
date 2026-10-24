@@ -341,7 +341,7 @@
                       "kubectl"
                       (nshell.domain.completion:complete kb "ku"))))
         (expect (null kubectl) :to-be-falsy)
-        (expect "control Kubernetes clusters" :to-equal (nshell.domain.completion:candidate-description kubectl)))
+        (expect "Kubernetes command line" :to-equal (nshell.domain.completion:candidate-description kubectl)))
       (expect (member "switch"
                   (completion-texts
                    (nshell.domain.completion:complete kb "git sw"))

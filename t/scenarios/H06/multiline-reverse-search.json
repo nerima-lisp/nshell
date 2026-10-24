@@ -8,7 +8,8 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "SCENARIO_H06-multiline-reverse-search> "
+      "NSHELL_PROMPT": "SCENARIO_H06-multiline-reverse-search> ",
+      "NSHELL_RIGHT_PROMPT": "H06_EDIT_READY"
     },
     "home": "home",
     "cwd": "work",
@@ -21,7 +22,7 @@
     "files": [
       {
         "path": "home/.local/share/nshell/history",
-        "content": "# nshell-history-v3 122\n(:text \"echo H06_OLD_START\necho H06_NEEDLE\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n# nshell-history-v3 122\n(:text \"echo H06_NEW_START\necho H06_NEEDLE\" :timestamp 2 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+        "content": "# nshell-history-v3 139\n(:text \"echo H06_OLD_START\necho H06_NEEDLE_OLD_CONTINUATION\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n# nshell-history-v3 139\n(:text \"echo H06_NEW_START\necho H06_NEEDLE_NEW_CONTINUATION\" :timestamp 2 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
       }
     ]
   },
@@ -36,7 +37,7 @@
     },
     {
       "type": "wait",
-      "contains": "echo H06_NEW_START",
+      "contains": "OLD_CONTINUATION",
       "timeout_seconds": 10
     },
     {
@@ -45,12 +46,17 @@
     },
     {
       "type": "wait",
-      "contains": "echo H06_OLD_START",
+      "contains": "OLD_CONTINUATION",
       "timeout_seconds": 10
     },
     {
       "type": "key",
       "key": "C-c"
+    },
+    {
+      "type": "wait",
+      "contains": "H06_EDIT_READY",
+      "timeout_seconds": 10
     },
     {
       "type": "key",
@@ -62,7 +68,7 @@
     },
     {
       "type": "keys",
-      "text": "echo H06_AFTER_$((1+1))"
+      "text": "echo H06_FIRST_$((1+1))"
     },
     {
       "type": "key",
@@ -70,12 +76,12 @@
     },
     {
       "type": "wait",
-      "contains": "H06_AFTER_2",
+      "contains": "H06_FIRST_2",
       "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "echo H06_AFTER_$((1+1))"
+      "text": "echo H06_SECOND_$((2+2))"
     },
     {
       "type": "key",
@@ -83,7 +89,7 @@
     },
     {
       "type": "wait",
-      "contains": "H06_AFTER_2",
+      "contains": "H06_SECOND_4",
       "timeout_seconds": 10
     },
     {
@@ -102,9 +108,14 @@
   "expected": {
     "stream": {
       "contains": [
+        "履歴: H06_NEEDLE  (2 件)",
         "echo H06_NEW_START",
         "echo H06_OLD_START",
-        "↳"
+        "▸ echo H06_OLD_START",
+        "NEW_CONTINUATION",
+        "OLD_CONTINUATION",
+        "H06_FIRST_2",
+        "H06_SECOND_4"
       ]
     },
     "exit_code": 0

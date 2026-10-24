@@ -510,9 +510,6 @@
                       (list "" nil 0 0))
                 (list "L04" #'nshell.application:call-with-command-failure-policy
                       (list nil #'identity))
-                (list "L07" #'nshell.application:context-shell-function-registry
-                      (list nil))
-                (list "L07" #'nshell.application:active-shell-function-scope nil)
                 (list "L08" #'nshell.application:execute-reader-ast-in-context
                       (list nil nil #'identity))))
         (signals-owner (first contract) (second contract) (third contract))))))

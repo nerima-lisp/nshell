@@ -36,6 +36,12 @@
                                      (global-table
                                       (make-hash-table :test #'equal))
                                      lookup-miss-hook)
+  (check-type global-table hash-table)
+  (unless
+      (or (eq (hash-table-test global-table) 'equal)
+          (eq (hash-table-test global-table) #'equal))
+    (error "Shell-function registry tables must use EQUAL."))
+  (check-type lookup-miss-hook (or null function))
   (%make-shell-function-registry :global-table
                                  global-table
                                  :lookup-miss-hook
@@ -43,41 +49,22 @@
 
 (define-value-struct shell-function-scope
                      ((table (make-hash-table :test #'equal) :type hash-table)
-                      (parent nil))
+                      (parent nil :type (or null shell-function-scope)))
                      :keyword-constructor
                      t)
 
 (defun make-shell-function-scope (&optional
                                   (table (make-hash-table :test #'equal))
                                   parent)
+  (check-type table hash-table)
+  (unless
+      (or (eq (hash-table-test table) 'equal)
+          (eq (hash-table-test table) #'equal))
+    (error "Shell-function scope tables must use EQUAL."))
+  (check-type parent (or null shell-function-scope))
   (%make-shell-function-scope :table table :parent parent))
 
-(defun register-shell-function (registry name binding &key escaped-p)
-  (declare (ignore registry name binding escaped-p))
-  (%signal-unimplemented-wp-interface "L07" 'register-shell-function))
-
-(defun peek-shell-function (registry name &key scope escaped-p)
-  (declare (ignore registry name scope escaped-p))
-  (%signal-unimplemented-wp-interface "L07" 'peek-shell-function))
-
-(defun lookup-shell-function (registry name &key scope escaped-p)
-  (declare (ignore registry name scope escaped-p))
-  (%signal-unimplemented-wp-interface "L07" 'lookup-shell-function))
-
-(defmacro define-shell-function (name lambda-list &body body)
-  (declare (ignore name lambda-list body))
-  (%signal-unimplemented-wp-interface "L07" (quote define-shell-function)))
-
-(defmacro with-shell-functions (bindings &body body)
-  (declare (ignore bindings body))
-  (%signal-unimplemented-wp-interface "L07" (quote with-shell-functions)))
-(declaim
- (ftype (function (t) shell-function-registry)
-        context-shell-function-registry)
- (ftype (function () (values (or null shell-function-scope)))
-        active-shell-function-scope))
-(defun context-shell-function-registry (context)
-  (declare (ignore context))
-  (%signal-unimplemented-wp-interface "L07" 'context-shell-function-registry))
-(defun active-shell-function-scope ()
-  (%signal-unimplemented-wp-interface "L07" 'active-shell-function-scope))
+(declaim (ftype (function (t) shell-function-registry)
+                context-shell-function-registry)
+         (ftype (function () (values (or null shell-function-scope)))
+                active-shell-function-scope))

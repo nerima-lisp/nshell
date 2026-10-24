@@ -11,7 +11,8 @@
             (:constructor %allocate-shell-context
                 (&key history config knowledge-base environment filesystem
                       job-monitor alias-table abbreviation-table function-table
-                      function-source-table execution-strategy pipefail-p running last-exit-code input-state
+                      function-source-table shell-function-registry
+                      execution-strategy pipefail-p running last-exit-code input-state
                       process-registry terminal-rows terminal-cols))
             (:copier nil))
   "Dependency container for one nshell session."
@@ -25,6 +26,8 @@
   (abbreviation-table nil :type hash-table)
   (function-table nil :type hash-table)
   (function-source-table nil :type hash-table)
+  (shell-function-registry (make-shell-function-registry)
+                           :type shell-function-registry)
   (execution-strategy nil :type (member :cps :os-pipes))
   (pipefail-p nil :type boolean)
   (running nil :type boolean)
@@ -49,6 +52,8 @@
                              (abbreviation-table (make-hash-table :test #'equal))
                              (function-table (make-hash-table :test #'equal))
                              (function-source-table (make-hash-table :test #'equal))
+                             (shell-function-registry
+                               (make-shell-function-registry))
                              (execution-strategy :cps)
                              (pipefail-p nil)
                              (running nil)
@@ -58,6 +63,7 @@
                              (terminal-rows 24)
                              (terminal-cols 80))
   "Build the application shell context through the composition boundary."
+  (check-type shell-function-registry shell-function-registry)
   (check-type execution-strategy (member :cps :os-pipes))
   (check-type pipefail-p boolean)
   (check-type running boolean)
@@ -75,6 +81,7 @@
    :abbreviation-table (%shell-context-hash-table abbreviation-table)
    :function-table (%shell-context-hash-table function-table)
    :function-source-table (%shell-context-hash-table function-source-table)
+   :shell-function-registry shell-function-registry
    :execution-strategy execution-strategy
    :pipefail-p pipefail-p
    :running running

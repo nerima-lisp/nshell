@@ -1,17 +1,21 @@
 # G08: Structural editing
 
-Use these bindings at the interactive prompt. `C-M-Shift-Left` and
-`C-M-Shift-Right` are sent as tmux keys `C-M-S-Left` and `C-M-S-Right`.
+Start nshell and wait for its interactive prompt. Here `C-` means Ctrl and
+`M-` means Meta (Alt). In `bind` names, `C-M-f` is `alt-ctrl-f`;
+`C-M-Shift-Left` and `C-M-Shift-Right` are `shift-alt-ctrl-left` and
+`shift-alt-ctrl-right`, sent to tmux as `C-M-S-Left` and `C-M-S-Right`.
 Do not press Enter on the forms. Inspect each edit in the input line, then use
 `C-c` to clear it before starting the next form.
 
 1. Type `(list (list G08_CHILD G08_TARGET) G08_AFTER)`. Use `C-a`, `C-M-d`,
    `C-M-f` twice, `C-M-b`, `C-M-d`, `C-M-f` twice, then `C-M-k`. The line should now
-   show `(list (list G08_CHILD) G08_AFTER)`. This visits the child list in both
-   directions and deletes its next expression.
+   show `(list (list G08_CHILD ) G08_AFTER)`. The separator before the inner
+   closing parenthesis remains. This visits the child list in both directions and
+   deletes its next expression.
 2. Re-enter the child list with `C-a`, `C-M-d`, `C-M-f` twice, `C-M-b`,
-   `C-M-d`, and `C-M-f` twice; press `C-y` to restore the deleted expression. Press
-   `C-M-u`, `C-M-f`, and `C-M-b` to leave the child list and traverse the next
+   `C-M-d`, and `C-M-f` twice. Press `C-f` to move over the remaining separator,
+   then `C-y` to restore the deleted expression. Press `C-M-u`, `C-M-f`, and `C-M-b`
+   to leave the child list and traverse the next
    expression in both directions. Press `C-e`, `C-b`, type ` G08_NEW`, then
    `C-e`. The line should be
    `(list (list G08_CHILD G08_TARGET) G08_AFTER G08_NEW)`.

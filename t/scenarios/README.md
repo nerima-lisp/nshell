@@ -81,8 +81,10 @@ PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `paste` sends bracketed paste, `key` sends a key name accepted by tmux
 `send-keys`, such as `Enter` or `C-d`, `resize` changes the pane dimensions,
 and `wait` waits for its `contains` string to appear in captured PTY output
-after the step starts. A `resize` step requires integer `columns` and `rows`
-values from 1 through 512. `wait_exit` waits for the shell to exit. The optional
+after the step starts. `wait_screen` polls the visible pane for its `contains`
+string, which can verify an interactive input-line redraw. Both wait steps reject
+markers that could come from input echo or the prompt. A `resize` step requires
+integer `columns` and `rows` values from 1 through 512. `wait_exit` waits for the shell to exit. The optional
 top-level `arguments` array passes exact additional arguments to the binary.
 For a single-session scenario, set a non-empty
 `environment.variables.NSHELL_PROMPT` marker that only the prompt displays.
@@ -172,7 +174,7 @@ each manifest `uc` array against the corresponding scenario's `uc` array,
 without regard to array order.
 
 Each scenario's top-level `timeout_seconds` defaults to 30 seconds for batch
-and 45 seconds for PTY. Each PTY `wait` and `wait_exit` step has its own
+and 45 seconds for PTY. Each PTY `wait`, `wait_screen`, and `wait_exit` step has its own
 `timeout_seconds`, defaulting to 10 seconds. A PTY step ends when its own
 timeout or the remaining scenario timeout is reached, whichever comes first.
 Scenario and step timeouts can be set up to 60 seconds. PTY stream capture is

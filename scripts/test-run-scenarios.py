@@ -201,6 +201,9 @@ class ScenarioRunnerTests(unittest.TestCase):
             def resize(self, columns: int, rows: int) -> None:
                 events.append(("resize", (columns, rows)))
 
+            def wait_for_screen(self, text: str, timeout: float) -> None:
+                events.append(("wait_screen", (text, timeout)))
+
             def wait_exit(self, timeout: float) -> int:
                 events.append(("wait_exit", timeout))
                 return 23
@@ -218,6 +221,7 @@ class ScenarioRunnerTests(unittest.TestCase):
             "resize-dispatch",
             [
                 {"type": "resize", "columns": 24, "rows": 20},
+                {"type": "wait_screen", "contains": "VISIBLE_SCREEN", "timeout_seconds": 6},
                 {"type": "wait_exit", "timeout_seconds": 8},
             ],
             {"exit_code": 23},
@@ -226,7 +230,11 @@ class ScenarioRunnerTests(unittest.TestCase):
                 patch.object(runner.shutil, "which", return_value="tmux"):
             _, _, exit_code, failures = runner._run_pty(scenario, Path("/unused/nshell"))
 
-        self.assertEqual(events, [("resize", (24, 20)), ("wait_exit", 8)])
+        self.assertEqual(events, [
+            ("resize", (24, 20)),
+            ("wait_screen", ("VISIBLE_SCREEN", 6)),
+            ("wait_exit", 8),
+        ])
         self.assertEqual(exit_code, 23)
         self.assertEqual(failures, [])
 
@@ -240,6 +248,21 @@ class ScenarioRunnerTests(unittest.TestCase):
         tmux.assert_called_once_with([
             "resize-window", "-t", "%7", "-x", "90", "-y", "31",
         ])
+
+    def test_tmux_wait_for_screen_polls_until_marker_is_visible(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.deadline = 10.0
+        session.scenario = {"id": "screen-wait"}
+
+        with (
+            patch.object(runner.time, "monotonic", side_effect=[1.0, 1.05]),
+            patch.object(session, "_capture", side_effect=["initial screen", "VISIBLE_SCREEN"]) as capture,
+            patch.object(session, "_read") as read,
+        ):
+            session.wait_for_screen("VISIBLE_SCREEN", 1)
+
+        self.assertEqual(capture.call_count, 2)
+        read.assert_called_once_with(0.1)
 
     def test_multiple_sessions_start_before_any_steps_run_and_share_a_root(self) -> None:
         events: list[tuple[str, str, Path | None]] = []
@@ -394,6 +417,33 @@ class ScenarioRunnerTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(runner.ScenarioError, "prompt redraw"):
             self._load_one(scenario, "redraw-only.json")
+
+    def test_prompt_redraw_cannot_satisfy_pty_screen_wait(self) -> None:
+        scenario = _pty_scenario(
+            "screen-redraw-only",
+            [
+                {"type": "key", "key": "C-l"},
+                {"type": "wait_screen", "contains": "SCREEN_PROMPT"},
+                {"type": "wait_exit"},
+            ],
+            {"exit_code": 0},
+            prompt="SCREEN_PROMPT> ",
+        )
+        with self.assertRaisesRegex(runner.ScenarioError, "prompt redraw"):
+            self._load_one(scenario, "screen-redraw-only.json")
+
+    def test_input_echo_cannot_satisfy_pty_screen_wait(self) -> None:
+        scenario = _pty_scenario(
+            "screen-input-echo-only",
+            [
+                {"type": "keys", "text": "SCREEN_INPUT_ONLY"},
+                {"type": "wait_screen", "contains": "SCREEN_INPUT_ONLY"},
+                {"type": "wait_exit"},
+            ],
+            {"exit_code": 0},
+        )
+        with self.assertRaisesRegex(runner.ScenarioError, "input echo"):
+            self._load_one(scenario, "screen-input-echo-only.json")
 
     def test_printable_key_echo_cannot_satisfy_pty_wait(self) -> None:
         scenario = _pty_scenario(

@@ -488,7 +488,7 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
             for step in steps:
                 _require(isinstance(step, dict), f"{scenario_id}: each pty step must be an object")
                 kind = step.get("type")
-                _require(kind in ("keys", "paste", "key", "wait", "wait_exit", "resize"),
+                _require(kind in ("keys", "paste", "key", "wait", "wait_screen", "wait_exit", "resize"),
                          f"{scenario_id}: unsupported pty step type {kind!r}")
                 if kind in ("keys", "paste"):
                     _require(isinstance(step.get("text"), str), f"{scenario_id}: {kind} requires text")
@@ -504,10 +504,10 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                     key = step.get("key")
                     _require(isinstance(key, str) and TMUX_KEY.fullmatch(key),
                              f"{scenario_id}: invalid tmux key {key!r}")
-                if kind == "wait":
+                if kind in ("wait", "wait_screen"):
                     _require(isinstance(step.get("contains"), str) and step["contains"],
-                             f"{scenario_id}: wait requires a non-empty contains string")
-                if kind in ("wait", "wait_exit"):
+                             f"{scenario_id}: {kind} requires a non-empty contains string")
+                if kind in ("wait", "wait_screen", "wait_exit"):
                     timeout = step.get("timeout_seconds", 10)
                     _require(
                         isinstance(timeout, (int, float))
@@ -628,10 +628,10 @@ def _validate_pty_match_sources(scenario: dict[str, Any]) -> None:
 
     inputs: list[str] = []
     for step in scenario["steps"]:
-        if step["type"] == "wait":
+        if step["type"] in ("wait", "wait_screen"):
             sources = [("input echo", text) for text in inputs]
             sources.append(("prompt redraw", prompt))
-            reject_overlap("wait", step["contains"], sources)
+            reject_overlap(step["type"], step["contains"], sources)
         if step["type"] in ("keys", "paste"):
             inputs.append(step["text"])
         elif step["type"] == "key":
@@ -1066,6 +1066,21 @@ class TmuxSession:
                 )
             self._read(remaining)
 
+    def wait_for_screen(self, text: str, timeout: float) -> None:
+        self._validate_timeout(timeout, self.scenario["id"])
+        deadline = min(self.deadline, time.monotonic() + timeout)
+        while True:
+            screen = self._capture()
+            if text in screen:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ScenarioError(
+                    f"{self.scenario['id']}: timed out waiting for {text!r} on screen; "
+                    f"current screen:\n{screen}"
+                )
+            self._read(min(remaining, 0.1))
+
     def wait_after_input(self, delay: float) -> None:
         if delay <= 0:
             return
@@ -1164,6 +1179,8 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                             session.resize(step["columns"], step["rows"])
                         elif kind == "wait":
                             session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
+                        elif kind == "wait_screen":
+                            session.wait_for_screen(step["contains"], step.get("timeout_seconds", 10))
                         elif kind == "wait_exit":
                             exit_codes.append(session.wait_exit(step.get("timeout_seconds", 10)))
                             session.drain()

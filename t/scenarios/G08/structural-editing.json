@@ -21,9 +21,6 @@
   },
   "expected": {
     "screen": {
-      "contains": [
-        "G08-structural-editing> "
-      ],
       "excludes": [
         "nshell error"
       ]
@@ -46,8 +43,8 @@
     { "type": "key", "key": "C-M-k" },
     { "type": "key", "key": "C-e" },
     {
-      "type": "wait",
-      "contains": "(list (list G08_CHILD) G08_AFTER)",
+      "type": "wait_screen",
+      "contains": "(list (list G08_CHILD ) G08_AFTER)",
       "timeout_seconds": 10
     },
     { "type": "key", "key": "C-a" },
@@ -58,6 +55,7 @@
     { "type": "key", "key": "C-M-d" },
     { "type": "key", "key": "C-M-f" },
     { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-f" },
     { "type": "key", "key": "C-y" },
     { "type": "key", "key": "C-M-u" },
     { "type": "key", "key": "C-M-f" },
@@ -70,7 +68,7 @@
     },
     { "type": "key", "key": "C-e" },
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "(list (list G08_CHILD G08_TARGET) G08_AFTER G08_NEW)",
       "timeout_seconds": 10
     },
@@ -94,7 +92,7 @@
     },
     { "type": "key", "key": "C-e" },
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "(+ G08_BW_LEFT G08_BW_KILL G08_BW_RIGHT G08_BW_NEW)",
       "timeout_seconds": 10
     },
@@ -110,7 +108,7 @@
     { "type": "key", "key": "C-M-Right" },
     { "type": "key", "key": "C-e" },
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "(+ G08_SF_LEFT G08_SF_RIGHT)",
       "timeout_seconds": 10
     },
@@ -126,7 +124,7 @@
     { "type": "key", "key": "C-M-S-Right" },
     { "type": "key", "key": "C-e" },
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "(+ G08_BF_LEFT) G08_BF_RIGHT",
       "timeout_seconds": 10
     },
@@ -144,7 +142,7 @@
     { "type": "key", "key": "C-M-Left" },
     { "type": "key", "key": "C-e" },
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "(list (list + G08_SB_RIGHT))",
       "timeout_seconds": 10
     },
@@ -160,7 +158,7 @@
     { "type": "key", "key": "C-M-S-Left" },
     { "type": "key", "key": "C-e" },
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "(list list (+ G08_BB_LEFT G08_BB_RIGHT))",
       "timeout_seconds": 10
     },

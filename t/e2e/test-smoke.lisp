@@ -485,13 +485,14 @@ The regular read timeout remains short for command-response assertions.")
           (expect chunks :to-be-null)))))
 
   (it "e2e-main-interactive-pty-job-control-lifecycle"
-    "The public entry point exposes background job state and fg completion under a real PTY."
+    "The public entry point exposes background completion and fg completion under a real PTY."
     #-(or darwin linux)
     (skip "PTY tests are only supported on Darwin and Linux")
     #+(or darwin linux)
     (skip-when-pty-unavailable "launches real nshell under a PTY"
       (let ((program (%absolute-sbcl-executable))
-            (pty nil))
+            (pty nil)
+            (captured-output ""))
         (unless program
           (skip "requires an absolute SBCL runtime path"))
         (unwind-protect
@@ -507,15 +508,51 @@ The regular read timeout remains short for command-response assertions.")
                  (%e2e-pty-write-line fd "/bin/sleep 3 &")
                  (%e2e-pty-write-line fd "jobs")
                  (let ((running-output (%e2e-pty-read-until fd "Running /bin/sleep 3")))
+                   (setf captured-output
+                         (concatenate (quote string) captured-output running-output))
                    (expect (search "Running" running-output) :to-be-truthy)
                    (expect (search "/bin/sleep 3" running-output) :to-be-truthy))
-                 (%e2e-pty-write-line fd "fg 1")
+                 (%e2e-pty-write-line fd "fg 1; printf E2E_FG_$((3+4))")
+                 (let ((foreground-output (%e2e-pty-read-until fd "E2E_FG_7")))
+                   (setf captured-output
+                         (concatenate (quote string) captured-output foreground-output))
+                   (expect (search "E2E_FG_7" foreground-output) :to-be-truthy))
+                 (%e2e-pty-write-line fd "/bin/sleep 2 &")
                  (%e2e-pty-write-line fd "jobs")
-                 (let ((done-output (%e2e-pty-read-until fd "Done /bin/sleep 3" :attempts 220)))
-                   (expect (search "Done" done-output) :to-be-truthy)
-                   (expect (search "/bin/sleep 3" done-output) :to-be-truthy))
+                 (let ((running-output (%e2e-pty-read-until fd "Running /bin/sleep 2")))
+                   (setf captured-output
+                         (concatenate (quote string) captured-output running-output))
+                   (expect (search "Running" running-output) :to-be-truthy)
+                   (expect (search "/bin/sleep 2" running-output) :to-be-truthy))
+                 (%e2e-pty-write-line fd "/bin/sleep 3; jobs; printf E2E_BACKGROUND_$((2+3))")
+                 (let ((marker-output (%e2e-pty-read-until fd "E2E_BACKGROUND_5")))
+                   (setf captured-output
+                         (concatenate (quote string) captured-output marker-output))
+                   (expect (search "E2E_BACKGROUND_5" marker-output) :to-be-truthy))
+                 (unless (search "Done /bin/sleep 2" captured-output)
+                   (setf captured-output
+                         (concatenate
+                          (quote string) captured-output
+                          (%e2e-pty-read-until fd "Done /bin/sleep 2"))))
+                 (%e2e-pty-write-line fd "jobs; printf E2E_JOBS_CAPTURED_$((3+4))")
+                 (let ((jobs-output (%e2e-pty-read-until fd "E2E_JOBS_CAPTURED_7")))
+                   (setf captured-output
+                         (concatenate (quote string) captured-output jobs-output))
+                   (expect (not (search "Done /bin/sleep 2" jobs-output))
+                           :to-be-truthy)
+                   (expect (not (search "Running /bin/sleep 2" jobs-output))
+                           :to-be-truthy))
+                 (let ((done-position (search "Done /bin/sleep 2" captured-output)))
+                   (expect done-position :to-be-truthy)
+                   (expect (null (search "Done /bin/sleep 2" captured-output
+                                         :start2 (1+ done-position)))
+                           :to-be-truthy)
+                   (expect (not (search "Running /bin/sleep 2" captured-output
+                                         :start2 done-position))
+                           :to-be-truthy))
                  (%e2e-pty-write-line fd "exit")
-                 (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
+                 (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!"))
+                         :to-be-truthy)
                  (%assert-pty-child-exit pty)))
           (%terminate-pty-process pty)))))
 

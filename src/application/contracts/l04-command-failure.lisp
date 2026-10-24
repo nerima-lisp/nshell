@@ -11,3 +11,7 @@
 (defvar *command-test-position-p* nil)
 
 (defvar *errexit-p* nil)
+(declaim (ftype (function (t function) (values t integer)) call-with-command-failure-policy))
+(defun call-with-command-failure-policy (command-ast thunk)
+  (declare (ignore command-ast thunk))
+  (%signal-unimplemented-wp-interface "L04" 'call-with-command-failure-policy))

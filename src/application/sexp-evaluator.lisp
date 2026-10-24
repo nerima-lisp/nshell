@@ -1246,7 +1246,7 @@
     (context form reader-result lexical-environment position
      &optional (supplied-classification nil classification-supplied-p))
   (let* ((raw-operator (and (consp form) (first form)))
-         (operator (and (symbolp raw-operator)
+         (operator (and (consp form) (symbolp raw-operator)
                         (%resolve-form-operator context form reader-result)))
          (classification
            (if classification-supplied-p

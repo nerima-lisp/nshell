@@ -1,0 +1,234 @@
+{
+  "id": "J13-completion-pager",
+  "uc": [
+    "J13"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J13-completion-pager> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 10
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "complete -c echo -a \"J13_ITEM_001 J13_ITEM_002 J13_ITEM_003 J13_ITEM_004 J13_ITEM_005 J13_ITEM_006 J13_ITEM_007 J13_ITEM_008 J13_ITEM_009 J13_ITEM_010 J13_ITEM_011 J13_ITEM_012 J13_ITEM_013 J13_ITEM_014 J13_ITEM_015 J13_ITEM_016 J13_ITEM_017 J13_ITEM_018 J13_ITEM_019 J13_ITEM_020 J13_ITEM_021 J13_ITEM_022 J13_ITEM_023 J13_ITEM_024 J13_ITEM_025 J13_ITEM_026 J13_ITEM_027 J13_ITEM_028 J13_ITEM_029 J13_ITEM_030 J13_ITEM_031 J13_ITEM_032 J13_ITEM_033 J13_ITEM_034 J13_ITEM_035 J13_ITEM_036 J13_ITEM_037 J13_ITEM_038 J13_ITEM_039 J13_ITEM_040 J13_ITEM_041 J13_ITEM_042 J13_ITEM_043 J13_ITEM_044 J13_ITEM_045 J13_ITEM_046 J13_ITEM_047 J13_ITEM_048 J13_ITEM_049 J13_ITEM_050 J13_ITEM_051 J13_ITEM_052 J13_ITEM_053 J13_ITEM_054 J13_ITEM_055 J13_ITEM_056 J13_ITEM_057 J13_ITEM_058 J13_ITEM_059 J13_ITEM_060 J13_ITEM_061 J13_ITEM_062 J13_ITEM_063 J13_ITEM_064 J13_ITEM_065 J13_ITEM_066 J13_ITEM_067 J13_ITEM_068 J13_ITEM_069 J13_ITEM_070 J13_ITEM_071 J13_ITEM_072 J13_ITEM_073 J13_ITEM_074 J13_ITEM_075 J13_ITEM_076 J13_ITEM_077 J13_ITEM_078 J13_ITEM_079 J13_ITEM_080 J13_ITEM_081 J13_ITEM_082 J13_ITEM_083 J13_ITEM_084 J13_ITEM_085 J13_ITEM_086 J13_ITEM_087 J13_ITEM_088 J13_ITEM_089 J13_ITEM_090 J13_ITEM_091 J13_ITEM_092 J13_ITEM_093 J13_ITEM_094 J13_ITEM_095 J13_ITEM_096 J13_ITEM_097 J13_ITEM_098 J13_ITEM_099 J13_ITEM_100 J13_SEARCH_ALPHA J13_SEARCH_BETA\"\n"
+      }
+    ]
+  },
+  "sessions": [
+    {
+      "id": "live-viewport",
+      "prompt": "J13_VIEWPORT> ",
+      "steps": [
+        {
+          "type": "keys",
+          "text": "echo "
+        },
+        {
+          "type": "key",
+          "key": "Tab"
+        },
+        {
+          "type": "wait",
+          "contains": "arrows move",
+          "timeout_seconds": 10
+        }
+      ]
+    },
+    {
+      "id": "search-selection-resize",
+      "prompt": "J13_SEARCH> ",
+      "steps": [
+        {
+          "type": "keys",
+          "text": "echo "
+        },
+        {
+          "type": "key",
+          "key": "Tab"
+        },
+        {
+          "type": "keys",
+          "text": "J"
+        },
+        {
+          "type": "wait",
+          "contains": "Filter: J",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "13_SEARCH_"
+        },
+        {
+          "type": "wait",
+          "contains": "Filter: J13_SEARCH_",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "key",
+          "key": "Down"
+        },
+        {
+          "type": "wait",
+          "contains": "2/2",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "resize",
+          "columns": 80,
+          "rows": 14
+        },
+        {
+          "type": "wait",
+          "contains": "Filter: J13_SEARCH_",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "J13_SEARCH_BETA",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "exit"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait_exit",
+          "timeout_seconds": 10
+        }
+      ]
+    },
+    {
+      "id": "escape-restores-input",
+      "prompt": "J13_ESCAPE> ",
+      "steps": [
+        {
+          "type": "keys",
+          "text": "echo J13_ESC_ORIGINAL "
+        },
+        {
+          "type": "key",
+          "key": "Tab"
+        },
+        {
+          "type": "key",
+          "key": "Escape"
+        },
+        {
+          "type": "keys",
+          "text": "J13_ESC_SUFFIX"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "J13_ESC_ORIGINAL J13_ESC_SUFFIX",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "exit"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait_exit",
+          "timeout_seconds": 10
+        }
+      ]
+    },
+    {
+      "id": "ctrl-c-restores-input",
+      "prompt": "J13_CTRL_C> ",
+      "steps": [
+        {
+          "type": "keys",
+          "text": "echo J13_CTRL_C_ORIGINAL "
+        },
+        {
+          "type": "key",
+          "key": "Tab"
+        },
+        {
+          "type": "key",
+          "key": "C-c"
+        },
+        {
+          "type": "keys",
+          "text": "J13_CTRL_C_SUFFIX"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait",
+          "contains": "J13_CTRL_C_ORIGINAL J13_CTRL_C_SUFFIX",
+          "timeout_seconds": 10
+        },
+        {
+          "type": "keys",
+          "text": "exit"
+        },
+        {
+          "type": "key",
+          "key": "Enter"
+        },
+        {
+          "type": "wait_exit",
+          "timeout_seconds": 10
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "arrows move",
+        "J13_SEARCH_BETA",
+        "J13_ESC_ORIGINAL J13_ESC_SUFFIX",
+        "J13_CTRL_C_ORIGINAL J13_CTRL_C_SUFFIX"
+      ]
+    },
+    "screen": {
+      "contains": [
+        "J13_VIEWPORT> echo",
+        "arrows move",
+        "J13_ITEM_001"
+      ],
+      "excludes": [
+        "J13_ITEM_050"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true
+}

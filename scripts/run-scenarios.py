@@ -573,10 +573,18 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         _require(isinstance(expected["exit_code"], int) and not isinstance(expected["exit_code"], bool),
                  f"{scenario_id}: expected.exit_code must be an integer")
         if scenario["mode"] == "pty":
+            sessions = _pty_sessions(scenario)
             _require(
-                all(session["steps"][-1]["type"] == "wait_exit" for session in _pty_sessions(scenario)),
-                f"{scenario_id}: PTY exit-code checks require a final wait_exit step",
+                any(session["steps"][-1]["type"] == "wait_exit" for session in sessions),
+                f"{scenario_id}: PTY exit-code checks require at least one final wait_exit step",
             )
+            if any(session["steps"][-1]["type"] == "wait" for session in sessions):
+                screen_expectation = expected.get("screen")
+                _require(
+                    isinstance(screen_expectation, dict)
+                    and any(screen_expectation.get(key) for key in ("contains", "excludes")),
+                    f"{scenario_id}: live PTY sessions require an expected.screen assertion",
+                )
 def _pty_sessions(scenario: dict[str, Any]) -> list[dict[str, Any]]:
     sessions = scenario.get("sessions")
     if sessions is None:

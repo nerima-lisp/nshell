@@ -197,9 +197,9 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | P12 | manual | 0 | 1 | `t/scenarios/P12/manual.md` |
 | Q01 | direct | 1 | 0 | `t/scenarios/Q01/Q01-no-debug-dump.json` |
 | Q02 | direct | 1 | 0 | `t/scenarios/Q02/Q02-bounded-recursion-recovery.json` |
-| Q03 | manual | 0 | 1 | `t/scenarios/Q03/manual.md` |
+| Q03 | manual | 0 | 1 | `t/scenarios/Q03/manual.md` (no REPL Lisp evaluator; status and fallback) |
 | Q04 | direct | 1 | 0 | `t/scenarios/Q04/Q04-cancel-completion.json` |
-| Q05 | manual | 0 | 1 | `t/scenarios/Q05/manual.md` |
+| Q05 | manual | 0 | 1 | `t/scenarios/Q05/manual.md` (slow NFS procedure and pass criteria) |
 | Q06 | approximation | 1 | 0 | `t/scenarios/Q06/approx-Q06-read-only-home-session.json` |
 | Q07 | manual | 0 | 1 | `t/scenarios/Q07/manual.md` |
 | Q08 | manual | 0 | 1 | `t/scenarios/Q08/manual.md` |

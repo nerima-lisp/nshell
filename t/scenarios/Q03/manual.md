@@ -1,13 +1,11 @@
 # Q03: Continue after heap exhaustion
 
-## Procedure
+## Available coverage
 
-1. Use a disposable Linux VM with a 2 GiB memory limit and a fresh home directory. Do not run this probe on a host session that contains valuable work.
-2. From the candidate source tree, start nshell with `nix develop -c sbcl --dynamic-space-size 512 --eval '(asdf:load-system "nshell")' --eval '(nshell:main)'`. The option must be on the SBCL command line before the system is loaded, not passed as an nshell argument.
-3. At the interactive S-expression prompt, enter `(echo ,(make-array 1073741824 :element-type '(unsigned-byte 8)))`. The `,(...)` form evaluates a native Lisp expression; this allocation is 1 GiB, above the 512 MiB dynamic-space limit and below the VM limit.
-4. After the allocation error, enter `echo Q03_CONTINUED` at the prompt.
-5. Capture the terminal output and process exit status. Record the image revision and the VM and SBCL memory limits.
+The interactive shell does not expose a Common Lisp form evaluator. `nshell -c` and the `eval` builtin parse nshell command text, while startup configuration files contain nshell commands. The S-expression reader is a parser prototype that is not connected to the REPL.
 
-## Pass condition
+The existing `storage-conditions-are-reported-and-the-repl-recovers` test injects a synthetic `storage-condition`. It checks the diagnostic, the absence of `Backtrace` and `#S(`, and execution of a later command. It does not assert the diagnostic line count or trigger a real SBCL heap exhaustion.
 
-The allocation failure is reported as one concise error without a debugger or structure dump. The shell remains alive and prints `Q03_CONTINUED`.
+## Manual status
+
+A PTY scenario that evaluates `(make-array (expt 10 12))` cannot use a current nshell entry point. Keep the real allocation check open until the shell provides a user-facing Lisp evaluation path.

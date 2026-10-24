@@ -140,17 +140,19 @@
   state)
 
 (defun %record-token-reduction-separator (state separator token)
-  (if (%token-reduction-state-current-cmd state)
-      (progn
-        (setf state (%record-missing-redirect-target state))
-        (setf state (%token-reduction-state-mark-pending-separator state separator token))
-        (%flush-token-reduction-command state))
-      (unless (eq (token-type token) :newline)
-        (%token-reduction-state-record-diagnostic
-         state
-         token
-         (%token-reduction-missing-command-policy
-          (%separator-text separator))))))
+  (cond
+    ((%token-reduction-state-current-cmd state)
+     (setf state (%record-missing-redirect-target state))
+     (setf state (%token-reduction-state-mark-pending-separator state separator token))
+     (%flush-token-reduction-command state))
+    ((eq (token-type token) :newline)
+     state)
+    (t
+     (%token-reduction-state-record-diagnostic
+      state
+      token
+      (%token-reduction-missing-command-policy
+       (%separator-text separator))))))
 
 (defun %token-reduction-word (state tok)
   (if (%token-reduction-state-current-cmd state)

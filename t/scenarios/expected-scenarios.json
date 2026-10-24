@@ -625,6 +625,13 @@
       "path": "G07/nested-continuation-indentation-and-single-execution.json"
     },
     {
+      "id": "WP-E03-blank-continuation-keeps-shell-alive",
+      "uc": [
+        "G07"
+      ],
+      "path": "G07/blank-continuation-line-keeps-shell-alive.json"
+    },
+    {
       "id": "G09-approx-balanced-parentheses-before-enter",
       "uc": [
         "G09"

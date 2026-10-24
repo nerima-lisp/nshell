@@ -717,4 +717,11 @@
       (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
       (expect (nshell.domain.parsing:command-node-p ast) :to-be-truthy)
       (expect '("hello world") :to-equal (nshell.domain.parsing:command-node-arg-values ast))))
+  (it "parse-blank-lines-after-command"
+    "A blank newline after a command preserves reducer state."
+    (with-complete-command-line (result ast (format nil "echo X~%~%"))
+      (expect (nshell.domain.parsing:parse-errors result) :to-be-null)
+      (expect (nshell.domain.parsing:command-node-command ast) :to-equal "echo")
+      (expect (list "X") :to-equal
+              (nshell.domain.parsing:command-node-arg-values ast))))
 )

@@ -230,6 +230,7 @@
           :pathname "../data/application/builtin-spec-data")
    (:file "application/builtin-spec")
    (:file "application/builtin-runtime")
+   (:file "application/sexp-evaluator")
    (:file "application/builtin-type-helpers")
    (:file "application/builtin-macros")
    (:file "application/builtin-agent")

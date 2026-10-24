@@ -23,15 +23,3 @@
    :binding binding
    :arguments arguments
    :redirect-target-values redirect-target-values))
-
-(defun classify-sexp-head (context head-source)
-  (declare (ignore context head-source))
-  (%signal-unimplemented-wp-interface "L02" 'classify-sexp-head))
-
-(defun evaluate-reader-result-in-context (context reader-result)
-  (declare (ignore context reader-result))
-  (%signal-unimplemented-wp-interface "L02" 'evaluate-reader-result-in-context))
-
-(defun evaluate-command-stage-in-context (context command-node)
-  (declare (ignore context command-node))
-  (%signal-unimplemented-wp-interface "L02" 'evaluate-command-stage-in-context))

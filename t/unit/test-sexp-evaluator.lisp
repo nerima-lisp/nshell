@@ -41,8 +41,7 @@
       (nshell.domain.parsing:make-command-node
        name arguments (gethash form form-span-map))))
 
-  (defun %sexp-evaluator-test-key (name escaped-p)
-    (if escaped-p (list :escaped name) (string-upcase name))))
+  (progn (defun %sexp-evaluator-test-key (name escaped-p) (if escaped-p (list :escaped name) (string-upcase name))) (defun %evaluate-sexp-evaluator-test-source (context source) (nshell.application:evaluate-reader-result-in-context context (%make-sexp-evaluator-test-reader-result source)))))
 (progn
   (defvar *sexp-evaluator-test-calls* nil)
   (defvar *sexp-evaluator-test-failure-policy-calls* 0)
@@ -182,6 +181,7 @@
                 ("(let ((value 3)) (let* ((value 10) (sequential value)) (+ value sequential)))"
                  20)
                 ("(let ((value 1)) (setq value (+ value 4)) value)" 5)
+                ("(let ((value 3)) (list (let ((value 10)) (setq value 12) value) value))" (12 3))
                 ("(if (> 3 2) 6 7)" 6)
                 ("(when t 8)" 8)
                 ("(unless nil 9)" 9)
@@ -194,12 +194,11 @@
                  17)
                 ("(handler-case (values 2 3) (:no-error (left right) (+ left right)))"
                  5)
-                ("(handler-case (fail) (nshell.application:command-failed () 18))"
-                 18)))
+                ("(handler-case (fail) (nshell.application:command-failed () 18))" 18 7)))
            (multiple-value-bind (value status)
                (%evaluate-sexp-evaluator-test-source context (first case))
              (expect (second case) :to-equal value)
-             (expect 0 :to-equal status))))))))
+             (expect (or (third case) 0) :to-equal status))))))))
 (describe "sexp-evaluator-positions"
   (it "propagates-test-and-value-positions"
     (let ((context (make-test-shell-context)))
@@ -453,4 +452,39 @@
                 (expect 2 :to-equal (length *sexp-evaluator-test-calls*))
                 (expect 2 :to-equal
                         *sexp-evaluator-test-failure-policy-calls*))))
-        (when (macro-function macro-name) (fmakunbound macro-name))))))
+        (when (macro-function macro-name) (fmakunbound macro-name)))))
+  (it "limits-nested-expansion-without-limiting-independent-calls"
+    (let* ((context (make-test-shell-context))
+           (recursive-name
+             (intern "L02-EVALUATOR-RECURSIVE" (find-package "NSHELL.USER")))
+           (constant-name
+             (intern "L02-EVALUATOR-CONSTANT" (find-package "NSHELL.USER")))
+           (expanded-source
+             (format nil "(progn~{ (~a)~})"
+                     (make-list 129 :initial-element
+                                "L02-EVALUATOR-CONSTANT"))))
+      (unwind-protect
+           (progn
+             (setf (macro-function recursive-name)
+                   (lambda (form environment)
+                     (declare (ignore environment))
+                     form))
+             (setf (macro-function constant-name)
+                   (lambda (form environment)
+                     (declare (ignore form environment))
+                     1))
+             (%call-with-sexp-evaluator-test-boundaries
+              context
+              (lambda ()
+                (expect
+                 (lambda ()
+                   (%evaluate-sexp-evaluator-test-source
+                    context "(L02-EVALUATOR-RECURSIVE)"))
+                 :to-throw 'nshell.application:command-macro-syntax-error)
+                (multiple-value-bind (value status)
+                    (%evaluate-sexp-evaluator-test-source
+                     context expanded-source)
+                  (expect 1 :to-equal value)
+                  (expect 0 :to-equal status)))))
+        (when (macro-function recursive-name) (fmakunbound recursive-name))
+        (when (macro-function constant-name) (fmakunbound constant-name))))))

@@ -385,6 +385,7 @@
 	   (:file "presentation/repl-assistant-progress")
 	   (:file "presentation/repl")
 	   (:file "main")
+    (:file "presentation/input-state-structural-editing")
     (:file "domain/completion/generated-external-command-kb-data"
        :pathname "../data/domain/completion/generated-external-command-kb-data")
 )

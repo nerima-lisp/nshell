@@ -136,3 +136,36 @@
   "Hash table from key-event type to action name. Seeded from
 +DEFAULT-INPUT-DISPATCH-BINDINGS+ and mutated by the BIND builtin; a type
 absent from this table (including one erased by BIND -e) dispatches :NONE.")
+
+(progn
+  (dolist (row '((:forward-sexp :forward-sexp nil)
+                 (:backward-sexp :backward-sexp nil)
+                 (:up-list :up-list nil)
+                 (:down-list :down-list nil)
+                 (:delete-forward-sexp :delete-forward-sexp nil)
+                 (:delete-backward-sexp :delete-backward-sexp nil)
+                 (:slurp-forward :slurp-forward nil)
+                 (:slurp-backward :slurp-backward nil)
+                 (:barf-forward :barf-forward nil)
+                 (:barf-backward :barf-backward nil)))
+    (unless (assoc (first row) +input-dispatch-action-table+)
+      (setf +input-dispatch-action-table+
+            (append +input-dispatch-action-table+ (list row)))))
+  (dolist (binding '((:alt-ctrl-f . :forward-sexp)
+                     (:alt-ctrl-b . :backward-sexp)
+                     (:alt-ctrl-u . :up-list)
+                     (:alt-ctrl-d . :down-list)
+                     (:alt-ctrl-k . :delete-forward-sexp)
+                     (:alt-ctrl-delete . :delete-backward-sexp)
+                     (:alt-ctrl-right . :slurp-forward)
+                     (:alt-ctrl-left . :slurp-backward)
+                     (:shift-alt-ctrl-right . :barf-forward)
+                     (:shift-alt-ctrl-left . :barf-backward)))
+    (let ((entry (assoc (car binding) +default-input-dispatch-bindings+)))
+      (if entry
+          (setf (cdr entry) (cdr binding))
+          (setf +default-input-dispatch-bindings+
+                (append +default-input-dispatch-bindings+ (list binding))))
+      (setf (gethash (car binding) *input-dispatch-bindings*)
+            (cdr binding)))))
+

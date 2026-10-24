@@ -1,30 +1,35 @@
 (in-package #:nshell.presentation)
 (progn
   (defun %repl-reader-context-for-source (source)
-  (if (not (%repl-new-reader-route-enabled-p))
-      :bare-line
-      (let ((first-nonwhite
-              (position-if-not
-               (lambda (character)
-                 (find character (list #\Space #\Tab #\Newline #\Return)))
-               source)))
-        (if (and first-nonwhite
-                 (char= (char source first-nonwhite) (code-char 40)))
-            :sexp
-            :bare-line))))
-  (defun %repl-input-scan-result (source cursor reader-context)
-    (let ((context
-            (and (eq reader-context :sexp)
-                 (%make-repl-shell-context))))
+    (if (not (%repl-new-reader-route-enabled-p))
+        :bare-line
+        (let ((first-nonwhite
+                (position-if-not
+                 (lambda (character)
+                   (find character (list #\Space #\Tab #\Newline #\Return)))
+                 source)))
+          (if (and first-nonwhite
+                   (char= (char source first-nonwhite) (code-char 40)))
+              :sexp
+              :bare-line))))
+  (defun %repl-input-scan-result (source cursor reader-context
+                                     &key head-classifier)
+    (let* ((context
+             (and (null head-classifier)
+                  (eq reader-context :sexp)
+                  (%make-repl-shell-context)))
+           (classifier
+             (or head-classifier
+                 (and context
+                      (lambda (head-source)
+                        (nshell.application:classify-sexp-head
+                         context head-source))))))
       (nshell.domain.parsing:scan-input
        source
        :cursor cursor
        :reader-context reader-context
        :indent-width +editor-indent-width+
-       :head-classifier
-       (and context
-            (lambda (head-source)
-              (nshell.application:classify-sexp-head context head-source))))))
+       :head-classifier classifier)))
   (defun %evaluate-repl-reader-submission (source reader-context)
   (let ((context (%make-repl-shell-context))
         (reader-results

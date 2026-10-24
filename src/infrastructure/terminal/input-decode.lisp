@@ -53,9 +53,14 @@ Returns NIL when BODY/FINAL is not an SGR mouse report."
         base)))
 
 (defun decode-csi-tilde (body)
-  (let* ((code (parse-integer-or-nil (first (split-string-on-char body #\;))))
+  (let* ((parts (split-string-on-char body #\;))
+         (code (parse-integer-or-nil (first parts)))
+         (modifier (csi-modifier body))
          (event (key-event-from-spec code +csi-tilde-specs+)))
-    (or event
+    (or (and (eql code 3)
+             (eql modifier 7)
+             (make-key-event (modified-arrow-type :delete modifier)))
+        event
         (make-key-event :unknown nil code))))
 
 (defun decode-csi-final (body final)
@@ -91,7 +96,13 @@ Returns NIL when BODY/FINAL is not an SGR mouse report."
 
 (defun decode-meta-key (ch)
   "Decode ESC-prefixed Meta key chords emitted by common terminals."
-  (or (key-event-from-spec (char-code ch) +meta-code-specs+)
+  (or (case (char-code ch)
+        (2 (make-key-event :alt-ctrl-b))
+        (4 (make-key-event :alt-ctrl-d))
+        (6 (make-key-event :alt-ctrl-f))
+        (11 (make-key-event :alt-ctrl-k))
+        (21 (make-key-event :alt-ctrl-u)))
+      (key-event-from-spec (char-code ch) +meta-code-specs+)
       (key-event-from-spec ch +meta-char-specs+ :test #'char-equal)
       (make-key-event :escape)))
 

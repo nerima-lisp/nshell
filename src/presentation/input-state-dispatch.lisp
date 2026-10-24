@@ -246,6 +246,16 @@ presentation package."
                            state
                            (input-dispatch-action-value action))))
       (:redraw (from (%redraw-input-state state)))
+      (:forward-sexp (from (%reduce-sexp-structural-edit state :forward-sexp)))
+      (:backward-sexp (from (%reduce-sexp-structural-edit state :backward-sexp)))
+      (:up-list (from (%reduce-sexp-structural-edit state :up-list)))
+      (:down-list (from (%reduce-sexp-structural-edit state :down-list)))
+      (:delete-forward-sexp (from (%reduce-sexp-structural-edit state :delete-forward-sexp)))
+      (:delete-backward-sexp (from (%reduce-sexp-structural-edit state :delete-backward-sexp)))
+      (:slurp-forward (from (%reduce-sexp-structural-edit state :slurp-forward)))
+      (:slurp-backward (from (%reduce-sexp-structural-edit state :slurp-backward)))
+      (:barf-forward (from (%reduce-sexp-structural-edit state :barf-forward)))
+      (:barf-backward (from (%reduce-sexp-structural-edit state :barf-backward)))
       (otherwise (input-dispatch-output-transition state :none)))))
 
 (defun reduce-insert-input-state-action (state action)

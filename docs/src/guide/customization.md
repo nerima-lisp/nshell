@@ -140,7 +140,8 @@ run of spaces is dropped too, so `{path} {git} {status}` never leaves a
 double space outside a repository.
 
 nshell has two prompts: the left one, and a right prompt that floats at the
-far edge of the terminal. The default formats are:
+far edge of the terminal. The default left format is shown first, followed by
+the right format:
 
 ```
 {path} {git} {status} 
@@ -157,17 +158,14 @@ matters, as it does for the trailing space the default format ends with:
 $ prompt left '{user}@{host} {path}{git} $ '
 ```
 
-`prompt preview FORMAT` renders `FORMAT` once against the current state,
-without installing it, so you can check a format before committing to it.
-`prompt reset` removes both session overrides. The corresponding environment
-variables then apply, or the built-in defaults if those variables are empty or
-unset. An invalid format exits with status 2
-and names the unknown segment; `prompt` with anything else prints a usage
-line and exits 1.
-
 Setting `NSHELL_PROMPT` and `NSHELL_RIGHT_PROMPT` in the environment supplies
 the corresponding format at session start; a `prompt left`/`prompt right`
 line in the startup file overrides the variable, since the file runs later.
+`prompt preview FORMAT` renders `FORMAT` once against the current state,
+without installing it. `prompt reset` removes both session overrides, then
+uses those environment variables or the built-in defaults when they are empty
+or unset. An invalid format exits with status 2 and names the unknown segment;
+`prompt` with anything else prints a usage line and exits 1.
 
 ## Customizing key bindings
 
@@ -216,20 +214,47 @@ is spelled the way it is typed, in lowercase and hyphen-separated (`ctrl-r`,
 `alt-e`, `right`, `shift-tab`). Put `bind` lines in the startup file to apply
 custom bindings at interactive startup, the same way `theme` lines do.
 
+### Structural editing
+
+These default bindings move through S-expressions on the current input line,
+delete an expression at the cursor, or move a list boundary around an adjacent
+expression. They edit the input buffer without evaluating it. `up-list` moves
+the cursor out of the surrounding list, and `down-list` enters the next child
+list. Slurp pulls the neighboring expression into the list; barf pushes the
+first or last expression out. Deletion puts the removed text in the kill ring,
+which `Ctrl-Y` yanks back. Structural actions leave an incomplete or invalid
+input line unchanged.
+
+| Key | Action |
+| --- | --- |
+| `alt-ctrl-f` | `forward-sexp` |
+| `alt-ctrl-b` | `backward-sexp` |
+| `alt-ctrl-u` | `up-list` |
+| `alt-ctrl-d` | `down-list` |
+| `alt-ctrl-k` | `delete-forward-sexp` |
+| `alt-ctrl-delete` | `delete-backward-sexp` |
+| `alt-ctrl-right` | `slurp-forward` |
+| `alt-ctrl-left` | `slurp-backward` |
+| `shift-alt-ctrl-right` | `barf-forward` |
+| `shift-alt-ctrl-left` | `barf-backward` |
+
+For example, rebind forward motion with `bind alt-ctrl-f backward-sexp` or
+remove its default with `bind -e alt-ctrl-f`.
+
 ### Capturing the previous command's output
 
 After a command has finished, press `Ctrl-X` to request a captured rerun. nshell
-shows the complete command and its existing AI safety classification; press
-`Ctrl-X` again only when that displayed command and classification are
-acceptable. Reassigned bindings are shown in the confirmation instead. Long
-lines wrap without omitting text. If the complete confirmation cannot fit in
-the terminal, or contains non-displayable control characters, nshell refuses
-the rerun. Any other key or a terminal resize cancels the pending confirmation.
-Commands classified as blocked, and terminal-dependent commands such as `vim`, `less`, and `ssh`,
-are rejected because the capture path does not provide a live terminal.
+shows the complete command, its safety classification (`safe`, `confirm`, or
+`block`), and the reason. `block` commands and terminal-dependent commands such
+as `vim`, `less`, and `ssh` are rejected; `safe` and `confirm` commands require
+a second `Ctrl-X` to run. The confirmation lists the keys currently bound to
+`rerun-last-command`. Long lines wrap without omitting text. If the complete
+confirmation cannot fit in the terminal or contains non-displayable control
+characters, nshell refuses the rerun. Any other key or a terminal resize
+cancels the pending confirmation.
 
-This is useful when the previous command's output was not retained for `?`
-(explain), and is intentionally a rerun rather than a replay of old output.
+Use this to capture fresh output before asking `?` to explain a command. It
+reruns the command rather than replaying old output.
 
 ### Vi-mode cursor shape
 

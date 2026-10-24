@@ -189,8 +189,10 @@
   (cond
    ((command-node-p ast)
     (format nil "~{~a~^ ~}"
-            (cons (command-node-command ast)
-                  (command-node-arg-values ast))))
+            (append (mapcar #'arg-value
+                            (command-node-environment-assignments ast))
+                    (cons (command-node-command ast)
+                          (command-node-arg-values ast)))))
    ((pipeline-node-p ast)
     (format nil "~{~a~^ | ~}"
             (mapcar (function ast-node->command-line)

@@ -64,7 +64,8 @@
                    t
                    (command-arg-fragments arg)
                    (command-arg-source-span arg)
-                   (command-arg-glob-p arg))
+                   (command-arg-glob-p arg)
+                   (command-arg-expand-p arg))
                   arg)
             (setf here-doc-target-p
                   (and (null (command-arg-quote-style arg))
@@ -81,14 +82,15 @@
              (:constructor %make-command-node
                  (command args &optional span command-quote-style
                           command-fragments redirects force-external-p
-                          argument-forms)))
+                          argument-forms environment-assignments)))
   (command "" :type string :read-only t)
   (command-quote-style nil :type (member nil :single :double) :read-only t)
   (args nil :type list :read-only t)
   (argument-forms nil :type list :read-only t)
   (command-fragments nil :type list :read-only t)
   (redirects nil :type list :read-only t)
-  (force-external-p nil :type boolean :read-only t))
+  (force-external-p nil :type boolean :read-only t)
+  (environment-assignments nil :type list :read-only t))
 
 (defun %command-node-fragment-quote-style (fragments)
   (let ((styles
@@ -109,7 +111,8 @@
     nil))
 (defun make-command-node (command args &optional span command-quote-style
                                   command-fragments redirects force-external-p
-                                  (argument-forms nil argument-forms-supplied-p))
+                                  (argument-forms nil argument-forms-supplied-p)
+                                  environment-assignments)
   (let* ((legacy-args (%copy-command-args args))
          (argument-forms
            (%copy-command-argument-forms
@@ -122,7 +125,12 @@
            (%copy-command-fragments
             (or command-fragments
                 (list (make-command-fragment command command-quote-style)))))
+         (validated-environment-assignments
+           (%copy-ast-list environment-assignments))
          (validated-span (%validated-source-span span)))
+    (unless (every #'command-arg-p validated-environment-assignments)
+      (error "Command environment assignments must be command arguments: ~S"
+             environment-assignments))
     (when (and argument-forms-supplied-p
                legacy-args
                (not (%command-arg-sequences-equal-p
@@ -137,7 +145,8 @@
                         fragments
                         (%copy-redirect-entries redirects)
                         (and force-external-p t)
-                        argument-forms)))
+                        argument-forms
+                        validated-environment-assignments)))
 
 (defun %validated-source-span (span)
   (when span
@@ -203,7 +212,9 @@
                      (equal (command-arg-source-span left-arg)
                             (command-arg-source-span right-arg))
                      (eql (command-arg-glob-p left-arg)
-                          (command-arg-glob-p right-arg))))
+                          (command-arg-glob-p right-arg))
+                     (eql (command-arg-expand-p left-arg)
+                          (command-arg-expand-p right-arg))))
               left
               right)))
 (define-value-struct pipeline-edge

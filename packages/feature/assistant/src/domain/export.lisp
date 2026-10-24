@@ -18,10 +18,20 @@
             (princ-to-string origin)))))
 
 (defun %assistant-export-git (git denylist-values)
-  (list (cons "branch"
-              (redact-text (getf git :branch)
-                           :denylist-values denylist-values))
-        (cons "dirty" (not (null (getf git :dirty))))))
+  (let ((ready-p (getf git :ready-p)))
+    (list (cons "branch"
+                (if ready-p
+                    (redact-text (getf git :branch)
+                                 :denylist-values denylist-values)
+                    json-kit:+json-null+))
+          (cons "dirty"
+                (if ready-p
+                    (if (getf git :dirty)
+                        t
+                        json-kit:+json-false+)
+                    json-kit:+json-null+))
+          (cons "ready"
+                (if ready-p t json-kit:+json-false+)))))
 
 (defun %assistant-export-last (last denylist-paths denylist-commands
                                denylist-values)

@@ -42,7 +42,7 @@
                 ('nshell.infrastructure.acl:get-git-status
                  (lambda (directory)
                    (declare (ignore directory))
-                   (values "main" t)))
+                   (values "main" t t)))
               (with-stable-repl-prompt ()
                 (with-fixed-terminal-size (24 80)
                   (capture-standard-output
@@ -60,6 +60,14 @@
                       :to-be-truthy)
               (expect (search "\"API_TOKEN\"" snapshot) :to-be-truthy)
               (expect (search "visible" transcript) :to-be-truthy)
+              (expect (search "\"branch\":\"main\"" transcript)
+                      :to-be-truthy)
+              (expect (search "\"branch\":\"main\"" snapshot)
+                      :to-be-truthy)
+              (expect (search "\"dirty\":true" transcript) :to-be-truthy)
+              (expect (search "\"dirty\":true" snapshot) :to-be-truthy)
+              (expect (search "\"ready\":true" transcript) :to-be-truthy)
+              (expect (search "\"ready\":true" snapshot) :to-be-truthy)
               (expect nil :to-be (search "secret-value" transcript))
               (expect nil :to-be
                       (search "ghp_12345678901234567890" transcript))
@@ -78,6 +86,56 @@
                       :to-equal
                       (logand (sb-posix:stat-mode
                                (sb-posix:stat snapshot-path)) #o777))))))))
+
+  (it "marks pending Git status as explicitly unknown"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((state-directory (merge-pathnames "state/" directory))
+             (transcript-session "pending-session")
+             (transcript-path
+               (merge-pathnames
+                (format nil "transcript-~a.jsonl" transcript-session)
+                state-directory))
+             (snapshot-path (merge-pathnames "snapshot.json" state-directory)))
+        (let ((nshell.feature.assistant:*assistant-state-directory-path-override*
+                state-directory)
+              (nshell.application:*job-monitor*
+                (nshell.domain.job-control:make-job-monitor)))
+          (with-repl-test-state
+            (setf nshell.presentation::*interactive-terminal-installed-p* t
+                  nshell.presentation::*assistant-session-id* transcript-session
+                  nshell.presentation::*input-state*
+                    (nshell.presentation::make-repl-input-state)
+                  nshell.presentation::*assistant-pending-transcript*
+                    (list :session-id transcript-session
+                          :timestamp 456
+                          :cwd "/tmp/pending-project"
+                          :text "true"
+                          :exit 0
+                          :duration-ms 1
+                          :origin :typed
+                          :output-head ""
+                          :denylist-paths
+                          nshell.feature.assistant:+assistant-default-denylist-paths+
+                          :denylist-commands
+                          nshell.feature.assistant:+assistant-default-denylist-commands+
+                          :denylist-values nil))
+            (with-temporary-function
+                ('nshell.infrastructure.acl:get-git-status
+                 (lambda (directory)
+                   (declare (ignore directory))
+                   (values nil nil nil)))
+              (with-stable-repl-prompt ()
+                (with-fixed-terminal-size (24 80)
+                  (capture-standard-output
+                    (nshell.presentation::render-prompt-cont)))))
+            (let ((transcript (host-kit:read-file-string transcript-path))
+                  (snapshot (host-kit:read-file-string snapshot-path)))
+              (expect (search "\"branch\":null" transcript) :to-be-truthy)
+              (expect (search "\"branch\":null" snapshot) :to-be-truthy)
+              (expect (search "\"dirty\":null" transcript) :to-be-truthy)
+              (expect (search "\"dirty\":null" snapshot) :to-be-truthy)
+              (expect (search "\"ready\":false" transcript) :to-be-truthy)
+              (expect (search "\"ready\":false" snapshot) :to-be-truthy)))))))
 
   (it "does not create state files for batch or script execution"
     (host-kit:with-temporary-directory (directory)

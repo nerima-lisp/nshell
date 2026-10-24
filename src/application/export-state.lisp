@@ -1,9 +1,9 @@
 (in-package #:nshell.application)
 
 (defun %assistant-export-git-state (directory)
-  (multiple-value-bind (branch dirty-p)
+  (multiple-value-bind (branch dirty-p ready-p)
       (nshell.infrastructure.acl:get-git-status directory)
-    (list :branch branch :dirty dirty-p)))
+    (list :branch branch :dirty dirty-p :ready-p ready-p)))
 
 (defun %assistant-export-job-listings ()
   (mapcar (lambda (listing)

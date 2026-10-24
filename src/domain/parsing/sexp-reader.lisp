@@ -1179,7 +1179,11 @@
                                   (and operator
                                        (%sexp-reader-command-redirect-spec
                                         operator))
-                                (if kind
+                                (if (and kind
+                                     (not (nth-value
+                                           0
+                                           (%sexp-reader-command-process-substitution-at
+                                            elements index))))
                                     (let ((target-index (1+ index)))
                                       (when (>= target-index (length elements))
                                         (%sexp-reader-command-error
@@ -1451,7 +1455,7 @@
          (value-form (%sexp-reader-bare-value-form token))
          (fragments (token-fragments token))
          (quote-style (token-quote-style token))
-         (pathname-expansion-p
+         (expand-p
            (and (null quote-style)
                 (every (lambda (fragment)
                          (and (null (command-fragment-quote-style fragment))
@@ -1465,7 +1469,7 @@
                           fragments
                           span
                           (null quote-style)
-                          pathname-expansion-p))))
+                          expand-p))))
 (defun %sexp-reader-bare-pipeline-from-tokens (tokens &optional process-substitution-p)
   (let ((stage-reversed nil)
         (commands-reversed nil)

@@ -139,7 +139,7 @@
       (expect t :to-equal
               (nshell.domain.parsing:command-node-force-external-p sexp-command))
       (expect nil :to-equal classifier-calls))
-    (let* ((source "(echo MiXeD* |Wild*)")
+    (let* ((source "(echo MiXeD* |Wild*|)")
            (result
              (first
               (nshell.domain.parsing:read-submission
@@ -157,7 +157,7 @@
               (nshell.domain.parsing:command-node-arg-values command))
       (expect '(t nil) :to-equal
               (mapcar
-               #'nshell.domain.parsing:command-arg-pathname-expansion-p
+               #'nshell.domain.parsing:command-arg-expand-p
                arguments))))
 
   (it "read-submission-fuzzes-one-hundred-thousand-fixed-seed-byte-strings"
@@ -486,7 +486,7 @@
                 (expect '(t t nil nil nil)
                         :to-equal
                         (mapcar
-                         #'nshell.domain.parsing:command-arg-pathname-expansion-p
+                         #'nshell.domain.parsing:command-arg-expand-p
                          arguments))
                 (expect '(t t nil nil nil)
                         :to-equal

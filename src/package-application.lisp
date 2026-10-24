@@ -12,6 +12,67 @@ permitted to know both the domain and infrastructure.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
+            ;; Shared S-expression transition contracts; each stub signals
+            ;; WP-INTERFACE-NOT-IMPLEMENTED until its owning WP implements it.
+            #:wp-interface-not-implemented
+            #:wp-interface-not-implemented-owner-wp
+            #:wp-interface-not-implemented-interface
+            #:command-failed #:command-failed-command #:command-failed-status
+            #:command-failed-stage-statuses #:command-failed-signal
+            #:command-execution-plan-error
+            #:command-execution-plan-error-source-span
+            #:command-execution-plan-error-operation
+            #:command-execution-plan-error-cause
+            #:byte-stream-execution-error
+            #:byte-stream-execution-error-operation
+            #:byte-stream-execution-error-cause
+            #:command-argument-type-error
+            #:command-argument-type-error-value
+            #:command-argument-type-error-source-span
+            #:command-macro-syntax-error
+            #:command-macro-syntax-error-source-span
+            #:command-macro-syntax-error-source-path
+            #:command-macro-syntax-error-cause
+            #:*interactive-top-level-p* #:*command-test-position-p* #:*errexit-p*
+            #:builtin-binding #:builtin-binding-p #:make-builtin-binding
+            #:builtin-binding-handler #:builtin-binding-argument-mode
+            #:*builtin-binding-registry* #:register-builtin
+            #:lookup-builtin-binding #:dispatch-builtin #:command-argv-strings
+            #:evaluated-command-stage #:evaluated-command-stage-p
+            #:make-evaluated-command-stage
+            #:evaluated-command-stage-command-node
+            #:evaluated-command-stage-dispatch-kind
+            #:evaluated-command-stage-binding
+            #:evaluated-command-stage-arguments
+            #:evaluated-command-stage-redirect-target-values
+            #:classify-sexp-head #:evaluate-reader-result-in-context
+            #:evaluate-command-stage-in-context
+            #:shell-function-binding #:shell-function-binding-p
+            #:make-shell-function-binding #:shell-function-binding-callable
+            #:shell-function-binding-lambda-list
+            #:shell-function-binding-display-name
+            #:shell-function-binding-source-path
+            #:shell-function-binding-source-span
+            #:shell-function-registry #:shell-function-registry-p
+            #:make-shell-function-registry #:shell-function-registry-global-table
+            #:shell-function-registry-lookup-miss-hook
+            #:shell-function-scope #:shell-function-scope-p
+            #:make-shell-function-scope #:shell-function-scope-table
+            #:shell-function-scope-parent #:register-shell-function
+            #:peek-shell-function #:lookup-shell-function
+            #:pipeline-execution-result #:pipeline-execution-result-p
+            #:make-pipeline-execution-result
+            #:pipeline-execution-result-status
+            #:pipeline-execution-result-stage-statuses
+            #:pipeline-execution-result-stage-signals
+            #:pipeline-stage-io #:pipeline-stage-io-p #:make-pipeline-stage-io
+            #:pipeline-stage-io-descriptor-map
+            #:pipeline-stage-io-transient-descriptors
+            #:pipeline-execution-handle #:pipeline-execution-handle-p
+            #:*pipeline-stage-io* #:pipeline-stage-stream
+            #:spawn-byte-stream-node-in-context
+            #:wait-byte-stream-execution #:command-node-external-p
+            #:execute-reader-ast-in-context #:argv-scalar-string
             ;; Runtime seams consumed by presentation and assistant adapters.
             #:*builtin-registry* #:*execution-confirmed-p* #:*execution-origin*
             #:*foreground-terminal-runner*

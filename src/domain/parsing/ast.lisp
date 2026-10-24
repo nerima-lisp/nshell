@@ -80,10 +80,12 @@
              (:include ast-node)
              (:constructor %make-command-node
                  (command args &optional span command-quote-style
-                          command-fragments redirects force-external-p)))
+                          command-fragments redirects force-external-p
+                          argument-forms)))
   (command "" :type string :read-only t)
   (command-quote-style nil :type (member nil :single :double) :read-only t)
   (args nil :type list :read-only t)
+  (argument-forms nil :type list :read-only t)
   (command-fragments nil :type list :read-only t)
   (redirects nil :type list :read-only t)
   (force-external-p nil :type boolean :read-only t))
@@ -106,18 +108,36 @@
         (copy-list redirects))
     nil))
 (defun make-command-node (command args &optional span command-quote-style
-                                  command-fragments redirects force-external-p)
-  (let ((fragments
-         (%copy-command-fragments
-          (or command-fragments
-              (list (make-command-fragment command command-quote-style))))))
+                                  command-fragments redirects force-external-p
+                                  (argument-forms nil argument-forms-supplied-p))
+  (let* ((legacy-args (%copy-command-args args))
+         (argument-forms
+           (%copy-command-argument-forms
+            (if argument-forms-supplied-p argument-forms legacy-args)))
+         (argument-args
+           (if argument-forms-supplied-p
+               (%command-argument-forms-command-args argument-forms)
+               legacy-args))
+         (fragments
+           (%copy-command-fragments
+            (or command-fragments
+                (list (make-command-fragment command command-quote-style)))))
+         (validated-span (%validated-source-span span)))
+    (when (and argument-forms-supplied-p
+               legacy-args
+               (not (%command-arg-sequences-equal-p
+                     legacy-args
+                     argument-args)))
+      (error "COMMAND-NODE args must match its command-argument projection: ~S"
+             args))
     (%make-command-node command
-                        (%copy-command-args args)
-                        span
+                        argument-args
+                        validated-span
                         (%command-node-fragment-quote-style fragments)
                         fragments
                         (%copy-redirect-entries redirects)
-                        (and force-external-p t))))
+                        (and force-external-p t)
+                        argument-forms)))
 
 (defun %validated-source-span (span)
   (when span
@@ -132,6 +152,60 @@
       (error "Source span must be NIL or a half-open pair of non-negative integers: ~S"
              span))
     (copy-list span)))
+
+(define-value-struct command-value-form
+    ((kind :value :type (member :value :splice :quoted))
+     (form nil :type t)
+     (source-span nil :type (or null list) :copy %validated-source-span))
+  :keyword-constructor t)
+
+(defun make-command-value-form (kind form &optional source-span)
+  (unless (member kind '(:value :splice :quoted))
+    (error "Invalid command value form kind: ~S" kind))
+  (%make-command-value-form :kind kind
+                            :form form
+                            :source-span (%validated-source-span source-span)))
+
+(defun %copy-command-argument-forms (forms)
+  (unless (and (listp forms)
+               (every (lambda (form)
+                        (or (command-arg-p form)
+                            (command-value-form-p form)))
+                      forms))
+    (error "Command argument forms must contain command args or value forms: ~S"
+           forms))
+  (copy-list forms))
+
+(defun %command-argument-forms-command-args (forms)
+  (remove-if-not #'command-arg-p forms))
+
+(defun %command-arg-sequences-equal-p (left right)
+  (and (= (length left) (length right))
+       (every (lambda (left-arg right-arg)
+                (and (string= (command-arg-value left-arg)
+                              (command-arg-value right-arg))
+                     (eql (command-arg-quote-style left-arg)
+                          (command-arg-quote-style right-arg))
+                     (eql (command-arg-here-doc-literal-p left-arg)
+                          (command-arg-here-doc-literal-p right-arg))
+                     (equal (mapcar
+                             (lambda (fragment)
+                               (list (command-fragment-value fragment)
+                                     (command-fragment-quote-style fragment)
+                                     (command-fragment-escaped-positions fragment)))
+                             (command-arg-fragments left-arg))
+                            (mapcar
+                             (lambda (fragment)
+                               (list (command-fragment-value fragment)
+                                     (command-fragment-quote-style fragment)
+                                     (command-fragment-escaped-positions fragment)))
+                             (command-arg-fragments right-arg)))
+                     (equal (command-arg-source-span left-arg)
+                            (command-arg-source-span right-arg))
+                     (eql (command-arg-glob-p left-arg)
+                          (command-arg-glob-p right-arg))))
+              left
+              right)))
 (define-value-struct pipeline-edge
     ((kind :pipe :type (member :pipe :pipe-stderr-to-stdout))
      (source-span nil :type (or null list) :copy %validated-source-span))
@@ -156,12 +230,16 @@
     nil))
 
 (defmacro define-ast-constructor (name lambda-list constructor &body arguments)
-  `(defun ,name ,lambda-list
-     (,constructor ,@arguments)))
+  (let ((span-form (car (last arguments)))
+        (constructor-arguments (butlast arguments)))
+    `(defun ,name ,lambda-list
+       (,constructor ,@constructor-arguments
+                     (%validated-source-span ,span-form)))))
 
 (defun make-pipeline-node (commands &optional span edges)
   (let* ((commands (%copy-ast-list commands))
-         (edges (%copy-pipeline-edges edges)))
+         (edges (%copy-pipeline-edges edges))
+         (span (%validated-source-span span)))
     (when (and edges
                (/= (length edges) (max 0 (1- (length commands)))))
       (error "Pipeline edge count must be one less than command count: ~S edges for ~S commands"
@@ -171,23 +249,47 @@
 
 (defstruct (sequence-node (:include ast-node)
                            (:constructor %make-sequence-node (commands &optional separators span)))
-  "Represents a sequence of command or pipeline items and their following separators. A terminal :amp is retained on the final item; otherwise the last item has no following separator."
+  "Represents a sequence of AST items and their following separators. A terminal :amp is retained on the final item; otherwise the last item has no following separator."
   (commands nil :type list :read-only t)
   (separators nil :type list :read-only t))
 
-(define-ast-constructor make-sequence-node
-    (commands &optional separators span)
-    %make-sequence-node
-    (%copy-ast-list commands)
-    (%copy-ast-list separators)
-    span)
+(defun make-sequence-node (commands &optional separators span)
+  (let* ((commands (%copy-ast-list commands))
+         (separators (%copy-ast-list separators))
+         (span (%validated-source-span span)))
+    (unless (every (lambda (command) (ast-node-p command))
+                   commands)
+      (error "Sequence items must be AST nodes: ~S" commands))
+    (unless (every (lambda (separator)
+                     (member separator '(:semi :and :or :amp)))
+                   separators)
+      (error "Invalid sequence separator: ~S" separators))
+    (let ((command-count (length commands))
+          (separator-count (length separators)))
+      (cond
+        ((zerop command-count)
+         (unless (zerop separator-count)
+           (error "An empty sequence cannot have separators: ~S" separators)))
+        ((= separator-count command-count)
+         (case (car (last separators))
+           (:semi (setf separators (butlast separators)))
+           ((:and :or)
+            (error "A sequence cannot end in :AND or :OR: ~S" separators))
+           (:amp nil)
+           (otherwise
+            (error "Invalid terminal sequence separator: ~S" separators))))
+        ((/= separator-count (1- command-count))
+         (error "Sequence separator count must be one less than item count, or match it only for terminal :AMP: ~S items, ~S separators"
+                command-count
+                separator-count)))
+      (%make-sequence-node commands separators span))))
 
 (define-value-struct sequence-node-command-separator
     ((command nil)
      (separator nil)))
 
 (defun sequence-node-command-separators (node)
-  "Return one pair per sequence item. The command slot may hold a command or pipeline node. A terminal :amp stays on the final item; other final items receive nil."
+  "Return one pair per sequence item. Its command slot may hold any AST node. A terminal :amp stays on the final item; other final items receive nil."
   (mapcar #'%make-sequence-node-command-separator
           (sequence-node-commands node)
           (append (sequence-node-separators node) '(nil))))

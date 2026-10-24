@@ -97,14 +97,16 @@
    :body-span (%validated-source-span body-span)))
 (define-value-struct redirect-procsub-target
     ((direction :input :type (member :input :output))
-     (form nil :type ast-node))
+     (form nil :type (or command-node pipeline-node)))
   :keyword-constructor t)
 (defun make-redirect-procsub-target (direction form)
-  (unless (member direction (list :input :output))
+  (unless (member direction '(:input :output))
     (error "Process-substitution direction must be :INPUT or :OUTPUT: ~S"
            direction))
-  (unless (ast-node-p form)
-    (error "Process-substitution form must be an AST node: ~S" form))
+  (unless (or (command-node-p form)
+              (pipeline-node-p form))
+    (error "Process-substitution form must be a command or pipeline node: ~S"
+           form))
   (%make-redirect-procsub-target :direction direction :form form))
 (define-value-struct ast-redirect-entry
     ((kind :input-file
@@ -122,25 +124,58 @@
      (source-span nil :type (or null list) :copy %validated-source-span)
      (source-order 0 :type (integer 0 *)))
   :keyword-constructor t)
+(defun %redirect-target-valid-p (kind file-descriptor target)
+  (case kind
+    ((:both-output-files :append-both-output-files)
+     (and (null file-descriptor)
+          (command-arg-p target)))
+    (:process-substitution-input
+     (and (null file-descriptor)
+          (redirect-procsub-target-p target)
+          (eq :input (redirect-procsub-target-direction target))))
+    (:process-substitution-output
+     (and (null file-descriptor)
+          (redirect-procsub-target-p target)
+          (eq :output (redirect-procsub-target-direction target))))
+    ((:duplicate-input-fd :duplicate-output-fd)
+     (and (integerp file-descriptor)
+          (or (redirect-fd-target-p target)
+              (redirect-fd-close-target-p target))))
+    ((:here-document :here-document-strip-tabs)
+     (and (integerp file-descriptor)
+          (redirect-heredoc-target-p target)
+          (eq (eq kind :here-document-strip-tabs)
+              (redirect-heredoc-target-strip-tabs-p target))))
+    (:here-string
+     (and (integerp file-descriptor)
+          (command-arg-p target)))
+    ((:input-file :output-file)
+     (and (integerp file-descriptor)
+          (or (command-arg-p target)
+              (and (redirect-procsub-target-p target)
+                   (eq (if (eq kind :input-file) :input :output)
+                       (redirect-procsub-target-direction target))))))
+    ((:append-output-file :force-output-file :error-file :append-error-file)
+     (and (integerp file-descriptor)
+          (command-arg-p target)))
+    (otherwise nil)))
+
 (defun make-ast-redirect-entry (kind file-descriptor target source-span source-order)
   (unless (member kind
-                  (list :input-file :output-file :append-output-file
-                        :force-output-file :error-file :append-error-file
-                        :both-output-files :append-both-output-files
-                        :duplicate-input-fd :duplicate-output-fd
-                        :here-document :here-document-strip-tabs
-                        :here-string :process-substitution-input
-                        :process-substitution-output))
+                  '(:input-file :output-file :append-output-file
+                    :force-output-file :error-file :append-error-file
+                    :both-output-files :append-both-output-files
+                    :duplicate-input-fd :duplicate-output-fd
+                    :here-document :here-document-strip-tabs :here-string
+                    :process-substitution-input :process-substitution-output))
     (error "Invalid redirect kind: ~S" kind))
-  (unless (or (command-arg-p target)
-              (redirect-fd-target-p target)
-              (redirect-fd-close-target-p target)
-              (redirect-heredoc-target-p target)
-              (redirect-procsub-target-p target))
-    (error "Redirect target has an unsupported type: ~S" target))
+  (%validated-redirect-file-descriptor file-descriptor)
+  (unless (%redirect-target-valid-p kind file-descriptor target)
+    (error "Redirect kind, descriptor, and target do not agree: ~S ~S ~S"
+           kind file-descriptor target))
   (%make-ast-redirect-entry
    :kind kind
-   :file-descriptor (%validated-redirect-file-descriptor file-descriptor)
+   :file-descriptor file-descriptor
    :target target
    :source-span (%validated-source-span source-span)
    :source-order

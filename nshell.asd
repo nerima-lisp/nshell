@@ -63,6 +63,10 @@
     :pathname "."
     :serial t
     :components ((:file "package-presentation")))
+   (:module "package-user"
+    :pathname "."
+    :serial t
+    :components ((:file "package-user")))
    (:file "infrastructure/acl/timeout")
    (:module "feature-command-line"
     :pathname "../packages/feature/command-line/src"
@@ -97,6 +101,8 @@
                  (:file "presentation/layer")))
    (:file "util/struct-macros")
    (:file "util/strings")
+   (:file "application/wp-interface-contracts")
+   (:file "presentation/wp-interface-contracts")
    (:file "domain/signals/signal")
    (:file "domain/input/key-event")
    (:file "domain/execution/command")

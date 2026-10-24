@@ -76,6 +76,7 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:command-node-p #:pipeline-node-p #:sequence-node-p
            #:command-node-command #:command-node-command-quote-style
            #:command-node-command-fragments #:command-node-args
+           #:command-node-argument-forms
            #:command-node-redirects #:command-node-force-external-p
            #:sequence-node-commands #:pipeline-node-commands #:pipeline-node-edges
            #:pipeline-edge #:pipeline-edge-p #:make-pipeline-edge
@@ -93,7 +94,10 @@ continuation line. A pure string-to-AST function with no filesystem access.")
            #:%balanced-substitution-end #:+control-flow-keywords+
            #:command-arg #:command-arg-p #:make-command-arg
            #:command-arg-value #:command-arg-quote-style #:command-arg-fragments
-           #:command-arg-source-span #:command-arg-glob-p
+           #:command-arg-source-span
+           #:command-value-form #:command-value-form-p
+           #:make-command-value-form #:command-value-form-kind
+           #:command-value-form-form #:command-value-form-source-span #:command-arg-glob-p
            #:command-fragment #:command-fragment-p #:make-command-fragment
            #:command-fragment-value #:command-fragment-quote-style
            #:command-fragment-escaped-positions

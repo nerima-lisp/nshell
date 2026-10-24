@@ -48,6 +48,11 @@
       "key": "Tab"
     },
     {
+      "type": "wait",
+      "contains": "Verbose output",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "C-c"
     },

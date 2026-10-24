@@ -956,6 +956,40 @@
             (%eval-form context (third spec) reader-result environment :value)
             nil)))))
 
+(defun %eval-dolist-form
+    (context form reader-result lexical-environment position)
+  (declare (ignore position))
+  (%check-special-form-arity 'cl:dolist form 1)
+  (let* ((spec (%materialize-reader-form (second form) reader-result))
+         (body (cddr form)))
+    (unless (and (%proper-list-p spec) (<= 2 (length spec) 3)
+                 (symbolp (first spec)))
+      (%special-form-syntax-error 'cl:dolist))
+    (let* ((variable (first spec))
+           (items (%eval-form context (second spec) reader-result
+                              lexical-environment :value)))
+      (unless (%proper-list-p items)
+        (error 'type-error :datum items :expected-type 'list))
+      (let ((environment
+              (%extend-lexical-environment
+               lexical-environment (list (cons variable nil)))))
+        (loop while (and (consp (first body))
+                         (eq (%resolve-reader-symbol
+                              reader-result (first (first body)))
+                             'cl:declare))
+              do (pop body))
+        (dolist (item items)
+          (setf (gethash variable
+                         (%sexp-lexical-environment-table environment))
+                item)
+          (%eval-body context body reader-result environment :stream))
+        (setf (gethash variable
+                       (%sexp-lexical-environment-table environment))
+              nil)
+        (if (cddr spec)
+            (%eval-form context (third spec) reader-result environment :value)
+            nil)))))
+
 (defun %function-lambda-list-variables (lambda-list)
   (let ((mode :required)
         (variables nil))
@@ -1302,6 +1336,10 @@
                                      "DEFINE-SHELL-FUNCTION")))))
        (%eval-define-shell-function-form
         context form reader-result lexical-environment))
+      ((and (eq classification :host-form)
+            (eq operator 'cl:dolist))
+       (%eval-dolist-form context form reader-result lexical-environment
+                          position))
       ((and (eq classification :host-form)
             (eq operator 'cl:dotimes))
        (%eval-dotimes-form context form reader-result lexical-environment

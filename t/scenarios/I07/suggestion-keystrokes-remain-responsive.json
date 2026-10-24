@@ -4,6 +4,7 @@
     "I07"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.1,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -28,7 +29,11 @@
   "expected": {
     "stream": {
       "contains": [
-        "I07_HISTORY_SUGGESTION",
+        "I07_HISTORY_SUGGESTION"
+      ]
+    },
+    "screen": {
+      "contains": [
         "I07_AFTER_2"
       ]
     },

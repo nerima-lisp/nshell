@@ -1,0 +1,20 @@
+{
+  "id": "J02-symlink-target-kind-cache-invalidation",
+  "uc": ["J02", "J12"],
+  "mode": "batch",
+  "environment": {
+    "variables": {"PATH": "/usr/bin:/bin", "TERM": "dumb"},
+    "home": "home",
+    "cwd": "work"
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "mkdir target; touch target/swap; ln -s target/swap link_swap; complete -C 'cd link_swap'; rm target/swap; mkdir target/swap; complete -C 'cd link_swap'"
+  },
+  "timeout_seconds": 15,
+  "expected": {
+    "stdout": {"contains": ["link_swap/"]},
+    "stderr": {"equals": ""},
+    "exit_code": 0
+  }
+}

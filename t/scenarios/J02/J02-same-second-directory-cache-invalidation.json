@@ -1,0 +1,20 @@
+{
+  "id": "J02-same-second-directory-cache-invalidation",
+  "uc": ["J02", "J12"],
+  "mode": "batch",
+  "environment": {
+    "variables": {"PATH": "/usr/bin:/bin", "TERM": "dumb"},
+    "home": "home",
+    "cwd": "work"
+  },
+  "invocation": {
+    "kind": "command",
+    "text": "/usr/bin/touch -t 202001010101.00 .; complete -C 'cat fresh'; /usr/bin/touch fresh.txt; /usr/bin/touch -t 202001010101.00 .; complete -C 'cat fresh'"
+  },
+  "timeout_seconds": 15,
+  "expected": {
+    "stdout": {"contains": ["fresh.txt"]},
+    "stderr": {"equals": ""},
+    "exit_code": 0
+  }
+}

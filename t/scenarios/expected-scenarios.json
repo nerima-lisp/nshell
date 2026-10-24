@@ -1542,6 +1542,22 @@
       "path": "J02/filename-insertion-pty.json"
     },
     {
+      "id": "J02-same-second-directory-cache-invalidation",
+      "uc": [
+        "J02",
+        "J12"
+      ],
+      "path": "J02/J02-same-second-directory-cache-invalidation.json"
+    },
+    {
+      "id": "J02-symlink-target-kind-cache-invalidation",
+      "uc": [
+        "J02",
+        "J12"
+      ],
+      "path": "J02/J02-symlink-target-kind-cache-invalidation.json"
+    },
+    {
       "id": "J12-large-directory-completion",
       "uc": [
         "J12"

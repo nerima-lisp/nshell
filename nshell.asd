@@ -519,6 +519,7 @@
    (:file "unit/test-sexp-reader")
    (:file "unit/test-sexp-scanner")
    (:file "unit/test-sexp-ast-contracts")
+   (:file "unit/test-sexp-evaluator")
    (:file "unit/test-cps")
    (:file "unit/test-input-state")
    (:file "unit/test-input-state-session")

@@ -1,0 +1,456 @@
+(in-package #:nshell/test)
+
+(progn
+  (defvar *sexp-evaluator-test-calls* nil)
+  (defvar *sexp-evaluator-test-failure-policy-calls* 0)
+  (defvar *sexp-evaluator-test-path-names* nil)
+  (defvar *sexp-evaluator-test-peek-calls* 0)
+  (defvar *sexp-evaluator-test-lookup-calls* 0)
+
+  (defun %make-sexp-evaluator-test-reader-result (source &optional supplied-form)
+    (let* ((*package* (find-package "NSHELL.USER"))
+           (form (or supplied-form (read-from-string source)))
+           (span-map (make-hash-table :test #'eq))
+           (span (list 0 (length source))))
+      (when (consp form)
+        (setf (gethash form span-map) span))
+      (nshell.domain.parsing:make-reader-result
+       :form form :source source :source-span span
+       :form-span-map span-map :source-path nil :source-map nil
+       :symbol-origins (make-hash-table :test #'eq))))
+
+  (defun %sexp-evaluator-test-argument (form)
+    (typecase form
+      (string form)
+      (symbol (symbol-name form))
+      (number (princ-to-string form))
+      (t (princ-to-string form))))
+
+  (defun %sexp-evaluator-test-command-form->ast
+      (source form form-span-map head-classifier)
+    (declare (ignore source))
+    (let* ((name (symbol-name (first form)))
+           (classification (funcall head-classifier name))
+           (arguments
+             (mapcar (lambda (argument)
+                       (nshell.domain.parsing:make-command-arg
+                        (%sexp-evaluator-test-argument argument)))
+                     (rest form))))
+      (unless (eq classification :command-island)
+        (error "Test command adapter received host form ~S" name))
+      (nshell.domain.parsing:make-command-node
+       name arguments (gethash form form-span-map))))
+
+  (defun %sexp-evaluator-test-key (name escaped-p)
+    (if escaped-p (list :escaped name) (string-upcase name))))
+(progn
+  (defvar *sexp-evaluator-test-calls* nil)
+  (defvar *sexp-evaluator-test-failure-policy-calls* 0)
+  (defvar *sexp-evaluator-test-path-names* nil)
+  (defvar *sexp-evaluator-test-peek-calls* 0)
+  (defvar *sexp-evaluator-test-lookup-calls* 0)
+  (defun %call-with-sexp-evaluator-test-boundaries (context thunk)
+    (let* ((registry (make-hash-table :test #'equal))
+           (builtins (make-hash-table :test #'equal))
+           (*sexp-evaluator-test-calls* nil)
+           (*sexp-evaluator-test-failure-policy-calls* 0)
+           (*sexp-evaluator-test-path-names* nil)
+           (*sexp-evaluator-test-peek-calls* 0)
+           (*sexp-evaluator-test-lookup-calls* 0))
+      (dolist (entry '(("echo" :argv) ("test" :argv) ("fail" :argv)
+                       ("set" :argv) ("value" :value)))
+        (setf (gethash (first entry) builtins)
+              (nshell.application:make-builtin-binding
+               (lambda (&rest arguments)
+                 (declare (ignore arguments))
+                 0)
+               (second entry))))
+      (with-temporary-functions
+          (('nshell.application:context-shell-function-registry
+            (lambda (ignored-context)
+              (declare (ignore ignored-context))
+              registry))
+           ('nshell.application:active-shell-function-scope
+            (lambda () nil))
+           ('nshell.application:peek-shell-function
+            (lambda (ignored-registry name &key scope escaped-p)
+              (declare (ignore ignored-registry scope))
+              (incf *sexp-evaluator-test-peek-calls*)
+              (gethash (%sexp-evaluator-test-key name escaped-p) registry)))
+           ('nshell.application:lookup-shell-function
+            (lambda (ignored-registry name &key scope escaped-p)
+              (declare (ignore ignored-registry scope))
+              (incf *sexp-evaluator-test-lookup-calls*)
+              (gethash (%sexp-evaluator-test-key name escaped-p) registry)))
+           ('nshell.application:register-shell-function
+            (lambda (ignored-registry name binding &key escaped-p)
+              (declare (ignore ignored-registry))
+              (setf (gethash (%sexp-evaluator-test-key name escaped-p) registry)
+                    binding)))
+           ('nshell.application:lookup-builtin-binding
+            (lambda (name)
+              (gethash (string-downcase name) builtins)))
+           ('nshell.application::%resolve-command-path-candidates
+            (lambda (ignored-context name)
+              (declare (ignore ignored-context))
+              (when (member name *sexp-evaluator-test-path-names*
+                            :test #'string-equal)
+                (list :candidate))))
+           ('nshell.application:command-form->ast
+            #'%sexp-evaluator-test-command-form->ast)
+           ('nshell.application:execute-reader-ast-in-context
+            (lambda (execution-context ast stage-evaluator)
+              (let* ((stage (funcall stage-evaluator execution-context ast))
+                     (node
+                       (nshell.application:evaluated-command-stage-command-node
+                        stage))
+                     (name
+                       (nshell.domain.parsing:command-node-command node))
+                     (position nshell.application::*command-stage-call-position*)
+                     (test-position nshell.application:*command-test-position-p*)
+                     (arguments
+                       (nshell.application:evaluated-command-stage-arguments
+                        stage))
+                     (status (cond ((string-equal name "test") 1)
+                                   ((string-equal name "fail") 7)
+                                   (t 0)))
+                     (result
+                       (if (eq
+                            (nshell.application:evaluated-command-stage-dispatch-kind
+                             stage)
+                            :shell-function)
+                           (funcall
+                            (nshell.application:shell-function-binding-callable
+                             (nshell.application:evaluated-command-stage-binding
+                              stage))
+                            execution-context arguments position)
+                           (format nil "~(~a~) output~%" name)))
+                     (pipeline
+                       (nshell.application:make-pipeline-execution-result
+                        status (list status) (list nil))))
+                (setf *sexp-evaluator-test-calls*
+                      (append *sexp-evaluator-test-calls*
+                              (list (list stage position test-position))))
+                (values result status pipeline))))
+           ('nshell.application:call-with-command-failure-policy
+            (lambda (ast evaluator-thunk)
+              (incf *sexp-evaluator-test-failure-policy-calls*)
+              (multiple-value-bind (value status pipeline)
+                  (funcall evaluator-thunk)
+                (if (and (not (zerop status))
+                         (not nshell.application:*command-test-position-p*)
+                         (not nshell.application:*interactive-top-level-p*))
+                    (error 'nshell.application:command-failed
+                           :command
+                           (if (nshell.domain.parsing:command-node-p ast)
+                               (nshell.domain.parsing:command-node-command ast)
+                               "test-command")
+                           :status status
+                           :stage-statuses (list status)
+                           :signal nil)
+                    (values value status pipeline))))))
+        (funcall thunk)))))
+(describe "sexp-evaluator-classification"
+  (it "classifies-heads-without-autoloading-and-keeps-command-precedence"
+    (let ((context (make-test-shell-context)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (setf *sexp-evaluator-test-path-names* '("find"))
+         (expect :host-form :to-equal
+                 (nshell.application:classify-sexp-head context "if"))
+         (expect :host-form :to-equal
+                 (nshell.application:classify-sexp-head context "CL:IF"))
+         (expect :command-island :to-equal
+                 (nshell.application:classify-sexp-head context "echo"))
+         (expect :command-island :to-equal
+                 (nshell.application:classify-sexp-head context "^echo"))
+         (expect :command-island :to-equal
+                 (nshell.application:classify-sexp-head context "find"))
+         (expect 0 :to-equal *sexp-evaluator-test-lookup-calls*)
+         (expect 2 :to-equal *sexp-evaluator-test-peek-calls*))))))
+(describe "sexp-evaluator-special-forms"
+  (it "applies-value-and-body-position-rules"
+    (let ((context (make-test-shell-context)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (dolist
+             (case
+              '(("(let ((value 3)) (let ((value 10) (parallel value)) (+ value parallel)))"
+                 13)
+                ("(let ((value 3)) (let* ((value 10) (sequential value)) (+ value sequential)))"
+                 20)
+                ("(let ((value 1)) (setq value (+ value 4)) value)" 5)
+                ("(if (> 3 2) 6 7)" 6)
+                ("(when t 8)" 8)
+                ("(unless nil 9)" 9)
+                ("(and t 10)" 10)
+                ("(or nil 11)" 11)
+                ("(not nil)" t)
+                ("(cond ((= 1 2) 12) (t 13))" 13)
+                ("(case 2 ((1) 14) ((2) 15) (otherwise 16))" 15)
+                ("(handler-case (error \"expected\") (simple-error () 17))"
+                 17)
+                ("(handler-case (values 2 3) (:no-error (left right) (+ left right)))"
+                 5)
+                ("(handler-case (fail) (nshell.application:command-failed () 18))"
+                 18)))
+           (multiple-value-bind (value status)
+               (%evaluate-sexp-evaluator-test-source context (first case))
+             (expect (second case) :to-equal value)
+             (expect 0 :to-equal status))))))))
+(describe "sexp-evaluator-positions"
+  (it "propagates-test-and-value-positions"
+    (let ((context (make-test-shell-context)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (multiple-value-bind (value status)
+             (%evaluate-sexp-evaluator-test-source
+              context "(if (test operand) (echo failed) (echo passed))")
+           (expect (format nil "echo output~%") :to-equal value)
+           (expect 0 :to-equal status)
+           (expect 2 :to-equal *sexp-evaluator-test-failure-policy-calls*)
+           (expect t :to-equal
+                   (third (first *sexp-evaluator-test-calls*)))
+           (expect :stream :to-equal
+                   (second (first *sexp-evaluator-test-calls*)))
+           (expect nil :to-equal
+                   (third (second *sexp-evaluator-test-calls*))))
+         (setf *sexp-evaluator-test-calls* nil)
+         (multiple-value-bind (value status)
+             (%evaluate-sexp-evaluator-test-source
+              context "(if (> 3 2) \"host\" \"other\")")
+           (expect "host" :to-equal value)
+           (expect 0 :to-equal status)
+           (expect nil :to-be-null *sexp-evaluator-test-calls*)))))))
+(describe "sexp-evaluator-dotimes"
+  (it "runs-each-body-command-in-stream-position"
+    (let ((context (make-test-shell-context)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (multiple-value-bind (value status)
+             (%evaluate-sexp-evaluator-test-source
+              context "(dotimes (index 2) (echo marker))")
+           (expect nil :to-equal value)
+           (expect 0 :to-equal status)
+           (expect 2 :to-equal (length *sexp-evaluator-test-calls*))
+           (expect :stream :to-equal
+                   (second (first *sexp-evaluator-test-calls*)))
+           (expect :stream :to-equal
+                   (second (second *sexp-evaluator-test-calls*)))))))))
+(describe "sexp-evaluator-command-values"
+  (it "evaluates-value-and-splice-operands-once"
+    (let* ((context (make-test-shell-context))
+           (counter (intern "L02-EVALUATOR-COUNTER" (find-package "NSHELL.USER")))
+           (literal
+             (nshell.domain.parsing:make-command-arg
+              "literal" nil nil nil '(1 2) t t))
+           (value-form
+             (nshell.domain.parsing:make-command-value-form
+              :value `(cl:setq ,counter (cl:+ ,counter 1)) '(3 8)))
+           (splice-form
+             (nshell.domain.parsing:make-command-value-form
+              :splice '(cl:list "one" "two") '(9 14)))
+           (quoted-form
+             (nshell.domain.parsing:make-command-value-form
+              :quoted '(cl:list "raw") '(15 20)))
+           (redirect-arg
+             (nshell.domain.parsing:make-command-arg
+              "output.txt" nil nil nil '(21 31) t t))
+           (redirect
+             (nshell.domain.parsing:make-ast-redirect-entry
+              :output-file 1 redirect-arg '(21 31) 2))
+           (node
+             (nshell.domain.parsing:make-command-node
+              "echo" (list literal) '(0 32) nil nil (list redirect) nil
+              (list literal value-form splice-form quoted-form)))
+           (source-form `(cl:let ((,counter 0)) ,node ,counter))
+           (reader-result
+             (%make-sexp-evaluator-test-reader-result
+              "(let ((counter 0)) (echo))" source-form)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (multiple-value-bind (value status)
+             (nshell.application:evaluate-reader-result-in-context
+              context reader-result)
+           (let* ((stage (first (first *sexp-evaluator-test-calls*)))
+                  (arguments
+                    (nshell.application:evaluated-command-stage-arguments
+                     stage))
+                  (redirect-values
+                    (nshell.application:evaluated-command-stage-redirect-target-values
+                     stage)))
+             (expect 1 :to-equal value)
+             (expect 0 :to-equal status)
+             (expect 5 :to-equal (length arguments))
+             (expect '("literal" 1 "one" "two" (cl:list "raw"))
+                     :to-equal
+                     (mapcar
+                      #'nshell.domain.parsing:evaluated-command-arg-value
+                      arguments))
+             (expect t :to-be-truthy
+                     (nshell.domain.parsing:evaluated-command-arg-glob-p
+                      (first arguments)))
+             (expect t :to-be-truthy
+                     (nshell.domain.parsing:evaluated-command-arg-expand-p
+                      (first arguments)))
+             (expect nil :to-equal
+                     (nshell.domain.parsing:evaluated-command-arg-expand-p
+                      (second arguments)))
+             (expect 1 :to-equal (length redirect-values))
+             (expect 2 :to-equal (caar redirect-values))
+             (expect "output.txt" :to-equal
+                     (nshell.domain.parsing:evaluated-command-arg-value
+                      (cdar redirect-values))))))))))
+(describe "sexp-evaluator-set"
+  (it "routes-set-through-the-builtin-boundary"
+    (let ((context (make-test-shell-context)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (%evaluate-sexp-evaluator-test-source context "(set \"name\" \"value\")")
+         (let* ((stage (first (first *sexp-evaluator-test-calls*)))
+                (node
+                  (nshell.application:evaluated-command-stage-command-node
+                   stage)))
+           (expect :builtin :to-equal
+                   (nshell.application:evaluated-command-stage-dispatch-kind
+                    stage))
+           (expect "set" :to-equal
+                   (string-downcase
+                    (nshell.domain.parsing:command-node-command node)))))))))
+(describe "sexp-evaluator-value-position"
+  (it "passes-value-position-and-rejects-value-builtins-in-stream-position"
+    (let ((context (make-test-shell-context)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (multiple-value-bind (value status)
+             (%evaluate-sexp-evaluator-test-source context "(identity (echo))")
+           (expect (format nil "echo output~%") :to-equal value)
+           (expect 0 :to-equal status)
+           (expect :value :to-equal
+                   (second (first *sexp-evaluator-test-calls*))))
+         (expect
+          (lambda ()
+            (let ((nshell.application::*command-stage-call-position* :stream))
+              (nshell.application:evaluate-command-stage-in-context
+               context
+               (nshell.domain.parsing:make-command-node "value" nil '(0 7)))))
+          :to-throw 'nshell.application:command-execution-plan-error))))))
+(describe "sexp-evaluator-defun"
+  (it "calls-a-defined-function-with-a-lexical-command-argument"
+    (let* ((context (make-test-shell-context))
+           (function-name
+             (intern "L02-EVALUATOR-GREET" (find-package "NSHELL.USER")))
+           (variable (intern "NAME" (find-package "NSHELL.USER")))
+           (argument
+             (nshell.domain.parsing:make-command-value-form
+              :value variable '(25 30)))
+           (body-command
+             (nshell.domain.parsing:make-command-node
+              "echo" nil '(20 31) nil nil nil nil (list argument)))
+           (defun-form
+             (list 'cl:defun function-name (list variable) body-command))
+           (def-reader
+             (%make-sexp-evaluator-test-reader-result
+              "(DEFUN L02-EVALUATOR-GREET (NAME) (ECHO $NAME))" defun-form))
+           (call-reader
+             (%make-sexp-evaluator-test-reader-result
+              "(L02-EVALUATOR-GREET \"hello\")"
+              (list function-name "hello"))))
+      (unwind-protect
+           (%call-with-sexp-evaluator-test-boundaries
+            context
+            (lambda ()
+              (nshell.application:evaluate-reader-result-in-context
+               context def-reader)
+              (multiple-value-bind (value status)
+                  (nshell.application:evaluate-reader-result-in-context
+                   context call-reader)
+                (let* ((stage (first (first *sexp-evaluator-test-calls*)))
+                       (arguments
+                         (nshell.application:evaluated-command-stage-arguments
+                          stage)))
+                  (expect (format nil "echo output~%") :to-equal value)
+                  (expect 0 :to-equal status)
+                  (expect "hello" :to-equal
+                          (nshell.domain.parsing:evaluated-command-arg-value
+                           (first arguments)))))))
+        (when (fboundp function-name) (fmakunbound function-name))))))
+(describe "sexp-evaluator-shell-function"
+  (it "registers-and-calls-a-shell-function-through-l07"
+    (let* ((context (make-test-shell-context))
+           (function-name
+             (intern "L02-SHELL-GREET" (find-package "NSHELL.USER")))
+           (variable (intern "NAME" (find-package "NSHELL.USER")))
+           (argument
+             (nshell.domain.parsing:make-command-value-form
+              :value variable '(25 30)))
+           (body-command
+             (nshell.domain.parsing:make-command-node
+              "echo" nil '(20 31) nil nil nil nil (list argument)))
+           (definition
+             (list 'nshell.user::define-shell-function function-name
+                   (list variable) body-command))
+           (reader-result
+             (%make-sexp-evaluator-test-reader-result
+              "(DEFINE-SHELL-FUNCTION L02-SHELL-GREET (NAME) (ECHO $NAME))"
+              definition))
+           (call-reader
+             (%make-sexp-evaluator-test-reader-result
+              "(L02-SHELL-GREET \"hello\")"
+              (list function-name "hello"))))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (nshell.application:evaluate-reader-result-in-context
+          context reader-result)
+         (multiple-value-bind (value status)
+             (nshell.application:evaluate-reader-result-in-context
+              context call-reader)
+           (let* ((calls *sexp-evaluator-test-calls*)
+                  (body-stage (first (first calls)))
+                  (function-stage (first (second calls))))
+             (expect (format nil "echo output~%") :to-equal value)
+             (expect 0 :to-equal status)
+             (expect "hello" :to-equal
+                     (nshell.domain.parsing:evaluated-command-arg-value
+                      (first
+                       (nshell.application:evaluated-command-stage-arguments
+                        body-stage))))
+             (expect :shell-function :to-equal
+                     (nshell.application:evaluated-command-stage-dispatch-kind
+                      function-stage)))))))))
+(describe "sexp-evaluator-macros"
+  (it "expands-a-user-macro-into-two-command-stages"
+    (let* ((context (make-test-shell-context))
+           (macro-name
+             (intern "L02-EVALUATOR-TWICE" (find-package "NSHELL.USER")))
+           (definition
+             (let ((*package* (find-package "NSHELL.USER")))
+               (read-from-string
+                "(DEFMACRO L02-EVALUATOR-TWICE (FORM) `(PROGN ,FORM ,FORM))")))
+           (definition-result
+             (%make-sexp-evaluator-test-reader-result
+              "(DEFMACRO L02-EVALUATOR-TWICE (FORM) `(PROGN ,FORM ,FORM))"
+              definition)))
+      (unwind-protect
+           (%call-with-sexp-evaluator-test-boundaries
+            context
+            (lambda ()
+              (nshell.application:evaluate-reader-result-in-context
+               context definition-result)
+              (multiple-value-bind (value status)
+                  (%evaluate-sexp-evaluator-test-source
+                   context "(L02-EVALUATOR-TWICE (ECHO MARKER))")
+                (expect (format nil "echo output~%") :to-equal value)
+                (expect 0 :to-equal status)
+                (expect 2 :to-equal (length *sexp-evaluator-test-calls*))
+                (expect 2 :to-equal
+                        *sexp-evaluator-test-failure-policy-calls*))))
+        (when (macro-function macro-name) (fmakunbound macro-name))))))

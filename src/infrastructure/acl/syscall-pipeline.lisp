@@ -19,7 +19,7 @@
   (%close-pipeline-fds pipes)
   (%terminate-pipeline-processes procs)
   (dolist (proc procs)
-    (ignore-errors (sb-ext:process-close proc))))
+    (ignore-errors (process-close proc))))
 
 (defun %prepare-pipeline (commands redirects)
   (let* ((count (length commands))
@@ -28,52 +28,43 @@
     (values redirects (%make-pipeline-pipes count))))
 
 (defun %run-pipeline-command (cmd args input output error-output environment resolved-cmd
-                              &key preserve-fds pgid)
+                              &key preserve-fds pgid input-source-owned-p)
   (if resolved-cmd
-      (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
-        (let ((proc nil) (error-stream nil) (complete nil))
-          (unwind-protect
-               (let ((helper (%resolve-external-command
-                              "cl-process-kit-spawn" (sb-ext:posix-environ))))
-                 (unless helper (error "cl-process-kit-spawn is unavailable"))
-                 (setf error-stream (sb-sys:make-fd-stream
-                                     read-fd :input t :element-type '(unsigned-byte 8)
-                                     :auto-close t)
-                       read-fd nil)
-                 (setf proc
-                       (sb-ext:run-program
-                        helper
-                        (append (list "--error-fd" (write-to-string write-fd)
-                                      "--pgroup" (write-to-string (or pgid 0)))
-                                (loop for fd in preserve-fds
-                                      append (list "--pass" (write-to-string fd)))
-                                (list "--" "/bin/sh" "-c"
-                                      "kill -STOP $$; exec \"$@\""
-                                      "nshell-pipeline" resolved-cmd)
-                                args)
-                        :input input :output output :error error-output
-                        :wait nil :search nil :environment environment
-                        :preserve-fds (cons write-fd preserve-fds)))
-                 (sb-posix:close write-fd)
-                 (setf write-fd nil)
-                 (when (read-byte error-stream nil nil)
-                   (error "Pipeline helper failed before exec"))
-                 ;; The leader must stay alive until every stage has joined it.
-                 (%wait-sbcl-process proc t)
-                 (unless (and (eq :stopped (sb-ext:process-status proc))
-                              (= (or pgid (sb-ext:process-pid proc))
-                                 (sb-posix:getpgid (sb-ext:process-pid proc))))
-                   (error "Pipeline stage did not reach its process-group barrier"))
-                 (setf complete t)
-                 proc)
-            (unless complete
-              (when proc
-                (ignore-errors (sb-ext:process-kill proc sb-unix:sigkill))
-                (ignore-errors (%wait-sbcl-process proc))
-                (ignore-errors (sb-ext:process-close proc))))
-            (when error-stream (close error-stream))
-            (when read-fd (sb-posix:close read-fd))
-            (when write-fd (sb-posix:close write-fd)))))
+      (let ((proc nil)
+            (input-source-transferred-p nil)
+            (complete nil))
+        (unwind-protect
+             (multiple-value-bind (process transferred-p)
+                 (%spawn-external-command
+                  "/bin/sh"
+                  (append
+                   (list "-c"
+                         "kill -STOP $$; exec \"$@\""
+                         "nshell-pipeline"
+                         resolved-cmd)
+                   args)
+                  environment
+                  :input input
+                  :output output
+                  :error error-output
+                  :process-group (or pgid :new)
+                  :preserve-fds preserve-fds
+                  :input-source-owned-p input-source-owned-p)
+               (setf proc process
+                     input-source-transferred-p transferred-p)
+               (process-wait proc t)
+               (unless (and (eq :stopped (process-status proc))
+                            (= (or pgid (process-pid proc))
+                               (sb-posix:getpgid (process-pid proc))))
+                 (error "Pipeline stage did not reach its process-group barrier"))
+               (setf complete t)
+               (return-from %run-pipeline-command
+                 (values proc input-source-transferred-p)))
+          (unless complete
+            (when proc
+              (ignore-errors (kill-process (process-pid proc) sb-unix:sigkill))
+              (ignore-errors (process-wait proc))
+              (ignore-errors (process-close proc))))))
       (progn
         (format *error-output*
                 "~a"
@@ -82,7 +73,7 @@
 
 (defun %run-synchronous-pipeline (procs pgid pipes pipefail-p)
   (flet ((finish-pipeline ()
-           (when pgid (%send-process-group-signal pgid sb-unix:sigcont))
+           (when pgid (process-continue-group pgid procs))
            (let ((timeout (%foreground-external-command-timeout)))
              (%wait-pipeline-with-output
               procs
@@ -135,19 +126,20 @@
                               args)
                        args)))
              (multiple-value-prog1
-                 (values
-                  (progn
-                    (%close-unused-next-pipe-writer next-pipe output-pipe-stream)
-                    (%run-pipeline-command cmd
-                                           effective-args
-                                           input
-                                           output
-                                           error-output
-                                           environment
-                                           effective-cmd
-                                           :preserve-fds preserve-fds
-                                           :pgid pgid))
-                  redirect-streams)
+                 (multiple-value-bind (process input-transferred-p)
+                     (progn
+                       (%close-unused-next-pipe-writer next-pipe output-pipe-stream)
+                       (%run-pipeline-command
+                        cmd effective-args input output error-output environment
+                        effective-cmd
+                        :preserve-fds preserve-fds
+                        :pgid pgid
+                        :input-source-owned-p
+                        (not (null (member input redirect-streams :test #'eq)))))
+                   (when input-transferred-p
+                     (setf redirect-streams
+                           (remove input redirect-streams :test #'eq)))
+                   (values process redirect-streams))
                (setf started t)))
         (unless started
           (%close-new-redirect-streams redirect-streams previous-redirect-streams))

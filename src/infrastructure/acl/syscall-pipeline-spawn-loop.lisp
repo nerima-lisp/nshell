@@ -39,7 +39,7 @@ ERROR-SENTINEL is stored as the error indicator on failure."
                           (if proc
                               (progn
                                 (push proc procs)
-                                (unless pgid (setf pgid (sb-ext:process-pid proc))))
+                                (unless pgid (setf pgid (process-pid proc))))
                               (setf error-p error-sentinel)))
                       (error (err)
                         (setf error-p error-sentinel)

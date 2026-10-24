@@ -66,7 +66,7 @@ per-stage exit codes in source order."
                      (progn
                        (%close-pipeline-fds pipes)
                        (when (and start-p pgid)
-                         (%send-process-group-signal pgid sb-unix:sigcont))
+                         (process-continue-group pgid procs))
                        (reverse procs)))
                (setf complete t)))
         (unless complete (%abort-pipeline owned-procs pipes))

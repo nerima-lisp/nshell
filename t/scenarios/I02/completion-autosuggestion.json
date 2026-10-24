@@ -21,14 +21,19 @@
     "files": [
       {
         "path": "home/.config/nshell/init.lisp",
-        "content": "complete -c suggest-tool -a \"--blue --bold\"\n"
+        "content": "complete -c echo -a \"--blue --bold\"\n"
       }
     ]
   },
+  "input_delay_seconds": 0.1,
   "steps": [
     {
       "type": "keys",
-      "text": "true; echo I02_$((1+1))"
+      "text": "echo --bl"
+    },
+    {
+      "type": "key",
+      "key": "M-Right"
     },
     {
       "type": "key",
@@ -36,28 +41,7 @@
     },
     {
       "type": "wait",
-      "contains": "I02_2",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "keys",
-      "text": "suggest-tool --b"
-    },
-    {
-      "type": "key",
-      "key": "C-c"
-    },
-    {
-      "type": "keys",
-      "text": "echo I02_AFTER_$((1+1))"
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
-      "type": "wait",
-      "contains": "I02_AFTER_2",
+      "contains": "--blue",
       "timeout_seconds": 10
     },
     {
@@ -81,8 +65,5 @@
     },
     "exit_code": 0
   },
-  "load_config": true,
-  "expected_failure": {
-    "reason": "WP-E06 owns suggestions from completion candidates."
-  }
+  "load_config": true
 }

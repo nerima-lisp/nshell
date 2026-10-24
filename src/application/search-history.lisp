@@ -96,11 +96,20 @@
                matches)
       (first matches)))
 
-(defun history-suggestion (history input)
+(defun history-suggestion (history input &key cwd)
   (unless (nshell.domain.parsing:shell-input-blank-p input)
-    (let ((matches (history-kit:history-search history input :mode :line-prefix)))
-      (when matches
-        (let* ((best (%interactive-history-best-entry matches))
+    (let* ((matches
+             (history-kit:history-search history input :mode :line-prefix))
+           (cwd-matches
+             (and (stringp cwd)
+                  (remove-if-not
+                   (lambda (entry)
+                     (%interactive-history-entry-filter-p
+                      history entry (list :cwd cwd)))
+                   matches)))
+           (ranked-matches (or cwd-matches matches)))
+      (when ranked-matches
+        (let* ((best (%interactive-history-best-entry ranked-matches))
                (suffix
                  (history-kit:history-entry-line-suffix
                   best

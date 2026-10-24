@@ -158,7 +158,15 @@
         16
         " && cat out.txt"
         :suggest-update))
-  (it "suggestion-redirection-helpers-cover-aggregate-and-invalid-targets" "Redirection acceptance keeps aggregate operators and malformed fd targets atomic." (expect 2 :to-equal (nshell.presentation::suggestion-redirection-operator-end "&>" 0)) (expect 2 :to-equal (nshell.presentation::suggestion-redirection-operator-end ">>" 0)) (expect 2 :to-equal (nshell.presentation::suggestion-compact-redirection-end "2>&x" 0)) (expect 5 :to-equal (nshell.presentation::suggestion-compact-redirection-end "2>&10" 0)))
+  (it "input-state-suggestion-accepts-command-substitution-as-one-scanner-segment"
+    "Acceptance includes a command substitution through its scanner delimiter pair."
+    (let ((acceptance
+            (nshell.presentation::next-suggestion-acceptance
+             " $(echo hi) | cat")))
+      (expect " $(echo hi)" :to-equal
+              (nshell.presentation::suggestion-acceptance-accepted acceptance))
+      (expect " | cat" :to-equal
+              (nshell.presentation::suggestion-acceptance-remaining acceptance))))
 
   (it "input-state-copy-explicit-nil-clears-suggestion"
     (let* ((state (input-state
@@ -312,19 +320,31 @@
                       :completion-base-cursor nil
                       :last-candidates nil)))
 
-  (it "input-state-suggestion-accepts-contiguous-word-tokens"
-    "Adjacent word-like tokens form one acceptance segment."
-    (let ((first-token (nshell.domain.parsing:make-token :word "git" 0 3))
-          (second-token (nshell.domain.parsing:make-token :word "status" 3 9)))
-      (expect 9 :to-equal
-        (nshell.presentation::suggestion-token-accept-end
-         (list first-token second-token)
-         first-token))))
+  (it "input-state-suggestion-accepts-dollar-prefix-with-contiguous-scanner-words"
+    (let ((acceptance
+            (nshell.presentation::next-suggestion-acceptance
+             " $HOME/path tail")))
+      (expect " $HOME/path" :to-equal
+              (nshell.presentation::suggestion-acceptance-accepted acceptance))
+      (expect " tail" :to-equal
+              (nshell.presentation::suggestion-acceptance-remaining acceptance))))
 
-  (it "input-state-suggestion-word-like-token-p-returns-canonical-booleans"
-    (expect t :to-be (nshell.presentation::suggestion-word-like-token-p
-               (nshell.domain.parsing:make-token :word "git")))
-    (expect t :to-be (nshell.presentation::suggestion-word-like-token-p
-               (nshell.domain.parsing:make-token :error "git")))
-    (expect (nshell.presentation::suggestion-word-like-token-p
-               (nshell.domain.parsing:make-token :pipe "|")) :to-be-null)))
+  (it "input-state-suggestion-word-like-token-p-uses-scanner-kinds"
+    (let* ((tokens
+             (nshell.domain.parsing:scan-result-tokens
+              (nshell.domain.parsing:scan-input
+               "git \"hello world\" | cat"
+               :reader-context :bare-line)))
+           (command-token (first tokens))
+           (string-token
+             (find :string tokens
+                   :key #'nshell.domain.parsing:scan-token-kind))
+           (pipeline-token
+             (find :pipeline tokens
+                   :key #'nshell.domain.parsing:scan-token-kind)))
+      (expect t :to-be
+              (nshell.presentation::suggestion-word-like-token-p command-token))
+      (expect t :to-be
+              (nshell.presentation::suggestion-word-like-token-p string-token))
+      (expect (nshell.presentation::suggestion-word-like-token-p pipeline-token)
+              :to-be-null))))

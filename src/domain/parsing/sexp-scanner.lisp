@@ -70,26 +70,38 @@
     (member text '("<<" "<<-") :test #'string=))
 
   (defun %depth-scan-bare-redirect-at (source position)
-  (let* ((length (length source))
-         (fd-end position)
-         (operators '("&>>" "<<<" "<<-" "2>&1" "1>>" "2>>" "&>"
-                      "&&" "||" "|&" ">>" ">|" "<<" "<&" ">&"
-                      "0<" "1>" "2>" "<" ">" "|" ";" "&")))
-    (loop while (and (< fd-end length) (digit-char-p (char source fd-end)))
-          do (incf fd-end))
-    (when (> fd-end position)
-      (loop for operator in '("<&" ">&")
-            when (and (<= (+ fd-end (length operator)) length)
-                      (string= operator source :start2 fd-end
-                               :end2 (+ fd-end (length operator))))
-              do (return-from %depth-scan-bare-redirect-at
-                   (subseq source position (+ fd-end (length operator))))))
-    (loop for operator in operators
-          when (and (<= (+ position (length operator)) length)
-                    (string= operator source :start2 position
-                             :end2 (+ position (length operator))))
-            do (return-from %depth-scan-bare-redirect-at operator))
-    nil))
+    (let* ((length (length source))
+           (fd-end position)
+           (operators (quote ("&>>" "<<<" "<<-" "2>&1" "1>>" "2>>" "&>"
+                              "&&" "||" "|&" ">>" ">|" "<<" "<&" ">&"
+                              "0<" "1>" "2>" "<" ">" "|" ";" "&"))))
+      (loop while (and (< fd-end length)
+                       (digit-char-p (char source fd-end)))
+            do (incf fd-end))
+      (when (> fd-end position)
+        (loop for operator in (quote ("<&" ">&"))
+              when (and (<= (+ fd-end (length operator)) length)
+                        (string= operator source
+                                 :start2 fd-end
+                                 :end2 (+ fd-end (length operator))))
+                do (return-from %depth-scan-bare-redirect-at
+                     (subseq source position (+ fd-end (length operator)))))
+        (when (and (< fd-end length)
+                   (member (char source fd-end) (quote (#\< #\>))))
+          (let ((end (1+ fd-end)))
+            (when (and (char= (char source fd-end) #\>)
+                       (< end length)
+                       (char= (char source end) #\>))
+              (incf end))
+            (return-from %depth-scan-bare-redirect-at
+              (subseq source position end)))))
+      (loop for operator in operators
+            when (and (<= (+ position (length operator)) length)
+                      (string= operator source
+                               :start2 position
+                               :end2 (+ position (length operator))))
+              do (return-from %depth-scan-bare-redirect-at operator))
+      nil))
 
   (defun %depth-scan-bare-delimiter-value (source start end)
     (with-output-to-string (result)

@@ -134,6 +134,13 @@
         19
         " | less"
         :suggest-update))
+  (it "input-state-alt-right-at-eol-accepts-compact-fd-file-redirection"
+    (with-expected-suggestion-reduction (new-state output)
+        ("grep error log" 14 " 3>target | less" :alt-right)
+        "grep error log 3>target"
+        23
+        " | less"
+        :suggest-update))
 
   (it "input-state-alt-right-at-eol-accepts-multi-digit-fd-redirection"
     (with-expected-suggestion-reduction (new-state output)

@@ -60,6 +60,9 @@
     ("type" . %builtin-type)
     ("wait" . %builtin-wait)
     ("which" . %builtin-which)))
+(defparameter +builtin-binding-specs+
+  (list
+   (list "eval" (quote %builtin-eval-sexp) :argv)))
 
 (defparameter +complete-option-specs+
   '(("-c" :kind :command :requirement "command")

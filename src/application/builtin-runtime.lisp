@@ -217,6 +217,31 @@
 
 (defun %builtin-eval (context args)
   (%execute-eval-command-line-in-context context (%string-join args " ")))
+(defun %builtin-eval-sexp (context args)
+  (handler-case
+      (let ((status 0))
+        (values
+         (with-output-to-string (output)
+           (let ((*standard-output* output))
+             (dolist (reader-result
+                      (nshell.domain.parsing:read-submission
+                       (%string-join args " ")
+                       :reader-context :auto))
+               (multiple-value-bind (value next-status)
+                   (evaluate-reader-result-in-context context reader-result)
+                 (declare (ignore value))
+                 (setf status next-status)))))
+         status))
+    (nshell.domain.parsing:sexp-reader-error (condition)
+      (let* ((cause
+               (nshell.domain.parsing:sexp-reader-error-cause condition))
+             (message
+               (if (typep cause 'simple-condition)
+                   (apply #'format nil
+                          (simple-condition-format-control cause)
+                          (simple-condition-format-arguments cause))
+                   (princ-to-string cause))))
+        (values (format nil "eval: parse error: ~a~%" message) 2)))))
 
 (defun %command-path-spec (command)
   (cdr (assoc command nshell.domain.completion:+command-path-builtin-specs+

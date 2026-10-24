@@ -129,6 +129,20 @@ NAME resolved to a builtin or an executable, NIL when it was not found."
   (dolist (entry +builtin-registry-specs+)
     (setf (gethash (car entry) *builtin-registry*)
           (symbol-function (cdr entry)))))
+(defun %install-builtin-binding-registry ()
+  (clrhash *builtin-binding-registry*)
+  (dolist (entry +builtin-registry-specs+)
+    (register-builtin
+     (car entry)
+     (make-builtin-binding
+      (symbol-function (cdr entry)) :argv)))
+  (dolist (spec +builtin-binding-specs+)
+    (register-builtin
+     (first spec)
+     (make-builtin-binding
+      (symbol-function (second spec))
+      (or (third spec) :argv)))))
 
 (eval-when (:load-toplevel :execute)
-  (%install-builtin-registry))
+  (%install-builtin-registry)
+  (%install-builtin-binding-registry))

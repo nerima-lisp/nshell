@@ -7,7 +7,8 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "dumb",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -22,7 +23,7 @@
   "invocation": {
     "kind": "script",
     "path": "scenario.nsh",
-    "text": "alias o18_alias 'echo \"O18_ALIAS_OK\"'\no18_alias\n(eval 'echo O18_EVAL_OK')\n"
+    "text": "alias o18_alias 'echo \"O18_ALIAS_OK\"'\no18_alias\n(eval \"echo O18_EVAL_OK\")\n"
   },
   "expected": {
     "stdout": {
@@ -34,6 +35,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L03 owns alias and eval execution without reparsing errors."
+    "reason": "The L08 reader executor and L05 stage dispatcher are stubs; alias resolution also needs L02/L07 integration."
   }
 }

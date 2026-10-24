@@ -4,6 +4,7 @@
     "K04"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -33,11 +34,6 @@
     {
       "type": "key",
       "key": "C-c"
-    },
-    {
-      "type": "wait",
-      "contains": ":",
-      "timeout_seconds": 10
     },
     {
       "type": "keys",

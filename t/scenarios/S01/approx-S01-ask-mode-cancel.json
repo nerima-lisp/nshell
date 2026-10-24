@@ -4,6 +4,7 @@
     "S01"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -68,8 +69,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-A01 owns the ask interaction and cancellation behavior."
   }
 }

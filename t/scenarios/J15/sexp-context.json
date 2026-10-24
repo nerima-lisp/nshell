@@ -2,12 +2,13 @@
   "id": "J15-sexp-context",
   "uc": ["J15"],
   "mode": "pty",
-  "input_delay_seconds": 0.1,
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "SCENARIO_J15-sexp-context> "
+      "NSHELL_PROMPT": "SCENARIO_J15-sexp-context> ",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",

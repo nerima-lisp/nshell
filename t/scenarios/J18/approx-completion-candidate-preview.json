@@ -4,6 +4,7 @@
     "J18"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",

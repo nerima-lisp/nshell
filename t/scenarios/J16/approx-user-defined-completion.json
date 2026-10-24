@@ -4,6 +4,7 @@
     "J16"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -89,8 +90,5 @@
     },
     "exit_code": 0
   },
-  "load_config": true,
-  "expected_failure": {
-    "reason": "Plan FR-024 defers user-defined completion to P6; no implementation WP is assigned."
-  }
+  "load_config": true
 }

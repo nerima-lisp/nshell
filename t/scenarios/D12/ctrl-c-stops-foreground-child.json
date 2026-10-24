@@ -4,6 +4,7 @@
     "D12"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -37,20 +38,20 @@
   "steps": [
     {
       "type": "keys",
-      "text": "cat"
+      "text": "sh -c 'printf \"D12_CHILD_%s\\n\" STARTED; sleep 10'"
     },
     {
       "type": "key",
       "key": "Enter"
     },
     {
-      "type": "key",
-      "key": "C-c"
+      "type": "wait",
+      "contains": "D12_CHILD_STARTED",
+      "timeout_seconds": 10
     },
     {
-      "type": "wait",
-      "contains": ":",
-      "timeout_seconds": 10
+      "type": "key",
+      "key": "C-c"
     },
     {
       "type": "keys",

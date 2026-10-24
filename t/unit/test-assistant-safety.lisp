@@ -104,7 +104,183 @@
     (let ((result (nshell.feature.assistant:classify-ast nil)))
       (expect :block :to-be
                (nshell.feature.assistant:assistant-safety-result-classification
-               result)))))
+               result))))
+  (it "classifies S-expression command forms before execution"
+    (labels ((classification (source)
+               (nshell.feature.assistant:assistant-safety-result-classification
+                (nshell.feature.assistant:classify-ast
+                 (first
+                  (nshell.domain.parsing:read-submission
+                   source :reader-context :sexp)))))
+             (reader-result (source)
+               (first
+                (nshell.domain.parsing:read-submission
+                 source :reader-context :auto)))
+             (reader-result-classification (reader-result)
+               (nshell.feature.assistant:assistant-safety-result-classification
+                (nshell.feature.assistant:classify-ast reader-result)))
+             (legacy-classification (source)
+               (nshell.feature.assistant:assistant-safety-result-classification
+                (nshell.feature.assistant:classify-ast
+                 (nshell.domain.parsing:parse-result-ast
+                  (nshell.domain.parsing:parse-command-line source))))))
+      (cl-weave:expect-assertions 25)
+      (expect :confirm :to-be (classification "(ls)"))
+      (expect :safe :to-be (classification "(^ls)"))
+      (expect :block :to-be (classification "(rm -rf /)"))
+      (expect :block :to-be (classification "(| (ls) (rm -rf /))"))
+      (expect :block :to-be (classification "(cat <(rm -rf /))"))
+      (progn
+        (expect :block :to-be (classification "(^rm -rf /)"))
+        (expect :block :to-be (classification "(^rm -rf marker-dir)"))
+        (expect :confirm :to-be (legacy-classification "rm -rf marker-dir"))
+        (expect :confirm :to-be (classification "(^rm -- -rf marker-dir)")))
+      (expect :block :to-be (classification "(|rm| -rf /)"))
+      (expect :confirm :to-be (classification "(^ls > /tmp/marker)"))
+      (expect :confirm :to-be
+              (classification "(^printf value >> /tmp/marker)"))
+      (expect :confirm :to-be
+              (classification "(| (^ls > /tmp/marker) (^cat))"))
+      (expect :confirm :to-be (classification "(unknown-form value)"))
+      (expect :block :to-be
+              (nshell.feature.assistant:assistant-safety-result-classification
+               (nshell.feature.assistant:classify-ast
+                (nshell.domain.parsing:read-submission
+                 "(^ls) (^rm -rf /)" :reader-context :sexp))))
+      (expect :confirm :to-be (legacy-classification "ls > /tmp/marker"))
+      (expect :confirm :to-be (nshell.feature.assistant:assistant-safety-result-classification (nshell.feature.assistant:classify-ast (list :unknown "form"))))
+      (let* ((result (reader-result "ls"))
+             (form (nshell.domain.parsing:reader-result-form result)))
+        (expect (nshell.domain.parsing:command-node-p form) :to-be-truthy)
+        (expect :safe :to-be (reader-result-classification result)))
+      (let* ((result (reader-result "ls > /tmp/marker"))
+             (form (nshell.domain.parsing:reader-result-form result)))
+        (expect (nshell.domain.parsing:command-node-p form) :to-be-truthy)
+        (expect :confirm :to-be (reader-result-classification result)))
+      (let* ((result (reader-result "ls > /tmp/marker | cat"))
+             (form (nshell.domain.parsing:reader-result-form result)))
+        (expect (nshell.domain.parsing:pipeline-node-p form) :to-be-truthy)
+        (expect :confirm :to-be (reader-result-classification result)))
+      (let* ((result (reader-result "ls ; cat > /tmp/marker"))
+             (form (nshell.domain.parsing:reader-result-form result)))
+        (expect (nshell.domain.parsing:sequence-node-p form) :to-be-truthy)
+        (expect :confirm :to-be (reader-result-classification result)))))
+  (it "routes S-expression proposals and agent steps through reader results"
+  (let ((original-reader
+          (symbol-function
+           (find-symbol "READ-SUBMISSION" "NSHELL.DOMAIN.PARSING")))
+        (original-classifier
+          (symbol-function
+           (find-symbol "CLASSIFY-AST" "NSHELL.FEATURE.ASSISTANT")))
+        (reader-contexts nil)
+        (classified-inputs nil)
+        (classification-depth 0)
+        (reader-setting "sexp"))
+    (with-temporary-function
+        ('uiop:getenv
+         (lambda (name)
+           (when (string= name "NSHELL_READER") reader-setting)))
+      (with-temporary-function
+          ('nshell.domain.parsing:read-submission
+           (lambda (source &key reader-context)
+             (push reader-context reader-contexts)
+             (funcall original-reader source :reader-context reader-context)))
+        (with-temporary-function
+            ('nshell.feature.assistant:classify-ast
+             (lambda (input)
+               (when (zerop classification-depth)
+                 (push input classified-inputs))
+               (incf classification-depth)
+               (unwind-protect
+                    (funcall original-classifier input)
+                 (decf classification-depth))))
+          (cl-weave:expect-assertions 27)
+          (multiple-value-bind (status classification reason)
+              (nshell.presentation::%assistant-proposal-assessment
+               "(^rm -rf /)")
+            (expect :classified :to-be status)
+            (expect nil :to-be reason)
+            (expect :block :to-be
+                    (nshell.feature.assistant:assistant-safety-result-classification
+                     classification)))
+          (let ((step (nshell.application::%agent-step-from-text "(^rm -rf /)")))
+            (expect :awaiting-approval :to-be
+                    (nshell.application:agent-step-status step))
+            (expect :block :to-be
+                    (nshell.feature.assistant:assistant-safety-result-classification
+                     (nshell.application:agent-step-classification step)))
+            (expect (nshell.domain.parsing:command-node-p
+                     (nshell.application:agent-step-ast step)) :to-be-truthy)
+            (expect "rm" :to-equal
+                    (nshell.domain.parsing:command-node-command
+                     (nshell.application:agent-step-ast step)))
+            (expect (nshell.domain.parsing:command-node-force-external-p
+                     (nshell.application:agent-step-ast step)) :to-be-truthy))
+          (multiple-value-bind (status classification reason)
+              (nshell.presentation::%assistant-proposal-assessment
+               "ls > /tmp/marker")
+            (expect :classified :to-be status)
+            (expect nil :to-be reason)
+            (expect :confirm :to-be
+                    (nshell.feature.assistant:assistant-safety-result-classification
+                     classification)))
+          (let ((step (nshell.application::%agent-step-from-text
+                       "ls > /tmp/marker")))
+            (expect :awaiting-approval :to-be
+                    (nshell.application:agent-step-status step))
+            (expect :confirm :to-be
+                    (nshell.feature.assistant:assistant-safety-result-classification
+                     (nshell.application:agent-step-classification step)))
+            (expect
+              (and
+               (nshell.domain.parsing:command-node-p
+                (nshell.application:agent-step-ast step))
+               (nshell.domain.parsing:command-node-redirects
+                (nshell.application:agent-step-ast step)))
+              :to-be-truthy))
+          (let ((step (nshell.application::%agent-step-from-text
+                       "(^ls) (^rm -rf /)")))
+            (expect :parse-error :to-be
+                    (nshell.application:agent-step-status step))
+            (expect nil :to-be
+                    (nshell.application:agent-step-ast step)))
+          (expect (list :sexp :auto :bare-line :auto :auto) :to-equal
+                  (nreverse reader-contexts))
+          (let ((reader-result-inputs (nreverse classified-inputs)))
+            (expect 4 :to-equal (length reader-result-inputs))
+            (expect
+              (every
+               (lambda (input)
+                 (and (consp input)
+                      (every (function nshell.domain.parsing:reader-result-p)
+                             input)))
+               reader-result-inputs)
+              :to-be-truthy))
+          (setf reader-contexts nil
+                reader-setting nil
+                classified-inputs nil)
+          (multiple-value-bind (status classification reason)
+              (nshell.presentation::%assistant-proposal-assessment
+               "ls > /tmp/marker")
+            (expect :classified :to-be status)
+            (expect :confirm :to-be
+                    (nshell.feature.assistant:assistant-safety-result-classification
+                     classification)))
+          (let ((step (nshell.application::%agent-step-from-text
+                       "ls > /tmp/marker")))
+            (expect :awaiting-approval :to-be
+                    (nshell.application:agent-step-status step))
+            (expect :confirm :to-be
+                    (nshell.feature.assistant:assistant-safety-result-classification
+                     (nshell.application:agent-step-classification step)))
+            (expect (nshell.domain.parsing:command-node-p
+                     (nshell.application:agent-step-ast step)) :to-be-truthy))
+          (expect nil :to-equal reader-contexts)
+          (let ((legacy-inputs (nreverse classified-inputs)))
+            (expect 2 :to-equal (length legacy-inputs))
+            (expect (every (function nshell.domain.parsing:command-node-p)
+                           legacy-inputs)
+                    :to-be-truthy))))))))
 
   (it "fails closed through command wrappers and strictens the safe allowlist"
     (dolist (case '( ("command rm -rf /" :block)

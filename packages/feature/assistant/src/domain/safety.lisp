@@ -387,12 +387,117 @@
        :reason "the value is not a sequence AST node")))
 
 (defun classify-ast (node)
-  "Classify a shell AST value without inspecting raw text."
-  (cond
-    ((nshell.domain.parsing:command-node-p node) (classify-command node))
-    ((nshell.domain.parsing:pipeline-node-p node) (classify-pipeline node))
-    ((nshell.domain.parsing:sequence-node-p node)
-     (%assistant-classify-sequence node))
-    (t (make-assistant-safety-result
-        :classification :block
-        :reason "unsupported AST node"))))
+  "Classify shell AST and S-expression input without inspecting raw text."
+  (labels ((reader-ast-has-redirect-p (node)
+             (cond
+               ((nshell.domain.parsing:command-node-p node)
+                (not
+                 (null
+                  (nshell.domain.parsing:command-node-redirects node))))
+               ((nshell.domain.parsing:pipeline-node-p node)
+                (some (function reader-ast-has-redirect-p)
+                      (nshell.domain.parsing:pipeline-node-commands node)))
+               ((nshell.domain.parsing:sequence-node-p node)
+                (some (function reader-ast-has-redirect-p)
+                      (nshell.domain.parsing:sequence-node-commands node)))
+               (t nil)))
+           (reader-ast-has-recursive-delete-p (node)
+             (cond
+               ((nshell.domain.parsing:command-node-p node)
+                (and
+                 (string= "rm"
+                          (%assistant-command-basename
+                           (nshell.domain.parsing:command-node-command node)))
+                 (%assistant-condition-p
+                  (quote (:any (:short-option-any "rR")
+                               (:option-equals "--recursive")))
+                  (nshell.domain.parsing:command-node-arg-values node))))
+               ((nshell.domain.parsing:pipeline-node-p node)
+                (some (function reader-ast-has-recursive-delete-p)
+                      (nshell.domain.parsing:pipeline-node-commands node)))
+               ((nshell.domain.parsing:sequence-node-p node)
+                (some (function reader-ast-has-recursive-delete-p)
+                      (nshell.domain.parsing:sequence-node-commands node)))
+               (t nil)))
+           (classify-reader-result (reader-result)
+             (let ((form (nshell.domain.parsing:reader-result-form
+                          reader-result)))
+               (cond
+                 ((or (nshell.domain.parsing:command-node-p form)
+                      (nshell.domain.parsing:pipeline-node-p form)
+                      (nshell.domain.parsing:sequence-node-p form))
+                  (let ((result (classify-ast form)))
+                    (cond
+                      ((reader-ast-has-recursive-delete-p form)
+                       (make-assistant-safety-result
+                        :classification :block
+                        :reason "recursive deletion proposals are blocked"))
+                      ((and
+                        (eq :safe
+                            (assistant-safety-result-classification result))
+                        (reader-ast-has-redirect-p form))
+                       (make-assistant-safety-result
+                        :classification :confirm
+                        :reason "Reader-result redirects require confirmation"))
+                      (t result))))
+                 ((consp form)
+                  (handler-case
+                      (let* ((ast
+                               (nshell.domain.parsing:command-form->ast
+                                (nshell.domain.parsing:reader-result-source
+                                 reader-result)
+                                form
+                                (nshell.domain.parsing:reader-result-form-span-map
+                                 reader-result)
+                                (lambda (head-source)
+                                  (declare (ignore head-source))
+                                  :command-island)))
+                             (result (classify-ast ast)))
+                        (cond
+                          ((reader-ast-has-recursive-delete-p ast)
+                           (make-assistant-safety-result
+                            :classification :block
+                            :reason "recursive deletion proposals are blocked"))
+                          ((and
+                            (eq :safe
+                                (assistant-safety-result-classification
+                                 result))
+                            (not
+                             (and
+                              (nshell.domain.parsing:command-node-p ast)
+                              (nshell.domain.parsing:command-node-force-external-p
+                               ast)
+                              (not (reader-ast-has-redirect-p ast))
+                              (ignore-errors
+                                (every (function atom) form)))))
+                           (make-assistant-safety-result
+                            :classification :confirm
+                            :reason "S-expression command requires explicit force and has no redirects"))
+                          (t result)))
+                    (error ()
+                      (make-assistant-safety-result
+                       :classification :confirm
+                       :reason "unclassifiable S-expression form"))))
+                 (t
+                  (make-assistant-safety-result
+                   :classification :confirm
+                   :reason "unclassifiable S-expression form"))))))
+    (cond
+      ((nshell.domain.parsing:reader-result-p node)
+       (classify-reader-result node))
+      ((and (consp node)
+            (ignore-errors
+              (every (function nshell.domain.parsing:reader-result-p) node)))
+       (%assistant-most-restrictive-result
+        (mapcar (function classify-reader-result) node)))
+      ((nshell.domain.parsing:command-node-p node) (classify-command node))
+      ((nshell.domain.parsing:pipeline-node-p node) (classify-pipeline node))
+      ((nshell.domain.parsing:sequence-node-p node)
+       (%assistant-classify-sequence node))
+      ((consp node)
+       (make-assistant-safety-result
+        :classification :confirm
+        :reason "unclassifiable S-expression form"))
+      (t (make-assistant-safety-result
+          :classification :block
+          :reason "unsupported AST node")))))

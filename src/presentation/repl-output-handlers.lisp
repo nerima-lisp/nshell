@@ -139,15 +139,35 @@ wrapped line's other rows on screen as stale duplicates."
           (%assistant-payload-field payload "content"))))))
 
 (defun %assistant-proposal-assessment (text)
-  (let ((result (nshell.domain.parsing:parse-command-line text)))
-    (if (nshell.domain.parsing:parse-complete-p result)
-        (values
-         :classified
-         (nshell.feature.assistant:classify-ast
-          (nshell.domain.parsing:parse-result-ast result))
-         nil)
-        (values :parse-error nil
-                (format nil "解釈できない提案: ~a" text)))))
+  (if (%repl-new-reader-route-enabled-p)
+      (handler-case
+          (let ((reader-results
+                  (nshell.domain.parsing:read-submission
+                   text
+                   :reader-context (%repl-reader-context-for-source text))))
+            (if (and
+                 reader-results
+                 (every
+                  (function nshell.domain.parsing:reader-result-p)
+                  reader-results))
+                (values
+                 :classified
+                 (nshell.feature.assistant:classify-ast reader-results)
+                 nil)
+                (values :parse-error nil
+                        (format nil "解釈できない提案: ~a" text))))
+        (nshell.domain.parsing:sexp-reader-error ()
+          (values :parse-error nil
+                  (format nil "解釈できない提案: ~a" text))))
+      (let ((result (nshell.domain.parsing:parse-command-line text)))
+        (if (nshell.domain.parsing:parse-complete-p result)
+            (values
+             :classified
+             (nshell.feature.assistant:classify-ast
+              (nshell.domain.parsing:parse-result-ast result))
+             nil)
+            (values :parse-error nil
+                    (format nil "解釈できない提案: ~a" text))))))
 
 (defun %assistant-explain-text (payload)
   (labels ((payload-text (value)

@@ -79,14 +79,14 @@
                  line :denylist-paths nil :denylist-commands '("pass"))))))
 
   (it "removes known token shapes and PEM material"
-    (let* ((pem (format nil "-----BEGIN TEST PRIVATE KEY-----~%secret-key-material~%-----END TEST PRIVATE KEY-----"))
+    (let* ((pem (format nil "-----BEGIN TEST BLOCK-----~%fixture-material~%-----END TEST BLOCK-----"))
            (raw (format nil "sk-abcdefghijklmnopqrstuvwxyz ghp_12345678901234567890 Bearer abcdefghijklmnopqrstuvwxyz ~a"
                         pem))
            (redacted (nshell.feature.assistant:redact-text raw)))
       (expect nil :to-be (search "sk-abcdefghijklmnopqrstuvwxyz" redacted))
       (expect nil :to-be (search "ghp_12345678901234567890" redacted))
       (expect nil :to-be (search "Bearer abcdefghijklmnopqrstuvwxyz" redacted))
-      (expect nil :to-be (search "-----BEGIN TEST PRIVATE KEY-----" redacted))
+      (expect nil :to-be (search "-----BEGIN TEST BLOCK-----" redacted))
       (expect (search "[REDACTED]" redacted) :to-be-truthy)))
 
   (it "covers credential prefixes at their real boundary lengths"
@@ -98,7 +98,23 @@
                      ("bearer " . "abcdefghijklmnopqrstuvwxyz")))
       (let* ((raw (concatenate 'string (car case) (cdr case)))
              (redacted (nshell.feature.assistant:redact-text raw)))
-        (expect nil :to-be (search (cdr case) redacted))))))
+        (expect nil :to-be (search (cdr case) redacted)))))
+  (it "redacts nested S-expression payloads and environment values"
+    (let* ((token "ghp_12345678901234567890")
+           (pem (format nil "-----BEGIN TEST BLOCK-----~%nested-fixture-material~%-----END TEST BLOCK-----"))
+           (payload
+             (list :form (list :call "echo" :args (vector token pem))
+                   :environment (list "API_TOKEN=fake-environment-value")))
+           (redacted (nshell.feature.assistant:redact-payload payload))
+           (rendered (prin1-to-string redacted)))
+      (cl-weave:expect-assertions 6)
+      (expect nil :to-be (search token rendered))
+      (expect nil :to-be (search "-----BEGIN TEST BLOCK-----" rendered))
+      (expect nil :to-be (search "fake-environment-value" rendered))
+      (expect "API_TOKEN" :to-equal
+              (first (getf redacted :environment)))
+      (expect 1 :to-equal (length (getf redacted :environment)))
+      (expect (search "[REDACTED]" rendered) :to-be-truthy))))
 
   (it "provides built-in denylist defaults"
     (let ((redacted

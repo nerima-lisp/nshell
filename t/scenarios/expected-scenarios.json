@@ -632,6 +632,13 @@
       "path": "G07/blank-continuation-line-keeps-shell-alive.json"
     },
     {
+      "id": "G08-structural-editing",
+      "uc": [
+        "G08"
+      ],
+      "path": "G08/structural-editing.json"
+    },
+    {
       "id": "G09-approx-balanced-parentheses-before-enter",
       "uc": [
         "G09"

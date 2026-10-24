@@ -104,7 +104,7 @@ executable scenarios and manual checks.
 | G05 | approximation | 1 | 0 | `t/scenarios/G05/approx-multiline-buffer-navigation.json` |
 | G06 | direct, manual | 1 | 1 | `t/scenarios/G06/nested-matching-delimiters.json`, `t/scenarios/G06/manual.md` |
 | G07 | direct, manual | 2 | 1 | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json`, `t/scenarios/G07/blank-continuation-line-keeps-shell-alive.json`, `t/scenarios/G07/manual.md` |
-| G08 | manual | 0 | 1 | `t/scenarios/G08/manual.md` |
+| G08 | direct, manual | 1 | 1 | `t/scenarios/G08/structural-editing.json`, `t/scenarios/G08/manual.md` |
 | G09 | approximation | 1 | 0 | `t/scenarios/G09/approx-balanced-parentheses-before-enter.json` |
 | G10 | approximation, manual | 1 | 1 | `t/scenarios/G10/external-editor.json`, `t/scenarios/G10/manual.md` |
 | G11 | direct | 2 | 0 | `t/scenarios/G11/clear-screen.json`, `t/scenarios/G11/clear-screen-keeps-prompt.json` |
@@ -233,4 +233,4 @@ executable scenarios and manual checks.
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 232 | 48 | — |
+| Total | expected corpus | 233 | 48 | — |

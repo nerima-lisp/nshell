@@ -1,0 +1,172 @@
+{
+  "id": "G08-structural-editing",
+  "uc": [
+    "G08"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.2,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NO_COLOR": "1",
+      "NSHELL_PROMPT": "G08-structural-editing> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "expected": {
+    "screen": {
+      "contains": [
+        "G08-structural-editing> "
+      ],
+      "excludes": [
+        "nshell error"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "(list (list G08_CHILD G08_TARGET) G08_AFTER)"
+    },
+    { "type": "key", "key": "C-a" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-b" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-k" },
+    { "type": "key", "key": "C-e" },
+    {
+      "type": "wait",
+      "contains": "(list (list G08_CHILD) G08_AFTER)",
+      "timeout_seconds": 10
+    },
+    { "type": "key", "key": "C-a" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-b" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-y" },
+    { "type": "key", "key": "C-M-u" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-b" },
+    { "type": "key", "key": "C-e" },
+    { "type": "key", "key": "C-b" },
+    {
+      "type": "keys",
+      "text": " G08_NEW"
+    },
+    { "type": "key", "key": "C-e" },
+    {
+      "type": "wait",
+      "contains": "(list (list G08_CHILD G08_TARGET) G08_AFTER G08_NEW)",
+      "timeout_seconds": 10
+    },
+    { "type": "key", "key": "C-c" },
+    {
+      "type": "keys",
+      "text": "(+ G08_BW_LEFT G08_BW_KILL G08_BW_RIGHT)"
+    },
+    { "type": "key", "key": "C-a" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-Delete" },
+    { "type": "key", "key": "C-y" },
+    { "type": "key", "key": "C-e" },
+    { "type": "key", "key": "C-b" },
+    {
+      "type": "keys",
+      "text": " G08_BW_NEW"
+    },
+    { "type": "key", "key": "C-e" },
+    {
+      "type": "wait",
+      "contains": "(+ G08_BW_LEFT G08_BW_KILL G08_BW_RIGHT G08_BW_NEW)",
+      "timeout_seconds": 10
+    },
+    { "type": "key", "key": "C-c" },
+    {
+      "type": "keys",
+      "text": "(+ G08_SF_LEFT) G08_SF_RIGHT"
+    },
+    { "type": "key", "key": "C-a" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-Right" },
+    { "type": "key", "key": "C-e" },
+    {
+      "type": "wait",
+      "contains": "(+ G08_SF_LEFT G08_SF_RIGHT)",
+      "timeout_seconds": 10
+    },
+    { "type": "key", "key": "C-c" },
+    {
+      "type": "keys",
+      "text": "(+ G08_BF_LEFT G08_BF_RIGHT)"
+    },
+    { "type": "key", "key": "C-a" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-S-Right" },
+    { "type": "key", "key": "C-e" },
+    {
+      "type": "wait",
+      "contains": "(+ G08_BF_LEFT) G08_BF_RIGHT",
+      "timeout_seconds": 10
+    },
+    { "type": "key", "key": "C-c" },
+    {
+      "type": "keys",
+      "text": "(list list (+ G08_SB_RIGHT))"
+    },
+    { "type": "key", "key": "C-a" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-f" },
+    { "type": "key", "key": "C-f" },
+    { "type": "key", "key": "C-M-Left" },
+    { "type": "key", "key": "C-e" },
+    {
+      "type": "wait",
+      "contains": "(list (list + G08_SB_RIGHT))",
+      "timeout_seconds": 10
+    },
+    { "type": "key", "key": "C-c" },
+    {
+      "type": "keys",
+      "text": "(list (list + G08_BB_LEFT G08_BB_RIGHT))"
+    },
+    { "type": "key", "key": "C-a" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-f" },
+    { "type": "key", "key": "C-M-d" },
+    { "type": "key", "key": "C-M-S-Left" },
+    { "type": "key", "key": "C-e" },
+    {
+      "type": "wait",
+      "contains": "(list list (+ G08_BB_LEFT G08_BB_RIGHT))",
+      "timeout_seconds": 10
+    },
+    { "type": "key", "key": "C-c" },
+    { "type": "keys", "text": "exit" },
+    { "type": "key", "key": "Enter" },
+    { "type": "wait_exit", "timeout_seconds": 10 }
+  ]
+}

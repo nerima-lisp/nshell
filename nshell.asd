@@ -272,6 +272,7 @@
    (:file "infrastructure/acl/syscall-environment")
    (:file "infrastructure/acl/syscall-redirection")
    (:file "infrastructure/acl/syscall-job-control")
+   (:file "infrastructure/acl/syscall-posix-spawn")
    (:file "infrastructure/acl/syscall-process-resolution")
    (:file "infrastructure/acl/syscall-process-io")
    (:file "infrastructure/acl/syscall-process")

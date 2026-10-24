@@ -10,14 +10,16 @@
       (%run-pipeline-command command args *standard-input* t t environment resolved))))
 
 (defun process-pid (process)
-  (if (pty-process-p process)
-      (pty-process-pid process)
-      (sb-ext:process-pid process)))
+  (cond
+    ((pty-process-p process) (pty-process-pid process))
+    ((native-process-p process) (native-process-pid process))
+    (t (sb-ext:process-pid process))))
 
 (defun process-status (process)
-  (if (pty-process-p process)
-      (pty-process-status process)
-      (sb-ext:process-status process)))
+  (cond
+    ((pty-process-p process) (pty-process-status process))
+    ((native-process-p process) (native-process-status process))
+    (t (sb-ext:process-status process))))
 
 (defun %wait-sbcl-process (process &optional check-for-stopped)
   ;; SBCL's wake pipe can close an already closed FD on successive CONT/STOP
@@ -30,26 +32,31 @@
                             process
                             (sb-ext:process-wait process)))))
 
-(defun process-wait (process)
-  (if (pty-process-p process)
-      (pty-process-wait process)
-      (%wait-sbcl-process process)))
+(defun process-wait (process &optional check-for-stopped)
+  (cond
+    ((pty-process-p process) (pty-process-wait process))
+    ((native-process-p process) (%wait-native-process process check-for-stopped))
+    (t (%wait-sbcl-process process check-for-stopped))))
 
 (defun process-continue (process)
-  (if (pty-process-p process)
-      (pty-process-continue process)
-      ;; SBCL 2.6 does not invalidate a cached stop when sending SIGCONT.
-      ;; Use its waitpid lock so a later stop or exit cannot be overwritten.
-      (sb-sys:without-interrupts
-        (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
-          (multiple-value-bind (sent errno)
-              (sb-ext:process-kill process sb-unix:sigcont :pid)
-            (when (and sent (eq :stopped (sb-impl::process-%status process)))
-              (setf (sb-impl::process-%status process) :running
-                    (sb-impl::process-%exit-code process) nil))
-            (values sent errno))))))
+  (cond
+    ((pty-process-p process) (pty-process-continue process))
+    ((native-process-p process)
+     (let ((sent (%native-process-kill process sb-unix:sigcont)))
+       (when (and sent (eq :stopped (native-process-status process)))
+         (%mark-native-process-running process))
+       sent))
+    (t
+     (sb-sys:without-interrupts
+       (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
+         (multiple-value-bind (sent errno)
+             (sb-ext:process-kill process sb-unix:sigcont :pid)
+           (when (and sent (eq :stopped (sb-impl::process-%status process)))
+             (setf (sb-impl::process-%status process) :running
+                   (sb-impl::process-%exit-code process) nil))
+           (values sent errno)))))))
 (defun process-continue-group (pgid processes)
-  "Continue PGID and refresh its registered SBCL process statuses under the waitpid lock."
+  "Continue PGID and refresh its registered process statuses under the waitpid lock."
   (sb-sys:without-interrupts
     (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
       (handler-case
@@ -58,48 +65,56 @@
           (unless (= (sb-posix:syscall-errno condition) sb-posix:esrch)
             (error condition))))
       (dolist (process processes)
-        (when (eq :stopped (sb-impl::process-%status process))
-          (setf (sb-impl::process-%status process) :running
-                (sb-impl::process-%exit-code process) nil)))
+        (cond
+          ((native-process-p process)
+           (%mark-native-process-running process))
+          ((not (pty-process-p process))
+           (when (eq :stopped (sb-impl::process-%status process))
+             (setf (sb-impl::process-%status process) :running
+                   (sb-impl::process-%exit-code process) nil)))))
       t)))
 
 (defun process-alive-p (process)
-  (if (pty-process-p process)
-      (member (pty-process-status process) '(:running :stopped))
-      (sb-ext:process-alive-p process)))
+  (cond
+    ((pty-process-p process)
+     (member (pty-process-status process) '(:running :stopped)))
+    ((native-process-p process) (%native-process-alive-p process))
+    (t (sb-ext:process-alive-p process))))
 
 (defun process-exit-status-code (proc)
-  "Return shell-compatible exit status for an SBCL process."
-  (if (pty-process-p proc)
-      (progn
-        (unless (member (pty-process-status proc) '(:exited :signaled))
-          (pty-process-wait proc))
-        (or (pty-process-exit-status proc) 0))
-      (let ((code (sb-ext:process-exit-code proc)))
-        (if (and code (eq (sb-ext:process-status proc) :signaled))
-            (+ 128 code)
-            (or code 0)))))
+  (cond
+    ((pty-process-p proc)
+     (progn
+       (unless (member (pty-process-status proc) '(:exited :signaled))
+         (pty-process-wait proc))
+       (or (pty-process-exit-status proc) 0)))
+    ((native-process-p proc) (%native-process-exit-status-code proc))
+    (t
+     (let ((code (sb-ext:process-exit-code proc)))
+       (if (and code (eq (process-status proc) :signaled))
+           (+ 128 code)
+           (or code 0))))))
 
 (defun %wait-process-exit-with-timeout (proc timeout-seconds)
   (let ((deadline (+ (get-internal-real-time)
                      (round (* timeout-seconds internal-time-units-per-second))))
         (sleep-seconds 0.0001))
-    (loop while (and (sb-ext:process-alive-p proc)
+    (loop while (and (process-alive-p proc)
                      (< (get-internal-real-time) deadline))
           for remaining-seconds = (/ (- deadline (get-internal-real-time))
                                      (float internal-time-units-per-second))
           do (sleep (min sleep-seconds (max 0 remaining-seconds)))
              (setf sleep-seconds (min 0.01 (* 2 sleep-seconds))))
-    (unless (sb-ext:process-alive-p proc)
-      (ignore-errors (sb-ext:process-wait proc))
+    (unless (process-alive-p proc)
+      (ignore-errors (process-wait proc))
       t)))
 
 (defun %terminate-process (proc &optional expected-pgid)
   (when proc
-    (let ((pid (sb-ext:process-pid proc)))
+    (let ((pid (process-pid proc)))
       (flet ((terminate (signal)
-               (let* ((alive-p (ignore-errors (sb-ext:process-alive-p proc)))
-                      (status (ignore-errors (sb-ext:process-status proc)))
+               (let* ((alive-p (ignore-errors (process-alive-p proc)))
+                      (status (ignore-errors (process-status proc)))
                       (signalable-p (and alive-p
                                          (member status '(:running :stopped))))
                       (actual-pgid (and (integerp pid) (plusp pid)
@@ -118,13 +133,13 @@
                  (if owns-process-group-p
                      (ignore-errors (%send-process-group-signal pid signal))
                      (when signalable-p
-                       (ignore-errors (sb-ext:process-kill proc signal)))))))
+                       (ignore-errors (kill-process pid signal)))))))
         (terminate sb-unix:sigterm)
         (%wait-process-exit-with-timeout proc 0.5)
         (terminate sb-unix:sigkill)
         (%wait-process-exit-with-timeout proc 0.5)
-        (unless (sb-ext:process-alive-p proc)
-          (ignore-errors (sb-ext:process-wait proc)))))))
+        (unless (process-alive-p proc)
+          (ignore-errors (process-wait proc)))))))
 
 (defmacro %with-process-output-copiers ((copiers) &body body)
   "Run BODY while guaranteeing that process output COPIERS are joined."
@@ -139,7 +154,7 @@
         (copiers-joined-p nil))
     (unwind-protect
          (progn
-           (loop while (or (some #'sb-ext:process-alive-p procs)
+           (loop while (or (some #'process-alive-p procs)
                            (some #'sb-thread:thread-alive-p copiers))
                  do (when (and deadline
                                (>= (funcall *process-output-clock*) deadline))
@@ -175,7 +190,7 @@
         (%wait-processes-with-output-copiers
          (list proc) copiers timeout-seconds
          (lambda ()
-           (when (sb-ext:process-alive-p proc)
+           (when (process-alive-p proc)
              (%terminate-process proc))))
       (unless output-complete-p
         (if timed-out-p
@@ -185,14 +200,14 @@
       (if timed-out-p
           (funcall timeout-fn)
           (progn
-            (%wait-sbcl-process proc)
+            (process-wait proc)
             (funcall success-fn))))))
 
 (defun %wait-process-with-copiers-or-stop (proc copiers success-fn stop-fn)
   "Wait for PROC while allowing a stopped process to be continued."
   (loop
-    (%wait-sbcl-process proc t)
-    (if (eq (sb-ext:process-status proc) :stopped)
+    (process-wait proc t)
+    (if (eq (process-status proc) :stopped)
         (let ((decision (funcall stop-fn)))
           (unless (eq decision :continue-wait) (return decision))
           (sleep 0.05))
@@ -205,9 +220,9 @@
     (unwind-protect
          (progn
            (push (%start-process-output-copier proc output) copiers)
-           (let ((error-stream (sb-ext:process-error proc)))
+           (let ((error-stream (process-error proc)))
              (when (and error-stream
-                        (not (eq error-stream (sb-ext:process-output proc))))
+                        (not (eq error-stream (process-output proc))))
                (push (%start-stream-copier error-stream error-output
                                           "nshell process error copier")
                      copiers)))
@@ -218,7 +233,7 @@
         (when (and copier (sb-thread:thread-alive-p copier))
           (sb-thread:terminate-thread copier))
         (%join-stream-copier copier))
-      (sb-ext:process-close proc))))
+      (process-close proc))))
 
 (defun spawn-async (cmd args &key redirects)
   "Spawn CMD with ARGS asynchronously. Returns the process or NIL on error."
@@ -231,8 +246,15 @@
                  (multiple-value-bind (resolved-cmd environment)
                      (%prepare-external-command cmd)
                    (when resolved-cmd
-                     (%spawn-in-own-process-group resolved-cmd args environment
-                                                  input output))))
+                     (multiple-value-bind (process input-transferred-p)
+                         (%spawn-in-own-process-group
+                          resolved-cmd args environment input output
+                          :input-source-owned-p
+                          (not (null (member input redirect-streams :test #'eq))))
+                       (when input-transferred-p
+                         (setf redirect-streams
+                               (remove input redirect-streams :test #'eq)))
+                       process))))
              (error (err)
                (format *error-output* "nshell: ~a: ~a~%" cmd err)
                nil))

@@ -28,15 +28,15 @@
                              resolved-command arguments environment
                              input output :error error-output)))
                (if process
-                   (let* ((pid (ignore-errors (sb-ext:process-pid process)))
+                   (let* ((pid (ignore-errors (process-pid process)))
                           (process-input (if (eq input :stream)
-                                             (sb-ext:process-input process)
+                                             (process-input process)
                                              input))
                           (process-output (if (eq output :stream)
-                                              (sb-ext:process-output process)
+                                              (process-output process)
                                               output))
                           (process-error (if (eq error-output :stream)
-                                             (sb-ext:process-error process)
+                                             (process-error process)
                                              (if (eq error-output :output)
                                                  process-output
                                                  error-output))))
@@ -53,7 +53,7 @@
   (and (sidecar-handle-p handle)
        (eq :running (sidecar-handle-cleanup-state handle))
        (ignore-errors
-        (sb-ext:process-alive-p (sidecar-handle-process handle)))))
+        (process-alive-p (sidecar-handle-process handle)))))
 
 (defun %close-sidecar-stream (stream)
   (when (streamp stream)
@@ -71,7 +71,7 @@
         (%close-sidecar-stream (sidecar-handle-output handle))
         (%close-sidecar-stream (sidecar-handle-error handle))
         (ignore-errors
-         (sb-ext:process-close (sidecar-handle-process handle)))
+         (process-close (sidecar-handle-process handle)))
         (setf (sidecar-handle-cleanup-state handle) :stopped)
         t)))
 
@@ -111,7 +111,7 @@
                            (round (* +sidecar-version-timeout-seconds+
                                      internal-time-units-per-second))))
               (timed-out-p nil))
-          (loop while (sb-ext:process-alive-p
+          (loop while (process-alive-p
                        (sidecar-handle-process handle))
                 do (cond
                      ((and cancelled-p (funcall cancelled-p))
@@ -122,7 +122,7 @@
                       (return))
                      (t (sleep 0.01))))
           (unless timed-out-p
-            (ignore-errors (sb-ext:process-wait (sidecar-handle-process handle))))
+            (ignore-errors (process-wait (sidecar-handle-process handle))))
           (when timed-out-p
             (stop-sidecar handle))
           (ignore-errors

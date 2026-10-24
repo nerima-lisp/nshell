@@ -40,53 +40,16 @@
 
 (defun %spawn-external-command
     (resolved-cmd args environment &key input output (error nil error-supplied-p)
-                  preserve-fds)
-  (let* ((host-environment (sb-ext:posix-environ))
-         (helper (or (%environment-value "CL_PROCESS_KIT_SPAWN" host-environment)
-                     (%resolve-external-command "cl-process-kit-spawn"
-                                                host-environment))))
-    (unless helper (error "cl-process-kit-spawn is unavailable"))
-    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
-      (let ((proc nil) (error-stream nil) (complete nil))
-        (unwind-protect
-             (progn
-               (setf error-stream
-                     (sb-sys:make-fd-stream
-                      read-fd :input t :element-type (quote (unsigned-byte 8))
-                      :auto-close t)
-                     read-fd nil)
-               (setf proc
-                     (sb-ext:run-program
-                      helper
-                      (append
-                       (list "--error-fd" (write-to-string write-fd)
-                             "--pgroup" "0")
-                       (loop for fd in preserve-fds
-                             append (list "--pass" (write-to-string fd)))
-                       (list "--" resolved-cmd)
-                       args)
-                      :input input
-                      :output output
-                      :error (if error-supplied-p error
-                                 (if *redirected-stderr* *error-output* :output))
-                      :wait nil
-                      :search nil
-                      :environment environment
-                      :preserve-fds (cons write-fd preserve-fds)))
-               (sb-posix:close write-fd)
-               (setf write-fd nil)
-               (when (read-byte error-stream nil nil)
-                 (error "cl-process-kit-spawn failed before exec"))
-               (setf complete t)
-               proc)
-          (unless complete
-            (when proc
-              (ignore-errors (sb-ext:process-kill proc sb-unix:sigkill))
-              (ignore-errors (sb-ext:process-wait proc))
-              (ignore-errors (sb-ext:process-close proc))))
-          (when error-stream (close error-stream))
-          (when read-fd (sb-posix:close read-fd))
-          (when write-fd (sb-posix:close write-fd)))))))
+                  preserve-fds (process-group :inherit) input-source-owned-p)
+  (%spawn-posix-process
+   resolved-cmd args environment
+   :input input
+   :output output
+   :error (if error-supplied-p error
+              (if *redirected-stderr* *error-output* :output))
+   :process-group process-group
+   :preserve-fds preserve-fds
+   :input-source-owned-p input-source-owned-p))
 
 (defun %resolve-input-redirect (redirects register)
   "Return the standard-input stream REDIRECTS ask for, calling REGISTER on any
@@ -114,18 +77,17 @@ process's own stdout, calling REGISTER on any stream opened here."
         t)))
 
 (defun %spawn-in-own-process-group (resolved-cmd args environment input output
-                                    &key (error nil error-supplied-p))
-  "Spawn RESOLVED-CMD wired to INPUT/OUTPUT and isolate it in its own process group. Returns the process, or NIL when the spawn fails."
-  (let ((proc (if error-supplied-p
-                  (%spawn-external-command resolved-cmd args environment
-                                           :input input :output output :error error)
-                  (%spawn-external-command resolved-cmd args environment
-                                           :input input :output output))))
-    (when proc
-      (let ((pid (sb-ext:process-pid proc)))
-        (when (plusp pid)
-          (ignore-errors (set-process-group pid pid))))
-      proc)))
+                                    &key (error nil error-supplied-p)
+                                         input-source-owned-p)
+  (if error-supplied-p
+      (%spawn-external-command resolved-cmd args environment
+                               :input input :output output :error error
+                               :process-group :new
+                               :input-source-owned-p input-source-owned-p)
+      (%spawn-external-command resolved-cmd args environment
+                               :input input :output output
+                               :process-group :new
+                               :input-source-owned-p input-source-owned-p)))
 (defun run-shell-command (command arguments environment)
   "Run COMMAND through /bin/sh with its argument vector and stdio preserved."
   (check-type command string)
@@ -138,9 +100,10 @@ process's own stdout, calling REGISTER on any stream opened here."
            environment
            :input t
            :output t
-           :error t)))
-    (sb-ext:process-wait process)
-    (let ((code (sb-ext:process-exit-code process)))
-      (if (and code (eq (sb-ext:process-status process) :signaled))
-          (+ 128 code)
-          (or code 0)))))
+           :error t
+           :process-group :new)))
+    (unwind-protect
+         (progn
+           (process-wait process)
+           (process-exit-status-code process))
+      (process-close process))))

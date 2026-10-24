@@ -75,17 +75,17 @@
                      (nshell.infrastructure.acl:%spawn-terminal-command
                       "/bin/sh"
                       (list "-c" "printf started > \"$1\"" "nshell-test" target)))
-               (expect :stopped :to-equal (sb-ext:process-status process))
-               (expect (sb-ext:process-pid process) :to-equal
-                       (sb-posix:getpgid (sb-ext:process-pid process)))
+               (expect :stopped :to-equal (nshell.infrastructure.acl:process-status process))
+               (expect (nshell.infrastructure.acl:process-pid process) :to-equal
+                       (sb-posix:getpgid (nshell.infrastructure.acl:process-pid process)))
                (expect (probe-file target) :to-be-null)
                (nshell.infrastructure.acl:process-continue process)
-               (sb-ext:process-wait process)
+               (nshell.infrastructure.acl:process-wait process)
                (expect 0 :to-equal
                        (nshell.infrastructure.acl:process-exit-status-code process))
                (expect "started" :to-equal (host-kit:read-file-string target)))
           (nshell.infrastructure.acl::%terminate-process process)
-          (when process (sb-ext:process-close process))))))
+          (when process (nshell.infrastructure.acl:process-close process))))))
 
   (it "spawn-pipeline-timeout-covers-orphaned-output-writer"
     (with-temporary-output-file (pid-file :prefix "nshell-pipeline-orphan")
@@ -143,11 +143,11 @@
                     :default-output :stream))
              (expect 2 :to-equal (length processes))
              (setf child-pid
-                   (parse-integer (read-line (sb-ext:process-output (second processes)))))
-             (sb-ext:process-wait (first processes))
-             (expect :exited :to-equal (sb-ext:process-status (first processes)))
+                   (parse-integer (read-line (nshell.infrastructure.acl:process-output (second processes)))))
+             (nshell.infrastructure.acl:process-wait (first processes))
+             (expect :exited :to-equal (nshell.infrastructure.acl:process-status (first processes)))
              (expect (ignore-errors (sb-posix:getpgid
-                                     (sb-ext:process-pid (first processes))))
+                                     (nshell.infrastructure.acl:process-pid (first processes))))
                      :to-be-null)
              (nshell.infrastructure.acl::%terminate-pipeline-processes (reverse processes))
              (loop repeat 100
@@ -257,7 +257,7 @@
                              (loop repeat 3 collect
                                (nshell.domain.parsing:make-command-node "true" nil)))))
           (expect 1 :to-equal (length processes))
-          (expect :signaled :to-equal (sb-ext:process-status (first processes)))
+          (expect :signaled :to-equal (nshell.infrastructure.acl:process-status (first processes)))
           (expect 4 :to-equal (length descriptors))
           (dolist (fd descriptors)
             (expect sb-posix:ebadf :to-equal
@@ -283,7 +283,7 @@
         (expect 2 :to-equal (length processes))
         (expect t :to-equal
                 (every (lambda (process)
-                         (eq :signaled (sb-ext:process-status process))) processes)))))
+                         (eq :signaled (nshell.infrastructure.acl:process-status process))) processes)))))
 
   (it "spawn-pipeline-internal-helper-survives-shell-path-change"
     (let ((nshell.infrastructure.acl::*exported-environment* '("PATH=/bin:/usr/bin"))
@@ -299,40 +299,44 @@
       (expect 0 :to-equal status)))
 
   (it "spawn-pipeline-holds-all-stages-in-one-group-before-release"
-    (dolist (async-p '(nil t))
-      (let ((spawn (symbol-function 'nshell.infrastructure.acl::%run-pipeline-command))
-            (processes nil)
-            (observed nil))
-        (with-rebound-function
-            (nshell.infrastructure.acl::%run-pipeline-command
-             (lambda (&rest arguments)
-               (let ((process (apply spawn arguments)))
-                 (when process (push process processes))
-                 process)))
-          (let ((result
-                  (funcall (if async-p
-                               #'nshell.infrastructure.acl:spawn-pipeline-async
-                               #'nshell.infrastructure.acl:spawn-pipeline)
-                           (loop repeat 3 collect
-                             (nshell.domain.parsing:make-command-node "true" nil))
-                           :after-spawn
-                           (lambda ()
-                             (setf observed
-                                   (mapcar (lambda (process)
-                                             (list (sb-ext:process-status process)
-                                                   (sb-posix:getpgid
-                                                    (sb-ext:process-pid process))))
-                                           processes))))))
-            (when async-p
-              (dolist (process result) (sb-ext:process-wait process)))
-            (expect 3 :to-equal (length processes))
-            (expect (make-list 3 :initial-element
-                               (list :stopped
-                                     (sb-ext:process-pid (car (last processes)))))
-                    :to-equal observed)
-            (expect '(0 0 0) :to-equal
-                    (mapcar #'nshell.infrastructure.acl:process-exit-status-code
-                            processes)))))))
+  (dolist (async-p '(nil t))
+    (let ((spawn (symbol-function 'nshell.infrastructure.acl::%run-pipeline-command))
+          (processes nil)
+          (observed nil))
+      (with-rebound-function
+          (nshell.infrastructure.acl::%run-pipeline-command
+           (lambda (&rest arguments)
+             (let ((process (apply spawn arguments)))
+               (when process (push process processes))
+               process)))
+        (let ((result
+                (funcall (if async-p
+                             #'nshell.infrastructure.acl:spawn-pipeline-async
+                             #'nshell.infrastructure.acl:spawn-pipeline)
+                         (loop repeat 3 collect
+                           (nshell.domain.parsing:make-command-node "true" nil))
+                         :after-spawn
+                         (lambda ()
+                           (setf observed
+                                 (mapcar (lambda (process)
+                                           (list
+                                            (nshell.infrastructure.acl:process-status process)
+                                            (sb-posix:getpgid
+                                             (nshell.infrastructure.acl:process-pid process))))
+                                         processes))))))
+          (when async-p
+            (dolist (process result)
+              (nshell.infrastructure.acl:process-wait process)))
+          (expect 3 :to-equal (length processes))
+          (expect (make-list
+                   3
+                   :initial-element
+                   (list :stopped
+                         (nshell.infrastructure.acl:process-pid (car (last processes)))))
+                  :to-equal observed)
+          (expect '(0 0 0) :to-equal
+                  (mapcar #'nshell.infrastructure.acl:process-exit-status-code
+                          processes)))))))
 
   (it "spawn-pipeline-aborts-real-stages-when-after-spawn-fails"
     (dolist (async-p '(nil t))
@@ -344,8 +348,8 @@
              (lambda (&rest arguments)
                (let ((process (apply spawn arguments)))
                  (when process (push process processes))
-                 (when (sb-ext:process-output process)
-                   (push (sb-ext:process-output process) outputs))
+                 (when (nshell.infrastructure.acl:process-output process)
+                   (push (nshell.infrastructure.acl:process-output process) outputs))
                  process)))
           (let ((result
                   (funcall (if async-p
@@ -357,12 +361,12 @@
                            :after-spawn (lambda () (error "injected launch failure")))))
             (expect (if async-p nil 127) :to-equal result)
             (expect 2 :to-equal (length processes))
-            (expect nil :to-equal (some #'sb-ext:process-alive-p processes))
+            (expect nil :to-equal (some (function nshell.infrastructure.acl:process-alive-p) processes))
             (expect 1 :to-equal (length outputs))
             (expect nil :to-equal (some #'open-stream-p outputs))
             (expect t :to-equal
                     (every (lambda (process)
-                             (eq :signaled (sb-ext:process-status process)))
+                             (eq :signaled (nshell.infrastructure.acl:process-status process)))
                            processes)))))))
 
   (it "foreground-external-command-timeout-uses-default-for-noninteractive-output"
@@ -504,7 +508,7 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
         (sb-thread:signal-semaphore semaphore)
         (ignore-errors (sb-thread:join-thread copier :timeout 3))
         (nshell.infrastructure.acl::%terminate-process proc)
-        (sb-ext:process-close proc))))
+        (nshell.infrastructure.acl:process-close proc))))
 
   (it "run-external-timeout-covers-orphaned-non-fd-stderr"
     (%check-orphaned-external-output-timeout
@@ -632,26 +636,32 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
       (when proc
         (unwind-protect
              (progn
-               (sb-ext:process-wait proc)
-               (expect (sb-ext:process-output proc) :to-be-null)
-               (expect 0 :to-equal (sb-ext:process-exit-code proc)))
-          (when (sb-ext:process-alive-p proc)
+               (nshell.infrastructure.acl:process-wait proc)
+               (expect (nshell.infrastructure.acl:process-output proc) :to-be-null)
+               (expect 0 :to-equal
+                       (nshell.infrastructure.acl:process-exit-status-code proc)))
+          (when (nshell.infrastructure.acl:process-alive-p proc)
             (ignore-errors
-              (sb-ext:process-kill proc 15)))))))
+              (nshell.infrastructure.acl:kill-process
+               (nshell.infrastructure.acl:process-pid proc) :sigterm)))))))
 
   (it "spawn-async-here-document-redirects-standard-input"
     "Asynchronous process spawning should route a here-document to stdin."
     (let ((proc (nshell.infrastructure.acl:spawn-async
-                 (current-sbcl-executable)
-                 (%process-test-sbcl-argv
-                  "(sb-ext:exit :code (if (string= (read-line) \"inline-doc\") 0 7))")
-                 :redirects
-                 (list (cons :<<-
-                             (format nil "inline-doc~%"))))))
-      (expect proc :to-be-truthy)
-      (when proc
-        (sb-ext:process-wait proc)
-        (expect 0 :to-equal (sb-ext:process-exit-code proc)))))
+                     (current-sbcl-executable)
+                     (%process-test-sbcl-argv
+                      "(sb-ext:exit :code (if (string= (read-line) \"inline-doc\") 0 7))")
+                     :redirects
+                     (list (cons :<<-
+                                 (format nil "inline-doc~%"))))))
+        (expect proc :to-be-truthy)
+        (when proc
+          (unwind-protect
+               (progn
+                 (nshell.infrastructure.acl:process-wait proc)
+                 (expect 0 :to-equal
+                         (nshell.infrastructure.acl:process-exit-status-code proc)))
+            (nshell.infrastructure.acl:process-close proc)))))
 
   (it "spawn-pipeline-pipes-stdout-only-by-default"
     "Pipeline stages pipe stdout only unless stderr is explicitly merged."
@@ -1035,16 +1045,16 @@ is 0 (a full 10-second sleep) rather than 130."
              (nshell.infrastructure.acl:spawn-pipeline-async
               (list (nshell.domain.parsing:make-command-node "sleep" '("30")))))
            (proc (first processes))
-           (pid (when proc (sb-ext:process-pid proc)))
-           (original-kill (symbol-function 'sb-ext:process-kill))
-           (original-wait (symbol-function 'nshell.infrastructure.acl::%wait-sbcl-process))
+           (pid (when proc (nshell.infrastructure.acl:process-pid proc)))
+           (original-kill (symbol-function 'nshell.infrastructure.acl:kill-process))
+           (original-wait (symbol-function 'nshell.infrastructure.acl:process-wait))
            (group-signals nil)
            (events nil)
            (ownership-checks 0))
       (unwind-protect
            (progn
              (expect 1 :to-equal (length processes))
-             (expect t :to-equal (sb-ext:process-alive-p proc))
+             (expect t :to-equal (nshell.infrastructure.acl:process-alive-p proc))
              (expect t :to-equal
                      (nshell.infrastructure.acl::%pipeline-process-group-owned-p
                       processes pid))
@@ -1084,24 +1094,24 @@ is 0 (a full 10-second sleep) rather than 130."
                            (list :bounded-wait 0.5))
                      :to-equal (reverse events)))
         (when proc
-          (ignore-errors (funcall original-kill proc sb-unix:sigkill))
+          (ignore-errors (funcall original-kill (- pid) sb-unix:sigkill))
           (ignore-errors (funcall original-wait proc))
-          (ignore-errors (sb-ext:process-close proc))))))
+          (ignore-errors (nshell.infrastructure.acl:process-close proc))))))
   (it "terminate-pipeline-uses-bounded-wait-after-sigkill"
     "Pipeline termination returns after the post-SIGKILL bounded wait."
     (let* ((processes
              (nshell.infrastructure.acl:spawn-pipeline-async
               (list (nshell.domain.parsing:make-command-node "sleep" '("30")))))
            (proc (first processes))
-           (pid (when proc (sb-ext:process-pid proc)))
-           (original-kill (symbol-function 'sb-ext:process-kill))
-           (original-wait (symbol-function 'nshell.infrastructure.acl::%wait-sbcl-process))
+           (pid (when proc (nshell.infrastructure.acl:process-pid proc)))
+           (original-kill (symbol-function 'nshell.infrastructure.acl:kill-process))
+           (original-wait (symbol-function 'nshell.infrastructure.acl:process-wait))
            (events nil)
            (unbounded-waits 0))
       (unwind-protect
            (progn
              (expect 1 :to-equal (length processes))
-             (expect t :to-equal (sb-ext:process-alive-p proc))
+             (expect t :to-equal (nshell.infrastructure.acl:process-alive-p proc))
              (with-rebound-function
                  (nshell.infrastructure.acl::%send-process-group-signal
                   (lambda (pgid signal)
@@ -1127,6 +1137,6 @@ is 0 (a full 10-second sleep) rather than 130."
                      :to-equal (reverse events))
              (expect 0 :to-equal unbounded-waits))
         (when proc
-          (ignore-errors (funcall original-kill proc sb-unix:sigkill))
+          (ignore-errors (funcall original-kill (- pid) sb-unix:sigkill))
           (ignore-errors (funcall original-wait proc))
-          (ignore-errors (sb-ext:process-close proc))))))
+          (ignore-errors (nshell.infrastructure.acl:process-close proc))))))

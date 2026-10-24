@@ -11,15 +11,19 @@
     (render-prompt-cont)))
 
 (defun %read-key-event-for-current-mode (interrupt-predicate)
-  "Read a key with vi insert Escape handling when that mode is active."
-  (if (and *vi-mode-enabled*
-           *input-state*
-           (eq (input-state-mode *input-state*) :insert))
-      (nshell.infrastructure.terminal:read-key-event
-       :interrupt-predicate interrupt-predicate
-       :vi-insert-mode-p t)
-      (nshell.infrastructure.terminal:read-key-event
-       :interrupt-predicate interrupt-predicate)))
+  "Read keys with vi Escape handling whenever a vi editing mode is active."
+  (let ((vi-mode-p
+          (and *vi-mode-enabled*
+               *input-state*
+               (member (input-state-mode *input-state*)
+                       '(:insert :vi-command :vi-d :vi-c :vi-visual)
+                       :test #'eq))))
+    (if vi-mode-p
+        (nshell.infrastructure.terminal:read-key-event
+         :interrupt-predicate interrupt-predicate
+         :vi-mode-p t)
+        (nshell.infrastructure.terminal:read-key-event
+         :interrupt-predicate interrupt-predicate))))
 
 (defun %assistant-repeat-cancel-event-p (event)
   (let ((last-cancel-at *assistant-last-cancel-at*)

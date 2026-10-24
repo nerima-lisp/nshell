@@ -22,11 +22,12 @@
     ]
   },
   "steps": [
+    {"type": "wait", "contains": "\u001b[6 q"},
     {"type": "keys", "text": "sh checker.sh z"},
-    {"type": "key", "key": "M-b"},
+    {"type": "key", "key": "Home"},
     {"type": "key", "key": "Escape"},
     {"type": "wait", "contains": "\u001b[2 q"},
-    {"type": "key", "key": "G"},
+    {"type": "keys", "text": "\u001bG"},
     {"type": "key", "key": "a"},
     {"type": "wait", "contains": "\u001b[6 q"},
     {"type": "keys", "text": "f"},

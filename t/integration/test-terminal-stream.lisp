@@ -5,27 +5,32 @@
     "ESC y is decoded as Meta-Y for yank-pop."
     (let ((event (single-key-event-from-string (esc-sequence "y"))))
       (expect :alt-y :to-be (nshell.infrastructure.terminal:key-event-type event))))
-  (it "terminal-stream-splits-vi-insert-escape-from-buffered-key"
-    "Vi insert mode separates a buffered key after Escape and default Meta decoding is unchanged."
-    (let ((input-text (coerce (list #\Esc #\e) 'string)))
-      (with-input-from-string (input input-text)
-        (let* ((*standard-input* input)
-               (escape-event
-                 (nshell.infrastructure.terminal:read-key-event
-                  :vi-insert-mode-p t))
-               (command-event
-                 (nshell.infrastructure.terminal:read-key-event)))
-          (expect :escape :to-be
-                  (nshell.infrastructure.terminal:key-event-type escape-event))
-          (expect :char :to-be
-                  (nshell.infrastructure.terminal:key-event-type command-event))
-          (expect #\e :to-equal
-                  (nshell.infrastructure.terminal:key-event-char command-event))))
-      (with-input-from-string (input input-text)
-        (let* ((*standard-input* input)
-               (meta-event (nshell.infrastructure.terminal:read-key-event)))
-          (expect :alt-e :to-be
-                  (nshell.infrastructure.terminal:key-event-type meta-event))))))
+  (it "terminal-stream-splits-vi-escape-from-buffered-keys"
+    "Vi mode separates buffered commands after Escape with both vi flag names, while default Meta decoding stays unchanged."
+    (dolist (case '((#\e :vi-insert-mode-p)
+                    (#\G :vi-mode-p)))
+      (let* ((character (first case))
+             (vi-key (second case))
+             (input-text (coerce (list #\Esc character) 'string)))
+        (with-input-from-string (input input-text)
+          (let* ((*standard-input* input)
+                 (escape-event
+                   (apply #'nshell.infrastructure.terminal:read-key-event
+                          (list vi-key t)))
+                 (command-event
+                   (nshell.infrastructure.terminal:read-key-event)))
+            (expect :escape :to-be
+                    (nshell.infrastructure.terminal:key-event-type escape-event))
+            (expect :char :to-be
+                    (nshell.infrastructure.terminal:key-event-type command-event))
+            (expect character :to-equal
+                    (nshell.infrastructure.terminal:key-event-char command-event))))
+        (when (char= character #\e)
+          (with-input-from-string (input input-text)
+            (let* ((*standard-input* input)
+                   (meta-event (nshell.infrastructure.terminal:read-key-event)))
+              (expect :alt-e :to-be
+                      (nshell.infrastructure.terminal:key-event-type meta-event))))))))
 
 
   (it "terminal-stream-decodes-printable-and-control-keys"

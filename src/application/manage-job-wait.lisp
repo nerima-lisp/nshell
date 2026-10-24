@@ -111,8 +111,13 @@ exit status when the reaper has already completed the domain job."
        (let ((processes (%job-process-list (gethash job-id process-registry))))
          (if (null processes)
              (values nil nil)
-             (%complete-waited-job
-              job-id process-registry job job-monitor processes)))))))
+             (progn
+               (when (nshell.domain.execution:job-stopped-p job)
+                 (%continue-job job-id job process-registry)
+                 (nshell.domain.job-control:background-job
+                  job-monitor job-id))
+               (%complete-waited-job
+                job-id process-registry job job-monitor processes))))))))
 
 (defun %job-process-exit-code (job processes)
   (let ((statuses

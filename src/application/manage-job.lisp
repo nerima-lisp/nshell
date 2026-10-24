@@ -6,8 +6,29 @@
       (setf (symbol-value symbol) (or pgid 0))))
   (values))
 
-(defun %continue-process-group (pgid)
-  (nshell.infrastructure.acl:kill-process (- pgid) :sigcont))
+(defun %continue-job (job-id job process-registry)
+  (let* ((pgid (nshell.domain.execution:job-control-pgid job))
+         (processes (and process-registry
+                         (%job-process-list
+                          (gethash job-id process-registry))))
+         (pids (nshell.domain.execution:job-known-pids job)))
+    (cond
+      (pgid
+       (nshell.infrastructure.acl:process-continue-group pgid processes))
+      (processes
+       (let ((sent-p nil))
+         (dolist (process processes)
+           (when (member (nshell.infrastructure.acl:process-status process)
+                         '(:running :stopped))
+             (nshell.infrastructure.acl:process-continue process)
+             (setf sent-p t)))
+         sent-p))
+      (t
+       (let ((sent-p nil))
+         (dolist (pid pids)
+           (nshell.infrastructure.acl:kill-process pid :sigcont)
+           (setf sent-p t))
+         sent-p)))))
 
 (defmacro %with-terminal-foreground-pgroup (pgid &body body)
   (let ((previous (gensym "PREVIOUS-FOREGROUND-PGID-")))
@@ -122,30 +143,24 @@
                    (let ((processes (and process-registry
                                          (%job-process-list
                                           (gethash job-id process-registry)))))
+                     (%continue-job job-id job process-registry)
                      (if processes
-                         (progn
-                           (dolist (process processes)
-                             (nshell.infrastructure.acl:process-continue process))
-                           (return-from fg
-                             (%wait-registered-foreground-job
-                              job job-id job-monitor process-registry processes)))
-                         (progn
-                           (%continue-process-group pgid)
-                           (funcall (symbol-function '%wait-job-pgid)
-                                    job job-id job-monitor))))))
+                         (return-from fg
+                           (%wait-registered-foreground-job
+                            job job-id job-monitor process-registry processes))
+                         (funcall (symbol-function '%wait-job-pgid)
+                                  job job-id job-monitor)))))
             (setf *foreground-job-pgid* nil)
             (%set-acl-foreground-pgid nil)))
         job))))
 
-(defun bg (job-id &optional (job-monitor *job-monitor*))
+(defun bg (job-id &optional (job-monitor *job-monitor*) process-registry)
   "Continue JOB-ID in the background."
   (let ((job (%require-job job-id job-monitor)))
     (when job
-      (let ((pgid (nshell.domain.execution:job-control-pgid job)))
-        (when pgid
-          (%continue-process-group pgid))
-        (nshell.domain.job-control:background-job job-monitor job-id)
-        job))))
+      (%continue-job job-id job process-registry)
+      (nshell.domain.job-control:background-job job-monitor job-id)
+      job)))
 
 (defun disown (job-id &optional (job-monitor *job-monitor*))
   "Remove JOB-ID from the job monitor."
@@ -176,38 +191,20 @@
              (pids (nshell.domain.execution:job-known-pids job))
              (was-stopped-p (nshell.domain.execution:job-stopped-p job)))
         (labels ((send-job-signal (sent-signal)
-                   (let ((registered-processes
-                           (and process-registry
-                                (nshell.infrastructure.acl:process-continue-signal-p
-                                 sent-signal)
-                                (gethash job-id process-registry))))
-                     (cond
-                       ((and registered-processes pgid)
-                        (nshell.infrastructure.acl:process-continue-group
-                         pgid (%job-process-list registered-processes)))
-                       (registered-processes
-                        (let ((sent-p nil))
-                          (dolist (process
-                                   (%job-process-list registered-processes))
-                            (when (member
-                                   (nshell.infrastructure.acl:process-status
-                                    process)
-                                   '(:running :stopped))
-                              (nshell.infrastructure.acl:process-continue
-                               process)
-                              (setf sent-p t)))
-                          sent-p))
-                       (pgid
-                        (nshell.infrastructure.acl:kill-process
-                         (- pgid) sent-signal)
-                        t)
-                       (t
-                        (let ((sent-p nil))
+                   (if (nshell.infrastructure.acl:process-continue-signal-p
+                        sent-signal)
+                       (%continue-job job-id job process-registry)
+                       (cond
+                         (pgid
+                          (nshell.infrastructure.acl:kill-process
+                           (- pgid) sent-signal)
+                          t)
+                         (pids
                           (dolist (pid pids)
                             (nshell.infrastructure.acl:kill-process
-                             pid sent-signal)
-                            (setf sent-p t))
-                          sent-p)))))
+                             pid sent-signal))
+                          t)
+                         (t nil))))
                  (record-signal-state (sent-signal)
                    (let ((current-job
                            (nshell.domain.job-control:monitor-find-job

@@ -35,7 +35,8 @@
                               (if *foreground-terminal-runner*
                                   (funcall *foreground-terminal-runner* #'resume-job)
                                   (resume-job)))
-                           `(,operation ,job-id ,job-monitor))))
+                           `(,operation ,job-id ,job-monitor
+                                        (shell-context-process-registry context)))))
            (if ,job
                (values nil ,(if (eq operation 'fg)
                                 `(if (nshell.domain.execution:job-stopped-p ,job)

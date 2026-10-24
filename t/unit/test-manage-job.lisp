@@ -290,17 +290,18 @@
            (nshell.application:*foreground-job-pgid* nil)
            (nshell.infrastructure.acl::*foreground-pgid* 0))
       (with-temporary-functions
-          (('nshell.application::%continue-process-group
-            (lambda (pgid)
-              (expect 4321 :to-equal pgid)))
-         ('nshell.application::%wait-job-pgid
-          (lambda (waited-job waited-job-id waited-monitor)
-            (expect job :to-be waited-job)
-            (expect job-id :to-equal waited-job-id)
-            (expect monitor :to-be waited-monitor)
-            (expect 4321 :to-equal nshell.application:*foreground-job-pgid*)
-            (expect 4321 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
-            (error "wait failed")))
+          (('nshell.infrastructure.acl:process-continue-group
+            (lambda (pgid processes)
+              (expect 4321 :to-equal pgid)
+              (expect nil :to-be processes)))
+           ('nshell.application::%wait-job-pgid
+            (lambda (waited-job waited-job-id waited-monitor)
+              (expect job :to-be waited-job)
+              (expect job-id :to-equal waited-job-id)
+              (expect monitor :to-be waited-monitor)
+              (expect 4321 :to-equal nshell.application:*foreground-job-pgid*)
+              (expect 4321 :to-equal nshell.infrastructure.acl::*foreground-pgid*)
+              (error "wait failed")))
            ('nshell.infrastructure.acl:get-foreground-pgroup
             (lambda () 1000))
            ('nshell.infrastructure.acl:set-foreground-pgroup
@@ -323,9 +324,10 @@
            (nshell.application:*foreground-job-pgid* nil)
            (nshell.infrastructure.acl::*foreground-pgid* 0))
       (with-temporary-functions
-          (('nshell.application::%continue-process-group
-            (lambda (pgid)
-              (expect 4321 :to-equal pgid)))
+          (('nshell.infrastructure.acl:process-continue-group
+            (lambda (pgid processes)
+              (expect 4321 :to-equal pgid)
+              (expect nil :to-be processes)))
            ('nshell.application::%wait-job-pgid
             (lambda (waited-job waited-job-id waited-monitor)
               (expect job :to-be waited-job)
@@ -487,18 +489,22 @@
               (nshell.application::make-job-listing 1 "Running" nil))
             :to-throw 'error))
 
-  (it "bg-continues-a-nonzero-process-group"
-    "BG forwards continuation to a tracked process group before marking it background."
+  (it "bg-continues-the-whole-process-group"
+    "BG resumes the process group through the shared continuation path."
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))
            (job (make-test-job 0 "sleep" :args '("10") :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (registry (make-hash-table))
+           (processes '(:first :second))
            (continue-calls nil))
+      (setf (gethash job-id registry) processes)
       (with-temporary-function
-          ('nshell.application::%continue-process-group
-           (lambda (pgid)
-             (push pgid continue-calls)))
-        (expect job :to-be (nshell.application:bg job-id monitor)))
-      (expect '(4321) :to-equal continue-calls)
+          ('nshell.infrastructure.acl:process-continue-group
+           (lambda (pgid observed-processes)
+             (push (list pgid observed-processes) continue-calls)
+             t))
+        (expect job :to-be (nshell.application:bg job-id monitor registry)))
+      (expect '((4321 (:first :second))) :to-equal continue-calls)
       (expect :background :to-be (nshell.domain.execution:job-state job))))
   (it "signal-job-continues-stopped-jobs-and-refreshes-process-cache"
     "Termination signals resume stopped jobs and synchronize registered processes."
@@ -752,24 +758,32 @@
         (expect 7 :to-equal exit-code)
         (expect nil :to-be (gethash job-id registry))))))
 
-  (it "wait-for-job-waits-and-completes-registered-processes"
-    "Registered processes are waited once, then their policy exit code is committed."
+  (it "wait-for-job-resumes-the-whole-stopped-process-group"
+    "WAIT resumes a stopped process group and synchronizes registered processes."
     (let* ((registry (make-hash-table))
            (monitor (nshell.domain.job-control:make-job-monitor))
-           (job (make-test-job 0 "true"))
+           (job (make-test-job 0 "true" :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (processes (list '(:status 0) '(:status 4)))
+           (continue-calls nil)
            (waited nil))
-      (setf (gethash job-id registry) (list '(:status 0) '(:status 4)))
-      (with-temporary-function
-          ('nshell.application::%wait-job-processes
-           (lambda (processes)
-             (setf waited processes)))
-        (with-temporary-function
-            ('nshell.infrastructure.acl:process-exit-status-code
-             (lambda (process) (getf process :status)))
-          (multiple-value-bind (result exit-code)
-              (nshell.application:wait-for-job job-id registry monitor)
-            (expect job :to-be result)
-            (expect 4 :to-equal exit-code)
-            (expect waited :to-equal (list '(:status 0) '(:status 4)))
-            (expect nil :to-be (gethash job-id registry)))))))
+      (setf (gethash job-id registry) processes)
+      (nshell.domain.job-control:suspend-job monitor job-id nil)
+      (with-temporary-functions
+          (('nshell.infrastructure.acl:process-continue-group
+            (lambda (pgid observed-processes)
+              (push (list pgid observed-processes) continue-calls)
+              t))
+           ('nshell.application::%wait-job-processes
+            (lambda (observed-processes)
+              (setf waited observed-processes)))
+           ('nshell.infrastructure.acl:process-exit-status-code
+            (lambda (process) (getf process :status))))
+        (multiple-value-bind (result exit-code)
+            (nshell.application:wait-for-job job-id registry monitor)
+          (expect job :to-be result)
+          (expect 4 :to-equal exit-code)))
+      (expect '((4321 ((:status 0) (:status 4)))) :to-equal continue-calls)
+      (expect processes :to-equal waited)
+      (expect :completed :to-be (nshell.domain.execution:job-state job))
+      (expect nil :to-be (gethash job-id registry))))

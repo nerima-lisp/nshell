@@ -22,6 +22,25 @@
       (history-kit:history-add history "git status" :exit-code 0)
       (history-kit:history-add history "git stahs" :exit-code 1)
       (expect "tus" :to-equal (nshell.application:history-suggestion history "git sta"))))
+  (it "history-suggestion-ranks-current-cwd-before-other-cwds"
+    "The exact current cwd ranks first while success and recency remain ordered."
+    (let ((history (history-kit:make-history)))
+      (add-history-record history "git status --short" :cwd "/repo" :exit-code 0)
+      (add-history-record history "git status --porcelain" :cwd "/repo" :exit-code 0)
+      (add-history-record history "git status --verbose" :cwd "/repo" :exit-code 1)
+      (add-history-record history "git status --branch" :cwd "/elsewhere" :exit-code 0)
+      (expect " --porcelain"
+              :to-equal
+              (nshell.application:history-suggestion
+               history "git status" :cwd "/repo"))))
+  (it "history-suggestion-falls-back-when-no-current-cwd-matches"
+    "Entries remain suggestible when none has exact cwd metadata for this prompt."
+    (let ((history (history-kit:make-history)))
+      (add-history-record history "git status --branch" :cwd "/elsewhere" :exit-code 0)
+      (expect " --branch"
+              :to-equal
+              (nshell.application:history-suggestion
+               history "git status" :cwd "/repo"))))
 
   (it "history-suggestion-falls-back-to-failed-match"
     "Failed entries remain suggestible when no non-failing match exists."

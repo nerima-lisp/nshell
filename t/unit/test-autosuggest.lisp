@@ -220,17 +220,56 @@ git status --short")
                         :knowledge-base kb
                         :filesystem *completion-test-filesystem*))))))
 
-  (it "autosuggest-closed-quoted-token-p-detects-matching-delimiters"
-    "autosuggest-closed-quoted-token-p returns true when the token is fully quoted."
-    (flet ((cq (input start end)
-             (nshell.presentation::%autosuggest-closed-quoted-token-p input start end)))
-      (expect (cq "'foo'" 0 5) :to-be-truthy)
-      (expect (cq "\"foo\"" 0 5) :to-be-truthy)
-      (expect (cq "'foo"  0 4) :to-be-falsy)
-      (expect (cq "foo"   0 3) :to-be-falsy)
-      (expect (cq "''"    0 1) :to-be-falsy)))
+  (it "autosuggest-respects-scanner-context-boundaries"
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+      (nshell.domain.completion:kb-add-command kb "git" :subcommands '("status"))
+      (with-history (history "git # comment")
+        (dolist (input '("git # co" "git #"))
+          (expect (nshell.presentation:compute-suggestion
+                   history
+                   input
+                   :knowledge-base kb)
+                  :to-be-null)))
+      (with-history (history "(git status")
+        (expect (nshell.presentation:compute-suggestion
+                 history
+                 "(git st"
+                 :knowledge-base kb)
+                :to-be-null))
+      (let ((history (history-kit:make-history)))
+        (expect "atus" :to-equal
+                (nshell.presentation:compute-suggestion
+                 history
+                 "git st"
+                 :knowledge-base kb)))))
 
   (it "accept-suggestion-appends-suggestion-to-input"
     "accept-suggestion concatenates current input with the tab-suggestion suffix."
     (expect "git checkout" :to-equal (nshell.presentation:accept-suggestion "git " "checkout"))
     (expect "git " :to-equal (nshell.presentation:accept-suggestion "git " "")))
+  (it "autosuggest-preserves-cwd-ranked-branch-suggestions"
+    (nshell.domain.completion::%invalidate-git-dynamic-cache)
+    (let ((nshell.domain.completion::*git-branch-lister*
+            (lambda (directory)
+              (expect "/repo" :to-equal directory)
+              '("feature-x"))))
+      (expect "ture-x" :to-equal
+              (nshell.presentation:compute-suggestion
+               (history-kit:make-history)
+               "git checkout fea"
+               :knowledge-base
+               (nshell.domain.completion:make-empty-knowledge-base)
+               :directory "/repo")))
+    (nshell.domain.completion::%invalidate-git-dynamic-cache))
+  (it "autosuggest-forwards-directory-to-history-ranking"
+    (let ((history (history-kit:make-history))
+          (knowledge-base (nshell.domain.completion:make-empty-knowledge-base)))
+      (add-history-record history "git status --short" :cwd "/repo" :exit-code 0)
+      (add-history-record history "git status --branch" :cwd "/elsewhere" :exit-code 0)
+      (expect "atus --short"
+              :to-equal
+              (nshell.presentation:compute-suggestion
+               history
+               "git st"
+               :knowledge-base knowledge-base
+               :directory "/repo"))))

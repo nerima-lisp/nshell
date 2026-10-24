@@ -4,83 +4,68 @@
 
 
 (defun suggestion-word-like-token-p (token)
-  (not (null (member (nshell.domain.parsing:token-type token)
-                     '(:word :error)
+  (not (null (member (nshell.domain.parsing:scan-token-kind token)
+                     '(:command-head :argument :string :escaped-symbol
+                       :here-doc-delimiter)
                      :test #'eq))))
 
 (defun suggestion-first-token-at-or-after (tokens position)
   (find-if (lambda (token)
-             (>= (nshell.domain.parsing:token-start token) position))
+             (>= (first (nshell.domain.parsing:scan-token-span token))
+                 position))
            tokens))
 
-(defun suggestion-token-accept-end (tokens first-token)
-  (let ((accept-end (nshell.domain.parsing:token-end first-token)))
-    (when (suggestion-word-like-token-p first-token)
-      (dolist (token (rest (member first-token tokens)))
-        (if (and (suggestion-word-like-token-p token)
-                 (= (nshell.domain.parsing:token-start token) accept-end))
-            (setf accept-end (nshell.domain.parsing:token-end token))
-            (return))))
-    accept-end))
-
-(defun suggestion-redirection-operator-end (suggestion position)
-  (let ((end (length suggestion)))
-    (when (< position end)
-      (let ((ch (char suggestion position)))
-        (cond
-          ((and (char= ch #\&)
-                (< (1+ position) end)
-                (char= (char suggestion (1+ position)) #\>))
-           (+ position 2))
-          ((or (char= ch #\<) (char= ch #\>))
-           (if (and (char= ch #\>)
-                    (< (1+ position) end)
-                    (char= (char suggestion (1+ position)) #\>))
-               (+ position 2)
-               (1+ position))))))))
-
-(defun %suggestion-scan-fd-digits (suggestion position end)
-  "Return the index just past the run of file-descriptor digits that begins at
-POSITION (POSITION itself when none follow)."
-  (loop for index from position below end
-        while (digit-char-p (char suggestion index))
-        finally (return index)))
-
-(defun %suggestion-redirection-target-end (suggestion operator-end end)
-  "Return the end of an `&'-style redirection target -- the fd digits in a form
-like \"2>&1\", or a bare \"-\" -- or OPERATOR-END when no such target follows the
-ampersand at OPERATOR-END."
-  (let ((target-position (1+ operator-end)))
-    (if (and (< target-position end)
-             (or (digit-char-p (char suggestion target-position))
-                 (char= (char suggestion target-position) #\-)))
-        (%suggestion-scan-fd-digits suggestion (1+ target-position) end)
-        operator-end)))
-
-(defun suggestion-compact-redirection-end (suggestion position)
-  "Return the end of a compact redirection starting at POSITION, or NIL.
-
-This keeps autosuggestion word acceptance from splitting shell forms such as
-\"2>&1\" and \">out.txt\" into lexer-sized pieces."
-  (let* ((end (length suggestion))
-         (operator-position (%suggestion-scan-fd-digits suggestion position end)))
-    (when (or (= operator-position position)
-              (and (< operator-position end)
-                   (member (char suggestion operator-position)
-                           '(#\< #\>)
-                           :test #'char=)))
-      (let ((operator-end
-              (suggestion-redirection-operator-end suggestion operator-position)))
-        (when operator-end
-          (cond
-            ((and (< operator-end end)
-                  (char= (char suggestion operator-end) #\&))
-             (%suggestion-redirection-target-end suggestion operator-end end))
-            ((and (< operator-end end)
-                  (not (nshell.domain.parsing:shell-token-separator-p
-                        (char suggestion operator-end))))
-             (shell-token-end suggestion operator-end))
-            (t operator-end)))))))
+(defun suggestion-token-accept-end (scan-result first-token)
+  (let* ((tokens (nshell.domain.parsing:scan-result-tokens scan-result))
+         (first-kind (nshell.domain.parsing:scan-token-kind first-token))
+         (first-span (nshell.domain.parsing:scan-token-span first-token))
+         (accept-end (second first-span))
+         (prefix-p (member first-kind '(:dollar-unquote :process-substitution)
+                           :test #'eq)))
+    (labels ((paired-end (token)
+               (let* ((token-span (nshell.domain.parsing:scan-token-span token))
+                      (open-position (second token-span))
+                      (open-token
+                        (find-if
+                         (lambda (candidate)
+                           (and (eq (nshell.domain.parsing:scan-token-kind candidate)
+                                    :delimiter-open)
+                                (= (first (nshell.domain.parsing:scan-token-span candidate))
+                                   open-position)))
+                         (rest (member token tokens))))
+                      (pair
+                        (and open-token
+                             (find-if
+                              (lambda (candidate)
+                                (equal (nshell.domain.parsing:scan-token-span open-token)
+                                       (nshell.domain.parsing:delimiter-pair-open-span candidate)))
+                              (nshell.domain.parsing:scan-result-delimiter-pairs
+                               scan-result)))))
+                 (and pair
+                      (second
+                       (nshell.domain.parsing:delimiter-pair-close-span pair))))))
+      (when prefix-p
+        (setf accept-end (or (paired-end first-token) accept-end)))
+      (when (or (suggestion-word-like-token-p first-token)
+                prefix-p
+                (eq first-kind :redirect))
+        (loop for token in (member first-token tokens)
+              for span = (nshell.domain.parsing:scan-token-span token)
+              for start = (first span)
+              for end = (second span)
+              do (cond
+                   ((<= end accept-end))
+                   ((= start accept-end)
+                    (let ((kind (nshell.domain.parsing:scan-token-kind token)))
+                      (cond
+                        ((suggestion-word-like-token-p token)
+                         (setf accept-end end))
+                        ((member kind '(:dollar-unquote :process-substitution)
+                                 :test #'eq)
+                         (setf accept-end (or (paired-end token) end)))
+                        (t (return)))))
+                   (t (return)))))
+      accept-end)))
 
 (define-value-struct %suggestion-acceptance-segment
     ((end 0 :type fixnum)))
@@ -126,29 +111,30 @@ This keeps autosuggestion word acceptance from splitting shell forms such as
 
 Leading shell word separators are accepted with the following token, matching
 fish-style autosuggestion word acceptance for tails such as \" status --short\"."
-  (let ((pos 0)
-        (end (length suggestion)))
-    (loop while (and (< pos end)
-                     (nshell.domain.parsing:shell-word-separator-p
-                      (char suggestion pos)))
-          do (incf pos))
-    (if (= pos end)
-        (%make-suggestion-acceptance-segment end)
-        (%make-suggestion-acceptance-segment
-         (or (suggestion-compact-redirection-end suggestion pos)
-             (handler-case
-                 (let* ((tokenization
-                          (nshell.domain.parsing:tokenize suggestion))
-                        (tokens
-                          (nshell.domain.parsing:tokenization-result-tokens
-                           tokenization))
-                        (first-token
-                          (suggestion-first-token-at-or-after tokens pos)))
-                   (if first-token
-                       (suggestion-token-accept-end tokens first-token)
-                       end))
-               (error ()
-                 (shell-token-end suggestion pos))))))))
+  (let* ((end (length suggestion))
+         (scan-result
+           (handler-case
+               (nshell.domain.parsing:scan-input
+                suggestion
+                :reader-context :bare-line)
+             (error () nil))))
+    (%make-suggestion-acceptance-segment
+     (if scan-result
+         (let* ((tokens (nshell.domain.parsing:scan-result-tokens scan-result))
+                (position
+                  (loop with position = 0
+                        for token in tokens
+                        while (eq (nshell.domain.parsing:scan-token-kind token)
+                                  :whitespace)
+                        do (setf position
+                                 (second (nshell.domain.parsing:scan-token-span token)))
+                        finally (return position)))
+                (first-token
+                  (suggestion-first-token-at-or-after tokens position)))
+           (if first-token
+               (suggestion-token-accept-end scan-result first-token)
+               end))
+         end))))
 
 (defun next-suggestion-acceptance (suggestion)
   (let* ((segment (suggestion-next-acceptance-segment suggestion))

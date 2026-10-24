@@ -143,6 +143,33 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self._load_one(scenario, "multi-pty.json")
 
+    def test_multiple_sessions_allow_live_screen_with_exit_status_session(self) -> None:
+        scenario = _multi_pty_scenario("mixed-live-pty")
+        scenario["sessions"][0]["steps"] = [
+            {"type": "wait", "contains": "LIVE_PAGER"},
+        ]
+        scenario["expected"]["screen"] = {"contains": ["LIVE_PAGER"]}
+
+        self._load_one(scenario, "mixed-live-pty.json")
+
+    def test_live_pty_session_requires_screen_assertion(self) -> None:
+        scenario = _multi_pty_scenario("live-pty-without-screen")
+        scenario["sessions"][0]["steps"] = [
+            {"type": "wait", "contains": "LIVE_PAGER"},
+        ]
+
+        with self.assertRaisesRegex(runner.ScenarioError, "expected.screen assertion"):
+            self._load_one(scenario, "live-pty-without-screen.json")
+
+    def test_pty_exit_code_rejects_all_live_sessions(self) -> None:
+        scenario = _multi_pty_scenario("all-live-pty")
+        scenario["expected"]["screen"] = {"contains": ["LIVE_PAGER"]}
+        for session in scenario["sessions"]:
+            session["steps"] = [{"type": "wait", "contains": "LIVE_PAGER"}]
+
+        with self.assertRaisesRegex(runner.ScenarioError, "at least one final wait_exit step"):
+            self._load_one(scenario, "all-live-pty.json")
+
     def test_pty_resize_dimensions_are_bounded_integers(self) -> None:
         scenario = _pty_scenario(
             "resize-dimensions",

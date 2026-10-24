@@ -926,11 +926,11 @@
       "path": "J12/twenty-thousand-entry-directory.json"
     },
     {
-      "id": "J13-approx-completion-pager",
+      "id": "J13-completion-pager",
       "uc": [
         "J13"
       ],
-      "path": "J13/approx-completion-pager.json"
+      "path": "J13/completion-pager.json"
     },
     {
       "id": "J14-case-and-fuzzy-match",

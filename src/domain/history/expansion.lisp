@@ -103,11 +103,12 @@
 (defun history-expand-line (history line)
   "Expand common interactive history designators in LINE without mutating HISTORY.
 
-Return the expanded line and NIL on success. If a recognized designator cannot
-be resolved, return NIL and an explanatory error string. Single-quoted and
-backslash-escaped exclamation marks remain literal."
+Return the expanded line and NIL on success, followed by a character source map.
+If a recognized designator cannot be resolved, return NIL and an explanatory
+error string. Single-quoted and backslash-escaped exclamation marks remain literal."
   (block expansion
     (let ((position 0)
+          (origins nil)
           (single-quoted-p nil)
           (line-length (length line)))
       (values
@@ -119,10 +120,13 @@ backslash-escaped exclamation marks remain literal."
                             (char= character #\\)
                             (< (1+ position) line-length))
                        (write-char character output)
+                       (push (list position (1+ position)) origins)
                        (write-char (char line (1+ position)) output)
+                       (push (list (1+ position) (+ position 2)) origins)
                        (incf position 2))
                       ((char= character #\')
                        (write-char character output)
+                       (push (list position (1+ position)) origins)
                        (setf single-quoted-p (not single-quoted-p))
                        (incf position))
                       ((and (not single-quoted-p) (char= character #\!))
@@ -134,11 +138,17 @@ backslash-escaped exclamation marks remain literal."
                                  (return-from expansion (values nil error))
                                  (progn
                                    (write-string replacement output)
+                                   (dotimes (index (length replacement))
+                                     (declare (ignore index))
+                                     (push (list position next-position) origins))
                                    (setf position next-position)))
                              (progn
                                (write-char character output)
+                               (push (list position (1+ position)) origins)
                                (incf position)))))
                       (t
                        (write-char character output)
+                       (push (list position (1+ position)) origins)
                        (incf position))))))
-       nil))))
+       nil
+       (coerce (nreverse origins) 'vector)))))

@@ -2,12 +2,29 @@
 
 (describe "history-expansion-domain-tests"
   (it "expands-the-most-recent-command"
-    "The `!!` designator resolves to the newest history entry."
+    "The !! designator resolves to the newest history entry."
     (with-history (history "echo first" "echo second")
       (multiple-value-bind (expanded error)
           (nshell.domain.history:history-expand-line history "!!")
         (expect "echo second" :to-equal expanded)
-        (expect error :to-be-null))))
+        (expect error :to-be-null))
+      (let ((nshell.presentation::*history* history))
+        (multiple-value-bind (expanded source-map)
+            (nshell.presentation:expand-history-input "echo !!")
+          (expect "echo echo second" :to-equal expanded)
+          (expect 16 :to-equal (length source-map))
+          (expect '(0 5) :to-equal
+                  (nshell.presentation:source-span-to-origin-span
+                   source-map '(0 5)))
+          (expect '(5 7) :to-equal
+                  (nshell.presentation:source-span-to-origin-span
+                   source-map '(5 16))))
+        (multiple-value-bind (expanded source-map)
+            (nshell.presentation:expand-history-input "echo !$")
+          (expect "echo second" :to-equal expanded)
+          (expect '(5 7) :to-equal
+                  (nshell.presentation:source-span-to-origin-span
+                   source-map '(5 11)))))))
 
   (it "expands-relative-history-and-the-last-argument"
     "Relative recall and `!$` use the current history ordering."
@@ -40,7 +57,17 @@
           (nshell.domain.history:history-expand-line history
                                                       "echo '!echo' \\!echo")
         (expect "echo '!echo' \\!echo" :to-equal expanded)
-        (expect error :to-be-null))))
+        (expect error :to-be-null))
+      (let ((nshell.presentation::*history* history))
+        (dolist (source '("echo '!echo' \\!echo" "(list !!)"))
+          (multiple-value-bind (expanded source-map)
+              (nshell.presentation:expand-history-input source)
+            (expect source :to-equal expanded)
+            (expect (coerce
+                     (loop for position below (length source)
+                           collect (list position (1+ position)))
+                     'vector)
+                    :to-equalp source-map))))))
 
   (it "reports-unresolvable-designators-and-literal-boundaries"
     "Recognized but unresolved designators report an error, while delimiter boundaries remain literal."

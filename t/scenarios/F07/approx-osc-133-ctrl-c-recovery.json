@@ -1,0 +1,84 @@
+{
+  "id": "F07-approx-osc-133-ctrl-c-recovery",
+  "uc": [
+    "F07"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "F07_CANCEL": "F07_MUST_NOT_RUN",
+      "F07_RECOVERED": "F07_CANCEL_RECOVERED",
+      "NSHELL_PROMPT": "F07-approx-osc-133-ctrl-c-recovery> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "F07_CANCEL_RECOVERED"
+      ],
+      "excludes": [
+        "F07_MUST_NOT_RUN"
+      ],
+      "ordered_contains": [
+        "\u001b]133;A",
+        "\u001b]133;B",
+        "\u001b]133;A",
+        "\u001b]133;B",
+        "\u001b]133;C",
+        "F07_CANCEL_RECOVERED",
+        "\u001b]133;D;0"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$F07_CANCEL"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "echo $F07_RECOVERED"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "F07_CANCEL_RECOVERED",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

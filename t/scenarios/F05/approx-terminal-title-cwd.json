@@ -24,9 +24,11 @@
   "expected": {
     "stream": {
       "contains": [
-        "\u001b]0;",
-        "work",
         "F05_TITLE_READY"
+      ],
+      "ordered_contains": [
+        "\u001b]0;nshell: ",
+        "/work/ | sleep 1; echo $F05_MESSAGE\u001b\\"
       ]
     },
     "exit_code": 0
@@ -34,7 +36,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo $F05_MESSAGE"
+      "text": "sleep 1; echo $F05_MESSAGE"
     },
     {
       "type": "key",

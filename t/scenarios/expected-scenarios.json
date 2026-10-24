@@ -485,6 +485,13 @@
       "path": "F01/approx-cooked-mode-after-crash.json"
     },
     {
+      "id": "F02-wp-r08-resize-redraw",
+      "uc": [
+        "F02"
+      ],
+      "path": "F02/WP-R08-resize-redraw.json"
+    },
+    {
       "id": "F03-wp-r01-sigterm-exit-status",
       "uc": [
         "F03"
@@ -513,6 +520,13 @@
       "path": "F07/approx-osc-133-prompt.json"
     },
     {
+      "id": "F07-approx-osc-133-ctrl-c-recovery",
+      "uc": [
+        "F07"
+      ],
+      "path": "F07/approx-osc-133-ctrl-c-recovery.json"
+    },
+    {
       "id": "F08-large-bracketed-paste",
       "uc": [
         "F08"
@@ -525,6 +539,13 @@
         "F09"
       ],
       "path": "F09/approx-mouse-report-default-off.json"
+    },
+    {
+      "id": "F09-mouse-report-opt-in",
+      "uc": [
+        "F09"
+      ],
+      "path": "F09/approx-mouse-report-opt-in.json"
     },
     {
       "id": "F10-unicode-grapheme-cursor-edit",

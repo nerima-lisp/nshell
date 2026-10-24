@@ -143,6 +143,77 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self._load_one(scenario, "multi-pty.json")
 
+    def test_pty_resize_dimensions_are_bounded_integers(self) -> None:
+        scenario = _pty_scenario(
+            "resize-dimensions",
+            [{"type": "resize", "columns": 1, "rows": 512}, {"type": "wait_exit"}],
+            {"exit_code": 0},
+        )
+        self._load_one(scenario, "resize-dimensions.json")
+
+        for dimension, value in (("columns", 0), ("rows", 513), ("columns", True)):
+            with self.subTest(dimension=dimension, value=value):
+                scenario["steps"][0] = {"type": "resize", "columns": 1, "rows": 512}
+                scenario["steps"][0][dimension] = value
+                with self.assertRaisesRegex(runner.ScenarioError, f"resize.{dimension}"):
+                    self._load_one(scenario, "resize-dimensions.json")
+        scenario["steps"][0]["columns"] = 1
+        scenario["steps"][0]["rows"] = 512
+
+    def test_pty_resize_dispatch_preserves_exit_status(self) -> None:
+        events: list[tuple[str, Any]] = []
+
+        class FakeSession:
+            def __init__(self, scenario: dict[str, Any], binary: Path, root: Path,
+                         env: dict[str, str], cwd: Path):
+                self.scenario = scenario
+                self.stream = bytearray()
+                self.deadline_seconds = 45
+                self.deadline = 0.0
+
+            def resize(self, columns: int, rows: int) -> None:
+                events.append(("resize", (columns, rows)))
+
+            def wait_exit(self, timeout: float) -> int:
+                events.append(("wait_exit", timeout))
+                return 23
+
+            def drain(self) -> None:
+                pass
+
+            def capture_screen(self) -> str:
+                return ""
+
+            def close(self) -> None:
+                pass
+
+        scenario = _pty_scenario(
+            "resize-dispatch",
+            [
+                {"type": "resize", "columns": 24, "rows": 20},
+                {"type": "wait_exit", "timeout_seconds": 8},
+            ],
+            {"exit_code": 23},
+        )
+        with patch.object(runner, "TmuxSession", FakeSession), \
+                patch.object(runner.shutil, "which", return_value="tmux"):
+            _, _, exit_code, failures = runner._run_pty(scenario, Path("/unused/nshell"))
+
+        self.assertEqual(events, [("resize", (24, 20)), ("wait_exit", 8)])
+        self.assertEqual(exit_code, 23)
+        self.assertEqual(failures, [])
+
+    def test_tmux_resize_invokes_window_resize(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.pane = "%7"
+
+        with patch.object(session, "_tmux") as tmux:
+            session.resize(90, 31)
+
+        tmux.assert_called_once_with([
+            "resize-window", "-t", "%7", "-x", "90", "-y", "31",
+        ])
+
     def test_multiple_sessions_start_before_any_steps_run_and_share_a_root(self) -> None:
         events: list[tuple[str, str, Path | None]] = []
 
@@ -388,6 +459,47 @@ class ScenarioRunnerTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(runner.ScenarioError, "prompt redraw"):
             self._load_one(scenario, "redraw-only-expectation.json")
+
+    def test_ordered_stream_markers_must_not_overlap_input_or_prompt(self) -> None:
+        echo_scenario = _pty_scenario(
+            "ordered-echo-marker",
+            [{"type": "keys", "text": "echo ECHO_ONLY"}, {"type": "wait_exit"}],
+            {"stream": {"ordered_contains": ["ECHO_ONLY"]}, "exit_code": 0},
+        )
+        with self.assertRaisesRegex(runner.ScenarioError, "input echo"):
+            self._load_one(echo_scenario, "ordered-echo-marker.json")
+
+        prompt_scenario = _pty_scenario(
+            "ordered-prompt-marker",
+            [{"type": "wait_exit"}],
+            {"stream": {"ordered_contains": ["TEST_PROMPT"]}, "exit_code": 0},
+        )
+        with self.assertRaisesRegex(runner.ScenarioError, "prompt redraw"):
+            self._load_one(prompt_scenario, "ordered-prompt-marker.json")
+
+    def test_ordered_stream_markers_are_checked_in_order(self) -> None:
+        failures: list[str] = []
+        runner._assert_text(
+            "stream", "A before B before C",
+            {"ordered_contains": ["A", "B", "C"]}, failures,
+        )
+        self.assertEqual(failures, [])
+
+        runner._assert_text(
+            "stream", "A before C before B",
+            {"ordered_contains": ["A", "B", "C"]}, failures,
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("required order", failures[0])
+
+    def test_ordered_stream_markers_must_be_nonempty_strings(self) -> None:
+        scenario = _pty_scenario(
+            "ordered-marker-invalid",
+            [{"type": "wait_exit"}],
+            {"stream": {"ordered_contains": ["A", 2]}, "exit_code": 0},
+        )
+        with self.assertRaisesRegex(runner.ScenarioError, "ordered_contains"):
+            self._load_one(scenario, "ordered-marker-invalid.json")
 
     def test_shell_output_only_marker_is_allowed(self) -> None:
         scenario = _pty_scenario(

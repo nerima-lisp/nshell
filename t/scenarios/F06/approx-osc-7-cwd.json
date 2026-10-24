@@ -11,7 +11,7 @@
       "NSHELL_PROMPT": "F06-approx-osc-7-cwd> "
     },
     "home": "home",
-    "cwd": "work",
+    "cwd": "work/日本 語",
     "terminal_size": {
       "columns": 80,
       "rows": 24
@@ -20,16 +20,26 @@
   "preconditions": {
     "files": [
       {
-        "path": "work/marker.txt",
+        "path": "work/日本 語/marker.txt",
         "content": "F06_READY\n"
+      },
+      {
+        "path": "work/更新/.keep",
+        "content": ""
       }
     ]
   },
   "expected": {
     "stream": {
       "contains": [
-        "\u001b]7;file://",
         "F06_READY"
+      ],
+      "ordered_contains": [
+        "\u001b]7;file://",
+        "%E6%97%A5%E6%9C%AC%20%E8%AA%9E",
+        "F06_READY",
+        "\u001b]7;file://",
+        "%E6%9B%B4%E6%96%B0"
       ]
     },
     "exit_code": 0
@@ -37,7 +47,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "cat marker.txt"
+      "text": "cat marker.txt && cd ../更新"
     },
     {
       "type": "key",
@@ -60,8 +70,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-R08 owns OSC 7 terminal integration."
-  }
+  ]
 }

@@ -29,6 +29,14 @@
     "stream": {
       "contains": [
         "F12_DUMB_READY"
+      ],
+      "excludes": [
+        "\u001b]0;",
+        "\u001b]7;",
+        "\u001b]133;",
+        "\u001b[?1000h",
+        "\u001b[?1006h",
+        "\u001b[?2004h"
       ]
     },
     "exit_code": 0

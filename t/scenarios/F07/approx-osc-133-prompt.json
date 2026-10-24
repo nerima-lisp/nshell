@@ -8,6 +8,8 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
+      "F07_FIRST": "F07_FIRST_OUTPUT",
+      "F07_SECOND": "F07_SECOND_OUTPUT",
       "NSHELL_PROMPT": "F07-approx-osc-133-prompt> "
     },
     "home": "home",
@@ -18,18 +20,18 @@
     }
   },
   "preconditions": {
-    "files": [
-      {
-        "path": "work/marker.txt",
-        "content": "F07_READY\n"
-      }
-    ]
+    "files": []
   },
   "expected": {
     "stream": {
-      "contains": [
+      "contains": ["F07_SECOND_OUTPUT"],
+      "ordered_contains": [
         "\u001b]133;A",
-        "F07_READY"
+        "\u001b]133;B",
+        "\u001b]133;C",
+        "F07_FIRST_OUTPUT",
+        "F07_SECOND_OUTPUT",
+        "\u001b]133;D;0"
       ]
     },
     "exit_code": 0
@@ -37,7 +39,15 @@
   "steps": [
     {
       "type": "keys",
-      "text": "cat marker.txt"
+      "text": "echo \"$F07_FIRST"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "and $F07_SECOND\""
     },
     {
       "type": "key",
@@ -45,7 +55,7 @@
     },
     {
       "type": "wait",
-      "contains": "F07_READY",
+      "contains": "F07_SECOND_OUTPUT",
       "timeout_seconds": 10
     },
     {
@@ -60,8 +70,5 @@
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-R08 owns OSC 133 terminal integration."
-  }
+  ]
 }

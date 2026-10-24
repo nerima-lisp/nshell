@@ -41,7 +41,8 @@ the [batch example](C01/batch-command.json) and
 [PTY example](C01/pty-paste.json).
 
 Use `preconditions.file_sets` to generate bounded file collections. Each
-entry requires a scenario-relative `directory`, a non-empty `prefix`, and a
+entry requires a `directory` relative to the scenario's isolated root, a
+non-empty `prefix`, and a
 `count` from 1 to 20,000; `suffix` and shared file `content` are optional.
 Generated names use a five-digit index starting at `00000`. The total number
 of generated files is limited to 20,000, and each name is limited to 255 UTF-8
@@ -55,8 +56,7 @@ sends text to standard input; `script` writes text to `invocation.path`
 (relative to `environment.cwd`) and runs that file. The `argv` kind passes
 each string in `invocation.arguments` as one argument after a prepended
 `--no-config` flag. It sends `invocation.stdin` to standard input; omitted
-`stdin` means empty input. Batch expectations can check stdout, stderr, exit
-code, and files created under the scenario working directory.
+`stdin` means empty input.
 
 Use case J12 creates 20,000 files in one directory. The unit test
 `filesystem-candidate-membership-probes-scale-linearly` counts candidate-set
@@ -78,10 +78,11 @@ an absolute landing threshold.
 
 PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `paste` sends bracketed paste, `key` sends a key name accepted by tmux
-`send-keys`, such as `Enter` or `C-d`, and `wait` waits for its `contains`
-string to appear in captured PTY output after the step starts. `wait_exit` waits
-for the shell to exit. The optional top-level `arguments` array passes exact
-additional arguments to the binary.
+`send-keys`, such as `Enter` or `C-d`, `resize` changes the pane dimensions,
+and `wait` waits for its `contains` string to appear in captured PTY output
+after the step starts. A `resize` step requires integer `columns` and `rows`
+values from 1 through 512. `wait_exit` waits for the shell to exit. The optional
+top-level `arguments` array passes exact additional arguments to the binary.
 For a single-session scenario, set a non-empty
 `environment.variables.NSHELL_PROMPT` marker that only the prompt displays.
 By default, the runner sends Enter to make the initial prompt appear and waits
@@ -112,26 +113,24 @@ An input echo is the terminal displaying text or a key sequence sent by a
 Before launching, the runner derives input echoes from `keys` and `paste` text
 plus recognized tmux key sequences for `key` steps. The key sequences it
 recognizes are defined in `scripts/run-scenarios.py`. The runner rejects
-positive markers that could be satisfied by terminal echo or a prompt redraw
-before launching:
+required assertion text that could be satisfied by terminal echo or a prompt
+redraw before launching:
 
 - `wait.contains` if an echo from an earlier input step or a prompt redraw
   contains the entire marker;
 - a value in `expected.stream.contains` or `expected.screen.contains` if an
   input echo or prompt redraw contains the entire value;
+- a value in `expected.stream.ordered_contains` or
+  `expected.screen.ordered_contains` if an input echo or prompt redraw contains
+  the entire value;
 - an `expected.stream.equals` or `expected.screen.equals` value if an input
   echo or prompt redraw contains the entire expected string.
-
-This overlap check runs before the shell starts, so it applies the same
-substring rule to an `equals` value. It prevents terminal echo from satisfying
-an equality check by itself.
 
 `excludes` assertions require the checked text to be absent from its target,
 such as output, screen, file, or history contents. They are not subject to this
 rejection.
 
-Each PTY step sequence must end with `wait_exit`; it waits for the shell to exit
-so the runner can record the required status. `expected.stream` checks output
+Each PTY step sequence must end with `wait_exit`. `expected.stream` checks output
 captured from the PTY during the run, while `expected.screen` checks the visible
 pane contents at the end.
 For a multi-session scenario, each check combines all sessions in `sessions`
@@ -147,8 +146,10 @@ are relative to `environment.cwd`. The optional
 `expected.side_effects.history` object checks the history file with the same
 fields and a path relative to `environment.home`.
 Text assertions for stdout, stderr, PTY stream, screen, file contents, and
-history contents use a string for `equals` and arrays of strings for `contains`
-and `excludes`. Put batch output checks in `expected.stdout` and
+history contents use a string for `equals` and arrays of strings for `contains`,
+`ordered_contains`, and `excludes`. Every `ordered_contains` marker must be
+non-empty and appear after the preceding marker; any text may appear between
+markers. Put batch output checks in `expected.stdout` and
 `expected.stderr`; put PTY output checks in `expected.stream` and
 `expected.screen`. Every listed `contains` string must appear, and every listed
 `excludes` string must be absent.
@@ -221,9 +222,10 @@ home directory or exact machine environment.
   stdout, stderr, and status. They do not test a particular external caller.
 - B10 runs `-ilc env` in a PTY with `load_config: true` and
   `wait_for_prompt: false`. Its temporary
-  `.nshellrc` adds a unique PATH marker and emits a startup marker. A fixture
-  `env` prints a success marker only when PATH contains the configured value;
-  the exact PTY stream also rejects startup output and diagnostics. The broader
+  `home/.config/nshell/init.lisp` adds a unique PATH marker and emits a startup
+  marker. A fixture `env` prints a success marker only when PATH contains the
+  configured value; the exact PTY stream also rejects startup output and
+  diagnostics. The broader
   configuration behavior assigned to L07 (public Lisp, scripts, autoload, and
   hooks) remains outside this fixture.
 

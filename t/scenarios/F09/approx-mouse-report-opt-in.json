@@ -1,0 +1,76 @@
+{
+  "id": "F09-mouse-report-opt-in",
+  "uc": [
+    "F09"
+  ],
+  "mode": "pty",
+  "load_config": true,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "F09-mouse-report-opt-in> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "set -x NSHELL_MOUSE_REPORTING 1\n"
+      },
+      {
+        "path": "work/marker.txt",
+        "content": "F09_OPT_IN_READY\n"
+      }
+    ]
+  },
+  "expected": {
+    "stream": {
+      "ordered_contains": [
+        "\u001b[?1000h",
+        "\u001b[?1006h",
+        "\u001b[?1006l",
+        "\u001b[?1000l",
+        "F09_OPT_IN_READY",
+        "\u001b[?1000h",
+        "\u001b[?1006h",
+        "\u001b[?1006l",
+        "\u001b[?1000l"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "cat marker.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "F09_OPT_IN_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

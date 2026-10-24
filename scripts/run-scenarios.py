@@ -488,10 +488,18 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
             for step in steps:
                 _require(isinstance(step, dict), f"{scenario_id}: each pty step must be an object")
                 kind = step.get("type")
-                _require(kind in ("keys", "paste", "key", "wait", "wait_exit"),
+                _require(kind in ("keys", "paste", "key", "wait", "wait_exit", "resize"),
                          f"{scenario_id}: unsupported pty step type {kind!r}")
                 if kind in ("keys", "paste"):
                     _require(isinstance(step.get("text"), str), f"{scenario_id}: {kind} requires text")
+                if kind == "resize":
+                    for dimension in ("columns", "rows"):
+                        value = step.get(dimension)
+                        _require(
+                            isinstance(value, int) and not isinstance(value, bool)
+                            and 1 <= value <= 512,
+                            f"{scenario_id}: resize.{dimension} must be between 1 and 512",
+                        )
                 if kind == "key":
                     key = step.get("key")
                     _require(isinstance(key, str) and TMUX_KEY.fullmatch(key),
@@ -632,6 +640,13 @@ def _validate_pty_match_sources(scenario: dict[str, Any]) -> None:
         contains = check.get("contains", [])
         if isinstance(contains, list):
             matches.extend(value for value in contains if isinstance(value, str))
+        ordered_contains = check.get("ordered_contains", [])
+        _require(
+            isinstance(ordered_contains, list)
+            and all(isinstance(value, str) and value for value in ordered_contains),
+            f"{scenario_id}: {output_name}.ordered_contains must be an array of non-empty strings",
+        )
+        matches.extend(ordered_contains)
         for marker in matches:
             reject_overlap(f"{output_name} expectation", marker, sources)
 
@@ -737,18 +752,30 @@ def _assert_text(label: str, actual: str, expected: Any, failures: list[str]) ->
             failures.append(f"{label} did not equal the expected text")
     contains = expected.get("contains", [])
     excludes = expected.get("excludes", [])
+    ordered_contains = expected.get("ordered_contains", [])
     _require(isinstance(contains, list) and all(isinstance(item, str) for item in contains),
              f"{label}.contains must be an array of strings")
     _require(isinstance(excludes, list) and all(isinstance(item, str) for item in excludes),
              f"{label}.excludes must be an array of strings")
+    _require(isinstance(ordered_contains, list)
+             and all(isinstance(item, str) for item in ordered_contains),
+             f"{label}.ordered_contains must be an array of strings")
     _require(
-        "equals" in expected or bool(contains) or bool(excludes),
+        "equals" in expected or bool(contains) or bool(excludes) or bool(ordered_contains),
         f"{label} expectation must define a non-empty text check",
     )
-    _require(all(item for item in contains + excludes), f"{label} text checks must be non-empty")
+    _require(all(item for item in contains + excludes + ordered_contains),
+             f"{label} text checks must be non-empty")
     for item in contains:
         if item not in actual:
             failures.append(f"{label} did not contain {item!r}")
+    position = 0
+    for item in ordered_contains:
+        match = actual.find(item, position)
+        if match < 0:
+            failures.append(f"{label} did not contain {item!r} in the required order")
+            break
+        position = match + len(item)
     for item in excludes:
         if item in actual:
             failures.append(f"{label} unexpectedly contained {item!r}")
@@ -979,6 +1006,12 @@ class TmuxSession:
         finally:
             self._tmux(["delete-buffer", "-b", buffer_name])
 
+    def resize(self, columns: int, rows: int) -> None:
+        self._tmux([
+            "resize-window", "-t", self.pane,
+            "-x", str(columns), "-y", str(rows),
+        ])
+
     def _read(self, timeout: float) -> bytes:
         readable, _, _ = select.select([self.fifo_fd], [], [], timeout)
         if not readable:
@@ -1116,6 +1149,8 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                             session.paste(step["text"])
                         elif kind == "key":
                             session.send_key(step["key"])
+                        elif kind == "resize":
+                            session.resize(step["columns"], step["rows"])
                         elif kind == "wait":
                             session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
                         elif kind == "wait_exit":

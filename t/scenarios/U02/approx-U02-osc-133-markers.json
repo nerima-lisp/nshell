@@ -51,16 +51,15 @@
   "expected": {
     "stream": {
       "contains": [
-        "U02_COMMAND_OK",
+        "U02_COMMAND_OK"
+      ],
+      "ordered_contains": [
         "\u001b]133;A",
         "\u001b]133;B",
         "\u001b]133;C",
-        "\u001b]133;D"
+        "\u001b]133;D;0"
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-R08 owns OSC 133 prompt markers."
   }
 }

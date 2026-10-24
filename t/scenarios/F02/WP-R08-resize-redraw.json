@@ -1,0 +1,91 @@
+{
+  "id": "F02-wp-r08-resize-redraw",
+  "uc": [
+    "F02"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "F02_MESSAGE": "F02_RESIZE_ONCE",
+      "NSHELL_PROMPT": "F02> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 32,
+      "rows": 14
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "F02_RESIZE_ONCE"
+      ]
+    },
+    "screen": {
+      "excludes": [
+        "F02_STALE"
+      ]
+    },
+    "side_effects": {
+      "files": [
+        {
+          "path": "resize-runs.txt",
+          "equals": "F02_RESIZE_ONCE\n"
+        }
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $F02_MESSAGE >> resize-runs.txt; echo $F02_MESSAGE F02_STALE"
+    },
+    {
+      "type": "resize",
+      "columns": 20,
+      "rows": 14
+    },
+    {
+      "type": "resize",
+      "columns": 80,
+      "rows": 14
+    },
+    {
+      "type": "resize",
+      "columns": 32,
+      "rows": 14
+    },
+    {
+      "type": "key",
+      "key": "C-w"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "F02_RESIZE_ONCE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

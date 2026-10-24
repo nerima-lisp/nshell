@@ -1,0 +1,101 @@
+{
+  "id": "E02-bg-resumes-stopped-descendant",
+  "uc": [
+    "E02"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.1,
+  "timeout_seconds": 30,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "E02_BG_DESCENDANT> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 100,
+      "rows": 30
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "E02_BG_CHILD_STARTED_1",
+        "E02_BG_RETURNED_1",
+        "E02_BG_CHILD_REAPED_1",
+        "E02_BG_DESCENDANT_REAPED_1"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "e02-bg-child.txt",
+          "equals": "E02_BG_CHILD_REAPED_1"
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh -c 'sleep 3 & echo $! > child.pid; echo E02_BG_CHILD_STARTED_$((0+1)); wait; printf E02_BG_CHILD_REAPED_$((0+1)) > e02-bg-child.txt'"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E02_BG_CHILD_STARTED_1",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "key",
+      "key": "C-z"
+    },
+    {
+      "type": "keys",
+      "text": "bg %1; echo E02_BG_RETURNED_$((0+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E02_BG_RETURNED_1",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "keys",
+      "text": "sleep 4; cat e02-bg-child.txt; echo E02_BG_DESCENDANT_REAPED_$((0+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "E02_BG_DESCENDANT_REAPED_1",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 5
+    }
+  ]
+}

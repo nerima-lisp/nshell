@@ -1,0 +1,78 @@
+{
+  "id": "T3-R03-fg-resumes-stopped-descendant",
+  "uc": [
+    "E02"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.1,
+  "timeout_seconds": 20,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "T3_R03_FG> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 100,
+      "rows": 30
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "T3_R03_CHILD_STARTED_42",
+        "T3_R03_FG_RETURNED_42"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "sh -c 'sleep 3 & echo $! > child.pid; printf T3_R03_CHILD_STARTED_$((40+2)); wait'"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "T3_R03_CHILD_STARTED_42",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "key",
+      "key": "C-z"
+    },
+    {
+      "type": "keys",
+      "text": "fg %1; echo T3_R03_FG_RETURNED_$((40+2))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "T3_R03_FG_RETURNED_42",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 5
+    }
+  ]
+}

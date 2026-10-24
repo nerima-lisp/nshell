@@ -62,7 +62,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | D11 | approximation | 1 | 0 | `t/scenarios/D11/approx-cooked-mode-after-crash.json` |
 | D12 | direct | 1 | 0 | `t/scenarios/D12/ctrl-c-stops-foreground-child.json` |
 | E01 | direct | 1 | 0 | `t/scenarios/E01/ctrl-z-stops-redirected-foreground-job.json` |
-| E02 | direct | 1 | 0 | `t/scenarios/E02/fg-bg-and-jobs.json` |
+| E02 | direct | 3 | 0 | `t/scenarios/E02/bg-resumes-stopped-descendant.json`, `t/scenarios/E02/fg-bg-and-jobs.json`, `t/scenarios/E02/T3-fg-resumes-stopped-descendant.json` |
 | E03 | direct | 1 | 0 | `t/scenarios/E03/kill-percent-one.json` |
 | E04 | direct | 1 | 0 | `t/scenarios/E04/disown-removes-job.json` |
 | E05 | direct | 1 | 0 | `t/scenarios/E05/wait-collects-background-status.json` |

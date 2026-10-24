@@ -408,11 +408,25 @@
       "path": "E01/ctrl-z-stops-redirected-foreground-job.json"
     },
     {
+      "id": "E02-bg-resumes-stopped-descendant",
+      "uc": [
+        "E02"
+      ],
+      "path": "E02/bg-resumes-stopped-descendant.json"
+    },
+    {
       "id": "E02-fg-bg-and-jobs",
       "uc": [
         "E02"
       ],
       "path": "E02/fg-bg-and-jobs.json"
+    },
+    {
+      "id": "T3-R03-fg-resumes-stopped-descendant",
+      "uc": [
+        "E02"
+      ],
+      "path": "E02/T3-fg-resumes-stopped-descendant.json"
     },
     {
       "id": "E03-kill-percent-one",

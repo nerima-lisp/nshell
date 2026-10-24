@@ -82,10 +82,8 @@
   (let ((environment (nshell.infrastructure.acl:current-environment-entries)))
     (loop for command in +host-clipboard-commands+
       for program = (ignore-errors
-                      (let ((found (host-kit:find-program (first command))))
-                        (typecase found
-                          (string found)
-                          (pathname (namestring found)))))
+                      (nshell.infrastructure.acl::%resolve-external-command
+                       (first command) environment))
       thereis (and program
                    (handler-case
                        (let ((input (make-string-input-stream text))

@@ -59,6 +59,13 @@
       "path": "A08/exit-warns-about-job.json"
     },
     {
+      "id": "WP-R10-whitespace-keeps-repl-alive",
+      "uc": [
+        "A08"
+      ],
+      "path": "A08/WP-R10-whitespace-keeps-repl-alive.json"
+    },
+    {
       "id": "A09-wp-r01-hup-forwards-to-job",
       "uc": [
         "A09"

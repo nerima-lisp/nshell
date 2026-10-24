@@ -1,0 +1,61 @@
+{
+  "id": "WP-R10-whitespace-keeps-repl-alive",
+  "uc": ["A08"],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "CPS_WS> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "CPS_WS_ALIVE",
+        "Goodbye!"
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "   "
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "printf '%s%s\\n' CPS_WS_ ALIVE"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

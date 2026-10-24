@@ -1024,7 +1024,9 @@ wrapped line's other rows on screen as stale duplicates."
                      (:error
                       (%execute-parse-error result))
                      (:incomplete
-                      (%execute-incomplete-command result))))))
+                      (%execute-incomplete-command result))
+                     (:empty
+                      (%execute-empty-input))))))
         (nshell.infrastructure.terminal:terminal-mode-operation-failed (condition)
           (format *error-output* "~%nshell: ~a~%" condition)
           (%set-command-failure-state 1)

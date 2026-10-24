@@ -854,16 +854,16 @@
         (expect '((321 :sigterm)) :to-equal seen))
       (with-temporary-function
           ('nshell.application::signal-job
-           (lambda (id signal job-monitor)
-             (declare (ignore signal job-monitor))
+           (lambda (id signal job-monitor process-registry)
+             (declare (ignore signal job-monitor process-registry))
              (= id job-id)))
         (assert-builtin-call (context "kill" (list (format nil "%~d" job-id)))
           :code 0
           :output-empty t))
       (with-temporary-function
           ('nshell.application::signal-job
-           (lambda (id signal job-monitor)
-             (declare (ignore id signal job-monitor))
+           (lambda (id signal job-monitor process-registry)
+             (declare (ignore id signal job-monitor process-registry))
              nil))
         (assert-builtin-call (context "kill" (list (format nil "%~d" job-id)))
           :code 1

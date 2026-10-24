@@ -168,37 +168,62 @@
 
 (defun %require-job (job-id &optional (job-monitor *job-monitor*))
   (nshell.domain.job-control:monitor-find-job job-monitor job-id))
-(defun signal-job (job-id signal &optional (job-monitor *job-monitor*))
-  "Send SIGNAL to JOB-ID and synchronize the monitor after a successful signal."
-  (labels ((record-signal-state ()
-                                (let ((current-job
-                                       (nshell.domain.job-control:monitor-find-job
-                                        job-monitor job-id)))
-                                  (when (and current-job
-                                             (not (nshell.domain.execution:job-completed-p
-                                                   current-job)))
-                                    (cond
-                                     ((nshell.infrastructure.acl:process-stop-signal-p
-                                       signal)
-                                      (nshell.domain.job-control:suspend-job
-                                       job-monitor job-id nil))
-                                     ((and (nshell.infrastructure.acl:process-continue-signal-p
-                                           signal)
-                                           (nshell.domain.execution:job-stopped-p current-job))
-                                      (nshell.domain.job-control:background-job
-                                       job-monitor job-id)))))))
-    (let ((job (%require-job job-id job-monitor)))
-      (when job
-        (let ((pgid (nshell.domain.execution:job-control-pgid job))
-              (pids (nshell.domain.execution:job-known-pids job))
-              (signaled-p nil))
-          (if pgid
-              (progn
-                (nshell.infrastructure.acl:kill-process (- pgid) signal)
-                (setf signaled-p t))
-              (dolist (pid pids)
-                (nshell.infrastructure.acl:kill-process pid signal)
-                (setf signaled-p t)))
-          (when signaled-p
-            (record-signal-state))
+(defun signal-job (job-id signal &optional (job-monitor *job-monitor*) process-registry)
+  "Send SIGNAL to JOB-ID and synchronize the monitor after successful delivery."
+  (let ((job (%require-job job-id job-monitor)))
+    (when job
+      (let* ((pgid (nshell.domain.execution:job-control-pgid job))
+             (pids (nshell.domain.execution:job-known-pids job))
+             (was-stopped-p (nshell.domain.execution:job-stopped-p job)))
+        (labels ((send-job-signal (sent-signal)
+                   (let ((registered-processes
+                           (and process-registry
+                                (nshell.infrastructure.acl:process-continue-signal-p
+                                 sent-signal)
+                                (gethash job-id process-registry))))
+                     (if registered-processes
+                         (progn
+                           (dolist (process
+                                    (%job-process-list registered-processes))
+                             (when (member
+                                    (nshell.infrastructure.acl:process-status
+                                     process)
+                                    '(:running :stopped))
+                               (nshell.infrastructure.acl:process-continue
+                                process)))
+                           t)
+                         (if pgid
+                             (progn
+                               (nshell.infrastructure.acl:kill-process
+                                (- pgid) sent-signal)
+                               t)
+                             (let ((sent-p nil))
+                               (dolist (pid pids)
+                                 (nshell.infrastructure.acl:kill-process
+                                  pid sent-signal)
+                                 (setf sent-p t))
+                               sent-p)))))
+                 (record-signal-state (sent-signal)
+                   (let ((current-job
+                           (nshell.domain.job-control:monitor-find-job
+                            job-monitor job-id)))
+                     (when (and current-job
+                                (not (nshell.domain.execution:job-completed-p
+                                      current-job)))
+                       (cond
+                         ((nshell.infrastructure.acl:process-stop-signal-p
+                           sent-signal)
+                          (nshell.domain.job-control:suspend-job
+                           job-monitor job-id nil))
+                         ((and (nshell.infrastructure.acl:process-continue-signal-p
+                                sent-signal)
+                               (nshell.domain.execution:job-stopped-p current-job))
+                          (nshell.domain.job-control:background-job
+                           job-monitor job-id)))))))
+          (when (send-job-signal signal)
+            (record-signal-state signal)
+            (when (and was-stopped-p
+                       (member signal (list :sigterm :sigint :sighup)))
+              (when (send-job-signal :sigcont)
+                (record-signal-state :sigcont))))
           job)))))

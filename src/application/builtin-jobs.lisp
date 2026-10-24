@@ -150,10 +150,11 @@
                  (string= target "-")))
     (nshell.domain.job-control:monitor-resolve-job-spec
      job-monitor target)))
-(defun %kill-one-target (job-monitor target signal)
+(defun %kill-one-target (job-monitor target signal &optional process-registry)
   (let ((job-id (%resolve-kill-job-id job-monitor target)))
     (cond
-      ((and job-id (signal-job job-id signal job-monitor))
+      ((and job-id
+            (signal-job job-id signal job-monitor process-registry))
        t)
       ((let ((pid (%parse-integer-designator target)))
          (when pid
@@ -174,13 +175,14 @@
        (%builtin-usage "kill" "kill [-signal] pid|%job"))
       (t
        (let ((job-monitor (shell-context-job-monitor context))
+             (process-registry (shell-context-process-registry context))
              (code 0))
          (values
           (with-output-to-string (out)
             (dolist (target targets)
               (handler-case
                   (unless (%kill-one-target
-                           job-monitor target signal-designator)
+                           job-monitor target signal-designator process-registry)
                     (setf code 1)
                     (format out "kill: no such process or job: ~a~%"
                             target))

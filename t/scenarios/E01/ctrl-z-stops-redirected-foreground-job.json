@@ -83,7 +83,7 @@
     },
     {
       "type": "keys",
-      "text": "kill -KILL %1; wait %1"
+      "text": "kill %1; wait %1"
     },
     {
       "type": "key",

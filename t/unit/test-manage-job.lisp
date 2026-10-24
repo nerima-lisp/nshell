@@ -485,30 +485,71 @@
         (expect job :to-be (nshell.application:bg job-id monitor)))
       (expect '(4321) :to-equal continue-calls)
       (expect :background :to-be (nshell.domain.execution:job-state job))))
-  (it "signal-job-updates-stop-and-continue-state"
-      "STOP and CONT signals keep monitor state aligned with successful delivery."
-      (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-             (job (make-test-job 0 "sleep" :pgid 4321))
-             (job-id (nshell.domain.job-control:monitor-add-job monitor job))
-             (calls nil))
-        (nshell.domain.job-control:background-job monitor job-id)
+  (it "signal-job-continues-stopped-jobs-and-refreshes-process-cache"
+    "Termination signals resume stopped jobs and update registered SBCL process state."
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "sleep" :pgid 4321))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (calls nil))
+      (nshell.domain.job-control:background-job monitor job-id)
+      (with-temporary-function
+          ((quote nshell.infrastructure.acl:kill-process)
+           (lambda (pid signal)
+             (push (list pid signal) calls)
+             0))
+        (expect job :to-be
+                (nshell.application::signal-job job-id :sigstop monitor))
+        (expect :stopped :to-be
+                (nshell.domain.execution:job-state job))
+        (expect (list (list -4321 :sigstop)) :to-equal calls)
+        (expect job :to-be
+                (nshell.application::signal-job job-id :sigcont monitor))
+        (expect :background :to-be
+                (nshell.domain.execution:job-state job))
+        (expect (list (list -4321 :sigcont) (list -4321 :sigstop))
+                :to-equal calls)
+        (dolist (termination-signal (list :sigterm :sigint :sighup))
+          (nshell.domain.job-control:suspend-job monitor job-id nil)
+          (setf calls nil)
+          (expect job :to-be
+                  (nshell.application::signal-job
+                   job-id termination-signal monitor))
+          (expect :background :to-be
+                  (nshell.domain.execution:job-state job))
+          (expect (list (list -4321 :sigcont)
+                        (list -4321 termination-signal))
+                  :to-equal calls))))
+    (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+           (job (make-test-job 0 "sleep" :pgid 4321))
+           (job-id (nshell.domain.job-control:monitor-add-job monitor job))
+           (process-registry (make-hash-table :test #'eql))
+           (processes '(:first :second :finished))
+           (continued nil)
+           (signals nil))
+      (nshell.domain.job-control:background-job monitor job-id)
+      (nshell.domain.job-control:suspend-job monitor job-id nil)
+      (setf (gethash job-id process-registry) processes)
+      (with-temporary-function
+          ((quote nshell.infrastructure.acl:kill-process)
+           (lambda (pid signal)
+             (push (list pid signal) signals)
+             0))
         (with-temporary-function
-         ((quote nshell.infrastructure.acl:kill-process)
-          (lambda (pid signal)
-            (push (list pid signal) calls)
-            0))
-         (expect job :to-be
-                 (nshell.application::signal-job job-id :sigstop monitor))
-         (expect :stopped :to-be
-                 (nshell.domain.execution:job-state job))
-         (expect (list (list -4321 :sigstop)) :to-equal calls)
-         (expect job :to-be
-                 (nshell.application::signal-job job-id :sigcont monitor))
-         (expect :background :to-be
-                 (nshell.domain.execution:job-state job))
-         (expect (list (list -4321 :sigcont)
-                       (list -4321 :sigstop))
-                 :to-equal calls))))
+            ((quote nshell.infrastructure.acl:process-status)
+             (lambda (process)
+               (if (eq process :finished) :exited :stopped)))
+          (with-temporary-function
+              ((quote nshell.infrastructure.acl:process-continue)
+               (lambda (process)
+                 (push process continued)
+                 t))
+            (expect job :to-be
+                    (nshell.application::signal-job
+                     job-id :sigterm monitor process-registry))
+            (expect :background :to-be
+                    (nshell.domain.execution:job-state job))
+            (expect '((-4321 :sigterm)) :to-equal signals)
+            (expect '(:second :first) :to-equal continued))))))
 
   (it "status-label-falls-back-for-unknown-state"
     "Unexpected internal job states remain visible as an explicit unknown label."

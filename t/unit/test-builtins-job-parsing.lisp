@@ -319,8 +319,10 @@
              (signals nil))
         (with-temporary-function
             ('nshell.application::signal-job
-             (lambda (selected-id signal selected-monitor)
+             (lambda (selected-id signal selected-monitor selected-registry)
                (declare (ignore selected-monitor))
+               (expect (nshell.application::shell-context-process-registry context)
+                       :to-be selected-registry)
                (push (list selected-id signal) signals)
                t))
           (multiple-value-bind (output status)
@@ -351,8 +353,8 @@
                     context (list (format nil "%~d" job-id))))))
         (with-temporary-function
             ('nshell.application::signal-job
-             (lambda (selected-id signal selected-monitor)
-               (declare (ignore selected-id signal selected-monitor))
+             (lambda (selected-id signal selected-monitor selected-registry)
+               (declare (ignore selected-id signal selected-monitor selected-registry))
                nil))
           (expect (list (format nil "kill: no such process or job: %~d~%" job-id)
                         1)

@@ -214,7 +214,10 @@ history remains available in private mode."
                         (function nshell.infrastructure.acl:current-working-directory))))
   (nshell.feature.assistant:reset-assistant-usage)
   (nshell.feature.assistant:reset-assistant-settings)
-  (%reset-repl-state-tables)
+  (progn
+    (%reset-repl-state-tables)
+    (setf *osc133-state* :none
+          *mouse-reporting-enabled-p* nil))
   (nshell.infrastructure.terminal:reset-terminal-color-depth)
   (setf nshell.domain.prompting:*git-status-resolver*
         (function nshell.infrastructure.acl:get-git-status)
@@ -229,7 +232,11 @@ history remains available in private mode."
   (setf *vi-mode-enabled*
         (%vi-mode-flag-enabled-p
          (nshell.infrastructure.acl:current-environment-value "NSHELL_VI_MODE")))
-  (%load-interactive-config :enabled-p load-config-p :path config-path)
+  (progn
+    (%load-interactive-config :enabled-p load-config-p :path config-path)
+    (setf *mouse-reporting-enabled-p*
+          (%vi-mode-flag-enabled-p
+           (nshell.domain.environment:env-get *environment* "NSHELL_MOUSE_REPORTING"))))
   (%apply-east-asian-ambiguous-width)
   (when history-p
     (%seed-history-from-file *history*))

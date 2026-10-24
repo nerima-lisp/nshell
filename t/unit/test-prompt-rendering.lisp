@@ -104,12 +104,42 @@
             (expect (search "AI " output) :to-be-truthy)))
       (nshell.feature.assistant:reset-assistant-usage)))
 
-  (it "render-prompt-emits-the-window-title-only-when-the-terminal-is-interactive"
-    "An OSC window-title sequence is written only when the interactive terminal flag is set."
-    (let ((output (capture-render-prompt :terminal-width 80 :window-title-p t)))
-      (expect (search (format nil "~C]0;" #\Esc) output) :to-be-truthy))
-    (let ((output (capture-render-prompt :terminal-width 80)))
-      (expect (search (format nil "~C]0;" #\Esc) output) :to-be-falsy)))
+  (it "render-prompt-emits-the-window-title-only-when-terminal-controls-are-supported"
+    "The OSC title is written only when requested and terminal control sequences are supported."
+    (with-temporary-function
+        ('nshell.infrastructure.terminal:terminal-control-sequences-supported-p
+         (lambda () t))
+      (let ((output (capture-render-prompt
+                     :terminal-width 80 :window-title-p t)))
+        (expect (search (format nil "~C]0;" #\Esc) output) :to-be-truthy)
+        (expect (search "nshell: /project/" output) :to-be-truthy)
+        (expect (search (concatenate 'string (string #\Esc) (string #\\))
+                        output)
+                :to-be-truthy)))
+    (with-temporary-function
+        ('nshell.infrastructure.terminal:terminal-control-sequences-supported-p
+         (lambda () nil))
+      (let ((output (capture-render-prompt
+                     :terminal-width 80 :window-title-p t)))
+        (expect (search (format nil "~C]0;" #\Esc) output) :to-be-falsy))))
+  (it "terminal-integration-osc7-percent-encodes-utf8-file-uri-paths"
+    "UTF-8 path bytes are percent encoded and OSC uses ST."
+    (with-temporary-function
+        ('nshell.infrastructure.terminal:terminal-control-sequences-supported-p
+         (lambda () t))
+      (let ((output
+              (with-output-to-string (*standard-output*)
+                (nshell.presentation::%emit-terminal-integration-sequence
+                 :osc7 "/project/a b/あ" "test-host"))))
+        (expect
+         (concatenate
+          'string
+          (string #\Esc)
+          "]7;file://test-host/project/a%20b/%E3%81%82"
+          (string #\Esc)
+          (string #\\))
+         :to-equal
+         output))))
 
   (it "home-prefix-only-matches-path-boundaries"
     "Home-directory shortening should not trigger on plain string prefixes."

@@ -2,10 +2,12 @@
 
 (describe
  "terminal-integration-tests"
- (it
-  "terminal-ansi-emits-advanced-control-sequences"
+ (it "terminal-ansi-emits-advanced-control-sequences"
   "Advanced terminal mode helpers emit standard ANSI control sequences."
-  (let ((output
+  (with-temporary-function
+      ((quote nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
+       (lambda () t))
+    (let ((output
          (with-output-to-string (stream)
            (nshell.infrastructure.terminal:ansi-hide-cursor stream)
            (nshell.infrastructure.terminal:ansi-show-cursor stream)
@@ -26,7 +28,7 @@
      (search (format nil "~C[?1006l~C[?1000l" #\Esc #\Esc) output)
      :to-be-truthy)
     (expect (search (format nil "~C[?1049h" #\Esc) output) :to-be-truthy)
-    (expect (search (format nil "~C[?1049l" #\Esc) output) :to-be-truthy)))
+    (expect (search (format nil "~C[?1049l" #\Esc) output) :to-be-truthy))))
  (it
   "terminal-ansi-cursor-motion-is-byte-identical-to-the-hand-rolled-form"
   "The cursor helpers emit exactly the sequences the presentation tier used to

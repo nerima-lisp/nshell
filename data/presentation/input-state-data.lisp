@@ -2,7 +2,7 @@
 
 (in-package #:nshell.presentation)
 
-(defconstant +max-input-buffer-size+ 4096
+(defconstant +max-input-buffer-size+ 65536
   "Maximum editable input buffer length accepted by `reduce-input-state'.")
 
 (defvar *vi-mode-enabled* nil

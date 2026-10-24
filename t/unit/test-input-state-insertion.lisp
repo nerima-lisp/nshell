@@ -119,11 +119,11 @@
                     buffer))
       (expect 10 :to-equal (nshell.presentation::buffer-insertion-cursor-pos
                  insertion)))
-    (let* ((limit 4096)
-           (buffer (make-string 4094 :initial-element #\x))
+    (let* ((limit nshell.presentation::+max-input-buffer-size+)
+           (buffer (make-string (- limit 2) :initial-element #\x))
            (insertion (nshell.presentation::buffer-insertion-at-cursor
                        buffer
-                       4094
+                       (- limit 2)
                        "abcdef")))
       (expect (concatenate 'string buffer "ab") :to-equal (nshell.presentation::buffer-insertion-result
                     insertion
@@ -132,13 +132,13 @@
                     insertion))))
 
   (it "input-state-buffer-insertion-rejects-non-insertions"
-    (let ((buffer (make-string 4096 :initial-element #\x)))
+    (let ((buffer (make-string nshell.presentation::+max-input-buffer-size+ :initial-element #\x)))
       (expect (nshell.presentation::buffer-insertion-at-cursor
                  "echo" 4 "") :to-be-null)
       (expect (nshell.presentation::buffer-insertion-at-cursor
                  "echo" 4 :not-a-string) :to-be-null)
       (expect (nshell.presentation::buffer-insertion-at-cursor
-                 buffer 4096 "x") :to-be-null)))
+                 buffer nshell.presentation::+max-input-buffer-size+ "x") :to-be-null)))
 
   (it "input-state-buffer-deletion-projects-result-and-cursor"
     (let* ((buffer "abcd")
@@ -521,11 +521,11 @@
                   (nshell.presentation:input-state-cursor-pos new-state)))))))
 
   (it "input-state-paste-is-capped-at-buffer-limit"
-    (let* ((limit 4096)
-           (buffer (make-string 4094 :initial-element #\x))
+    (let* ((limit nshell.presentation::+max-input-buffer-size+)
+           (buffer (make-string (- limit 2) :initial-element #\x))
            (state (input-state
                    :buffer buffer
-                   :cursor-pos 4094)))
+                   :cursor-pos (- limit 2))))
       (with-expected-input-state-reduction (new-state output)
           state
           (reduce-once state :paste nil nil

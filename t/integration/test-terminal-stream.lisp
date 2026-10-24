@@ -142,7 +142,7 @@
 
   (it "terminal-stream-caps-bracketed-paste-retention"
     "Bracketed paste input is consumed fully but retained text is bounded."
-    (let* ((limit 4096)
+    (let* ((limit nshell.infrastructure.terminal::*max-bracketed-paste-size*)
            (paste-text (make-string (+ limit 128) :initial-element #\x))
            (events (read-key-events-from-string
                     (concatenate 'string

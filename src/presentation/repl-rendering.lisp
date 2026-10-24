@@ -125,11 +125,22 @@
     (%ensure-rendered-prompt-origin)
     (let* ((terminal-width (terminal-width))
            (prompt-width
-           (render-prompt *config* *last-exit-code*
-                            :last-command-duration-ms *last-command-duration-ms*
-                            :failure-explain-p *failure-explain-available-p*
-                            :terminal-width terminal-width
-                            :window-title-p *interactive-terminal-installed-p*))
+             (progn
+               (when (and *interactive-terminal-installed-p*
+                          (eq *osc133-state* :none))
+                 (%emit-terminal-integration-sequence
+                  :osc7
+                  (boundary-current-directory)
+                  (boundary-hostname))
+                 (%emit-terminal-integration-sequence :osc133 "A")
+                 (setf *osc133-state* :prompt))
+               (render-prompt *config* *last-exit-code*
+                              :last-command-duration-ms *last-command-duration-ms*
+                              :failure-explain-p *failure-explain-available-p*
+                              :terminal-width terminal-width
+                              :window-title-p
+                              (and *interactive-terminal-installed-p*
+                                   (eq *osc133-state* :prompt)))))
            (text (input-state-buffer *input-state*))
            (theme (nshell.domain.configuration:config-theme *config*))
            (suggestion (input-state-suggestion *input-state*))
@@ -142,9 +153,13 @@
         (format t " ")
         (%write-styled ask-suffix :prompt-assistant theme)
         (incf prompt-width (1+ (%string-visible-width ask-suffix))))
-      (render-edit-buffer text theme
-                          :selection-start (first selection-range)
-                          :selection-end (second selection-range))
+      (progn
+        (when (eq *osc133-state* :prompt)
+          (%emit-terminal-integration-sequence :osc133 "B")
+          (setf *osc133-state* :input))
+        (render-edit-buffer text theme
+                            :selection-start (first selection-range)
+                            :selection-end (second selection-range)))
       (when (and suggestion (> (length suggestion) 0))
         (%write-styled suggestion :autosuggestion theme))
       (%move-cursor-to-rendered-position text

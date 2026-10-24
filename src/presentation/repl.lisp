@@ -134,8 +134,12 @@
               (setf *rerun-confirmation-pending-p* nil
                     *rerun-command-assessment* nil)
               (clear-rendered-transient-panel))
-            (setf *assistant-last-cancel-at* nil
-                  *input-state* new-state)
+            (progn
+              (when (eq :ctrl-c
+                        (nshell.domain.input:key-event-type event))
+                (setf *osc133-state* :none))
+              (setf *assistant-last-cancel-at* nil
+                    *input-state* new-state))
             (process-output-event output-event)))
       (storage-condition ()
         (setf *input-state* input-state-before)
@@ -180,6 +184,8 @@
             (%read-key-event-for-current-mode
              (lambda ()
                (or (%handle-pending-shell-termination)
+                   (when (nshell.infrastructure.acl:consume-terminal-resize-p)
+                     (nshell.domain.input:make-key-event :ignore nil nil (list :terminal-resize t)))
                    (when (nshell.infrastructure.acl:consume-sigint-received-p)
                      t)
                    (%poll-assistant-model-event)))))
@@ -202,6 +208,10 @@
           (read-key-cont)))
        ((and event *rerun-confirmation-pending-p*)
         (lambda () (%process-input-event event)))
+       ((and event
+             (eq :ignore (nshell.domain.input:key-event-type event))
+             (getf (nshell.domain.input:key-event-data event) :terminal-resize))
+        (lambda () (%render-prompt-after-terminal-resize)))
        ((and event *command-not-found-fallback-text*)
         (lambda () (%process-command-not-found-fallback-event event)))
        ((and event (%transient-panel-expand-event-p event))

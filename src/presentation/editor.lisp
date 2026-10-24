@@ -79,4 +79,6 @@
           (first argv) (append (rest argv) (list (namestring path)))))
     (ignore-errors (nshell.infrastructure.terminal:enable-raw-mode))
     (ignore-errors (nshell.infrastructure.terminal:ansi-enable-bracketed-paste))
-    (ignore-errors (nshell.infrastructure.terminal:ansi-enable-sgr-mouse))))
+    (when *mouse-reporting-enabled-p*
+      (ignore-errors
+        (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)))))

@@ -92,7 +92,7 @@
                               (nshell.presentation:input-state-buffer left-start-state)))))))))
 
   (it "input-state-buffer-never-exceeds-reasonable-size"
-    (let* ((limit 4096)
+    (let* ((limit nshell.presentation::+max-input-buffer-size+)
            (buffer (make-string limit :initial-element #\x))
            (state (input-state :buffer buffer :cursor-pos limit)))
       (with-expected-input-state-reduction (new-state output)

@@ -47,11 +47,14 @@ above."
   ;; The ANSI modes are for the line editor, so they are only worth turning on
   ;; once raw mode is actually in effect.
   (when (enter-raw-mode-or-report)
-    (ignore-errors
+    (when (nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
+      (ignore-errors
         (progn
+          (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
           (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
-          (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)
-          (finish-output)))
+          (when *mouse-reporting-enabled-p*
+            (nshell.infrastructure.terminal:ansi-enable-sgr-mouse))
+          (finish-output))))
     t))
 
 (defun restore-interactive-terminal ()

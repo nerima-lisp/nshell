@@ -38,17 +38,21 @@
   code)
 
 (defun %call-with-cooked-terminal (thunk)
-  (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
-  (nshell.infrastructure.terminal:ansi-disable-bracketed-paste)
-  (finish-output)
+  (when (nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
+    (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
+    (nshell.infrastructure.terminal:ansi-disable-bracketed-paste)
+    (finish-output))
   (nshell.infrastructure.terminal:restore-terminal-mode 0 :preserve-snapshot-p t)
   (unwind-protect (funcall thunk)
     (nshell.infrastructure.terminal:restore-terminal-mode
      0 :preserve-snapshot-p t)
     (nshell.infrastructure.terminal:enable-raw-mode)
-    (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
-    (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)
-    (finish-output)))
+    (when (nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
+      (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
+      (if *mouse-reporting-enabled-p*
+          (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)
+          (nshell.infrastructure.terminal:ansi-disable-sgr-mouse))
+      (finish-output))))
 
 (defun %execute-with-repl-shell-context (thunk)
   (let ((context (%make-repl-shell-context))

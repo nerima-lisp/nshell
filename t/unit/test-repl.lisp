@@ -306,8 +306,8 @@
           (expect 1 :to-equal stop-calls)
           (expect 1 :to-equal restore-calls)))))
 
-  (it "read-key-cont-renders-after-resize-detected-during-read"
-    "A resize detected after an input read still schedules a redraw."
+  (it "read-key-cont-renders-after-resize-detected-after-read"
+    "A resize noticed after blocking input schedules a redraw."
     (with-repl-test-state
       (let ((resize-checks 0)
             (rendered nil))
@@ -317,8 +317,8 @@
                 (= 2 (incf resize-checks))))
              ('nshell.infrastructure.terminal:read-key-event
               (lambda (&key interrupt-predicate)
-  (declare (ignore interrupt-predicate))
-  nil))
+                (declare (ignore interrupt-predicate))
+                nil))
              ('nshell.presentation::render-prompt-cont
               (lambda ()
                 (setf rendered t))))
@@ -327,6 +327,32 @@
             (expect 2 :to-equal resize-checks)
             (funcall continuation)
             (expect rendered :to-be-truthy))))))
+  (it "read-key-cont-redraws-on-a-resize-polled-during-input"
+    "A resize polled during blocking input redraws while preserving the buffer."
+    (with-repl-test-state
+      (with-repl-input-state (:buffer "keep this" :cursor-pos 9)
+        (let ((resize-checks 0)
+              (rendered-buffer nil))
+          (with-temporary-functions
+              (( 'nshell.infrastructure.acl:consume-terminal-resize-p
+                 (lambda ()
+                   (= 2 (incf resize-checks))))
+               ('nshell.infrastructure.terminal:read-key-event
+                (lambda (&key interrupt-predicate &allow-other-keys)
+                  (funcall interrupt-predicate)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda ()
+                  (setf rendered-buffer
+                        (nshell.presentation:input-state-buffer
+                         nshell.presentation::*input-state*)))))
+            (let ((continuation (nshell.presentation::read-key-cont)))
+              (expect (functionp continuation) :to-be-truthy)
+              (funcall continuation)
+              (expect 2 :to-equal resize-checks)
+              (expect "keep this" :to-equal rendered-buffer)
+              (expect "keep this" :to-equal
+                      (nshell.presentation:input-state-buffer
+                       nshell.presentation::*input-state*))))))))
 
   (it "repl-mouse-event-maps-rendered-buffer-position"
     "Rendered SGR mouse coordinates become buffer-relative mouse events."

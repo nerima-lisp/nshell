@@ -581,7 +581,9 @@ wrapped line's other rows on screen as stale duplicates."
           *failure-explain-available-p* nil)
     (setf *assistant-command-origin* :typed
           *assistant-command-confirmed-p* nil)
-    (setf *input-state* (make-repl-input-state))))
+    (progn
+      (setf *osc133-state* :none)
+      (setf *input-state* (make-repl-input-state)))))
 
 (defun %assistant-proposal-confirmation-required-p ()
   (and (eq *assistant-command-origin* :proposal)
@@ -596,7 +598,13 @@ wrapped line's other rows on screen as stale duplicates."
 
 (defun %execute-complete-command (ast text)
   (with-reset-rendered-prompt-state-and-prompt-cont
-   (format t "~%")
+   (progn
+     (format t "~%")
+     (setf *osc133-state* :command)
+     (%emit-terminal-integration-sequence :osc133 "C")
+     (%emit-terminal-integration-sequence
+      :title
+      (format nil "nshell: ~a | ~a" (boundary-current-directory) text)))
    (%refresh-history-from-file)
    (sync-exported-environment)
    ;; Time the command through the clock boundary (real clock == monotonic
@@ -681,7 +689,12 @@ wrapped line's other rows on screen as stale duplicates."
                        (%assistant-environment-denylist-values
                         (nshell.domain.environment:env-bindings
                          (ensure-environment)))))
-           (setf *command-not-found-command* nil))))
+           (progn
+             (setf *command-not-found-command* nil)
+             (%emit-terminal-integration-sequence
+              :osc133
+              (format nil "D;~d" recorded-exit-code))
+             (setf *osc133-state* :none)))))
      (unless *agent-session*
        (setf *assistant-command-origin* :typed
              *assistant-command-confirmed-p* nil)
@@ -689,7 +702,9 @@ wrapped line's other rows on screen as stale duplicates."
 
 (defun %execute-parse-error (result)
   (with-reset-rendered-prompt-state-and-prompt-cont
-    (format t "~%")
+    (progn
+      (format t "~%")
+      (setf *osc133-state* :none))
     (report-parse-diagnostics result *error-output*)
     (%set-command-failure-state 2)))
 
@@ -993,7 +1008,9 @@ wrapped line's other rows on screen as stale duplicates."
                   (nshell.domain.history:history-expand-line *history* text)
                 (if expansion-error
                     (with-reset-rendered-prompt-state-and-prompt-cont
-                     (format t "~%nshell: ~a~%" expansion-error)
+                     (progn
+                      (format t "~%nshell: ~a~%" expansion-error)
+                      (setf *osc133-state* :none))
                      (%set-command-failure-state 2))
                     (nshell.domain.parsing:with-parsed-command-line-case
                      (result ast expanded-text)

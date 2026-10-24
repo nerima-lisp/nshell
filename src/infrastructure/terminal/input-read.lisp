@@ -1,7 +1,7 @@
 (in-package #:nshell.infrastructure.terminal)
 
 
-(defparameter *max-bracketed-paste-size* 4096
+(defparameter *max-bracketed-paste-size* 65536
   "Maximum number of pasted characters retained by the terminal reader.")
 
 (defun read-available-char (&key (attempts 20) (sleep-seconds 0.001))

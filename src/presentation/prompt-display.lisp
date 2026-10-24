@@ -373,10 +373,63 @@ side names a format."
                              (%format-segments right-format pm failure-explain-p)
                              (%right-prompt-segments pm failure-explain-p))))
     (when window-title-p
-      (write-string (cl-tty-kit:ansi-set-window-title
-                     (nshell.domain.prompting:prompt-model-cwd pm))))
+      (%emit-terminal-integration-sequence
+       :title
+       (format nil "nshell: ~a"
+               (or (nshell.domain.prompting:prompt-model-directory pm)
+                   (nshell.domain.prompting:prompt-model-cwd pm)))))
     (%write-colored-segments *standard-output* theme segments)
     (when right-segments
       (%write-right-prompt theme segments right-segments terminal-width))
     (finish-output)
     (%segments-visible-width segments)))
+(defun %emit-terminal-integration-sequence (kind value &optional host)
+  (when (nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
+    (labels ((write-osc (payload)
+               (write-char #\Esc *standard-output*)
+               (write-char #\] *standard-output*)
+               (write-string payload *standard-output*)
+               (write-char #\Esc *standard-output*)
+               (write-char #\\ *standard-output*))
+             (safe-title (text)
+               (map 'string
+                    (lambda (character)
+                      (let ((code (char-code character)))
+                        (if (or (<= code #x1f)
+                                (<= #x7f code #x9f))
+                            #\Space
+                            character)))
+                    text))
+             (safe-host (text)
+               (let ((filtered
+                       (coerce
+                        (remove-if-not
+                         (lambda (character)
+                           (or (alpha-char-p character)
+                               (digit-char-p character)
+                               (find character "._-:[]")))
+                         (coerce (or text "localhost") 'list))
+                        'string)))
+                 (if (and (find #\: filtered)
+                          (not (find #\[ filtered)))
+                     (format nil "[~a]" filtered)
+                     filtered)))
+             (encoded-path (path)
+               (with-output-to-string (output)
+                 (loop for octet across (nshell.util:utf-8-octets path)
+                       for character = (code-char octet)
+                       do (if (or (<= (char-code #\A) octet (char-code #\Z))
+                                  (<= (char-code #\a) octet (char-code #\z))
+                                  (<= (char-code #\0) octet (char-code #\9))
+                                  (find character "/-._~"))
+                              (write-char character output)
+                              (format output "%~2,'0X" octet))))))
+      (ecase kind
+        (:osc7
+         (write-osc (format nil "7;file://~a~a" (safe-host host) (encoded-path value))))
+        (:osc133
+         (write-osc (concatenate 'string "133;" value)))
+        (:title
+         (write-osc (concatenate 'string "0;" (safe-title value)))))
+      (finish-output *standard-output*)
+      t)))

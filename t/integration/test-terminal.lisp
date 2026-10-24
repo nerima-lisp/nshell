@@ -414,9 +414,13 @@ never undone leaves SGR mouse reporting on in the user's next shell."
 (describe "terminal-lifecycle-seam-tests"
   (it "installs-and-restores-terminal-through-boundary-calls"
     (let ((calls nil)
-          (nshell.application:*shell-pgid* nil))
-      (with-temporary-functions
-          (('nshell.infrastructure.acl:set-process-group
+          (nshell.application:*shell-pgid* nil)
+          (nshell.presentation::*mouse-reporting-enabled-p* t))
+      (with-temporary-function
+          ((quote nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
+           (lambda () t))
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:set-process-group
             (lambda (&rest args)
               (declare (ignore args))
               (push :set-process-group calls)))
@@ -455,9 +459,9 @@ never undone leaves SGR mouse reporting on in the user's next shell."
             (lambda (&rest args)
               (declare (ignore args))
               (push :ansi-disable-bracketed-paste calls))))
-        (expect t :to-be
-                (nshell.presentation::install-interactive-terminal))
-        (nshell.presentation::restore-interactive-terminal))
+          (expect t :to-be
+                  (nshell.presentation::install-interactive-terminal))
+          (nshell.presentation::restore-interactive-terminal)))
       (dolist (call '(:set-process-group
                       :install-signal-handlers
                       :set-foreground-pgroup

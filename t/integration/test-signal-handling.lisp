@@ -120,7 +120,7 @@
            ((quote nshell.infrastructure.acl:kill-process)
             (lambda (pid signal) (push (list pid signal) calls))))
         (nshell.infrastructure.acl::shell-sighup-handler nil nil nil)
-        (expect :shell-termination :to-equal
+        (expect nshell.presentation::+repl-exit+ :to-equal
                 (nshell.presentation::%handle-pending-shell-termination))
         (expect 129 :to-equal nshell.presentation::*last-exit-code*)
         (expect nil :to-be nshell.presentation::*running*)

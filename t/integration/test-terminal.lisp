@@ -380,8 +380,10 @@ never undone leaves SGR mouse reporting on in the user's next shell."
             (lambda () (setf installed t) nil))
            ('nshell.presentation::restore-interactive-terminal
             (lambda () (setf restored t)))
-           ('nshell.presentation:trampoline
-            (lambda (thunk) (declare (ignore thunk)) (setf edited t))))
+           ('nshell.presentation::render-prompt-cont
+            (lambda ()
+              (setf edited t)
+              nshell.presentation::+repl-exit+)))
         (with-output-to-string (*standard-output*)
           (setf code (nshell.presentation:run-repl))))
       (expect installed :to-be-truthy)

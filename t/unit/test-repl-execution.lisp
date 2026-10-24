@@ -351,7 +351,7 @@
                      (when (eq scenario :execution-failure)
                        (error "injected execution failure"))
                      (values nil 0)))
-                  nil)))
+                  nshell.presentation::+repl-exit+)))
             (handler-case (setf code (nshell.presentation:run-repl))
               (error () (setf caught t))))
           (expect (not (null selected)) :to-equal (not (eq scenario :install-failure)))

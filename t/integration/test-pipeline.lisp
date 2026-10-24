@@ -207,14 +207,16 @@
 
   (it "cps-trampoline-execution"
     (let ((results '()))
-      (nshell.presentation:trampoline
-       (lambda ()
-         (push 1 results)
-         (lambda ()
-           (push 2 results)
-           (lambda ()
-             (push 3 results)
-             nil))))
+      (let ((result
+              (nshell.presentation:trampoline
+               (lambda ()
+                 (push 1 results)
+                 (lambda ()
+                   (push 2 results)
+                   (lambda ()
+                     (push 3 results)
+                     nshell.presentation::+repl-exit+))))))
+        (expect nshell.presentation::+repl-exit+ :to-equal result))
       (expect '(3 2 1) :to-equal results)))
 
   (it "tokenizer-parser-ast-roundtrip"

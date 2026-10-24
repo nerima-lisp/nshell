@@ -6,12 +6,13 @@
      (here-doc-literal-p nil :type boolean)
      (fragments nil :type list :copy %copy-command-fragments)
      (source-span nil :type (or null list) :copy %validated-source-span)
-     (glob-p nil :type boolean))
+     (glob-p nil :type boolean)
+     (expand-p nil :type boolean))
   :keyword-constructor t)
 
-(defun make-command-arg (value &optional quote-style here-doc-literal-p
-                                      fragments source-span
-                                      (glob-p nil glob-p-supplied-p))
+(defun make-command-arg
+    (value &optional quote-style here-doc-literal-p fragments source-span
+             (glob-p nil glob-p-supplied-p) expand-p)
   (%make-command-arg
    :value (%ensure-ast-string value "COMMAND-ARG value")
    :quote-style (%validated-command-quote-style value quote-style)
@@ -20,7 +21,8 @@
                (or fragments
                    (list (make-command-fragment value quote-style))))
    :source-span (%validated-source-span source-span)
-   :glob-p (and (if glob-p-supplied-p glob-p (null quote-style)) t)))
+   :glob-p (and (if glob-p-supplied-p glob-p (null quote-style)) t)
+   :expand-p (and expand-p t)))
 
 (defun %command-arg (arg)
   (etypecase arg
@@ -53,13 +55,15 @@
 (define-value-struct evaluated-command-arg
     ((value nil :type t)
      (source-span nil :type (or null list) :copy %validated-source-span)
-     (glob-p nil :type boolean))
+     (glob-p nil :type boolean)
+     (expand-p nil :type boolean))
   :keyword-constructor t)
-(defun make-evaluated-command-arg (value &optional source-span glob-p)
+(defun make-evaluated-command-arg (value &optional source-span glob-p expand-p)
   (%make-evaluated-command-arg
    :value value
    :source-span (%validated-source-span source-span)
-   :glob-p (and glob-p t)))
+   :glob-p (and glob-p t)
+   :expand-p (and expand-p t)))
 (defun %validated-nonnegative-integer (value field-name)
   (unless (and (integerp value) (<= 0 value))
     (error "~A must be a non-negative integer: ~S" field-name value))

@@ -461,3 +461,34 @@
       (expect "legacy" :to-equal (nshell.domain.parsing:arg-value plain-string))
       (expect nil :to-equal (nshell.domain.parsing:arg-quote-style plain-string))
       (expect nil :to-equal (nshell.domain.parsing:arg-here-doc-literal-p plain-string)))))
+
+(describe "owner-interface-contracts"
+  (it "keeps-expansion-eligibility-separate-from-quote-style"
+    (let* ((quoted
+             (nshell.domain.parsing:make-command-arg "literal" :double))
+           (source
+             (nshell.domain.parsing:make-command-arg
+              "~/src" nil nil nil nil nil t))
+           (source-arg
+             (nshell.domain.parsing:make-evaluated-command-arg
+              "~/src" nil nil t))
+           (evaluated-value
+             (nshell.domain.parsing:make-evaluated-command-arg "~/src")))
+      (expect nil :to-equal
+              (nshell.domain.parsing:command-arg-expand-p quoted))
+      (expect t :to-equal
+              (nshell.domain.parsing:command-arg-expand-p source))
+      (expect t :to-equal
+              (nshell.domain.parsing:evaluated-command-arg-expand-p source-arg))
+      (expect nil :to-equal
+              (nshell.domain.parsing:evaluated-command-arg-expand-p
+               evaluated-value))))
+  (it "signals-owner-tagged-interface-stubs"
+    (let ((owner-wp nil))
+      (handler-case
+          (nshell.application:command-argv-strings nil nil)
+        (nshell.application:wp-interface-not-implemented (condition)
+          (setf owner-wp
+                (nshell.application:wp-interface-not-implemented-owner-wp
+                 condition))))
+      (expect "L03" :to-equal owner-wp))))

@@ -48,5 +48,5 @@ in its interactive, batch, and script forms.")
              #:highlight-span-start #:highlight-span-end
              #:highlight-span-role
              #:highlight->ansi #:theme-color->ansi #:text-style->ansi
-             #:segment-kind->role))
+             #:segment-kind->role #:expand-history-input #:source-span-to-origin-span))
 )

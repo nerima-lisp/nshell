@@ -670,7 +670,7 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
              '("-c" "exec 0<&-; sleep 1")
              :redirects
              (list (cons :<<-
-                         (make-string (* 1024 1024) #\a))))))
+                         (make-string (* 1024 1024) :initial-element #\a))))))
       (expect proc :to-be-truthy)
       (when proc
         (unwind-protect

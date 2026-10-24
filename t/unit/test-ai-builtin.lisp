@@ -67,7 +67,7 @@
             (multiple-value-bind (output code)
                 (call-builtin context "ai" '("status"))
               (expect 0 :to-equal code)
-              (expect (search "non-interactive" output) :to-be-truthy)
+              (expect (format nil "AI is disabled in non-interactive sessions~%") :to-equal output)
               (expect nil :to-be started-p)))))))
 
   (it "ai-status-uses-the-model-status-and-formats-environment-disablement"

@@ -90,7 +90,7 @@
           (null (rest args)))
      (if (nshell.infrastructure.terminal:interactive-terminal-p)
          (values (%ai-status-output) 0)
-         (values "AI is disabled in non-interactive sessions~%" 0)))
+         (values (format nil "AI is disabled in non-interactive sessions~%") 0)))
     ((string-equal (first args) "reset")
      (if (rest args)
          (%builtin-ai-usage)

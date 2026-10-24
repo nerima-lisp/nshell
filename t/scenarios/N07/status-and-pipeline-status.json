@@ -22,7 +22,8 @@
     "files": []
   },
   "invocation": {
-    "kind": "command",
+    "kind": "script",
+    "path": "scenario.nsh",
     "text": "false | true; printf \"<%s,%s,%s>\\n\" $status $pipestatus"
   },
   "expected": {

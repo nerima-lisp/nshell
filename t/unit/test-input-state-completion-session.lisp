@@ -158,7 +158,7 @@
         (expect "echo original " :to-equal
                 (nshell.presentation:input-state-buffer new-state))
         (expect nil :to-be
-                (nshell.presentation:input-state-completion-pager new-state))
+                (nshell.presentation::input-state-completion-pager new-state))
         (expect nil :to-be
                 (nshell.presentation:input-state-last-candidates new-state))
         (expect :redraw :to-be output))))
@@ -175,11 +175,64 @@
            state
            (input-key-event :down))
         (expect 1 :to-equal
-                (getf (nshell.presentation:input-state-completion-pager new-state)
+                (getf (nshell.presentation::input-state-completion-pager new-state)
                       :index))
         (expect "echo " :to-equal
                 (nshell.presentation:input-state-buffer new-state))
         (expect :redraw :to-be output))))
+  (it "completion-pager-reducer-moves-vertically-by-displayed-row"
+    (let ((state (input-state
+                  :buffer "echo "
+                  :cursor-pos 5
+                  :completion-base-buffer "echo "
+                  :completion-base-cursor 5
+                  :last-candidates
+                    (list
+                     (nshell.domain.completion:make-candidate "a" :kind :file)
+                     (nshell.domain.completion:make-candidate "b" :kind :file)
+                     (nshell.domain.completion:make-candidate "c" :kind :file)
+                     (nshell.domain.completion:make-candidate "d" :kind :file))
+                  :completion-pager (list :query "" :index 0))))
+      (with-fixed-terminal-size (24 10)
+        (multiple-value-bind (down-state down-output)
+            (nshell.presentation:reduce-input-state
+             state
+             (input-key-event :down))
+          (expect 2 :to-equal
+                  (getf (nshell.presentation::input-state-completion-pager down-state)
+                        :index))
+          (expect :redraw :to-be down-output)
+          (multiple-value-bind (up-state up-output)
+              (nshell.presentation:reduce-input-state
+               down-state
+               (input-key-event :up))
+            (expect 0 :to-equal
+                    (getf (nshell.presentation::input-state-completion-pager up-state)
+                          :index))
+            (expect :redraw :to-be up-output))))
+      (with-fixed-terminal-size (24 10)
+        (let ((partial-row-state
+                (input-state
+                 :buffer "echo "
+                 :cursor-pos 5
+                 :completion-base-buffer "echo "
+                 :completion-base-cursor 5
+                 :last-candidates
+                   (list
+                    (nshell.domain.completion:make-candidate "a" :kind :file)
+                    (nshell.domain.completion:make-candidate "b" :kind :file)
+                    (nshell.domain.completion:make-candidate "c" :kind :file)
+                    (nshell.domain.completion:make-candidate "d" :kind :file)
+                    (nshell.domain.completion:make-candidate "e" :kind :file))
+                 :completion-pager (list :query "" :index 4))))
+          (multiple-value-bind (new-state output)
+              (nshell.presentation:reduce-input-state
+               partial-row-state
+               (input-key-event :down))
+            (expect 4 :to-equal
+                    (getf (nshell.presentation::input-state-completion-pager new-state)
+                          :index))
+            (expect :redraw :to-be output))))))
   (it "completion-pager-reducer-character-filters-without-editing-input"
     (let ((state (input-state
                   :buffer "echo "
@@ -193,7 +246,7 @@
            state
            (input-key-event :char #\b))
         (expect "b" :to-equal
-                (getf (nshell.presentation:input-state-completion-pager new-state)
+                (getf (nshell.presentation::input-state-completion-pager new-state)
                       :query))
         (expect "echo " :to-equal
                 (nshell.presentation:input-state-buffer new-state))

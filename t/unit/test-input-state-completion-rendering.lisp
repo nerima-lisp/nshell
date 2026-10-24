@@ -179,7 +179,7 @@
                       :max-rows max-rows
                       :footer "100/100"))))
       (expect 5 :to-equal
-              (nshell.presentation:completion-render-line-count
+              (nshell.presentation::completion-render-line-count
                candidates
                :terminal-width 80
                :max-rows max-rows
@@ -190,6 +190,29 @@
       (expect (search "candidate-100" output) :to-be-truthy)
       (expect (search "candidate-001" output) :to-be-falsy)
       (expect (search "100/100" output) :to-be-truthy)))
+  (it "completion-rendering-keeps-candidate-row-when-max-rows-is-one"
+    (let* ((candidates (list (nshell.domain.completion:make-candidate
+                              "alpha"
+                              :kind :file)))
+           (rendered-lines nil)
+           (output
+             (with-output-to-string (stream)
+               (let ((*standard-output* stream))
+                 (setf rendered-lines
+                       (nshell.presentation:render-completions
+                        candidates
+                        :terminal-width 80
+                        :max-rows 1
+                        :footer "1/1"))))))
+      (expect 1 :to-equal
+              (nshell.presentation::completion-render-line-count
+               candidates
+               :terminal-width 80
+               :max-rows 1
+               :footer-p t))
+      (expect 1 :to-equal rendered-lines)
+      (expect (search "alpha" output) :to-be-truthy)
+      (expect (search "1/1" output) :to-be-falsy)))
   (it "completion-rendering-keeps-fitting-list-nonmodal-on-24-row-terminal"
     (with-repl-test-state
       (let* ((candidates (loop for index from 1 to 30
@@ -207,7 +230,7 @@
                  (capture-standard-output
                    (nshell.presentation::%render-current-completion-results)))))
         (expect nil :to-equal
-                (nshell.presentation:input-state-completion-pager
+                (nshell.presentation::input-state-completion-pager
                  nshell.presentation::*input-state*))
         (expect (search "candidate-030" output) :to-be-truthy)
         (expect (search "arrows move" output) :to-be-falsy)

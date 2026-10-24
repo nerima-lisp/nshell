@@ -54,7 +54,7 @@
                               :completion-index 0)
         (let ((output (capture-process-output-event :complete)))
           (expect (search (esc-sequence "7") output) :to-be-truthy)
-          (expect (search (format nil "~a~%" (esc-sequence "[2B")) output) :to-be-truthy)
+          (expect (search (format nil "~a" (esc-sequence "[2B")) output) :to-be-truthy)
           (expect (search "git" output) :to-be-truthy)
           (expect (search (esc-sequence "8") output) :to-be-truthy)))))
 

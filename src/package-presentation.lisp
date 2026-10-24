@@ -35,7 +35,7 @@ in its interactive, batch, and script forms.")
             #:reduce-input-state #:insert-newline-at-cursor
             #:output-event
             #:exported-environment-strings
-            #:run-repl #:run-repl-batch #:run-repl-script
+            #:run-repl #:run-repl-batch #:run-repl-shell-command #:run-repl-script
             #:call-with-command-failure-restarts
             #:trampoline #:with-cps-trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion

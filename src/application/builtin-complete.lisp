@@ -18,17 +18,45 @@ to PATH/filesystem candidates rather than crashing -- see the TYPECASE in
 needed here the way the mutating `-c`/`-e` paths below need one."
   (let* ((environment (shell-context-environment context))
          (path (and environment (nshell.domain.environment:env-get environment "PATH")))
-         (candidates (nshell.domain.completion:complete
-                      (shell-context-knowledge-base context)
-                      line
-                      :path path
-                      :filesystem (shell-context-filesystem context)
-                      :alias-table (shell-context-alias-table context)
-                      :function-table (shell-context-function-table context))))
+         (variable-names
+           (when environment
+             (mapcar (lambda (binding)
+                       (cons (nshell.domain.environment:env-binding-name binding)
+                             (nshell.domain.environment:env-binding-value binding)))
+                     (nshell.domain.environment:env-bindings environment))))
+         (directory (nshell.infrastructure.acl:current-working-directory))
+         (home-directory
+           (and environment (nshell.domain.environment:env-get environment "HOME")))
+         (process-ids nil)
+         (registry (shell-context-process-registry context))
+         (candidates
+           (progn
+             (when (hash-table-p registry)
+               (maphash
+                (lambda (job-id processes)
+                  (declare (ignore job-id))
+                  (dolist (process (if (listp processes) processes (list processes)))
+                    (let ((pid (ignore-errors
+                                 (nshell.infrastructure.acl:process-pid process))))
+                      (when (and (integerp pid) (plusp pid))
+                        (push (princ-to-string pid) process-ids)))))
+                registry))
+             (nshell.domain.completion:complete
+              (shell-context-knowledge-base context)
+              line
+              :path path
+              :filesystem (shell-context-filesystem context)
+              :alias-table (shell-context-alias-table context)
+              :function-table (shell-context-function-table context)
+              :variable-names variable-names
+              :directory directory
+              :home-directory home-directory
+              :process-ids (remove-duplicates process-ids :test #'string=)))))
     (values (when candidates
-              (format nil "~{~a~%~}"
+              (format nil "~{~a~%}"
                       (mapcar #'nshell.domain.completion:candidate-text candidates)))
             0)))
+
 
 (defun %complete-upsert-command (kb command flags long-options short-options arguments description)
   (let* ((option-flags (append long-options short-options))

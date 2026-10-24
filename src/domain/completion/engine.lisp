@@ -1,7 +1,8 @@
 (in-package #:nshell.domain.completion)
 
 (defun completion-query-for (partial-input &optional filesystem &key home-directory)
-  (let* ((context (completion-context-for partial-input))
+  (let* ((context (%unwrap-completion-context
+                   (completion-context-for partial-input)))
          (arg-prefix (completion-context-argument-prefix context))
          (filesystem-mode (completion-filesystem-mode context)))
     (%make-completion-query partial-input context
@@ -13,14 +14,17 @@
                               (filesystem-candidates-for-mode filesystem-mode arg-prefix filesystem
                                                               :home-directory home-directory)))))
 
+
 (defun complete (kb partial-input &key path filesystem alias-table function-table
-                                        variable-names directory home-directory)
+                                        variable-names directory home-directory process-ids)
   (let ((query (completion-query-for partial-input filesystem :home-directory home-directory)))
     (%rank-candidates (%completion-ranking-prefix query)
                       (%completion-candidates kb query path alias-table function-table
                                               :variable-names variable-names
                                               :directory directory
-                                              :home-directory home-directory))))
+                                              :home-directory home-directory
+                                              :process-ids process-ids))))
+
 (defun %completion-context-filesystem-candidates
     (context filesystem variable-names home-directory)
   (let ((mode (completion-filesystem-mode context))
@@ -117,8 +121,9 @@
           (%merge-candidates candidates (cdpath-candidates)))))))
 (defun complete-in-context
     (kb partial-input context &key path filesystem alias-table function-table
-                                    variable-names directory home-directory)
-  (let* ((arg-prefix (completion-context-argument-prefix context))
+                                    variable-names directory home-directory process-ids)
+  (let* ((context (%unwrap-completion-context context))
+         (arg-prefix (completion-context-argument-prefix context))
          (filesystem-candidates
            (%completion-context-filesystem-candidates
             context filesystem variable-names home-directory))
@@ -136,4 +141,6 @@
      (%completion-candidates kb query path alias-table function-table
                              :variable-names variable-names
                              :directory directory
-                             :home-directory home-directory))))
+                             :home-directory home-directory
+                             :process-ids process-ids))))
+

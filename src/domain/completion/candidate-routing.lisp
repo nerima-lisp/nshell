@@ -5,7 +5,14 @@
 ;;; pattern SEARCH-HISTORY.LISP uses for a later-loaded file's functions.
 (declaim (ftype function %variable-completion-word-prefix
                 %variable-completion-candidates
-                %git-dynamic-candidates))
+                %git-dynamic-candidates
+                %ssh-host-candidates
+                %make-target-candidates
+                %kill-dynamic-candidates
+                %username-completion-candidates
+                %unwrap-completion-context))
+
+
 
 (defun %knowledge-base-command-candidates (kb path command filesystem)
   (%merge-candidates
@@ -90,12 +97,14 @@
       (completion-query-arg-prefix query)))
 
 (defun %completion-candidates
-    (kb query path alias-table function-table &key variable-names directory home-directory)
+    (kb query path alias-table function-table &key variable-names directory home-directory process-ids)
   (let ((active-word (%completion-ranking-prefix query)))
     (if (%variable-completion-word-prefix active-word)
         (%variable-completion-candidates active-word variable-names)
         (let* ((redirection-p (%completion-query-redirection-target-p query))
                (command-position-p (%completion-query-command-position-p query))
+               (command (completion-query-command query))
+               (arg-prefix (completion-query-arg-prefix query))
                (candidates (cond
                              (redirection-p (%redirection-target-candidates query))
                              (t (typecase kb
@@ -106,12 +115,15 @@
           (cond
             ((and command-position-p (not redirection-p))
              (%merge-candidates candidates
-                                (%runtime-command-candidates alias-table function-table
-                                                              (completion-query-command query))))
+                                (%runtime-command-candidates alias-table function-table command)))
             ((and (not command-position-p) (not redirection-p))
              (%merge-candidates candidates
-                                (%git-dynamic-candidates (completion-query-command query)
+                                (%git-dynamic-candidates command
                                                           (completion-query-argument-words query)
-                                                          (completion-query-arg-prefix query)
-                                                          directory)))
+                                                          arg-prefix directory)
+                                (%ssh-host-candidates command arg-prefix home-directory)
+                                (%make-target-candidates command arg-prefix directory)
+                                (%kill-dynamic-candidates command arg-prefix process-ids)
+                                (%username-completion-candidates active-word variable-names)))
             (t candidates))))))
+

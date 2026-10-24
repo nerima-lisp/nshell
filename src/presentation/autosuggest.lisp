@@ -60,7 +60,7 @@
     (knowledge-base input scan-result &key path
                                         (filesystem (nshell.infrastructure.acl:make-host-filesystem))
                                         alias-table function-table
-                                        variable-names directory home-directory)
+                                        variable-names directory home-directory process-ids)
   (when (and knowledge-base
              (not (nshell.domain.parsing:shell-input-blank-p input)))
     (ignore-errors
@@ -82,7 +82,8 @@
                      :function-table function-table
                      :variable-names variable-names
                      :directory directory
-                     :home-directory home-directory)))
+                     :home-directory home-directory
+                     :process-ids process-ids)))
                  (text (if (or (null candidates)
                                (some (lambda (candidate)
                                        (member
@@ -109,11 +110,12 @@
                        :quote-context quote-context)))
                 (subseq escaped-text (length escaped-prefix))))))))))
 
+
 (defun compute-suggestion
     (history input &key knowledge-base path
                               (filesystem (nshell.infrastructure.acl:make-host-filesystem))
                               alias-table function-table
-                              variable-names directory home-directory)
+                              variable-names directory home-directory process-ids)
   (unless (nshell.domain.parsing:shell-input-blank-p input)
     (let ((scan-result
             (handler-case
@@ -145,7 +147,9 @@
                                    :function-table function-table
                                    :variable-names variable-names
                                    :directory directory
-                                   :home-directory home-directory))))))
+                                   :home-directory home-directory
+                                   :process-ids process-ids))))))
+
 
 (defun accept-suggestion (input suggestion)
   (concatenate 'string input suggestion))

@@ -1,9 +1,8 @@
 {
   "id": "J03-cd-and-cdpath",
-  "uc": [
-    "J03"
-  ],
-  "mode": "batch",
+  "uc": ["J03"],
+  "mode": "pty",
+  "input_delay_seconds": 0.1,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -22,34 +21,25 @@
     "files": [
       {
         "path": "work/parent/nested/entry.txt",
-        "content": "x"
+        "content": "J03_CDPATH_COMPLETION_OK\n"
       }
     ]
   },
-  "invocation": {
-    "kind": "command",
-    "text": "cd nested; pwd > result.txt; cat result.txt"
-  },
+  "steps": [
+    {"type": "keys", "text": "cd ne"},
+    {"type": "key", "key": "Tab"},
+    {"type": "key", "key": "Tab"},
+    {"type": "keys", "text": "; cat entry.txt"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "J03_CDPATH_COMPLETION_OK"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
   "expected": {
-    "stdout": {
-      "contains": [
-        "nested"
-      ]
+    "stream": {
+      "contains": ["J03_CDPATH_COMPLETION_OK"]
     },
-    "exit_code": 0,
-    "side_effects": {
-      "files": [
-        {
-          "path": "result.txt",
-          "exists": true,
-          "contains": [
-            "parent/nested"
-          ]
-        }
-      ]
-    }
-  },
-  "expected_failure": {
-    "reason": "WP-C06 owns completion context for cd and CDPATH."
+    "exit_code": 0
   }
 }

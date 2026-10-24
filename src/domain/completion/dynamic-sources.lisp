@@ -4,16 +4,13 @@
 ;;; live shell environment instead of the command/argument knowledge base.
 
 (defun %variable-completion-word-prefix (word)
-  "Return the lead-in string (\"$\" or \"${\") when WORD denotes a variable
-completion token, or NIL otherwise. A produced candidate's TEXT keeps this
-lead-in: APPLY-COMPLETION (src/presentation/completion-ui-logic.lisp)
-replaces the whole shell token verbatim, the same convention a directory
-candidate already relies on by carrying its own trailing slash in TEXT."
-  (cond
-    ((and (<= 2 (length word)) (char= (char word 0) #\$) (char= (char word 1) #\{))
-     (subseq word 0 2))
-    ((and (<= 1 (length word)) (char= (char word 0) #\$))
-     (subseq word 0 1))))
+  "Return the lead-in string (\"$\" or \"${\") when WORD denotes a variable completion token, or NIL otherwise. Candidate TEXT keeps this lead-in because APPLY-COMPLETION replaces the whole shell token verbatim."
+  (unless (position #\/ word)
+    (cond
+      ((and (<= 2 (length word)) (char= (char word 0) #\$) (char= (char word 1) #\{))
+       (subseq word 0 2))
+      ((and (<= 1 (length word)) (char= (char word 0) #\$))
+       (subseq word 0 1)))))
 
 (defun %truncate-variable-value (value &optional (limit 40))
   (if (> (length value) limit)

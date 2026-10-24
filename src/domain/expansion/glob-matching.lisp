@@ -50,14 +50,16 @@
       (ignore-errors (funcall directory-files (pathname root))))))
 
 (define-value-struct %glob-match-subject
-    ((pattern "" :type string) (root "./") (file #p"" :type pathname)))
+    ((pattern "" :type string) (root "./")
+     (file #p"" :type (or pathname string))))
 
 (defun %glob-file-match-subject (pattern root file)
   (%make-glob-match-subject pattern root file))
 
 (defun %glob-match-subject-candidate (subject)
   (let* ((root (glob-match-subject-root subject))
-         (candidate (namestring (glob-match-subject-file subject))))
+         (file (glob-match-subject-file subject))
+         (candidate (if (pathnamep file) (namestring file) file)))
     (cond
       ((string= root "./") (if (string-prefix-p "./" candidate) (subseq candidate 2) candidate))
       ((string-prefix-p root candidate) candidate)

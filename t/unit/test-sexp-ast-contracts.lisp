@@ -509,10 +509,6 @@
                       (list nil nil :forward-sexp))
                 (list "E05" #'nshell.presentation::highlight-line-from-scanner
                       (list "" nil 0 0))
-                (list "C06" #'nshell.domain.completion:completion-context-for-scan
-                      (list nil 0))
-                (list "C06" #'nshell.domain.completion:complete-in-context
-                      (list nil "" nil))
                 (list "L04" #'nshell.application:call-with-command-failure-policy
                       (list nil #'identity))
                 (list "L06" #'nshell.user:to-json (list nil))

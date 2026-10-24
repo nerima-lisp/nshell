@@ -1,9 +1,8 @@
 {
   "id": "J15-sexp-context",
-  "uc": [
-    "J15"
-  ],
-  "mode": "batch",
+  "uc": ["J15"],
+  "mode": "pty",
+  "input_delay_seconds": 0.1,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -17,27 +16,19 @@
       "rows": 24
     }
   },
-  "preconditions": {
-    "files": [
-      {
-        "path": "work/item.txt",
-        "content": "item"
-      }
-    ]
-  },
-  "invocation": {
-    "kind": "command",
-    "text": "complete -C \"(progn (git st\""
-  },
+  "steps": [
+    {"type": "keys", "text": "(progn (git st"},
+    {"type": "key", "key": "Tab"},
+    {"type": "wait", "contains": "status"},
+    {"type": "key", "key": "C-c"},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit"}
+  ],
   "expected": {
-    "stdout": {
-      "contains": [
-        "status"
-      ]
+    "stream": {
+      "contains": ["status"]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-C06 owns S-expression completion context."
   }
 }

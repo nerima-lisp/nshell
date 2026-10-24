@@ -139,31 +139,89 @@
                                   (input-state-buffer state))
                          (= expected-cursor
                             (input-state-cursor-pos state))))))))))
+(defun %repl-completion-fallback-head-classification (context head-source)
+  (let* ((upper-name (string-upcase head-source))
+         (package-separator (position #\: upper-name))
+         (package-name (and package-separator
+                            (subseq upper-name 0 package-separator)))
+         (symbol-name (if package-separator
+                          (subseq upper-name (1+ package-separator))
+                          upper-name))
+         (user-package (find-package "NSHELL.USER"))
+         (user-symbol (and user-package
+                           (find-symbol head-source user-package)))
+         (common-lisp-symbol (find-symbol symbol-name "COMMON-LISP"))
+         (function-table
+           (nshell.application:shell-context-function-table context)))
+    (cond
+      (package-name :host-form)
+      ((nth-value 1 (gethash head-source function-table))
+       :command-island)
+      ((or (and common-lisp-symbol
+                (or (special-operator-p common-lisp-symbol)
+                    (macro-function common-lisp-symbol)
+                    (fboundp common-lisp-symbol)))
+           (and user-symbol (fboundp user-symbol)))
+       :host-form)
+      (t :command-island))))
+(defun %repl-completion-head-classifier (context)
+  (lambda (head-source)
+    (handler-case
+        (nshell.application:classify-sexp-head context head-source)
+      (nshell.application:wp-interface-not-implemented (condition)
+        (if (and (string= "L02"
+                         (nshell.application:wp-interface-not-implemented-owner-wp
+                          condition))
+                 (eq 'nshell.application:classify-sexp-head
+                     (nshell.application:wp-interface-not-implemented-interface
+                      condition)))
+            (%repl-completion-fallback-head-classification context head-source)
+            (error condition))))))
 
 (defun %refresh-completion-session-state (state)
   (with-normalized-input-state (state state)
     (let* ((text (input-state-buffer state))
-           (context (nshell.domain.completion:completion-context-for text))
-           (command (nshell.domain.completion:completion-context-command context))
+           (cursor (input-state-cursor-pos state))
+           (shell-context (%make-repl-shell-context))
+           (scan-result
+             (nshell.domain.parsing:scan-input
+              text
+              :cursor cursor
+              :reader-context :auto
+              :head-classifier
+              (%repl-completion-head-classifier shell-context)))
+           (role
+             (nshell.domain.parsing:scan-result-cursor-role scan-result))
+           (context
+             (nshell.domain.completion:completion-context-for-scan
+              scan-result cursor))
+           (command
+             (nshell.domain.completion:completion-context-command context))
            (command-position-p
-             (nshell.domain.completion:completion-context-command-position-p context))
+             (nshell.domain.completion:completion-context-command-position-p
+              context))
+           (completion-role-p
+             (member role '(:command-head :argument :redirect-target)
+                     :test #'eq))
            (completion-path
              (nshell.domain.environment:env-get (ensure-environment) "PATH"))
-           (filesystem (nshell.infrastructure.acl:make-host-filesystem)))
-      (unless command-position-p
+           (filesystem
+             (nshell.infrastructure.acl:make-host-filesystem)))
+      (when (and (not command-position-p) (plusp (length command)))
         (%warm-command-completion-help-path
          *kb*
          command
          (nshell.domain.completion:completion-context-argument-words context)
          (nshell.domain.completion:completion-context-argument-prefix context)))
-      (let ((candidates (when (> (length text) 0)
-                          (apply #'nshell.domain.completion:complete
-                                 *kb* text
-                                 :path completion-path
-                                 :filesystem filesystem
-                                 :alias-table *aliases*
-                                 :function-table *functions*
-                                 (repl-completion-environment-arguments)))))
+      (let ((candidates
+              (when (and completion-role-p (plusp (length text)))
+                (apply #'nshell.domain.completion:complete-in-context
+                       *kb* text context
+                       :path completion-path
+                       :filesystem filesystem
+                       :alias-table *aliases*
+                       :function-table *functions*
+                       (repl-completion-environment-arguments)))))
         (if candidates
             (multiple-value-bind (extended-state extended-p)
                 (maybe-extend-completion-common-prefix state candidates)

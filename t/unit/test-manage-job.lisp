@@ -121,6 +121,34 @@
         (expect :running :to-be
                 (nshell.infrastructure.acl:process-status process))
         (expect (sb-ext:process-exit-code process) :to-be-null))))
+  (it "process-resume-group-refreshes-cache-after-esrch"
+    (with-stopped-resume-process (process)
+      (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
+        (setf (sb-impl::process-%exit-code process) 7))
+      (with-temporary-function
+          ('nshell.infrastructure.acl:kill-process
+           (lambda (pid signal)
+             (expect -4321 :to-equal pid)
+             (expect :sigcont :to-equal signal)
+             (error 'sb-posix:syscall-error :name "kill" :errno sb-posix:esrch)))
+        (expect t :to-be
+                (nshell.infrastructure.acl:process-continue-group
+                 4321 (list process)))
+        (expect :running :to-be
+                (nshell.infrastructure.acl:process-status process))
+        (expect (sb-ext:process-exit-code process) :to-be-null)))
+    (with-stopped-resume-process (process)
+      (with-temporary-function
+          ('nshell.infrastructure.acl:kill-process
+           (lambda (pid signal)
+             (declare (ignore pid signal))
+             (error 'sb-posix:syscall-error :name "kill" :errno sb-posix:eperm)))
+        (expect (lambda ()
+                  (nshell.infrastructure.acl:process-continue-group
+                   4321 (list process)))
+                :to-throw 'sb-posix:syscall-error)
+        (expect :stopped :to-be
+                (nshell.infrastructure.acl:process-status process)))))
 
   (it "process-resume-observes-a-new-stop-and-preserves-the-status-hook"
     (let ((output (make-string-output-stream)))

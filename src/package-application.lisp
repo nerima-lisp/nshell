@@ -19,6 +19,9 @@ permitted to know both the domain and infrastructure.")
             #:wp-interface-not-implemented-interface
             #:command-failed #:command-failed-command #:command-failed-status
             #:command-failed-stage-statuses #:command-failed-signal
+            #:call-with-command-failure-policy
+            #:value-conversion-error #:value-conversion-error-operation
+            #:value-conversion-error-input #:value-conversion-error-cause
             #:command-execution-plan-error
             #:command-execution-plan-error-source-span
             #:command-execution-plan-error-operation
@@ -58,7 +61,8 @@ permitted to know both the domain and infrastructure.")
             #:shell-function-registry-lookup-miss-hook
             #:shell-function-scope #:shell-function-scope-p
             #:make-shell-function-scope #:shell-function-scope-table
-            #:shell-function-scope-parent #:register-shell-function
+            #:shell-function-scope-parent #:context-shell-function-registry
+            #:active-shell-function-scope #:register-shell-function
             #:peek-shell-function #:lookup-shell-function
             #:pipeline-execution-result #:pipeline-execution-result-p
             #:make-pipeline-execution-result

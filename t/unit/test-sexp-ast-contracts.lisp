@@ -492,3 +492,51 @@
                 (nshell.application:wp-interface-not-implemented-owner-wp
                  condition))))
       (expect "L03" :to-equal owner-wp))))
+
+(describe "p2-owner-interface-contracts"
+  (it "signals each new owner-tagged stub"
+    (labels ((signals-owner (expected-owner function arguments)
+               (let ((owner-wp nil))
+                 (handler-case
+                     (apply function arguments)
+                   (nshell.application:wp-interface-not-implemented (condition)
+                     (setf owner-wp
+                           (nshell.application:wp-interface-not-implemented-owner-wp
+                            condition))))
+                 (expect expected-owner :to-equal owner-wp))))
+      (dolist (contract
+               (list
+                (list "E04" #'nshell.presentation:apply-sexp-structural-edit
+                      (list nil nil :forward-sexp))
+                (list "E05" #'nshell.presentation::highlight-line-from-scanner
+                      (list "" nil 0 0))
+                (list "C06" #'nshell.domain.completion:completion-context-for-scan
+                      (list nil 0))
+                (list "C06" #'nshell.domain.completion:complete-in-context
+                      (list nil "" nil))
+                (list "L04" #'nshell.application:call-with-command-failure-policy
+                      (list nil #'identity))
+                (list "L06" #'nshell.user:to-json (list nil))
+                (list "L06" #'nshell.user:from-json (list "{}"))
+                (list "L06" #'nshell.user:to-tsv (list nil))
+                (list "L06" #'nshell.user:from-tsv (list ""))
+                (list "L06" #'nshell.user:to-lines (list ""))
+                (list "L06" #'nshell.user:from-lines (list nil))
+                (list "L06" #'nshell.user:regex-match-p (list "" ""))
+                (list "L06" #'nshell.user:regex-find (list "" ""))
+                (list "L06" #'nshell.user:regex-replace (list "" "" ""))
+                (list "L06" #'nshell.user:split-string (list "" ""))
+                (list "L06" #'nshell.user:join-strings (list nil ""))
+                (list "L06" #'nshell.user:replace-string (list "" "" ""))
+                (list "L07" #'nshell.application:context-shell-function-registry
+                      (list nil))
+                (list "L07" #'nshell.application:active-shell-function-scope nil)
+                (list "L08" #'nshell.application:execute-reader-ast-in-context
+                      (list nil nil #'identity))))
+        (signals-owner (first contract) (second contract) (third contract))))))
+
+(describe "p2-owner-contract-types"
+  (it "loads the L06 conversion condition"
+    (expect t :to-equal
+            (not (null
+                  (find-class 'nshell.application:value-conversion-error nil))))))

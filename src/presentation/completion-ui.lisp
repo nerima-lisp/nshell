@@ -82,51 +82,112 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
 
 (defun %compute-columns (candidates &key (terminal-width (terminal-width)) (padding 2))
   (let* ((formatted (mapcar #'%format-candidate candidates))
+         (padding (min padding (max 0 (1- terminal-width))))
+         (max-cell-width (max 1 (- terminal-width padding)))
          (max-width (if formatted
-                        (apply #'max (mapcar #'%string-visible-width formatted))
+                        (min max-cell-width
+                             (apply #'max
+                                    (mapcar #'%string-visible-width formatted)))
                         1))
          (column-width (+ max-width padding))
          (columns (max 1 (floor terminal-width column-width))))
     (values columns column-width formatted)))
 
-(defun %completion-render-line-count (columns formatted)
-  (if formatted
-      (+ (ceiling (min 64 (length formatted)) columns)
-         (if (< 64 (length formatted)) 1 0))
-      0))
+(defun %completion-render-line-count (columns formatted &key max-rows footer-p)
+  (let* ((total-rows (if formatted
+                         (ceiling (length formatted) columns)
+                         0))
+         (footer-lines (if (and footer-p (or (null max-rows) (plusp max-rows)))
+                           1
+                           0))
+         (content-limit (if max-rows
+                            (max 0 (- max-rows footer-lines))
+                            total-rows)))
+    (+ (min total-rows content-limit) footer-lines)))
 
-(defun completion-render-line-count (candidates &key (terminal-width (terminal-width)))
+(defun completion-render-line-count (candidates
+                                      &key
+                                        (terminal-width (terminal-width))
+                                        max-rows
+                                        footer-p)
   (multiple-value-bind (columns column-width formatted)
       (%compute-columns candidates :terminal-width terminal-width)
     (declare (ignore column-width))
-    (%completion-render-line-count columns formatted)))
+    (%completion-render-line-count columns
+                                   formatted
+                                   :max-rows max-rows
+                                   :footer-p footer-p)))
 
-(defun render-completions (candidates &key selected-index (terminal-width (terminal-width))
-                                       (theme (nshell.domain.configuration:default-theme)))
-  (if candidates
-      (multiple-value-bind (columns column-width formatted)
-          (%compute-columns candidates :terminal-width terminal-width)
-        (let* ((limit (min 64 (length formatted)))
-               (visible (subseq formatted 0 limit))
-               (visible-candidates (subseq candidates 0 limit)))
-          (format t "~%")
-          (loop for item in visible
-                for candidate in visible-candidates
-                for index from 0
-                do (if (and (integerp selected-index)
-                            (= index selected-index))
-                       (%write-styled (%pad-to-visible-width item column-width)
-                                      :completion-selected theme)
-                       (format t "~a"
-                               (%pad-styled-cell
-                                (%format-candidate-styled candidate theme)
-                                item column-width)))
-                   (when (or (= (mod (1+ index) columns) 0)
-                             (= index (1- limit)))
-                     (format t "~%")))
-          (when (< limit (length formatted))
-            (%write-styled (format nil "… and ~d more" (- (length formatted) limit))
-                           :completion-more theme)
-            (format t "~%"))
-          (%completion-render-line-count columns formatted)))
-      0))
+(defun render-completions (candidates
+                           &key
+                           selected-index
+                           (terminal-width (terminal-width))
+                           (theme (nshell.domain.configuration:default-theme))
+                           max-rows
+                           footer
+                           empty-message)
+  (multiple-value-bind (columns column-width formatted)
+      (%compute-columns candidates :terminal-width terminal-width)
+    (let* ((candidate-count (length candidates))
+           (footer-visible-p (and footer (or (null max-rows) (plusp max-rows))))
+           (total-rows (if formatted (ceiling candidate-count columns) 0))
+           (content-budget (if max-rows
+                               (max 0 (- max-rows
+                                         (if footer-visible-p 1 0)))
+                             (max total-rows (if empty-message 1 0))))
+           (visible-rows (min total-rows content-budget))
+           (selected-index (and (integerp selected-index)
+                                (<= 0 selected-index)
+                                (< selected-index candidate-count)
+                                selected-index))
+           (selected-row (if selected-index
+                             (floor selected-index columns)
+                           0))
+           (start-row (if (plusp visible-rows)
+                          (max 0
+                               (min (- total-rows visible-rows)
+                                    (- selected-row
+                                       (floor (1- visible-rows) 2))))
+                        0))
+           (empty-row-p (and (zerop candidate-count)
+                             empty-message
+                             (plusp content-budget)))
+           (rendered-lines (+ visible-rows
+                              (if empty-row-p 1 0)
+                              (if footer-visible-p 1 0)))
+           (content-width (max 1
+                               (- column-width
+                                  (min 2 (max 0 (1- terminal-width)))))))
+      (when (plusp rendered-lines)
+        (format t "~%")
+        (when (plusp candidate-count)
+          (loop for row from start-row below (+ start-row visible-rows)
+                do (progn
+                     (loop for index from (* row columns)
+                           below (min candidate-count (* (1+ row) columns))
+                           for item = (nth index formatted)
+                           for candidate = (nth index candidates)
+                           for visible-item = (%truncate-string-to-width
+                                               item content-width)
+                           do (if (eql index selected-index)
+                                  (%write-styled
+                                   (%pad-to-visible-width visible-item column-width)
+                                   :completion-selected
+                                   theme)
+                                (if (string= visible-item item)
+                                    (format t "~a"
+                                            (%pad-styled-cell
+                                             (%format-candidate-styled candidate theme)
+                                             item
+                                             column-width))
+                                  (format t "~a"
+                                          (%pad-to-visible-width
+                                           visible-item column-width)))))
+                     (format t "~%"))))
+        (when empty-row-p
+          (format t "~a~%"
+                  (%truncate-string-to-width empty-message terminal-width)))
+        (when footer-visible-p
+          (format t "~a~%"
+                  (%truncate-string-to-width footer terminal-width)))
+        rendered-lines))))

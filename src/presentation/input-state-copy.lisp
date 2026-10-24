@@ -15,6 +15,8 @@
                                                               completion-base-cursor-supplied-p)
                                       (last-candidates nil
                                                        last-candidates-supplied-p)
+                                      (completion-pager nil
+                                                        completion-pager-supplied-p)
                                       (suggestion nil suggestion-supplied-p)
                                       mode
                                       (vi-count nil vi-count-supplied-p)
@@ -47,7 +49,7 @@
   (let* ((new-buffer (or buffer (input-state-buffer state)))
          (new-cursor (clamp-cursor (or cursor-pos (input-state-cursor-pos state))
                                    new-buffer)))
-    (apply #'make-input-state
+    (apply (function make-input-state)
            (append
             (list :buffer new-buffer :cursor-pos new-cursor)
             (%copy-input-state-completion-initargs
@@ -56,6 +58,7 @@
              completion-base-supplied-p completion-base-buffer
              completion-base-cursor-supplied-p completion-base-cursor
              last-candidates-supplied-p last-candidates
+             completion-pager-supplied-p completion-pager
              suggestion-supplied-p suggestion)
             (%copy-input-state-transient-initargs
              state new-buffer mode

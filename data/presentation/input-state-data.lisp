@@ -30,6 +30,7 @@ operator-pending states after pressing d or c in normal mode."
                                             (completion-base-buffer nil)
                                             (completion-base-cursor nil)
                                             (last-candidates nil)
+                                            (completion-pager nil)
                                             suggestion
                                             (mode :insert)
                                             (vi-count nil)
@@ -77,6 +78,7 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
   (completion-base-buffer nil :type (or null string))
   (completion-base-cursor nil :type (or null integer))
   (last-candidates nil :type list)
+  (completion-pager nil :type (or null list))
   (suggestion nil :type (or null string))
   (mode :insert :type input-mode)
   (vi-count nil :type (or null integer))

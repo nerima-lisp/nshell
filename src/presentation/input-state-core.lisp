@@ -20,6 +20,7 @@
    (completion-base-buffer nil)
    (completion-base-cursor nil)
    (last-candidates nil)
+   (completion-pager nil)
    (suggestion nil)
    (mode :insert)
    (vi-count nil)

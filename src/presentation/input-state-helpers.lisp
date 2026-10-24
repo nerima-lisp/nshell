@@ -43,6 +43,7 @@
         :completion-base-buffer :clear
         :completion-base-cursor :clear
         :last-candidates :clear
+        :completion-pager :clear
         :suggestion :clear))
 
 (defun %history-search-session-clear-overrides ()

@@ -142,4 +142,59 @@
       (expect (nshell.presentation::%completion-session-valid-p state) :to-be-truthy)
       (expect (nshell.presentation::%completion-session-valid-p
                 (nshell.presentation::copy-input-state-with
-                 state :buffer "git stash")) :to-be-falsy))))
+                 state :buffer "git stash")) :to-be-falsy)))
+  (it "completion-pager-reducer-ctrl-c-restores-original-input"
+    (let ((state (input-state
+                  :buffer "echo original "
+                  :cursor-pos 15
+                  :completion-base-buffer "echo original "
+                  :completion-base-cursor 15
+                  :last-candidates '("alpha" "beta")
+                  :completion-pager (list :query "b" :index 1))))
+      (multiple-value-bind (new-state output)
+          (nshell.presentation:reduce-input-state
+           state
+           (input-key-event :ctrl-c))
+        (expect "echo original " :to-equal
+                (nshell.presentation:input-state-buffer new-state))
+        (expect nil :to-be
+                (nshell.presentation:input-state-completion-pager new-state))
+        (expect nil :to-be
+                (nshell.presentation:input-state-last-candidates new-state))
+        (expect :redraw :to-be output))))
+  (it "completion-pager-reducer-down-moves-selection"
+    (let ((state (input-state
+                  :buffer "echo "
+                  :cursor-pos 5
+                  :completion-base-buffer "echo "
+                  :completion-base-cursor 5
+                  :last-candidates '("alpha" "beta")
+                  :completion-pager (list :query "" :index 0))))
+      (multiple-value-bind (new-state output)
+          (nshell.presentation:reduce-input-state
+           state
+           (input-key-event :down))
+        (expect 1 :to-equal
+                (getf (nshell.presentation:input-state-completion-pager new-state)
+                      :index))
+        (expect "echo " :to-equal
+                (nshell.presentation:input-state-buffer new-state))
+        (expect :redraw :to-be output))))
+  (it "completion-pager-reducer-character-filters-without-editing-input"
+    (let ((state (input-state
+                  :buffer "echo "
+                  :cursor-pos 5
+                  :completion-base-buffer "echo "
+                  :completion-base-cursor 5
+                  :last-candidates '("alpha" "beta")
+                  :completion-pager (list :query "" :index 0))))
+      (multiple-value-bind (new-state output)
+          (nshell.presentation:reduce-input-state
+           state
+           (input-key-event :char #\b))
+        (expect "b" :to-equal
+                (getf (nshell.presentation:input-state-completion-pager new-state)
+                      :query))
+        (expect "echo " :to-equal
+                (nshell.presentation:input-state-buffer new-state))
+        (expect :redraw :to-be output)))))

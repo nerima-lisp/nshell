@@ -145,19 +145,74 @@
       (expect (search "$  VARIABLE" output) :to-be-truthy)
       (expect (search "· unknown" output) :to-be-truthy)))
 
-  (it "completion-rendering-reports-omitted-candidates"
-    (let* ((candidates (loop for index from 1 to 65
+  (it "completion-rendering-renders-candidates-beyond-sixty-four"
+    (let* ((candidates (loop for index from 1 to 100
                              collect (nshell.domain.completion:make-candidate
                                       (format nil "candidate-~d" index)
                                       :kind :file)))
            (output (capture-standard-output
                      (nshell.presentation:render-completions
                       candidates
-                      :terminal-width 80))))
-      (expect (search "… and 1 more" output) :to-be-truthy)
-      (expect 14 :to-equal (nshell.presentation:render-completions
-                candidates
-                :terminal-width 80))))
+                      :terminal-width 80)))
+           (expected-lines
+             (nshell.presentation::completion-render-line-count
+              candidates
+              :terminal-width 80)))
+      (expect (search "candidate-100" output) :to-be-truthy)
+      (expect (search "… and " output) :to-be-falsy)
+      (expect expected-lines :to-equal
+              (let ((*standard-output* (make-string-output-stream)))
+                (nshell.presentation:render-completions
+                 candidates
+                 :terminal-width 80)))))
+  (it "completion-rendering-bounds-rows-and-keeps-selection-visible"
+    (let* ((candidates (loop for index from 1 to 100
+                             collect (nshell.domain.completion:make-candidate
+                                      (format nil "candidate-~3,'0d" index)
+                                      :kind :file)))
+           (max-rows 5)
+           (output (capture-standard-output
+                     (nshell.presentation:render-completions
+                      candidates
+                      :selected-index 99
+                      :terminal-width 80
+                      :max-rows max-rows
+                      :footer "100/100"))))
+      (expect 5 :to-equal
+              (nshell.presentation:completion-render-line-count
+               candidates
+               :terminal-width 80
+               :max-rows max-rows
+               :footer-p t))
+      (expect 6 :to-equal
+              (count #\Newline output))
+      (expect (search "candidate-085" output) :to-be-truthy)
+      (expect (search "candidate-100" output) :to-be-truthy)
+      (expect (search "candidate-001" output) :to-be-falsy)
+      (expect (search "100/100" output) :to-be-truthy)))
+  (it "completion-rendering-keeps-fitting-list-nonmodal-on-24-row-terminal"
+    (with-repl-test-state
+      (let* ((candidates (loop for index from 1 to 30
+                               collect (nshell.domain.completion:make-candidate
+                                        (format nil "candidate-~3,'0d" index)
+                                        :kind :file)))
+             (nshell.presentation::*input-state*
+               (nshell.presentation:make-input-state
+                :buffer "echo "
+                :last-candidates candidates))
+             (nshell.presentation::*prompt-rendered-lines* 1)
+             (nshell.presentation::*prompt-rendered-cursor-row* 0)
+             (output
+               (with-fixed-terminal-size (24 80)
+                 (capture-standard-output
+                   (nshell.presentation::%render-current-completion-results)))))
+        (expect nil :to-equal
+                (nshell.presentation:input-state-completion-pager
+                 nshell.presentation::*input-state*))
+        (expect (search "candidate-030" output) :to-be-truthy)
+        (expect (search "arrows move" output) :to-be-falsy)
+        (expect (<= nshell.presentation::*completion-rendered-lines* 23)
+                :to-be-truthy))))
 
   (it "completion-rendering-pads-wide-candidates-to-column-width"
     (let* ((candidates (list (nshell.domain.completion:make-candidate
@@ -171,6 +226,30 @@
                                 (string #\Newline)
                                 "∙ λ あ  "
                                 (string #\Newline)) :to-equal output)))
+  (it "completion-rendering-truncates-wide-candidates-by-display-width"
+    (let* ((wide-text (make-string 20 :initial-element #\界))
+           (candidates (list (nshell.domain.completion:make-candidate
+                              wide-text
+                              :kind :file)))
+           (output (capture-standard-output
+                     (nshell.presentation:render-completions
+                      candidates
+                      :terminal-width 12
+                      :max-rows 2
+                      :footer "status")))
+           (line-end (position #\Newline output :start 1))
+           (candidate-line (subseq output 1 line-end)))
+      (expect 2 :to-equal
+              (let ((*standard-output* (make-string-output-stream)))
+                (nshell.presentation:render-completions
+                 candidates
+                 :terminal-width 12
+                 :max-rows 2
+                 :footer "status")))
+      (expect 12 :to-equal
+              (nshell.presentation::%string-visible-width candidate-line))
+      (expect (search "∙ 界界界界" candidate-line) :to-be-truthy)
+      (expect (search "界界界界界" candidate-line) :to-be-falsy)))
 
   (it "completion-rendering-returns-rendered-line-count"
     (let ((*standard-output* (make-string-output-stream)))

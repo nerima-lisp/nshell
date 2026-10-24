@@ -1050,20 +1050,32 @@ wrapped line's other rows on screen as stale duplicates."
     (%execute-command-line (input-state-buffer *input-state*)))
 
   (define-output-event-handler %process-complete-output-event
-                               with-cleared-rendered-completions-and-prompt-cont
-                               (if (%completion-session-valid-p *input-state*)
-                                   (let ((candidates (input-state-last-candidates *input-state*))
-                                         (selected-index (input-state-completion-index *input-state*)))
-                                     (setf *completion-rendered-lines*
-                                           (%render-completions-below-prompt
-                                            candidates
-                                            :selected-index selected-index)))
-                                   (multiple-value-bind (refreshed-state candidates)
-                                       (%refresh-completion-session-state *input-state*)
-                                     (setf *input-state* refreshed-state)
-                                     (when candidates
-                                       (setf *completion-rendered-lines*
-                                             (%render-completions-below-prompt candidates))))))
+    with-cleared-rendered-completions-and-prompt-cont
+    (unless (%completion-session-valid-p *input-state*)
+      (let* ((base-state *input-state*)
+             (base-buffer (input-state-buffer base-state))
+             (base-cursor (input-state-cursor-pos base-state)))
+        (multiple-value-bind (refreshed-state candidates)
+            (%refresh-completion-session-state base-state)
+          (setf *input-state*
+                (cond
+                  ((null candidates) refreshed-state)
+                  ((> (completion-render-line-count
+                       candidates
+                       :terminal-width (terminal-width))
+                      (%completion-pager-row-budget))
+                   (copy-input-state-with
+                    base-state
+                    :last-candidates candidates
+                    :completion-base-buffer base-buffer
+                    :completion-base-cursor base-cursor
+                    :completion-pager (list :query "" :index 0)
+                    :suggestion :clear))
+                  (t
+                   (copy-input-state-with
+                    refreshed-state
+                    :completion-base-buffer base-buffer
+                    :completion-base-cursor base-cursor))))))))
 
 (define-output-event-handler %process-suggest-update-output-event
     with-cleared-rendered-completions-and-prompt-cont

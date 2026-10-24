@@ -2,24 +2,35 @@
 
 (describe "terminal-integration-tests"
   (it "terminal-enter-on-incomplete-input-continues-buffer"
-    "Decoded Enter can be promoted to multiline continuation after parsing."
-    (dolist (line (list "echo \"hi" "echo \\"))
-      (let ((state (input-state)))
+    "Decoded Enter can be promoted to an indented multiline continuation."
+    (dolist (case (list (cons "echo \"hi" 5)
+                        (cons "echo \\" 2)))
+      (let* ((line (car case))
+             (indent (cdr case))
+             (expected-buffer
+               (concatenate (quote string)
+                            line
+                            (string (code-char 10))
+                            (make-string indent :initial-element (code-char 32))))
+             (state (input-state)))
         (dolist (event (read-key-events-from-string (format nil "~a~%" line)))
-            (multiple-value-bind (next-state output)
-                (nshell.presentation:reduce-input-state state event)
-              (setf state
-                    (if (eq output :execute)
-                        (with-parsed-command-line
-                            (result (nshell.presentation:input-state-buffer next-state))
-                          (if (nshell.domain.parsing:parse-result-incomplete result)
-                              (nth-value 0
-                                         (nshell.presentation:insert-newline-at-cursor
-                                          next-state))
-                              next-state))
-                        next-state))))
-        (expect (format nil "~a~%" line) :to-equal (nshell.presentation:input-state-buffer state))
-        (expect (length (nshell.presentation:input-state-buffer state)) :to-equal (nshell.presentation:input-state-cursor-pos state)))))
+          (multiple-value-bind (next-state output)
+              (nshell.presentation:reduce-input-state state event)
+            (setf state
+                  (if (eq output :execute)
+                      (with-parsed-command-line
+                          (result (nshell.presentation:input-state-buffer next-state))
+                        (if (nshell.domain.parsing:parse-result-incomplete result)
+                            (nth-value 0
+                                       (nshell.presentation:insert-newline-at-cursor
+                                        next-state))
+                            next-state))
+                      next-state))))
+        (expect expected-buffer :to-equal
+                (nshell.presentation:input-state-buffer state))
+        (expect (length (nshell.presentation:input-state-buffer state))
+                :to-equal
+                (nshell.presentation:input-state-cursor-pos state)))))
 
   (it "terminal-execute-on-structural-incomplete-input-indents-continuation"
     "REPL execution promotes structural incomplete input to an indented continuation."

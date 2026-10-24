@@ -185,7 +185,8 @@ For a known defect, add a top-level `expected_failure` object with a non-empty
 `reason` string. Only failed assertions are reported as `XFAIL`; if the assertions
 pass, the runner reports `XPASS` and exits nonzero so the obsolete marker can
 be removed. Scenario validation errors, launch errors, and timeouts remain
-failures.
+failures. An optional `platform` field can limit the marker to `linux` or
+`darwin`; other platforms apply the scenario's assertions normally.
 
 ## Login and shell-caller coverage
 

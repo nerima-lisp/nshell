@@ -527,6 +527,9 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         reason = expected_failure.get("reason")
         _require(isinstance(reason, str) and reason.strip(),
                  f"{scenario_id}: expected_failure.reason must be non-empty")
+        platform = expected_failure.get("platform")
+        _require(platform is None or platform in ("linux", "darwin"),
+                 f"{scenario_id}: expected_failure.platform must be linux or darwin")
     _require(isinstance(scenario.get("expected"), dict), f"{scenario_id}: expected must be an object")
     timeout = scenario.get("timeout_seconds", 30)
     _require(
@@ -1195,6 +1198,8 @@ def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code
 def _run_once(scenario: dict[str, Any], binary: Path) -> tuple[str, str]:
     _, _, _, failures = _run_batch(scenario, binary) if scenario["mode"] == "batch" else _run_pty(scenario, binary)
     expected_failure = scenario.get("expected_failure")
+    if expected_failure is not None and expected_failure.get("platform", sys.platform) != sys.platform:
+        expected_failure = None
     if expected_failure is not None:
         if failures:
             return "XFAIL", f"{expected_failure['reason']} Failed: {'; '.join(failures)}"

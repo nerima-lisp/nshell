@@ -530,6 +530,16 @@ class ScenarioRunnerTests(unittest.TestCase):
                 with self.assertRaisesRegex(runner.ScenarioError, "expected.exit_code is required"):
                     self._load_one(scenario, f"{scenario['id']}.json")
 
+    def test_expected_failure_rejects_unknown_platform(self) -> None:
+        scenario = _batch_scenario("expected-failure-unknown-platform")
+        scenario["expected_failure"] = {
+            "reason": "known issue",
+            "platform": "freebsd",
+        }
+
+        with self.assertRaisesRegex(runner.ScenarioError, "expected_failure.platform"):
+            self._load_one(scenario, f"{scenario['id']}.json")
+
     def test_full_selection_matches_manifest_paths_ids_and_uc_mapping(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -953,6 +963,27 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(1, exit_code)
         self.assertIn("FAIL timeout-stays-fail", output.getvalue())
         self.assertNotIn("XFAIL timeout-stays-fail", output.getvalue())
+
+    def test_platform_expected_failure_only_applies_on_selected_platform(self) -> None:
+        scenario = _batch_scenario("linux-only-expected-failure")
+        scenario["expected_failure"] = {"reason": "known issue", "platform": "linux"}
+        failed_run = ("", "", 1, ["expected output was missing"])
+        passed_run = ("", "", 0, [])
+
+        with mock.patch.object(runner, "_run_batch", return_value=failed_run):
+            with mock.patch.object(runner.sys, "platform", "linux"):
+                self.assertEqual(("XFAIL", "known issue Failed: expected output was missing"),
+                                 runner._run_once(scenario, Path("/unused/nshell")))
+            with mock.patch.object(runner.sys, "platform", "darwin"):
+                self.assertEqual(("FAIL", "expected output was missing"),
+                                 runner._run_once(scenario, Path("/unused/nshell")))
+
+        with mock.patch.object(runner, "_run_batch", return_value=passed_run):
+            with mock.patch.object(runner.sys, "platform", "linux"):
+                self.assertEqual(("XPASS", "expected failure now satisfies all assertions: known issue"),
+                                 runner._run_once(scenario, Path("/unused/nshell")))
+            with mock.patch.object(runner.sys, "platform", "darwin"):
+                self.assertEqual(("PASS", ""), runner._run_once(scenario, Path("/unused/nshell")))
 
 
 if __name__ == "__main__":

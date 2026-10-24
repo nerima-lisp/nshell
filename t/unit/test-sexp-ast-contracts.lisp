@@ -1,5 +1,4 @@
 (in-package #:nshell/test)
-
 (describe "shared-sexp-ast-contracts"
   (it "constructs-and-reads-every-shared-ast-value"
     (let* ((fragment
@@ -511,18 +510,6 @@
                       (list "" nil 0 0))
                 (list "L04" #'nshell.application:call-with-command-failure-policy
                       (list nil #'identity))
-                (list "L06" #'nshell.user:to-json (list nil))
-                (list "L06" #'nshell.user:from-json (list "{}"))
-                (list "L06" #'nshell.user:to-tsv (list nil))
-                (list "L06" #'nshell.user:from-tsv (list ""))
-                (list "L06" #'nshell.user:to-lines (list ""))
-                (list "L06" #'nshell.user:from-lines (list nil))
-                (list "L06" #'nshell.user:regex-match-p (list "" ""))
-                (list "L06" #'nshell.user:regex-find (list "" ""))
-                (list "L06" #'nshell.user:regex-replace (list "" "" ""))
-                (list "L06" #'nshell.user:split-string (list "" ""))
-                (list "L06" #'nshell.user:join-strings (list nil ""))
-                (list "L06" #'nshell.user:replace-string (list "" "" ""))
                 (list "L07" #'nshell.application:context-shell-function-registry
                       (list nil))
                 (list "L07" #'nshell.application:active-shell-function-scope nil)
@@ -535,7 +522,6 @@
     (expect t :to-equal
             (not (null
                   (find-class 'nshell.application:value-conversion-error nil))))))
-
 (describe "shared-sexp-environment-assignment-contracts"
   (it "preserves-command-scoped-environment-assignments"
     (let* ((assignment

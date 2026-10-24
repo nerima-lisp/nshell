@@ -34,7 +34,8 @@
                "cl-process-kit"
                "cl-history-kit"
                "cl-concurrent-kit"
-               "cl-json-kit")
+               "cl-json-kit"
+               "cl-regex-kit")
   :pathname "src"
   :serial t
   :components
@@ -107,6 +108,7 @@
    (:file "application/contracts/l04-command-failure")
    (:file "application/contracts/l05-pipeline")
    (:file "application/contracts/l06-value-conversion")
+   (:file "application/sexp-value-conversion")
    (:file "application/contracts/l07-shell-functions")
    (:file "application/contracts/l08-reader-execution")
    (:file "presentation/contracts/l04-command-failure")
@@ -523,6 +525,7 @@
    (:file "unit/test-sexp-reader")
    (:file "unit/test-sexp-scanner")
    (:file "unit/test-sexp-ast-contracts")
+   (:file "unit/test-sexp-value-conversion")
    (:file "unit/test-sexp-evaluator")
    (:file "unit/test-cps")
    (:file "unit/test-input-state")

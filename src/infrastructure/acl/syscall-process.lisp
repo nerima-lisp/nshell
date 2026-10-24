@@ -77,7 +77,9 @@
 (defun process-alive-p (process)
   (cond
     ((pty-process-p process)
-     (member (pty-process-status process) '(:running :stopped)))
+     (let ((status (pty-process-status process)))
+       (or (eq status :running)
+           (eq status :stopped))))
     ((native-process-p process) (%native-process-alive-p process))
     (t (sb-ext:process-alive-p process))))
 

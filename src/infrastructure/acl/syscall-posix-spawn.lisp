@@ -218,7 +218,9 @@
         do (sb-sys:serve-all-events 0.01)))
 
 (defun %native-process-alive-p (process)
-  (member (native-process-status process) '(:running :stopped) :test #'eq))
+  (let ((status (native-process-status process)))
+    (or (eq status :running)
+        (eq status :stopped))))
 
 (defun %native-process-exit-status-code (process)
   (let ((status (native-process-status process)))

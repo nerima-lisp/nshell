@@ -507,7 +507,7 @@
                              (nshell.feature.assistant::assistant-pending-cell-events pending)))
                     (expect t :to-be (cl-concurrent-kit:channel-closed-p write-channel))
                     (expect nil :to-be
-                            (sb-ext:process-alive-p
+                            (nshell.infrastructure.acl:process-alive-p
                              (nshell.infrastructure.acl:sidecar-handle-process handle))))
                (cl-concurrent-kit:try-send release t)
                (nshell.feature.assistant::%assistant-sidecar-stop-state state)))

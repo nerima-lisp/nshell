@@ -149,31 +149,38 @@
 
 (defun %set-command-description! (kb cmd-name description)
   (let* ((descriptions (knowledge-base-command-description-facts kb))
-         (fact (gethash cmd-name descriptions)))
+         (fact (gethash cmd-name descriptions))
+         (new-fact
+           (make-fact :predicate 'describes
+                      :args (list cmd-name description))))
+    (setf (gethash cmd-name descriptions) new-fact)
     (if fact
         (progn
-          (setf (fact-args fact) (list cmd-name description))
+          (setf (rule-knowledge-base-facts kb)
+                (substitute new-fact fact
+                            (rule-knowledge-base-facts kb)
+                            :test #'eq))
           (%invalidate-rule-knowledge-base! kb))
-        (let ((new-fact
-                (make-fact :predicate 'describes :args (list cmd-name description))))
-          (setf (gethash cmd-name descriptions) new-fact)
-          (assert-fact! kb new-fact))))
+        (assert-fact! kb new-fact)))
   kb)
 (defun %set-flag-description! (kb cmd-name option description)
   (let* ((command-facts
            (or (gethash cmd-name (knowledge-base-flag-description-facts kb))
                (setf (gethash cmd-name (knowledge-base-flag-description-facts kb))
                      (make-hash-table :test #'equal))))
-         (fact (gethash option command-facts)))
+         (fact (gethash option command-facts))
+         (new-fact
+           (make-fact :predicate 'flag-describes
+                      :args (list cmd-name option description))))
+    (setf (gethash option command-facts) new-fact)
     (if fact
         (progn
-          (setf (fact-args fact) (list cmd-name option description))
+          (setf (rule-knowledge-base-facts kb)
+                (substitute new-fact fact
+                            (rule-knowledge-base-facts kb)
+                            :test #'eq))
           (%invalidate-rule-knowledge-base! kb))
-        (let ((new-fact
-                (make-fact :predicate 'flag-describes
-                           :args (list cmd-name option description))))
-          (setf (gethash option command-facts) new-fact)
-          (assert-fact! kb new-fact))))
+        (assert-fact! kb new-fact)))
   kb)
 
 (defun kb-add-command

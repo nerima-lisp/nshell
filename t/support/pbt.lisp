@@ -148,6 +148,15 @@ autosuggest blank-input semantics."
               (subseq text 0 1))
         :test #'string=))))
 
+(defun shrink-shell-command (text)
+  "Return shrink candidates that keep TEXT within shell-command constraints."
+  (let* ((half (subseq text 0 (max 1 (floor (length text) 2))))
+         (prefix (string-right-trim (string #\Space) half))
+         (first-word-end (or (position #\Space text) (length text)))
+         (first-word (subseq text 0 first-word-end)))
+    (remove-if (lambda (candidate) (string= candidate text))
+               (list prefix first-word))))
+
 (defun shrink-integer (n)
   "Return integers strictly closer to zero than N -- zero, the halfway point,
 and one step toward zero -- so a failing numeric property shrinks its

@@ -48,11 +48,11 @@
     (check-property (:trials 50)
         ((prefix (gen-shell-command :min-words 1 :max-words 3
                                     :max-word-length 8)
-                 #'shrink-prompt-text)
+                 #'shrink-shell-command)
          (fd (gen-in-range 0 9) nil)
          (target-fd (gen-in-range 0 9) nil)
          (target (gen-shell-word :min-length 1 :max-length 8)
-                 #'shrink-prompt-text)
+                 #'shrink-shell-word)
          (style (gen-in-range 0 1) nil))
       (let* ((redirection
                (if (zerop style)

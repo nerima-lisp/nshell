@@ -6,6 +6,9 @@
   (defvar *sexp-evaluator-test-path-names* nil)
   (defvar *sexp-evaluator-test-peek-calls* 0)
   (defvar *sexp-evaluator-test-lookup-calls* 0)
+  (defvar *sexp-evaluator-test-use-real-command-form->ast-p* nil)
+  (defvar *sexp-evaluator-test-real-command-form->ast*
+    (symbol-function 'nshell.domain.parsing:command-form->ast))
 
   (defun %make-sexp-evaluator-test-reader-result (source &optional supplied-form)
     (let* ((*package* (find-package "NSHELL.USER"))
@@ -27,19 +30,21 @@
       (t (princ-to-string form))))
 
   (defun %sexp-evaluator-test-command-form->ast
-      (source form form-span-map head-classifier)
-    (declare (ignore source))
-    (let* ((name (symbol-name (first form)))
-           (classification (funcall head-classifier name))
-           (arguments
-             (mapcar (lambda (argument)
-                       (nshell.domain.parsing:make-command-arg
-                        (%sexp-evaluator-test-argument argument)))
-                     (rest form))))
-      (unless (eq classification :command-island)
-        (error "Test command adapter received host form ~S" name))
-      (nshell.domain.parsing:make-command-node
-       name arguments (gethash form form-span-map))))
+    (source form form-span-map head-classifier)
+  (if *sexp-evaluator-test-use-real-command-form->ast-p*
+      (funcall *sexp-evaluator-test-real-command-form->ast*
+               source form form-span-map head-classifier)
+      (let* ((name (symbol-name (first form)))
+             (classification (funcall head-classifier name))
+             (arguments
+               (mapcar (lambda (argument)
+                         (nshell.domain.parsing:make-command-arg
+                          (%sexp-evaluator-test-argument argument)))
+                       (rest form))))
+        (unless (eq classification :command-island)
+          (error "Test command adapter received host form ~S" name))
+        (nshell.domain.parsing:make-command-node
+         name arguments (gethash form form-span-map)))))
 
   (progn (defun %sexp-evaluator-test-key (name escaped-p) (if escaped-p (list :escaped name) (string-upcase name))) (defun %evaluate-sexp-evaluator-test-source (context source) (nshell.application:evaluate-reader-result-in-context context (%make-sexp-evaluator-test-reader-result source)))))
 (progn
@@ -95,7 +100,7 @@
               (when (member name *sexp-evaluator-test-path-names*
                             :test #'string-equal)
                 (list :candidate))))
-           ('nshell.application:command-form->ast
+           ('nshell.domain.parsing:command-form->ast
             #'%sexp-evaluator-test-command-form->ast)
            ('nshell.application:execute-reader-ast-in-context
             (lambda (execution-context ast stage-evaluator)
@@ -488,3 +493,171 @@
                   (expect 0 :to-equal status)))))
         (when (macro-function recursive-name) (fmakunbound recursive-name))
         (when (macro-function constant-name) (fmakunbound constant-name))))))
+
+(describe "sexp-evaluator-reader-integration"
+  (it "reads-host-and-command-forms-through-the-real-ast-adapter"
+    (let ((context (make-test-shell-context)))
+      (let ((*sexp-evaluator-test-use-real-command-form->ast-p* t))
+        (%call-with-sexp-evaluator-test-boundaries
+         context
+         (lambda ()
+           (let* ((host-source "(progn (echo first) (echo last))")
+                  (host-reader-result
+                    (first
+                     (nshell.domain.parsing:read-submission
+                      host-source :reader-context :sexp))))
+             (multiple-value-bind (value status)
+                 (nshell.application:evaluate-reader-result-in-context
+                  context host-reader-result)
+               (let* ((first-call (first *sexp-evaluator-test-calls*))
+                      (first-stage (first first-call))
+                      (first-node
+                        (nshell.application:evaluated-command-stage-command-node
+                         first-stage))
+                      (first-arguments
+                        (nshell.application:evaluated-command-stage-arguments
+                         first-stage)))
+                 (expect (format nil "echo output~%") :to-equal value)
+                 (expect 0 :to-equal status)
+                 (expect 2 :to-equal
+                         (length *sexp-evaluator-test-calls*))
+                 (expect '(:stream :value)
+                         :to-equal
+                         (mapcar #'second *sexp-evaluator-test-calls*))
+                 (expect "echo" :to-equal
+                         (nshell.domain.parsing:command-node-command
+                          first-node))
+                 (expect '("first")
+                         :to-equal
+                         (mapcar
+                          #'nshell.domain.parsing:evaluated-command-arg-value
+                          first-arguments))))
+             (setf *sexp-evaluator-test-calls* nil)
+             (let* ((command-source "(echo direct)")
+                    (command-reader-result
+                      (first
+                       (nshell.domain.parsing:read-submission
+                        command-source :reader-context :sexp))))
+               (multiple-value-bind (value status)
+                   (nshell.application:evaluate-reader-result-in-context
+                    context command-reader-result)
+                 (expect (format nil "echo output~%") :to-equal value)
+                 (expect 0 :to-equal status)
+                 (expect :stream :to-equal
+                         (second (first *sexp-evaluator-test-calls*)))
+                 (expect '("direct")
+                         :to-equal
+                         (mapcar
+                          #'nshell.domain.parsing:evaluated-command-arg-value
+                          (nshell.application:evaluated-command-stage-arguments
+                           (first
+                            (first *sexp-evaluator-test-calls*)))))))))))))
+  (it "rejects-opaque-reader-markers-before-host-evaluation"
+    (let* ((context (make-test-shell-context))
+           (host-source
+             "(progn (echo before) (if t (echo reached) (echo #S(vendor :value 1))))")
+           (marker-start (search "#S" host-source))
+           (marker-span
+             (list marker-start
+                   (+ marker-start (length "#S(vendor :value 1)"))))
+           (host-reader-result
+             (first
+              (nshell.domain.parsing:read-submission
+               host-source :reader-context :sexp))))
+      (let ((*sexp-evaluator-test-use-real-command-form->ast-p* t))
+        (%call-with-sexp-evaluator-test-boundaries
+         context
+         (lambda ()
+           (let ((condition
+                   (handler-case
+                       (progn
+                         (nshell.application:evaluate-reader-result-in-context
+                          context host-reader-result)
+                         nil)
+                     (nshell.application:sexp-evaluation-syntax-error
+                       (condition)
+                       condition))))
+             (expect condition :to-be-truthy)
+             (expect marker-span
+                     :to-equal
+                     (nshell.application:sexp-evaluation-syntax-error-source-span
+                      condition))
+             (expect nil
+                     :to-equal
+                     (nshell.application:sexp-evaluation-syntax-error-source-path
+                      condition))
+             (expect nil :to-equal *sexp-evaluator-test-calls*)
+             (expect 0 :to-equal
+                     *sexp-evaluator-test-failure-policy-calls*))
+           (let* ((quoted-source "(quote #S(vendor :value 1))")
+                  (quoted-reader-result
+                    (first
+                     (nshell.domain.parsing:read-submission
+                      quoted-source :reader-context :sexp))))
+             (expect
+              (lambda ()
+                (nshell.application:evaluate-reader-result-in-context
+                 context quoted-reader-result))
+              :to-throw 'nshell.application:sexp-evaluation-syntax-error)
+             (expect nil :to-equal *sexp-evaluator-test-calls*))
+           (let* ((command-source "(echo #S(vendor :value 1))")
+                  (command-reader-result
+                    (first
+                     (nshell.domain.parsing:read-submission
+                      command-source :reader-context :sexp))))
+             (multiple-value-bind (value status)
+                 (nshell.application:evaluate-reader-result-in-context
+                  context command-reader-result)
+               (let* ((call (first *sexp-evaluator-test-calls*))
+                      (stage (first call))
+                      (arguments
+                        (nshell.application:evaluated-command-stage-arguments
+                         stage)))
+                 (expect (format nil "echo output~%") :to-equal value)
+                 (expect 0 :to-equal status)
+                 (expect :stream :to-equal (second call))
+                 (expect '("#S(vendor :value 1)")
+                         :to-equal
+                         (mapcar
+                          #'nshell.domain.parsing:evaluated-command-arg-value
+                          arguments)))))))))))
+
+(describe "sexp-evaluator-opaque-command-values"
+  (it "rejects-opaque-markers-entering-a-command-value-expression"
+    (let* ((context (make-test-shell-context))
+           (source "(echo ,#S(vendor :value 1))")
+           (reader-result
+             (first
+              (nshell.domain.parsing:read-submission
+               source :reader-context :sexp))))
+      (let ((*sexp-evaluator-test-use-real-command-form->ast-p* t))
+        (%call-with-sexp-evaluator-test-boundaries
+         context
+         (lambda ()
+           (expect
+            (lambda ()
+              (nshell.application:evaluate-reader-result-in-context
+               context reader-result))
+            :to-throw 'nshell.application:sexp-evaluation-syntax-error)
+           (expect nil :to-equal *sexp-evaluator-test-calls*)
+           (expect 1 :to-equal
+                   *sexp-evaluator-test-failure-policy-calls*))))))
+  (it "rejects-opaque-markers-in-quoted-command-values"
+    (let* ((context (make-test-shell-context))
+           (source "(echo '#S(vendor :value 1))")
+           (reader-result
+             (first
+              (nshell.domain.parsing:read-submission
+               source :reader-context :sexp))))
+      (let ((*sexp-evaluator-test-use-real-command-form->ast-p* t))
+        (%call-with-sexp-evaluator-test-boundaries
+         context
+         (lambda ()
+           (expect
+            (lambda ()
+              (nshell.application:evaluate-reader-result-in-context
+               context reader-result))
+            :to-throw 'nshell.application:sexp-evaluation-syntax-error)
+           (expect nil :to-equal *sexp-evaluator-test-calls*)
+           (expect 1 :to-equal
+                   *sexp-evaluator-test-failure-policy-calls*)))))))

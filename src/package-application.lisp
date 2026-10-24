@@ -33,9 +33,13 @@ permitted to know both the domain and infrastructure.")
             #:command-argument-type-error-value
             #:command-argument-type-error-source-span
             #:command-macro-syntax-error
+            #:sexp-evaluation-syntax-error
             #:command-macro-syntax-error-source-span
+            #:sexp-evaluation-syntax-error-source-span
             #:command-macro-syntax-error-source-path
+            #:sexp-evaluation-syntax-error-source-path
             #:command-macro-syntax-error-cause
+            #:sexp-evaluation-syntax-error-cause
             #:*interactive-top-level-p* #:*command-test-position-p* #:*errexit-p*
             #:builtin-binding #:builtin-binding-p #:make-builtin-binding
             #:builtin-binding-handler #:builtin-binding-argument-mode

@@ -137,7 +137,7 @@
 
   (it "runs continuation chains to completion"
     (let ((steps 0))
-      (expect nil
+      (expect nshell.presentation::+repl-exit+
               :to-equal
               (nshell.presentation:trampoline
                (lambda ()
@@ -146,13 +146,13 @@
                    (incf steps)
                    (lambda ()
                      (incf steps)
-                     nil)))))
+                     nshell.presentation::+repl-exit+)))))
       (expect 3 :to-equal steps)))
 
   (it "returns immediately for an exhausted continuation"
-    (expect nil
+    (expect nshell.presentation::+repl-exit+
             :to-equal
-            (nshell.presentation:trampoline (lambda () nil))))
+            (nshell.presentation:trampoline (lambda () nshell.presentation::+repl-exit+))))
 
   (it "resets mutable tables and completion cache"
     (let ((stale-aliases (nshell.presentation::%make-repl-name-table))
@@ -287,7 +287,9 @@
       (call-repl-builtin "function" '("hi" "echo" "hello" "end"))
       (expect '("echo hello") :to-equal (repl-test-function "hi"))
       (call-repl-builtin "exit" nil)
-      (expect (repl-test-running-p) :to-be-falsy)))
+      (expect (repl-test-running-p) :to-be-falsy)
+      (expect nshell.presentation::+repl-exit+ :to-be
+        (nshell.presentation::render-prompt-cont))))
 
   (it "repl-constructs-host-filesystem-capability"
     "The REPL execution context carries one host filesystem capability."

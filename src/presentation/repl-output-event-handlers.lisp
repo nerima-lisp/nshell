@@ -44,7 +44,7 @@
             (lambda () (render-prompt-cont)))
           (progn
             (setf *running* nil)
-            nil))))
+            +repl-exit+))))
 
   (define-output-event-handler %process-default-output-event
                                with-cleared-rendered-completions-and-prompt-cont)

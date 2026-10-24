@@ -3,10 +3,11 @@
 (defun %trampoline-result-sequence (sequence)
   (let ((results '()))
     (labels ((next-continuation (remaining)
-               (when remaining
-                 (lambda ()
-                   (push (first remaining) results)
-                   (next-continuation (rest remaining))))))
+               (if remaining
+                   (lambda ()
+                     (push (first remaining) results)
+                     (next-continuation (rest remaining)))
+                   nshell.presentation::+repl-exit+)))
       (nshell.presentation:trampoline
        (lambda ()
          (next-continuation sequence))))
@@ -20,7 +21,7 @@
     (multiple-value-bind (expansion expanded-p)
         (macroexpand-1
          '(nshell.presentation:with-cps-trampoline
-            (lambda () nil)))
+            (lambda () nshell.presentation::+repl-exit+)))
       (expect expanded-p :to-be-truthy)
       (expect 'nshell.presentation:trampoline :to-be (first expansion))))
 
@@ -38,22 +39,50 @@
               (loop for i from 1 to depth collect i)))))
 
   (it "trampoline-termination"
+    (expect nshell.presentation::+repl-exit+ :to-equal
+            (nshell.presentation:trampoline
+             (lambda () nshell.presentation::+repl-exit+)))
     (assert-trampoline-sequence nil nil))
 
-  (it "trampoline-does-not-invoke-a-nil-continuation"
-    (let ((calls 0))
-      (expect nil :to-be
-        (nshell.presentation:trampoline
-         (lambda ()
-           (incf calls)
-           nil)))
-      (expect 1 :to-equal calls)))
+  (it "trampoline-recovers-from-nil-and-integer-results"
+    (let ((calls 0)
+          (diagnostic (make-string-output-stream)))
+      (let ((*error-output* diagnostic))
+        (expect nshell.presentation::+repl-exit+ :to-equal
+                (nshell.presentation:trampoline
+                 (lambda ()
+                   (case (incf calls)
+                     (1 nil)
+                     (2 23)
+                     (otherwise nshell.presentation::+repl-exit+))))))
+      (expect 3 :to-equal calls)
+      (expect 2 :to-equal
+              (count #\Newline (get-output-stream-string diagnostic)))))
+
+  (it "trampoline-restarts-the-initial-step-after-invalid-continuation"
+    (let ((initial-calls 0)
+          (continuation-calls 0)
+          (diagnostic (make-string-output-stream)))
+      (let ((*error-output* diagnostic))
+        (expect nshell.presentation::+repl-exit+ :to-equal
+                (nshell.presentation:trampoline
+                 (lambda ()
+                   (if (= (incf initial-calls) 1)
+                       (lambda ()
+                         (incf continuation-calls)
+                         nil)
+                       nshell.presentation::+repl-exit+)))))
+      (expect 2 :to-equal initial-calls)
+      (expect 1 :to-equal continuation-calls)
+      (expect 1 :to-equal
+              (count #\Newline (get-output-stream-string diagnostic)))))
 
   (it "with-cps-trampoline-runs-the-initial-step"
     (let ((steps '()))
-      (nshell.presentation:with-cps-trampoline
-        (push :initial steps)
-        (lambda ()
-          (push :continuation steps)
-          nil))
+      (expect nshell.presentation::+repl-exit+ :to-equal
+              (nshell.presentation:with-cps-trampoline
+                (push :initial steps)
+                (lambda ()
+                  (push :continuation steps)
+                  nshell.presentation::+repl-exit+)))
       (expect '(:continuation :initial) :to-equal steps))))

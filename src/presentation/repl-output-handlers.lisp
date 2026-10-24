@@ -260,30 +260,33 @@ wrapped line's other rows on screen as stale duplicates."
        (render-assistant-progress-panel *assistant-turn-started-at*)))))
 
 (defun %install-explain-candidate ()
-  (let* ((candidate-count (length *assistant-explain-candidates*))
-         (index (mod *assistant-explain-candidate-index* candidate-count))
-         (candidate (nth index *assistant-explain-candidates*)))
-    (incf *assistant-explain-candidate-index*)
-    (multiple-value-bind (status classification reason)
-        (%assistant-proposal-assessment candidate)
-      (when (eq status :classified)
-        (case (nshell.feature.assistant:assistant-safety-result-classification
-               classification)
-          (:block
-           (render-transient-panel
-            (list (format nil "候補 ~d はブロックされました: ~a"
-                          (1+ index)
-                          (nshell.feature.assistant:assistant-safety-result-reason
-                           classification)))))
-          (otherwise
-           (%install-assistant-proposal candidate)
-           (setf *assistant-command-origin* :proposal
-                 *assistant-command-confirmed-p*
-                   (eq :safe
-                       (nshell.feature.assistant:assistant-safety-result-classification
-                        classification))))))
-      (when (eq status :parse-error)
-        (render-transient-panel (list reason))))))
+  (with-cleared-rendered-completions-and-prompt-cont
+    (setf *preserve-transient-panel-on-next-prompt-p* t)
+    (let ((candidate-count (length *assistant-explain-candidates*)))
+      (when (plusp candidate-count)
+        (let* ((index (mod *assistant-explain-candidate-index* candidate-count))
+               (candidate (nth index *assistant-explain-candidates*)))
+          (incf *assistant-explain-candidate-index*)
+          (multiple-value-bind (status classification reason)
+              (%assistant-proposal-assessment candidate)
+            (when (eq status :classified)
+              (case (nshell.feature.assistant:assistant-safety-result-classification
+                     classification)
+                (:block
+                 (render-transient-panel
+                  (list (format nil "候補 ~d はブロックされました: ~a"
+                                (1+ index)
+                                (nshell.feature.assistant:assistant-safety-result-reason
+                                 classification)))))
+                (otherwise
+                 (%install-assistant-proposal candidate)
+                 (setf *assistant-command-origin* :proposal
+                       *assistant-command-confirmed-p*
+                         (eq :safe
+                             (nshell.feature.assistant:assistant-safety-result-classification
+                              classification))))))
+            (when (eq status :parse-error)
+              (render-transient-panel (list reason)))))))))
 
 (defun %process-explain-panel-event (event)
   (if (eq :tab (nshell.domain.input:key-event-type event))

@@ -1,15 +1,28 @@
 (in-package #:nshell.presentation)
 
+(defconstant +repl-exit+
+  :repl-exit)
+
 (defun trampoline (thunk)
-  "Run THUNK and repeatedly invoke each returned continuation until NIL."
-  (loop for continuation = (funcall thunk)
-        then (funcall continuation)
-        while continuation))
+  "Run THUNK until it returns the explicit REPL exit value.
+
+Invalid step results are reported and restart THUNK."
+  (loop with step = thunk
+        for result = (funcall step)
+        do (cond
+             ((eq result +repl-exit+) (return +repl-exit+))
+             ((functionp result)
+              (setf step result))
+             (t
+               (format *error-output*
+                       "nshell: invalid REPL continuation result; returning to prompt.~%")
+               (setf step thunk)))))
 
 (defmacro with-cps-trampoline (&body body)
   "Evaluate BODY as the initial step of a continuation trampoline.
 
-BODY must return either NIL or a zero-argument continuation.  Keeping the
-initial step lexical makes CPS call sites read like a boundary declaration and
-leaves the continuation loop in TRAMPOLINE, where it can be tested once."
-  `(trampoline (lambda () ,@body)))
+BODY should return the explicit REPL exit value or a zero-argument
+continuation.  Other results are diagnosed before the initial step runs again."
+  `(trampoline
+    (lambda ()
+      ,@body)))

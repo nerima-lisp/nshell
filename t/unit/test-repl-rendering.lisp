@@ -285,4 +285,11 @@
                                               (esc-sequence "[0m"))
                                 output)
                         :to-be-truthy))))))))
+  (it "render-prompt-cont-returns-sentinel-when-stopped"
+    "A stopped prompt cycle exits without rendering."
+    (with-repl-test-state
+      (setf nshell.presentation::*running* nil)
+      (expect nshell.presentation::+repl-exit+ :to-be
+              (nshell.presentation::render-prompt-cont))))
+
 )

@@ -322,6 +322,7 @@
                               :cursor-pos 14)
         (let ((panel nil)
               (classification-count 0)
+              (prompt-redraw-count 0)
               (original-classify
                 (symbol-function 'nshell.feature.assistant:classify-ast)))
           (setf nshell.presentation::*assistant-request-kind* :explain)
@@ -331,49 +332,69 @@
                   (declare (ignore arguments))
                   (setf panel content)))
                ('nshell.presentation::render-prompt-cont
-                (lambda () nil))
+                (lambda ()
+                  (incf prompt-redraw-count)
+                  (setf nshell.presentation::*preserve-transient-panel-on-next-prompt-p*
+                        nil)
+                  (lambda () :next-key)))
                ('nshell.feature.assistant:classify-ast
                 (lambda (ast)
                   (incf classification-count)
                   (funcall original-classify ast))))
-            (nshell.presentation::%handle-ask-model-event
-             (nshell.feature.assistant::make-assistant-model-event
-              1 :result
-              '(("explanation" . "説明")
-                ("structured_output" .
-                 (("next_steps" . ("ls" "rm file" "rm -rf /")))))))
-            (nshell.presentation::%process-explain-panel-event
-             (input-key-event :tab))
-            (expect "ls"
-                    :to-equal
-                    (nshell.presentation:input-state-buffer
-                     nshell.presentation::*input-state*))
-            (expect :proposal :to-be
-                    nshell.presentation::*assistant-command-origin*)
-            (expect t :to-be
-                    nshell.presentation::*assistant-command-confirmed-p*)
-            (nshell.presentation::%process-explain-panel-event
-             (input-key-event :tab))
-            (expect "rm file"
-                    :to-equal
-                    (nshell.presentation:input-state-buffer
-                     nshell.presentation::*input-state*))
-            (expect :proposal :to-be
-                    nshell.presentation::*assistant-command-origin*)
-            (expect nil :to-be
-                    nshell.presentation::*assistant-command-confirmed-p*)
-            (nshell.presentation::%process-explain-panel-event
-             (input-key-event :tab))
-            (expect "rm file"
-                    :to-equal
-                    (nshell.presentation:input-state-buffer
-                     nshell.presentation::*input-state*))
-            (expect nil :to-be
-                    (search "rm -rf /"
-                            (nshell.presentation:input-state-buffer
-                             nshell.presentation::*input-state*)))
-            (expect (search "block" (first panel)) :to-be-truthy)
-            (expect 3 :to-be classification-count)))))))
+            (labels ((process-tab ()
+                       (let ((redraw-count prompt-redraw-count)
+                             (continuation
+                               (nshell.presentation::%process-explain-panel-event
+                                (input-key-event :tab))))
+                         (expect t :to-be (functionp continuation))
+                         (let ((next-continuation (funcall continuation)))
+                           (expect (1+ redraw-count)
+                                   :to-equal prompt-redraw-count)
+                           (expect t :to-be (functionp next-continuation))))))
+              (nshell.presentation::%handle-ask-model-event
+               (nshell.feature.assistant::make-assistant-model-event
+                1 :result
+                '(("explanation" . "説明")
+                  ("structured_output" .
+                   (("next_steps" . ("ls" "rm file" "rm -rf /")))))))
+              (process-tab)
+              (expect "ls"
+                      :to-equal
+                      (nshell.presentation:input-state-buffer
+                       nshell.presentation::*input-state*))
+              (expect :proposal :to-be
+                      nshell.presentation::*assistant-command-origin*)
+              (expect t :to-be
+                      nshell.presentation::*assistant-command-confirmed-p*)
+              (process-tab)
+              (expect "rm file"
+                      :to-equal
+                      (nshell.presentation:input-state-buffer
+                       nshell.presentation::*input-state*))
+              (expect :proposal :to-be
+                      nshell.presentation::*assistant-command-origin*)
+              (expect nil :to-be
+                      nshell.presentation::*assistant-command-confirmed-p*)
+              (process-tab)
+              (expect "rm file"
+                      :to-equal
+                      (nshell.presentation:input-state-buffer
+                       nshell.presentation::*input-state*))
+              (expect nil :to-be
+                      (search "rm -rf /"
+                              (nshell.presentation:input-state-buffer
+                               nshell.presentation::*input-state*)))
+              (expect (search "block" (first panel)) :to-be-truthy)
+              (setf nshell.presentation::*assistant-explain-candidates*
+                    '("unterminated '")
+                    nshell.presentation::*assistant-explain-candidate-index* 0)
+              (process-tab)
+              (expect "rm file"
+                      :to-equal
+                      (nshell.presentation:input-state-buffer
+                       nshell.presentation::*input-state*))
+              (expect (search "解釈できない提案" (first panel)) :to-be-truthy)
+              (expect 3 :to-be classification-count))))))))
 
 (describe "repl-ask-confirmation-tests"
   (it "does-not-execute-a-confirm-proposal-before-the-second-enter"

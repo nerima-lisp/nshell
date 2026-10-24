@@ -429,6 +429,16 @@ not signal. This is separate from E03's `call-with-command-failure-restarts`,
 which encloses each top-level result; L02's policy call handles commands and
 pipelines evaluated within that result.
 
+The REPL's continuation trampoline runs the prompt cycle around E03's
+submission/resume flow and L04's nested command-failure restart loop. Each
+step returns either a zero-argument continuation or the explicit `+repl-exit+`
+value. `nil` and any other non-function result violate this contract: the
+trampoline writes one diagnostic line to standard error and retries the initial
+step. Ordinary completion returns a continuation. Ctrl-D and `exit` return
+`+repl-exit+` when shutdown proceeds after any active-job warning; EOF and
+SIGHUP return it directly. After cleanup, `run-repl` returns
+`*last-exit-code*`.
+
 `execute-reader-ast-in-context(context ast stage-evaluator)` returns
 `(values value integer-status pipeline-execution-result)`. A standalone command
 returns a one-stage result. For a pipeline, stage index `i` in the result maps

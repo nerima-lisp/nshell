@@ -245,10 +245,39 @@
             (lambda () nil))
            ('nshell.infrastructure.terminal:read-key-event
             (lambda (&key interrupt-predicate)
-  (declare (ignore interrupt-predicate))
-  nil)))
-        (expect nil :to-be (nshell.presentation::read-key-cont))
+              (declare (ignore interrupt-predicate))
+              nil)))
+        (expect nshell.presentation::+repl-exit+ :to-be
+                (nshell.presentation::read-key-cont))
         (expect nil :to-be nshell.presentation::*running*))))
+
+  (it "read-key-cont-stops-after-sighup-with-explicit-exit"
+    "A pending SIGHUP stops input and later reads return the exit sentinel."
+    (with-repl-test-state
+      (let ((status (+ 128 sb-unix:sighup))
+            (termination-consumed-p nil)
+            (read-calls 0))
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.infrastructure.acl:consume-shell-termination-status
+              (lambda ()
+                (unless termination-consumed-p
+                  (setf termination-consumed-p t)
+                  status)))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (incf read-calls)
+                (funcall interrupt-predicate)
+                nil)))
+          (expect nshell.presentation::+repl-exit+ :to-be
+                  (nshell.presentation::read-key-cont))
+          (expect status :to-be nshell.presentation::*last-exit-code*)
+          (expect nil :to-be nshell.presentation::*running*)
+          (expect nshell.presentation::+repl-exit+ :to-be
+                  (nshell.presentation::read-key-cont))
+          (expect 1 :to-equal read-calls)))))
+
   (it "ctrl-d-warns-once-before-stopping-with-active-jobs"
     "Ctrl-D warns while jobs are active and exits on the next attempt."
     (with-repl-test-state
@@ -280,11 +309,11 @@
                       (setf second-continuation
                             (nshell.presentation::%process-quit-output-event)))))
             (expect "" :to-equal second-output)
-            (expect nil :to-be second-continuation)
+            (expect nshell.presentation::+repl-exit+ :to-be second-continuation)
             (expect nil :to-be nshell.presentation::*running*))))))
 
   (it "repl-eof-stops-the-assistant-before-terminal-cleanup"
-    "EOF exits through the REPL unwind cleanup and requests model shutdown."
+    "EOF exits through the trampoline and runs model and terminal cleanup."
     (with-repl-test-state
       (let ((stop-calls 0)
             (restore-calls 0))
@@ -293,8 +322,12 @@
               (lambda () t))
              ('nshell.presentation::restore-interactive-terminal
               (lambda () (incf restore-calls)))
-             ('nshell.presentation::read-key-cont
+             ('nshell.infrastructure.acl:consume-terminal-resize-p
               (lambda () nil))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                nil))
              ('nshell.feature.assistant:assistant-model-stop
               (lambda ()
                 (incf stop-calls)
@@ -305,6 +338,48 @@
                    :history-p nil))
           (expect 1 :to-equal stop-calls)
           (expect 1 :to-equal restore-calls)))))
+
+  (it "repl-terminal-setup-failure-returns-explicit-exit-and-status"
+    "Raw mode setup failure stops through the sentinel and keeps status one."
+    (with-repl-test-state
+      (let ((trampoline-result nil)
+            (restore-calls 0)
+            (render-calls 0)
+            (real-trampoline
+              (symbol-function 'nshell.presentation:trampoline))
+            (standard-output (make-string-output-stream))
+            (error-output (make-string-output-stream))
+            (exit-status nil))
+        (with-temporary-functions
+            (('nshell.presentation::install-interactive-terminal
+              (lambda () nil))
+             ('nshell.presentation::restore-interactive-terminal
+              (lambda () (incf restore-calls)))
+             ('nshell.presentation::render-prompt-cont
+              (lambda ()
+                (incf render-calls)
+                nshell.presentation::+repl-exit+))
+             ('nshell.presentation:trampoline
+              (lambda (thunk)
+                (let ((result (funcall thunk)))
+                  (setf trampoline-result result)
+                  (funcall real-trampoline (lambda () result)))))
+             ('nshell.feature.assistant:assistant-model-stop
+              (lambda () nil)))
+          (let ((*standard-output* standard-output)
+                (*error-output* error-output))
+            (setf exit-status
+                  (nshell.presentation:run-repl
+                   :load-config-p nil
+                   :history-p nil)))
+          (expect 1 :to-equal exit-status)
+          (expect nshell.presentation::+repl-exit+ :to-be trampoline-result)
+          (expect 0 :to-equal render-calls)
+          (expect 1 :to-equal restore-calls)
+          (expect (search "Goodbye!" (get-output-stream-string standard-output))
+                  :to-be-truthy)
+          (expect "" :to-equal (get-output-stream-string error-output))))))
+
 
   (it "read-key-cont-renders-after-resize-detected-after-read"
     "A resize noticed after blocking input schedules a redraw."
@@ -428,7 +503,7 @@
                       :to-be-truthy)
               (expect (search "PROMPT> " default-output)
                       :to-be-truthy))
-            (expect nil :to-be
+            (expect nshell.presentation::+repl-exit+ :to-be
                     (nshell.presentation::process-output-event :quit))
             (expect nil :to-be
                     nshell.presentation::*running*))))))

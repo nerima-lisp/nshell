@@ -282,6 +282,7 @@
    (:file "infrastructure/assistant-sidecar-lifecycle")
    (:file "infrastructure/assistant-sidecar-stream")
    (:file "infrastructure/acl/syscall-process-execution")
+   (:file "infrastructure/acl/syscall-process-capture")
    (:file "infrastructure/acl/filesystem")
    (:file "infrastructure/acl/syscall-pipeline-streams")
    (:file "infrastructure/acl/syscall-pipeline-wait")

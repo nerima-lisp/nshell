@@ -99,6 +99,7 @@ set it."
              (:narrow nil)
              (:auto
               (if (and interactive-p
+                       *interactive-terminal-installed-p*
                        (nshell.infrastructure.terminal:interactive-terminal-p))
                   (case (nshell.infrastructure.terminal:detect-east-asian-ambiguous-wide-p)
                     (:wide t)

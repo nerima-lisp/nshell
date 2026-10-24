@@ -392,27 +392,42 @@ never undone leaves SGR mouse reporting on in the user's next shell."
       (expect 1 :to-equal code)))
 
   (it "a-successful-install-runs-the-editor-and-restores-afterwards"
-    (dolist (exit-code '(0 23))
-      (let ((restored nil) (edited nil) (code nil)
-            (nshell.presentation::*last-exit-code* 0))
-        (with-temporary-functions
-            (('nshell.presentation::initialize-repl-state
-              (lambda (&rest ignored)
-                (declare (ignore ignored))
-                nil))
-             ('nshell.presentation::install-interactive-terminal (lambda () t))
-             ('nshell.presentation::restore-interactive-terminal
-              (lambda () (setf restored t)))
-             ('nshell.presentation:trampoline
-              (lambda (thunk)
-                (declare (ignore thunk))
-                (setf edited t
-                      nshell.presentation::*last-exit-code* exit-code))))
-          (with-output-to-string (*standard-output*)
-            (setf code (nshell.presentation:run-repl))))
-        (expect edited :to-be-truthy)
-        (expect restored :to-be-truthy)
-        (expect exit-code :to-equal code)))))
+    (dolist (exit-code (list 0 23))
+      (with-repl-test-state
+        (let ((detections 0)
+              (detected-after-install nil)
+              (restored nil)
+              (edited nil)
+              (code nil)
+              (nshell.presentation::*last-exit-code* 0))
+          (with-temporary-functions
+              (('nshell.infrastructure.terminal:interactive-terminal-p
+                (lambda (&optional fd) (declare (ignore fd)) t))
+               ('nshell.infrastructure.terminal:detect-east-asian-ambiguous-wide-p
+                (lambda ()
+                  (incf detections)
+                  (setf detected-after-install
+                        nshell.presentation::*interactive-terminal-installed-p*)
+                  :wide))
+               ('nshell.presentation::install-interactive-terminal (lambda () t))
+               ('nshell.presentation::restore-interactive-terminal
+                (lambda () (setf restored t)))
+               ('nshell.presentation:trampoline
+                (lambda (thunk) (funcall thunk)))
+               ('nshell.presentation::render-prompt-cont
+                (lambda ()
+                  (setf edited t
+                        nshell.presentation::*last-exit-code* exit-code)
+                  nshell.presentation::+repl-exit+)))
+            (with-output-to-string (*standard-output*)
+              (setf code
+                    (nshell.presentation:run-repl
+                     :load-config-p nil :history-p nil :private-p t))))
+          (expect 1 :to-equal detections)
+          (expect detected-after-install :to-be-truthy)
+          (expect edited :to-be-truthy)
+          (expect restored :to-be-truthy)
+          (expect exit-code :to-equal code))))))
 (describe "terminal-lifecycle-seam-tests"
   (it "installs-and-restores-terminal-through-boundary-calls"
     (let ((calls nil)

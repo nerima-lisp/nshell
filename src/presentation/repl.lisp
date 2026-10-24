@@ -281,7 +281,9 @@ the next shell could start with SGR mouse reporting still on."
           (with-cps-trampoline
            (if (setf *interactive-terminal-installed-p*
                      (install-interactive-terminal))
-               (render-prompt-cont)
+               (progn
+                  (%apply-east-asian-ambiguous-width)
+                  (render-prompt-cont))
              ;; Raw mode is a precondition for the line editor and could not be
              ;; entered; INSTALL-INTERACTIVE-TERMINAL has already said so on
              ;; stderr. Running the editor against a cooked terminal anyway is the

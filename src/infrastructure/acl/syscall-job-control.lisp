@@ -1,6 +1,6 @@
 (in-package #:nshell.infrastructure.acl)
 
-(declaim (special *shell-pgid* *foreground-pgid*))
+(declaim (special *shell-pgid* *foreground-pgid* *native-process-waitpid-lock*))
 
 (defun current-process-id ()
   "Return the process id of the current Lisp process."
@@ -64,17 +64,20 @@
   "Reap all changed child processes without blocking. Returns CHILD-STATUS values."
   (let ((children nil))
     (loop
-      (handler-case
-          (multiple-value-bind (pid status) (sb-posix:waitpid -1 sb-posix:wnohang)
-            (cond
-              ((plusp pid)
-               (push (%make-child-status pid status) children))
-              (t
-               (return (nreverse children)))))
-        (sb-posix:syscall-error (condition)
-          (if (= (sb-posix:syscall-errno condition) sb-posix:echild)
-              (return (nreverse children))
-              (error condition)))))))
+     (handler-case
+         (sb-thread:with-mutex (*native-process-waitpid-lock*)
+                               (multiple-value-bind (pid status)
+                                   (sb-posix:waitpid -1 sb-posix:wnohang)
+                                 (cond
+                                  ((plusp pid)
+                                   (%refresh-native-process-from-wait-status pid status)
+                                   (push (%make-child-status pid status) children))
+                                  (t
+                                   (return (nreverse children))))))
+       (sb-posix:syscall-error (condition)
+                               (if (= (sb-posix:syscall-errno condition) sb-posix:echild)
+                                   (return (nreverse children))
+                                 (error condition)))))))
 
 (defun %decode-wait-status (pid status)
   (cond
@@ -106,18 +109,21 @@
 (defun wait-job (pid &key nohang untraced continued)
   "Wait for PID or process group PID and return (values child-pid state detail)."
   (handler-case
-      (multiple-value-bind (child-pid status)
-          (sb-posix:waitpid pid (%waitpid-flags
-                                  :nohang nohang
-                                  :untraced untraced
-                                  :continued continued))
-        (%decode-wait-status child-pid status))
+      (sb-thread:with-mutex (*native-process-waitpid-lock*)
+                            (multiple-value-bind (child-pid status)
+                                (sb-posix:waitpid pid (%waitpid-flags
+                                                       :nohang nohang
+                                                       :untraced untraced
+                                                       :continued continued))
+                              (when (and child-pid (plusp child-pid))
+                                (%refresh-native-process-from-wait-status child-pid status))
+                              (%decode-wait-status child-pid status)))
     (sb-posix:syscall-error (condition)
-      (let ((errno (sb-posix:syscall-errno condition)))
-        (cond
-          ((= errno sb-posix:echild)
-           (values nil :no-child nil))
-          ((= errno sb-posix:eintr)
-           (values nil :interrupted nil))
-          (t
-           (error condition)))))))
+                            (let ((errno (sb-posix:syscall-errno condition)))
+                              (cond
+                               ((= errno sb-posix:echild)
+                                (values nil :no-child nil))
+                               ((= errno sb-posix:eintr)
+                                (values nil :interrupted nil))
+                               (t
+                                (error condition)))))))

@@ -1,7 +1,7 @@
 ;;; REPL process and background job helpers
 (in-package #:nshell.presentation)
 
-(defparameter *background-proc-alive-p* #'sb-ext:process-alive-p
+(defparameter *background-proc-alive-p* #'nshell.infrastructure.acl:process-alive-p
   "Function used to determine whether a background process is still running.")
 
 (defparameter *background-proc-exit-code*

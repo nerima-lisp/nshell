@@ -85,7 +85,7 @@
                     :stage-environments *pipeline-stage-environments*)))
     (unless processes
       (return-from %run-terminal-pipeline (values nil 127 (list 127))))
-    (let ((pgid (sb-ext:process-pid (first processes)))
+    (let ((pgid (nshell.infrastructure.acl:process-pid (first processes)))
           (retained-p nil))
       (unwind-protect
            (progn
@@ -97,7 +97,7 @@
                (if (eq :stopped (%wait-terminal-processes processes))
                    (let* ((monitor (shell-context-job-monitor context))
                           (id (nshell.domain.job-control:monitor-add-background-job
-                               monitor (mapcar #'sb-ext:process-pid processes)
+                               monitor (mapcar #'nshell.infrastructure.acl:process-pid processes)
                                (%string-join
                                 (mapcar (lambda (command)
                                           (%string-join
@@ -111,7 +111,7 @@
                      (setf retained-p t)
                      (values nil (+ 128 sb-unix:sigtstp)
                              (mapcar (lambda (process)
-                                       (if (eq :stopped (sb-ext:process-status process))
+                                       (if (eq :stopped (nshell.infrastructure.acl:process-status process))
                                            (+ 128 sb-unix:sigtstp)
                                            (nshell.infrastructure.acl:process-exit-status-code process)))
                                      processes)))

@@ -94,18 +94,33 @@
                     (simple-error (condition) condition)))
           (expect 1 :to-equal waits)))))
 
-  (it "process-resume-does-not-treat-cached-stop-as-a-new-stop"
+  (it "process-resume-refreshes-single-and-group-process-cache"
     (with-stopped-resume-process (process)
-        (with-temporary-function
-            ('sb-ext:process-kill
-              (lambda (observed signal &optional target)
-                (expect process :to-be observed)
-                (expect sb-unix:sigcont :to-equal signal)
-                (expect :pid :to-be target)
-                t))
-          (expect (nshell.infrastructure.acl:process-continue process) :to-be-truthy)
-          (expect :running :to-be (nshell.infrastructure.acl:process-status process))
-          (expect (sb-ext:process-exit-code process) :to-be-null))))
+      (with-temporary-function
+          ('sb-ext:process-kill
+           (lambda (observed signal &optional target)
+             (expect process :to-be observed)
+             (expect sb-unix:sigcont :to-equal signal)
+             (expect :pid :to-be target)
+             t))
+        (expect (nshell.infrastructure.acl:process-continue process)
+                :to-be-truthy)
+        (expect :running :to-be
+                (nshell.infrastructure.acl:process-status process))
+        (expect (sb-ext:process-exit-code process) :to-be-null)))
+    (with-stopped-resume-process (process)
+      (with-temporary-function
+          ('nshell.infrastructure.acl:kill-process
+           (lambda (pid signal)
+             (expect -4321 :to-equal pid)
+             (expect :sigcont :to-equal signal)
+             0))
+        (expect t :to-be
+                (nshell.infrastructure.acl:process-continue-group
+                 4321 (list process)))
+        (expect :running :to-be
+                (nshell.infrastructure.acl:process-status process))
+        (expect (sb-ext:process-exit-code process) :to-be-null))))
 
   (it "process-resume-observes-a-new-stop-and-preserves-the-status-hook"
     (let ((output (make-string-output-stream)))
@@ -486,7 +501,7 @@
       (expect '(4321) :to-equal continue-calls)
       (expect :background :to-be (nshell.domain.execution:job-state job))))
   (it "signal-job-continues-stopped-jobs-and-refreshes-process-cache"
-    "Termination signals resume stopped jobs and update registered SBCL process state."
+    "Termination signals resume stopped jobs and synchronize registered processes."
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))
            (job (make-test-job 0 "sleep" :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
@@ -535,21 +550,17 @@
              (push (list pid signal) signals)
              0))
         (with-temporary-function
-            ((quote nshell.infrastructure.acl:process-status)
-             (lambda (process)
-               (if (eq process :finished) :exited :stopped)))
-          (with-temporary-function
-              ((quote nshell.infrastructure.acl:process-continue)
-               (lambda (process)
-                 (push process continued)
-                 t))
-            (expect job :to-be
-                    (nshell.application::signal-job
-                     job-id :sigterm monitor process-registry))
-            (expect :background :to-be
-                    (nshell.domain.execution:job-state job))
-            (expect '((-4321 :sigterm)) :to-equal signals)
-            (expect '(:second :first) :to-equal continued))))))
+            ((quote nshell.infrastructure.acl:process-continue-group)
+             (lambda (pgid registered-processes)
+               (push (list pgid registered-processes) continued)
+               t))
+          (expect job :to-be
+                  (nshell.application::signal-job
+                   job-id :sigterm monitor process-registry))
+          (expect :background :to-be
+                  (nshell.domain.execution:job-state job))
+          (expect '((-4321 :sigterm)) :to-equal signals)
+          (expect '((4321 (:first :second :finished))) :to-equal continued)))))
 
   (it "status-label-falls-back-for-unknown-state"
     "Unexpected internal job states remain visible as an explicit unknown label."

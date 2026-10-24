@@ -181,28 +181,33 @@
                                 (nshell.infrastructure.acl:process-continue-signal-p
                                  sent-signal)
                                 (gethash job-id process-registry))))
-                     (if registered-processes
-                         (progn
-                           (dolist (process
-                                    (%job-process-list registered-processes))
-                             (when (member
-                                    (nshell.infrastructure.acl:process-status
-                                     process)
-                                    '(:running :stopped))
-                               (nshell.infrastructure.acl:process-continue
-                                process)))
-                           t)
-                         (if pgid
-                             (progn
-                               (nshell.infrastructure.acl:kill-process
-                                (- pgid) sent-signal)
-                               t)
-                             (let ((sent-p nil))
-                               (dolist (pid pids)
-                                 (nshell.infrastructure.acl:kill-process
-                                  pid sent-signal)
-                                 (setf sent-p t))
-                               sent-p)))))
+                     (cond
+                       ((and registered-processes pgid)
+                        (nshell.infrastructure.acl:process-continue-group
+                         pgid (%job-process-list registered-processes)))
+                       (registered-processes
+                        (let ((sent-p nil))
+                          (dolist (process
+                                   (%job-process-list registered-processes))
+                            (when (member
+                                   (nshell.infrastructure.acl:process-status
+                                    process)
+                                   '(:running :stopped))
+                              (nshell.infrastructure.acl:process-continue
+                               process)
+                              (setf sent-p t)))
+                          sent-p))
+                       (pgid
+                        (nshell.infrastructure.acl:kill-process
+                         (- pgid) sent-signal)
+                        t)
+                       (t
+                        (let ((sent-p nil))
+                          (dolist (pid pids)
+                            (nshell.infrastructure.acl:kill-process
+                             pid sent-signal)
+                            (setf sent-p t))
+                          sent-p)))))
                  (record-signal-state (sent-signal)
                    (let ((current-job
                            (nshell.domain.job-control:monitor-find-job

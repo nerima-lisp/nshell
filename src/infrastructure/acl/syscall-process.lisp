@@ -48,6 +48,16 @@
               (setf (sb-impl::process-%status process) :running
                     (sb-impl::process-%exit-code process) nil))
             (values sent errno))))))
+(defun process-continue-group (pgid processes)
+  "Continue PGID and refresh its registered SBCL process statuses under the waitpid lock."
+  (sb-sys:without-interrupts
+    (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
+      (funcall (symbol-function 'kill-process) (- pgid) :sigcont)
+      (dolist (process processes)
+        (when (eq :stopped (sb-impl::process-%status process))
+          (setf (sb-impl::process-%status process) :running
+                (sb-impl::process-%exit-code process) nil)))
+      t)))
 
 (defun process-alive-p (process)
   (if (pty-process-p process)

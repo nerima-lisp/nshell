@@ -672,7 +672,7 @@
                 (%assistant-sidecar-close-channel
                  (assistant-pending-cell-events pending)))))
           (progn
-            ;; Generation 0 is the bootstrap sentinel for the first accepted request.
+            ;; Startup can create a generation-0 error before a request updates the pending cell.
             (when (and present-p
                        (assistant-model-event-p event)
                        (eq pending current)

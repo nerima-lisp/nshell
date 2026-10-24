@@ -1410,19 +1410,18 @@
                       (expect t :to-be present-p)
                       (expect :stream-error :to-be
                               (nshell.feature.assistant:assistant-model-event-kind event))
-                      (progn
-                        (expect
-                         (nshell.feature.assistant:assistant-model-event-generation event)
-                         :to-be 57)
-                        (expect
-                         (nshell.feature.assistant::%assistant-object-field
-                          (nshell.feature.assistant:assistant-model-event-payload
-                           event-before-publication)
-                          "message")
-                         :to-equal
-                         (nshell.feature.assistant::%assistant-object-field
-                          (nshell.feature.assistant:assistant-model-event-payload event)
-                          "message"))))
+                      (expect
+                       (nshell.feature.assistant:assistant-model-event-generation event)
+                       :to-be 57)
+                      (expect
+                       (nshell.feature.assistant::%assistant-object-field
+                        (nshell.feature.assistant:assistant-model-event-payload
+                         event-before-publication)
+                        "message")
+                       :to-equal
+                       (nshell.feature.assistant::%assistant-object-field
+                        (nshell.feature.assistant:assistant-model-event-payload event)
+                        "message")))
                     (expect t :to-be
                             (cl-concurrent-kit:promise-settled-p
                              (nshell.feature.assistant::assistant-pending-cell-completion pending))))

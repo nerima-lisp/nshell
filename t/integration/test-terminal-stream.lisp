@@ -85,28 +85,40 @@
       (expect (length line) :to-equal (nshell.presentation:input-state-cursor-pos state))))
 
   (it "terminal-stream-decodes-csi-navigation"
-    "Common CSI escape sequences produce navigation key events."
+    "Common CSI sequences produce navigation events and ignore cursor reports."
     (dolist (case '(("[A" . :up)
-                    ("[B" . :down)
-                    ("[C" . :right)
-                    ("[D" . :left)
-                    ("[H" . :home)
-                    ("[F" . :end)
-                    ("[3~" . :delete)
-                    ("[5~" . :page-up)
-                    ("[6~" . :page-down)
-                    ("[Z" . :shift-tab)))
-      (let ((event (single-key-event-from-string (esc-sequence (car case)))))
-        (expect (cdr case) :to-be (nshell.infrastructure.terminal:key-event-type event)))))
+                  ("[B" . :down)
+                  ("[C" . :right)
+                  ("[D" . :left)
+                  ("[H" . :home)
+                  ("[F" . :end)
+                  ("[3~" . :delete)
+                  ("[5~" . :page-up)
+                  ("[6~" . :page-down)
+                  ("[Z" . :shift-tab)
+                  ("[1;1R" . :ignore)))
+    (let ((event (single-key-event-from-string (esc-sequence (car case)))))
+      (expect (cdr case) :to-be
+              (nshell.infrastructure.terminal:key-event-type event)))))
 
-  (it "terminal-stream-decodes-csi-without-consuming-following-input"
-    "A CSI event stops at its final byte so later input remains readable."
-    (let ((events (read-key-events-from-string
-                   (concatenate 'string (esc-sequence "[C") "ab"))))
+  (it "terminal-stream-ignores-cursor-report-without-consuming-following-input"
+    "A numeric cursor report is ignored while later typed input is applied."
+    (let* ((events (read-key-events-from-string
+                    (concatenate 'string (esc-sequence "[24;80R") "ab")))
+           (state (apply-key-events-to-input-state (input-state) events)))
       (expect 3 :to-equal (length events))
-      (expect :right :to-be (nshell.infrastructure.terminal:key-event-type (first events)))
-      (expect #\a :to-equal (nshell.infrastructure.terminal:key-event-char (second events)))
-      (expect #\b :to-equal (nshell.infrastructure.terminal:key-event-char (third events)))))
+      (expect :ignore :to-be
+              (nshell.infrastructure.terminal:key-event-type (first events)))
+      (expect :char :to-be
+              (nshell.infrastructure.terminal:key-event-type (second events)))
+      (expect #\a :to-equal
+              (nshell.infrastructure.terminal:key-event-char (second events)))
+      (expect :char :to-be
+              (nshell.infrastructure.terminal:key-event-type (third events)))
+      (expect #\b :to-equal
+              (nshell.infrastructure.terminal:key-event-char (third events)))
+      (expect "ab" :to-equal (nshell.presentation:input-state-buffer state))
+      (expect 2 :to-equal (nshell.presentation:input-state-cursor-pos state))))
 
   (it "terminal-stream-decodes-bracketed-paste-as-single-event"
     "Bracketed paste content is decoded as one structured paste event."

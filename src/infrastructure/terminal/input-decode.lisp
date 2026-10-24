@@ -59,7 +59,15 @@ Returns NIL when BODY/FINAL is not an SGR mouse report."
         (make-key-event :unknown nil code))))
 
 (defun decode-csi-final (body final)
-  (or (decode-sgr-mouse-event body final)
+  (or (when (and (char= final #\R)
+                 (let ((parts (split-string-on-char body #\;)))
+                   (and (= (length parts) 2)
+                        (every (lambda (part)
+                                 (and (plusp (length part))
+                                      (every #'digit-char-p part)))
+                               parts))))
+        (make-key-event :ignore))
+      (decode-sgr-mouse-event body final)
       (let ((arrow-type (lookup-key-event-type final +csi-arrow-specs+)))
         (when arrow-type
           (make-key-event (modified-arrow-type arrow-type (csi-modifier body)))))

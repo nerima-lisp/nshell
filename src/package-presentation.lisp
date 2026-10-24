@@ -37,6 +37,7 @@ in its interactive, batch, and script forms.")
             #:exported-environment-strings
             #:run-repl #:run-repl-batch #:run-repl-shell-command #:run-repl-script
             #:call-with-command-failure-restarts
+            #:apply-sexp-structural-edit
             #:trampoline #:with-cps-trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion
              #:render-completions #:apply-completion

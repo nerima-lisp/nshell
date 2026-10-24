@@ -50,6 +50,11 @@
       "key": "Enter"
     },
     {
+      "type": "wait",
+      "contains": "F08_PASTE_FINISHED",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "C-c"
     },

@@ -44,11 +44,12 @@ Use `preconditions.file_sets` to generate bounded file collections. Each
 entry requires a `directory` relative to the scenario's isolated root, a
 non-empty `prefix`, and a
 `count` from 1 to 20,000; `suffix` and shared file `content` are optional.
-Generated names use a five-digit index starting at `00000`. The total number
-of generated files is limited to 20,000, and each name is limited to 255 UTF-8
-bytes. Shared file content is limited to 1,024 UTF-8 bytes. Paths must stay
-within the scenario root. Fixture paths cannot be duplicated or make one
-fixture path the parent directory of another.
+The runner creates each directory and its files. Generated names use a
+five-digit index starting at `00000`. The total number of generated files is
+limited to 20,000, and each name is limited to 255 UTF-8 bytes. Shared file
+content is limited to 1,024 UTF-8 bytes. Paths must stay within the scenario
+root. Fixture paths cannot be duplicated or make one fixture path the parent
+directory of another.
 
 Batch scenarios select `invocation.kind` as `command`, `stdin`, `script`, or
 `argv`. The `command` kind passes command text to `nshell --command`; `stdin`
@@ -222,9 +223,10 @@ home directory or exact machine environment.
   stdout, stderr, and status. They do not test a particular external caller.
 - B10 runs `-ilc env` in a PTY with `load_config: true` and
   `wait_for_prompt: false`. Its temporary
-  `home/.config/nshell/init.lisp` adds a unique PATH marker and emits a startup
-  marker. A fixture `env` prints a success marker only when PATH contains the
-  configured value; the exact PTY stream also rejects startup output and
+  `home/.config/nshell/init.lisp` adds a unique PATH entry and emits a startup
+  marker that the PTY assertion excludes. A fixture `env` prints `B10_PATH_OK`
+  only when PATH contains that entry; the expected PTY stream is exactly
+  `B10_PATH_OK` followed by its CRLF line ending, with no startup output or
   diagnostics. The broader
   configuration behavior assigned to L07 (public Lisp, scripts, autoload, and
   hooks) remains outside this fixture.

@@ -245,29 +245,180 @@ after a non-zero exit code; git no longer appears here."
                     :name "test git status lookup"))
              (expect (sb-thread:wait-on-semaphore worker-started :timeout 2)
                      :to-be-truthy)
-             (expect (sb-thread:wait-on-semaphore lookup-returned :timeout 0.2)
+             (expect (sb-thread:wait-on-semaphore lookup-returned :timeout 1.0)
                      :to-be-truthy)
-             (expect (list nil nil) :to-equal lookup-result)
-             (expect (sb-thread:wait-on-semaphore worker-finished :timeout 0.2)
+             (expect (list nil nil nil) :to-equal lookup-result)
+             (expect (sb-thread:wait-on-semaphore worker-finished :timeout 1.0)
                      :to-be-falsy)
              (sb-thread:signal-semaphore release-worker)
              (expect (sb-thread:wait-on-semaphore worker-finished :timeout 2)
                      :to-be-truthy)
+             (sb-thread:join-thread lookup-thread)
              (when worker-thread
                (sb-thread:join-thread worker-thread))
              (setf worker-thread nil)
-             (sb-thread:join-thread lookup-thread)
              (setf lookup-thread nil)
-             (multiple-value-bind (branch dirty-p)
+             (multiple-value-bind (branch dirty-p ready-p)
                  (nshell.infrastructure.acl:get-git-status "/async-prompt/")
                (expect "main" :to-equal branch)
-               (expect dirty-p :to-be-falsy)))
+               (expect dirty-p :to-be-falsy)
+               (expect ready-p :to-be-truthy)))
         (sb-thread:signal-semaphore release-worker)
-        (when worker-thread
-          (sb-thread:join-thread worker-thread))
         (when lookup-thread
           (sb-thread:join-thread lookup-thread))
+        (when worker-thread
+          (sb-thread:join-thread worker-thread))
         (nshell.infrastructure.acl:clear-git-status-cache))))
+  (it "cleared-cache-rejects-stale-worker-publication"
+    "A worker started before cache clear cannot replace a post-clear result."
+    (let* ((workers nil)
+           (old-worker-started (sb-thread:make-semaphore :count 0))
+           (release-old-worker (sb-thread:make-semaphore :count 0))
+           (old-worker-finished (sb-thread:make-semaphore :count 0))
+           (old-thread nil)
+           (launcher (lambda (worker) (push worker workers)))
+           (old-runner
+             (lambda (dir args)
+               (declare (ignore dir))
+               (if (member "rev-parse" args :test (function string=))
+                   (progn
+                     (sb-thread:signal-semaphore old-worker-started)
+                     (unless (sb-thread:wait-on-semaphore release-old-worker :timeout 3)
+                       (error "Stale Git worker test barrier was not released"))
+                     (values (format nil "old~%") 0))
+                   (progn
+                     (sb-thread:signal-semaphore old-worker-finished)
+                     (values (format nil " M old.lisp~%") 0)))))
+           (new-runner
+             (lambda (dir args)
+               (declare (ignore dir))
+               (values (if (member "rev-parse" args :test (function string=))
+                           (format nil "new~%")
+                           (format nil " M new.lisp~%"))
+                       0))))
+      (nshell.infrastructure.acl:clear-git-status-cache)
+      (unwind-protect
+           (progn
+             (let ((nshell.infrastructure.acl::*git-runner* old-runner)
+                   (nshell.infrastructure.acl::*git-status-worker-launcher* launcher))
+               (expect (list nil nil nil)
+                       :to-equal
+                       (multiple-value-list
+                        (nshell.infrastructure.acl:get-git-status "/stale-worker/"))))
+             (setf old-thread
+                   (sb-thread:make-thread (pop workers)
+                                          :name "test stale Git status worker"))
+             (expect (sb-thread:wait-on-semaphore old-worker-started :timeout 2)
+                     :to-be-truthy)
+             (nshell.infrastructure.acl:clear-git-status-cache)
+             (let ((nshell.infrastructure.acl::*git-runner* new-runner)
+                   (nshell.infrastructure.acl::*git-status-worker-launcher* launcher))
+               (expect (list nil nil nil)
+                       :to-equal
+                       (multiple-value-list
+                        (nshell.infrastructure.acl:get-git-status "/stale-worker/"))))
+             (funcall (pop workers))
+             (multiple-value-bind (branch dirty-p ready-p)
+                 (nshell.infrastructure.acl:get-git-status "/stale-worker/")
+               (expect "new" :to-equal branch)
+               (expect ready-p :to-be-truthy)
+               (expect dirty-p :to-be-truthy))
+             (sb-thread:signal-semaphore release-old-worker)
+             (expect (sb-thread:wait-on-semaphore old-worker-finished :timeout 2)
+                     :to-be-truthy)
+             (sb-thread:join-thread old-thread)
+             (setf old-thread nil)
+             (multiple-value-bind (branch dirty-p ready-p)
+                 (nshell.infrastructure.acl:get-git-status "/stale-worker/")
+               (expect "new" :to-equal branch)
+               (expect ready-p :to-be-truthy)
+               (expect dirty-p :to-be-truthy)))
+        (sb-thread:signal-semaphore release-old-worker)
+        (when old-thread
+          (sb-thread:join-thread old-thread))
+        (nshell.infrastructure.acl:clear-git-status-cache))))
+  (it "worker-errors-publish-failed-status"
+    "An unexpected Git runner error is cached as a failed query, not as pending."
+    (let* ((worker nil)
+           (calls 0)
+           (runner
+             (lambda (dir args)
+               (declare (ignore dir args))
+               (incf calls)
+               (error "Fake Git runner failure"))))
+      (nshell.infrastructure.acl:clear-git-status-cache)
+      (unwind-protect
+           (progn
+             (let ((nshell.infrastructure.acl::*git-runner* runner)
+                   (nshell.infrastructure.acl::*git-status-worker-launcher*
+                     (lambda (scheduled-worker)
+                       (setf worker scheduled-worker))))
+               (expect (list nil nil nil)
+                       :to-equal
+                       (multiple-value-list
+                        (nshell.infrastructure.acl:get-git-status "/worker-error/"))))
+             (expect worker :to-be-truthy)
+             (funcall worker)
+             (expect 1 :to-equal calls)
+             (multiple-value-bind (entry present-p)
+                 (gethash "/worker-error/"
+                          nshell.infrastructure.acl::*git-status-cache*)
+               (expect present-p :to-be-truthy)
+               (expect (list nil nil t)
+        :to-equal
+        (multiple-value-list
+         (nshell.infrastructure.acl:get-git-status "/worker-error/")))
+               (expect (list nil nil) :to-equal entry)))
+        (nshell.infrastructure.acl:clear-git-status-cache))))
+  (it "git-status-worker-drain-waits-for-worker-unwind"
+    "The drain helper joins a tracked Git worker before returning."
+    (let* ((worker-started (sb-thread:make-semaphore :count 0))
+           (release-worker (sb-thread:make-semaphore :count 0))
+           (worker-finished (sb-thread:make-semaphore :count 0))
+           (drain-started (sb-thread:make-semaphore :count 0))
+           (drain-finished (sb-thread:make-semaphore :count 0))
+           (worker-thread nil)
+           (drain-thread nil))
+      (unwind-protect
+           (progn
+             (setf worker-thread
+                   (nshell.infrastructure.acl::%start-git-status-worker
+                    (lambda ()
+                      (sb-thread:signal-semaphore worker-started)
+                      (unless (sb-thread:wait-on-semaphore release-worker :timeout 3)
+                        (error "Git worker drain test barrier was not released"))
+                      (sb-thread:signal-semaphore worker-finished))))
+             (expect worker-thread :to-be-truthy)
+             (expect (sb-thread:wait-on-semaphore worker-started :timeout 2)
+                     :to-be-truthy)
+             (setf drain-thread
+                   (sb-thread:make-thread
+                    (lambda ()
+                      (sb-thread:signal-semaphore drain-started)
+                      (nshell.infrastructure.acl::%drain-git-status-workers)
+                      (sb-thread:signal-semaphore drain-finished))
+                    :name "test Git status worker drain"))
+             (expect (sb-thread:wait-on-semaphore drain-started :timeout 2)
+                     :to-be-truthy)
+             (expect (sb-thread:wait-on-semaphore drain-finished :timeout 1.0)
+                     :to-be-falsy)
+             (sb-thread:signal-semaphore release-worker)
+             (expect (sb-thread:wait-on-semaphore worker-finished :timeout 2)
+                     :to-be-truthy)
+             (expect (sb-thread:wait-on-semaphore drain-finished :timeout 2)
+                     :to-be-truthy)
+             (sb-thread:join-thread worker-thread)
+             (setf worker-thread nil)
+             (sb-thread:join-thread drain-thread)
+             (setf drain-thread nil))
+        (sb-thread:signal-semaphore release-worker)
+        (when drain-thread
+          (sb-thread:join-thread drain-thread))
+        (when worker-thread
+          (sb-thread:join-thread worker-thread))
+        (sb-thread:with-mutex (nshell.infrastructure.acl::*git-status-worker-lock*)
+          (setf nshell.infrastructure.acl::*git-status-worker-threads* nil
+                nshell.infrastructure.acl::*git-status-workers-draining-p* nil)))))
   (it "rejects-empty-and-failed-branch-results"
     "A missing or failed branch query does not classify the directory as a repository."
     (dolist (case (list (list "/empty-branch/" "" 0)

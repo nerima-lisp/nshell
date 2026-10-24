@@ -414,16 +414,22 @@
   (make-array 4096 :element-type (%spawn-copy-element-type stream)))
 
 (defun %spawn-copy-input (source child-stream &optional close-source-p)
-  (unwind-protect
-       (let ((buffer (%spawn-stream-copy-buffer source)))
-         (loop for count = (read-sequence buffer source)
-               while (plusp count)
-               do (write-sequence buffer child-stream :end count))
-         (finish-output child-stream))
+  (let ((broken-pipe-p nil))
     (unwind-protect
-         (close child-stream)
-      (when close-source-p
-        (close source)))))
+         (handler-case
+             (let ((buffer (%spawn-stream-copy-buffer source)))
+               (loop for count = (read-sequence buffer source)
+                     while (plusp count)
+                     do (write-sequence buffer child-stream :end count))
+               (finish-output child-stream))
+           (sb-int:broken-pipe ()
+             (setf broken-pipe-p t)))
+      (unwind-protect
+           (handler-case
+               (close child-stream :abort broken-pipe-p)
+             (sb-int:broken-pipe () nil))
+        (when close-source-p
+          (close source))))))
 
 (defun %spawn-copy-output (child-stream destination)
   (unwind-protect

@@ -662,6 +662,23 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
                  (expect 0 :to-equal
                          (nshell.infrastructure.acl:process-exit-status-code proc)))
             (nshell.infrastructure.acl:process-close proc)))))
+  (it "spawn-async-tolerates-child-closing-stdin-early"
+    "A child can close its input pipe before exiting."
+    (let ((proc
+            (nshell.infrastructure.acl:spawn-async
+             "/bin/sh"
+             '("-c" "exec 0<&-; sleep 1")
+             :redirects
+             (list (cons :<<-
+                         (make-string (* 1024 1024) #\a))))))
+      (expect proc :to-be-truthy)
+      (when proc
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.acl:process-wait proc)
+               (expect 0 :to-equal
+                       (nshell.infrastructure.acl:process-exit-status-code proc)))
+          (nshell.infrastructure.acl:process-close proc)))))
 
   (it "spawn-pipeline-pipes-stdout-only-by-default"
     "Pipeline stages pipe stdout only unless stderr is explicitly merged."

@@ -14,16 +14,21 @@ subprocess object with separate spawn/output/exit-code hooks.")
 
 (defvar *git-status-cache* (make-hash-table :test #'equal)
   "Directory keyed cache of git prompt status.")
+(defvar *git-status-cache-lock* (sb-thread:make-mutex :name "git prompt status cache"))
+(defvar *git-status-worker-launcher* nil
+  "Optional test hook for scheduling a Git status worker.")
 
 (defmacro with-git-runner ((runner) &body body)
   "Run BODY with RUNNER, a (DIR ARGS) -> (values OUTPUT EXIT-CODE) function,
-standing in for real git invocations."
-  `(let ((*git-runner* ,runner))
+synchronously for deterministic tests."
+  `(let ((*git-runner* ,runner)
+         (*git-status-worker-launcher* #'funcall))
      ,@body))
 
 (defun clear-git-status-cache ()
   "Clear all cached git prompt status."
-  (clrhash *git-status-cache*))
+  (sb-thread:with-mutex (*git-status-cache-lock*)
+    (clrhash *git-status-cache*)))
 
 (defun %trim-newline (text)
   (string-right-trim '(#\Newline #\Return #\Space #\Tab) text))
@@ -71,12 +76,44 @@ one is bound."
     (and (zerop code) (> (length (%trim-newline out)) 0))))
 
 (defun get-git-status (dir)
-  "Return values BRANCH and DIRTY-P for DIR, using a per-directory cache."
-  (let* ((key (namestring (host-kit:ensure-directory-pathname dir)))
-         (cached (gethash key *git-status-cache*)))
-    (if cached
-        (values (first cached) (second cached))
-        (let* ((branch (%git-branch-uncached key))
-               (dirty (and branch (%git-dirty-uncached key))))
-          (setf (gethash key *git-status-cache*) (list branch dirty))
-          (values branch dirty)))))
+  "Return cached Git status and refresh cache misses outside the prompt thread."
+  (let ((key (namestring (host-kit:ensure-directory-pathname dir)))
+        (cached nil)
+        (found-p nil))
+    (sb-thread:with-mutex (*git-status-cache-lock*)
+      (multiple-value-setq (cached found-p) (gethash key *git-status-cache*))
+      (unless found-p
+        (setf (gethash key *git-status-cache*) (cons :pending nil))))
+    (labels ((publish (branch dirty-p)
+               (sb-thread:with-mutex (*git-status-cache-lock*)
+                 (setf (gethash key *git-status-cache*)
+                       (list branch dirty-p))))
+             (read-current ()
+               (sb-thread:with-mutex (*git-status-cache-lock*)
+                 (multiple-value-bind (entry present-p)
+                     (gethash key *git-status-cache*)
+                   (if (and present-p
+                            (not (and (consp entry)
+                                      (eq (car entry) :pending))))
+                       (values (first entry) (second entry))
+                       (values nil nil))))))
+      (cond
+        (found-p
+         (if (and (consp cached) (eq (car cached) :pending))
+             (values nil nil)
+             (values (first cached) (second cached))))
+        (t
+         (let* ((runner *git-runner*)
+                (worker
+                  (lambda ()
+                    (let ((*git-runner* runner))
+                      (let* ((branch (%git-branch-uncached key))
+                             (dirty-p (and branch (%git-dirty-uncached key))))
+                        (publish branch dirty-p))))))
+           (if *git-status-worker-launcher*
+               (funcall *git-status-worker-launcher* worker)
+               (handler-case
+                   (sb-thread:make-thread worker
+                                          :name "nshell git prompt status")
+                 (error () (publish nil nil))))
+           (read-current)))))))

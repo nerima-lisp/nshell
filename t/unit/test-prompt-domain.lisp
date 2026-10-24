@@ -203,6 +203,71 @@ after a non-zero exit code; git no longer appears here."
         (nshell.infrastructure.acl:clear-git-status-cache)
         (nshell.infrastructure.acl:get-git-status "/cache-reset/"))
       (expect 4 :to-equal calls)))
+  (it "prompt-git-status-returns-before-slow-worker-completes"
+    "The lookup returns while a fake Git worker waits behind a semaphore barrier."
+    (let* ((worker-started (sb-thread:make-semaphore :count 0))
+           (release-worker (sb-thread:make-semaphore :count 0))
+           (worker-finished (sb-thread:make-semaphore :count 0))
+           (lookup-returned (sb-thread:make-semaphore :count 0))
+           (worker-thread nil)
+           (lookup-thread nil)
+           (lookup-result nil)
+           (runner
+             (lambda (dir args)
+               (declare (ignore dir))
+               (if (member "rev-parse" args :test (function string=))
+                   (progn
+                     (sb-thread:signal-semaphore worker-started)
+                     (unless (sb-thread:wait-on-semaphore release-worker :timeout 3)
+                       (error "Git worker test barrier was not released"))
+                     (values (format nil "main~%") 0))
+                   (progn
+                     (sb-thread:signal-semaphore worker-finished)
+                     (values "" 0))))))
+      (nshell.infrastructure.acl:clear-git-status-cache)
+      (unwind-protect
+           (progn
+             (setf lookup-thread
+                   (sb-thread:make-thread
+                    (lambda ()
+                      (let ((nshell.infrastructure.acl::*git-runner* runner))
+                        (progv (list (quote nshell.infrastructure.acl::*git-status-worker-launcher*))
+                            (list (lambda (worker)
+                                    (setf worker-thread
+                                          (sb-thread:make-thread
+                                           worker
+                                           :name "test git status worker"))))
+                          (setf lookup-result
+                                (multiple-value-list
+                                 (nshell.infrastructure.acl:get-git-status
+                                  "/async-prompt/")))
+                          (sb-thread:signal-semaphore lookup-returned))))
+                    :name "test git status lookup"))
+             (expect (sb-thread:wait-on-semaphore worker-started :timeout 2)
+                     :to-be-truthy)
+             (expect (sb-thread:wait-on-semaphore lookup-returned :timeout 0.2)
+                     :to-be-truthy)
+             (expect (list nil nil) :to-equal lookup-result)
+             (expect (sb-thread:wait-on-semaphore worker-finished :timeout 0.2)
+                     :to-be-falsy)
+             (sb-thread:signal-semaphore release-worker)
+             (expect (sb-thread:wait-on-semaphore worker-finished :timeout 2)
+                     :to-be-truthy)
+             (when worker-thread
+               (sb-thread:join-thread worker-thread))
+             (setf worker-thread nil)
+             (sb-thread:join-thread lookup-thread)
+             (setf lookup-thread nil)
+             (multiple-value-bind (branch dirty-p)
+                 (nshell.infrastructure.acl:get-git-status "/async-prompt/")
+               (expect "main" :to-equal branch)
+               (expect dirty-p :to-be-falsy)))
+        (sb-thread:signal-semaphore release-worker)
+        (when worker-thread
+          (sb-thread:join-thread worker-thread))
+        (when lookup-thread
+          (sb-thread:join-thread lookup-thread))
+        (nshell.infrastructure.acl:clear-git-status-cache))))
   (it "rejects-empty-and-failed-branch-results"
     "A missing or failed branch query does not classify the directory as a repository."
     (dolist (case (list (list "/empty-branch/" "" 0)

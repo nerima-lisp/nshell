@@ -129,7 +129,8 @@
              (lambda (&key attempts sleep-seconds)
                (declare (ignore attempts sleep-seconds))
                :narrow))
-          (nshell.presentation::%apply-east-asian-ambiguous-width)
+          (let ((nshell.presentation::*interactive-terminal-installed-p* t))
+            (nshell.presentation::%apply-east-asian-ambiguous-width))
           (expect cl-tty-kit:*east-asian-ambiguous-wide* :to-be nil)))))
 
   (it "measures-unicode-graphemes-as-display-units"
@@ -137,10 +138,9 @@
           (family "👨‍👩‍👧‍👦")
           (flag "🇯🇵")
           (combining "é"))
-      (dolist (case `((,vs16 1) (,family 2) (,flag 1) (,combining 1)))
-        (expect (second case) :to-equal
-                (cl-tty-kit:grapheme-width
-                 (first (cl-tty-kit:string-graphemes (first case))))))
+      (dolist (text (list vs16 family flag combining))
+        (expect 1 :to-equal
+                (length (cl-tty-kit:string-graphemes text))))
       (expect (nshell.presentation::%string-visible-width family) :to-equal 2)
       (expect (nshell.presentation::%string-visible-width vs16) :to-equal 2)
       (expect (nshell.presentation::%string-visible-width flag) :to-equal 2)

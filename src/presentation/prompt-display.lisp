@@ -21,17 +21,23 @@ classifier (control/combining -> 0, wide/emoji -> 2, otherwise 1)."
   (cl-tty-kit:char-width char))
 
 (defun %grapheme-visible-width (grapheme)
-  "Return GRAPHEME's width, compensating for cl-tty-kit's VS16 gap.
+  "Return GRAPHEME display width, correcting emoji clusters reported too narrow
+by cl-tty-kit.
 
-cl-tty-kit:GRAPHEME-WIDTH handles ZWJ and combining clusters, but its
-code-point maximum leaves VS16 presentations and regional-indicator flags at
-text width. Terminals render those clusters as two-column glyphs."
+VS16 presentations, regional-indicator flags, and joined pictographs can render
+as two-column glyphs even when GRAPHEME-WIDTH returns one."
   (let ((width (cl-tty-kit:grapheme-width grapheme)))
     (if (and (= width 1)
              (or (find (code-char #xFE0F) grapheme)
                  (and (= (length grapheme) 2)
                       (every (lambda (char)
                               (<= #x1F1E6 (char-code char) #x1F1FF))
+                            grapheme))
+                 (and (find (code-char #x200D) grapheme)
+                      (some (lambda (char)
+                              (let ((code (char-code char)))
+                                (or (<= #x2600 code #x27FF)
+                                    (<= #x1F000 code #x1FAFF))))
                             grapheme))))
         2
         width)))

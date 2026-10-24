@@ -18,6 +18,17 @@
                   "echo one | grep \"two\"words"))
     (expect "hi" :to-equal (nshell.domain.history:command-line-last-argument
                   "echo hi > out")))
+  (it "history-command-line-last-argument-preserves-process-substitution-span"
+    "Process substitutions are returned as one raw argument."
+    (expect "<(cat file)" :to-equal
+            (nshell.domain.history:command-line-last-argument
+             "echo before <(cat file)"))
+    (expect ">(cat file)" :to-equal
+            (nshell.domain.history:command-line-last-argument
+             "echo >(cat file)"))
+    (expect "after" :to-equal
+            (nshell.domain.history:command-line-last-argument
+             "echo <(cat file) after")))
 
   (it "history-command-line-last-argument-skips-logical-redirection-targets"
     "Redirect targets are skipped as logical shell words, including quoted fragments."
@@ -27,20 +38,30 @@
                   "printf kept > out\\ file next")))
 
   (it "history-last-argument-scan-cursor-projects-token-and-word-boundaries"
-    "Last-argument scanning keeps token lookahead separate from logical shell words."
-    (let* ((tokens (nshell.domain.parsing:tokenization-result-tokens
-                    (nshell.domain.parsing:tokenize "echo \"hello\"world > out")))
-           (word-token (second tokens))
-           (window (nshell.domain.history::%history-token-window-from-remaining
-                    (rest tokens)))
-           (cursor (nshell.domain.history::%make-history-logical-word-cursor
-                    (nshell.domain.history::%history-logical-words tokens)))
+    "Last-argument scanning uses scanner token spans for raw logical words."
+    (let* ((line "echo \"hello\"world > out")
+           (tokens
+             (nshell.domain.parsing:scan-result-tokens
+              (nshell.domain.parsing:scan-input
+               line :reader-context :bare-line)))
+           (command-token
+             (find :command-head tokens
+                   :key #'nshell.domain.parsing:scan-token-kind))
+           (word-token
+             (find :string tokens
+                   :key #'nshell.domain.parsing:scan-token-kind))
+           (window
+             (nshell.domain.history::%history-token-window-from-remaining
+              (member word-token tokens :test #'eq)))
+           (cursor
+             (nshell.domain.history::%make-history-logical-word-cursor
+              (nshell.domain.history::%history-logical-words tokens)))
            (command-word nil)
            (argument-word nil))
       (multiple-value-setq
        (command-word cursor)
        (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
-        cursor (first tokens)))
+        cursor command-token))
       (multiple-value-setq
        (argument-word cursor)
        (nshell.domain.history::%history-logical-word-cursor-consume-matching-token
@@ -49,13 +70,13 @@
       (expect (fboundp 'nshell.domain.history::copy-%history-logical-word-cursor) :to-be-falsy)
       (expect (fboundp 'nshell.domain.history::copy-%history-last-argument-scan-state) :to-be-falsy)
       (expect word-token :to-be (nshell.domain.history::%history-token-window-current window))
-      (expect (third tokens) :to-be (nshell.domain.history::%history-token-window-next window))
-      (expect "echo" :to-equal (nshell.domain.history::%history-word-source
-                    "echo \"hello\"world > out"
-                    command-word))
-      (expect "\"hello\"world" :to-equal (nshell.domain.history::%history-word-source
-                    "echo \"hello\"world > out"
-                    argument-word))))
+      (expect :whitespace :to-be
+              (nshell.domain.parsing:scan-token-kind
+               (nshell.domain.history::%history-token-window-next window)))
+      (expect "echo" :to-equal
+              (nshell.domain.history::%history-word-source line command-word))
+      (expect "\"hello\"world" :to-equal
+              (nshell.domain.history::%history-word-source line argument-word))))
 
   (it "history-command-line-last-argument-skips-file-descriptor-redirection-prefixes"
     "File-descriptor prefixes immediately before redirects are not treated as arguments."
@@ -64,7 +85,11 @@
     (expect "next" :to-equal (nshell.domain.history:command-line-last-argument
                   "echo hi 2>out.txt next"))
     (expect "log" :to-equal (nshell.domain.history:command-line-last-argument
-                  "grep error log 2>&1")))
+                  "grep error log 2>&1"))
+    (expect "next" :to-equal (nshell.domain.history:command-line-last-argument
+                  "echo hi 2>&1 next"))
+    (expect "final" :to-equal (nshell.domain.history:command-line-last-argument
+                  "echo kept > out && grep next 2>&1 final")))
 
   (it "history-command-line-last-argument-skips-leading-assignments"
     "Leading shell assignments are not mistaken for the insertable last argument."

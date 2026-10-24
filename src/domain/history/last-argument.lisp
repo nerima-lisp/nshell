@@ -1,8 +1,6 @@
-;;; The `!$`/Alt-. last-argument feature: extracting the final insertable
-;;; argument from a recorded history line. This is shell-specific (it walks
-;;; the tokenizer's AST to skip command words, redirect targets, and leading
-;;; assignments), unlike generic recall/search/navigation, which are the
-;;; responsibility of the history-kit library.
+;;; `!$` and Alt-. extract the final insertable argument from a recorded
+;;; shell line. The extractor uses scanner spans to preserve source spelling
+;;; while skipping command words, leading assignments, and redirection targets.
 (in-package #:nshell.domain.history)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -42,37 +40,53 @@
   (%make-history-token-window (first remaining) (second remaining)))
 
 (defun %history-word-token-p (token)
-  (not (null (member (nshell.domain.parsing:token-type token) '(:word :error) :test #'eq))))
+  (and (eq (nshell.domain.parsing:scan-token-reader-context token) :bare-line)
+       (member (nshell.domain.parsing:scan-token-kind token)
+               '(:command-head :argument :string :here-doc-delimiter
+                 :process-substitution)
+               :test #'eq)))
 
 (defun %history-redirect-token-p (token)
-  (eq (nshell.domain.parsing:token-type token) :redirect))
+  (eq (nshell.domain.parsing:scan-token-kind token) :redirect))
 
 (defun %history-fd-redirection-designator-p (token next-token)
   (and token next-token
        (%history-word-token-p token)
        (%history-redirect-token-p next-token)
-       (= (nshell.domain.parsing:token-end token)
-          (nshell.domain.parsing:token-start next-token))
-       (every #'digit-char-p (nshell.domain.parsing:token-value token))))
+       (= (second (nshell.domain.parsing:scan-token-span token))
+          (first (nshell.domain.parsing:scan-token-span next-token)))
+       (every #'digit-char-p (nshell.domain.parsing:scan-token-text token))))
 
 (defun %history-logical-words-flush-current (words current)
   (if current
       (values (cons current words) nil)
       (values words nil)))
 
-(defun %history-logical-words (tokens)
-  "Coalesce adjacent parser word tokens into shell words.
-
-The tokenizer already normalizes escaped-space words into a single token, but
-quoted fragments can still arrive as adjacent word-like tokens. History
-expansion wants the source span of the logical shell word, so adjacent
-word-like tokens are merged before command/argument classification."
+(defun %history-logical-words (tokens &optional delimiter-pairs)
+  ;; Adjacent quoted and unquoted tokens form one shell word, as in "x"y.
+  ;; Coalescing their spans preserves the full raw spelling for insertion.
   (let ((words nil)
         (current nil))
     (dolist (token tokens)
       (if (%history-word-token-p token)
-          (let ((start (nshell.domain.parsing:token-start token))
-                (end (nshell.domain.parsing:token-end token)))
+          (let* ((span (nshell.domain.parsing:scan-token-span token))
+                 (start (first span))
+                 (end
+                   (if (eq (nshell.domain.parsing:scan-token-kind token)
+                           :process-substitution)
+                       (let ((pair
+                               (find-if
+                                (lambda (candidate)
+                                  (= (first
+                                      (nshell.domain.parsing:delimiter-pair-open-span
+                                       candidate))
+                                     (second span)))
+                                delimiter-pairs)))
+                         (if pair
+                             (second
+                              (nshell.domain.parsing:delimiter-pair-close-span pair))
+                             (second span)))
+                       (second span))))
             (if (and current (= start (history-word-end current)))
                 (setf current (%make-history-word (history-word-start current) end))
                 (progn
@@ -98,7 +112,7 @@ word-like tokens are merged before command/argument classification."
 (defun %history-logical-word-cursor-consume-matching-token (cursor token)
   (let ((word (%history-logical-word-cursor-current cursor)))
     (when (and word
-               (= (nshell.domain.parsing:token-start token)
+               (= (first (nshell.domain.parsing:scan-token-span token))
                   (history-word-start word)))
       (values word (%history-logical-word-cursor-consume-current cursor)))))
 
@@ -161,17 +175,19 @@ word-like tokens are merged before command/argument classification."
 
 (defun %history-last-argument-handle-token (state line token token-window)
   (cond
-    ((and (%history-last-argument-scan-state-skip-redirect-target state)
-          (eq (nshell.domain.parsing:token-type token) :ampersand))
-     state)
-    ((nshell.domain.parsing:shell-command-separator-token-p token)
+    ((member (nshell.domain.parsing:scan-token-kind token)
+             '(:pipeline :pipeline-stderr :and :or
+               :sequence-separator :background)
+             :test #'eq)
      (%history-last-argument-reset-for-separator state))
     ((%history-redirect-token-p token)
-     (%make-history-last-argument-scan-state
-      (%history-last-argument-scan-state-last-argument state)
-      t
-      (%history-last-argument-scan-state-seen-command-word state)
-      (%history-last-argument-scan-state-logical-word-cursor state)))
+     (if (string= (nshell.domain.parsing:scan-token-text token) "2>&1")
+         state
+         (%make-history-last-argument-scan-state
+          (%history-last-argument-scan-state-last-argument state)
+          t
+          (%history-last-argument-scan-state-seen-command-word state)
+          (%history-last-argument-scan-state-logical-word-cursor state))))
     ((%history-word-token-p token)
      (%history-last-argument-handle-word state line token token-window))
     (t
@@ -186,12 +202,23 @@ word-like tokens are merged before command/argument classification."
 Command words and redirection targets are not considered arguments. For
 pipelines and command lists, the result is scoped to the final command segment."
   (when (and (stringp line) (plusp (length line)))
-    (let* ((tokens (nshell.domain.parsing:tokenization-result-tokens
-                    (nshell.domain.parsing:tokenize line)))
+    (let* ((scan-result
+             (nshell.domain.parsing:scan-input
+              line
+              :reader-context :auto
+              :head-classifier
+              ;; Keep S-expression forms in host code; this scan has no
+              ;; classifier for shell command islands.
+              (lambda (head)
+                (declare (ignore head))
+                :host-form)))
+           (tokens (nshell.domain.parsing:scan-result-tokens scan-result))
+           (delimiter-pairs
+             (nshell.domain.parsing:scan-result-delimiter-pairs scan-result))
            (state (%make-history-last-argument-scan-state
                    nil nil nil
                    (%make-history-logical-word-cursor
-                    (%history-logical-words tokens)))))
+                    (%history-logical-words tokens delimiter-pairs)))))
       (do ((remaining tokens (rest remaining)))
           ((endp remaining)
            (%history-last-argument-scan-state-last-argument state))
@@ -202,7 +229,7 @@ pipelines and command lists, the result is scoped to the final command segment."
                  state line token token-window)))))))
 
 (defun history-last-argument-at (history index)
-  "Return INDEX-th most recent insertable last argument in HISTORY, or NIL."
+  "Return the zero-based INDEX-th insertable last argument in HISTORY, or NIL."
   (when (and (integerp index) (not (minusp index)))
     (do ((entries (history-kit:history-entries history) (rest entries)))
         ((endp entries) nil)

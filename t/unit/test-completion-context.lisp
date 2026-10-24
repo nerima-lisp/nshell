@@ -723,4 +723,26 @@
                     (mapcar
                      (lambda (candidate)
                        (nshell.domain.completion:candidate-text candidate))
-                     candidates)))))))))
+                     candidates))))))))
+  (it "completion-context-for-scan-preserves-command-position-for-bare-head"
+    (let* ((source "ch")
+           (cursor (length source))
+           (scan
+             (nshell.domain.parsing:scan-input
+              source
+              :cursor cursor
+              :reader-context :auto))
+           (context
+             (nshell.domain.completion:completion-context-for-scan scan cursor)))
+      (expect :argument :to-be
+              (nshell.domain.parsing:scan-result-cursor-role scan))
+      (expect "ch" :to-equal
+              (nshell.domain.completion:completion-context-command context))
+      (expect "" :to-equal
+              (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect (list) :to-equal
+              (nshell.domain.completion:completion-context-argument-words context))
+      (expect t :to-be
+              (nshell.domain.completion:completion-context-command-position-p context))
+      (expect nil :to-be
+              (nshell.domain.completion:completion-context-redirection-target-p context)))))

@@ -1640,9 +1640,13 @@ WP-C06 maps scanner cursor roles into the existing completion-context fields
 | `cursor-role` | `command` | `argument-prefix` and `argument-words` | `command-position-p` | `redirection-target-p` |
 |---|---|---|---|---|
 | `:command-head` | The command prefix through the cursor | Empty string and empty list | `t` | `nil` |
-| `:argument` | The command in the current command segment | The current argument prefix through the cursor, included in `argument-words` | `nil` | `nil`, unless prefix analysis identifies a redirection target |
+| `:argument` | The command in the current command segment | Prefix analysis supplies the argument prefix and words; an unfinished command prefix leaves them empty | `t` when prefix analysis still identifies the command prefix; otherwise `nil` | `nil`, unless prefix analysis identifies a redirection target |
 | `:redirect-target` | The command in the current command segment | The target prefix through the cursor, included in `argument-words` | `nil` | `t` |
 | `:host-form`, `:comment`, `:none` | Empty string | Empty string and empty list | `nil` | `nil` |
+
+At the end of a bare command line, the scanner can report `:argument` after its
+command head. Prefix analysis keeps `command-position-p` true while that word is
+still the unfinished command prefix, so command candidates remain available.
 
 When the cursor is inside a redirection-target token, the scanner reports
 `:argument`; C06 preserves the target flag from the completion-prefix analysis.

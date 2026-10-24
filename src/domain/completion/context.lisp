@@ -316,6 +316,9 @@ intervening whitespace are merged."
                (completion-context-argument-prefix context)
                :argument-words
                (completion-context-argument-words context)
+               :command-position-p
+               (and (eq role :argument)
+                    (completion-context-command-position-p context))
                :redirection-target-p
                (or (eq role :redirect-target)
                    (completion-context-redirection-target-p context))))))))

@@ -49,7 +49,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "sh -c 'printf E07_STARTED_$((2+3)); sleep 5' | cat"
+      "text": "sh -c 'printf E07_STARTED_$((2+3)); sleep 30' | cat"
     },
     {
       "type": "key",

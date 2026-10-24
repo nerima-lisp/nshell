@@ -7,6 +7,7 @@
     (setf *rerun-confirmation-pending-p* nil
           *rerun-command-assessment* nil)
     (clear-rendered-transient-panel))
+  (clear-rendered-completions)
   (let ((*preserve-transient-panel-on-next-prompt-p* t))
     (render-prompt-cont)))
 

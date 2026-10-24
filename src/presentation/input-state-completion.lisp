@@ -76,3 +76,73 @@
                      state
                      (completion-cycle-edit-for-selection selection))
                     :complete))))))
+(defun completion-pager-filtered-candidates (state)
+  (let ((query (getf (input-state-completion-pager state) :query "")))
+    (remove-if-not
+     (lambda (candidate)
+       (or (string= query "")
+           (search query (%candidate-text candidate) :test #'char-equal)))
+     (input-state-last-candidates state))))
+(defun reduce-completion-pager-input-state (state key-event)
+  (let* ((pager (input-state-completion-pager state))
+         (query (getf pager :query ""))
+         (selected-index (getf pager :index 0))
+         (type (nshell.domain.input:key-event-type key-event)))
+    (labels ((update (new-query new-index)
+                     (values (copy-input-state-with
+                              state
+                              :completion-pager
+                              (list :query new-query :index new-index))
+                             :redraw))
+             (move-selection (delta)
+                             (let* ((candidates (completion-pager-filtered-candidates state))
+                                    (last-index (max 0 (1- (length candidates)))))
+                               (update query
+                                       (max 0 (min last-index (+ selected-index delta))))))
+             (accept-selection ()
+                               (let* ((candidates (completion-pager-filtered-candidates state))
+                                      (candidate (nth selected-index candidates))
+                                      (base-buffer (or (input-state-completion-base-buffer state)
+                                                       (input-state-buffer state)))
+                                      (base-cursor (or (input-state-completion-base-cursor state)
+                                                       (input-state-cursor-pos state))))
+                                 (if candidate
+                                     (multiple-value-bind (buffer cursor)
+                                         (apply-completion base-buffer candidate :cursor base-cursor)
+                                       (values (copy-input-state-clearing-completion
+                                                state
+                                                :buffer buffer
+                                                :cursor-pos cursor
+                                                :suggestion :clear)
+                                               :redraw))
+                                   (values state :redraw))))
+             (append-query (text) (let ((added (with-output-to-string (out) (loop with remaining = (max 0 (- +max-input-buffer-size+ (length query))) for char across text while (plusp remaining) when (graphic-char-p char) do (write-char char out) (decf remaining))))) (update (concatenate 'string query added) 0))))
+      (case type
+        (:char
+         (let ((char (nshell.domain.input:key-event-char key-event)))
+           (if (and char (graphic-char-p char))
+               (append-query (string char))
+             (values state :none))))
+        (:paste
+         (let ((text (getf (nshell.domain.input:key-event-data key-event) :text)))
+           (if (stringp text)
+               (append-query text)
+             (values state :none))))
+        (:backspace
+         (if (plusp (length query))
+             (update (subseq query 0 (1- (length query))) 0)
+           (values state :redraw)))
+        (:up (move-selection -1))
+        (:down (move-selection 1))
+        (:left (move-selection -1))
+        (:right (move-selection 1))
+        (:page-up (move-selection -8))
+        (:page-down (move-selection 8))
+        (:home (update query 0))
+        (:end (update query
+                      (max 0 (1- (length
+                                  (completion-pager-filtered-candidates state))))))
+        ((:enter :tab) (accept-selection))
+        ((:escape :ctrl-g :ctrl-c)
+         (values (clear-completion-session-state state) :redraw))
+        (otherwise (values state :none))))))

@@ -46,26 +46,30 @@
 
 (defun input-session-reduction-for-key-event (state key-event)
   (multiple-value-bind (new-state output)
-      (case (input-state-mode state)
-        (:search (reduce-search-input-state state key-event))
-        (:ask (reduce-ask-input-state state key-event))
-        (:ask-waiting (reduce-ask-waiting-input-state state key-event))
-        ((:vi-command :vi-visual :vi-d :vi-c)
-         (reduce-vi-input-state state key-event))
-        (t (reduce-insert-input-state state key-event)))
+      (if (input-state-completion-pager state)
+          (reduce-completion-pager-input-state state key-event)
+          (case (input-state-mode state)
+            (:search (reduce-search-input-state state key-event))
+            (:ask (reduce-ask-input-state state key-event))
+            (:ask-waiting (reduce-ask-waiting-input-state state key-event))
+            ((:vi-command :vi-visual :vi-d :vi-c)
+             (reduce-vi-input-state state key-event))
+            (t (reduce-insert-input-state state key-event))))
     (input-session-reduction new-state output)))
 
 (defun %completion-session-preserved-p (old-state state key-event-type)
   (and (eq (input-state-mode old-state) :insert)
        (eq (input-state-mode state) :insert)
-       (not (member key-event-type +completion-session-resetting-key-event-types+
-                    :test #'eq))
-       (or (not (null (member key-event-type
-                              +completion-session-preserving-key-event-types+
-                              :test #'eq)))
-           (let ((suggestion (input-state-suggestion state)))
-             (and (stringp suggestion)
-                  (plusp (length suggestion)))))))
+       (or (not (null (input-state-completion-pager old-state)))
+           (and (not (member key-event-type
+                             +completion-session-resetting-key-event-types+
+                             :test #'eq))
+                (or (not (null (member key-event-type
+                                       +completion-session-preserving-key-event-types+
+                                       :test #'eq)))
+                    (let ((suggestion (input-state-suggestion state)))
+                      (and (stringp suggestion)
+                           (plusp (length suggestion)))))))))
 
 (defun input-session-transition-policy-for-key-event (old-state state key-event)
   (let ((key-event-type (nshell.domain.input:key-event-type key-event)))

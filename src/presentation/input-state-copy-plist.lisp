@@ -82,6 +82,8 @@ current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
                                               completion-base-cursor
                                               last-candidates-supplied-p
                                               last-candidates
+                                              completion-pager-supplied-p
+                                              completion-pager
                                               suggestion-supplied-p
                                               suggestion)
   ;; A fresh completion session (index -1) drops any carried base position.
@@ -106,7 +108,8 @@ current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
                                     completion-base-cursor)
                                    (input-state-completion-base-cursor state)
                                    :acceptp #'integerp)))
-     (%input-state-copy-args state last-candidates suggestion))))
+     (%input-state-copy-args state
+       last-candidates completion-pager suggestion))))
 
 (defun %copy-input-state-transient-initargs (state
                                              buffer

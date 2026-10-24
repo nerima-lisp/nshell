@@ -30,6 +30,77 @@
         (list (nshell.domain.parsing:delimiter-pair-open-span pair)
               (nshell.domain.parsing:delimiter-pair-close-span pair))))))
 
+(defun %completion-pager-row-budget ()
+  (let ((terminal-rows
+          (handler-case
+              (multiple-value-bind (rows columns)
+                  (nshell.infrastructure.acl:get-terminal-size)
+                (declare (ignore columns))
+                (if (and (numberp rows) (plusp rows)) rows 24))
+            (error () 24))))
+    (max 0 (- terminal-rows (or *prompt-rendered-lines* 0) 1))))
+
+(defun %render-current-completion-results ()
+  (let* ((state *input-state*)
+         (candidates (and state (input-state-last-candidates state)))
+         (pager (and state (input-state-completion-pager state)))
+         (row-budget (%completion-pager-row-budget))
+         (terminal-width (terminal-width)))
+    (when (and candidates
+               (null pager)
+               (> (completion-render-line-count
+                   candidates
+                   :terminal-width terminal-width)
+                  row-budget))
+      (let* ((base-buffer (or (input-state-completion-base-buffer state)
+                              (input-state-buffer state)))
+             (base-cursor (or (input-state-completion-base-cursor state)
+                              (input-state-cursor-pos state)))
+             (candidate-index (input-state-completion-index state))
+             (selected-index
+               (if (and (<= 0 candidate-index)
+                        (< candidate-index (length candidates)))
+                   candidate-index
+                   0)))
+        (setf *input-state*
+              (copy-input-state-with state :completion-base-buffer base-buffer :completion-base-cursor base-cursor :completion-pager (list :query "" :index selected-index) :suggestion :clear)
+              state *input-state*
+              pager (input-state-completion-pager state))))
+    (when candidates
+      (let* ((pager-active-p (not (null pager)))
+             (visible-candidates
+               (if pager-active-p
+                   (completion-pager-filtered-candidates state)
+                   candidates))
+             (count (length visible-candidates))
+             (selected-index
+               (if pager-active-p
+                   (if (plusp count)
+                       (max 0 (min (1- count)
+                                   (getf pager :index 0)))
+                       0)
+                   (input-state-completion-index state)))
+             (query (and pager-active-p (getf pager :query "")))
+             (footer
+               (when pager-active-p
+                 (format nil "~a~d/~d  arrows move, Enter accepts, Esc/Ctrl-C cancels"
+                         (if (string= query "")
+                             ""
+                             (format nil "Filter: ~a | " query))
+                         (if (plusp count) (1+ selected-index) 0)
+                         count))))
+        (setf *completion-rendered-lines*
+              (%render-transient-output-below-prompt
+               (lambda ()
+                 (render-completions
+                  visible-candidates
+                  :selected-index selected-index
+                  :terminal-width terminal-width
+                  :max-rows row-budget
+                  :footer footer
+                  :empty-message (when pager-active-p "No matches")
+                  :theme (nshell.domain.configuration:config-theme *config*)))))))))
+
 (defun %render-edit-buffer-line
     (line absolute-start theme selection-start selection-end matching-spans)
   (loop with local-start = 0
@@ -223,8 +294,10 @@
     (when transient-panel-content
       (render-transient-panel transient-panel-content
                               :terminal-width (terminal-width)))
-    (when (eq (input-state-mode *input-state*) :search)
-      (render-current-history-search-panel))
+    (progn
+      (when (eq (input-state-mode *input-state*) :search)
+        (render-current-history-search-panel))
+      (%render-current-completion-results))
     (when *interactive-terminal-installed-p*
       (if *vi-mode-enabled*
           (nshell.infrastructure.terminal:ansi-set-vi-mode-cursor-shape

@@ -342,14 +342,19 @@
                       (cdar redirect-values)))))))))
   (it "rejects-dotted-command-splice-values"
     (let* ((context (make-test-shell-context))
+           (counter
+             (intern "L02-EVALUATOR-SPLICE-COUNTER"
+                     (find-package "NSHELL.USER")))
            (splice-form
              (nshell.domain.parsing:make-command-value-form
               :splice '(cl:cons "one" "tail") '(1 2)))
            (node
              (nshell.domain.parsing:make-command-node
               "echo" nil '(0 6) nil nil nil nil (list splice-form)))
+           (source-form `(cl:let ((,counter 0)) ,node ,counter))
            (reader-result
-             (%make-sexp-evaluator-test-reader-result "(echo)" node)))
+             (%make-sexp-evaluator-test-reader-result
+              "(let ((counter 0)) (echo))" source-form)))
       (%call-with-sexp-evaluator-test-boundaries
        context
        (lambda ()

@@ -10,7 +10,7 @@
               (nshell.application:collect-source-lines stream))))
   (it "source-reader-opt-in-is-explicit-and-defaults-to-legacy"
     (let ((context (make-test-builtins-context))
-          (source '("(+ 1 2)"))
+          (source '("(if t 1 2)"))
           (legacy-output nil)
           (legacy-code nil)
           (unset-output nil)
@@ -26,17 +26,26 @@
         (multiple-value-setq (legacy-output legacy-code)
           (nshell.application::%source-lines context source))
         (multiple-value-setq (unset-output unset-code)
-          (nshell.application:source-lines context source "source-test.nsh")))
+          (nshell.application:source-lines
+            (make-test-builtins-context)
+            source
+            "source-test.nsh")))
       (with-temporary-function
           ('uiop:getenv
            (lambda (name) (when (string= name "NSHELL_READER") "other")))
         (multiple-value-setq (other-output other-code)
-          (nshell.application:source-lines context source "source-test.nsh")))
+          (nshell.application:source-lines
+            (make-test-builtins-context)
+            source
+            "source-test.nsh")))
       (with-temporary-function
           ('uiop:getenv
            (lambda (name) (when (string= name "NSHELL_READER") "sexp")))
         (multiple-value-setq (sexp-output sexp-code)
-          (nshell.application:source-lines context source "source-test.nsh"))
+          (nshell.application:source-lines
+            (make-test-builtins-context)
+            source
+            "source-test.nsh"))
         (multiple-value-setq (batch-output batch-code)
           (nshell.application:source-lines context source)))
       (expect legacy-output :to-equal unset-output)

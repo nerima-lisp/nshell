@@ -523,7 +523,7 @@
                  (nth-value 0
                    (%eval-command-value-operand
                     context form reader-result lexical-environment))))
-           (unless (listp value)
+           (unless (%proper-list-p value)
              (error
               (make-condition
                (quote sexp-evaluation-syntax-error)

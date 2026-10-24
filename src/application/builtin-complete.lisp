@@ -53,7 +53,7 @@ needed here the way the mutating `-c`/`-e` paths below need one."
               :home-directory home-directory
               :process-ids (remove-duplicates process-ids :test #'string=)))))
     (values (when candidates
-              (format nil "~{~a~%}"
+              (format nil "~{~a~%~}"
                       (mapcar #'nshell.domain.completion:candidate-text candidates)))
             0)))
 

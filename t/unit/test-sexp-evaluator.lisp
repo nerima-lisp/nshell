@@ -228,7 +228,7 @@
               context "(if (> 3 2) \"host\" \"other\")")
            (expect "host" :to-equal value)
            (expect 0 :to-equal status)
-           (expect nil :to-be-null *sexp-evaluator-test-calls*)))))))
+           (expect *sexp-evaluator-test-calls* :to-be-null)))))))
 (describe "sexp-evaluator-repetition"
   (it "runs-each-body-command-in-stream-position"
     (let ((context (make-test-shell-context)))
@@ -326,12 +326,14 @@
                      (mapcar
                       #'nshell.domain.parsing:evaluated-command-arg-value
                       arguments))
-             (expect t :to-be-truthy
-                     (nshell.domain.parsing:evaluated-command-arg-glob-p
-                      (first arguments)))
-             (expect t :to-be-truthy
-                     (nshell.domain.parsing:evaluated-command-arg-expand-p
-                      (first arguments)))
+             (expect
+              (nshell.domain.parsing:evaluated-command-arg-glob-p
+               (first arguments))
+              :to-be-truthy)
+             (expect
+              (nshell.domain.parsing:evaluated-command-arg-expand-p
+               (first arguments))
+              :to-be-truthy)
              (expect nil :to-equal
                      (nshell.domain.parsing:evaluated-command-arg-expand-p
                       (second arguments)))

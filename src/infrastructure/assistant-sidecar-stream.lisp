@@ -671,7 +671,20 @@
                   (%assistant-sidecar-complete pending))
                 (%assistant-sidecar-close-channel
                  (assistant-pending-cell-events pending)))))
-          (values event present-p))
+          (progn
+            ;; Generation 0 is the bootstrap sentinel for the first accepted request.
+            (when (and present-p
+                       (assistant-model-event-p event)
+                       (eq pending current)
+                       (plusp generation)
+                       (eq (assistant-model-event-kind event) :stream-error)
+                       (zerop (assistant-model-event-generation event)))
+              (setf event
+                    (%assistant-sidecar-error-event
+                     generation
+                     (%assistant-object-field
+                      (assistant-model-event-payload event) "message"))))
+            (values event present-p)))
         (progn
           (when (and current
                      (> generation (assistant-pending-cell-generation current))

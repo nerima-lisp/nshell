@@ -1342,6 +1342,101 @@
         (cl-concurrent-kit:close-channel writes)
         (cl-concurrent-kit:close-channel
          (nshell.feature.assistant::assistant-pending-cell-events pending)))))
+  (it "publishes-startup-error-for-request-generation"
+    (let* ((state (nshell.feature.assistant::%make-assistant-sidecar-state nil nil))
+           (pending (nshell.feature.assistant::%make-assistant-pending-cell
+                     0 (cl-concurrent-kit:make-channel :buffer-size 2)
+                     (cl-concurrent-kit:make-promise)))
+           (publication-entered (cl-concurrent-kit:make-channel :buffer-size 1))
+           (allow-publication (cl-concurrent-kit:make-channel :buffer-size 1))
+           (publish (symbol-function 'nshell.feature.assistant::%assistant-sidecar-publish))
+           (event-before-publication nil)
+           (worker nil)
+           (publication-released-p nil))
+      (setf (nshell.feature.assistant::assistant-sidecar-state-startup-generation state) 1
+            (nshell.feature.assistant::assistant-sidecar-state-starting-p state) t
+            (nshell.feature.assistant::assistant-sidecar-state-handle state) :fixture
+            (nshell.feature.assistant::assistant-sidecar-state-init-p state) t
+            (nshell.feature.assistant::assistant-sidecar-state-pending state) pending)
+      (unwind-protect
+           (with-temporary-functions
+               (('nshell.infrastructure.acl:run-sidecar-version-cancellable
+                 (lambda (command cancelled-p)
+                   (declare (ignore command cancelled-p))
+                   (values nil :command-not-found)))
+                ('nshell.feature.assistant::%assistant-sidecar-publish
+                 (lambda (cell event)
+                   (setf event-before-publication event)
+                   (cl-concurrent-kit:send publication-entered t)
+                   (cl-concurrent-kit:recv
+                    allow-publication :timeout (cl-date-kit:duration-of-seconds 2))
+                   (funcall publish cell event)))
+                ('nshell.feature.assistant::%assistant-sidecar-write-item
+                 (lambda (current item)
+                   (declare (ignore current item))
+                   t)))
+             (unwind-protect
+                  (progn
+                    (setf worker
+                          (sb-thread:make-thread
+                           (lambda ()
+                             (nshell.feature.assistant::%assistant-sidecar-start-worker
+                              state pending 1))))
+                    (multiple-value-bind (value present-p)
+                        (cl-concurrent-kit:recv
+                         publication-entered :timeout (cl-date-kit:duration-of-seconds 2))
+                      (expect t :to-be present-p)
+                      (expect t :to-be value))
+                    (expect 0 :to-be
+                            (nshell.feature.assistant:assistant-model-event-generation
+                             event-before-publication))
+                    (expect t :to-be
+                            (with-temporary-function
+                                ('nshell.feature.assistant::%assistant-sidecar-dead-p
+                                 (lambda (current)
+                                   (declare (ignore current))
+                                   nil))
+                              (nshell.feature.assistant::%assistant-sidecar-request
+                               state 57
+                               (nshell.feature.assistant:make-assistant-user-payload "race"))))
+                    (expect 57 :to-be
+                            (nshell.feature.assistant::assistant-pending-cell-generation pending))
+                    (cl-concurrent-kit:send allow-publication t)
+                    (setf publication-released-p t)
+                    (sb-thread:join-thread worker :timeout 2 :default :timed-out)
+                    (expect nil :to-be (sb-thread:thread-alive-p worker))
+                    (multiple-value-bind (event present-p)
+                        (nshell.feature.assistant::%assistant-sidecar-poll state 57)
+                      (expect t :to-be present-p)
+                      (expect :stream-error :to-be
+                              (nshell.feature.assistant:assistant-model-event-kind event))
+                      (progn
+                        (expect
+                         (nshell.feature.assistant:assistant-model-event-generation event)
+                         :to-be 57)
+                        (expect
+                         (nshell.feature.assistant::%assistant-object-field
+                          (nshell.feature.assistant:assistant-model-event-payload
+                           event-before-publication)
+                          "message")
+                         :to-equal
+                         (nshell.feature.assistant::%assistant-object-field
+                          (nshell.feature.assistant:assistant-model-event-payload event)
+                          "message"))))
+                    (expect t :to-be
+                            (cl-concurrent-kit:promise-settled-p
+                             (nshell.feature.assistant::assistant-pending-cell-completion pending))))
+               (unless publication-released-p
+                 (cl-concurrent-kit:send allow-publication t))
+               (when worker
+                 (sb-thread:join-thread worker :timeout 2 :default nil))))
+        (setf (nshell.feature.assistant::assistant-sidecar-state-handle state) nil
+              (nshell.feature.assistant::assistant-sidecar-state-init-p state) nil
+              (nshell.feature.assistant::assistant-sidecar-state-pending state) nil)
+        (cl-concurrent-kit:close-channel publication-entered)
+        (cl-concurrent-kit:close-channel allow-publication)
+        (cl-concurrent-kit:close-channel
+         (nshell.feature.assistant::assistant-pending-cell-events pending)))))
 
   (it "keeps-allowed-and-warning-rate-events-pending"
     (dolist (status '("allowed" "allowed_warning"))

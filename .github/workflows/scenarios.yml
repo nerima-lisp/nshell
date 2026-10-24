@@ -38,18 +38,27 @@ jobs:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
           cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
+      - name: Build nshell
+        run: >-
+          nix build --print-build-logs
+          ".#packages.${{ matrix.system }}.default"
+          --out-link "$RUNNER_TEMP/nshell-scenario-binary"
+
+      - name: Run J05 PTY scenario before batch check
+        if: ${{ matrix.run_batch_check }}
+        run: >-
+          nix develop .#scenarios -c python3 scripts/run-scenarios.py
+          --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"
+          --repeat 3
+          --mode pty
+          --scenario-id J05-option-name-and-description
+
       - name: Build and run the batch scenario check
         if: ${{ matrix.run_batch_check }}
         run: >-
           nix build --print-build-logs
           ".#checks.${{ matrix.system }}.scenarios-batch"
           --out-link "$RUNNER_TEMP/nshell-scenario-check"
-
-      - name: Build nshell
-        run: >-
-          nix build --print-build-logs
-          ".#packages.${{ matrix.system }}.default"
-          --out-link "$RUNNER_TEMP/nshell-scenario-binary"
 
       - name: Run PTY scenarios
         run: >-

@@ -538,6 +538,33 @@
                 (expect 2 :to-equal
                         *sexp-evaluator-test-failure-policy-calls*))))
         (when (macro-function macro-name) (fmakunbound macro-name)))))
+  (it "expands a macro read by the S-expression reader"
+  (let* ((context (make-test-shell-context))
+         (macro-name
+           (intern "L07-READER-MACRO-TWICE" (find-package "NSHELL.USER")))
+         (definition-result
+           (first
+            (nshell.domain.parsing:read-submission
+             "(defmacro L07-READER-MACRO-TWICE (form &rest forms) `(progn ,form ,@forms))"
+             :reader-context :sexp)))
+         (call-result
+           (first
+            (nshell.domain.parsing:read-submission
+             "(L07-READER-MACRO-TWICE (echo first) (echo second))"
+             :reader-context :sexp))))
+    (unwind-protect
+         (%call-with-sexp-evaluator-test-boundaries
+          context
+          (lambda ()
+            (nshell.application:evaluate-reader-result-in-context
+             context definition-result)
+            (multiple-value-bind (value status)
+                (nshell.application:evaluate-reader-result-in-context
+                 context call-result)
+              (expect (format nil "echo output~%") :to-equal value)
+              (expect 0 :to-equal status)
+              (expect 2 :to-equal (length *sexp-evaluator-test-calls*)))))
+      (when (macro-function macro-name) (fmakunbound macro-name)))))
   (it "limits-nested-expansion-without-limiting-independent-calls"
     (let* ((context (make-test-shell-context))
            (recursive-name

@@ -536,8 +536,7 @@
     (when skipped-p
       (%sexp-reader-fail "Reader prefix cannot precede an excluded datum."
                          source-start))
-    (let* ((head (%sexp-reader-new-marker
-                  name nil package source-start prefix-end))
+    (let* ((head (%sexp-reader-new-marker name nil package source-start prefix-end :reader-prefix-p))
            (form (list head operand))
            (elements (list
                       (%make-sexp-reader-list-element

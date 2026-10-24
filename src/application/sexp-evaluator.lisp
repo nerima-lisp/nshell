@@ -121,13 +121,35 @@
 
 (defun %materialize-reader-form (form reader-result)
   (cond
+    ((and (consp form)
+          (symbolp (car form))
+          (getf (%reader-symbol-origin reader-result (car form))
+                :reader-prefix-p))
+     (let* ((origin (%reader-symbol-origin reader-result (car form)))
+            (source-name (getf origin :source-name))
+            (package-qualifier (getf origin :package-qualifier))
+            (operand (%materialize-reader-form (cadr form) reader-result)))
+       ;; SBCL represents backquote with a quasiquote symbol and comma objects.
+       (cond
+         ((and (string-equal (or package-qualifier "") "CL")
+               (string-equal (or source-name "") "QUASIQUOTE"))
+          (list (quote sb-int:quasiquote) operand))
+         ((and (string-equal (or package-qualifier "") "CL")
+               (string-equal (or source-name "") "UNQUOTE"))
+          (sb-impl::%default-comma-constructor :expr operand :kind 0))
+         ((and (string-equal (or package-qualifier "") "CL")
+               (string-equal (or source-name "") "UNQUOTE-SPLICING"))
+          (sb-impl::%default-comma-constructor :expr operand :kind 2))
+         (t
+          (cons (%resolve-reader-symbol reader-result (car form))
+                (%materialize-reader-form (cdr form) reader-result))))))
     ((symbolp form) (%resolve-reader-symbol reader-result form))
     ((consp form)
      (cons (%materialize-reader-form (car form) reader-result)
            (%materialize-reader-form (cdr form) reader-result)))
     ((and (vectorp form) (not (stringp form)))
-     (map 'vector (lambda (item)
-                    (%materialize-reader-form item reader-result))
+     (map (quote vector) (lambda (item)
+                           (%materialize-reader-form item reader-result))
           form))
     (t form)))
 

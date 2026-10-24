@@ -7,7 +7,8 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "dumb",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -22,7 +23,7 @@
   "invocation": {
     "kind": "script",
     "path": "scenario.nsh",
-    "text": "(when (false) (echo O07_FALSE_BRANCH_WRONG))\n(handler-case (o07-command-that-does-not-exist) (command-failed () (echo O07_HANDLER_OK)))\n"
+    "text": "(when (false) (echo O07_FALSE_BRANCH_WRONG))\n(handler-case (^o07-command-that-does-not-exist) (command-failed () (echo O07_HANDLER_OK)))\n"
   },
   "expected": {
     "stdout": {
@@ -34,8 +35,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L04 owns command-failed conditions and handler-case."
   }
 }

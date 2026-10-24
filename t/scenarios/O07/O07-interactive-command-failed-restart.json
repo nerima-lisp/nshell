@@ -9,7 +9,8 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "O07> ",
-      "SCENARIO_MARKER": "O07_RESTART_CONTINUED_OK"
+      "SCENARIO_MARKER": "O07_RESTART_CONTINUED_OK",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -24,7 +25,15 @@
   "steps": [
     {
       "type": "keys",
-      "text": "cat missing-o07-file"
+      "text": "(defun o07_fail () (^cat missing-o07-file))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "(o07_fail)"
     },
     {
       "type": "key",
@@ -72,8 +81,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L04 owns interactive command-failed restart handling."
   }
 }

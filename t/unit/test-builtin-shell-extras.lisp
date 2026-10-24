@@ -434,7 +434,22 @@ unchanged directory must come from the cache."
                                   (cons kind nil)))
           (nshell.infrastructure.acl::cached-subdirectories "/tmp/")
           (nshell.infrastructure.acl::cached-subdirectories "/tmp/")
-          (expect 2 :to-equal reads))))))
+          (expect 2 :to-equal reads)))))
+  (it "real-stat-produces-six-part-precise-directory-stamp"
+    "Report the host stat stamp so platform-specific nanosecond reads are visible in CI."
+    (host-kit:with-temporary-directory (directory)
+      (let ((stamp (nshell.infrastructure.acl::%directory-listing-stamp directory)))
+        (format *error-output* "~&DIRECTORY_LISTING_STAMP ~S~%" stamp)
+        (expect (and (listp stamp)
+                     (= (length stamp) 6))
+                :to-be-truthy)
+        (expect (and (integerp (fourth stamp))
+                     (<= 0 (fourth stamp))
+                     (< (fourth stamp) 1000000000)
+                     (integerp (sixth stamp))
+                     (<= 0 (sixth stamp))
+                     (< (sixth stamp) 1000000000))
+                :to-be-truthy)))))
 
 (describe "builtin-set-scope-tests"
   (it "set-rejects-universal-variables"

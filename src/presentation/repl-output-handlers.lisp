@@ -507,11 +507,11 @@ wrapped line's other rows on screen as stale duplicates."
 (defun %process-ask-cancel-turn-output-event ()
   (cond
     ((eq *assistant-request-kind* :agent)
-      (let* ((now (boundary-monotonic))
-             (repeat-p (%assistant-cancel-repeat-p now))
-             (starting-p (eq :starting
-                             (getf (nshell.feature.assistant:assistant-model-status)
-                                   :state)))
+     (let* ((now (boundary-monotonic))
+            (repeat-p (%assistant-cancel-repeat-p now))
+            (starting-p (eq :starting
+                            (getf (nshell.feature.assistant:assistant-model-status)
+                                  :state)))
             (generation
               (setf *assistant-turn-generation*
                     (nshell.feature.assistant:next-assistant-turn-generation
@@ -522,17 +522,18 @@ wrapped line's other rows on screen as stale duplicates."
                             (nshell.feature.assistant:assistant-model-start))))
        (declare (ignore generation))
        (setf *assistant-last-cancel-at* (unless repeat-p now))
-       (%finish-agent-session "canceled")
-       (when (and repeat-p
-                  (not (%assistant-boundary-ok-p start-result)))
-         (format t "nshell: AI sidecar restart failed: ~a~%"
-                 (%assistant-boundary-failure-message
-                  start-result "assistant model boundary is unavailable")))
-       (when (and repeat-p
-                  (not (%assistant-boundary-ok-p stop-result)))
-         (format t "nshell: AI sidecar stop failed: ~a~%"
-                 (%assistant-boundary-failure-message
-                  stop-result "assistant model boundary is unavailable")))))
+       (prog1
+           (%finish-agent-session "canceled")
+         (when (and repeat-p
+                    (not (%assistant-boundary-ok-p start-result)))
+           (format t "nshell: AI sidecar restart failed: ~a~%"
+                   (%assistant-boundary-failure-message
+                    start-result "assistant model boundary is unavailable")))
+         (when (and repeat-p
+                    (not (%assistant-boundary-ok-p stop-result)))
+           (format t "nshell: AI sidecar stop failed: ~a~%"
+                   (%assistant-boundary-failure-message
+                    stop-result "assistant model boundary is unavailable"))))))
     (t
      (let* ((now (boundary-monotonic))
             (repeat-p (%assistant-cancel-repeat-p now))

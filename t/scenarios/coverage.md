@@ -209,7 +209,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | S04 | manual | 0 | 1 | `t/scenarios/S04/manual.md` |
 | S05 | direct | 1 | 0 | `t/scenarios/S05/S05-noninteractive-ai-status.json` |
 | S06 | manual | 0 | 1 | `t/scenarios/S06/manual.md` |
-| S07 | approximation | 1 | 0 | `t/scenarios/S07/approx-S07-shell-without-claude.json` |
+| S07 | approximation | 2 | 0 | `t/scenarios/S07/approx-S07-shell-without-claude.json`, `t/scenarios/S07/cancel-resumes-after-new-request.json` |
 | T01 | manual | 0 | 1 | `t/scenarios/T01/manual.md` |
 | T02 | manual | 0 | 1 | `t/scenarios/T02/manual.md` |
 | T03 | approximation | 1 | 0 | `t/scenarios/T03/approx-T03-help-output.json` |

@@ -1,0 +1,123 @@
+{
+  "id": "S07-cancel-resumes-after-new-request",
+  "uc": [
+    "S07"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "./:/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "S07_CANCEL_RECOVERY> ",
+      "NSHELL_AI_COMMAND": "fake-ai"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/fake-ai",
+        "content": "#!/bin/sh\ncount_file=\"$HOME/.s07-fake-count\"\nif [ \"$1\" = \"--version\" ]; then\n  n=0\n  if [ -r \"$count_file\" ]; then read n < \"$count_file\"; fi\n  n=$((n + 1))\n  printf '%s\\n' \"$n\" > \"$count_file\"\n  if [ \"$n\" -eq 1 ]; then sleep 3; printf '%s\\n' 'FAKE_CANCELED_STARTUP_FINISHED'; exit 0; fi\n  printf '%s\\n' 'S07 fake sidecar 1.0'\n  exit 0\nfi\nwhile IFS= read -r line; do\n  case \"$line\" in\n    *'\"content\":\"\"'*)\n      printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'\n      continue ;;\n    *'\"request_id\":\"nshell-bootstrap-interrupt\"'*)\n      printf '%s\\n' '{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"nshell-bootstrap-interrupt\",\"response\":{\"still_queued\":[]}}}'\n      printf '%s\\n' '{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[]}}'\n      printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true}'\n      continue ;;\n  esac\n  printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"echo S07_CANCEL_RECOVERY_RESULT\"}]}}'\n  printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"structured_output\":{\"command\":\"echo S07_CANCEL_RECOVERY_RESULT\",\"reason\":\"cancel recovery fixture\",\"risk\":\"low\"}}'\ndone\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "chmod +x fake-ai && printf '%s\\n' S07_FAKE_\"READY\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S07_FAKE_READY",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "keys",
+      "text": "agent \"first delayed startup\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "thinking",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "wait",
+      "contains": "agent: canceled",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "keys",
+      "text": "agent \"request after cancellation\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "echo S07_CANCEL_RECOVERY_RESULT",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "q"
+    },
+    {
+      "type": "keys",
+      "text": "printf '%s\\n' S07_SHELL_ALIVE_\"AFTER_CANCEL\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S07_SHELL_ALIVE_AFTER_CANCEL",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "agent: canceled",
+        "echo S07_CANCEL_RECOVERY_RESULT",
+        "S07_SHELL_ALIVE_AFTER_CANCEL",
+        "Goodbye!"
+      ],
+      "excludes": [
+        "FAKE_CANCELED_STARTUP_FINISHED"
+      ]
+    },
+    "exit_code": 0
+  }
+}

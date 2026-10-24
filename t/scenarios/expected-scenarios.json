@@ -1332,6 +1332,13 @@
       "path": "S07/approx-S07-shell-without-claude.json"
     },
     {
+      "id": "S07-cancel-resumes-after-new-request",
+      "uc": [
+        "S07"
+      ],
+      "path": "S07/cancel-resumes-after-new-request.json"
+    },
+    {
       "id": "T03-help-output",
       "uc": [
         "T03"

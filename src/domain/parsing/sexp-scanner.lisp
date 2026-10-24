@@ -1,0 +1,3 @@
+(in-package #:nshell.domain.parsing)
+
+(progn (defstruct scan-token kind text span reader-context) (defstruct delimiter-frame opener expected-close opener-span) (defstruct delimiter-pair open-span close-span) (defstruct scan-result status tokens open-delimiters delimiter-pairs invalid-span incomplete-span next-indent cursor-role) (defun scan-input (source &key (cursor (length source)) (reader-context :auto) (indent-width 2) head-classifier) (declare (ignore source cursor reader-context indent-width head-classifier)) (error (make-condition (find-class (find-symbol "WP-INTERFACE-NOT-IMPLEMENTED" "NSHELL.APPLICATION")) :owner-wp "L01" :interface (find-symbol "SCAN-INPUT" "NSHELL.DOMAIN.PARSING")))))

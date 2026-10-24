@@ -141,6 +141,8 @@
    (:file "domain/parsing/parser-structure-data")
    (:file "domain/parsing/parser")
    (:file "domain/parsing/sexp-reader-prototype")
+   (:file "domain/parsing/sexp-scanner")
+   (:file "domain/parsing/sexp-reader")
     (:file "domain/environment/env")
     (:file "domain/filesystem")
      (:file "domain/expansion/glob-matching")

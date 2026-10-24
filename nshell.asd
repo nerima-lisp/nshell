@@ -381,7 +381,10 @@
 	   (:file "presentation/repl-assistant-poll")
 	   (:file "presentation/repl-assistant-progress")
 	   (:file "presentation/repl")
-	   (:file "main"))
+	   (:file "main")
+    (:file "domain/completion/generated-external-command-kb-data"
+       :pathname "../data/domain/completion/generated-external-command-kb-data")
+)
   ;; The three build keys and the :perform below are exempt from the metadata
   ;; order above -- PACKAGE_STANDARD.md names cl-weave's identical trio and
   ;; cl-tty-kit's :perform as "はどこに書いても構いません" -- and they sit here,

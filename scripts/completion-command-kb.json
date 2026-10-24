@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "commands": [
+    {"command": "git", "description": "distributed version control", "subcommands": ["add", "branch", "checkout", "clone", "commit", "diff", "fetch", "init", "log", "merge", "pull", "push", "rebase", "restore", "rm", "show", "status", "switch", "tag", "worktree"], "flags": ["--help", "--version", "-C", "-c"]},
+    {"command": "git add", "flags": ["--all", "--dry-run", "--force", "--interactive", "--patch", "--update", "-A", "-p", "-u"]},
+    {"command": "git branch", "flags": ["--all", "--delete", "--force", "--list", "--move", "--show-current", "-a", "-d", "-D", "-m"]},
+    {"command": "git checkout", "flags": ["--branch", "--detach", "--force", "--orphan", "-b", "-B"]},
+    {"command": "git commit", "flags": ["--all", "--amend", "--message", "--no-edit", "--signoff", "-a", "-m"]},
+    {"command": "git diff", "flags": ["--cached", "--check", "--name-only", "--stat", "--staged", "--word-diff"]},
+    {"command": "git log", "flags": ["--all", "--author", "--graph", "--oneline", "--reverse", "-n"]},
+    {"command": "git pull", "flags": ["--ff-only", "--no-rebase", "--rebase", "--tags", "--unshallow"]},
+    {"command": "git push", "flags": ["--all", "--delete", "--force", "--force-with-lease", "--set-upstream", "-u"]},
+    {"command": "git status", "flags": ["--branch", "--porcelain", "--short", "--untracked-files"]},
+    {"command": "git switch", "flags": ["--create", "--detach", "--force", "--orphan", "-c", "-C"]},
+
+    {"command": "jj", "description": "version control", "subcommands": ["abandon", "absorb", "bookmark", "commit", "describe", "diff", "duplicate", "edit", "file", "git", "log", "new", "next", "prev", "rebase", "resolve", "restore", "show", "squash", "status", "st", "tag", "undo", "workspace"], "flags": ["--help", "--version", "--repository", "-R"]},
+    {"command": "jj bookmark", "subcommands": ["create", "delete", "list", "move", "set", "track", "untrack", "rename"]},
+    {"command": "jj git", "subcommands": ["clone", "fetch", "init", "push", "remote", "remote add", "remote list", "remote remove"]},
+    {"command": "jj log", "flags": ["--all", "--color", "--graph", "--limit", "--no-graph", "-r"]},
+    {"command": "jj new", "flags": ["--allow-empty", "--insert-after", "--insert-before", "--message", "-m"]},
+    {"command": "jj status", "flags": ["--ignore-working-copy", "--summary", "--verbose"]},
+
+    {"command": "nix", "description": "Nix package manager", "subcommands": ["build", "copy", "develop", "derivation", "eval", "flake", "fmt", "hash", "help", "log", "profile", "repl", "run", "search", "shell", "store", "upgrade", "why-depends"], "flags": ["--help", "--version", "--extra-experimental-features", "--offline"]},
+    {"command": "nix build", "flags": ["--dry-run", "--file", "--no-link", "--out-link", "--print-build-logs", "--show-trace"]},
+    {"command": "nix develop", "flags": ["--command", "--ignore-environment", "--no-write-lock-file", "--profile"]},
+    {"command": "nix eval", "flags": ["--apply", "--json", "--raw", "--show-trace"]},
+    {"command": "nix flake", "subcommands": ["check", "init", "lock", "metadata", "new", "prefetch", "show", "update"]},
+    {"command": "nix run", "flags": ["--command", "--file", "--no-write-lock-file", "--refresh"]},
+
+    {"command": "cargo", "description": "Rust package manager", "subcommands": ["add", "bench", "build", "check", "clean", "clippy", "doc", "fetch", "fix", "fmt", "install", "locate-project", "login", "metadata", "new", "publish", "remove", "run", "search", "test", "uninstall", "update", "version", "tree"], "flags": ["--help", "--version", "--locked", "--offline"]},
+    {"command": "cargo build", "flags": ["--all-features", "--bin", "--features", "--locked", "--release", "--workspace"]},
+    {"command": "cargo check", "flags": ["--all-features", "--bin", "--features", "--locked", "--release", "--workspace"]},
+    {"command": "cargo clippy", "flags": ["--all-features", "--fix", "--features", "--locked", "--release"]},
+    {"command": "cargo test", "flags": ["--all-features", "--doc", "--exact", "--features", "--no-run", "--release", "--workspace"]},
+
+    {"command": "docker", "description": "container management", "subcommands": ["build", "compose", "container", "cp", "exec", "images", "info", "inspect", "logs", "network", "ps", "pull", "push", "run", "start", "stop", "tag", "volume"], "flags": ["--help", "--version", "--context", "--debug", "-H"]},
+    {"command": "docker compose", "subcommands": ["build", "config", "down", "exec", "logs", "ps", "pull", "restart", "run", "start", "stop", "up", "version"]},
+    {"command": "docker compose up", "flags": ["--build", "--detach", "--force-recreate", "--no-deps", "--remove-orphans", "--wait"]},
+    {"command": "docker exec", "flags": ["--detach", "--env", "--interactive", "--privileged", "--tty", "-i", "-t"]},
+    {"command": "docker ps", "flags": ["--all", "--filter", "--format", "--last", "--latest", "--no-trunc", "--quiet", "-a", "-q"]},
+    {"command": "docker run", "flags": ["--detach", "--env", "--name", "--publish", "--rm", "--volume", "-d", "-p", "-v"]},
+
+    {"command": "kubectl", "description": "Kubernetes command line", "subcommands": ["apply", "auth", "autoscale", "certificate", "cluster-info", "completion", "config", "cordon", "create", "delete", "describe", "diff", "drain", "edit", "exec", "explain", "expose", "get", "label", "logs", "patch", "port-forward", "proxy", "replace", "rollout", "run", "scale", "set", "taint", "top", "uncordon", "version", "wait"], "flags": ["--context", "--help", "--kubeconfig", "--namespace", "--server", "-n"]},
+    {"command": "kubectl apply", "flags": ["--all", "--dry-run", "--filename", "--namespace", "--prune", "--recursive", "-f", "-n"]},
+    {"command": "kubectl get", "flags": ["--all-namespaces", "--ignore-not-found", "--namespace", "--output", "--selector", "--watch", "-n", "-o"]},
+    {"command": "kubectl logs", "flags": ["--all-containers", "--follow", "--namespace", "--previous", "--since", "--tail", "-f", "-n"]},
+    {"command": "kubectl rollout", "subcommands": ["history", "pause", "restart", "resume", "status", "undo"]},
+
+    {"command": "gh", "description": "GitHub command line", "subcommands": ["alias", "api", "auth", "browse", "codespace", "gist", "issue", "org", "pr", "project", "release", "repo", "run", "workflow"], "flags": ["--help", "--version", "--hostname", "--repo", "-R"]},
+    {"command": "gh issue", "subcommands": ["close", "comment", "create", "delete", "develop", "edit", "list", "lock", "reopen", "status", "transfer", "unlock", "view"]},
+    {"command": "gh pr", "subcommands": ["checkout", "checks", "close", "comment", "create", "diff", "edit", "list", "lock", "merge", "ready", "reopen", "review", "status", "unlock", "update-branch", "view"], "flags": ["--draft", "--fill", "--help", "--json", "--repo", "--web"]},
+    {"command": "gh repo", "subcommands": ["archive", "clone", "create", "delete", "edit", "fork", "list", "rename", "set-default", "sync", "view"]},
+
+    {"command": "npm", "description": "Node package manager", "subcommands": ["access", "adduser", "audit", "cache", "ci", "config", "dedupe", "deprecate", "diff", "dist-tag", "docs", "doctor", "exec", "explain", "explore", "find-dupes", "fund", "help", "hook", "init", "install", "install-ci-test", "install-test", "link", "login", "logout", "ls", "org", "outdated", "owner", "pack", "ping", "pkg", "prefix", "profile", "prune", "publish", "query", "rebuild", "repo", "restart", "root", "run", "run-script", "search", "shrinkwrap", "star", "stars", "start", "stop", "team", "test", "token", "uninstall", "unpublish", "unstar", "update", "version", "view", "whoami"], "flags": ["--help", "--version", "--global", "--install-links", "--offline", "--workspace"]},
+    {"command": "npm install", "flags": ["--global", "--legacy-peer-deps", "--no-audit", "--no-fund", "--save-dev", "--save-exact", "-D", "-g"]},
+    {"command": "npm run", "flags": ["--if-present", "--silent", "--workspace", "--workspaces"]},
+
+    {"command": "pnpm", "description": "pnpm package manager", "subcommands": ["add", "audit", "bin", "catalog", "completion", "config", "create", "deploy", "dlx", "env", "exec", "fetch", "import", "init", "install", "link", "list", "manage", "node", "outdated", "patch", "prune", "publish", "rebuild", "remove", "root", "run", "self-update", "setup", "start", "store", "test", "update", "why"], "flags": ["--help", "--version", "--filter", "--global", "--offline", "--recursive"]},
+    {"command": "pnpm add", "flags": ["--global", "--save-dev", "--save-exact", "--workspace"]},
+    {"command": "pnpm install", "flags": ["--frozen-lockfile", "--ignore-scripts", "--offline", "--prefer-offline", "--recursive"]},
+    {"command": "pnpm run", "flags": ["--if-present", "--recursive", "--silent", "--filter"]}
+  ]
+}

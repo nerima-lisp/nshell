@@ -395,7 +395,9 @@
              ('nshell.presentation::install-interactive-terminal (lambda () t))
              ('nshell.presentation::restore-interactive-terminal
               (lambda () (setf restored t)))
-             ('nshell.infrastructure.terminal:restore-terminal-mode (lambda (&optional fd &key preserve-snapshot-p) (declare (ignore fd preserve-snapshot-p))))
+             ('nshell.infrastructure.terminal:restore-terminal-mode
+              (lambda (&optional fd &key preserve-snapshot-p)
+                (declare (ignore fd preserve-snapshot-p))))
              ('nshell.infrastructure.terminal:enable-raw-mode
               (lambda (&optional fd)
                 (declare (ignore fd))
@@ -409,8 +411,9 @@
              ('nshell.presentation::render-prompt-cont
               (lambda ()
                 (let ((next (nshell.presentation::%execute-command-line "true")))
-                  (when next (setf continued t)))
-                nil)))
+                  (when (functionp next)
+                    (setf continued t))
+                  next))))
           (capture-standard-output
             (let ((*error-output* *standard-output*))
               (setf code (nshell.presentation:run-repl)))))

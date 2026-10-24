@@ -1034,7 +1034,7 @@ wrapped line's other rows on screen as stale duplicates."
           (format *error-output* "~%nshell: ~a~%" condition)
           (%set-command-failure-state 1)
           (setf *running* nil)
-          nil)
+          +repl-exit+)
         (storage-condition ()
           (with-reset-rendered-prompt-state-and-prompt-cont
             (format t "~%nshell: storage exhausted~%")

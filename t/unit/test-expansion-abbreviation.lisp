@@ -111,7 +111,30 @@
              "git checkout")))
       (expect expanded-p :to-be-falsy)
       (expect "echo \"gco\"" :to-equal buffer)
-      (expect 10 :to-equal cursor)))
+      (expect 10 :to-equal cursor))
+    (let ((buffer "(+ gco)"))
+      (multiple-value-bind (new-buffer cursor expanded-p)
+          (nshell.domain.abbreviation:expand-abbreviation
+           buffer 6
+           (lambda (token)
+             (when (string= token "gco")
+               "git checkout")))
+        (expect expanded-p :to-be-falsy)
+        (expect buffer :to-equal new-buffer)
+        (expect 6 :to-equal cursor)))
+    (let ((buffer "(run gco)"))
+      (multiple-value-bind (new-buffer cursor expanded-p)
+          (nshell.domain.abbreviation:expand-abbreviation
+           buffer 8
+           (lambda (token)
+             (when (string= token "gco")
+               "git checkout"))
+           :head-classifier
+           (lambda (head)
+             (if (string= head "run") :command-island :host-form)))
+        (expect expanded-p :to-be-truthy)
+        (expect "(run git checkout)" :to-equal new-buffer)
+        (expect 17 :to-equal cursor))))
 
   (it "abbreviation-domain-allows-escaped-quote-content"
     (multiple-value-bind (buffer cursor expanded-p)

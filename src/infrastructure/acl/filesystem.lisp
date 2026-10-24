@@ -112,29 +112,71 @@ grow it without bound.")
            (getf entry-lists :symlink-target-kinds)))
 
   (defun %filesystem-completion-entry-lists (directory)
-    (let ((files nil)
-          (subdirectories nil)
-          (symlink-target-kinds nil))
-      (host-kit:call-with-directory-entries
-       (lambda (entry metadata)
-         (case (host-kit:file-metadata-kind metadata)
-           (:regular-file
-            (push entry files))
-           (:directory
-            (push (host-kit:ensure-directory-pathname entry) subdirectories))
-           (:symbolic-link
-            (let ((kind (%filesystem-completion-symlink-target-kind entry)))
-              (push (cons entry kind) symlink-target-kinds)
-              (case kind
-                (:directory
-                 (push (host-kit:ensure-directory-pathname entry) subdirectories))
-                ((:regular-file :missing)
-                 (push entry files)))))))
-       directory
-       :follow-symlinks nil)
-      (list :files (nreverse files)
-            :subdirectories (nreverse subdirectories)
-            :symlink-target-kinds (nreverse symlink-target-kinds))))
+    (let* ((directory-path
+             (if (stringp directory)
+                 (if (and (plusp (length directory))
+                          (char= (char directory (1- (length directory))) #\/))
+                     directory
+                     (concatenate 'string directory "/"))
+                 (namestring (host-kit:ensure-directory-pathname directory))))
+           (files nil)
+           (subdirectories nil)
+           (symlink-target-kinds nil))
+      (labels ((entry-path (name)
+                 (concatenate 'string directory-path name))
+               (entry-value (path directory-p)
+                 (let ((pathname (ignore-errors (pathname path))))
+                   (if (and pathname
+                            (not (wild-pathname-p pathname))
+                            (string= path (namestring pathname)))
+                       (if directory-p
+                           (host-kit:ensure-directory-pathname pathname)
+                           pathname)
+                       (if directory-p
+                           (concatenate 'string path "/")
+                           path))))
+               (entry-kind (path)
+                 (let ((mode (sb-posix:stat-mode (sb-posix:lstat path))))
+                   (cond
+                     ((sb-posix:s-isreg mode) :regular-file)
+                     ((sb-posix:s-isdir mode) :directory)
+                     ((sb-posix:s-islnk mode) :symbolic-link)
+                     (t :other))))
+               (visit-entries ()
+                 (let ((stream (sb-posix:opendir directory-path)))
+                   (unwind-protect
+                        (let ((names
+                                (sort
+                                 (loop for entry = (sb-posix:readdir stream)
+                                       while (and entry
+                                                  (not (sb-alien:null-alien entry)))
+                                       for name = (sb-posix:dirent-name entry)
+                                       unless (member name '("." "..") :test #'string=)
+                                         collect name)
+                                 #'string<)))
+                          (dolist (name names)
+                            (let* ((entry (entry-path name))
+                                   (kind (entry-kind entry)))
+                              (case kind
+                                (:regular-file
+                                 (push (entry-value entry nil) files))
+                                (:directory
+                                 (push (entry-value entry t) subdirectories))
+                                (:symbolic-link
+                                 (let ((target-kind
+                                         (%filesystem-completion-symlink-target-kind
+                                          entry)))
+                                   (push (cons entry target-kind) symlink-target-kinds)
+                                   (case target-kind
+                                     (:directory
+                                      (push (entry-value entry t) subdirectories))
+                                     ((:regular-file :missing)
+                                      (push (entry-value entry nil) files))))))))
+                     (sb-posix:closedir stream))))))
+        (visit-entries)
+        (list :files (nreverse files)
+              :subdirectories (nreverse subdirectories)
+              :symlink-target-kinds (nreverse symlink-target-kinds)))))
 
   (defun %cached-filesystem-completion-entry-lists (directory)
     (%cached-directory-listing :filesystem-completion-entries

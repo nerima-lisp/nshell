@@ -106,14 +106,19 @@
                   :to-equal
                   (nshell.presentation:apply-completion "cat 日"
                                                         unicode-candidate))))))
-  (it "host-filesystem-completion-lists-file-directory-and-broken-links"
-  "The host adapter lists links as candidates and treats a broken link as a file."
+  (it "host-filesystem-completion-lists-special-filenames-and-links"
+  "The host adapter preserves raw entry names and classifies symbolic links."
   (host-kit:with-temporary-directory (directory)
     (let* ((target-file (merge-pathnames "target.txt" directory))
            (target-directory (merge-pathnames "target-dir/" directory))
            (file-link (merge-pathnames "file-link.txt" directory))
            (directory-link (merge-pathnames "directory-link" directory))
            (broken-link (merge-pathnames "broken-link" directory))
+           (directory-prefix
+             (namestring (host-kit:ensure-directory-pathname directory)))
+           (backslash-name (format nil "back~cslash.txt" (code-char 92)))
+           (backslash-path (concatenate 'string directory-prefix backslash-name))
+           (backslash-prefix (concatenate 'string directory-prefix "back"))
            (filesystem (nshell.infrastructure.acl:make-host-filesystem)))
       (host-kit:write-file-string "target" target-file)
       (host-kit:ensure-directory-tree target-directory)
@@ -121,6 +126,11 @@
       (host-kit:create-symbolic-link target-directory directory-link)
       (host-kit:create-symbolic-link
        (merge-pathnames "missing.txt" directory) broken-link)
+      (let ((fd (sb-posix:open
+                 backslash-path
+                 (logior sb-posix:o-wronly sb-posix:o-creat sb-posix:o-trunc)
+                 #o600)))
+        (sb-posix:close fd))
       (nshell.infrastructure.acl:clear-directory-listing-cache)
       (unwind-protect
            (let* ((file-reader
@@ -132,15 +142,33 @@
                             (funcall file-reader directory)))
                   (directory-names
                     (mapcar #'nshell.domain.completion::%entry-path-name
-                            (funcall directory-reader directory))))
+                            (funcall directory-reader directory)))
+                  (backslash-candidate
+                    (completion-candidate-by-text
+                     (concatenate 'string directory-prefix backslash-name)
+                     (nshell.domain.completion:complete
+                      (nshell.domain.completion:make-empty-knowledge-base)
+                      (concatenate 'string "cat " backslash-prefix)
+                      :filesystem
+                      filesystem))))
              (expect (member "target.txt" file-names :test #'string=)
                      :to-be-truthy)
              (expect (member "file-link.txt" file-names :test #'string=)
                      :to-be-truthy)
              (expect (member "broken-link" file-names :test #'string=)
                      :to-be-truthy)
+             (expect (member backslash-name file-names :test #'string=)
+                     :to-be-truthy)
              (expect (member "target-dir" directory-names :test #'string=)
                      :to-be-truthy)
              (expect (member "directory-link" directory-names :test #'string=)
-                     :to-be-truthy))
+                     :to-be-truthy)
+             (expect backslash-candidate :to-be-truthy)
+             (expect (concatenate 'string "cat " backslash-prefix
+                                  (make-string 2 :initial-element (code-char 92))
+                                  "slash.txt")
+                     :to-equal
+                     (nshell.presentation:apply-completion
+                      (concatenate 'string "cat " backslash-prefix)
+                      backslash-candidate)))
         (nshell.infrastructure.acl:clear-directory-listing-cache))))))

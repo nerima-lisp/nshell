@@ -1633,17 +1633,59 @@ order to the prefix before `cursor`:
    physical lines.
 5. In all other cases, insert zero spaces.
 
-WP-C06 projects `cursor-role` into the existing completion-context fields
+WP-C06 maps scanner cursor roles into the existing completion-context fields
 `command`, `argument-prefix`, `argument-words`, `command-position-p`, and
-`redirection-target-p`.
+`redirection-target-p` as follows:
+
+| `cursor-role` | `command` | `argument-prefix` and `argument-words` | `command-position-p` | `redirection-target-p` |
+|---|---|---|---|---|
+| `:command-head` | The command prefix through the cursor | Empty string and empty list | `t` | `nil` |
+| `:argument` | The command in the current command segment | The current argument prefix through the cursor, included in `argument-words` | `nil` | `nil`, unless prefix analysis identifies a redirection target |
+| `:redirect-target` | The command in the current command segment | The target prefix through the cursor, included in `argument-words` | `nil` | `t` |
+| `:host-form`, `:comment`, `:none` | Empty string | Empty string and empty list | `nil` | `nil` |
+
+When the cursor is inside a redirection-target token, the scanner reports
+`:argument`; C06 preserves the target flag from the completion-prefix analysis.
+At the gap after a redirection operator, the scanner reports
+`:redirect-target` directly.
+
+The projection uses the scanner's cursor from the current buffer. Prefix fields
+stop at that cursor even when the token continues to its right. Candidate
+replacement still uses the full token span: the candidate replaces the whole
+token, including text to the right of the cursor, while text after the token
+remains in the buffer. Host forms, comments, and completed top-level forms do
+not produce completion candidates.
+
+For `:argument` and `:redirect-target`, `argument-words` contains the parsed
+argument values in the current command segment, in source order. It excludes
+the command head and operators. When a token is under the cursor, only its
+prefix through the cursor is included; when the cursor is after whitespace,
+only preceding arguments are included and `argument-prefix` is empty. These
+values come from the existing completion tokenizer, not from raw source
+slices.
 
 The scanner-backed APIs are
 `completion-context-for-scan(scan-result cursor) => completion-context` and
 `complete-in-context(kb partial-input context &key path filesystem alias-table
 function-table variable-names directory home-directory) => candidates`.
 `completion-context-for(partial-input)` and the legacy `complete` route remain
-available through P5; C06 uses the scanner-backed projection for the S-expression
-editor path.
+available for callers that still use them. The REPL completion path scans with
+`:reader-context :auto` and uses the scanner-backed APIs for both bare-line and
+S-expression input.
+
+Until WP-L02 implements `classify-sexp-head`, the completion caller catches
+only that interface's L02 unimplemented-contract condition. Its local fallback
+recognizes package-qualified heads, Common Lisp operators, and bound user
+operators as host forms; registered shell functions and other heads remain
+command islands. The fallback is limited to completion and does not evaluate
+the form. Other conditions propagate unchanged. Remove this fallback when the
+L02 classifier is available.
+
+For scanner-backed filesystem completion, `$VAR/` and `${VAR}/` prefixes are
+expanded only while listing directories; returned candidates retain the
+typed variable prefix. A `cd` query with no path separator also searches each
+non-empty `CDPATH` entry and returns its explicit path in the candidate, so
+inserting it does not depend on runtime `CDPATH` behavior.
 
 ### Shell-function registry
 

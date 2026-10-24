@@ -599,4 +599,128 @@
                 (large-probes (run-size 20000)))
             (expect 2000 :to-equal small-probes)
             (expect 20000 :to-equal large-probes)
-            (expect (* 10 small-probes) :to-equal large-probes)))))))
+            (expect (* 10 small-probes) :to-equal large-probes))))))
+  (it "completion-context-for-scan-projects-each-cursor-role"
+  (labels ((classify-head (head)
+             (if (member (string-upcase head) '("PROGN" "+") :test #'string=)
+                 :host-form
+                 :command-island))
+           (scan-context (source cursor)
+             (let* ((scan
+                      (nshell.domain.parsing:scan-input
+                       source
+                       :cursor cursor
+                       :reader-context :auto
+                       :head-classifier #'classify-head))
+                    (context
+                      (nshell.domain.completion:completion-context-for-scan
+                       scan cursor)))
+               (values scan context)))
+           (expect-empty-context (context)
+             (expect "" :to-equal
+                     (nshell.domain.completion:completion-context-command context))
+             (expect "" :to-equal
+                     (nshell.domain.completion:completion-context-argument-prefix
+                      context))
+             (expect '() :to-equal
+                     (nshell.domain.completion:completion-context-argument-words
+                      context))
+             (expect nil :to-be
+                     (nshell.domain.completion:completion-context-command-position-p
+                      context))
+             (expect nil :to-be
+                     (nshell.domain.completion:completion-context-redirection-target-p
+                      context))))
+    (multiple-value-bind (scan context) (scan-context "(git status)" 3)
+      (expect :command-head :to-be
+              (nshell.domain.parsing:scan-result-cursor-role scan))
+      (expect "gi" :to-equal
+              (nshell.domain.completion:completion-context-command context))
+      (expect "" :to-equal
+              (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect '() :to-equal
+              (nshell.domain.completion:completion-context-argument-words context))
+      (expect t :to-be
+              (nshell.domain.completion:completion-context-command-position-p context))
+      (expect nil :to-be
+              (nshell.domain.completion:completion-context-redirection-target-p context)))
+    (multiple-value-bind (scan context) (scan-context "(git status)" 8)
+      (expect :argument :to-be
+              (nshell.domain.parsing:scan-result-cursor-role scan))
+      (expect "git" :to-equal
+              (nshell.domain.completion:completion-context-command context))
+      (expect "sta" :to-equal
+              (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect '("sta") :to-equal
+              (nshell.domain.completion:completion-context-argument-words context))
+      (expect nil :to-be
+              (nshell.domain.completion:completion-context-command-position-p context))
+      (expect nil :to-be
+              (nshell.domain.completion:completion-context-redirection-target-p context)))
+    (multiple-value-bind (scan context) (scan-context "(cat > out)" 9)
+      (expect :argument :to-be
+              (nshell.domain.parsing:scan-result-cursor-role scan))
+      (expect "cat" :to-equal
+              (nshell.domain.completion:completion-context-command context))
+      (expect "ou" :to-equal
+              (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect (list "ou") :to-equal
+              (nshell.domain.completion:completion-context-argument-words context))
+      (expect nil :to-be
+              (nshell.domain.completion:completion-context-command-position-p context))
+      (expect t :to-be
+              (nshell.domain.completion:completion-context-redirection-target-p context)))
+    (multiple-value-bind (scan context) (scan-context "(cat > " 7)
+      (expect :redirect-target :to-be
+              (nshell.domain.parsing:scan-result-cursor-role scan))
+      (expect "cat" :to-equal
+              (nshell.domain.completion:completion-context-command context))
+      (expect "" :to-equal
+              (nshell.domain.completion:completion-context-argument-prefix context))
+      (expect nil :to-be
+              (nshell.domain.completion:completion-context-argument-words context))
+      (expect nil :to-be
+              (nshell.domain.completion:completion-context-command-position-p context))
+      (expect t :to-be
+              (nshell.domain.completion:completion-context-redirection-target-p context)))
+    (multiple-value-bind (scan context)
+        (scan-context "(progn (+ 1 2))" 8)
+      (expect :host-form :to-be
+              (nshell.domain.parsing:scan-result-cursor-role scan))
+      (expect-empty-context context))
+    (multiple-value-bind (scan context)
+        (scan-context "(progn ; note" 9)
+      (expect :comment :to-be
+              (nshell.domain.parsing:scan-result-cursor-role scan))
+      (expect-empty-context context))
+    (multiple-value-bind (scan context)
+        (scan-context "(progn)" 7)
+      (expect :none :to-be
+              (nshell.domain.parsing:scan-result-cursor-role scan))
+      (expect-empty-context context))
+    (with-test-file-filesystem
+        ((lambda (directory)
+           (when (search "/home/user/target" (namestring directory))
+             (list #p"variable-note.txt")))
+         (constantly nil))
+      (let* ((source "(cat $TARGET/variable-)")
+             (cursor (1- (length source))))
+        (multiple-value-bind (scan context) (scan-context source cursor)
+          (expect :argument :to-be
+                  (nshell.domain.parsing:scan-result-cursor-role scan))
+          (expect "cat" :to-equal
+                  (nshell.domain.completion:completion-context-command context))
+          (expect "$TARGET/variable-" :to-equal
+                  (nshell.domain.completion:completion-context-argument-prefix context))
+          (let ((candidates
+                  (nshell.domain.completion:complete-in-context
+                   (nshell.domain.completion:make-empty-knowledge-base)
+                   source
+                   context
+                   :filesystem *completion-test-filesystem*
+                   :variable-names (list (cons "TARGET" "/home/user/target")))))
+            (expect (list "$TARGET/variable-note.txt") :to-equal
+                    (mapcar
+                     (lambda (candidate)
+                       (nshell.domain.completion:candidate-text candidate))
+                     candidates)))))))))

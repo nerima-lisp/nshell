@@ -110,10 +110,18 @@
     (%completion-splice-with-quote-context input start end replacement
                                             :quote-context quote-context)))
 
-(defun %completion-prefix-extends-token-p (prefix context)
-  (let ((raw-token (completion-token-context-raw-token context)))
-    (and (> (length prefix) (length raw-token))
-         (string= raw-token (subseq prefix 0 (length raw-token))))))
+(defun %completion-prefix-extends-token-p (prefix context input cursor)
+  (let* ((body-bounds (completion-token-context-body-bounds context))
+         (body-start (completion-token-slice-start body-bounds))
+         (body-end (completion-token-slice-end body-bounds))
+         (prefix-end (max body-start (min cursor body-end)))
+         (typed-prefix
+           (%completion-unescape-token
+            (subseq input body-start prefix-end)
+            :quote-context (completion-token-context-quote-context context))))
+    (and (> (length prefix) (length typed-prefix))
+         (string= typed-prefix
+                  (subseq prefix 0 (length typed-prefix))))))
 
 (defun maybe-extend-completion-common-prefix (state candidates)
   "Apply an unambiguous completion prefix, if CANDIDATES advance the token."
@@ -127,16 +135,18 @@
                 (variable-p (every (lambda (candidate)
                                      (eq (%candidate-kind candidate) :variable))
                                    candidates)))
-            (if (%completion-prefix-extends-token-p prefix context)
+            (if (%completion-prefix-extends-token-p
+                 prefix context buffer cursor)
                 (multiple-value-bind (new-buffer new-cursor)
                     (%completion-replace-token
                      buffer
                      context
-                     (if variable-p
-                         prefix
-                         (%completion-insertion-text
-                          prefix
-                          :quote-context (completion-token-context-quote-context context))))
+                     (%completion-candidate-insertion-text
+                      prefix
+                      (if variable-p :variable :command)
+                      (completion-token-context-raw-token context)
+                      :quote-context
+                      (completion-token-context-quote-context context)))
                   (values (copy-input-state-clearing-completion
                            state
                            :buffer new-buffer
@@ -147,11 +157,11 @@
 (defun apply-completion (input candidate &key (cursor (length input)))
   (let* ((context (%completion-token-context input cursor))
          (raw (%candidate-text candidate))
-         ;; A variable candidate carries its own $ sigil and braces, which the
-         ;; shell must still read as an expansion after insertion.
-         (text (if (eq (%candidate-kind candidate) :variable)
-                   raw
-                   (%completion-insertion-text
-                    raw
-                    :quote-context (completion-token-context-quote-context context)))))
+         (text
+           (%completion-candidate-insertion-text
+            raw
+            (%candidate-kind candidate)
+            (completion-token-context-raw-token context)
+            :quote-context
+            (completion-token-context-quote-context context))))
     (%completion-replace-token input context text)))

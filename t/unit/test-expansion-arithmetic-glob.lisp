@@ -204,6 +204,19 @@
         (ignore-errors
           (when (probe-file root)
             (host-kit:delete-directory-tree root :validate t))))))
+  (it "glob-expansion-preserves-backslash-filenames"
+    "Glob candidates retain literal POSIX backslashes."
+    (let* ((name (format nil "back~cslash.txt" (code-char 92)))
+           (filesystem
+             (make-test-filesystem
+              :directory-files
+              (lambda (directory)
+                (declare (ignore directory))
+                (list (concatenate 'string "./" name)))
+              :subdirectories (constantly nil))))
+      (expect (list name)
+              :to-equal
+              (nshell.domain.expansion:expand-glob "back*" filesystem))))
 
   (it "expand-glob-uses-immediate-directory-scope"
     "A non-recursive glob uses immediate directory candidates through expand-glob."

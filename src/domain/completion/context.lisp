@@ -211,3 +211,111 @@ intervening whitespace are merged."
 (defun completion-context-for (partial-input)
   (%completion-context-from-analysis
    (%analyze-completion-input partial-input)))
+(defun %completion-scan-source (scan-result)
+  (let* ((tokens (nshell.domain.parsing:scan-result-tokens scan-result))
+         (length (loop for token in tokens
+                       maximize (second (nshell.domain.parsing:scan-token-span token))
+                         into maximum
+                       finally (return (or maximum 0))))
+         (source (make-string length :initial-element #\Space)))
+    (dolist (token tokens source)
+      (let ((span (nshell.domain.parsing:scan-token-span token)))
+        (replace source
+                 (nshell.domain.parsing:scan-token-text token)
+                 :start1 (first span)
+                 :end1 (second span))))))
+(defun %completion-scan-segment-prefix (scan-result source cursor)
+  (let* ((tokens (nshell.domain.parsing:scan-result-tokens scan-result))
+         (stack nil)
+         (depth 0))
+    (dolist (token tokens)
+      (let* ((span (nshell.domain.parsing:scan-token-span token))
+             (start (first span))
+             (kind (nshell.domain.parsing:scan-token-kind token)))
+        (when (>= start cursor)
+          (return))
+        (case kind
+          (:delimiter-open
+           (push (second span) stack)
+           (incf depth))
+          (:delimiter-close
+           (when stack
+             (pop stack)
+             (decf depth))))))
+    (let ((target-depth depth)
+          (segment-start (car stack)))
+      (unless segment-start
+        (return-from %completion-scan-segment-prefix
+          (subseq source 0 cursor)))
+      (setf depth 0)
+      (dolist (token tokens)
+        (let* ((span (nshell.domain.parsing:scan-token-span token))
+               (start (first span))
+               (end (second span))
+               (kind (nshell.domain.parsing:scan-token-kind token))
+               (reader-context
+                 (nshell.domain.parsing:scan-token-reader-context token)))
+          (when (>= start cursor)
+            (return))
+          (case kind
+            (:delimiter-open
+             (incf depth))
+            (:delimiter-close
+             (decf depth))
+            (otherwise
+             (when (and (= depth target-depth)
+                        (eq reader-context :command-island))
+               (cond
+                 ((eq kind :command-head)
+                  (setf segment-start start))
+                 ((member kind
+                          '(:pipeline :pipeline-stderr :sequence-separator
+                            :and :or :background)
+                          :test #'eq)
+                  (setf segment-start end))))))))
+      (subseq source segment-start cursor))))
+(defun completion-context-for-scan (scan-result cursor)
+  (let* ((source (%completion-scan-source scan-result))
+         (tokens (nshell.domain.parsing:scan-result-tokens scan-result))
+         (role (nshell.domain.parsing:scan-result-cursor-role scan-result)))
+    (unless (and (integerp cursor)
+                 (<= 0 cursor (length source)))
+      (error "CURSOR must be an offset into the scanned source."))
+    (if (not (member role '(:command-head :argument :redirect-target)
+                     :test #'eq))
+        (%make-completion-context)
+        (let* ((sexp-context-p
+                 (or (some (lambda (token)
+                             (member
+                              (nshell.domain.parsing:scan-token-reader-context token)
+                              '(:host-form :command-island)
+                              :test #'eq))
+                           tokens)
+                     (let ((first-nonwhite
+                             (position-if-not
+                              (lambda (character)
+                                (find character
+                                      '(#\Space #\Tab #\Newline #\Return)))
+                              source)))
+                       (and first-nonwhite
+                            (char= (char source first-nonwhite) #\()))))
+               (prefix (if sexp-context-p
+                           (%completion-scan-segment-prefix
+                            scan-result source cursor)
+                           (subseq source 0 cursor)))
+               (context
+                 (%completion-context-from-analysis
+                  (%analyze-completion-input prefix))))
+          (if (eq role :command-head)
+              (%make-completion-context
+               :command (completion-context-command context)
+               :command-position-p t)
+              (%make-completion-context
+               :command (completion-context-command context)
+               :argument-prefix
+               (completion-context-argument-prefix context)
+               :argument-words
+               (completion-context-argument-words context)
+               :redirection-target-p
+               (or (eq role :redirect-target)
+                   (completion-context-redirection-target-p context))))))))

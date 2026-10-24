@@ -80,6 +80,46 @@
     ((nil) (%completion-unquoted-insertion-text text))
     (:single (%completion-single-quoted-insertion-text text))
     (:double (%completion-double-quoted-insertion-text text))))
+(defun %completion-candidate-insertion-text
+    (text kind raw-token &key quote-context)
+  (if (eq kind :variable)
+      text
+      (let ((prefix-end
+              (when (null quote-context)
+                (let* ((length (length raw-token))
+                       (braced-p
+                         (and (> length 2)
+                              (char= (char raw-token 0) #\$)
+                              (char= (char raw-token 1) #\{)))
+                       (name-start (if braced-p 2 1))
+                       (name-end
+                         (if braced-p
+                             (position #\} raw-token :start name-start)
+                             (position-if-not
+                              (lambda (character)
+                                (or (alphanumericp character)
+                                    (char= character #\_)))
+                              raw-token
+                              :start name-start)))
+                       (slash-position
+                         (if braced-p
+                             (and name-end (1+ name-end))
+                             name-end)))
+                  (and name-end
+                       (> name-end name-start)
+                       slash-position
+                       (< slash-position length)
+                       (char= (char raw-token slash-position) #\/)
+                       (1+ slash-position))))))
+        (if (and prefix-end
+                 (>= (length text) prefix-end)
+                 (string= raw-token text :end1 prefix-end :end2 prefix-end))
+            (concatenate 'string
+                         (subseq text 0 prefix-end)
+                         (%completion-insertion-text
+                          (subseq text prefix-end)
+                          :quote-context quote-context))
+            (%completion-insertion-text text :quote-context quote-context)))))
 
 (defun %completion-unescape-token (text &key quote-context)
   (with-output-to-string (out)

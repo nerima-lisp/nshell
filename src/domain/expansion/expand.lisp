@@ -157,8 +157,18 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
                         (remove-if
                          (lambda (subdirectory)
                            (let* ((components
-                                    (pathname-directory (pathname subdirectory)))
-                                  (name (find-if #'stringp (reverse components))))
+                                    (and (pathnamep subdirectory)
+                                         (pathname-directory subdirectory)))
+                                  (name
+                                    (if components
+                                        (find-if #'stringp (reverse components))
+                                        (let* ((trimmed
+                                                 (string-right-trim "/" subdirectory))
+                                               (separator
+                                                 (position #\/ trimmed :from-end t)))
+                                          (if separator
+                                              (subseq trimmed (1+ separator))
+                                              trimmed)))))
                              (and (%glob-hidden-component-p name)
                                   (notany (lambda (component)
                                             (glob-match-p component name))

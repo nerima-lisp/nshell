@@ -190,7 +190,7 @@
                         :description "debug ignores"))))
       (expect "check" :to-equal (nshell.presentation::completion-common-prefix candidates))))
 
-  (it "completion-common-prefix-extension-preserves-suffix"
+  (it "completion-common-prefix-extension-preserves-suffix-and-completes-midword"
     (let* ((state (input-state
                    :buffer "git ch --dry-run"
                    :cursor-pos 6))
@@ -202,6 +202,21 @@
         (is-input-state new-state
                         :buffer "git check --dry-run"
                         :cursor-pos 9
+                        :completion-index -1
+                        :suggestion nil)))
+    (let* ((buffer "cat nested/sexp-pathZZ")
+           (typed-prefix "cat nested/sexp-path")
+           (state (input-state
+                   :buffer buffer
+                   :cursor-pos (length typed-prefix)))
+           (candidates '("nested/sexp-path.txt")))
+      (multiple-value-bind (new-state extended-p)
+          (nshell.presentation::maybe-extend-completion-common-prefix state
+                                                                      candidates)
+        (expect extended-p :to-be-truthy)
+        (is-input-state new-state
+                        :buffer "cat nested/sexp-path.txt"
+                        :cursor-pos (length "cat nested/sexp-path.txt")
                         :completion-index -1
                         :suggestion nil))))
 
@@ -494,4 +509,30 @@
       (multiple-value-bind (new-state extended-p)
           (nshell.presentation::maybe-extend-completion-common-prefix state candidates)
         (expect extended-p :to-be-truthy)
-        (expect "echo $XDG_C" :to-equal (nshell.presentation:input-state-buffer new-state))))))
+        (expect "echo $XDG_C" :to-equal (nshell.presentation:input-state-buffer new-state)))))
+  (it "file-candidates-preserve-variable-directory-prefix-and-escape-suffix"
+    (dolist (case '(("cat $TARGET/fi" "$TARGET/file name.txt"
+                    "cat $TARGET/file\\ name.txt")
+                   ("cat \${TARGET}/fi" "\${TARGET}/file name.txt"
+                    "cat \${TARGET}/file\\ name.txt")))
+      (destructuring-bind (input candidate-text expected) case
+        (let ((candidate
+                (nshell.domain.completion:make-candidate
+                 candidate-text :kind :file)))
+          (expect expected :to-equal
+                  (nshell.presentation:apply-completion input candidate)))))
+    (let* ((state (input-state
+                   :buffer "cat $TARGET/"
+                   :cursor-pos (length "cat $TARGET/")))
+           (candidates
+             (list (nshell.domain.completion:make-candidate
+                    "$TARGET/file-a" :kind :file)
+                   (nshell.domain.completion:make-candidate
+                    "$TARGET/file-b" :kind :file))))
+      (multiple-value-bind (new-state extended-p)
+          (nshell.presentation::maybe-extend-completion-common-prefix
+           state candidates)
+        (expect extended-p :to-be-truthy)
+        (expect "cat $TARGET/file-"
+                :to-equal
+                (nshell.presentation:input-state-buffer new-state))))))

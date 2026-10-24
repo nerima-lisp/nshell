@@ -400,17 +400,36 @@
       (setf (gethash history *history-record-tables*)
             (make-hash-table :test #'eq))))
 
+(defun %history-record-entry-active-p (entry active-entries)
+  (gethash entry active-entries))
 (defun %prune-history-record-table (history)
-  (let ((table (%history-record-table history))
-        (entries (history-kit:history-entries history)))
+  (let* ((table (%history-record-table history))
+         (entries (history-kit:history-entries history))
+         (active-entries
+           (make-hash-table :test #'eq :size (max 1 (length entries))))
+         (stale-entries nil))
+    (dolist (entry entries)
+      (setf (gethash entry active-entries) t))
     (maphash (lambda (entry record)
                (declare (ignore record))
-               (unless (find entry entries :test #'eq)
-                 (remhash entry table)))
-             table)))
+               (unless (%history-record-entry-active-p entry active-entries)
+                 (push entry stale-entries)))
+             table)
+    (dolist (entry stale-entries)
+      (remhash entry table))
+    nil))
 
+(defun %history-record-add-unpruned (history record)
+  (multiple-value-bind (history entry)
+      (history-kit:history-add
+       history
+       (history-record-text record)
+       :timestamp (or (history-record-timestamp record) 0)
+       :exit-code (history-record-exit-code record))
+    (setf (gethash entry (%history-record-table history)) record)
+    (values history record)))
 (defun history-record-add (history text &key timestamp cwd exit-code duration-ms
-                                            (origin :typed) host)
+                                           (origin :typed) host)
   "Add TEXT to HISTORY and associate its v3 metadata with the new entry."
   (let ((record (%make-history-record-from-values
                  :text text
@@ -420,17 +439,17 @@
                  :duration-ms duration-ms
                  :origin origin
                  :host host)))
-    (multiple-value-bind (history entry)
-        (if (integerp timestamp)
-            (history-kit:history-add history text
-                                     :timestamp timestamp
-                                     :exit-code exit-code)
-            (history-kit:history-add history text
-                                     :timestamp 0
-                                     :exit-code exit-code))
-      (setf (gethash entry (%history-record-table history)) record)
+    (multiple-value-bind (history record)
+        (%history-record-add-unpruned history record)
       (%prune-history-record-table history)
       (values history record))))
+(defun history-record-add-batch (history records)
+  "Add RECORDS oldest first, pruning metadata once after the batch."
+  (dolist (record records)
+    (setf history
+          (nth-value 0 (%history-record-add-unpruned history record))))
+  (%prune-history-record-table history)
+  (values history records))
 
 (defun history-record-for-entry (history entry)
   "Return nshell metadata for ENTRY, including a safe history-kit fallback."

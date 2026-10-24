@@ -113,31 +113,32 @@ set it."
     wide-p))
 (defun %merge-history-records (history records)
   "Add unseen persisted records to HISTORY in oldest-first order."
-  (let ((added-p nil))
+  (let ((new-records nil)
+        (new-texts (make-hash-table :test #'equal)))
     (dolist (entry (history-kit:history-entries history))
       (setf (gethash (history-kit:history-entry-text entry)
                      *history-seen-command-texts*)
             t))
     (dolist (record records)
       (let ((text (nshell.infrastructure.persistence:history-record-text record)))
-        (unless (gethash text *history-seen-command-texts*)
-          (nshell.infrastructure.persistence:history-record-add
-           history
-           text
-           :timestamp
-           (nshell.infrastructure.persistence:history-record-timestamp record)
-           :cwd (nshell.infrastructure.persistence:history-record-cwd record)
-           :exit-code
-           (nshell.infrastructure.persistence:history-record-exit-code record)
-           :duration-ms
-           (nshell.infrastructure.persistence:history-record-duration-ms record)
-           :origin (nshell.infrastructure.persistence:history-record-origin record)
-           :host (nshell.infrastructure.persistence:history-record-host record))
-          (setf (gethash text *history-seen-command-texts*) t
-                added-p t))))
-    (when added-p
-      (history-kit:history-reset-navigation history))
-    added-p))
+        (unless (or (gethash text *history-seen-command-texts*)
+                    (gethash text new-texts))
+          (setf (gethash text new-texts) t)
+          (push record new-records))))
+    (when new-records
+      (setf new-records (nreverse new-records)
+            history
+            (nth-value
+             0
+             (nshell.infrastructure.persistence:history-record-add-batch
+              history new-records)))
+      (dolist (record new-records)
+        (setf (gethash
+               (nshell.infrastructure.persistence:history-record-text record)
+               *history-seen-command-texts*)
+              t))
+      (history-kit:history-reset-navigation history)
+      t)))
 (defun %seed-history-from-file (history)
   "Load persisted entries oldest first so the newest record is most recent in HISTORY."
   (%merge-history-records

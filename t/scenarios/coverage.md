@@ -110,7 +110,7 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | H11 | direct | 1 | 0 | `t/scenarios/H11/last-argument-insertion.json` |
 | H12 | direct | 1 | 0 | `t/scenarios/H12/history-expansion.json` |
 | H13 | direct | 1 | 0 | `t/scenarios/H13/malformed-history-recovers.json` |
-| H14 | direct, approximation | 2 | 0 | `t/scenarios/H14/history-persists-timestamp-metadata.json`, `t/scenarios/H14/approx-history-timestamp-metadata.json` |
+| H14 | direct, approximation | 3 | 0 | `t/scenarios/H14/history-persists-timestamp-metadata.json`, `t/scenarios/H14/history-timestamps-display-utc.json`, `t/scenarios/H14/approx-history-timestamp-metadata.json` |
 | H15 | direct | 2 | 0 | `t/scenarios/H15/history-uses-xdg-data-home.json`, `t/scenarios/H15/history-ignores-xdg-state-home.json` |
 | I01 | direct | 1 | 0 | `t/scenarios/I01/history-autosuggestion.json` |
 | I02 | direct | 1 | 0 | `t/scenarios/I02/completion-autosuggestion.json` |
@@ -219,4 +219,4 @@ A direct JSON scenario exercises the stated behavior and asserts a result using 
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 218 | 48 | — |
+| Total | expected corpus | 220 | 48 | — |

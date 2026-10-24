@@ -131,7 +131,8 @@ set it."
            (nshell.infrastructure.persistence:history-record-exit-code record)
            :duration-ms
            (nshell.infrastructure.persistence:history-record-duration-ms record)
-           :origin (nshell.infrastructure.persistence:history-record-origin record))
+           :origin (nshell.infrastructure.persistence:history-record-origin record)
+           :host (nshell.infrastructure.persistence:history-record-host record))
           (setf (gethash text *history-seen-command-texts*) t
                 added-p t))))
     (when added-p

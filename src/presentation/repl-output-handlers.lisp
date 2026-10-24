@@ -603,6 +603,7 @@ wrapped line's other rows on screen as stale duplicates."
    (let ((start-time (boundary-monotonic))
          (timestamp (get-universal-time))
          (cwd (boundary-current-directory))
+         (host (boundary-hostname))
          (exit-code nil))
      (unwind-protect
          (let ((nshell.infrastructure.acl:*command-not-found-hook*
@@ -653,7 +654,8 @@ wrapped line's other rows on screen as stale duplicates."
                       :cwd cwd
                       :exit-code recorded-exit-code
                       :duration-ms duration-ms
-                      :origin *assistant-command-origin*)
+                      :origin *assistant-command-origin*
+                      :host host)
                    (declare (ignore history))
                    (history-kit:history-reset-navigation *history*)
                    (let ((nshell.infrastructure.persistence:*history-record-to-append*

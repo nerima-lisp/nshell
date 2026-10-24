@@ -9,7 +9,8 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "SCENARIO_H08-delete-history-entry> ",
-      "SCENARIO_VALUE": "H08_DELETE_ME"
+      "SCENARIO_COMMAND": "echo H08_CREATED_$((1+1))",
+      "SCENARIO_HISTORY_TEXT": "eval \"$SCENARIO_COMMAND\""
     },
     "home": "home",
     "cwd": "work",
@@ -24,7 +25,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo \"$SCENARIO_VALUE\""
+      "text": "eval \"$SCENARIO_COMMAND\""
     },
     {
       "type": "key",
@@ -32,12 +33,12 @@
     },
     {
       "type": "wait",
-      "contains": "H08_DELETE_ME",
+      "contains": "H08_CREATED_2",
       "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "history delete 'echo \"$SCENARIO_VALUE\"'"
+      "text": "history delete \"$SCENARIO_HISTORY_TEXT\"; echo H08_DELETE_FINISHED_$((1+1))"
     },
     {
       "type": "key",
@@ -45,7 +46,7 @@
     },
     {
       "type": "wait",
-      "contains": "1",
+      "contains": "H08_DELETE_FINISHED_2",
       "timeout_seconds": 10
     },
     {
@@ -64,9 +65,18 @@
   "expected": {
     "stream": {
       "contains": [
-        "1"
+        "H08_CREATED_2",
+        "H08_DELETE_FINISHED_2"
       ]
     },
-    "exit_code": 0
+    "exit_code": 0,
+    "side_effects": {
+      "history": {
+        "path": ".local/share/nshell/history",
+        "excludes": [
+          "eval \\\"$SCENARIO_COMMAND\\\""
+        ]
+      }
+    }
   }
 }

@@ -146,12 +146,12 @@ base: a command registered via -c shows up as a -C candidate."
         ('("search" "--exact" "--case-sensitive" "Git status") :code 0
          :output (format nil "Git status~%"))
         ('("search") :code 1
-         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE]~%"))
+         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE|--host HOST|--duration-min MS|--duration-max MS] [--timestamps]~%"))
         ('("delete" "docker" "ps") :code 0 :output (format nil "1~%"))
         ('("delete") :code 1
-         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE]~%"))
+         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE|--host HOST|--duration-min MS|--duration-max MS] [--timestamps]~%"))
         ('("size") :code 0 :output (format nil "4~%"))
         ('("clear") :code 0 :output-null t)
         ('("bogus") :code 1
-         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE]~%")))
+         :output (format nil "history: usage: history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size]; history [--failed|--success|--exit CODE|--cwd PATH|--origin SOURCE|--host HOST|--duration-min MS|--duration-max MS] [--timestamps]~%")))
       (expect 0 :to-equal (history-kit:history-count history)))))

@@ -124,9 +124,12 @@
   (it "render-search-results-makes-history-filters-discoverable"
     (let ((output (capture-standard-output
                     (nshell.presentation::render-search-results
-                     "" nil 0 :terminal-width 120
+                     "" nil 0 :terminal-width 180
                      :theme (nshell.domain.configuration:default-theme)))))
       (expect (search "status:failed" output) :to-be-truthy)
+      (expect (search "host:HOST" output) :to-be-truthy)
+      (expect (search "duration-min:MS" output) :to-be-truthy)
+      (expect (search "duration-max:MS" output) :to-be-truthy)
       (expect (search "origin:typed|proposal|agent" output) :to-be-truthy)))
 
   (it "render-search-results-truncates-rows-to-terminal-width"
@@ -193,6 +196,36 @@
       (expect 3 :to-equal (nshell.presentation::render-search-results
                             "git" '("git status" "git log") 0
                             :terminal-width 80))))
+  (it "render-search-results-counts-multiline-command-lines"
+    (let* ((output (make-string-output-stream))
+           (line-count
+             (let ((*standard-output* output)
+                   (nshell.infrastructure.terminal:*terminal-color-depth* :none))
+               (nshell.presentation::render-search-results
+                "SECOND_LINE"
+                (list (format nil "echo FIRST_LINE~%echo SECOND_LINE")
+                      "echo SINGLE_LINE")
+                0 :terminal-width 80
+                :theme (nshell.domain.configuration:default-theme))))
+           (rendered (get-output-stream-string output)))
+      (expect 4 :to-equal line-count)
+      (expect 5 :to-equal (count #\Newline rendered))))
+  (it "render-search-results-prefixes-multiline-history-lines"
+    (let* ((nshell.infrastructure.terminal:*terminal-color-depth* :none)
+           (rendered
+             (%strip-sgr-sequences
+              (capture-standard-output
+                (nshell.presentation::render-search-results
+                 ""
+                 (list (list :text (format nil "echo FIRST_LINE~%echo SECOND_LINE")
+                             :origin :typed)
+                       (format nil "echo OTHER_FIRST~%echo OTHER_SECOND"))
+                 0 :terminal-width 80
+                 :theme (nshell.domain.configuration:default-theme))))))
+      (expect (search (format nil
+                              "▸ echo FIRST_LINE~%↳ echo SECOND_LINE~%  echo OTHER_FIRST~%↳ echo OTHER_SECOND~%")
+                      rendered)
+              :to-be-truthy)))
 
   (it "history-search-match-start-is-case-insensitive-for-lowercase-query"
     (expect 4 :to-equal (nshell.presentation::history-search-match-start

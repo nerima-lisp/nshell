@@ -248,6 +248,8 @@ fails part-way through, the cleanup must still restore that state; otherwise
 the next shell could start with SGR mouse reporting still on."
   (let ((*history-loading-enabled-p* history-p)
         (*history-persistence-enabled-p* (and history-p (not private-p)))
+        (nshell.infrastructure.persistence:*history-file-mutations-enabled-p*
+         (and history-p (not private-p)))
         (*history-seen-command-texts* (make-hash-table :test #'equal)))
     (initialize-repl-state
      :load-config-p load-config-p

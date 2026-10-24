@@ -89,6 +89,80 @@ git status")
               (history-kit:history-entry-texts
                (nshell.application:interactive-history-search-use-case
                 history "status:failed git")))))
+  (it "interactive-history-search-filters-host-and-duration-bounds"
+    "Ctrl-R host and duration tokens use exact hosts and inclusive bounds."
+    (let ((history (history-kit:make-history)))
+      (add-history-record history "echo lower bound" :host "alpha" :duration-ms 100)
+      (add-history-record history "echo middle" :host "alpha" :duration-ms 125)
+      (add-history-record history "echo upper bound" :host "alpha" :duration-ms 150)
+      (add-history-record history "echo too fast" :host "alpha" :duration-ms 99)
+      (add-history-record history "echo too slow" :host "alpha" :duration-ms 151)
+      (add-history-record history "echo no duration" :host "alpha")
+      (add-history-record history "echo other host" :host "beta" :duration-ms 125)
+      (expect (list "echo lower bound" "echo middle" "echo upper bound")
+              :to-equal
+              (sort
+               (history-kit:history-entry-texts
+                (nshell.application:interactive-history-search-use-case
+                 history "host:alpha duration-min:100 duration-max:150"))
+               (function string<)))))
+  (it "interactive-history-search-supports-quoted-metadata-values"
+    "Quoted token values preserve whitespace and combine with free-text terms."
+    (let ((history (history-kit:make-history)))
+      (add-history-record history "echo target" :cwd "/workspace/My Project")
+      (add-history-record history "printf target" :cwd "/workspace/My Project")
+      (add-history-record history "echo elsewhere" :cwd "/workspace/Other")
+      (expect '("echo target")
+              :to-equal
+              (history-kit:history-entry-texts
+               (nshell.application:interactive-history-search-use-case
+                history "cwd:\"/workspace/My Project\" echo")))
+      (expect '("echo target" "printf target")
+              :to-equal
+              (sort
+               (history-kit:history-entry-texts
+                (nshell.application:interactive-history-search-use-case
+                 history "cwd:\"/workspace/My Project\""))
+               #'string<))
+      (expect '("echo elsewhere")
+              :to-equal
+              (history-kit:history-entry-texts
+               (nshell.application:interactive-history-search-use-case
+                history "cwd:\"/workspace/My Project\" cwd:/workspace/Other")))))
+  (it "history-builtin-filters-metadata-and-renders-utc-timestamps"
+    "The history builtin supports host and duration filters and displays UTC timestamps on request."
+    (with-builtins-context (context)
+      (let* ((history (nshell.application:shell-context-history context))
+             (timestamp (encode-universal-time 5 4 3 2 1 2000 0)))
+        (add-history-record history "history lower" :host "alpha"
+                            :duration-ms 100 :timestamp timestamp)
+        (add-history-record history "history upper" :host "alpha"
+                            :duration-ms 150 :timestamp nil)
+        (add-history-record history "history other host" :host "beta"
+                            :duration-ms 125 :timestamp timestamp)
+        (add-history-record history "history too fast" :host "alpha"
+                            :duration-ms 99 :timestamp timestamp)
+        (add-history-record history "history too slow" :host "alpha"
+                            :duration-ms 151 :timestamp timestamp)
+        (add-history-record history "history missing duration" :host "alpha"
+                            :timestamp timestamp)
+        (assert-builtin-call
+         (context "history"
+                  (list "--host" "alpha" "--duration-min=100"
+                        "--duration-max" "150"))
+         :code 0
+         :output (format nil "history lower~%history upper~%"))
+        (assert-builtin-call
+         (context "history"
+                  (list "--timestamps" "--host=alpha" "--duration-min" "100"
+                        "--duration-max=150"))
+         :code 0
+         :output (format nil
+                         "2000-01-02T03:04:05Z history lower~%- history upper~%"))
+        (assert-builtin-call
+         (context "history" (list "--host" "--timestamps"))
+         :code 1
+         :contains (list "usage")))))
 
   (it "interactive-history-search-prefers-line-prefix-before-contains"
     "Interactive reverse search ranks command-line starts before incidental substrings."

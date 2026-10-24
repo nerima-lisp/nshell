@@ -89,7 +89,7 @@
         (progn (when (probe-file test-path) (delete-file test-path)) (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path test-path))) (when (probe-file lock-path) (delete-file lock-path)))))))
 
   (it "file-history-v3-round-trip-preserves-metadata"
-    "A v3 frame preserves every metadata field and the multiline text."
+    "A v3 frame round-trips optional host metadata and multiline text."
     (let* ((test-path (format nil "/tmp/nshell-test-history-v3-~d.lisp"
                               (random 1000000)))
            (command (format nil "for item~%  echo $item~%done")))
@@ -104,7 +104,8 @@
               :cwd "/tmp/nshell-history"
               :exit-code 7
               :duration-ms 42
-              :origin :agent)
+              :origin :agent
+              :host "alpha")
              (with-open-file (stream test-path :direction :input)
                (expect nshell.infrastructure.persistence::+history-record-v3-prefix+
                        :to-equal (subseq (read-line stream)
@@ -123,8 +124,86 @@
                (expect 42 :to-equal
                        (nshell.infrastructure.persistence:history-record-duration-ms record))
                (expect :agent :to-equal
-                       (nshell.infrastructure.persistence:history-record-origin record))))
+                       (nshell.infrastructure.persistence:history-record-origin record))
+               (expect "alpha" :to-equal
+                       (nshell.infrastructure.persistence:history-record-host record))))
         (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (progn (when (probe-file test-path) (delete-file test-path)) (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path test-path))) (when (probe-file lock-path) (delete-file lock-path)))))))
+  (it "file-history-v3-missing-host-remains-readable"
+    "A v3 frame written before host metadata remains readable."
+    (let* ((test-path (format nil "/tmp/nshell-test-history-v3-legacy-~d.lisp"
+                              (random 1000000)))
+           (payload
+             (nshell.infrastructure.persistence::%history-record-payload
+              (nshell.infrastructure.persistence::%make-history-record-from-values
+               :text "legacy v3 command"))))
+      (unwind-protect
+           (progn
+             (setf nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+             (with-open-file (stream test-path :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+               (format stream "~a~d~%~a~%"
+                       nshell.infrastructure.persistence::+history-record-v3-prefix+
+                       (length payload)
+                       payload))
+             (let ((record (first
+                            (nshell.infrastructure.persistence:load-history-file))))
+               (expect "legacy v3 command" :to-equal
+                       (nshell.infrastructure.persistence:history-record-text record))
+               (expect (nshell.infrastructure.persistence:history-record-host record) :to-be-null)))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (progn (when (probe-file test-path) (delete-file test-path)) (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path test-path))) (when (probe-file lock-path) (delete-file lock-path)))))))
+  (it "file-history-delete-and-clear-persist-current-records"
+    "The delete and clear operations update the saved history file."
+    (let ((test-path (format nil "/tmp/nshell-test-history-mutate-~d.lisp" (random 1000000))))
+      (unwind-protect
+           (let ((nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+                 (nshell.infrastructure.persistence:*history-file-mutations-enabled-p*
+                   t))
+             (nshell.infrastructure.persistence:append-history-entry "delete target"
+                                                                     :timestamp 10)
+             (nshell.infrastructure.persistence:append-history-entry "keep existing"
+                                                                     :timestamp 20)
+             (let ((stale-snapshot
+                     (nshell.infrastructure.persistence:load-history-file)))
+               (nshell.infrastructure.persistence:append-history-entry
+                "newer session record" :timestamp 30)
+               (expect (nshell.infrastructure.persistence:delete-history-entry "delete target") :to-be-truthy)
+               (expect (list "keep existing" "newer session record")
+                       :to-equal
+                       (mapcar (function nshell.infrastructure.persistence:history-record-text)
+                               (nshell.infrastructure.persistence:load-history-file)))
+               (expect 2 :to-equal (length stale-snapshot)))
+             (expect (nshell.infrastructure.persistence:clear-history-file) :to-be-truthy)
+             (expect (nshell.infrastructure.persistence:load-history-file) :to-be-null))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (setf nshell.infrastructure.persistence:*history-file-mutations-enabled-p* nil)
+        (progn (when (probe-file test-path) (delete-file test-path)) (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path test-path))) (when (probe-file lock-path) (delete-file lock-path)))))))
+  (it "file-history-delete-and-clear-respect-session-gate"
+    "Disabled file mutations leave saved history bytes unchanged."
+    (let ((test-path (format nil "/tmp/nshell-test-history-gate-~d.lisp" (random 1000000))))
+      (unwind-protect
+           (let ((nshell.infrastructure.persistence:*history-file-path-override*
+                   (pathname test-path))
+                 (nshell.infrastructure.persistence:*history-file-mutations-enabled-p*
+                   t))
+             (nshell.infrastructure.persistence:append-history-entry "gate delete target")
+             (nshell.infrastructure.persistence:append-history-entry "gate keep record")
+             (let ((before (uiop:read-file-string test-path)))
+               (let ((nshell.infrastructure.persistence:*history-file-mutations-enabled-p*
+                       nil))
+                 (expect (nshell.infrastructure.persistence:delete-history-entry "gate delete target") :to-be-truthy)
+                 (expect (nshell.infrastructure.persistence:clear-history-file) :to-be-truthy))
+               (expect before :to-equal (uiop:read-file-string test-path))
+               (expect (list "gate delete target" "gate keep record")
+                       :to-equal
+                       (mapcar (function nshell.infrastructure.persistence:history-record-text)
+                               (nshell.infrastructure.persistence:load-history-file)))))
+        (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+        (setf nshell.infrastructure.persistence:*history-file-mutations-enabled-p* nil)
         (progn (when (probe-file test-path) (delete-file test-path)) (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path test-path))) (when (probe-file lock-path) (delete-file lock-path)))))))
 
   (it "file-history-unframed-lines"

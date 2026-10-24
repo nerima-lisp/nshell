@@ -9,7 +9,7 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "SCENARIO_H09-up-arrow-prefix-search> ",
-      "SCENARIO_VALUE": "H09_PREFIX_RESULT"
+      "H09_RUN": "0"
     },
     "home": "home",
     "cwd": "work",
@@ -24,7 +24,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo $SCENARIO_VALUE"
+      "text": "echo H09_PREFIX_RESULT >> prefix-results.txt; H09_RUN=$((H09_RUN+1)); echo H09_REPLAY_READY_$H09_RUN"
     },
     {
       "type": "key",
@@ -32,12 +32,25 @@
     },
     {
       "type": "wait",
-      "contains": "H09_PREFIX_RESULT",
+      "contains": "H09_REPLAY_READY_1",
       "timeout_seconds": 10
     },
     {
       "type": "keys",
-      "text": "echo $SCENARIO_"
+      "text": "echo \"H09_DECOY_$((1+1)) echo H09_PREFIX_INTERNAL\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H09_DECOY_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo H09_PREFIX_"
     },
     {
       "type": "key",
@@ -49,7 +62,20 @@
     },
     {
       "type": "wait",
-      "contains": "H09_PREFIX_RESULT",
+      "contains": "H09_REPLAY_READY_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "sed -n '2p' prefix-results.txt; echo H09_REPLAY_READBACK_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H09_REPLAY_READBACK_2",
       "timeout_seconds": 10
     },
     {
@@ -68,9 +94,17 @@
   "expected": {
     "stream": {
       "contains": [
-        "H09_PREFIX_RESULT"
+        "H09_REPLAY_READBACK_2"
       ]
     },
-    "exit_code": 0
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "prefix-results.txt",
+          "equals": "H09_PREFIX_RESULT\nH09_PREFIX_RESULT\n"
+        }
+      ]
+    }
   }
 }

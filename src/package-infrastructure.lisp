@@ -120,19 +120,19 @@ line editor has a single place to import them from.")
 
 (defpackage #:nshell.infrastructure.persistence
   (:documentation
-   "Infrastructure: state that outlives a session. Locates, reads, and appends
-to the history file as length-framed records and loads and saves the config file,
-converting
-between that on-disk format and nshell.domain.configuration's domain
-values.")
+   "Stores state that outlives a session. It reads and updates length-framed
+history records and loads and saves configuration values.")
   (:use #:cl)
   (:export #:*history-file-path-override*
            #:load-history-file #:append-history-entry
+           #:delete-history-entry #:clear-history-file
+           #:*history-file-mutations-enabled-p*
            #:history-file-path
            #:history-record #:history-record-p
            #:history-record-text #:history-record-timestamp
            #:history-record-cwd #:history-record-exit-code
            #:history-record-duration-ms #:history-record-origin
+           #:history-record-host
            #:history-record-add #:history-record-for-entry
            #:history-record-matches-p #:history-record-filter-token
            #:*history-record-to-append*

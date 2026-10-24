@@ -1,0 +1,88 @@
+{
+  "id": "H14-history-timestamps-display-utc",
+  "uc": [
+    "H14"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_H14-history-timestamps-display-utc> ",
+      "SCENARIO_COMMAND": "echo H14_FRESH_TIMESTAMP_OUTPUT_$((1+1))"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.local/share/nshell/history",
+        "content": "# nshell-history-v3 120\n(:text \"echo H14_TIMESTAMP_SEEDED_RECORD\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "eval \"$SCENARIO_COMMAND\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H14_FRESH_TIMESTAMP_OUTPUT_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "history --timestamps"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo H14_AFTER_TIMESTAMP_LIST_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H14_AFTER_TIMESTAMP_LIST_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "H14_FRESH_TIMESTAMP_OUTPUT_2",
+        "H14_AFTER_TIMESTAMP_LIST_2",
+        "1900-01-01T00:00:01Z",
+        "H14_TIMESTAMP_SEEDED_RECORD"
+      ]
+    },
+    "exit_code": 0
+  }
+}

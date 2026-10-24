@@ -20,8 +20,8 @@
   "preconditions": {
     "files": [
       {
-        "path": "home/.local/state/nshell/history",
-        "content": "# nshell-history-v3 128\n(:text \"echo H06_FIRST_LINE\necho H06_SECOND_LINE\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+        "path": "home/.local/share/nshell/history",
+        "content": "# nshell-history-v3 122\n(:text \"echo H06_OLD_START\necho H06_NEEDLE\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n# nshell-history-v3 122\n(:text \"echo H06_NEW_START\necho H06_NEEDLE\" :timestamp 2 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
       }
     ]
   },
@@ -32,7 +32,21 @@
     },
     {
       "type": "keys",
-      "text": "SECOND_LINE"
+      "text": "H06_NEEDLE"
+    },
+    {
+      "type": "wait",
+      "contains": "echo H06_NEW_START",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "wait",
+      "contains": "echo H06_OLD_START",
+      "timeout_seconds": 10
     },
     {
       "type": "key",
@@ -88,13 +102,11 @@
   "expected": {
     "stream": {
       "contains": [
-        "H06_FIRST_LINE",
-        "H06_SECOND_LINE"
+        "echo H06_NEW_START",
+        "echo H06_OLD_START",
+        "↳"
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-E02 owns Ctrl-R display of multiline history entries."
   }
 }

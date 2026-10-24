@@ -20,27 +20,23 @@
   "preconditions": {
     "files": [
       {
-        "path": "home/.local/state/nshell/history",
-        "content": "# nshell-history-v3 93\n(:text \"false\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 1 :duration-ms 1 :origin :typed)\n# nshell-history-v3 114\n(:text \"echo H07_OTHER_CWD_RECORD\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 1 :duration-ms 1 :origin :typed)\n# nshell-history-v3 112\n(:text \"echo H07_CURRENT_SUCCESS\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 1 :origin :typed)\n"
+        "path": "home/.local/share/nshell/history",
+        "content": "# nshell-history-v3 131\n(:text \"echo H07_CLI_CWD_STATUS_MATCH\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 1 :duration-ms 50 :host \"beta\" :origin :typed)\n# nshell-history-v3 136\n(:text \"echo H07_CLI_CWD_STATUS_OTHER_CWD\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 1 :duration-ms 50 :host \"beta\" :origin :typed)\n# nshell-history-v3 133\n(:text \"echo H07_CLI_CWD_STATUS_SUCCESS\" :timestamp 1 :cwd \"/scenario/work\" :exit-code 0 :duration-ms 50 :host \"beta\" :origin :typed)\n# nshell-history-v3 133\n(:text \"echo H07_CLI_DURATION_MIN_MATCH\" :timestamp 1 :cwd \"/scenario/cli\" :exit-code 0 :duration-ms 150 :host \"beta\" :origin :typed)\n# nshell-history-v3 131\n(:text \"echo H07_CLI_DURATION_MIN_MISS\" :timestamp 1 :cwd \"/scenario/cli\" :exit-code 0 :duration-ms 50 :host \"beta\" :origin :typed)\n# nshell-history-v3 131\n(:text \"echo H07_CLI_DURATION_MAX_MATCH\" :timestamp 1 :cwd \"/scenario/cli\" :exit-code 0 :duration-ms 5 :host \"beta\" :origin :typed)\n# nshell-history-v3 131\n(:text \"echo H07_CLI_DURATION_MAX_MISS\" :timestamp 1 :cwd \"/scenario/cli\" :exit-code 0 :duration-ms 15 :host \"beta\" :origin :typed)\n# nshell-history-v3 125\n(:text \"echo H07_CLI_HOST_MATCH\" :timestamp 1 :cwd \"/scenario/cli\" :exit-code 0 :duration-ms 50 :host \"alpha\" :origin :typed)\n# nshell-history-v3 123\n(:text \"echo H07_CLI_HOST_MISS\" :timestamp 1 :cwd \"/scenario/cli\" :exit-code 0 :duration-ms 50 :host \"beta\" :origin :typed)\n# nshell-history-v3 137\n(:text \"echo H07_TOKEN_DURATION_MIN_MATCH\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 0 :duration-ms 150 :host \"beta\" :origin :typed)\n# nshell-history-v3 135\n(:text \"echo H07_TOKEN_DURATION_MIN_MISS\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 0 :duration-ms 50 :host \"beta\" :origin :typed)\n# nshell-history-v3 135\n(:text \"echo H07_TOKEN_DURATION_MAX_MATCH\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 0 :duration-ms 5 :host \"beta\" :origin :typed)\n# nshell-history-v3 135\n(:text \"echo H07_TOKEN_DURATION_MAX_MISS\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 0 :duration-ms 15 :host \"beta\" :origin :typed)\n# nshell-history-v3 129\n(:text \"echo H07_TOKEN_HOST_MATCH\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 0 :duration-ms 50 :host \"alpha\" :origin :typed)\n# nshell-history-v3 127\n(:text \"echo H07_TOKEN_HOST_MISS\" :timestamp 1 :cwd \"/scenario/other\" :exit-code 0 :duration-ms 50 :host \"beta\" :origin :typed)\n"
       }
     ]
   },
   "steps": [
     {
       "type": "keys",
-      "text": "history --failed --cwd=/scenario/work"
+      "text": "history --failed --cwd=/scenario/work > history-cwd-status.txt"
     },
     {
       "type": "key",
       "key": "Enter"
     },
     {
-      "type": "key",
-      "key": "C-c"
-    },
-    {
       "type": "keys",
-      "text": "echo H07_AFTER_$((1+1))"
+      "text": "echo H07_STEP1_$((1+1))"
     },
     {
       "type": "key",
@@ -48,16 +44,114 @@
     },
     {
       "type": "wait",
-      "contains": "H07_AFTER_2",
+      "contains": "H07_STEP1_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "history --duration-min=100 --cwd=/scenario/cli > history-duration-min.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo H07_STEP2_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H07_STEP2_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "history --duration-max=10 --cwd=/scenario/cli > history-duration-max.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo H07_STEP3_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H07_STEP3_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "history --host=alpha --cwd=/scenario/cli > history-host.txt"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "echo H07_STEP4_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H07_STEP4_2",
       "timeout_seconds": 10
     },
     {
       "type": "key",
-      "key": "C-c"
+      "key": "C-r"
     },
     {
       "type": "keys",
-      "text": "echo H07_AFTER_$((1+1))"
+      "text": "duration-min:100 "
+    },
+    {
+      "type": "wait",
+      "contains": "履歴: duration-min:100",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "H07_TOKEN_DURATION_MIN"
+    },
+    {
+      "type": "wait",
+      "contains": " (1 件)",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait",
+      "contains": "H07_TOKEN_DURATION_MIN_MATCH",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "key",
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo H07_TOKEN_STEP1_$((1+1))"
     },
     {
       "type": "key",
@@ -65,7 +159,111 @@
     },
     {
       "type": "wait",
-      "contains": "H07_AFTER_2",
+      "contains": "H07_TOKEN_STEP1_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "duration-max:10 "
+    },
+    {
+      "type": "wait",
+      "contains": "履歴: duration-max:10",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "H07_TOKEN_DURATION_MAX"
+    },
+    {
+      "type": "wait",
+      "contains": " (1 件)",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait",
+      "contains": "H07_TOKEN_DURATION_MAX_MATCH",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "key",
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo H07_TOKEN_STEP2_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H07_TOKEN_STEP2_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-r"
+    },
+    {
+      "type": "keys",
+      "text": "host:alpha "
+    },
+    {
+      "type": "wait",
+      "contains": "履歴: host:alpha",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "H07_TOKEN_HOST"
+    },
+    {
+      "type": "wait",
+      "contains": " (1 件)",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait",
+      "contains": "H07_TOKEN_HOST_MATCH",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Escape"
+    },
+    {
+      "type": "key",
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "echo H07_TOKEN_STEP3_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "H07_TOKEN_STEP3_2",
       "timeout_seconds": 10
     },
     {
@@ -84,16 +282,38 @@
   "expected": {
     "stream": {
       "contains": [
-        "false"
-      ],
-      "excludes": [
-        "H07_OTHER_CWD_RECORD",
-        "H07_CURRENT_SUCCESS"
+        "H07_TOKEN_STEP1_2",
+        "H07_TOKEN_STEP2_2",
+        "H07_TOKEN_STEP3_2"
       ]
     },
-    "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-E02 owns history filters by cwd and status."
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "history-cwd-status.txt",
+          "contains": ["H07_CLI_CWD_STATUS_MATCH"],
+          "excludes": [
+            "H07_CLI_CWD_STATUS_OTHER_CWD",
+            "H07_CLI_CWD_STATUS_SUCCESS"
+          ]
+        },
+        {
+          "path": "history-duration-min.txt",
+          "contains": ["H07_CLI_DURATION_MIN_MATCH"],
+          "excludes": ["H07_CLI_DURATION_MIN_MISS"]
+        },
+        {
+          "path": "history-duration-max.txt",
+          "contains": ["H07_CLI_DURATION_MAX_MATCH"],
+          "excludes": ["H07_CLI_DURATION_MAX_MISS"]
+        },
+        {
+          "path": "history-host.txt",
+          "contains": ["H07_CLI_HOST_MATCH"],
+          "excludes": ["H07_CLI_HOST_MISS"]
+        }
+      ]
+    }
   }
 }

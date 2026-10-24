@@ -63,7 +63,7 @@ when QUERY does not occur in TEXT."
     (and (plusp width) (fit badges))))
 
 (defun %search-header-text (query count)
-  (format nil "~a | 絞り込み: status:failed status:success exit:N cwd:PATH origin:typed|proposal|agent"
+  (format nil "~a | 絞り込み: status:failed status:success exit:N cwd:PATH host:HOST duration-min:MS duration-max:MS origin:typed|proposal|agent"
           (if (zerop count)
               (format nil "履歴: ~a  (該当なし)" query)
               (format nil "履歴: ~a  (~d 件)" query count))))
@@ -71,40 +71,52 @@ when QUERY does not occur in TEXT."
 (defun %search-result-row (match query selected-p width theme)
   (let* ((metadata (%search-result-metadata match))
          (text (getf metadata :text))
+         (lines (loop with start = 0
+                      for end = (position #\Newline text :start start)
+                      collect (subseq text start end)
+                      do (if end
+                             (setf start (1+ end))
+                             (loop-finish))))
          (marker (%truncate-string-to-width (%search-result-marker selected-p)
                                            width))
-         (badges (%search-result-badges metadata))
          (badges (%search-result-badges-within-width
-                  badges
-                  (- width (%string-visible-width marker))))
-         (badge-text (mapcar #'first badges))
-         (badge-width (reduce #'+ badge-text :key #'%string-visible-width :initial-value 0))
-         (text-width (max 0 (- width (%string-visible-width marker) badge-width)))
-         (visible-text (%truncate-string-to-width text text-width))
-         (visible (concatenate 'string marker visible-text
-                               (if badge-text
-                                   (apply #'concatenate 'string badge-text)
-                                   "")))
-         (text-visible (concatenate 'string marker visible-text)))
-    (if selected-p
-        (progn
-          (%write-styled text-visible :completion-selected theme)
-          (dolist (badge badges)
-            (%write-styled (first badge) (second badge) theme)))
-        (let* ((marker-length (length marker))
-               (match-start (history-search-match-start visible-text query))
-               (row-start (and match-start (+ marker-length match-start)))
-               (row-end (and row-start
-                             (min (+ row-start (length query))
-                                  (+ marker-length (length visible-text))))))
-          (if (and row-start row-end (> row-end row-start))
-              (progn
-                (write-string (subseq text-visible 0 row-start))
-                (%write-styled (subseq visible row-start row-end) :search-match theme)
-                (write-string (subseq text-visible row-end)))
-              (write-string text-visible))
-          (dolist (badge badges)
-            (%write-styled (first badge) (second badge) theme))))))
+                  (%search-result-badges metadata)
+                  (- width (%string-visible-width marker)))))
+    (loop for line in lines
+          for line-index from 0
+          do (when (plusp line-index)
+               (format t "~%"))
+             (let* ((prefix (if (zerop line-index)
+                                marker
+                                (%truncate-string-to-width "↳ " width)))
+                    (line-badges (if (zerop line-index) badges nil))
+                    (badge-width (reduce #'+ line-badges
+                                         :key (lambda (badge)
+                                                (%string-visible-width (first badge)))
+                                         :initial-value 0))
+                    (text-width (max 0 (- width
+                                         (%string-visible-width prefix)
+                                         badge-width)))
+                    (visible-text (%truncate-string-to-width line text-width))
+                    (text-visible (concatenate (quote string) prefix visible-text)))
+               (if selected-p
+                   (%write-styled text-visible :completion-selected theme)
+                   (let* ((match-start (history-search-match-start
+                                        visible-text query))
+                          (match-end (and match-start
+                                          (min (+ match-start (length query))
+                                               (length visible-text)))))
+                     (if (and match-start match-end (> match-end match-start))
+                         (progn
+                           (write-string prefix)
+                           (write-string (subseq visible-text 0 match-start))
+                           (%write-styled (subseq visible-text match-start match-end)
+                                          :search-match theme)
+                           (write-string (subseq visible-text match-end)))
+                         (write-string text-visible))))
+               (dolist (badge line-badges)
+                 (%write-styled (first badge) (second badge) theme))))
+    (length lines)))
 
 (defun render-search-results (query matches selected-index
                               &key (terminal-width (terminal-width))
@@ -115,7 +127,8 @@ SELECTED-INDEX marked and styled `:completion-selected`. Returns the number of
 lines written, for the caller to clear on the next redraw."
   (let* ((count (length matches))
          (visible-matches
-           (subseq matches 0 (min +history-search-max-visible-matches+ count))))
+           (subseq matches 0 (min +history-search-max-visible-matches+ count)))
+         (rendered-match-lines 0))
     (format t "~%")
     (%write-styled
      (%truncate-string-to-width (%search-header-text query count)
@@ -124,10 +137,11 @@ lines written, for the caller to clear on the next redraw."
     (format t "~%")
     (loop for match in visible-matches
           for index from 0
-          do (%search-result-row match query (eql index selected-index)
-                                 terminal-width theme)
+          do (incf rendered-match-lines
+                   (%search-result-row match query (eql index selected-index)
+                                       terminal-width theme))
              (format t "~%"))
-    (1+ (length visible-matches))))
+    (1+ rendered-match-lines)))
 
 (defun render-search-results-below-prompt (query matches selected-index)
   (setf *search-rendered-lines*

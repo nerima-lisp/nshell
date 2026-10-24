@@ -29,24 +29,34 @@ standing in for real git invocations."
   (string-right-trim '(#\Newline #\Return #\Space #\Tab) text))
 
 (defun %run-git (dir args)
-  "Run git ARGS in DIR, returning its stdout and exit code, bounded by
-*GIT-COMMAND-TIMEOUT* through cl-process-kit so a hung repository can never stall
-the prompt. A timeout, launch failure, or any error yields (values \"\" 1).
-Delegates to *GIT-RUNNER* when one is bound."
+  "Run git ARGS in DIR with a bounded native subprocess. A timeout, launch
+failure, or any error yields (values \"\" 1). Delegates to *GIT-RUNNER* when
+one is bound."
   (if *git-runner*
       (funcall *git-runner* dir args)
       (handler-case
-          (let ((result (process-kit:run
-                         "git"
-                         (list* "-C" (namestring (host-kit:ensure-directory-pathname dir)) args)
-                         :search t
-                         :error :capture
-                         :timeout *git-command-timeout*
-                         :on-timeout :return)))
-            (if (process-kit:process-result-timed-out-p result)
-                (values "" 1)
-                (values (process-kit:process-result-stdout result)
-                        (or (process-kit:process-result-exit-code result) 1))))
+          (let* ((environment (current-environment-entries))
+                 (program (%resolve-external-command "git" environment)))
+            (unless program
+              (return-from %run-git (values "" 1)))
+            (let ((output (make-string-output-stream))
+                  (error-output (make-string-output-stream))
+                  (timeout (ensure-timeout-seconds
+                            *git-command-timeout* "git command timeout")))
+              (let ((process
+                      (%spawn-in-own-process-group
+                       program
+                       (list* "-C"
+                              (namestring (host-kit:ensure-directory-pathname dir))
+                              args)
+                       environment nil :stream :error :stream)))
+                (multiple-value-bind (exit timed-out-p)
+                    (%wait-process-with-output
+                     process output timeout (lambda () 124) error-output)
+                  (if timed-out-p
+                      (values "" 1)
+                      (values (get-output-stream-string output)
+                              (or exit 1)))))))
         (error () (values "" 1)))))
 
 (defun %git-branch-uncached (dir)

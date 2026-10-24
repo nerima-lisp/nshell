@@ -1,5 +1,8 @@
 # S-expression syntax redesign
 
+Decision IDs in this note refer to section 2 of
+`/private/tmp/nshell-work/plan/requirements.md`.
+
 The old reader and parser remain on the default input path until WP-X01 switches
 after the [P5 reader-switch gate](#contracts-for-the-prototype-and-follow-on-work)
 passes. WP-X01 then removes the old reader and its reader-specific tests. The
@@ -49,14 +52,15 @@ An empty list `()` has no head and is the Common Lisp value `nil`, so it is
 always host syntax. It produces a `reader-result` whose `form` is `nil`; it is
 not a command and does not invoke head classification.
 
-Shell-style command substitution no longer captures stdout as text in command
-forms. Command forms return values, so `(set branch ,(git rev-parse
---abbrev-ref HEAD))` evaluates the nested command and passes its value to `set`.
-`$` followed by a form, such as `$(pwd)`, remains reader syntax for evaluation;
-it does not capture command output as a string or interpolate into a surrounding
-string. Unquoted here-document bodies are the exception and keep their
-established text-expansion behavior as specified under [Typed redirects and
-pipeline edges](#typed-redirects-and-pipeline-edges).
+Command forms do not splice command output into source text. An external
+command in value position returns stdout as one string with trailing linefeeds
+removed. For example, `(set branch ,(git rev-parse --abbrev-ref HEAD))`
+evaluates the nested command and passes its string result to `set`. `$` followed
+by a form, such as `$(pwd)`, evaluates that form once and yields its result as a
+Lisp value; it does not interpolate text into an enclosing source string.
+Unquoted here-document bodies are the exception and keep their established
+text-expansion behavior as specified under [Typed redirects and pipeline
+edges](#typed-redirects-and-pipeline-edges).
 
 ## Reader
 
@@ -88,22 +92,30 @@ selects S-expression mode, every later top-level Common Lisp datum is accepted,
 including atoms, vectors, quote forms, and strings; each is evaluated in
 source order. `!!` and `!$` expand only for bare interactive input. E03
 captures the submission's `:bare-line` or `:sexp` context from the raw buffer
-before history expansion, then passes that context explicitly to `scan-input`;
-an expansion that changes the first non-whitespace character cannot switch the
-submission mode. Incremental editor scans may use `:auto`. An S-expression
-submission may contain multiple top-level forms. The reader returns one
+before history expansion, then passes the same context explicitly to
+`scan-input` and `read-submission`; an expansion that changes the first
+non-whitespace character cannot switch the submission mode. Incremental editor
+scans may use `:auto`. An S-expression submission may contain multiple
+top-level forms. The reader returns one
 `reader-result` per form, in source order, and the REPL evaluates them in that
 order. A source file uses the same mode-selection rule with `:auto` and without
 interactive history expansion. A bare-line submission continues to produce
 its single command or sequence AST.
 
-WP-L01 exposes `(read-submission source &key source-path source-map) =>
+For example, `'(x)` begins with a quote, so it selects bare-line mode. A quote
+form is read as a host datum after an opening list has selected S-expression
+mode, as in `(progn '(x))`.
+
+WP-L01 exposes `(read-submission source &key (reader-context :auto)
+source-path source-map) =>
 list-of reader-result` from
 `sexp-reader.lisp`. It preserves forms and source spans without resolving
 command heads or receiving shell state. The REPL and source-file reader
 call `scan-input` first and call `read-submission` only when the scan is
 `:complete`; for S-expression scans, they pass the active WP-L02
 `classify-sexp-head` closure to `scan-input` as `head-classifier`.
+For source files, WP-L07 passes `:auto` to both APIs. For interactive input,
+WP-E03 passes the context captured from the raw buffer to both APIs.
 `read-submission` has no classifier parameter. WP-L07's
 `builtin-source-reader.lisp` owns this scan-and-read dispatch for source files;
 WP-E03 owns it for interactive input. Both pass each returned
@@ -119,6 +131,12 @@ inserted by one expansion maps to the original history-expression span. E03
 passes this map to L01 and uses the same map to translate scanner diagnostics.
 All reader and AST spans index the exact post-expansion string passed as
 `source`.
+
+The `reader-context` argument to `read-submission` fixes syntax mode but does
+not receive or freeze shell-context resolution; the scanner callback classifies
+syntax context only. WP-L02 resolves each source-backed command head again
+during evaluation, because earlier forms may have changed the active shell
+scope.
 For source files, `:invalid` signals `sexp-reader-error` at
 `scan-result.invalid-span`, and `:incomplete` signals it at
 `scan-result.incomplete-span`. In either case, the source reader evaluates no
@@ -1452,7 +1470,10 @@ WP-C06 projects `cursor-role` into the existing completion-context fields
 
 ### Shell-function registry
 
-WP-L07 owns the global shell-function registry, its binding types, autoload hook, and user-package definition path. WP-L02 owns evaluator syntax and calls the registry API. Registry code replaces source-line reparsing with captured callables.
+WP-L07 owns the global shell-function registry, its binding types, autoload
+hook, and module loading into the existing `NSHELL.USER` package. WP-L00b owns
+package creation. WP-L02 owns evaluator syntax and calls the registry API.
+Registry code replaces source-line reparsing with captured callables.
 
 `shell-function-binding` has slots `callable` (`function`), `lambda-list` (list), `display-name` (string), `source-path` (nullable pathname or string), and `source-span` (nullable source span). A callable receives `(context evaluated-command-args)` and returns one Lisp value; command failures use `command-failed`. The evaluator passes the argument values to the declared lambda list while retaining their spans for diagnostics. In a stream stage, a normal callable return maps to status `0` and no signal; a `command-failed` condition maps to its `status` and `signal` slots, while its value is not serialized. L08 returns those stage results to L05, which completes the pipeline before L04 applies D-06.
 
@@ -1524,9 +1545,9 @@ rebuilding shared structures:
 | L04 | New `src/application/command-failed.lisp` and failure-policy files, the `call-with-command-failure-restarts` helper in `src/presentation/repl-output-handlers.lisp`, restart-mode data and tests | `command-failed` and condition-policy types; the three special variables in `nshell.application` | Owns condition slots, policy, and `call-with-command-failure-restarts(thunk)`. Consume the pipeline result interface supplied by L05; do not change pipeline or AST structures or E03-owned submission functions. |
 | L05 | `src/application/execute-pipeline-stage.lisp`, `src/application/execute-source-pipeline.lisp`, `src/application/execute-pipeline.lisp`, `src/infrastructure/acl/syscall-pipeline*.lisp`, streaming/value executor files, matching tests | `pipeline-execution-result`, `pipeline-stage-io`, `byte-stream-execution-error`; `pipeline-stage-stream`, `*pipeline-stage-io*`, `spawn-byte-stream-node-in-context`, `wait-byte-stream-execution`, `command-node-external-p` | R02 lands the posix_spawn infrastructure before L05 changes pipeline spawning. Consume `evaluated-command-stage` and per-stage descriptor maps. Expose per-stage status and signal metadata to L04 without changing `command-failed`. Start external stages, provide mapped streams for internal stages, and invoke L08's dispatcher for builtin and shell-function stages; do not interpret redirect entries or pipeline edges on this path. Define `byte-stream-execution-error(operation cause)` for infrastructure start/wait failures; cleanup all started stages and never return a partial result. The external-path predicate uses the same runtime dispatch as stage launch and performs no allocation or process start. |
 | L06 | New `src/application/sexp-value-conversion.lisp`, matching conversion tests, and its `nshell.asd` entry | JSON, TSV, line, regex, and string conversion types; `command-argument-type-error`; `argv-scalar-string` | Own the shared scalar argv converter and its source-located type error. L03 and L08 call it at their argv and redirect boundaries; they do not duplicate conversion rules. Do not add implicit conversions to AST or stream boundaries. |
-| L07 | `src/application/shell-context.lisp`, `src/application/builtin-source-reader.lisp`, `src/application/shell-function-registry.lisp`, matching tests, and `nshell.asd` entries | `shell-function-binding`, `shell-function-registry`, `shell-function-scope`, and loader types | Own the registry, module loader, and autoload path. `NSHELL.USER` package creation belongs to L00b and is already available before L01 loads. `builtin-source-reader.lisp` scans source text before `read-submission`, supplies L02's active classifier to `scan-input`, and sends complete reader results to L02 for sequential evaluation under the active script policy. L02 uses the registry accessors and definition API; it does not recreate the registry. |
+| L07 | `src/application/shell-context.lisp`, `src/application/builtin-source-reader.lisp`, `src/application/shell-function-registry.lisp`, matching tests, and `nshell.asd` entries | `shell-function-binding`, `shell-function-registry`, `shell-function-scope`, and loader types | Own the registry, module loader, and autoload path. `NSHELL.USER` package creation belongs to L00b and is already available before L01 loads. `builtin-source-reader.lisp` scans source text before `read-submission`, supplies L02's active classifier to `scan-input`, passes `:auto` to both `scan-input` and `read-submission`, and sends complete reader results to L02 for sequential evaluation under the active script policy. L02 uses the registry accessors and definition API; it does not recreate the registry. |
 | L08 | `src/domain/parsing/ast-redirect-split.lisp`, `src/application/execute-pipeline-control.lisp` (`%execute-reader-sequence-node-in-context` only), `src/application/execute-pipeline-redirect.lisp`, `src/application/execute-pipeline-expansion-here-doc.lisp`, `src/application/execute-pipeline-stage-background.lisp`, new `src/application/execute-pipeline-process-substitution.lisp`, `src/infrastructure/acl/syscall-process-substitution.lisp`, matching tests, and its `nshell.asd` entries | `command-execution-plan-error`; redirect execution-plan and process-substitution runtime types; `execute-reader-ast-in-context` | Own typed-reader AST dispatch, a new reader-only sequence helper, redirects, and process substitutions. The legacy `%execute-sequence-node-in-context` remains unchanged to satisfy D-02; `&&` short-circuiting is fixed only in `%execute-reader-sequence-node-in-context` on the `execute-reader-ast-in-context` path. Accept L02's stage-evaluator callback, prepare evaluated stages and final descriptor maps, then pass both to L05; read typed redirects directly and preserve the legacy splitter for legacy callers. Bind mapped standard streams and `*pipeline-stage-io*` for internal stages. Reject non-external or nested process-substitution stages, direction mismatch, and process substitution under `&` during preflight before allocation. Wrap L05 start/wait failures with the pipeline or redirect source span, clean up all resources, and do not expose partial results. Clean up and re-signal L06 conversion conditions unchanged. It does not edit shared AST types. |
-| E03 | `src/presentation/input-state-core.lisp`, `src/presentation/input-state-copy.lisp`, `src/presentation/input-state-dispatch-data.lisp`, `src/presentation/input-state-dispatch.lisp`, new `src/presentation/input-state-vertical-navigation.lisp`, `src/presentation/input-state-vi-edit.lisp`, `src/presentation/input-state-words.lisp`, `src/presentation/input-state-words-scan.lisp`, `src/presentation/repl-execution.lisp` lines 28–36, REPL handling definitions in `src/presentation/repl-output-handlers.lisp` except L04's restart wrapper, `t/unit/test-input-state-navigation.lisp`, `t/unit/test-input-state-navigation-properties.lisp`, `t/unit/test-input-state-vi.lisp`, new `t/unit/test-input-state-continuation.lisp` and `t/unit/test-repl-submission.lisp`, and `nshell.asd` entries | `input-state` slot `preferred-visual-column` (`nil` or nonnegative integer); `+editor-indent-width+` set to 2; editor continuation, indentation, and vertical navigation state | Own the preferred-column slot and its copy/reset behavior, Up/Down dispatch and movement, REPL scanner/reader dispatch, and continuation over the existing `*input-state*` buffer; do not create another submission buffer. Retain invalid input and cursor; for incomplete input, insert a newline followed by `next-indent` spaces at the current cursor and leave the cursor after those spaces. Route complete submissions through `read-submission`. Capture `:bare-line` or `:sexp` from the raw buffer before history expansion and pass it explicitly to the submission scan; expansion cannot switch the mode. Incremental editor scans may use `:auto`. Consume `scan-result`, pass `+editor-indent-width+` to `scan-input`, and provide the active `classify-sexp-head` callback for S-expression scans. Test scanner indentation calculation in L01; test editor insertion and cursor placement in `t/unit/test-input-state-continuation.lisp`, and REPL dispatch and buffer retention in `t/unit/test-repl-submission.lisp`. Wrap each top-level result evaluation with L04's `call-with-command-failure-restarts` and call L02's `evaluate-reader-result-in-context` once per result in order. |
+| E03 | `src/presentation/input-state-core.lisp`, `src/presentation/input-state-copy.lisp`, `src/presentation/input-state-dispatch-data.lisp`, `src/presentation/input-state-dispatch.lisp`, new `src/presentation/input-state-vertical-navigation.lisp`, `src/presentation/input-state-vi-edit.lisp`, `src/presentation/input-state-words.lisp`, `src/presentation/input-state-words-scan.lisp`, `src/presentation/repl-execution.lisp` lines 28–36, REPL handling definitions in `src/presentation/repl-output-handlers.lisp` except L04's restart wrapper, `t/unit/test-input-state-navigation.lisp`, `t/unit/test-input-state-navigation-properties.lisp`, `t/unit/test-input-state-vi.lisp`, new `t/unit/test-input-state-continuation.lisp` and `t/unit/test-repl-submission.lisp`, and `nshell.asd` entries | `input-state` slot `preferred-visual-column` (`nil` or nonnegative integer); `+editor-indent-width+` set to 2; editor continuation, indentation, and vertical navigation state | Own the preferred-column slot and its copy/reset behavior, Up/Down dispatch and movement, REPL scanner/reader dispatch, and continuation over the existing `*input-state*` buffer; do not create another submission buffer. Retain invalid input and cursor; for incomplete input, insert a newline followed by `next-indent` spaces at the current cursor and leave the cursor after those spaces. Build the new submission route as a dormant path; do not make it the default until WP-X01 switches after P5 passes. Route complete submissions through `read-submission` with the `reader-context` captured from the raw buffer. Pass that same context to `scan-input`; expansion cannot switch the mode. Incremental editor scans may use `:auto`. Consume `scan-result`, pass `+editor-indent-width+` to `scan-input`, and provide the active `classify-sexp-head` callback for S-expression scans. Test scanner indentation calculation in L01; test editor insertion and cursor placement in `t/unit/test-input-state-continuation.lisp`, and REPL dispatch and buffer retention in `t/unit/test-repl-submission.lisp`. Wrap each top-level result evaluation with L04's `call-with-command-failure-restarts` and call L02's `evaluate-reader-result-in-context` once per result in order. |
 | E05 | `src/presentation/highlight.lisp`, `src/presentation/repl-highlight.lisp`, `src/presentation/repl-diagnostics.lisp`, diagnostic and highlighting tests | Highlight and diagnostic projection types | Consume scanner token kinds, spans, and `delimiter-pairs`; own rendering of matching delimiters and source-located reader diagnostics. Do not re-tokenize or edit scanner types. |
 | C06 | `src/domain/completion/context.lisp`, `src/presentation/completion-ui-logic.lisp`, `src/presentation/completion-ui-text.lisp`, completion tests | Completion projection types only | Keep the existing five-field `completion-context`; project scanner `cursor-role` into it. C06 depends on L02's `classify-sexp-head` API through a callback supplied by presentation; the domain completion package does not import application symbols. |
 | E06 | Suggestion, abbreviation, history-expansion, and last-argument files under `src/presentation/` and `src/domain/`, with their tests | Suggestion and history projection types | Consume scanner and AST accessors; do not add fields to scanner or completion context. |

@@ -75,6 +75,30 @@ Unquoted here-document bodies are the exception and keep their established
 text-expansion behavior as specified under [Typed redirects and pipeline
 edges](#typed-redirects-and-pipeline-edges).
 
+## Evaluator acceptance scope
+
+O04 names `if`, `when`, `unless`, `cond`, `case`, and repetition without naming
+the repetition forms. WP-L02 accepts `dotimes` for counted iteration and
+`dolist` for list traversal. This covers the two common forms needed to repeat
+commands over a range or a collection. `do`, `do*`, and `loop` are outside this
+WP's acceptance scope.
+
+Both forms evaluate their control expression once and evaluate body forms in
+stream position. `dotimes` requires a nonnegative integer count, leaves its
+index equal to the count after iteration, and evaluates an optional result form
+in value position. `dolist` requires a proper list, sets its item variable to
+`nil` after iteration, and evaluates an optional result form in value position.
+
+O05 permits `defun` inside executable bodies. A nested `defun` registers its
+function in the persistent `NSHELL.USER` package; it does not create a lexical
+local function. Function definitions and calls use Common Lisp lambda-list
+validation, so invalid lambda lists and argument counts signal errors.
+
+Macro expansion proceeds one step at a time. The evaluator limits active
+expansion nesting to 128 steps; a further nested expansion signals
+`command-macro-syntax-error` at the current macro call's source span. The limit
+counts nested expansion depth rather than the total expansions in a submission.
+
 ## Reader
 
 ### Bare lines are sugar

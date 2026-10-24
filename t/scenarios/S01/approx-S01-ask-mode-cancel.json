@@ -4,7 +4,7 @@
     "S01"
   ],
   "mode": "pty",
-  "input_delay_seconds": 0.12,
+  "input_delay_seconds": 0.5,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
@@ -26,6 +26,11 @@
     {
       "type": "keys",
       "text": "\u001d"
+    },
+    {
+      "type": "wait",
+      "contains": "ask>",
+      "timeout_seconds": 5
     },
     {
       "type": "keys",

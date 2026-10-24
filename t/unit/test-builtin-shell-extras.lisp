@@ -307,22 +307,8 @@ read $status and call complete -C without an interactive session."
   (it "repeated-listings-of-an-unchanged-directory-read-the-directory-once"
     "Completion lists a directory per keystroke, so the second read of an
 unchanged directory must come from the cache."
-    (let ((reads 0))
-      (nshell.infrastructure.acl:clear-directory-listing-cache)
-      (with-rebound-function (host-kit:directory-files
-                              (lambda (directory)
-                                (declare (ignore directory))
-                                (incf reads)
-                                (list "a.txt")))
-        (expect '("a.txt") :to-equal
-                (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
-        (expect '("a.txt") :to-equal
-                (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
-        (expect 1 :to-equal reads))))
-
-  (it "a-changed-directory-write-date-invalidates-the-entry"
     (let ((reads 0)
-          (stamp 1))
+          (stamp '(1 2 3 4 5 6)))
       (nshell.infrastructure.acl:clear-directory-listing-cache)
       (with-rebound-function (host-kit:directory-files
                               (lambda (directory)
@@ -332,11 +318,107 @@ unchanged directory must come from the cache."
         (with-rebound-function (nshell.infrastructure.acl::%directory-listing-stamp
                                 (lambda (directory)
                                   (declare (ignore directory))
-                                  stamp))
+                                  (copy-list stamp)))
+          (expect '("a.txt") :to-equal
+                  (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
+          (expect '("a.txt") :to-equal
+                  (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
+          (expect 1 :to-equal reads)))))
+
+  (it "a-changed-directory-stamp-invalidates-the-entry"
+    (let ((reads 0)
+          (stamp '(1 2 3 4 5 6)))
+      (nshell.infrastructure.acl:clear-directory-listing-cache)
+      (with-rebound-function (host-kit:directory-files
+                              (lambda (directory)
+                                (declare (ignore directory))
+                                (incf reads)
+                                (list "a.txt")))
+        (with-rebound-function (nshell.infrastructure.acl::%directory-listing-stamp
+                                (lambda (directory)
+                                  (declare (ignore directory))
+                                  (copy-list stamp)))
           (nshell.infrastructure.acl::cached-directory-files "/tmp/")
-          (setf stamp 2)
+          (setf stamp '(1 2 3 4 5 7))
           (nshell.infrastructure.acl::cached-directory-files "/tmp/")
           (expect 2 :to-equal reads)))))
+  (it "a-symlink-target-kind-change-invalidates-the-entry"
+    "A target changed outside the directory must invalidate its cached completion kind."
+    (let ((reads 0)
+          (stamp '(1 2 3 4 5 6))
+          (target-kind :regular-file))
+      (nshell.infrastructure.acl:clear-directory-listing-cache)
+      (with-rebound-function (nshell.infrastructure.acl::%filesystem-completion-symlink-target-kind
+                              (lambda (entry)
+                                (declare (ignore entry))
+                                target-kind))
+        (with-rebound-function (nshell.infrastructure.acl::%filesystem-completion-entry-lists
+                                (lambda (directory)
+                                  (declare (ignore directory))
+                                  (incf reads)
+                                  (list :files (if (eq target-kind :regular-file) '("link") nil)
+                                        :subdirectories
+                                        (if (eq target-kind :directory) '("link/") nil)
+                                        :symlink-target-kinds
+                                        (list (cons "link" target-kind)))))
+          (with-rebound-function (nshell.infrastructure.acl::%directory-listing-stamp
+                                  (lambda (directory)
+                                    (declare (ignore directory))
+                                    (copy-list stamp)))
+            (expect nil :to-equal
+                    (nshell.infrastructure.acl::cached-completion-subdirectories "/tmp/"))
+            (setf target-kind :directory)
+            (expect '("link/") :to-equal
+                    (nshell.infrastructure.acl::cached-completion-subdirectories "/tmp/"))
+            (expect 2 :to-equal reads))))))
+
+  (it "a-subsecond-ctime-change-invalidates-the-entry"
+    "A directory change can keep mtime and ctime seconds fixed while ctime nanoseconds change."
+    (let ((reads 0)
+          (stamp '(1 2 3 4 5 6)))
+      (nshell.infrastructure.acl:clear-directory-listing-cache)
+      (with-rebound-function (host-kit:directory-files
+                              (lambda (directory)
+                                (declare (ignore directory))
+                                (incf reads)
+                                (if (= reads 1)
+                                    '("before.txt")
+                                    '("after.txt"))))
+        (with-rebound-function (nshell.infrastructure.acl::%directory-listing-stamp
+                                (lambda (directory)
+                                  (declare (ignore directory))
+                                  (copy-list stamp)))
+          (expect '("before.txt") :to-equal
+                  (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
+          (setf stamp '(1 2 3 4 5 7))
+          (expect '("after.txt") :to-equal
+                  (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
+          (expect 2 :to-equal reads)))))
+
+  (it "a-missing-directory-stamp-bypasses-and-discards-the-cache"
+    (let ((reads 0)
+          (stamp '(1 2 3 4 5 6)))
+      (nshell.infrastructure.acl:clear-directory-listing-cache)
+      (with-rebound-function (host-kit:directory-files
+                              (lambda (directory)
+                                (declare (ignore directory))
+                                (case (incf reads)
+                                  (1 '("first.txt"))
+                                  (2 '("uncached.txt"))
+                                  (otherwise '("after-recovery.txt")))))
+        (with-rebound-function (nshell.infrastructure.acl::%directory-listing-stamp
+                                (lambda (directory)
+                                  (declare (ignore directory))
+                                  (copy-list stamp)))
+          (expect '("first.txt") :to-equal
+                  (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
+          (setf stamp nil)
+          (expect '("uncached.txt") :to-equal
+                  (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
+          (setf stamp '(1 2 3 4 5 6))
+          (expect '("after-recovery.txt") :to-equal
+                  (nshell.infrastructure.acl::cached-directory-files "/tmp/"))
+          (expect 3 :to-equal reads)))))
 
   (it "an-unreadable-directory-name-bypasses-the-cache"
     (let ((reads 0))

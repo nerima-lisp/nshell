@@ -10,7 +10,9 @@
 ;;; (engine.lisp) can TYPECASE it ahead of the plain RULE-KNOWLEDGE-BASE that
 ;;; *BUILT-IN-RULE-KNOWLEDGE-BASE* uses -- both are CL-PROLOG-KIT rulebases under
 ;;; the hood, but they answer completion queries through different rule sets.
-(defstruct (knowledge-base (:include rule-knowledge-base)))
+(defstruct (knowledge-base (:include rule-knowledge-base))
+  (command-description-facts (make-hash-table :test #'equal))
+  (flag-description-facts (make-hash-table :test #'equal)))
 
 (defun make-empty-knowledge-base ()
   (let ((kb (make-knowledge-base)))
@@ -121,7 +123,12 @@
    :test #'equal :from-end t))
 
 (defun kb-command-description (kb cmd-name)
-  (first (%kb-solution-values kb (list 'describes cmd-name '?description) '?description)))
+  (let ((fact (gethash cmd-name (knowledge-base-command-description-facts kb))))
+    (if fact
+        (second (fact-args fact))
+        (first (%kb-solution-values kb
+                                    (list 'describes cmd-name '?description)
+                                    '?description)))))
 
 (defun kb-registered-commands (kb)
   (sort (%unique-string-values (%kb-solution-values kb '(command-registered ?cmd) '?cmd))
@@ -133,23 +140,45 @@
                      (and (member (fact-predicate fact)
                                   '(command-registered subcommand-of has-flag
                                     option-value option-value-kind
-                                    exclusive-group describes))
+                                    exclusive-group describes flag-describes))
                           (equal (first (fact-args fact)) cmd-name)))
                    (rule-knowledge-base-facts kb)))
+  (remhash cmd-name (knowledge-base-command-description-facts kb))
+  (remhash cmd-name (knowledge-base-flag-description-facts kb))
   (%invalidate-rule-knowledge-base! kb))
 
 (defun %set-command-description! (kb cmd-name description)
-  (setf (rule-knowledge-base-facts kb)
-        (remove-if (lambda (fact)
-                     (and (eq (fact-predicate fact) 'describes)
-                          (equal (first (fact-args fact)) cmd-name)))
-                   (rule-knowledge-base-facts kb)))
-  (%invalidate-rule-knowledge-base! kb)
-  (assert-fact! kb (make-fact :predicate 'describes :args (list cmd-name description))))
+  (let* ((descriptions (knowledge-base-command-description-facts kb))
+         (fact (gethash cmd-name descriptions)))
+    (if fact
+        (progn
+          (setf (fact-args fact) (list cmd-name description))
+          (%invalidate-rule-knowledge-base! kb))
+        (let ((new-fact
+                (make-fact :predicate 'describes :args (list cmd-name description))))
+          (setf (gethash cmd-name descriptions) new-fact)
+          (assert-fact! kb new-fact))))
+  kb)
+(defun %set-flag-description! (kb cmd-name option description)
+  (let* ((command-facts
+           (or (gethash cmd-name (knowledge-base-flag-description-facts kb))
+               (setf (gethash cmd-name (knowledge-base-flag-description-facts kb))
+                     (make-hash-table :test #'equal))))
+         (fact (gethash option command-facts)))
+    (if fact
+        (progn
+          (setf (fact-args fact) (list cmd-name option description))
+          (%invalidate-rule-knowledge-base! kb))
+        (let ((new-fact
+                (make-fact :predicate 'flag-describes
+                           :args (list cmd-name option description))))
+          (setf (gethash option command-facts) new-fact)
+          (assert-fact! kb new-fact))))
+  kb)
 
 (defun kb-add-command
-    (kb cmd-name &key subcommands flags option-values option-value-kinds
-             exclusive-options description)
+    (kb cmd-name &key subcommands flags option-values option-descriptions
+             option-value-kinds exclusive-options description)
   (assert-fact! kb (make-fact :predicate 'command-registered :args (list cmd-name)))
   (dolist (name (remove-if-not #'stringp subcommands))
     (assert-fact! kb (make-fact :predicate 'subcommand-of :args (list cmd-name name))))
@@ -162,6 +191,13 @@
           (when (stringp value)
             (assert-fact! kb (make-fact :predicate 'option-value
                                         :args (list cmd-name option value))))))))
+  (dolist (spec option-descriptions)
+    (when (and (consp spec)
+               (stringp (first spec))
+               (consp (rest spec))
+               (stringp (second spec))
+               (null (cddr spec)))
+      (%set-flag-description! kb cmd-name (first spec) (second spec))))
   (dolist (spec option-value-kinds)
     (when (%valid-kb-option-value-kind-spec-p spec)
       (assert-fact!

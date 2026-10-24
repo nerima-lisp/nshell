@@ -52,4 +52,5 @@ exported predicates below are goals callers may query directly.")
              #:%git-output-lines
              #:%git-porcelain-status-paths
              #:*git-branch-lister*
-             #:*git-modified-path-lister*)))
+             #:*git-modified-path-lister*
+             #:flag-describes)))

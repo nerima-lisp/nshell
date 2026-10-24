@@ -105,15 +105,48 @@
               (completion-texts
                (nshell.domain.completion:complete kb "git status --p")))))
 
-  (it "knowledge-base-add-command-updates-description-when-provided"
+  (it "knowledge-base-add-command-indexes-option-descriptions"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
-      (nshell.domain.completion:kb-add-command kb "tool" :description "first source")
-      (nshell.domain.completion:kb-add-command kb "tool" :description "second source")
-      (let ((candidate (completion-candidate-by-text
-                        "tool"
-                        (nshell.domain.completion:complete kb "to"))))
-        (expect (null candidate) :to-be-falsy)
-        (expect "second source" :to-equal (nshell.domain.completion:candidate-description candidate)))))
+      (nshell.domain.completion:kb-add-command
+       kb "tool"
+       :flags '("--verbose")
+       :option-descriptions '(("--verbose" "first source"))
+       :description "first source")
+      (nshell.domain.completion:kb-add-command
+       kb "tool"
+       :flags '("--verbose")
+       :option-descriptions '(("--verbose" "second source"))
+       :description "second source")
+      (nshell.domain.completion:kb-add-command
+       kb "tool"
+       :flags '("--verbose")
+       :option-descriptions '(("--verbose" "second source"))
+       :description "second source")
+      (let* ((command (completion-candidate-by-text
+                       "tool"
+                       (nshell.domain.completion:complete kb "to")))
+             (options (nshell.domain.completion:complete kb "tool --v"))
+             (option (completion-candidate-by-text "--verbose" options))
+             (description-facts
+              (nshell.domain.completion:prove-all
+               kb
+               '(nshell.domain.completion:flag-describes
+                 "tool" "--verbose" "second source"))))
+        (expect (null command) :to-be-falsy)
+        (expect "second source" :to-equal
+                (nshell.domain.completion:candidate-description command))
+        (expect 1 :to-equal (length options))
+        (expect (null option) :to-be-falsy)
+        (expect "second source" :to-equal
+                (nshell.domain.completion:candidate-description option))
+        (expect 1 :to-equal (length description-facts)))
+      (nshell.domain.completion:kb-remove-command kb "tool")
+      (expect nil :to-equal
+              (nshell.domain.completion:prove-all
+               kb
+               '(nshell.domain.completion:flag-describes
+                 "tool" "--verbose" "second source")))
+      (expect nil :to-equal (nshell.domain.completion:complete kb "tool --"))))
 
   (it "knowledge-base-add-command-merges-exclusive-option-groups"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

@@ -94,8 +94,5 @@
     },
     "exit_code": 0
   },
-  "load_config": true,
-  "expected_failure": {
-    "reason": "WP-C03 owns completion registration cost and option descriptions."
-  }
+  "load_config": true
 }

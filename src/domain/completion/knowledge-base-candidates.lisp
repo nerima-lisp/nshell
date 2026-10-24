@@ -206,13 +206,19 @@
                   (not (%kb-exclusive-option-blocked-p kb command name argument-words)))
           collect name))
 
-(defun %argument-name-candidate (name)
-  (make-candidate name :kind :option :description ""))
+(defun %argument-name-candidate (name description)
+  (make-candidate name
+                  :kind :option
+                  :description (or description "")))
 
 (defun %kb-argument-name-candidates (kb command prefix argument-words)
-  (%sorted-candidates-by-text
-   (loop for name in (%available-kb-argument-names kb command prefix argument-words)
-         collect (%argument-name-candidate name))))
+  (let ((descriptions (gethash command (knowledge-base-flag-description-facts kb))))
+    (%sorted-candidates-by-text
+     (loop for name in (%available-kb-argument-names kb command prefix argument-words)
+           for fact = (and descriptions (gethash name descriptions))
+           collect (%argument-name-candidate
+                    name
+                    (when fact (third (fact-args fact))))))))
 
 (defun knowledge-base-argument-candidates (kb command prefix &key argument-words)
   (let ((resolved-command

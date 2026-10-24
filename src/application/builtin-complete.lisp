@@ -1,26 +1,5 @@
 (in-package #:nshell.application)
 
-(defun %complete-merge-strings (new existing)
-  (remove-duplicates (append new existing)
-                     :test #'string=))
-
-(defun %complete-option-values-for (option-values option)
-  (cdr (assoc option option-values :test #'string=)))
-
-(defun %complete-merge-option-values (existing options values)
-  (if (or (null options) (null values))
-      existing
-      (let ((merged existing))
-        (dolist (option options merged)
-          (setf merged
-                (acons option
-                       (%complete-merge-strings
-                        values
-                        (%complete-option-values-for merged option))
-                       (remove option merged
-                               :key #'first
-                               :test #'string=)))))))
-
 (defun %complete-ensure-knowledge-base (context)
   "Return CONTEXT's completion knowledge base, lazily creating one when the
 session has none -- batch mode (`nshell -c ...`) never seeds *KB*, so without
@@ -54,27 +33,20 @@ needed here the way the mutating `-c`/`-e` paths below need one."
 (defun %complete-upsert-command (kb command flags long-options short-options arguments description)
   (let* ((option-flags (append long-options short-options))
          (generic-arguments (and (null option-flags) arguments))
-         (merged-subcommands
-           (%complete-merge-strings
-            generic-arguments
-            (nshell.domain.completion:kb-command-subcommands kb command)))
-         (merged-flags
-           (%complete-merge-strings (append flags option-flags)
-                                    (nshell.domain.completion:kb-command-flags
-                                     kb command)))
-         (merged-option-values
-           (%complete-merge-option-values
-            (nshell.domain.completion:kb-command-option-values kb command)
-            option-flags
-            arguments))
-         (existing-description
-           (nshell.domain.completion:kb-command-description kb command)))
+         (option-values
+           (loop for option in option-flags
+                 collect (cons option arguments)))
+         (option-descriptions
+           (when description
+             (loop for option in (append flags option-flags)
+                   collect (list option description)))))
     (nshell.domain.completion:kb-add-command
      kb command
-     :subcommands merged-subcommands
-     :flags merged-flags
-     :option-values merged-option-values
-     :description (or description existing-description))))
+     :subcommands generic-arguments
+     :flags (append flags option-flags)
+     :option-values option-values
+     :option-descriptions option-descriptions
+     :description description)))
 
 (defun %builtin-complete (context args)
   (if (and args (member (first args) '("-C" "--do-complete") :test #'string=))

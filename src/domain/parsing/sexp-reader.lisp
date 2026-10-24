@@ -1291,7 +1291,8 @@
                     (nreverse argument-forms)
                     nil)))))) (convert-form form span nil t))
 )
-(defun command-form->ast (source form form-span-map head-classifier)
+(defun command-form->ast
+    (source form form-span-map head-classifier &key symbol-origins)
   (unless (stringp source)
     (error "Command source must be a string: ~S" source))
   (unless (functionp head-classifier)
@@ -1318,7 +1319,15 @@
               (%sexp-reader-command-error
                "The source span does not identify exactly one command form."
                span))
-            (%sexp-reader-command-convert source-form span head-classifier)))
+            (let ((ast
+                    (%sexp-reader-command-convert
+                     source-form span head-classifier)))
+              (when (hash-table-p symbol-origins)
+                (maphash (lambda (symbol origin)
+                           (setf (gethash symbol symbol-origins)
+                                 (copy-list origin)))
+                         (%sexp-reader-state-symbol-origins state)))
+              ast)))
       (sexp-reader-error (condition)
         (error condition))
       (error (cause)

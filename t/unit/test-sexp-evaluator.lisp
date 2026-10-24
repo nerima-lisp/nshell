@@ -30,10 +30,12 @@
       (t (princ-to-string form))))
 
   (defun %sexp-evaluator-test-command-form->ast
-    (source form form-span-map head-classifier)
+    (source form form-span-map head-classifier &key symbol-origins)
+  (declare (ignorable symbol-origins))
   (if *sexp-evaluator-test-use-real-command-form->ast-p*
       (funcall *sexp-evaluator-test-real-command-form->ast*
-               source form form-span-map head-classifier)
+               source form form-span-map head-classifier
+               :symbol-origins symbol-origins)
       (let* ((name (symbol-name (first form)))
              (classification (funcall head-classifier name))
              (arguments

@@ -432,7 +432,9 @@
    (nshell.domain.parsing:reader-result-source reader-result)
    form
    (nshell.domain.parsing:reader-result-form-span-map reader-result)
-   (lambda (head-source) (classify-sexp-head context head-source))))
+   (lambda (head-source) (classify-sexp-head context head-source))
+   :symbol-origins
+   (nshell.domain.parsing:reader-result-symbol-origins reader-result)))
 
 (defun %proper-list-p (value)
   (loop with slow = value

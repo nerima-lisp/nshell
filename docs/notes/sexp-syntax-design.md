@@ -15,6 +15,12 @@ or the source reader to S-expression input. P3 implementations may build the
 new path against these contracts while the legacy path remains active; they do
 not change the legacy path's behavior or make S-expressions the default.
 
+WP-L02b provides a temporary opt-in: `NSHELL_READER=sexp` selects the new
+reader for interactive submissions and source files. An unset variable or any
+other value keeps the legacy route. After the P5 gate, WP-X01 switches the
+default to the new reader and removes this opt-in variable; until then, new
+reader scenarios set it explicitly.
+
 Fish is an interaction-quality reference for editing, completion, and
 responsiveness, not a syntax or compatibility target. The new surface syntax
 is S-expressions, with bare command lines retained as command-entry sugar.

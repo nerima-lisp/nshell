@@ -180,6 +180,106 @@ which are skipped rather than parsed."
                     (return))))))
     (values (apply #'concatenate 'string (nreverse output)) code)))
 
-(defun source-lines (context lines &optional source-path)
-  "Execute source LINES in CONTEXT through the application source use case."
-  (%source-lines context lines source-path))
+(progn
+  (defun %source-new-reader-route-enabled-p ()
+    (equal "sexp" (uiop:getenv "NSHELL_READER")))
+
+  (defun %source-reader-scan-result (context source)
+    (nshell.domain.parsing:scan-input
+     source
+     :reader-context :auto
+     :head-classifier
+     (lambda (head-source)
+       (classify-sexp-head context head-source))))
+
+  (defun %source-evaluate-reader-submission (context source source-path)
+    (let* ((scan-result (%source-reader-scan-result context source))
+           (reader-results
+             (nshell.domain.parsing:read-submission
+              source :reader-context :auto :source-path source-path)))
+      (unless (eq (nshell.domain.parsing:scan-result-status scan-result) :complete)
+        (error "source: incomplete reader input"))
+      (let ((code 0))
+        (dolist (reader-result reader-results)
+          (multiple-value-bind (value result-code)
+              (evaluate-reader-result-in-context context reader-result)
+            (declare (ignore value))
+            (setf code result-code)
+            (%record-last-exit-code context code))
+          (unless (shell-context-running context)
+            (return)))
+        (values nil code))))
+
+  (defun %source-lines-with-reader (context lines &optional source-path)
+    (let ((output nil)
+          (code 0)
+          (remaining lines))
+      (loop while remaining
+            for line = (pop remaining)
+            do (cond
+                 ((%comment-or-blank-source-line-p line) nil)
+                 ((and (not (%function-start-p line))
+                       (source-line-function-split line))
+                  (multiple-value-bind (prefix definition)
+                      (source-line-function-split line)
+                    (setf remaining (list* prefix definition remaining))))
+                 ((%function-start-p line)
+                  (let ((step (%source-lines-handle-function-start
+                               context line remaining source-path output)))
+                    (setf remaining (%source-lines-step-result-remaining-lines step)
+                          output (%source-lines-step-result-output-chunks step)
+                          code (%source-lines-step-result-exit-code step))
+                    (%record-last-exit-code context code)
+                    (when (or (%source-lines-step-result-stop-p step)
+                              (not (shell-context-running context)))
+                      (return))))
+                 (t
+                  (let* ((first-nonwhite
+                           (position-if-not
+                            (lambda (character)
+                              (find character
+                                    (list #\Space #\Tab #\Newline #\Return)))
+                            line))
+                         (sexp-p
+                           (and first-nonwhite
+                                (char= (char line first-nonwhite) #\())))
+                         (text line)
+                         (scan-result (%source-reader-scan-result context line))
+                         (parse-result
+                           (and (not sexp-p)
+                                (nshell.domain.parsing:parse-command-line line))))
+                    (loop while
+                          (and remaining
+                               (or (eq (nshell.domain.parsing:scan-result-status
+                                        scan-result)
+                                       :incomplete)
+                                   (and parse-result
+                                        (%source-line-needs-more-input-p parse-result))))
+                          for next-line = (pop remaining)
+                          do (setf text
+                                   (if sexp-p
+                                       (%append-source-here-document-line
+                                        text next-line)
+                                       (%append-source-continuation
+                                        text next-line parse-result))
+                                   scan-result (%source-reader-scan-result
+                                                context text)
+                                   parse-result
+                                   (and (not sexp-p)
+                                        (nshell.domain.parsing:parse-command-line
+                                         text))))
+                    (multiple-value-bind (chunk exit-code)
+                        (%source-evaluate-reader-submission
+                         context text source-path)
+                      (setf output (%source-lines-add-chunk chunk output)
+                            code exit-code)
+                      (%record-last-exit-code context code)
+                      (when (not (shell-context-running context))
+                        (return))))))
+      (values (apply #'concatenate 'string (nreverse output)) code)))
+
+    (defun source-lines (context lines &optional source-path)
+    "Execute source LINES in CONTEXT through the application source use case."
+    (if (and source-path (%source-new-reader-route-enabled-p))
+        (%source-lines-with-reader context lines source-path)
+        (%source-lines context lines source-path))))

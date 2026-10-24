@@ -10,6 +10,24 @@
               (nshell.presentation::%repl-reader-context-for-source "  (+ 1 2)"))
       (expect :bare-line :to-be
               (nshell.presentation::%repl-reader-context-for-source "echo (+ 1 2)"))))
+  (it "e03-reader-route-environment-enables-only-exact-sexp"
+    (let ((source " (+ 1 2)"))
+      (with-temporary-function
+          ('uiop:getenv (lambda (name) (declare (ignore name)) nil))
+        (expect :bare-line :to-be
+                (nshell.presentation::%repl-reader-context-for-source source)))
+      (with-temporary-function
+          ('uiop:getenv
+           (lambda (name)
+             (when (string= name "NSHELL_READER") "shell")))
+        (expect :bare-line :to-be
+                (nshell.presentation::%repl-reader-context-for-source source)))
+      (with-temporary-function
+          ('uiop:getenv
+           (lambda (name)
+             (when (string= name "NSHELL_READER") "sexp")))
+        (expect :sexp :to-be
+                (nshell.presentation::%repl-reader-context-for-source source)))))
 
   (it "e03-new-reader-route-passes-context-and-evaluates-results-in-order"
     (with-repl-test-state

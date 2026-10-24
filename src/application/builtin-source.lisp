@@ -4,7 +4,7 @@
   (if args
       (handler-case
           (with-open-file (stream (first args) :direction :input)
-            (%source-lines context (%collect-source-lines stream) (first args)))
+            (source-lines context (%collect-source-lines stream) (first args)))
         (error (condition)
           (values (format nil "source: ~a: ~a~%" (first args) condition) 1)))
       (%builtin-usage "source" "source file")))

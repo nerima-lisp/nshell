@@ -5,8 +5,50 @@
     "The application layer exposes source reader use cases for presentation callers."
     (expect (fboundp 'nshell.application:source-lines) :to-be-truthy)
     (expect (fboundp 'nshell.application:collect-source-lines) :to-be-truthy)
-    (expect '("echo one" "echo two") :to-equal (with-input-from-string (stream (format nil "echo one~%echo two~%"))
-                 (nshell.application:collect-source-lines stream)))))
+    (expect '("echo one" "echo two") :to-equal
+            (with-input-from-string (stream (format nil "echo one~%echo two~%"))
+              (nshell.application:collect-source-lines stream))))
+  (it "source-reader-opt-in-is-explicit-and-defaults-to-legacy"
+    (let ((context (make-test-builtins-context))
+          (source '("(+ 1 2)"))
+          (legacy-output nil)
+          (legacy-code nil)
+          (unset-output nil)
+          (unset-code nil)
+          (other-output nil)
+          (other-code nil)
+          (sexp-output nil)
+          (sexp-code nil)
+          (batch-output nil)
+          (batch-code nil))
+      (with-temporary-function
+          ('uiop:getenv (lambda (name) (when (string= name "NSHELL_READER") nil)))
+        (multiple-value-setq (legacy-output legacy-code)
+          (nshell.application::%source-lines context source))
+        (multiple-value-setq (unset-output unset-code)
+          (nshell.application:source-lines context source "source-test.nsh")))
+      (with-temporary-function
+          ('uiop:getenv
+           (lambda (name) (when (string= name "NSHELL_READER") "other")))
+        (multiple-value-setq (other-output other-code)
+          (nshell.application:source-lines context source "source-test.nsh")))
+      (with-temporary-function
+          ('uiop:getenv
+           (lambda (name) (when (string= name "NSHELL_READER") "sexp")))
+        (multiple-value-setq (sexp-output sexp-code)
+          (nshell.application:source-lines context source "source-test.nsh"))
+        (multiple-value-setq (batch-output batch-code)
+          (nshell.application:source-lines context source)))
+      (expect legacy-output :to-equal unset-output)
+      (expect legacy-code :to-equal unset-code)
+      (expect legacy-output :to-equal other-output)
+      (expect legacy-code :to-equal other-code)
+      (expect legacy-output :to-equal batch-output)
+      (expect legacy-code :to-equal batch-code)
+      (expect 0 :to-equal sexp-code)
+      (expect (or (not (string= legacy-output sexp-output))
+                  (/= legacy-code sexp-code))
+              :to-be-truthy))))
 
 (defun %source-sequence-call-order (line first-code second-code)
   (let ((calls nil))

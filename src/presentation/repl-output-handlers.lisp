@@ -1047,7 +1047,7 @@ wrapped line's other rows on screen as stale duplicates."
   (cond
     ((%assistant-proposal-confirmation-required-p)
      (%confirm-assistant-proposal))
-    (*repl-new-reader-route-enabled-p*
+    ((%repl-new-reader-route-enabled-p)
      (if (every (lambda (character)
                   (find character (list #\Space #\Tab #\Newline #\Return)))
                 text)

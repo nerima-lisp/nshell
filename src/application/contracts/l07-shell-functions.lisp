@@ -71,3 +71,13 @@
 (defmacro with-shell-functions (bindings &body body)
   (declare (ignore bindings body))
   (%signal-unimplemented-wp-interface "L07" (quote with-shell-functions)))
+(declaim
+ (ftype (function (t) shell-function-registry)
+        context-shell-function-registry)
+ (ftype (function () (values (or null shell-function-scope)))
+        active-shell-function-scope))
+(defun context-shell-function-registry (context)
+  (declare (ignore context))
+  (%signal-unimplemented-wp-interface "L07" 'context-shell-function-registry))
+(defun active-shell-function-scope ()
+  (%signal-unimplemented-wp-interface "L07" 'active-shell-function-scope))

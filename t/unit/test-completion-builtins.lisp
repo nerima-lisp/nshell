@@ -314,6 +314,7 @@
     (with-repl-completion-help-fetcher
         (fetch-count
          (format nil "Usage: zz-uncatalogued~%Options:~%  --from-help"))
+      (repl-test-set-env "NSHELL_COMPLETION_HELP_ALLOWLIST" "zz-uncatalogued")
       (with-repl-completion-refresh (state candidates "zz-uncatalogued --")
         (declare (ignore state))
         (expect 1 :to-equal fetch-count)
@@ -331,23 +332,55 @@
           (nshell.domain.completion:kb-command-present-p
            nshell.presentation::*kb* "zz-large")))))
 
-  (it "completion-help-validates-command-and-help-shapes"
-    (expect nil :to-be
-      (nshell.presentation::%completion-help-command-parts ""))
-    (expect nil :to-be
-      (nshell.presentation::%completion-help-command-parts "echo; rm"))
-    (expect '("echo" "hello") :to-equal
-      (nshell.presentation::%completion-help-command-parts "echo  hello"))
-    (expect nil :to-be
-      (nshell.presentation::%completion-help-text-p nil))
-    (expect nil :to-be
-      (nshell.presentation::%completion-help-text-p "plain output"))
-    (expect (nshell.presentation::%completion-help-text-p "Options: --verbose")
-            :to-be-truthy))
+  (it "completion-help-validates-command-help-shapes-and-allowlist"
+    (with-repl-test-state
+      (expect '("cargo" "curl" "docker" "find" "gh" "git" "go" "grep" "jq"
+                "kubectl" "make" "nix" "npm" "pip" "python" "rg" "ssh" "tar")
+              :to-equal
+              (nshell.presentation::%completion-help-default-command-names))
+      (expect t :to-be
+        (nshell.presentation::%completion-help-allowed-command-p "git"))
+      (expect nil :to-be
+        (nshell.presentation::%completion-help-allowed-command-p "zz-unlisted"))
+      (repl-test-set-env "NSHELL_COMPLETION_HELP_ALLOWLIST" "")
+      (expect nil :to-be
+        (nshell.presentation::%completion-help-allowed-command-p "git"))
+      (repl-test-set-env "NSHELL_COMPLETION_HELP_ALLOWLIST" "zz-custom")
+      (expect t :to-be
+        (nshell.presentation::%completion-help-allowed-command-p "zz-custom"))
+      (expect nil :to-be (nshell.presentation::%completion-help-allowed-command-p "git"))
+      (let ((xdg-home "/absolute/cache"))
+        (with-temporary-function
+            ('nshell.infrastructure.acl:current-environment-value
+             (lambda (name)
+               (when (string= name "XDG_CACHE_HOME")
+                 xdg-home)))
+          (expect (merge-pathnames #P"nshell/completion-help/"
+                                   #P"/absolute/cache/")
+                  :to-equal
+                  (nshell.presentation::%completion-help-cache-directory))
+          (setf xdg-home "relative/cache")
+          (expect (merge-pathnames #P".cache/nshell/completion-help/"
+                                   (user-homedir-pathname))
+                  :to-equal
+                  (nshell.presentation::%completion-help-cache-directory))))
+      (expect nil :to-be
+        (nshell.presentation::%completion-help-command-parts ""))
+      (expect nil :to-be
+        (nshell.presentation::%completion-help-command-parts "echo; rm"))
+      (expect '("echo" "hello") :to-equal
+        (nshell.presentation::%completion-help-command-parts "echo  hello"))
+      (expect nil :to-be
+        (nshell.presentation::%completion-help-text-p nil))
+      (expect nil :to-be
+        (nshell.presentation::%completion-help-text-p "plain output"))
+      (expect (nshell.presentation::%completion-help-text-p "Options: --verbose")
+              :to-be-truthy)))
 
   (it "completion-help-caches-only-successful-text"
     (with-repl-test-state
-      (let ((command "zz-cache-policy"))
+      (let ((command "zz-cache-policy")
+            (help-text "Options: --help"))
         (expect :missing :to-equal
           (nshell.presentation::%completion-help-cache-help-text
            command "Options: --help" 1))
@@ -359,20 +392,268 @@
            command 42 0))
         (expect :loaded :to-equal
           (nshell.presentation::%completion-help-cache-help-text
-           command "Options: --help" 0))
+           command help-text 0))
         (expect (nshell.domain.completion:kb-command-present-p
                  nshell.presentation::*kb* command)
-                :to-be-truthy))))
+                :to-be-truthy)
+        (host-kit:with-temporary-directory (directory)
+          (let ((fetch-count 0)
+                (cache-file
+                  (nshell.presentation::%completion-help-cache-file
+                   command directory)))
+            (multiple-value-bind (status output)
+                (nshell.presentation::%completion-help-fetch-cache-result
+                 command "/test/bin/zz-cache-policy" 1 directory
+                 (lambda (name path)
+                   (declare (ignore name path))
+                   (incf fetch-count)
+                   (values help-text 0)))
+              (expect :loaded :to-equal status)
+              (expect help-text :to-equal output))
+            (expect 1 :to-equal fetch-count)
+            (multiple-value-bind (status output)
+                (nshell.presentation::%completion-help-fetch-cache-result
+                 command "/test/bin/zz-cache-policy" 1 directory
+                 (lambda (name path)
+                   (declare (ignore name path))
+                   (incf fetch-count)
+                   (values help-text 0)))
+              (expect :loaded :to-equal status)
+              (expect help-text :to-equal output))
+            (expect 1 :to-equal fetch-count)
+            (with-open-file (stream cache-file :direction :output
+                                    :if-exists :supersede
+                                    :if-does-not-exist :create)
+              (write-line "NSHELL-COMPLETION-HELP-1" stream)
+              (write-line "ZZZZZZ" stream))
+            (multiple-value-bind (status output)
+                (nshell.presentation::%completion-help-fetch-cache-result
+                 command "/test/bin/zz-cache-policy" 1 directory
+                 (lambda (name path)
+                   (declare (ignore name path))
+                   (incf fetch-count)
+                   (values help-text 0)))
+              (expect :loaded :to-equal status)
+              (expect help-text :to-equal output))
+            (expect 2 :to-equal fetch-count))))))
 
-  (it "completion-help-fetch-errors-become-missing-cache-state"
+  (it "completion-help-cache-writer-replaces-symlinks-without-changing-target"
     (with-repl-test-state
-      (let ((nshell.presentation::*completion-help-fetcher*
-              (lambda (command)
-                (declare (ignore command))
-                (error "synthetic help failure"))))
+      (host-kit:with-temporary-directory (directory)
+        (let* ((command "zz-cache-symlink")
+               (resolved-path "/test/bin/zz-cache-symlink")
+               (mtime 123)
+               (help-text "Options: --learned")
+               (cache-file
+                 (nshell.presentation::%completion-help-cache-file
+                  command directory))
+               (target-file (merge-pathnames "symlink-target.txt" directory)))
+          (host-kit:write-file-string "target unchanged" target-file)
+          (ensure-directories-exist cache-file)
+          (sb-posix:symlink (namestring target-file) (namestring cache-file))
+          (nshell.presentation::%completion-help-write-cache
+           command resolved-path mtime help-text directory)
+          (expect "target unchanged"
+                  :to-equal (uiop:read-file-string target-file))
+          (expect help-text
+                  :to-equal
+                  (nshell.presentation::%completion-help-read-cache
+                   command resolved-path mtime directory))))))
+  (it "completion-help-cache-reader-fetches-on-symlink"
+    (with-repl-test-state
+      (host-kit:with-temporary-directory (directory)
+        (let* ((command "zz-cache-symlink-read")
+               (resolved-path "/test/bin/zz-cache-symlink-read")
+               (mtime 123)
+               (help-text "Options: --from-fetch")
+               (cache-file
+                 (nshell.presentation::%completion-help-cache-file
+                  command directory))
+               (target-file (merge-pathnames "cache-target.txt" directory))
+               (fetch-count 0))
+          (host-kit:write-file-string "target remains unchanged" target-file)
+          (ensure-directories-exist cache-file)
+          (sb-posix:symlink (namestring target-file) (namestring cache-file))
+          (multiple-value-bind (status output)
+              (nshell.presentation::%completion-help-fetch-cache-result
+               command resolved-path mtime directory
+               (lambda (name path)
+                 (declare (ignore name path))
+                 (incf fetch-count)
+                 (values help-text 0)))
+            (expect :loaded :to-equal status)
+            (expect help-text :to-equal output))
+          (expect 1 :to-equal fetch-count)
+          (expect "target remains unchanged"
+                  :to-equal (uiop:read-file-string target-file))
+          (expect help-text
+                  :to-equal
+                  (nshell.presentation::%completion-help-read-cache
+                   command resolved-path mtime directory))))))
+
+  (it "completion-help-rejects-truncated-output"
+    (with-repl-test-state
+      (let ((command "zz-truncated-help")
+            (help-text "Usage: zz-truncated-help"))
+        (host-kit:with-temporary-directory (directory)
+          (let ((cache-file
+                  (nshell.presentation::%completion-help-cache-file
+                   command directory))
+                (fetch-count 0))
+            (multiple-value-bind (status output)
+                (nshell.presentation::%completion-help-fetch-cache-result
+                 command "/test/bin/zz-truncated-help" 1 directory
+                 (lambda (name path)
+                   (declare (ignore name path))
+                   (incf fetch-count)
+                   (values help-text 0 t)))
+              (expect :missing :to-equal status)
+              (expect nil :to-be output))
+            (expect 1 :to-equal fetch-count)
+            (expect nil :to-be (probe-file cache-file))))
         (expect :missing :to-equal
-          (nshell.presentation::%completion-help-fetch-cache-state
-           "zz-error")))))
+          (nshell.presentation::%completion-help-cache-help-text
+           command help-text 0 t))
+        (expect nil :to-be
+          (nshell.domain.completion:kb-command-present-p
+           nshell.presentation::*kb* command)))))
+
+  (it "repl-completion-returns-before-delayed-help-and-invalidates-stale-facts"
+    (with-repl-test-state
+      (repl-test-set-env "NSHELL_COMPLETION_HELP_ALLOWLIST" "zz-delayed")
+      (host-kit:with-temporary-directory (cache-directory)
+        (let* ((resolved-path "/test/bin/zz-delayed")
+               (mtime 1)
+               (help-text
+                 (format nil "Usage: zz-delayed~%Options:~%  --old Old option~%"))
+               (fetch-count 0)
+               (fetch-started (sb-thread:make-semaphore :count 0))
+               (release-fetch (sb-thread:make-semaphore :count 0))
+               (release-signaled-p nil)
+               (nshell.presentation::*completion-help-command-info-function*
+                 (lambda (command)
+                   (declare (ignore command))
+                   (list resolved-path mtime)))
+               (nshell.presentation::*completion-help-cache-directory-override*
+                 cache-directory)
+               (nshell.presentation::*completion-help-fetcher*
+                 (lambda (command path)
+                   (declare (ignore command path))
+                   (incf fetch-count)
+                   (when (= fetch-count 1)
+                     (sb-thread:signal-semaphore fetch-started)
+                     (unless (sb-thread:wait-on-semaphore
+                              release-fetch :timeout 3)
+                       (error "Timed out waiting to release delayed help fetch")))
+                   (when (= fetch-count 4)
+                     (error "synthetic help failure"))
+                   (values help-text 0))))
+          (nshell.domain.completion:kb-add-command-from-help
+           nshell.presentation::*kb*
+           "zz-delayed"
+           (format nil "Usage: zz-delayed~%Options:~%  --static Static option~%"))
+          (with-repl-input-state
+              (:buffer "zz-delayed --"
+               :cursor-pos (length "zz-delayed --"))
+            (labels ((flag-texts ()
+                       (completion-texts
+                        (nshell.domain.completion:complete
+                         nshell.presentation::*kb* "zz-delayed --")))
+                     (await-result ()
+                       (loop repeat 300
+                             do (nshell.presentation::%apply-completion-help-results)
+                             unless (eq :loading
+                                        (getf
+                                         (gethash "zz-delayed"
+                                                  nshell.presentation::*completion-help-cache*)
+                                         :status))
+                               return t
+                             do (sleep 0.01)
+                             finally (return nil)))
+                     (release-worker ()
+                       (unless release-signaled-p
+                         (setf release-signaled-p t)
+                         (sb-thread:signal-semaphore release-fetch))))
+              (unwind-protect
+                   (progn
+                     (let ((started-at (get-internal-real-time)))
+                       (nshell.presentation::%refresh-completion-session-state
+                        nshell.presentation::*input-state*)
+                       (expect
+                        (< (/ (- (get-internal-real-time) started-at)
+                              internal-time-units-per-second)
+                           1)
+                        :to-be-truthy))
+                     (let* ((fetch-started-p
+                              (sb-thread:wait-on-semaphore
+                               fetch-started :timeout 1))
+                            (cache-state
+                              (gethash
+                               "zz-delayed"
+                               nshell.presentation::*completion-help-cache*))
+                            (channel
+                              nshell.presentation::*completion-help-result-channel*)
+                            (queued-results
+                              (sb-thread:with-mutex
+                                  ((nshell.presentation::completion-help-result-channel-mutex
+                                    channel))
+                                (mapcar
+                                 (lambda (result)
+                                   (list :status (getf result :status)
+                                         :condition (getf result :condition)))
+                                 (copy-list
+                                  (nshell.presentation::completion-help-result-channel-results
+                                   channel))))))
+                       (unless fetch-started-p
+                         (format *error-output*
+                                 "completion help diagnostic: state=~s results=~s~%"
+                                 (list :status (getf cache-state :status)
+                                       :path (getf cache-state :path)
+                                       :mtime (getf cache-state :mtime))
+                                 queued-results))
+                       (unless fetch-started-p (error "completion help fetch did not start: state=~s results=~s" (list :status (getf cache-state :status) :path (getf cache-state :path) :mtime (getf cache-state :mtime)) queued-results)))
+                     (expect :loading :to-be
+                       (getf
+                        (gethash "zz-delayed"
+                                 nshell.presentation::*completion-help-cache*)
+                        :status))
+                     (assert-texts-include (flag-texts) "--static")
+                     (assert-texts-exclude (flag-texts) "--old")
+                     (release-worker)
+                     (expect t :to-be (await-result))
+                     (expect 1 :to-equal fetch-count)
+                     (assert-texts-include (flag-texts) "--static" "--old")
+                     (setf mtime 2
+                           help-text
+                           (format nil "Usage: zz-delayed~%Options:~%  --new New option~%"))
+                     (nshell.presentation::%refresh-completion-session-state
+                      nshell.presentation::*input-state*)
+                     (expect t :to-be (await-result))
+                     (expect 2 :to-equal fetch-count)
+                     (assert-texts-include (flag-texts) "--static" "--new")
+                     (assert-texts-exclude (flag-texts) "--old")
+                     (setf resolved-path "/test/bin/zz-delayed-v2"
+                           help-text
+                           (format nil "Usage: zz-delayed~%Options:~%  --third Third option~%"))
+                     (nshell.presentation::%refresh-completion-session-state
+                      nshell.presentation::*input-state*)
+                     (expect t :to-be (await-result))
+                     (expect 3 :to-equal fetch-count)
+                     (assert-texts-include (flag-texts) "--static" "--third")
+                     (assert-texts-exclude (flag-texts) "--new")
+                     (setf mtime 3)
+                     (nshell.presentation::%refresh-completion-session-state
+                      nshell.presentation::*input-state*)
+                     (expect t :to-be (await-result))
+                     (expect 4 :to-equal fetch-count)
+                     (expect :missing :to-be
+                       (getf
+                        (gethash "zz-delayed"
+                                 nshell.presentation::*completion-help-cache*)
+                        :status))
+                     (assert-texts-include (flag-texts) "--static")
+                     (assert-texts-exclude (flag-texts) "--third"))
+                (release-worker))))))))
 
   (it "repl-completion-does-not-fetch-help-for-unavailable-commands"
     (with-repl-completion-help-fetcher
@@ -382,9 +663,50 @@
            (lambda (command)
              (declare (ignore command))
              nil)))
+      (repl-test-set-env "NSHELL_COMPLETION_HELP_ALLOWLIST" "zz-unavailable")
       (with-repl-completion-refresh (state candidates "zz-unavailable --")
         (declare (ignore state candidates))
         (expect 0 :to-equal fetch-count))))
+
+  (it "repl-completion-ignores-escaped-command-and-subcommand-tokens"
+    (with-repl-completion-help-fetcher
+        (fetch-count "Usage: should-not-run")
+      (repl-test-set-env "NSHELL_COMPLETION_HELP_ALLOWLIST" "git")
+      (let* ((command-info-count 0)
+            (nshell.presentation::*completion-help-command-info-function*
+              (lambda (name)
+                (declare (ignore name))
+                (incf command-info-count)
+                nil))
+            (input
+              "git\\ -c\\ alias.foo=!touch\\ foo\\ marker --"))
+        (expect "git -c alias.foo=!touch foo marker"
+                :to-equal
+                (nshell.domain.completion:completion-context-command
+                 (nshell.domain.completion:completion-context-for input)))
+        (with-repl-completion-refresh (state candidates input)
+          (declare (ignore state candidates))
+          (expect 0 :to-equal command-info-count)
+          (expect 0 :to-equal fetch-count))
+        (let ((observed-argument-words nil)
+              (resolver-call-count 0)
+              (nshell.presentation::*completion-help-command-info-function*
+                (lambda (name)
+                  (declare (ignore name))
+                  nil)))
+          (with-temporary-function
+              ('nshell.domain.completion:kb-resolve-command-path
+               (lambda (knowledge-base command argument-words prefix)
+                 (declare (ignore knowledge-base prefix))
+                 (setf observed-argument-words argument-words)
+                 (incf resolver-call-count)
+                 (format nil "~a status" command)))
+            (nshell.presentation::%warm-command-completion-help-path
+             nshell.presentation::*kb* "git"
+             '("status" "origin status") "")
+            (expect '("status") :to-equal observed-argument-words)
+            (expect 2 :to-equal resolver-call-count)
+            (expect 0 :to-equal fetch-count))))))
 
   (it "repl-completion-hides-common-external-mutually-exclusive-options"
     (with-seeded-completion-knowledge-base (kb)

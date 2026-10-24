@@ -130,24 +130,43 @@
      &body body)
   `(let ((,fetch-count-var 0))
      (with-repl-test-state
-       (let ((nshell.presentation::*completion-help-fetcher*
-               (lambda (command)
-                 (declare (ignore command))
-                 (incf ,fetch-count-var)
-                 (values ,help-text ,exit-code)))
-             (nshell.presentation::*completion-help-command-available-p*
-               ,command-available-p))
-         ,@body))))
+       (host-kit:with-temporary-directory (cache-directory)
+         (let ((nshell.presentation::*completion-help-fetcher*
+                 (lambda (command resolved-path)
+                   (declare (ignore command resolved-path))
+                   (incf ,fetch-count-var)
+                   (values ,help-text ,exit-code)))
+               (nshell.presentation::*completion-help-command-info-function*
+                 (lambda (command)
+                   (when (funcall ,command-available-p command)
+                     (list (format nil "/test/bin/~a" command) 1))))
+               (nshell.presentation::*completion-help-cache-directory-override*
+                 cache-directory))
+           ,@body)))))
 
 (defmacro with-repl-completion-refresh ((state candidates input
                                                &key
                                                  (cursor-pos `(length ,input)))
                                         &body body)
   `(with-repl-input-state (:buffer ,input :cursor-pos ,cursor-pos)
-     (multiple-value-bind (,state ,candidates)
+     (multiple-value-bind (initial-state initial-candidates)
          (nshell.presentation::%refresh-completion-session-state
           nshell.presentation::*input-state*)
-       ,@body)))
+       (declare (ignore initial-state initial-candidates))
+       (expect t :to-be
+         (loop repeat 300
+               do (nshell.presentation::%apply-completion-help-results)
+               unless (loop for cache-state
+                              being the hash-values of
+                                nshell.presentation::*completion-help-cache*
+                            thereis (eq :loading (getf cache-state :status)))
+                 return t
+               do (sleep 0.01)
+               finally (return nil)))
+       (multiple-value-bind (,state ,candidates)
+           (nshell.presentation::%refresh-completion-session-state
+            nshell.presentation::*input-state*)
+         ,@body))))
 
 (defmacro assert-completion-candidate (text candidates &key kind description)
   `(let ((candidate (completion-candidate-by-text ,text ,candidates)))

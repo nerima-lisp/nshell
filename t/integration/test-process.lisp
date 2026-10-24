@@ -448,10 +448,26 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
 
   (it "run-external-capture-echo"
     "External command capture returns stdout and exit code."
-    (multiple-value-bind (output exit)
-        (nshell.infrastructure.acl:run-external-capture "echo" '("hello"))
-      (expect 0 :to-equal exit)
-      (expect (format nil "hello~%") :to-equal output)))
+    (expect (list (format nil "hello~%") 0)
+            :to-equal
+            (multiple-value-list
+             (nshell.infrastructure.acl:run-external-capture
+              "echo" '("hello")))))
+  (it "run-external-capture-bounds-output-while-draining"
+    "Captured stdout is bounded while the process output keeps draining."
+    (let* ((size 131072)
+           (limit 16)
+           (form (format nil
+                         "(write-string (make-string ~d :initial-element #\\x))"
+                         size)))
+      (multiple-value-bind (output exit truncated-p)
+          (nshell.infrastructure.acl:run-external-capture
+           (current-sbcl-executable)
+           (%process-test-sbcl-argv form)
+           :max-output-chars limit)
+        (expect 0 :to-equal exit)
+        (expect (make-string limit :initial-element #\x) :to-equal output)
+        (expect t :to-equal truncated-p))))
 
   (it "run-external-times-out-and-returns"
     "Synchronous execution should time out while reading output or waiting."

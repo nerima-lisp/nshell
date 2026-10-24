@@ -654,23 +654,22 @@
                :stream))
          (*current-user-evaluator-context* context)
          (*current-user-evaluator-position* position))
-    (handler-case
-        (multiple-value-bind (value status pipeline-result)
-            (call-with-command-failure-policy
-             ast
-             (lambda ()
-               (execute-reader-ast-in-context
-                context ast
-                (lambda (stage-context command-node)
-                  (evaluate-command-stage-in-context
-                   stage-context command-node)))))
-          (declare (ignore pipeline-result))
-          (setf *current-evaluation-status* status)
-          (values (if (eq position :test) (zerop status) value)))
-      (command-failed (condition)
-        (setf *current-evaluation-status*
-              (command-failed-status condition))
-        (error condition)))))
+    (handler-bind ((command-failed
+                    (lambda (condition)
+                      (setf *current-evaluation-status*
+                            (car (last (command-failed-stage-statuses condition)))))))
+      (multiple-value-bind (value status pipeline-result)
+          (call-with-command-failure-policy
+           ast
+           (lambda ()
+             (execute-reader-ast-in-context
+              context ast
+              (lambda (stage-context command-node)
+                (evaluate-command-stage-in-context
+                 stage-context command-node)))))
+        (declare (ignore pipeline-result))
+        (setf *current-evaluation-status* status)
+        (values (if (eq position :test) (zerop status) value))))))
 
 (defun %eval-body (context forms reader-result lexical-environment position)
   (cond

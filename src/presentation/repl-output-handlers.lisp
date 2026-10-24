@@ -1,5 +1,74 @@
 ;;; REPL output-event execution helpers
 (in-package #:nshell.presentation)
+(defun %read-command-failure-restart-choice (condition continue-restart return-restart)
+  (let ((selected-p nil))
+    (format t
+            "~%nshell: ~a failed with status ~d.~%[1] Ignore and continue; Ctrl-C returns to the prompt.~%> "
+            (nshell.application:command-failed-command condition)
+            (nshell.application:command-failed-status condition))
+    (finish-output)
+    (loop for event =
+            (nshell.infrastructure.terminal:read-key-event
+             :interrupt-predicate
+             (lambda ()
+               (when (nshell.infrastructure.acl:consume-sigint-received-p)
+                 t)))
+          for event-type =
+            (and event (nshell.domain.input:key-event-type event))
+          do (cond
+               ((null event)
+                (error "End of input while waiting for command failure choice."))
+               ((eq event-type :ctrl-c)
+                (terpri)
+                (invoke-restart
+                 return-restart
+                 (nshell.application:command-failed-status condition)))
+               ((eq event-type :char)
+                (let ((char (nshell.domain.input:key-event-char event)))
+                  (if (char= char (code-char 49))
+                      (unless selected-p
+                        (setf selected-p t)
+                        (write-char char)
+                        (finish-output))
+                      (setf selected-p nil))))
+               ((eq event-type :backspace)
+                (when selected-p
+                  (write-string (format nil "~c ~c" (code-char 8) (code-char 8)))
+                  (finish-output))
+                (setf selected-p nil))
+               ((eq event-type :enter)
+                (terpri)
+                (if selected-p
+                    (invoke-restart continue-restart)
+                    (progn
+                      (format t "Enter 1 to ignore and continue, or press Ctrl-C to return to the prompt.~%> ")
+                      (finish-output))))
+               (t
+                (setf selected-p nil))))))
+(defun call-with-command-failure-restarts (thunk)
+  (let ((nshell.application:*interactive-top-level-p* t))
+    (let ((results
+            (multiple-value-list
+             (restart-case
+                 (handler-bind
+                     ((nshell.application:command-failed
+                        (lambda (condition)
+                          (let ((continue-restart
+                                  (find-restart
+                                   'nshell.application::continue-command-failure
+                                   condition)))
+                            (when continue-restart
+                              (%read-command-failure-restart-choice
+                               condition
+                               continue-restart
+                               (find-restart
+                                'return-command-failure-to-prompt)))))))
+                   (funcall thunk))
+               (return-command-failure-to-prompt (status)
+                 (values nil status))))))
+      (unless (integerp (second results))
+        (error 'type-error :datum (second results) :expected-type 'integer))
+      (values-list results))))
 
 (defmacro with-reset-rendered-prompt-state-and-prompt-cont (&body body)
   "For handlers whose BODY leaves the terminal in a state CLEAR-RENDERED-PROMPT

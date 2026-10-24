@@ -527,6 +527,7 @@
    (:file "unit/test-sexp-ast-contracts")
    (:file "unit/test-sexp-value-conversion")
    (:file "unit/test-sexp-evaluator")
+   (:file "unit/test-command-failure")
    (:file "unit/test-cps")
    (:file "unit/test-input-state")
    (:file "unit/test-input-state-session")

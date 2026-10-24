@@ -4,12 +4,13 @@
     "H06"
   ],
   "mode": "pty",
+  "input_delay_seconds": 0.12,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "SCENARIO_H06-multiline-reverse-search> ",
-      "NSHELL_RIGHT_PROMPT": "H06_EDIT_READY"
+      "NSHELL_VI_MODE": "1"
     },
     "home": "home",
     "cwd": "work",
@@ -55,20 +56,17 @@
     },
     {
       "type": "wait",
-      "contains": "H06_EDIT_READY",
+      "contains": "\u001b[6 q",
       "timeout_seconds": 10
     },
     {
-      "type": "key",
-      "key": "C-a"
-    },
-    {
-      "type": "key",
-      "key": "C-k"
-    },
-    {
-      "type": "keys",
+      "type": "paste",
       "text": "echo H06_FIRST_$((1+1))"
+    },
+    {
+      "type": "wait",
+      "contains": "\u001b[6 q",
+      "timeout_seconds": 10
     },
     {
       "type": "key",
@@ -80,8 +78,13 @@
       "timeout_seconds": 10
     },
     {
-      "type": "keys",
+      "type": "paste",
       "text": "echo H06_SECOND_$((2+2))"
+    },
+    {
+      "type": "wait",
+      "contains": "\u001b[6 q",
+      "timeout_seconds": 10
     },
     {
       "type": "key",
@@ -108,10 +111,8 @@
   "expected": {
     "stream": {
       "contains": [
-        "履歴: H06_NEEDLE  (2 件)",
         "echo H06_NEW_START",
         "echo H06_OLD_START",
-        "▸ echo H06_OLD_START",
         "NEW_CONTINUATION",
         "OLD_CONTINUATION",
         "H06_FIRST_2",

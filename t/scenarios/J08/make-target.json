@@ -21,7 +21,7 @@
     "files": [
       {
         "path": "work/Makefile",
-        "content": "scenario-test:\n\t@echo ok\n"
+        "content": ".PHONY: scenario-test\nscenario-test: dependency\n\t@echo ignored-target:\nbuild deploy:\n%.o: %.c\nSOURCE := generated\n"
       }
     ]
   },
@@ -36,8 +36,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-C04 owns third-party command completion knowledge."
   }
 }

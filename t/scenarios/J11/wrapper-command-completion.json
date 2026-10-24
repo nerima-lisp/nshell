@@ -34,8 +34,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-C04 owns completion routing through wrapper commands."
   }
 }

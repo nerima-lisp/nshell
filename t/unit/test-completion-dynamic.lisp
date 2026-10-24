@@ -169,3 +169,79 @@ this agent's report for the NSHELL.DOMAIN.COMPLETION export it still needs."
         (nshell.domain.completion:complete
          (nshell.domain.completion:make-empty-knowledge-base) "git checkout m" :directory "/repo")
         (expect 2 :to-equal call-count)))))
+(describe "third-party-completion-source-tests"
+  (it "parses-literal-ssh-hosts-and-skips-patterns-and-hashed-known-hosts"
+    (expect '("another-host" "config-host" "known-host" "other-host") :to-equal
+            (nshell.domain.completion::%ssh-host-names-from-text
+             '("Host config-host *.example !excluded"
+               "Host another-host")
+             '("known-host,other-host ssh-ed25519 placeholder-key"
+               "|1|hashed-host ssh-ed25519 placeholder-key"
+               "@revoked |1|revoked-host ssh-ed25519 placeholder-key"))))
+
+  (it "parses-make-targets-without-recipes-phony-patterns-or-assignments"
+    (expect '("build" "scenario-test") :to-equal
+            (nshell.domain.completion::%makefile-target-names
+             '(".PHONY: scenario-test"
+               "scenario-test: dependency"
+               "build deploy:"
+               "\t@echo ignored-target:"
+               "%.o: %.c"
+               "SOURCE := generated"
+               "# ignored: comment"))))
+
+  (it "completes-ssh-hosts-and-make-targets-from-their-listers"
+    (let ((nshell.domain.completion::*ssh-host-lister*
+            (lambda (home)
+              (expect "scenario-home" :to-equal home)
+              '("scenario-build-host" "other-host")))
+          (nshell.domain.completion::*make-target-lister*
+            (lambda (directory)
+              (expect "/repo" :to-equal directory)
+              '("scenario-test" "clean"))))
+      (let ((ssh-candidates
+              (nshell.domain.completion:complete
+               (nshell.domain.completion:make-empty-knowledge-base)
+               "ssh scenario-" :home-directory "scenario-home"))
+            (make-candidates
+              (nshell.domain.completion:complete
+               (nshell.domain.completion:make-empty-knowledge-base)
+               "make scenario" :directory "/repo")))
+        (expect '("scenario-build-host") :to-equal (completion-texts ssh-candidates))
+        (expect '("scenario-test") :to-equal (completion-texts make-candidates)))))
+
+  (it "completes-kill-signals-pids-and-usernames"
+    (let ((signals
+            (nshell.domain.completion:complete
+             (nshell.domain.completion:make-empty-knowledge-base) "kill -T"))
+          (pids
+            (nshell.domain.completion:complete
+             (nshell.domain.completion:make-empty-knowledge-base)
+             "kill 12" :process-ids '("123" "234")))
+          (users
+            (nshell.domain.completion::%username-completion-candidates
+             "~scenario" '(("USER" . "scenario-user")))))
+      (expect '("-TERM" "-TSTP" "-TTIN" "-TTOU") :to-equal
+              (completion-texts signals))
+      (expect '("123") :to-equal (completion-texts pids))
+      (expect '("~scenario-user/") :to-equal (completion-texts users))))
+
+  (it "unwraps-wrapper-options-before-the-completion-target"
+    (dolist (case '(("env cargo bu" "cargo" "bu" ("bu") nil)
+                    ("sudo -u 1234 kubectl ge" "kubectl" "ge" ("ge") nil)
+                    ("sudo gi" "gi" "" nil t)
+                    ("xargs cargo" "cargo" "" nil t)))
+      (destructuring-bind (line command prefix words command-position-p) case
+        (let* ((raw (nshell.domain.completion:completion-context-for line))
+               (context (nshell.domain.completion::%unwrap-completion-context raw)))
+          (expect command :to-equal
+                  (nshell.domain.completion:completion-context-command context))
+          (expect prefix :to-equal
+                  (nshell.domain.completion:completion-context-argument-prefix context))
+          (expect words :to-equal
+                  (nshell.domain.completion:completion-context-argument-words context))
+          (expect command-position-p :to-equal
+                  (nshell.domain.completion:completion-context-command-position-p context)))))))
+
+
+

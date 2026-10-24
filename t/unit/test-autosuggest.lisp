@@ -273,3 +273,13 @@ git status --short")
                "git st"
                :knowledge-base knowledge-base
                :directory "/repo"))))
+  (describe "autosuggest-process-completion-arguments"
+  (it "passes-process-ids-through-to-completion"
+    (expect "15" :to-equal
+            (nshell.presentation:compute-suggestion
+             (history-kit:make-history)
+             "kill 314"
+             :knowledge-base
+             (nshell.domain.completion:make-empty-knowledge-base)
+             :process-ids '("31415")))))
+

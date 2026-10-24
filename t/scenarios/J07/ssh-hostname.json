@@ -21,23 +21,28 @@
     "files": [
       {
         "path": "home/.ssh/config",
-        "content": "Host scenario-build-host\n  HostName build.invalid\n"
+        "content": "Host scenario-build-host *.example !private\n  HostName build.invalid\n"
+      },
+      {
+        "path": "home/.ssh/known_hosts",
+        "content": "scenario-known-host ssh-ed25519 placeholder-key\n|1|scenario-hashed|checksum ssh-ed25519 placeholder-key\n"
       }
     ]
   },
   "invocation": {
     "kind": "command",
-    "text": "complete -C \"ssh scenario-\""
+    "text": "complete -C \"ssh \""
   },
   "expected": {
     "stdout": {
       "contains": [
-        "scenario-build-host"
+        "scenario-build-host",
+        "scenario-known-host"
+      ],
+      "excludes": [
+        "scenario-hashed"
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-C04 owns third-party command completion knowledge."
   }
 }

@@ -402,3 +402,21 @@
           (setf signaled-p t)))
       (expect signaled-p :to-be-truthy)))
   (it "catalog-entry-property-projection" "Catalog entry property access should preserve each modeled field." (let ((entry (nshell.domain.completion::%make-catalog-command-entry :command "run" :synopsis "run [args]" :description "Run a command." :subcommands (list "exec") :flags (list "--verbose") :option-values (list "json") :exclusive-options (list "--quiet")))) (expect "run" :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :command)) (expect "run [args]" :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :synopsis)) (expect "Run a command." :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :description)) (expect (list "exec") :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :subcommands)) (expect (list "--verbose") :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :flags)) (expect (list "json") :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :option-values)) (expect (list "--quiet") :to-equal (nshell.domain.completion::%catalog-entry-property-value entry :exclusive-options)) (expect "run" :to-equal (nshell.domain.completion::%catalog-entry-command entry)))))
+(describe "repl-process-completion-arguments"
+  (it "includes-unique-pids-from-the-repl-process-registry"
+    "Interactive completion receives PIDs from singleton and grouped process entries."
+    (with-repl-test-state
+      (let ((first-process
+              (nshell.infrastructure.acl::%make-native-process 31415 31415))
+            (second-process
+              (nshell.infrastructure.acl::%make-native-process 27182 27182)))
+        (setf (gethash 1 nshell.presentation::*proc-registry*) first-process
+              (gethash 2 nshell.presentation::*proc-registry*)
+              (list second-process first-process))
+        (let ((process-ids
+                (getf (nshell.presentation::repl-completion-environment-arguments)
+                      :process-ids)))
+          (expect 2 :to-equal (length process-ids))
+          (expect (member "31415" process-ids :test #'string=) :to-be-truthy)
+          (expect (member "27182" process-ids :test #'string=) :to-be-truthy))))))
+

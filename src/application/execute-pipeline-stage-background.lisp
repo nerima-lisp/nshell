@@ -4,7 +4,7 @@
 
 (defun %background-process-pid (process)
   "Return the OS PID of a background PROCESS object, or NIL if unavailable."
-  (ignore-errors (sb-ext:process-pid process)))
+  (ignore-errors (nshell.infrastructure.acl:process-pid process)))
 
 (defun %register-background-job (context processes command-line)
   "Register PROCESSES as a background job in CONTEXT's monitor and process registry.

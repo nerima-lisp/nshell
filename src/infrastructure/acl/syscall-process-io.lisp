@@ -7,14 +7,6 @@
       :stream
       output))
 
-(defun %process-result-shell-exit (result)
-  "Map a cl-process-kit PROCESS-RESULT to a shell exit status."
-  (let ((code (process-kit:process-result-exit-code result))
-        (signal (process-kit:process-result-signal result)))
-    (cond (code code)
-          (signal (+ 128 signal))
-          (t 0))))
-
 (defvar *process-output-clock* (function get-internal-real-time))
 (defun %copy-process-output (input output read-function)
   (let ((buffer (make-string 4096)))
@@ -36,7 +28,7 @@
      :name name)))
 
 (defun %start-process-output-copier (proc output)
-  (%start-stream-copier (and proc (sb-ext:process-output proc))
+  (%start-stream-copier (and proc (process-output proc))
                         output
                         "nshell process output copier"))
 

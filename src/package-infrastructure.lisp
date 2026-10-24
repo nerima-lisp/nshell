@@ -75,7 +75,8 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:run-sidecar-version #:stop-sidecar #:sidecar-alive-p
             #:sidecar-exit-status
             #:with-git-runner #:clear-git-status-cache
-            #:get-git-status))
+            #:get-git-status)
+  (:export #:process-input #:process-output #:process-error #:process-close))
 
 (defpackage #:nshell.infrastructure.terminal
   (:documentation

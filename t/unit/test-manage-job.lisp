@@ -149,6 +149,41 @@
                 :to-throw 'sb-posix:syscall-error)
         (expect :stopped :to-be
                 (nshell.infrastructure.acl:process-status process)))))
+  (it "posix-spawn-process-resume-refreshes-group-cache"
+    (let* ((process (nshell.infrastructure.acl::%spawn-posix-process
+                     "/bin/sh"
+                     '("-c" "kill -STOP $$; exit 7")
+                     nil
+                     :process-group :new))
+           (pid (nshell.infrastructure.acl:process-pid process)))
+      (unwind-protect
+           (progn
+             (expect t :to-be
+                     (nshell.infrastructure.acl::native-process-p process))
+             (loop repeat 5000
+                   for state = (nshell.infrastructure.acl:process-status process)
+                   until (member state '(:stopped :exited :signaled))
+                   do (sleep 0.001))
+             (expect :stopped :to-be
+                     (nshell.infrastructure.acl:process-status process))
+             (setf (nshell.infrastructure.acl::native-process-exit-code process) 23)
+             (with-temporary-function
+                 ('nshell.infrastructure.acl:kill-process
+                  (lambda (target signal)
+                    (expect (- pid) :to-equal target)
+                    (expect :sigcont :to-equal signal)
+                    0))
+               (expect t :to-be
+                       (nshell.infrastructure.acl:process-continue-group
+                        pid (list process)))
+               (expect :running :to-be
+                       (nshell.infrastructure.acl::native-process-status process))
+               (expect (nshell.infrastructure.acl::native-process-exit-code process)
+                       :to-be-null)))
+        (ignore-errors
+          (nshell.infrastructure.acl:kill-process pid :sigkill))
+        (nshell.infrastructure.acl:process-wait process)
+        (nshell.infrastructure.acl::process-close process))))
 
   (it "process-resume-observes-a-new-stop-and-preserves-the-status-hook"
     (let ((output (make-string-output-stream)))

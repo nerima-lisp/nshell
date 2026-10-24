@@ -35,6 +35,6 @@
                   (report-timeout)
                   (collect-output 124))))
         (when (and process
-                   (sb-ext:process-alive-p process)
-                   (not (eq (sb-ext:process-status process) :stopped)))
+                   (nshell.infrastructure.acl:process-alive-p process)
+                   (not (eq (nshell.infrastructure.acl:process-status process) :stopped)))
           (ignore-errors (nshell.infrastructure.acl:process-wait process)))))))

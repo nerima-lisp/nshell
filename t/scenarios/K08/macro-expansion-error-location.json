@@ -7,6 +7,7 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
+      "NSHELL_READER": "sexp",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "SCENARIO_K08-macro-expansion-error-location> "
     },
@@ -26,16 +27,15 @@
     "text": "(define-macro bad-form () (error \"K08_EXPANSION_ERROR\"))\n(bad-form)"
   },
   "expected": {
-    "stdout": {
+    "stderr": {
       "contains": [
-        "K08_EXPANSION_ERROR",
-        "bad-form",
-        "2"
+        "scenario.nsh:2:1",
+        "K08_EXPANSION_ERROR"
       ]
     },
     "exit_code": 1
   },
   "expected_failure": {
-    "reason": "WP-E05 owns macro-expansion diagnostics."
+    "reason": "WP-L07 owns the unimplemented CONTEXT-SHELL-FUNCTION-REGISTRY interface required to load this script."
   }
 }

@@ -10,7 +10,7 @@
 (defstruct (shell-context
             (:constructor %allocate-shell-context
                 (&key history config knowledge-base environment filesystem
-                      job-monitor alias-table abbreviation-table function-table
+                      job-monitor alias-table sexp-alias-table abbreviation-table function-table
                       function-source-table shell-function-registry
                       execution-strategy pipefail-p running last-exit-code input-state
                       process-registry terminal-rows terminal-cols))
@@ -23,6 +23,7 @@
   (filesystem)
   (job-monitor)
   (alias-table nil :type hash-table)
+  (sexp-alias-table nil :type hash-table)
   (abbreviation-table nil :type hash-table)
   (function-table nil :type hash-table)
   (function-source-table nil :type hash-table)
@@ -49,6 +50,7 @@
                              filesystem
                              job-monitor
                              (alias-table (make-hash-table :test #'equal))
+                             (sexp-alias-table (make-hash-table :test #'equal))
                              (abbreviation-table (make-hash-table :test #'equal))
                              (function-table (make-hash-table :test #'equal))
                              (function-source-table (make-hash-table :test #'equal))
@@ -79,6 +81,7 @@
            :filesystem filesystem
            :job-monitor job-monitor
            :alias-table (%shell-context-hash-table alias-table)
+           :sexp-alias-table (%shell-context-hash-table sexp-alias-table)
            :abbreviation-table (%shell-context-hash-table abbreviation-table)
            :function-table (%shell-context-hash-table function-table)
            :function-source-table (%shell-context-hash-table

@@ -23,7 +23,7 @@
   (form-spans (make-hash-table :test #'eq))
   (symbol-origins (make-hash-table :test #'eq))
   (list-elements (make-hash-table :test #'eq)))
-(defvar *sexp-reader-state* nil)
+(progn (defvar *sexp-reader-state* nil) (defvar *sexp-reader-alias-template-depth* nil))
 (progn (defvar *sexp-reader-backquote-depth* 0) (defvar *sexp-reader-nesting-depth* 0) (defparameter +sexp-reader-max-nesting-depth+ 256))
 (defparameter *sexp-reader-eof* (gensym "READER-EOF-"))
 (defparameter *sexp-reader-skipped* (gensym "READER-SKIPPED-"))
@@ -1936,16 +1936,76 @@
                      "Unexpected token in a bare-line command."
                      (list (token-start token) (token-end token)))))
                  (setf index next-index))
-        (make-command-node
-         command
-         (nreverse arguments)
-         (list command-start command-end)
-         command-quote-style
-         command-fragments
-         (nreverse redirects)
-         force-external-p
-         (nreverse argument-forms)
-         environment-assignments))))
+        (let* ((ordered-arguments (nreverse arguments))
+               (ordered-argument-forms (nreverse argument-forms))
+               (alias-source
+                 (when (and (string= command "alias")
+                            (not *sexp-reader-alias-template-depth*)
+                            (every #'command-arg-p ordered-arguments))
+                   (let* ((values
+                            (mapcar #'command-arg-value ordered-arguments))
+                          (first-value (first values))
+                          (equals
+                            (and first-value (position #\= first-value)))
+                          (rhs-arguments (rest ordered-arguments))
+                          (rhs-source
+                            (when (and rhs-arguments
+                                       (every
+                                        (lambda (argument)
+                                          (command-arg-source-span argument))
+                                        rhs-arguments))
+                              (%sexp-reader-source-slice
+                               (first (command-arg-source-span
+                                       (first rhs-arguments)))
+                               (second (command-arg-source-span
+                                        (car (last rhs-arguments)))))))
+                          (body
+                            (cond
+                              ((or (null first-value)
+                                   (member first-value
+                                           (list "-e" "--erase" "-q" "--query")
+                                           :test #'string=))
+                               nil)
+                              (equals
+                               (let ((inline-body
+                                       (subseq first-value (1+ equals))))
+                                 (cond
+                                   ((null rhs-arguments) inline-body)
+                                   ((and (plusp (length inline-body))
+                                         rhs-source)
+                                    (concatenate 'string inline-body " "
+                                                 rhs-source))
+                                   ((plusp (length inline-body)) inline-body)
+                                   (t rhs-source))))
+                              ((null rhs-arguments) nil)
+                              ((null (cdr rhs-arguments))
+                               (command-arg-value (first rhs-arguments)))
+                              (t rhs-source))))
+                     (when (and (stringp body) (plusp (length body))
+                                (not (member first-value
+                                             (list "-e" "--erase" "-q" "--query")
+                                             :test #'string=)))
+                       body))))
+               (alias-template
+                 (when alias-source
+                   (let* ((*sexp-reader-alias-template-depth* t)
+                          (*sexp-reader-state*
+                            (%make-sexp-reader-state :source alias-source)))
+                     (multiple-value-bind (template span)
+                         (%sexp-reader-read-bare-line alias-source)
+                       (declare (ignore span))
+                       template)))))
+          (make-command-node
+           command
+           ordered-arguments
+           (list command-start command-end)
+           command-quote-style
+           command-fragments
+           (nreverse redirects)
+           force-external-p
+           ordered-argument-forms
+           environment-assignments
+           alias-template)))))
 ) (defun %sexp-reader-read-bare-line (source)
   (let ((tokens (%sexp-reader-bare-tokenize source))
         (segment-reversed nil)

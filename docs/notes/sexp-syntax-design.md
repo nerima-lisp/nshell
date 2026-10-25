@@ -771,22 +771,25 @@ internals remain private.
 
 The evaluator resolves an S-expression command head in this order:
 
-1. A `^`-marked head bypasses Lisp functions, shell functions, and builtins and searches `PATH` only. The reader stores the marker in `command-node.force-external-p` and removes the prefix from the command name.
+1. A `^`-marked head bypasses aliases, Lisp functions, shell functions, and builtins and searches `PATH` only. The reader stores the marker in `command-node.force-external-p` and removes the prefix from the command name.
 2. An explicitly package-qualified host symbol is evaluated as a host form. This includes symbols in `CL` and `NSHELL.USER`.
 3. Common Lisp special operators and the evaluator-aware forms `if`, `when`, `unless`, `and`, `or`, `not`, `let`, `let*`, `progn`, `cond`, `case`, and `handler-case` are host forms. The evaluator applies test-position policy only to direct tests and operands listed under [Errors](#errors); body forms inherit their enclosing position under the body rule below. Other Common Lisp macros are not reserved here.
 4. A package-local `NSHELL.USER` function or macro is evaluated as a host form. Common Lisp `flet` and `labels` bindings are not inputs to command-island classification.
-5. A lexical shell-function binding is checked, then the global shell-function registry.
-6. Builtins are checked.
-7. An executable is searched for in `PATH`.
-8. An inherited ordinary Common Lisp function or macro is evaluated as a host form only if no shell function, builtin, or executable matched.
+5. An S-expression alias is checked.
+6. A lexical shell-function binding is checked, then the global shell-function registry.
+7. Builtins are checked.
+8. An executable is searched for in `PATH`.
+9. An inherited ordinary Common Lisp function or macro is evaluated as a host form only if no alias, shell function, builtin, or executable matched.
 
 This order keeps inherited names such as `find`, `sort`, `time`, `sleep`, `read`, and `print` available as everyday commands. For example, `(time make)` selects a matching shell function, builtin, or PATH executable; `CL:TIME` explicitly selects the host macro. Bare-line input always uses shell command resolution and never consults `NSHELL.USER` or the Common Lisp namespace.
+
+The source reader attaches a typed `alias-template` AST to an S-expression alias definition. The alias builtin stores that template in a separate S-expression alias table while preserving the legacy string table. Command-stage resolution checks the typed table after host-form priorities and before shell functions, builtins, and `PATH`; expansion combines the template's `argument-forms` with the invocation's `argument-forms`. This route does not parse or tokenize alias text during registration or command execution. The legacy route keeps its existing string-reparse behavior.
 
 `classify-sexp-head(context head-source)` receives the active
 `shell-context` and the exact source spelling of a simple head token. It returns
 `:host-form` when this resolution selects host evaluation and
 `:command-island` otherwise. It uses the same order as evaluation, including
-package-qualified names, shell functions, builtins, and `PATH`, but never
+package-qualified names, aliases, shell functions, builtins, and `PATH`, but never
 evaluates a form or starts a process. WP-L02 owns this function; L01 and E03
 pass a closure that supplies the active context to the scanner's
 `head-classifier` callback. A non-symbol, computed, or compound head bypasses

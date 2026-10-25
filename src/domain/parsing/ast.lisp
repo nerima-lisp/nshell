@@ -82,7 +82,7 @@
              (:constructor %make-command-node
                  (command args &optional span command-quote-style
                           command-fragments redirects force-external-p
-                          argument-forms environment-assignments)))
+                          argument-forms environment-assignments alias-template)))
   (command "" :type string :read-only t)
   (command-quote-style nil :type (member nil :single :double) :read-only t)
   (args nil :type list :read-only t)
@@ -90,7 +90,8 @@
   (command-fragments nil :type list :read-only t)
   (redirects nil :type list :read-only t)
   (force-external-p nil :type boolean :read-only t)
-  (environment-assignments nil :type list :read-only t))
+  (environment-assignments nil :type list :read-only t)
+  (alias-template nil :type (or null ast-node) :read-only t))
 
 (defun %command-node-fragment-quote-style (fragments)
   (let ((styles
@@ -112,7 +113,7 @@
 (defun make-command-node (command args &optional span command-quote-style
                                   command-fragments redirects force-external-p
                                   (argument-forms nil argument-forms-supplied-p)
-                                  environment-assignments)
+                                  environment-assignments alias-template)
   (let* ((legacy-args (%copy-command-args args))
          (argument-forms
            (%copy-command-argument-forms
@@ -146,7 +147,8 @@
                         (%copy-redirect-entries redirects)
                         (and force-external-p t)
                         argument-forms
-                        validated-environment-assignments)))
+                        validated-environment-assignments
+                        alias-template)))
 
 (defun %validated-source-span (span)
   (when span

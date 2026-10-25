@@ -14,7 +14,7 @@
 (defvar *current-evaluation-status* 0)
 (defvar *macro-expansion-origin-map* nil)
 (defvar *macro-expansion-symbol-origin-map* nil)
-(defvar *generated-command-head-origin-map* nil)
+(progn (defvar *generated-command-head-origin-map* nil) (defvar *sexp-command-alias-expansion-stack* nil))
 (defvar *macro-expansion-depth* 0)
 (defvar *macro-expansion-depth-limit* 128)
 
@@ -321,6 +321,13 @@
       (package-name :host-form)
       ((%evaluator-aware-head-p name escaped-p) :host-form)
       ((%user-package-function-or-macro-p name) :host-form)
+      ((and (not escaped-p)
+            (or (nth-value 1
+                           (gethash name
+                                    (shell-context-sexp-alias-table context)))
+                (nth-value 1
+                           (gethash name (shell-context-alias-table context)))))
+       :command-island)
       ((%peek-shell-function-p context name escaped-p) :command-island)
       ((nth-value 1 (lookup-builtin-binding name)) :command-island)
       ((%command-path-candidate-p context name) :command-island)
@@ -403,15 +410,22 @@
       ((and (string= (package-name package) "NSHELL.USER")
             (or (fboundp symbol) (macro-function symbol)))
        :host-form)
+      ((and (not escaped-p)
+            (or (nth-value 1
+                           (gethash name
+                                    (shell-context-sexp-alias-table context)))
+                (nth-value 1
+                           (gethash name (shell-context-alias-table context)))))
+       :command-island)
       ((%peek-shell-function-p context name escaped-p) :command-island)
       ((nth-value 1 (lookup-builtin-binding name)) :command-island)
       ((%command-path-candidate-p context name) :command-island)
       ((and (not escaped-p)
             (let ((host-symbol (find-symbol (string-upcase name) "CL")))
-         (and host-symbol
-              (or (special-operator-p host-symbol)
-                  (macro-function host-symbol)
-                  (fboundp host-symbol)))))
+              (and host-symbol
+                   (or (special-operator-p host-symbol)
+                       (macro-function host-symbol)
+                       (fboundp host-symbol)))))
        :host-form)
       (t :command-island))))
 
@@ -617,53 +631,154 @@
             (nshell.domain.parsing:ast-node-span command-node)))
         (nshell.domain.parsing:command-node-command command-node))))
 
-(defun %resolve-command-stage-binding (context command-node)
-  (let* ((name (nshell.domain.parsing:command-node-command command-node))
-         (head-source (%command-node-head-source command-node)))
-    (multiple-value-bind (ignored-name escaped-p ignored-package forced-p)
-        (%parse-head-source head-source)
-      (declare (ignore ignored-name ignored-package))
-      (if (or forced-p
-              (nshell.domain.parsing:command-node-force-external-p
-               command-node))
-          (values :external nil)
-          (multiple-value-bind (shell-binding shell-found-p)
-              (lookup-shell-function
-               (context-shell-function-registry context)
-               name :scope (active-shell-function-scope)
-               :escaped-p escaped-p)
-            (if shell-found-p
-                (values :shell-function shell-binding)
-                (multiple-value-bind (builtin-binding builtin-found-p)
-                    (lookup-builtin-binding name)
-                  (cond
-                    (builtin-found-p (values :builtin builtin-binding))
-                    ((%command-path-candidate-p context name)
-                     (values :external nil))
-                    (t (values :external nil))))))))))
+(progn
+  (defun %sync-sexp-alias-table (context argv template)
+    (let ((table (shell-context-sexp-alias-table context)))
+      (cond
+       ((member (first argv) (list "-e" "--erase") :test #'string=)
+        (dolist (alias-name (rest argv))
+          (remhash alias-name table)))
+       ((member (first argv) (list "-q" "--query") :test #'string=)
+        nil)
+       ((or (rest argv)
+            (and (first argv)
+                 (let ((equals (position #\= (first argv))))
+                   (and equals (plusp equals)))))
+        (let* ((definition (first argv))
+               (equals (position #\= definition))
+               (alias-name (if (and equals (plusp equals))
+                               (subseq definition 0 equals)
+                             definition)))
+          (if template
+              (setf (gethash alias-name table) template)
+            (remhash alias-name table)))))))
+
+  (defun %make-sexp-alias-builtin-binding (command-node builtin-binding)
+    (let ((template
+            (nshell.domain.parsing::command-node-alias-template command-node)))
+      (make-builtin-binding
+       (lambda (context argv)
+         (multiple-value-bind (output status)
+             (funcall (builtin-binding-handler builtin-binding) context argv)
+           (when (zerop status)
+             (%sync-sexp-alias-table context argv template))
+           (values output status)))
+       (builtin-binding-argument-mode builtin-binding))))
+
+  (defun %resolve-command-stage-binding (context command-node)
+    (let* ((name (nshell.domain.parsing:command-node-command command-node))
+           (head-source (%command-node-head-source command-node)))
+      (multiple-value-bind (ignored-name escaped-p package-name forced-p)
+          (%parse-head-source head-source)
+        (declare (ignore ignored-name))
+        (cond
+          ((or forced-p
+               (nshell.domain.parsing:command-node-force-external-p
+                command-node))
+           (values :external nil))
+          ((and (null package-name)
+                (not escaped-p)
+                (nth-value
+                 1
+                 (gethash name (shell-context-sexp-alias-table context))))
+           (values :alias
+                   (gethash name (shell-context-sexp-alias-table context))))
+          (t
+           (multiple-value-bind (shell-binding shell-found-p)
+               (lookup-shell-function
+                (context-shell-function-registry context)
+                name :scope (active-shell-function-scope)
+                :escaped-p escaped-p)
+             (if shell-found-p
+                 (values :shell-function shell-binding)
+                 (multiple-value-bind (builtin-binding builtin-found-p)
+                     (lookup-builtin-binding name)
+                   (cond
+                     (builtin-found-p
+                      (values
+                       :builtin
+                       (if (string= name "alias")
+                           (%make-sexp-alias-builtin-binding
+                            command-node builtin-binding)
+                           builtin-binding)))
+                     ((%command-path-candidate-p context name)
+                      (values :external nil))
+                     (t (values :external nil))))))))))))
 
 (defun evaluate-command-stage-in-context (context command-node)
   (multiple-value-bind (dispatch-kind binding)
       (%resolve-command-stage-binding context command-node)
-    (when (and (eq dispatch-kind :builtin)
-               (eq :value (builtin-binding-argument-mode binding))
-               (not (eq *command-stage-call-position* :value)))
-      (error 'command-execution-plan-error
-             :source-span (nshell.domain.parsing:ast-node-span command-node)
-             :operation :value-builtin-position
-             :cause
-             (make-condition 'simple-error
-                             :format-control
-                             "A :value builtin requires value position."
-                             :format-arguments nil)))
-    (make-evaluated-command-stage
-     command-node dispatch-kind binding
-     (%evaluate-command-arguments
-      context command-node *command-stage-reader-result*
-      *command-stage-lexical-environment*)
-     (%evaluate-redirect-target-values
-      command-node *command-stage-reader-result*
-      *command-stage-lexical-environment*))))
+    (if (eq dispatch-kind :alias)
+        (progn
+          (unless (nshell.domain.parsing:command-node-p binding)
+            (error "A SEXP alias must contain a typed command AST: ~S"
+                   binding))
+          (when (member
+                 (nshell.domain.parsing:command-node-command command-node)
+                 *sexp-command-alias-expansion-stack*
+                 :test #'string=)
+            (error "Recursive SEXP command alias: ~A"
+                   (nshell.domain.parsing:command-node-command command-node)))
+          (let* ((template-forms
+                   (nshell.domain.parsing:command-node-argument-forms binding))
+                 (invocation-forms
+                   (nshell.domain.parsing:command-node-argument-forms
+                    command-node))
+                 (combined-forms (append template-forms invocation-forms))
+                 (expanded-node
+                   (nshell.domain.parsing:make-command-node
+                    (nshell.domain.parsing:command-node-command binding)
+                    (remove-if-not
+                     #'nshell.domain.parsing:command-arg-p combined-forms)
+                    (nshell.domain.parsing:ast-node-span command-node)
+                    (nshell.domain.parsing:command-node-command-quote-style
+                     binding)
+                    (nshell.domain.parsing:command-node-command-fragments
+                     binding)
+                    (append
+                     (nshell.domain.parsing:command-node-redirects binding)
+                     (nshell.domain.parsing:command-node-redirects command-node))
+                    (nshell.domain.parsing:command-node-force-external-p binding)
+                    combined-forms
+                    (append
+                     (nshell.domain.parsing:command-node-environment-assignments
+                      binding)
+                     (nshell.domain.parsing:command-node-environment-assignments
+                      command-node)))))
+            (let ((*sexp-command-alias-expansion-stack*
+                    (cons
+                     (nshell.domain.parsing:command-node-command command-node)
+                     *sexp-command-alias-expansion-stack*))
+                  (*generated-command-head-origin-map*
+                    (or *generated-command-head-origin-map*
+                        (make-hash-table :test #'eq))))
+              (setf (gethash expanded-node *generated-command-head-origin-map*)
+                    (list :source-name
+                          (nshell.domain.parsing:command-node-command binding)
+                          :escaped-p nil))
+              (evaluate-command-stage-in-context context expanded-node))))
+        (progn
+          (when (and (eq dispatch-kind :builtin)
+                     (eq :value (builtin-binding-argument-mode binding))
+                     (not (eq *command-stage-call-position* :value)))
+            (error 'command-execution-plan-error
+                   :source-span
+                   (nshell.domain.parsing:ast-node-span command-node)
+                   :operation :value-builtin-position
+                   :cause
+                   (make-condition
+                    'simple-error
+                    :format-control
+                    "A :value builtin requires value position."
+                    :format-arguments nil)))
+          (make-evaluated-command-stage
+           command-node dispatch-kind binding
+           (%evaluate-command-arguments
+            context command-node *command-stage-reader-result*
+            *command-stage-lexical-environment*)
+           (%evaluate-redirect-target-values
+            command-node *command-stage-reader-result*
+            *command-stage-lexical-environment*))))))
 
 (defun %eval-command-ast-in-position
     (context ast reader-result lexical-environment position)

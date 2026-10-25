@@ -33,8 +33,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-O18fix: the NSHELL_READER=sexp command-stage resolver does not expand aliases before resolving shell functions, builtins, and PATH commands. Integrating alias expansion into reader-backed command planning remains a separate execution task."
   }
 }

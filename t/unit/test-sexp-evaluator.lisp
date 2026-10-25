@@ -63,14 +63,19 @@
            (*sexp-evaluator-test-path-names* nil)
            (*sexp-evaluator-test-peek-calls* 0)
            (*sexp-evaluator-test-lookup-calls* 0))
-      (dolist (entry '(("echo" :argv) ("test" :argv) ("fail" :argv)
-                       ("set" :argv) ("value" :value)))
-        (setf (gethash (first entry) builtins)
-              (nshell.application:make-builtin-binding
-               (lambda (&rest arguments)
-                 (declare (ignore arguments))
-                 0)
-               (second entry))))
+      (progn
+        (dolist (entry '(("echo" :argv) ("test" :argv) ("fail" :argv)
+                         ("set" :argv) ("value" :value)))
+          (setf (gethash (first entry) builtins)
+                (nshell.application:make-builtin-binding
+                 (lambda (&rest arguments)
+                   (declare (ignore arguments))
+                   0)
+                 (second entry))))
+        (multiple-value-bind (alias-binding alias-found-p)
+            (nshell.application:lookup-builtin-binding "alias")
+          (when alias-found-p
+            (setf (gethash "alias" builtins) alias-binding))))
       (with-temporary-functions
           (('nshell.application:context-shell-function-registry
             (lambda (ignored-context)
@@ -174,7 +179,123 @@
          (expect :command-island :to-equal
                  (nshell.application:classify-sexp-head context "find"))
          (expect 0 :to-equal *sexp-evaluator-test-lookup-calls*)
-         (expect 2 :to-equal *sexp-evaluator-test-peek-calls*))))))
+         (expect 2 :to-equal *sexp-evaluator-test-peek-calls*)))))
+  (it "classifies aliases before builtins-path-and-inherited-host-forms"
+    (let ((context (make-test-shell-context)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (setf *sexp-evaluator-test-path-names* '("find"))
+         (setf (gethash "echo" (nshell.application:shell-context-alias-table context))
+               "find")
+         (setf (gethash "find" (nshell.application:shell-context-alias-table context))
+               "echo")
+         (setf (gethash "gethash" (nshell.application:shell-context-alias-table context))
+               "echo")
+         (expect :command-island :to-equal
+                 (nshell.application:classify-sexp-head context "echo"))
+         (expect :command-island :to-equal
+                 (nshell.application:classify-sexp-head context "find"))
+         (expect :command-island :to-equal
+                 (nshell.application:classify-sexp-head context "gethash"))
+         (expect 0 :to-equal *sexp-evaluator-test-peek-calls*)))))
+  (it "registers-typed-aliases-and-expands-without-reparsing"
+      (let* ((context (make-test-shell-context))
+             (definition-reader
+              (first
+               (nshell.domain.parsing:read-submission
+                "alias echo 'test typed'" :reader-context :bare-line)))
+             (definition-node
+              (nshell.domain.parsing:reader-result-form definition-reader))
+             (template
+              (nshell.domain.parsing::command-node-alias-template
+               definition-node))
+             (value-form
+              (nshell.domain.parsing:make-command-value-form
+               :value 23 '(5 7)))
+             (invocation-node
+              (nshell.domain.parsing:make-command-node
+               "echo" nil '(0 4) nil nil nil nil (list value-form)))
+             (invocation-reader
+              (%make-sexp-evaluator-test-reader-result "echo 23")))
+        (expect t :to-equal (nshell.domain.parsing:command-node-p template))
+        (expect "test" :to-equal
+                (nshell.domain.parsing:command-node-command template))
+        (%call-with-sexp-evaluator-test-boundaries
+         context
+         (lambda ()
+           (with-temporary-functions
+            (('nshell.application:expand-command-alias-node
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (error "Legacy alias expansion was called.")))
+             ('nshell.domain.parsing:read-submission
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (error "Runtime read-submission was called.")))
+             ('nshell.domain.parsing::%sexp-reader-read-bare-line
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (error "Runtime bare-line parsing was called.")))
+             ('nshell.domain.parsing::%sexp-reader-bare-tokenize
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (error "Runtime bare-line tokenization was called."))))
+            (multiple-value-bind (definition-kind definition-binding)
+                (nshell.application::%resolve-command-stage-binding
+                 context definition-node)
+              (expect :builtin :to-equal definition-kind)
+              (expect t :to-equal (nshell.application:builtin-binding-p
+                                   definition-binding)))
+            (let* ((nshell.application::*command-stage-reader-result*
+                    definition-reader)
+                   (definition-stage
+                    (nshell.application:evaluate-command-stage-in-context
+                     context definition-node)))
+              (expect t :to-equal (nshell.application:evaluated-command-stage-p
+                                   definition-stage))
+              (when (nshell.application:evaluated-command-stage-p
+                     definition-stage)
+                (nshell.application:dispatch-builtin
+                 context
+                 (nshell.application:evaluated-command-stage-binding
+                  definition-stage)
+                 (nshell.application:evaluated-command-stage-arguments
+                  definition-stage))))
+            (let ((stored-template
+                   (gethash
+                    "echo"
+                    (nshell.application::shell-context-sexp-alias-table context))))
+              (expect t :to-equal
+                      (nshell.domain.parsing:command-node-p stored-template)))
+            (let* ((nshell.application::*command-stage-reader-result*
+                    invocation-reader)
+                   (expanded-stage
+                    (nshell.application:evaluate-command-stage-in-context
+                     context invocation-node)))
+              (expect t :to-equal (nshell.application:evaluated-command-stage-p
+                                   expanded-stage))
+              (when (nshell.application:evaluated-command-stage-p expanded-stage)
+                (expect :builtin :to-equal
+                        (nshell.application:evaluated-command-stage-dispatch-kind
+                         expanded-stage))
+                (expect "test" :to-equal
+                        (nshell.domain.parsing:command-node-command
+                         (nshell.application:evaluated-command-stage-command-node
+                          expanded-stage)))
+                (expect '("typed" 23) :to-equal
+                        (mapcar
+                         #'nshell.domain.parsing:evaluated-command-arg-value
+                         (nshell.application:evaluated-command-stage-arguments
+                          expanded-stage)))
+                (expect t :to-equal
+                        (eq
+                         value-form
+                         (car
+                          (last
+                           (nshell.domain.parsing:command-node-argument-forms
+                            (nshell.application:evaluated-command-stage-command-node
+                             expanded-stage))))))))))))))
 (describe "sexp-evaluator-special-forms"
   (it "applies-value-and-body-position-rules"
     (let ((context (make-test-shell-context)))

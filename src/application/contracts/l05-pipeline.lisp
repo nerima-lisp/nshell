@@ -1,5 +1,11 @@
 (in-package #:nshell.application)
-(declaim (special nshell.infrastructure.acl:*command-not-found-hook*))
+(declaim
+  (special
+   nshell.infrastructure.acl:*command-not-found-hook*
+   *function-call-depth*
+   nshell.domain.expansion:*positional-args*
+   nshell.infrastructure.persistence:*history-file-mutations-enabled-p*
+   nshell.infrastructure.persistence::*history-file-path-override*))
 
 (define-condition byte-stream-execution-error (error)
   ((operation :initarg :operation :reader byte-stream-execution-error-operation)
@@ -22,15 +28,18 @@
 (define-value-struct pipeline-stage-io
     ((descriptor-map nil :type list :copy :list)
      (transient-descriptors nil :type list :copy :list)
-     (preserved-descriptors nil :type list :copy :list))
+     (preserved-descriptors nil :type list :copy :list)
+     (default-standard-streams nil :type list :copy :list))
   :keyword-constructor t)
 
 (defun make-pipeline-stage-io (descriptor-map transient-descriptors
-                               &optional preserved-descriptors)
+                               &optional preserved-descriptors
+                                 default-standard-streams)
   (%make-pipeline-stage-io
    :descriptor-map descriptor-map
    :transient-descriptors transient-descriptors
-   :preserved-descriptors preserved-descriptors))
+   :preserved-descriptors preserved-descriptors
+   :default-standard-streams default-standard-streams))
 
 (defstruct (pipeline-execution-handle
              (:constructor %make-pipeline-execution-handle (token)))
@@ -114,6 +123,10 @@
     (let ((mapping
             (assoc descriptor
                    (nshell.application:pipeline-stage-io-descriptor-map
+                    stage-io)))
+          (default-stream
+            (assoc descriptor
+                   (nshell.application:pipeline-stage-io-default-standard-streams
                     stage-io))))
       (cond
         (mapping
@@ -124,6 +137,8 @@
               (%pipeline-stage-stream-from-descriptor source))
              (t
               (error "Invalid pipeline source descriptor: ~s" source)))))
+        (default-stream
+         (cdr default-stream))
         ((= descriptor 0) *standard-input*)
         ((= descriptor 1) *standard-output*)
         ((= descriptor 2) *error-output*)
@@ -143,30 +158,35 @@
   (defun %byte-stream-standard-source (descriptor stage-io)
     (let ((mapping
             (assoc descriptor
-                   (pipeline-stage-io-descriptor-map stage-io))))
-      (if mapping
-          (let ((source (cdr mapping)))
-            (cond
-              ((eq source :closed) nil)
-              ((typep source '(integer 0 *)) source)
-              (t (error "Invalid pipeline source descriptor: ~s" source))))
-          t)))
+                   (pipeline-stage-io-descriptor-map stage-io)))
+          (default-stream
+            (assoc descriptor
+                   (pipeline-stage-io-default-standard-streams stage-io))))
+      (cond
+        (mapping
+         (let ((source (cdr mapping)))
+           (cond
+             ((eq source :closed) nil)
+             ((typep source '(integer 0 *)) source)
+             (t (error "Invalid pipeline source descriptor: ~s" source)))))
+        (default-stream (cdr default-stream))
+        (t t))))
 
   (defun %byte-stream-stage-argvs (context stages)
-    (let ((argvs (make-array (length stages) :initial-element nil)))
-      (loop for stage in stages
-            for index from 0
-            for kind = (evaluated-command-stage-dispatch-kind stage)
-            when (or (eq kind :external)
-                     (and (eq kind :builtin)
-                          (eq :argv
-                              (builtin-binding-argument-mode
-                               (evaluated-command-stage-binding stage)))))
-              do (setf (aref argvs index)
-                       (command-argv-strings
-                        context
-                        (evaluated-command-stage-arguments stage))))
-      argvs))
+  (let ((argvs (make-array (length stages) :initial-element nil)))
+    (loop for stage in stages
+          for index from 0
+          for kind = (evaluated-command-stage-dispatch-kind stage)
+          when (or (member kind '(:external :source-function) :test #'eq)
+                   (and (eq kind :builtin)
+                        (eq :argv
+                            (builtin-binding-argument-mode
+                             (evaluated-command-stage-binding stage)))))
+            do (setf (aref argvs index)
+                     (command-argv-strings
+                      context
+                      (evaluated-command-stage-arguments stage))))
+    argvs))
 
   (defun %cleanup-byte-stream-execution (state)
     (let ((processes
@@ -191,165 +211,191 @@
     state)
 
   (defun %byte-stream-launch-thread (state index thunk)
-    (let ((stage-io (nth index (%byte-stream-execution-state-stage-ios state)))
-          (cache (aref (%byte-stream-execution-state-stream-caches state) index))
-          (command-not-found-hook
-            nshell.infrastructure.acl:*command-not-found-hook*))
-      (setf (aref (%byte-stream-execution-state-threads state) index)
-            (sb-thread:make-thread
-             (lambda ()
-               (let ((*pipeline-stage-io* stage-io)
-                     (nshell.infrastructure.acl:*command-not-found-hook*
-                      command-not-found-hook)
-                     (*pipeline-stage-stream-cache* cache)
-                     (*pipeline-stage-stream-cache-active-p* t))
-                 (unwind-protect
-                      (handler-case
-                          (let ((*standard-input*
-                                  (%byte-stream-standard-stream
-                                   0 stage-io *standard-input*))
-                                (*standard-output*
-                                  (%byte-stream-standard-stream
-                                   1 stage-io *standard-output*))
-                                (*error-output*
-                                  (%byte-stream-standard-stream
-                                   2 stage-io *error-output*)))
-                            (funcall thunk))
-                        (error (condition)
-                          (setf (aref (%byte-stream-execution-state-failures state)
-                                      index)
-                                condition)))
-                   (handler-case
-                       (%close-pipeline-stage-stream-cache cache)
-                     (error (condition)
-                       (unless (aref (%byte-stream-execution-state-failures state)
-                                     index)
-                         (setf (aref (%byte-stream-execution-state-failures state)
-                                     index)
-                               condition)))))))
-             :name (format nil "nshell pipeline stage ~d" index)))
+  (let ((stage-io (nth index (%byte-stream-execution-state-stage-ios state)))
+        (cache (aref (%byte-stream-execution-state-stream-caches state) index))
+        (command-not-found-hook
+          nshell.infrastructure.acl:*command-not-found-hook*)
+        (history-file-mutations-enabled-p
+          nshell.infrastructure.persistence:*history-file-mutations-enabled-p*)
+        (history-file-path-override
+          nshell.infrastructure.persistence::*history-file-path-override*)
+        (function-call-depth *function-call-depth*)
+        (positional-args
+          (copy-list nshell.domain.expansion:*positional-args*)))
+    (setf (aref (%byte-stream-execution-state-threads state) index)
+          (sb-thread:make-thread
+           (lambda ()
+             (let ((nshell.domain.expansion:*positional-args* positional-args)
+                   (*pipeline-stage-io* stage-io)
+                   (nshell.infrastructure.acl:*command-not-found-hook*
+                     command-not-found-hook)
+                   (*pipeline-stage-stream-cache* cache)
+                   (*pipeline-stage-stream-cache-active-p* t)
+                   (nshell.infrastructure.persistence:*history-file-mutations-enabled-p*
+                     history-file-mutations-enabled-p)
+                   (nshell.infrastructure.persistence::*history-file-path-override*
+                     history-file-path-override)
+                   (*function-call-depth* function-call-depth))
+               (unwind-protect
+                    (handler-case
+                        (let ((*standard-input*
+                                (%byte-stream-standard-stream
+                                 0 stage-io *standard-input*))
+                              (*standard-output*
+                                (%byte-stream-standard-stream
+                                 1 stage-io *standard-output*))
+                              (*error-output*
+                                (%byte-stream-standard-stream
+                                 2 stage-io *error-output*)))
+                          (funcall thunk))
+                      (error (condition)
+                        (setf (aref (%byte-stream-execution-state-failures state)
+                                    index)
+                              condition)))
+                 (handler-case
+                     (%close-pipeline-stage-stream-cache cache)
+                   (error (condition)
+                     (unless (aref (%byte-stream-execution-state-failures state)
+                                   index)
+                       (setf (aref (%byte-stream-execution-state-failures state)
+                                   index)
+                             condition)))))))
+           :name (format nil "nshell pipeline stage ~d" index)))
     state))
 
   (defun spawn-byte-stream-node-in-context
-      (context evaluated-stages stage-ios internal-stage-dispatcher)
-    (let* ((stages (copy-list evaluated-stages))
-           (stage-io-list (copy-list stage-ios))
-           (count (length stages)))
-      (unless (= count (length stage-io-list))
-        (error "Pipeline stage and descriptor-map counts differ."))
-      (let* ((argvs (%byte-stream-stage-argvs context stages))
-             (processes (make-array count :initial-element nil))
-             (threads (make-array count :initial-element nil))
-             (statuses (make-array count :initial-element nil))
-             (signals (make-array count :initial-element nil))
-             (failures (make-array count :initial-element nil))
-             (stream-caches (make-array count :initial-element nil))
-             (state
-               (%make-byte-stream-execution-state
-                :context context
-                :stages stages
-                :stage-ios stage-io-list
-                :dispatcher internal-stage-dispatcher
-                :processes processes
-                :threads threads
-                :statuses statuses
-                :signals signals
-                :failures failures
-                :stream-caches stream-caches))
-             (environment
-               (nshell.infrastructure.acl::external-command-environment))
-             (resolved-commands (make-array count :initial-element nil))
-             (process-group nil))
-        (handler-case
-            (progn
-              (loop for stage in stages
-                    for index from 0
-                    when (eq :external
-                             (evaluated-command-stage-dispatch-kind stage))
-                      do (setf (aref resolved-commands index)
-                               (nshell.infrastructure.acl::%resolve-external-command
-                                (nshell.domain.parsing:command-node-command
-                                 (evaluated-command-stage-command-node stage))
-                                environment)))
-              (loop for stage in stages
-                    for index from 0
-                    for kind = (evaluated-command-stage-dispatch-kind stage)
-                    when (or (member kind '(:builtin :shell-function) :test #'eq)
-                             (and (eq kind :external)
-                                  (null (aref resolved-commands index))))
-                      do (setf (aref stream-caches index)
-                               (%prepare-pipeline-stage-stream-cache
-                                (nth index stage-io-list))))
-              (loop for stage in stages
-                    for index from 0
-                    for kind = (evaluated-command-stage-dispatch-kind stage)
-                    for stage-io = (nth index stage-io-list)
-                    do (case kind
-                         (:external
-                          (let ((command
-                                  (nshell.domain.parsing:command-node-command
-                                   (evaluated-command-stage-command-node stage)))
-                                (resolved (aref resolved-commands index)))
-                            (if resolved
-                                (let ((process
-                                        (nshell.infrastructure.acl::%spawn-external-command
-                                         resolved
-                                         (aref argvs index)
-                                         environment
-                                         :input (%byte-stream-standard-source
-                                                 0 stage-io)
-                                         :output (%byte-stream-standard-source
-                                                  1 stage-io)
-                                         :error (%byte-stream-standard-source
-                                                 2 stage-io)
-                                         :preserve-fds
-                                         (pipeline-stage-io-preserved-descriptors stage-io)
-                                         :process-group (or process-group :new))))
-                                  (setf (aref processes index) process)
-                                  (unless process-group
-                                    (setf process-group
-                                          (nshell.infrastructure.acl:process-pid
-                                           process))))
-                                (let ((stage-index index))
-                                 (%byte-stream-launch-thread
-                                  state stage-index
-                                  (lambda ()
-                                    (write-string
-                                     (nshell.infrastructure.acl::%external-command-not-found-message
-                                      command)
-                                     *error-output*)
-                                    (setf (aref statuses stage-index) 127)))))))
-                         ((:builtin :shell-function)
-                          (let ((stage-to-dispatch stage)
-                                (stage-io-to-dispatch stage-io)
-                                (stage-index index))
-                            (%byte-stream-launch-thread
-                             state stage-index
-                             (lambda ()
-                               (multiple-value-bind (status signal)
-                                   (funcall internal-stage-dispatcher
-                                            context
-                                            stage-to-dispatch
-                                            stage-io-to-dispatch
-                                            (aref argvs stage-index))
-                                 (unless (integerp status)
-                                   (error "Pipeline dispatcher returned a non-integer status: ~s"
-                                          status))
-                                 (unless (or (null signal)
-                                             (and (integerp signal) (plusp signal)))
-                                   (error "Pipeline dispatcher returned an invalid signal: ~s"
-                                          signal))
-                                 (setf (aref statuses stage-index) status
-                                       (aref signals stage-index) signal))))))
-                         (otherwise
-                          (error "Unsupported evaluated pipeline stage kind: ~s"
-                                 kind))))
-              (%make-pipeline-execution-handle state))
-          (error (condition)
-            (%cleanup-byte-stream-execution state)
-            (error 'byte-stream-execution-error
-                   :operation :start
-                   :cause condition))))))
+  (context evaluated-stages stage-ios internal-stage-dispatcher)
+(let* ((stages (copy-list evaluated-stages))
+       (stage-io-list (copy-list stage-ios))
+       (count (length stages)))
+  (unless (= count (length stage-io-list))
+    (error "Pipeline stage and descriptor-map counts differ."))
+  (let* ((argvs (%byte-stream-stage-argvs context stages))
+         (processes (make-array count :initial-element nil))
+         (threads (make-array count :initial-element nil))
+         (statuses (make-array count :initial-element nil))
+         (signals (make-array count :initial-element nil))
+         (failures (make-array count :initial-element nil))
+         (stream-caches (make-array count :initial-element nil))
+         (state
+           (%make-byte-stream-execution-state
+            :context context
+            :stages stages
+            :stage-ios stage-io-list
+            :dispatcher internal-stage-dispatcher
+            :processes processes
+            :threads threads
+            :statuses statuses
+            :signals signals
+            :failures failures
+            :stream-caches stream-caches))
+         (environments
+           (map 'vector
+                (lambda (stage)
+                  (or (%stage-environment-strings
+                       context
+                       (evaluated-command-stage-environment-assignments
+                        stage))
+                      (%context-exported-environment-strings context)
+                      (nshell.infrastructure.acl::external-command-environment)))
+                stages))
+         (resolved-commands (make-array count :initial-element nil))
+         (process-group nil))
+    (handler-case
+        (progn
+          (loop for stage in stages
+                for index from 0
+                when (eq :external
+                         (evaluated-command-stage-dispatch-kind stage))
+                  do (setf (aref resolved-commands index)
+                           (nshell.infrastructure.acl::%resolve-external-command
+                            (nshell.domain.parsing:command-node-command
+                             (evaluated-command-stage-command-node stage))
+                            (aref environments index))))
+          (loop for stage in stages
+                for index from 0
+                for kind = (evaluated-command-stage-dispatch-kind stage)
+                when (or (member kind
+                                 '(:builtin :shell-function :source-function)
+                                 :test #'eq)
+                         (and (eq kind :external)
+                              (null (aref resolved-commands index))))
+                  do (setf (aref stream-caches index)
+                           (%prepare-pipeline-stage-stream-cache
+                            (nth index stage-io-list))))
+          (loop for stage in stages
+                for index from 0
+                for kind = (evaluated-command-stage-dispatch-kind stage)
+                for stage-io = (nth index stage-io-list)
+                do (case kind
+                     (:external
+                      (let ((command
+                              (nshell.domain.parsing:command-node-command
+                               (evaluated-command-stage-command-node stage)))
+                            (resolved (aref resolved-commands index)))
+                        (if resolved
+                            (let ((process
+                                    (nshell.infrastructure.acl::%spawn-external-command
+                                     resolved
+                                     (aref argvs index)
+                                     (aref environments index)
+                                     :input (%byte-stream-standard-source
+                                             0 stage-io)
+                                     :output (%byte-stream-standard-source
+                                              1 stage-io)
+                                     :error (%byte-stream-standard-source
+                                             2 stage-io)
+                                     :preserve-fds
+                                     (pipeline-stage-io-preserved-descriptors
+                                      stage-io)
+                                     :process-group (or process-group :new))))
+                              (setf (aref processes index) process)
+                              (unless process-group
+                                (setf process-group
+                                      (nshell.infrastructure.acl:process-pid
+                                       process))))
+                            (let ((stage-index index))
+                              (setf (aref statuses stage-index) 127)
+                              (%byte-stream-launch-thread
+                               state stage-index
+                               (lambda ()
+                                 (write-string
+                                  (nshell.infrastructure.acl::%external-command-not-found-message command)
+                                  (if (= count 1)
+                                      *standard-output*
+                                      *error-output*))))))))
+                     ((:builtin :shell-function :source-function)
+                      (let ((stage-to-dispatch stage)
+                            (stage-io-to-dispatch stage-io)
+                            (stage-index index))
+                        (%byte-stream-launch-thread
+                         state stage-index
+                         (lambda ()
+                           (multiple-value-bind (status signal)
+                               (funcall internal-stage-dispatcher
+                                        context
+                                        stage-to-dispatch
+                                        stage-io-to-dispatch
+                                        (aref argvs stage-index))
+                             (unless (integerp status)
+                               (error "Pipeline dispatcher returned a non-integer status: ~s"
+                                      status))
+                             (unless (or (null signal)
+                                         (and (integerp signal) (plusp signal)))
+                               (error "Pipeline dispatcher returned an invalid signal: ~s"
+                                      signal))
+                             (setf (aref statuses stage-index) status
+                                   (aref signals stage-index) signal)))))
+                      )
+                     (otherwise
+                      (error "Unsupported evaluated pipeline stage kind: ~s"
+                             kind))))
+          (%make-pipeline-execution-handle state))
+      (error (condition)
+        (%cleanup-byte-stream-execution state)
+        (error 'byte-stream-execution-error
+               :operation :start
+               :cause condition))))))
 
   (defun %byte-stream-process-signal (process)
     (when (eq :signaled
@@ -394,7 +440,12 @@
                     when cache
                       do (%close-pipeline-stage-stream-cache cache))
               (make-pipeline-execution-result
-               (or (car (last stage-statuses)) 0)
+               (if (shell-context-pipefail-p
+                    (%byte-stream-execution-state-context state))
+                   (or (find-if (lambda (status) (not (zerop status)))
+                                stage-statuses)
+                       0)
+                   (or (car (last stage-statuses)) 0))
                stage-statuses
                stage-signals)))
         (error (condition)

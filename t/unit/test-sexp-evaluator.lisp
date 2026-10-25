@@ -586,6 +586,47 @@
                           (nshell.domain.parsing:evaluated-command-arg-value
                            (first arguments)))))))
         (when (fboundp function-name) (fmakunbound function-name)))))
+  (it "keeps-escaped-argv-distinct-from-positional-argv"
+    (let* ((context (make-test-shell-context))
+           (function-name
+             (intern "L02-EVALUATOR-ESCAPED-ARGV"
+                     (find-package "NSHELL.USER"))))
+      (unwind-protect
+           (progn
+             (%evaluate-sexp-evaluator-test-source
+              context
+              "(defun L02-EVALUATOR-ESCAPED-ARGV (|argv| other)
+                   (symbol-value
+                    'nshell.domain.expansion:*positional-args*))")
+             (multiple-value-bind (value status)
+                 (%evaluate-sexp-evaluator-test-source
+                  context
+                  "(L02-EVALUATOR-ESCAPED-ARGV
+                    '(\"first\" \"second\") \"other\")")
+               (expect '(("first" "second") "other") :to-equal value)
+               (expect 0 :to-equal status)))
+        (when (fboundp function-name) (fmakunbound function-name)))))
+  (it "does-not-classify-case-distinct-originless-shell-function-symbol"
+    (let* ((context (make-test-shell-context))
+           (operator
+             (intern "define-shell-function"
+                     (find-package "NSHELL.USER")))
+           (function-name
+             (intern "L02-ORIGINLESS-SHELL-FUNCTION"
+                     (find-package "NSHELL.USER")))
+           (reader-result
+             (%make-sexp-evaluator-test-reader-result
+              "(|define-shell-function| L02-ORIGINLESS-SHELL-FUNCTION () 42)"
+              (list operator function-name nil 42))))
+      (expect nil
+              :to-equal
+              (eq operator
+                  (quote nshell.user::define-shell-function)))
+      (expect
+       (lambda ()
+         (nshell.application:evaluate-reader-result-in-context
+          context reader-result))
+       :to-throw (quote undefined-function))))
   (it "allows-nested-definitions-and-rejects-invalid-lambda-lists"
     (let* ((context (make-test-shell-context))
            (nested-name
@@ -655,7 +696,70 @@
                         body-stage))))
              (expect :shell-function :to-equal
                      (nshell.application:evaluated-command-stage-dispatch-kind
-                      function-stage)))))))))
+                      function-stage))))))))
+  (it "dispatches-mixed-case-unescaped-shell-function-head"
+    (let* ((context (make-test-shell-context))
+           (definition
+             (first
+              (nshell.domain.parsing:read-submission
+               "(dEfInE-sHeLl-FuNcTiOn L02-MIXED-CASE-SHELL-FUNCTION () (ECHO MARKER))"
+               :reader-context :sexp)))
+           (call
+             (first
+              (nshell.domain.parsing:read-submission
+               "(L02-MIXED-CASE-SHELL-FUNCTION)"
+               :reader-context :sexp))))
+      (let ((*sexp-evaluator-test-use-real-command-form->ast-p* t))
+        (%call-with-sexp-evaluator-test-boundaries
+         context
+         (lambda ()
+           (nshell.application:evaluate-reader-result-in-context
+            context definition)
+           (multiple-value-bind (value status)
+               (nshell.application:evaluate-reader-result-in-context
+                context call)
+             (expect (format nil "echo output~%") :to-equal value)
+             (expect 0 :to-equal status)
+             (expect 2 :to-equal
+                     (length *sexp-evaluator-test-calls*))
+             (expect :shell-function :to-equal
+                     (nshell.application:evaluated-command-stage-dispatch-kind
+                      (first (second *sexp-evaluator-test-calls*))))))))))
+  (it "does-not-dispatch-escaped-or-package-qualified-shell-function-heads"
+    (let* ((context (make-test-shell-context))
+           (escaped-name "L02-ESCAPED-SHELL-FUNCTION")
+           (qualified-name "L02-QUALIFIED-SHELL-FUNCTION")
+           (escaped-definition
+             (first
+              (nshell.domain.parsing:read-submission
+               "(|DEFINE-SHELL-FUNCTION| L02-ESCAPED-SHELL-FUNCTION () (ECHO MARKER))"
+               :reader-context :sexp)))
+           (qualified-definition
+             (first
+              (nshell.domain.parsing:read-submission
+               "(NSHELL.USER::DEFINE-SHELL-FUNCTION L02-QUALIFIED-SHELL-FUNCTION () (ECHO MARKER))"
+               :reader-context :sexp))))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (expect
+          (lambda ()
+            (nshell.application:evaluate-reader-result-in-context
+             context escaped-definition))
+          :to-throw (quote undefined-function))
+         (expect
+          (lambda ()
+            (nshell.application:evaluate-reader-result-in-context
+             context qualified-definition))
+          :to-throw (quote undefined-function))
+         (expect nil :to-equal
+                 (nshell.application:peek-shell-function
+                  (nshell.application:context-shell-function-registry context)
+                  escaped-name))
+         (expect nil :to-equal
+                 (nshell.application:peek-shell-function
+                  (nshell.application:context-shell-function-registry context)
+                  qualified-name)))))))
 (describe "sexp-evaluator-macros"
   (it "expands-a-user-macro-into-two-command-stages"
     (let* ((context (make-test-shell-context))

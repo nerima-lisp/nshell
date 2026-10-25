@@ -77,6 +77,7 @@ permitted to know both the domain and infrastructure.")
             #:pipeline-stage-io-descriptor-map
             #:pipeline-stage-io-transient-descriptors
             #:pipeline-stage-io-preserved-descriptors
+            #:pipeline-stage-io-default-standard-streams
             #:pipeline-execution-handle #:pipeline-execution-handle-p
             #:*pipeline-stage-io* #:pipeline-stage-stream
             #:spawn-byte-stream-node-in-context
@@ -108,7 +109,7 @@ permitted to know both the domain and infrastructure.")
             #:lookup-builtin
             #:resolve-command-path
             #:seed-shell-status-environment
-            #:collect-source-lines #:source-lines
+            #:collect-source-lines #:source-lines #:source-lines-to-stream
             #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
             #:execute-command-node-in-context
             #:execute-ast-in-context
@@ -135,5 +136,5 @@ permitted to know both the domain and infrastructure.")
             #:agent-session-propose-step #:agent-session-reclassify-step
             #:agent-session-record-step #:agent-session-skip-step
             #:agent-session-stop #:agent-session-limit-reached-p
-            #:agent-max-steps-from-context #:define-shell-function #:with-shell-functions #:register-shell-hook #:remove-shell-hook #:clear-shell-hooks #:run-shell-hooks))
+            #:agent-max-steps-from-context #:define-shell-function #:with-shell-functions #:register-shell-hook #:remove-shell-hook #:clear-shell-hooks #:run-shell-hooks #:evaluated-command-stage-environment-assignments))
 )

@@ -525,7 +525,7 @@
         (%sexp-reader-record-span array start end)
         (values array start end nil)))))
 (defun %sexp-reader-read-prefixed-datum
-    (name package source-start prefix-length prefix-end)
+    (name package source-start prefix-length prefix-end reader-prefix-kind)
   (%sexp-reader-advance prefix-length)
   (%sexp-reader-skip-trivia)
   (when (null (%sexp-reader-peek))
@@ -536,13 +536,22 @@
     (when skipped-p
       (%sexp-reader-fail "Reader prefix cannot precede an excluded datum."
                          source-start))
-    (let* ((head (%sexp-reader-new-marker name nil package source-start prefix-end :reader-prefix-p))
+    (let* ((head (%sexp-reader-new-marker
+                  name nil package source-start prefix-end :reader-prefix-p))
+           (origin (gethash head
+                            (%sexp-reader-state-symbol-origins
+                             *sexp-reader-state*)))
            (form (list head operand))
            (elements (list
                       (%make-sexp-reader-list-element
                        head (list source-start prefix-end))
                       (%make-sexp-reader-list-element
                        operand (list operand-start end)))))
+      (setf (gethash head
+               (%sexp-reader-state-symbol-origins
+                *sexp-reader-state*))
+      (append origin
+              (list :reader-prefix-kind reader-prefix-kind)))
       (%sexp-reader-record-span form source-start end)
       (%sexp-reader-record-list-elements form elements)
       (values form source-start end nil))))
@@ -585,7 +594,7 @@
                                  start))
              (39
               (%sexp-reader-read-prefixed-datum
-               "FUNCTION" "CL" start 1 (+ start 2)))
+               "FUNCTION" "CL" start 1 (+ start 2) :function))
              (40
               (%sexp-reader-read-list t start))
              (58
@@ -688,13 +697,13 @@
              (%sexp-reader-read-string)
            (values string (first span) (second span) nil)))
         (39
-         (%sexp-reader-read-prefixed-datum "QUOTE" "CL"
-                                           start 1 (1+ start)))
+         (%sexp-reader-read-prefixed-datum
+          "QUOTE" "CL" start 1 (1+ start) :quote))
         (96
          (let ((*sexp-reader-backquote-depth*
                  (1+ *sexp-reader-backquote-depth*)))
-           (%sexp-reader-read-prefixed-datum "QUASIQUOTE" "CL"
-                                             start 1 (1+ start))))
+           (%sexp-reader-read-prefixed-datum
+             "QUASIQUOTE" "CL" start 1 (1+ start) :quasiquote)))
         (44
          (let* ((splicing-p (= (or (and (%sexp-reader-peek 1)
                                         (char-code (%sexp-reader-peek 1)))
@@ -703,10 +712,11 @@
                 (length (if splicing-p 2 1)))
            (%sexp-reader-read-prefixed-datum
             (if splicing-p "UNQUOTE-SPLICING" "UNQUOTE")
-            "CL" start length (+ start length))))
+            "CL" start length (+ start length)
+            (if splicing-p :unquote-splicing :unquote))))
         (36
-         (%sexp-reader-read-prefixed-datum "UNQUOTE" "NSHELL.USER"
-                                           start 1 (1+ start)))
+         (%sexp-reader-read-prefixed-datum
+          "UNQUOTE" "NSHELL.USER" start 1 (1+ start) :unquote))
         (35
          (if (null (%sexp-reader-peek 1))
              (progn
@@ -845,16 +855,42 @@
           (and (keywordp form) (symbol-name form))))))
 (defun %sexp-reader-command-value-argument (form span)
   (let* ((head (and (consp form) (first form)))
-         (head-name (%sexp-reader-command-form-name head)))
-    (cond
-      ((string-equal (or head-name "") "UNQUOTE-SPLICING")
-       (make-command-value-form :splice (second form) span))
-      ((string-equal (or head-name "") "UNQUOTE")
-       (make-command-value-form :value (second form) span))
-      ((string-equal (or head-name "") "QUOTE")
-       (make-command-value-form :quoted (second form) span))
-      (t
-       (make-command-value-form :value form span)))))
+         (head-origin (%sexp-reader-command-origin head))
+         (prefix-kind
+           (and (getf head-origin :reader-prefix-p)
+                (getf head-origin :reader-prefix-kind)))
+         (value-form (second form))
+         (quote-symbol (find-symbol "QUOTE" (find-package "CL")))
+         (argv-symbol (find-symbol "ARGV" (find-package "NSHELL.USER"))))
+    (labels ((source-symbol (source-form)
+               (let* ((origin (%sexp-reader-command-origin source-form))
+                      (source-name (and origin (getf origin :source-name)))
+                      (qualifier
+                        (and origin (getf origin :package-qualifier)))
+                      (package (if qualifier
+                                   (find-package qualifier)
+                                   (find-package "NSHELL.USER"))))
+                 (when (and source-name package)
+                   (let ((symbol (find-symbol source-name package)))
+                     (when (and symbol
+                                (or (null qualifier)
+                                    (eq (symbol-package symbol) package)))
+                       symbol))))))
+      (case prefix-kind
+        (:unquote-splicing
+         (make-command-value-form :splice value-form span))
+        (:unquote
+         (make-command-value-form
+          (if (eq (source-symbol value-form) argv-symbol)
+              :splice
+              :value)
+          value-form span))
+        (:quote
+         (make-command-value-form :quoted value-form span))
+        (otherwise
+         (if (eq (source-symbol head) quote-symbol)
+             (make-command-value-form :quoted value-form span)
+             (make-command-value-form :value form span)))))))
 (defun %sexp-reader-command-argument (form span)
   (let* ((raw (%sexp-reader-source-slice (first span) (second span)))
          (origin (and (symbolp form)
@@ -1477,8 +1513,14 @@
          (form-start (if double-quoted-prefix-p (1+ start) start))
          (form-end (if double-quoted-prefix-p (1- end) end))
          (first-character
-           (and (< form-start form-end) (char source form-start))))
+           (and (< form-start form-end) (char source form-start)))
+         (command-substitution-p
+           (and first-character
+                (= (char-code first-character) 36)
+                (< (1+ form-start) form-end)
+                (= (char-code (char source (1+ form-start))) 40))))
     (when (and first-character
+               (not command-substitution-p)
                (member (char-code first-character) '(36 44))
                (not (and escaped-zero-p (not double-quoted-prefix-p))))
       (let ((saved-position (%sexp-reader-current-position)))
@@ -1494,34 +1536,39 @@
                    (%sexp-reader-command-error
                     "A bare-line value token must contain exactly one reader prefix."
                     (list start end)))
-                 (let ((head-name
-                         (%sexp-reader-command-form-name (first wrapper))))
-                   (cond
-                     ((string-equal (or head-name "") "UNQUOTE-SPLICING")
-                      (make-command-value-form :splice (second wrapper)
+                 (let* ((head (first wrapper))
+                       (head-origin (%sexp-reader-command-origin head))
+                       (prefix-kind
+                         (and (getf head-origin :reader-prefix-p)
+                              (getf head-origin :reader-prefix-kind))))
+                   (case prefix-kind
+                     (:unquote-splicing
+                      (make-command-value-form :splice
+                                               (second wrapper)
                                                (list start end)))
-                     ((string-equal (or head-name "") "UNQUOTE")
-                      (make-command-value-form :value (second wrapper)
+                     (:unquote
+                      (make-command-value-form :value
+                                               (second wrapper)
                                                (list start end)))
-                     (t
+                     (otherwise
                       (%sexp-reader-command-error
                        "A bare-line value prefix must be $ or comma."
                        (list start end)))))))
           (setf (%sexp-reader-state-position *sexp-reader-state*)
-                saved-position)))))
-)
+                saved-position))))))
 (defun %sexp-reader-bare-argument (token)
   (let* ((span (list (token-start token) (token-end token)))
          (value-form (%sexp-reader-bare-value-form token))
          (fragments (token-fragments token))
          (quote-style (token-quote-style token))
          (expand-p
-           (and (null quote-style)
-                (every (lambda (fragment)
-                         (and (null (command-fragment-quote-style fragment))
-                              (null
-                               (command-fragment-escaped-positions fragment))))
-                       fragments))))
+           (or (eq quote-style :double)
+    (and (null quote-style)
+         (every (lambda (fragment)
+                  (and (null (command-fragment-quote-style fragment))
+                       (null
+                        (command-fragment-escaped-positions fragment))))
+                fragments)))))
     (or value-form
         (make-command-arg (token-value token)
                           quote-style
@@ -1837,6 +1884,26 @@
                  (1+ target-index)
                  covered-end)))))))) (defun %sexp-reader-bare-command-from-tokens
     (tokens &optional process-substitution-p)
+  (when (and tokens
+             (every (lambda (token)
+                      (and (%sexp-reader-bare-unquoted-word-p token)
+                           (shell-assignment-word-p (token-value token))))
+                    tokens))
+    (return-from %sexp-reader-bare-command-from-tokens
+      (make-command-node
+       "" nil
+       (list (token-start (first tokens))
+             (token-end (car (last tokens))))
+       nil nil nil nil nil
+       (mapcar (lambda (token)
+                 (make-command-arg
+                  (token-value token)
+                  (token-quote-style token)
+                  nil
+                  (token-fragments token)
+                  (list (token-start token) (token-end token))
+                  nil nil))
+               tokens))))
   (unless (and tokens (eq (token-type (first tokens)) :word))
     (%sexp-reader-command-error
      "A bare-line command requires a word command head."

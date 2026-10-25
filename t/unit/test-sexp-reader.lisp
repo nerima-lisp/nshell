@@ -623,6 +623,43 @@
                          (nshell.domain.parsing:command-value-form-form
                           splice-form)))
                 (expect nil :to-equal classifier-calls)))
+          (it "classifies-package-qualified-unquote-and-quote-as-lisp-values"
+              (let* ((source "(echo (nshell.user::unquote argv) (nshell.user::quote argv))")
+                     (reader-result
+                       (first (nshell.domain.parsing:read-submission
+                               source :reader-context :sexp)))
+                     (form
+                       (nshell.domain.parsing:reader-result-form reader-result))
+                     (node
+                       (nshell.domain.parsing:command-form->ast
+                        source
+                        form
+                        (nshell.domain.parsing:reader-result-form-span-map
+                         reader-result)
+                        (lambda (head)
+                          (declare (ignore head))
+                          :command-island)))
+                     (argument-forms
+                       (nshell.domain.parsing:command-node-argument-forms node)))
+                (expect 2 :to-equal (length argument-forms))
+                (expect (list :value :value)
+                        :to-equal
+                        (mapcar (lambda (argument-form)
+                                  (nshell.domain.parsing:command-value-form-kind
+                                   argument-form))
+                                argument-forms))
+                (expect "unquote"
+                        :to-equal
+                        (symbol-name
+                         (first
+                          (nshell.domain.parsing:command-value-form-form
+                           (first argument-forms)))))
+                (expect "quote"
+                        :to-equal
+                        (symbol-name
+                         (first
+                          (nshell.domain.parsing:command-value-form-form
+                           (second argument-forms)))))))
           (it "builds-bare-line-pipelines-with-leading-environment-assignments"
               (let* ((source "  FOO=1 echo file*.txt | cat # trailing note")
                      (results (nshell.domain.parsing:read-submission source))

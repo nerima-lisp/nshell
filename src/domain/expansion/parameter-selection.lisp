@@ -80,7 +80,8 @@
   (%list-spec-fields *positional-args* spec))
 
 (defun %variable-list-fields (name env)
-  (if (string= name +argv-reference-name+)
+  (if (and (string= name +argv-reference-name+)
+           (not (nshell.domain.environment:env-defined-p env name)))
       (copy-list *positional-args*)
       (nshell.domain.environment:env-get-values env name)))
 

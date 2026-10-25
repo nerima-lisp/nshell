@@ -24,34 +24,11 @@
      (if matched-p 0 1))))
 
 (defun %string-wildcard-match-p (pattern string &key ignore-case)
-  (let ((test (%string-character-test ignore-case))
-        (pattern-length (length pattern))
-        (string-length (length string))
-        (memo (make-hash-table :test #'equal)))
-    (labels ((match (pattern-index string-index)
-               (let ((key (cons pattern-index string-index)))
-                 (multiple-value-bind (cached-value present-p)
-                     (gethash key memo)
-                   (if present-p
-                       cached-value
-                       (setf (gethash key memo)
-                             (cond
-                               ((= pattern-index pattern-length)
-                                (= string-index string-length))
-                               ((char= (char pattern pattern-index) #\*)
-                                (or (match (1+ pattern-index) string-index)
-                                    (and (< string-index string-length)
-                                         (match pattern-index (1+ string-index)))))
-                               ((char= (char pattern pattern-index) #\?)
-                                (and (< string-index string-length)
-                                     (match (1+ pattern-index) (1+ string-index))))
-                               (t
-                                (and (< string-index string-length)
-                                     (funcall test (char pattern pattern-index)
-                                              (char string string-index))
-                                     (match (1+ pattern-index)
-                                            (1+ string-index)))))))))))
-      (match 0 0))))
+  (if ignore-case
+      (nshell.domain.expansion:glob-match-p
+       (string-downcase pattern)
+       (string-downcase string))
+      (nshell.domain.expansion:glob-match-p pattern string)))
 
 (defun %string-replace-text (text pattern replacement &key all ignore-case)
   (let ((test (%string-character-test ignore-case))

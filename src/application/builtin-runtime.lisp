@@ -107,13 +107,19 @@
   "Return the command resolution kind and detail used by COMMAND."
   (multiple-value-bind (function-body function-present-p)
       (gethash command (shell-context-function-table context))
-    (cond
-      (function-present-p (values :function function-body))
-      ((lookup-builtin command) (values :builtin command))
-      (t
-       (let ((candidates (%resolve-command-path-candidates context command)))
-         (when candidates
-           (values :path (first candidates))))))))
+    (if function-present-p
+        (values :function function-body)
+        (multiple-value-bind (binding registered-p)
+            (lookup-shell-function
+             (context-shell-function-registry context) command)
+          (cond
+            (registered-p (values :function binding))
+            ((lookup-builtin command) (values :builtin command))
+            (t
+             (let ((candidates
+                     (%resolve-command-path-candidates context command)))
+               (when candidates
+                 (values :path (first candidates))))))))))
 
 (defun %parse-command-options (args)
   (let ((mode :execute)
@@ -259,7 +265,8 @@ afterwards with any global write the callee made."
             (nshell.domain.environment:env-restore-scopes
              (shell-context-environment context) caller)))))
 
-(defun %execute-function-command-in-context (context function-body args)
+(defun %execute-function-command-in-context (context function-body args
+                                                     &key (output-mode :return))
   ;; Expose the call arguments to the function body as $argv / $argv[N]. The
   ;; call scope is restored via unwind-protect (not %update-shell-environment,
   ;; which is not yet loaded at this point in the ASDF build) so a `return` or a
@@ -270,16 +277,35 @@ afterwards with any global write the callee made."
         (*function-call-depth* (1+ *function-call-depth*)))
     (%call-with-function-scope
      context
-     (lambda () (%source-lines context function-body)))))
+     (lambda ()
+       (ecase output-mode
+         (:return (source-lines context function-body))
+         (:stream (source-lines-to-stream context function-body)))))))
 
 (defun %execute-command-by-name-in-context (context command args)
   (multiple-value-bind (function-body function-present-p)
       (gethash command (shell-context-function-table context))
-    (let ((handler (lookup-builtin command)))
-      (cond
-        (function-present-p
-         (%execute-function-command-in-context context function-body args))
-        (handler
-         (funcall handler context args))
-        (t
-         (%run-external-command-in-context context command args))))))
+    (if function-present-p
+        (%execute-function-command-in-context context function-body args)
+        (multiple-value-bind (binding registered-p)
+            (lookup-shell-function
+             (context-shell-function-registry context) command)
+          (let ((handler (lookup-builtin command)))
+            (cond
+              (registered-p
+               (when (>= *function-call-depth* 128)
+                 (error "function recursion limit exceeded"))
+               (let ((*function-call-depth* (1+ *function-call-depth*)))
+                 (funcall
+                  (shell-function-binding-callable binding)
+                  context
+                  (mapcar
+                   (lambda (argument)
+                     (nshell.domain.parsing:make-evaluated-command-arg
+                      argument))
+                   args)
+                  :stream)
+                 (values nil 0)))
+              (handler (funcall handler context args))
+              (t
+               (%run-external-command-in-context context command args))))))))

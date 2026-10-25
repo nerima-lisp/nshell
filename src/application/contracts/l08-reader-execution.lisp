@@ -14,29 +14,17 @@
              (command-execution-plan-error-cause condition)))))
 
 (declaim
+  (special nshell.infrastructure.acl:*exported-environment*)
+  (special *foreground-terminal-runner*)
+  (special *function-call-depth*)
+  (special *command-evaluation-position*)
   (ftype
    (function (t t function &optional function)
     (values t integer pipeline-execution-result))
    execute-reader-ast-in-context))
 (defun execute-reader-ast-in-context
     (context ast stage-evaluator &optional command-failure-policy)
-  (cond
-    ((nshell.domain.parsing:sequence-node-p ast)
-     (%execute-reader-sequence-node-in-context
-      context ast stage-evaluator command-failure-policy))
-    ((or (nshell.domain.parsing:command-node-p ast)
-         (nshell.domain.parsing:pipeline-node-p ast))
-     (%reader-execute-foreground-in-context context ast stage-evaluator))
-    (t
-     (error 'command-execution-plan-error
-            :source-span
-            (and (nshell.domain.parsing::ast-node-p ast)
-                 (nshell.domain.parsing:ast-node-span ast))
-            :operation :dispatch
-            :cause
-            (make-condition 'simple-error
-                            :format-control "Unsupported reader AST node."
-                            :format-arguments nil)))))
+  (cond ((nshell.domain.parsing:sequence-node-p ast) (%execute-reader-sequence-node-in-context context ast stage-evaluator command-failure-policy)) ((or (nshell.domain.parsing:command-node-p ast) (nshell.domain.parsing:pipeline-node-p ast)) (%reader-execute-foreground-in-context context ast stage-evaluator)) (t (error (quote command-execution-plan-error) :source-span (and (nshell.domain.parsing::ast-node-p ast) (nshell.domain.parsing:ast-node-span ast)) :operation :dispatch :cause (make-condition (quote simple-error) :format-control "Unsupported reader AST node." :format-arguments nil)))))
 
 (defstruct (%reader-execution-state
              (:constructor %make-reader-execution-state ()))
@@ -177,7 +165,8 @@
    (nshell.application:evaluated-command-stage-dispatch-kind stage)
    (nshell.application:evaluated-command-stage-binding stage)
    arguments
-   (nshell.application:evaluated-command-stage-redirect-target-values stage)))
+   (nshell.application:evaluated-command-stage-redirect-target-values stage)
+   (nshell.application:evaluated-command-stage-environment-assignments stage)))
 
 (defun %reader-resolve-descriptor (bindings descriptor)
   (multiple-value-bind (value present-p)
@@ -215,7 +204,10 @@
           (make-pipeline-stage-io
            (%reader-binding-alist stage-bindings)
            process-substitution-fds
-           process-substitution-fds))))
+           process-substitution-fds
+           (list (cons 0 *standard-input*)
+                 (cons 1 *standard-output*)
+                 (cons 2 *error-output*))))))
 
 (defun %reader-open-redirect (context state redirect evaluated-stage)
   (let* ((target
@@ -334,49 +326,116 @@
         stream)))
 
 (defun %reader-dispatch-internal-stage
-    (context evaluated-stage stage-io argv-strings)
-  (let* ((binding
-           (nshell.application:evaluated-command-stage-binding
-            evaluated-stage))
-         (dispatch-kind
-           (nshell.application:evaluated-command-stage-dispatch-kind
-            evaluated-stage))
-         (*pipeline-stage-io* stage-io)
-         (*standard-input* (%reader-stage-standard-stream 0 stage-io))
-         (*standard-output* (%reader-stage-standard-stream 1 stage-io))
-         (*error-output* (%reader-stage-standard-stream 2 stage-io)))
-    (ecase dispatch-kind
-      (:builtin
-       (when (eq :value (builtin-binding-argument-mode binding))
-         (%reader-plan-error
-          (nshell.domain.parsing:ast-node-span
-           (nshell.application:evaluated-command-stage-command-node
-            evaluated-stage))
-          :dispatch
-          (%reader-simple-condition
-           "A value builtin cannot run as a byte-stream stage.")))
-       (multiple-value-bind (output status)
-           (dispatch-builtin
-            context binding
-            (nshell.application:evaluated-command-stage-arguments
-             evaluated-stage)
-            :argv-strings argv-strings)
-         (when output
-           (write-string output *standard-output*))
-         (values status nil)))
-      (:shell-function
-       (handler-case
-           (progn
-             (funcall
-              (shell-function-binding-callable binding)
-              context
+    (context evaluated-stage stage-io argv-strings &optional single-stage-p)
+  (flet ((stage-context (&optional isolate-environment-p)
+           (let ((assignments
+                   (nshell.application:evaluated-command-stage-environment-assignments
+                    evaluated-stage)))
+             (if (and (null assignments)
+                      (not isolate-environment-p))
+                 context
+                 (make-shell-context
+                  :history (shell-context-history context)
+                  :config (shell-context-config context)
+                  :knowledge-base (shell-context-knowledge-base context)
+                  :environment
+                  (reduce
+                   (lambda (environment assignment)
+                     (nshell.domain.environment:env-set
+                      environment (car assignment) (cdr assignment) t
+                      :scope :global))
+                   assignments
+                   :initial-value
+                   (%environment-with-assignments
+                    (shell-context-environment context)
+                    assignments))
+                  :filesystem (shell-context-filesystem context)
+                  :job-monitor (shell-context-job-monitor context)
+                  :alias-table (shell-context-alias-table context)
+                  :sexp-alias-table (shell-context-sexp-alias-table context)
+                  :abbreviation-table
+                  (shell-context-abbreviation-table context)
+                  :function-table (shell-context-function-table context)
+                  :function-source-table
+                  (shell-context-function-source-table context)
+                  :shell-function-registry
+                  (make-shell-function-registry
+                   (shell-function-registry-global-table
+                    (shell-context-shell-function-registry context)))
+                  :execution-strategy
+                  (shell-context-execution-strategy context)
+                  :pipefail-p (shell-context-pipefail-p context)
+                  :running (shell-context-running context)
+                  :last-exit-code (shell-context-last-exit-code context)
+                  :input-state (shell-context-input-state context)
+                  :process-registry (shell-context-process-registry context)
+                  :terminal-rows (shell-context-terminal-rows context)
+                  :terminal-cols (shell-context-terminal-cols context))))))
+    (let* ((binding
+             (nshell.application:evaluated-command-stage-binding
+              evaluated-stage))
+           (dispatch-kind
+             (nshell.application:evaluated-command-stage-dispatch-kind
+              evaluated-stage))
+           ;; Source-function call scopes must not replace a sibling stage's context.
+           (context
+             (stage-context
+             (and (eq dispatch-kind :source-function)
+                  (not single-stage-p))))
+           (nshell.infrastructure.acl:*exported-environment*
+             (%context-exported-environment-strings context))
+           (*pipeline-stage-io* stage-io)
+           (*standard-input* (%reader-stage-standard-stream 0 stage-io))
+           (*standard-output* (%reader-stage-standard-stream 1 stage-io))
+           (*error-output* (%reader-stage-standard-stream 2 stage-io)))
+      (ecase dispatch-kind
+        (:builtin
+         (when (eq :value (builtin-binding-argument-mode binding))
+           (%reader-plan-error
+            (nshell.domain.parsing:ast-node-span
+             (nshell.application:evaluated-command-stage-command-node
+              evaluated-stage))
+            :dispatch
+            (%reader-simple-condition
+             "A value builtin cannot run as a byte-stream stage.")))
+         (multiple-value-bind (output status)
+             (dispatch-builtin
+              context binding
               (nshell.application:evaluated-command-stage-arguments
                evaluated-stage)
-              :stream)
-             (values 0 nil))
-         (command-failed (condition)
-           (values (command-failed-status condition)
-                   (command-failed-signal condition))))))))
+              :argv-strings argv-strings)
+           (when (and output
+                     (not (member *command-evaluation-position*
+                                  (quote (:test :status-value))
+                                  :test (function eq))))
+             (write-string output *standard-output*))
+           (values status nil)))
+        (:shell-function
+         (when (>= *function-call-depth* 128)
+           (error "function recursion limit exceeded"))
+         (let ((*function-call-depth* (1+ *function-call-depth*)))
+           (handler-case
+               (progn
+                 (funcall
+                  (shell-function-binding-callable binding)
+                  context
+                  (nshell.application:evaluated-command-stage-arguments
+                   evaluated-stage)
+                  :stream)
+                 (values 0 nil))
+             (command-failed (condition)
+               (values (command-failed-status condition)
+                       (command-failed-signal condition))))))
+        (:source-function
+         (handler-case
+             (multiple-value-bind (output status)
+                 (%execute-function-command-in-context context binding argv-strings :output-mode :stream)
+               (when output
+                 (write-string output *standard-output*))
+               (values status nil))
+           (command-failed (condition)
+             (values (command-failed-status condition)
+                     (command-failed-signal condition)))))))))
 
 (defun %reader-rewrite-process-substitution-arguments
     (state stage-index evaluated-stage)
@@ -445,6 +504,7 @@
     (context state ast evaluated-stages &key input-fd output-fd)
   (let* ((commands (%reader-command-stages ast))
          (edges (%reader-pipeline-edges ast))
+         (pipe-endpoints nil)
          (bindings (mapcar (lambda (ignored)
                              (declare (ignore ignored))
                              (cons (make-hash-table :test #'eql) nil))
@@ -466,6 +526,7 @@
                      :avoid-descriptors
                      (append (%reader-execution-state-descriptors state)
                              '(0 1 2)))))
+               (push (list read-fd write-fd source-span) pipe-endpoints)
                (%reader-own-descriptor state read-fd source-span)
                (%reader-own-descriptor state write-fd source-span)
                (%reader-set-descriptor (nth index bindings) 1 write-fd)
@@ -527,6 +588,27 @@
                                       :append-both-output-files))
                         (%reader-set-descriptor stage-bindings 1 source)
                         (%reader-set-descriptor stage-bindings 2 source))))))))
+    (loop for (read-fd write-fd source-span) in (nreverse pipe-endpoints)
+          for index from 0
+          for upstream-bindings = (nth index bindings)
+          for downstream-bindings = (nth (1+ index) bindings)
+          when (and (not (eql (%reader-resolve-descriptor
+                               downstream-bindings 0)
+                              read-fd))
+                    (eql (%reader-resolve-descriptor upstream-bindings 1)
+                         write-fd))
+            do (let ((discard-fd
+                       (%reader-allocate-with-plan-error
+                        source-span
+                        (lambda ()
+                          (nshell.infrastructure.acl::open-reader-redirect-file
+                           "/dev/null" :append
+                           :avoid-descriptors
+                           (append
+                            (%reader-execution-state-descriptors state)
+                            '(0 1 2)))))))
+                 (%reader-own-descriptor state discard-fd source-span)
+                 (%reader-set-descriptor upstream-bindings 1 discard-fd)))
     (loop for edge in edges
           for index from 0
           when (eq :pipe-stderr-to-stdout
@@ -542,6 +624,216 @@
   (mapcar (lambda (command)
             (funcall stage-evaluator context command))
           commands))
+(defun %reader-run-single-internal-stage
+    (context evaluated-stages stage-io-list)
+  (when (and (= 1 (length evaluated-stages))
+             (member
+              (nshell.application:evaluated-command-stage-dispatch-kind
+               (first evaluated-stages))
+              '(:builtin :shell-function :source-function)
+              :test #'eq))
+    (let* ((stage (first evaluated-stages))
+           (stage-io (first stage-io-list))
+           (stream-cache
+             (%prepare-pipeline-stage-stream-cache stage-io))
+           (argvs (%byte-stream-stage-argvs context evaluated-stages)))
+      (unwind-protect
+           (multiple-value-bind (status signal)
+               (let ((*pipeline-stage-stream-cache* stream-cache)
+                     (*pipeline-stage-stream-cache-active-p* t))
+                 (%reader-dispatch-internal-stage
+                  context stage stage-io (aref argvs 0) t))
+             (unless (integerp status)
+               (error "Pipeline dispatcher returned a non-integer status: ~s"
+                      status))
+             (unless (or (null signal)
+                         (and (integerp signal) (plusp signal)))
+               (error "Pipeline dispatcher returned an invalid signal: ~s"
+                      signal))
+             (make-pipeline-execution-result status (list status) (list signal)))
+        (%close-pipeline-stage-stream-cache stream-cache)))))
+(defun %reader-terminal-external-dispatch (context ast plans evaluated-stages)
+  (labels ((terminal-command (stage)
+           (let ((command-node
+                   (nshell.application:evaluated-command-stage-command-node
+                    stage)))
+             (nshell.domain.parsing:make-command-node
+              (nshell.domain.parsing:command-node-command command-node)
+              (command-argv-strings
+               context
+               (nshell.application:evaluated-command-stage-arguments stage))
+              (nshell.domain.parsing:ast-node-span command-node))))
+         (terminal-redirect-kind (redirect)
+           (case (nshell.domain.parsing:ast-redirect-entry-kind redirect)
+             (:input-file :<)
+             (:output-file :>)
+             (:append-output-file :>>)
+             (:force-output-file :>)
+             (:error-file :2>)
+             (:append-error-file :2>>)
+             (:both-output-files :&>)
+             (:append-both-output-files :&>>)
+             (:here-document :<<)
+             (:here-document-strip-tabs :<<-)
+             (:here-string :<<<)
+             ((:duplicate-input-fd :duplicate-output-fd) :fd-dup)))
+         (terminal-redirect-supported-p (redirect)
+           (let ((kind
+                   (nshell.domain.parsing:ast-redirect-entry-kind redirect))
+                 (descriptor
+                   (nshell.domain.parsing:ast-redirect-entry-file-descriptor
+                    redirect))
+                 (target
+                   (nshell.domain.parsing:ast-redirect-entry-target redirect)))
+             (case kind
+               (:input-file (= (or descriptor 0) 0))
+               (:here-document (= (or descriptor 0) 0))
+               (:here-document-strip-tabs (= (or descriptor 0) 0))
+               (:here-string (= (or descriptor 0) 0))
+               ((:output-file :append-output-file :force-output-file)
+                (= (or descriptor 1) 1))
+               ((:error-file :append-error-file)
+                (= (or descriptor 2) 2))
+               ((:both-output-files :append-both-output-files) t)
+               ((:duplicate-input-fd :duplicate-output-fd)
+                (and
+                 (integerp
+                  (nshell.domain.parsing:ast-redirect-entry-file-descriptor
+                   redirect))
+                 (<= 0
+                     (nshell.domain.parsing:ast-redirect-entry-file-descriptor
+                      redirect))
+                 (or
+                  (nshell.domain.parsing:redirect-fd-close-target-p target)
+                  (let ((target-descriptor
+                          (nshell.domain.parsing:redirect-fd-target-file-descriptor
+                           target)))
+                    (and (integerp target-descriptor)
+                         (<= 0 target-descriptor))))))
+               (otherwise nil))))
+         (terminal-redirect (stage redirect)
+           (let* ((kind
+                    (nshell.domain.parsing:ast-redirect-entry-kind redirect))
+                  (target
+                    (nshell.domain.parsing:ast-redirect-entry-target redirect))
+                  (redirect-target
+                    (case kind
+                      ((:duplicate-input-fd :duplicate-output-fd)
+                       (nshell.domain.parsing:make-redirect-fd-dup-target
+                        (nshell.domain.parsing:ast-redirect-entry-file-descriptor
+                         redirect)
+                        (if (nshell.domain.parsing:redirect-fd-close-target-p
+                             target)
+                            :close
+                            (nshell.domain.parsing:redirect-fd-target-file-descriptor
+                             target))
+                        (if (eq kind :duplicate-input-fd) :input :output)))
+                      ((:here-document :here-document-strip-tabs)
+                       (nshell.domain.parsing:redirect-heredoc-target-body
+                        target))
+                      (otherwise
+                       (let ((evaluated-target
+                               (%reader-find-evaluated-redirect-target
+                                stage redirect)))
+                         (unless evaluated-target
+                           (%reader-plan-error
+                            (nshell.domain.parsing:ast-redirect-entry-source-span
+                             redirect)
+                            :redirect-target
+                            (%reader-simple-condition
+                             "Reader redirect target was not evaluated.")))
+                         (argv-scalar-string
+                          (nshell.domain.parsing:evaluated-command-arg-value
+                           evaluated-target)
+                          :source-span
+                          (nshell.domain.parsing:evaluated-command-arg-source-span
+                           evaluated-target)))))))
+             (cons (terminal-redirect-kind redirect) redirect-target)))
+         (terminal-stage-redirects (stage)
+           (loop for redirect in
+                   (stable-sort
+                    (copy-list
+                     (nshell.domain.parsing:command-node-redirects
+                      (nshell.application:evaluated-command-stage-command-node
+                       stage)))
+                    #'<
+                    :key #'nshell.domain.parsing:ast-redirect-entry-source-order)
+                 collect (terminal-redirect stage redirect))))
+    (when (and (or *foreground-terminal-runner*
+                    (eq :os-pipes (shell-context-execution-strategy context)))
+               (null plans)
+               evaluated-stages
+               (every
+                (lambda (stage)
+                  (and
+                   (eq :external
+                       (nshell.application:evaluated-command-stage-dispatch-kind
+                        stage))
+                   (null
+                    (nshell.application:evaluated-command-stage-environment-assignments
+                     stage))
+                   (every #'terminal-redirect-supported-p
+                          (nshell.domain.parsing:command-node-redirects
+                           (nshell.application:evaluated-command-stage-command-node
+                            stage)))))
+                evaluated-stages)
+               (every
+                (lambda (edge)
+                  (eq :pipe
+                      (nshell.domain.parsing:pipeline-edge-kind edge)))
+                (%reader-pipeline-edges ast)))
+      (let* ((nshell.infrastructure.acl:*exported-environment*
+               (%context-exported-environment-strings context))
+             (commands (mapcar #'terminal-command evaluated-stages))
+             (stage-redirects (mapcar #'terminal-stage-redirects evaluated-stages))
+             (redirects (and (some #'identity stage-redirects) stage-redirects)))
+        (if (and (not *foreground-terminal-runner*) (eq :os-pipes (shell-context-execution-strategy context)))
+            (let ((output nil)
+                  (status nil)
+                  (stage-statuses nil))
+              (setf output
+                    (with-output-to-string (stream)
+                      (let ((*standard-output* stream))
+                        (multiple-value-setq (status stage-statuses)
+                          (nshell.infrastructure.acl:spawn-pipeline
+                           commands
+                           :redirects redirects
+                           :pipefail-p (shell-context-pipefail-p context))))))
+              (let* ((statuses (or stage-statuses (list status)))
+                     (signals (make-list (length statuses) :initial-element nil)))
+                (values
+                 t output status
+                 (make-pipeline-execution-result status statuses signals))))
+            (if (and (= 1 (length evaluated-stages))
+                     (null (first redirects)))
+                (let ((stage (first evaluated-stages))
+                      (command-node
+                        (nshell.application:evaluated-command-stage-command-node
+                         (first evaluated-stages))))
+                  (multiple-value-bind (output status)
+                      (funcall
+                       *foreground-terminal-runner*
+                       (lambda ()
+                         (%run-terminal-command
+                          context
+                          (nshell.domain.parsing:command-node-command command-node)
+                          (command-argv-strings
+                           context
+                           (nshell.application:evaluated-command-stage-arguments
+                            stage)))))
+                    (values
+                     t output status
+                     (make-pipeline-execution-result status (list status) (list nil)))))
+                (multiple-value-bind (output status stage-statuses)
+                    (funcall
+                     *foreground-terminal-runner*
+                     (lambda ()
+                       (%run-terminal-pipeline context commands redirects)))
+                  (let* ((statuses (or stage-statuses (list status)))
+                         (signals (make-list (length statuses) :initial-element nil)))
+                    (values
+                     t output status
+                     (make-pipeline-execution-result status statuses signals))))))))))
 (defun %reader-process-substitution-form (entry)
   (nshell.domain.parsing:redirect-procsub-target-form
    (nshell.domain.parsing:ast-redirect-entry-target entry)))
@@ -676,6 +968,21 @@
 
 (defun %reader-execute-foreground-in-context
     (context ast stage-evaluator)
+  (when (and (nshell.domain.parsing:command-node-p ast)
+             (string= "" (nshell.domain.parsing:command-node-command ast))
+             (nshell.domain.parsing:command-node-environment-assignments ast))
+    (let ((assignments
+            (mapcar (lambda (assignment)
+                      (%assignment-word-binding
+                       context
+                       (nshell.domain.parsing:command-arg-value assignment)))
+                    (nshell.domain.parsing:command-node-environment-assignments
+                     ast))))
+      (%assign-shell-variables context assignments)
+      (%record-pipeline-statuses context '(0))
+      (%record-last-exit-code context 0)
+      (return-from %reader-execute-foreground-in-context
+        (values nil 0 (make-pipeline-execution-result 0 '(0) '(nil))))))
   (let ((state (%make-reader-execution-state)))
     (unwind-protect
          (let* ((commands (%reader-command-stages ast))
@@ -691,8 +998,17 @@
                     (%reader-evaluate-stages
                      context commands stage-evaluator))
                   (evaluated-substitutions
-                    (%reader-evaluate-process-substitutions
-                     context plans stage-evaluator))
+                    (multiple-value-bind (terminal-p output status result)
+                        (%reader-terminal-external-dispatch
+                         context ast plans evaluated-stages)
+                      (when terminal-p
+                        (%record-pipeline-statuses
+                         context
+                         (pipeline-execution-result-stage-statuses result))
+                        (return-from %reader-execute-foreground-in-context
+                          (values output status result)))
+                      (%reader-evaluate-process-substitutions
+                       context plans stage-evaluator)))
                   (substitutions
                     (%reader-allocate-process-substitutions
                      state commands evaluated-substitutions))
@@ -709,16 +1025,20 @@
                        context state ast evaluated-stages))
                     (stage-io
                       (%reader-stage-io-list bindings state))
+                    (single-stage-result
+                      (%reader-run-single-internal-stage
+                       context evaluated-stages stage-io))
                     (handle
-                      (handler-case
-                          (spawn-byte-stream-node-in-context
-                           context evaluated-stages stage-io
-                           #'%reader-dispatch-internal-stage)
-                        (byte-stream-execution-error (condition)
-                          (%reader-plan-error
-                           span
-                           (byte-stream-execution-error-operation condition)
-                           condition))))
+                      (unless single-stage-result
+                        (handler-case
+                            (spawn-byte-stream-node-in-context
+                             context evaluated-stages stage-io
+                             #'%reader-dispatch-internal-stage)
+                          (byte-stream-execution-error (condition)
+                            (%reader-plan-error
+                             span
+                             (byte-stream-execution-error-operation condition)
+                             condition)))))
                     (keep
                       (mapcar
                        (lambda (substitution)
@@ -727,13 +1047,14 @@
                        (%reader-execution-state-process-substitutions state))))
                (%reader-close-owned-descriptors state keep)
                (let ((result
-                       (handler-case
-                           (wait-byte-stream-execution handle)
-                         (byte-stream-execution-error (condition)
-                           (%reader-plan-error
-                            span
-                            (byte-stream-execution-error-operation condition)
-                            condition)))))
+                       (or single-stage-result
+                           (handler-case
+                               (wait-byte-stream-execution handle)
+                             (byte-stream-execution-error (condition)
+                               (%reader-plan-error
+                                span
+                                (byte-stream-execution-error-operation condition)
+                                condition))))))
                  (%reader-close-owned-descriptors state)
                  (%reader-wait-process-substitutions state)
                  (%record-pipeline-statuses

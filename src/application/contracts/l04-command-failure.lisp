@@ -3,14 +3,18 @@
 (define-condition command-failed (error)
   ((command :initarg :command :reader command-failed-command)
    (status :initarg :status :reader command-failed-status)
+   (pipeline-status :initarg :pipeline-status :initform nil
+                    :reader command-failed-pipeline-status)
    (stage-statuses :initarg :stage-statuses :reader command-failed-stage-statuses)
    (signal :initarg :signal :reader command-failed-signal)))
 
 (defvar *interactive-top-level-p* nil)
 
 (defvar *command-test-position-p* nil)
+(defvar *command-failure-handler-active-p* nil)
 
 (defvar *errexit-p* nil)
+(defvar *command-pipefail-p* nil)
 (declaim (ftype (function (t function) (values t integer)) call-with-command-failure-policy))
 (defun call-with-command-failure-policy (command-ast thunk)
   (multiple-value-bind (value status pipeline-result)
@@ -44,14 +48,19 @@
                           stage-signals))
         (error "Malformed pipeline execution result for ~d command stages."
                stage-count))
-      (let ((final-stage-status (car (last stage-statuses))))
-        (unless (and (= status final-stage-status)
-                     (= (pipeline-execution-result-status pipeline-result)
-                        final-stage-status))
-          (error "Inconsistent command status: evaluator ~d, pipeline ~d, final stage ~d."
-                 status
-                 (pipeline-execution-result-status pipeline-result)
-                 final-stage-status))
+      (let* ((expected-status
+               (if *command-pipefail-p*
+                   (or (find-if (lambda (stage-status)
+                                  (not (zerop stage-status)))
+                                stage-statuses)
+                       0)
+                   (or (car (last stage-statuses)) 0)))
+             (pipeline-status
+               (pipeline-execution-result-status pipeline-result)))
+        (unless (and (= status expected-status)
+                     (= pipeline-status expected-status))
+          (error "Inconsistent command status: evaluator ~d, pipeline ~d, expected ~d."
+                 status pipeline-status expected-status))
         (let ((failure
                 (loop for stage in stages
                       for stage-status in stage-statuses
@@ -70,9 +79,11 @@
                            :command
                            (nshell.domain.parsing:command-node-command stage)
                            :status failure-status
+                           :pipeline-status pipeline-status
                            :stage-statuses stage-statuses
                            :signal failure-signal)
                   (continue-command-failure ()
                     :report "Ignore and continue."
-                    (values nil final-stage-status))))
-              (values value final-stage-status)))))))
+                    (values nil status))))
+              (values value status))))))
+)

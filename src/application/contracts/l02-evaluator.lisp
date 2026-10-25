@@ -15,17 +15,22 @@
 
 (define-value-struct evaluated-command-stage
     ((command-node nil)
-     (dispatch-kind :external :type (member :external :builtin :shell-function))
+     (dispatch-kind :external
+                    :type (member :external :builtin :shell-function
+                                  :source-function))
      (binding nil)
      (arguments nil :type list :copy :list)
-     (redirect-target-values nil :type list :copy :list))
+     (redirect-target-values nil :type list :copy :list)
+     (environment-assignments nil :type list :copy :list))
   :keyword-constructor t)
 
 (defun make-evaluated-command-stage
-    (command-node dispatch-kind binding arguments redirect-target-values)
+    (command-node dispatch-kind binding arguments redirect-target-values
+     &optional environment-assignments)
   (%make-evaluated-command-stage
    :command-node command-node
    :dispatch-kind dispatch-kind
    :binding binding
    :arguments arguments
-   :redirect-target-values redirect-target-values))
+   :redirect-target-values redirect-target-values
+   :environment-assignments environment-assignments))

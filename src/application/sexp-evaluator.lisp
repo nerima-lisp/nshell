@@ -320,6 +320,9 @@
       (forced-p :command-island)
       (package-name :host-form)
       ((%evaluator-aware-head-p name escaped-p) :host-form)
+      ((and escaped-p
+            (%evaluator-aware-head-p name nil))
+       :host-form)
       ((%user-package-function-or-macro-p name) :host-form)
       ((and (not escaped-p)
             (or (nth-value 1
@@ -382,9 +385,19 @@
    (%source-form-span form reader-result)))
 
 (defun %source-backed-form-p (form reader-result)
-  (or (gethash form
-               (nshell.domain.parsing:reader-result-form-span-map reader-result))
+  (or (gethash
+       form
+       (nshell.domain.parsing:reader-result-form-span-map reader-result))
       (eq form (nshell.domain.parsing:reader-result-form reader-result))))
+
+(defun %source-backed-command-form-p (form reader-result)
+  (or (%source-backed-form-p form reader-result)
+      (and (%source-form-span form reader-result)
+           (or (zerop *macro-expansion-depth*)
+               (and (consp form)
+                    *macro-expansion-symbol-origin-map*
+                    (gethash (first form)
+                             *macro-expansion-symbol-origin-map*))))))
 
 (defun %symbol-command-classification (context symbol)
   (let* ((package (symbol-package symbol))
@@ -430,7 +443,7 @@
       (t :command-island))))
 
 (defun %form-command-classification (context form reader-result)
-  (if (%source-backed-form-p form reader-result)
+  (if (%source-backed-command-form-p form reader-result)
       (classify-sexp-head context (%form-head-source form reader-result))
       (%symbol-command-classification context (first form))))
 
@@ -447,7 +460,7 @@
             (escaped-p (%find-user-symbol source-name))
             ((%evaluator-aware-head-p source-name nil)
              (or (find-symbol (string-upcase source-name) "CL")
-                 (%find-user-symbol source-name)))
+                 (%find-user-symbol (string-upcase source-name))))
             ((%user-package-function-or-macro-p source-name)
              (%find-user-symbol source-name))
             ((find-symbol (string-upcase source-name) "CL")
@@ -466,13 +479,16 @@
              (member head '(:pipeline :pipeline-stderr-to-stdout))))))
 
 (defun %command-form->ast (context form reader-result)
-  (nshell.domain.parsing:command-form->ast
-   (nshell.domain.parsing:reader-result-source reader-result)
-   form
-   (nshell.domain.parsing:reader-result-form-span-map reader-result)
-   (lambda (head-source) (classify-sexp-head context head-source))
-   :symbol-origins
-   (nshell.domain.parsing:reader-result-symbol-origins reader-result)))
+  (let ((form-span-map (make-hash-table :test (function eq))))
+    (setf (gethash form form-span-map)
+          (%source-form-span form reader-result))
+    (nshell.domain.parsing:command-form->ast
+     (nshell.domain.parsing:reader-result-source reader-result)
+     form
+     form-span-map
+     (lambda (head-source) (classify-sexp-head context head-source))
+     :symbol-origins
+     (nshell.domain.parsing:reader-result-symbol-origins reader-result))))
 
 (defun %proper-list-p (value)
   (loop with slow = value
@@ -524,74 +540,114 @@
                        "")))))))
       (%eval-form context form reader-result lexical-environment :value)))
 
-(defun %evaluate-command-value-form
-    (context value-form reader-result lexical-environment)
-  (let* ((span
-           (nshell.domain.parsing:command-value-form-source-span value-form))
+(defun %evaluate-command-value-form (context value-form reader-result lexical-environment)
+  (let* ((span (nshell.domain.parsing:command-value-form-source-span value-form))
          (form (nshell.domain.parsing:command-value-form-form value-form)))
     (labels ((source-form-at-span ()
                (block found
                  (maphash (lambda (candidate candidate-span)
                             (when (equal span candidate-span)
                               (return-from found candidate)))
-                          (nshell.domain.parsing:reader-result-form-span-map
-                           reader-result))
+                          (nshell.domain.parsing:reader-result-form-span-map reader-result))
                  (maphash (lambda (symbol origin)
-                            (when (equal
-                                   span
-                                   (%origin-field origin :source-span))
+                            (when (equal span (%origin-field origin :source-span))
                               (return-from found symbol)))
-                          (nshell.domain.parsing:reader-result-symbol-origins
-                           reader-result))
-                 nil)))
-      (%reject-opaque-dispatch-markers
-       (or (source-form-at-span) form)
-       reader-result)
+                          (nshell.domain.parsing:reader-result-symbol-origins reader-result))
+                 nil))
+             (positional-reference-fields (source-form)
+               (multiple-value-bind (source-name escaped-p package-qualifier)
+                   (%reader-symbol-origin-info reader-result source-form)
+                 (if (and source-name
+                          (not escaped-p)
+                          (null package-qualifier)
+                          (or (string= source-name "argv")
+                              (and (>= (length source-name) 6)
+                                   (string= source-name "argv[" :end1 5 :end2 5))))
+                     (nshell.domain.expansion:argv-reference-fields
+                      (concatenate (quote string) "$" source-name))
+                     (values nil nil))))
+             (field-arguments (fields)
+               (mapcar (lambda (field)
+                         (nshell.domain.parsing:make-evaluated-command-arg
+                          field span nil nil))
+                       fields)))
+      (%reject-opaque-dispatch-markers (or (source-form-at-span) form) reader-result)
       (case (nshell.domain.parsing:command-value-form-kind value-form)
         (:quoted
          (list (nshell.domain.parsing:make-evaluated-command-arg
-                (%materialize-reader-form form reader-result)
-                span nil nil)))
+                (%materialize-reader-form form reader-result) span nil nil)))
         (:value
-         (list (nshell.domain.parsing:make-evaluated-command-arg
-                (nth-value 0
-                  (%eval-command-value-operand
-                   context form reader-result lexical-environment))
-                span nil nil)))
+         (multiple-value-bind (fields positional-reference-p)
+             (positional-reference-fields form)
+           (if positional-reference-p
+               (field-arguments fields)
+               (list
+                (nshell.domain.parsing:make-evaluated-command-arg
+                 (nth-value 0 (%eval-command-value-operand context form reader-result lexical-environment))
+                 span nil nil)))))
         (:splice
-         (let ((value
-                 (nth-value 0
-                   (%eval-command-value-operand
-                    context form reader-result lexical-environment))))
-           (unless (%proper-list-p value)
-             (error
-              (make-condition
-               (quote sexp-evaluation-syntax-error)
-               :source-span span
-               :source-path
-               (nshell.domain.parsing:reader-result-source-path
-                reader-result)
-               :cause
-               (make-condition
-                (quote simple-error)
-                :format-control
-                "A command splice value must be a proper list."
-                :format-arguments nil))))
-           (mapcar (lambda (item)
-                     (nshell.domain.parsing:make-evaluated-command-arg
-                      item span nil nil))
-                   value)))))))
+         (multiple-value-bind (fields positional-reference-p)
+             (positional-reference-fields form)
+           (if positional-reference-p
+               (field-arguments fields)
+               (let ((value (nth-value 0 (%eval-command-value-operand context form reader-result lexical-environment))))
+                 (unless (%proper-list-p value)
+                   (error
+                    (make-condition
+                     (quote sexp-evaluation-syntax-error)
+                     :source-span span
+                     :source-path (nshell.domain.parsing:reader-result-source-path reader-result)
+                     :cause
+                     (make-condition
+                      (quote simple-error)
+                      :format-control "A command splice value must be a proper list."
+                      :format-arguments nil))))
+                 (mapcar (lambda (item)
+                           (nshell.domain.parsing:make-evaluated-command-arg item span nil nil))
+                         value)))))))))
 
 (defun %evaluate-command-argument
     (context argument reader-result lexical-environment)
-  (if (nshell.domain.parsing:command-arg-p argument)
-      (list (nshell.domain.parsing:make-evaluated-command-arg
-             (nshell.domain.parsing:command-arg-value argument)
-             (nshell.domain.parsing:command-arg-source-span argument)
-             (nshell.domain.parsing:command-arg-glob-p argument)
-             (nshell.domain.parsing:command-arg-expand-p argument)))
-      (%evaluate-command-value-form
-       context argument reader-result lexical-environment)))
+  (labels ((expansion-environment ()
+             (let ((environment (shell-context-environment context))
+                   (frames nil))
+               (loop for frame = lexical-environment
+                       then (%sexp-lexical-environment-parent frame)
+                     while frame
+                     do (push frame frames))
+               (dolist (frame frames environment)
+                 (maphash
+                  (lambda (symbol value)
+                    (setf environment
+                          (nshell.domain.environment:env-set-values
+                           environment
+                           (or (nth-value
+                                0
+                                (%reader-symbol-origin-info reader-result symbol))
+                               (symbol-name symbol))
+                           (cond
+                             ((null value) nil)
+                             ((listp value)
+                              (mapcar (function argv-scalar-string) value))
+                             (t (list (argv-scalar-string value))))
+                           nil)))
+                  (%sexp-lexical-environment-table frame))))))
+    (if (nshell.domain.parsing:command-arg-p argument)
+        (loop for value in
+                (if (nshell.domain.parsing:command-arg-expand-p argument)
+                    (%expand-source-arg-in-context
+                     context argument (expansion-environment))
+                    (list
+                     (nshell.domain.parsing:command-arg-value argument)))
+              collect
+                (nshell.domain.parsing:make-evaluated-command-arg
+                 value
+                 (nshell.domain.parsing:command-arg-source-span argument)
+                 (nshell.domain.parsing:command-arg-glob-p argument)
+                 (nshell.domain.parsing:command-arg-expand-p argument)))
+        (%evaluate-command-value-form
+         context argument reader-result lexical-environment))))
+
 
 (defun %evaluate-command-arguments
     (context command-node reader-result lexical-environment)
@@ -632,26 +688,80 @@
         (nshell.domain.parsing:command-node-command command-node))))
 
 (progn
+  (defun %reader-alias-expanded-command-node (context command-node)
+  (let ((head-source (%command-node-head-source command-node)))
+    (multiple-value-bind (ignored-name escaped-p ignored-package forced-p)
+        (%parse-head-source head-source)
+      (declare (ignore ignored-name ignored-package))
+      (if (or escaped-p forced-p
+              (nshell.domain.parsing:command-node-force-external-p
+               command-node)
+              (nshell.domain.parsing:command-node-command-quote-style
+               command-node))
+          command-node
+          (let* ((name
+                   (nshell.domain.parsing:command-node-command command-node))
+                 (alias
+                   (gethash name (shell-context-alias-table context))))
+            (if (or (null alias)
+                    (nth-value
+                     1
+                     (gethash name
+                              (shell-context-sexp-alias-table context))))
+                command-node
+                (let* ((reader-results
+                         (nshell.domain.parsing:read-submission
+                          alias :reader-context :bare-line))
+                       (alias-node
+                         (and (= (length reader-results) 1)
+                              (nshell.domain.parsing:reader-result-form
+                               (first reader-results)))))
+                  (if (nshell.domain.parsing:command-node-p alias-node)
+                      (nshell.domain.parsing:make-command-node
+                       (nshell.domain.parsing:command-node-command alias-node)
+                       (append
+                        (nshell.domain.parsing:command-node-args alias-node)
+                        (nshell.domain.parsing:command-node-args command-node))
+                       (nshell.domain.parsing:ast-node-span command-node)
+                       (nshell.domain.parsing:command-node-command-quote-style
+                        alias-node)
+                       (nshell.domain.parsing:command-node-command-fragments
+                        alias-node)
+                       (nshell.domain.parsing:command-node-redirects
+                        command-node)
+                       (nshell.domain.parsing:command-node-force-external-p
+                        alias-node)
+                       (append
+                        (nshell.domain.parsing:command-node-argument-forms
+                         alias-node)
+                        (nshell.domain.parsing:command-node-argument-forms
+                         command-node))
+                       (nshell.domain.parsing:command-node-environment-assignments
+                        command-node))
+                      command-node))))))))
+
+
+
   (defun %sync-sexp-alias-table (context argv template)
     (let ((table (shell-context-sexp-alias-table context)))
       (cond
-       ((member (first argv) (list "-e" "--erase") :test #'string=)
-        (dolist (alias-name (rest argv))
-          (remhash alias-name table)))
-       ((member (first argv) (list "-q" "--query") :test #'string=)
-        nil)
-       ((or (rest argv)
-            (and (first argv)
-                 (let ((equals (position #\= (first argv))))
-                   (and equals (plusp equals)))))
-        (let* ((definition (first argv))
-               (equals (position #\= definition))
-               (alias-name (if (and equals (plusp equals))
-                               (subseq definition 0 equals)
-                             definition)))
-          (if template
-              (setf (gethash alias-name table) template)
-            (remhash alias-name table)))))))
+        ((member (first argv) (list "-e" "--erase") :test #'string=)
+         (dolist (alias-name (rest argv))
+           (remhash alias-name table)))
+        ((member (first argv) (list "-q" "--query") :test #'string=)
+         nil)
+        ((or (rest argv)
+             (and (first argv)
+                  (let ((equals (position #\= (first argv))))
+                    (and equals (plusp equals)))))
+         (let* ((definition (first argv))
+                (equals (position #\= definition))
+                (alias-name (if (and equals (plusp equals))
+                                (subseq definition 0 equals)
+                                definition)))
+           (if template
+               (setf (gethash alias-name table) template)
+               (remhash alias-name table)))))))
 
   (defun %make-sexp-alias-builtin-binding (command-node builtin-binding)
     (let ((template
@@ -666,47 +776,75 @@
        (builtin-binding-argument-mode builtin-binding))))
 
   (defun %resolve-command-stage-binding (context command-node)
-    (let* ((name (nshell.domain.parsing:command-node-command command-node))
-           (head-source (%command-node-head-source command-node)))
-      (multiple-value-bind (ignored-name escaped-p package-name forced-p)
-          (%parse-head-source head-source)
-        (declare (ignore ignored-name))
-        (cond
-          ((or forced-p
-               (nshell.domain.parsing:command-node-force-external-p
-                command-node))
-           (values :external nil))
-          ((and (null package-name)
-                (not escaped-p)
-                (nth-value
-                 1
-                 (gethash name (shell-context-sexp-alias-table context))))
-           (values :alias
-                   (gethash name (shell-context-sexp-alias-table context))))
-          (t
-           (multiple-value-bind (shell-binding shell-found-p)
-               (lookup-shell-function
-                (context-shell-function-registry context)
-                name :scope (active-shell-function-scope)
-                :escaped-p escaped-p)
-             (if shell-found-p
-                 (values :shell-function shell-binding)
-                 (multiple-value-bind (builtin-binding builtin-found-p)
-                     (lookup-builtin-binding name)
-                   (cond
-                     (builtin-found-p
-                      (values
-                       :builtin
-                       (if (string= name "alias")
-                           (%make-sexp-alias-builtin-binding
-                            command-node builtin-binding)
-                           builtin-binding)))
-                     ((%command-path-candidate-p context name)
-                      (values :external nil))
-                     (t (values :external nil))))))))))))
+    (let* ((command-node
+             (%reader-alias-expanded-command-node context command-node))
+           (head-info
+             (multiple-value-list
+              (%parse-head-source (%command-node-head-source command-node))))
+           (escaped-p (second head-info))
+           (package-name (third head-info))
+           (forced-p (fourth head-info))
+           (name
+             (if escaped-p
+    (nshell.domain.parsing:command-node-command command-node)
+    (%expand-command-name-from-fragments
+     command-node
+     (shell-context-environment context)
+     (shell-context-filesystem context))))
+           (command-node
+             (nshell.domain.parsing:make-command-node
+              name
+              (nshell.domain.parsing:command-node-args command-node)
+              (nshell.domain.parsing:ast-node-span command-node)
+              (nshell.domain.parsing:command-node-command-quote-style
+               command-node)
+              nil
+              (nshell.domain.parsing:command-node-redirects command-node)
+              (nshell.domain.parsing:command-node-force-external-p command-node)
+              (nshell.domain.parsing:command-node-argument-forms command-node)
+              (nshell.domain.parsing:command-node-environment-assignments
+               command-node)
+              (nshell.domain.parsing::command-node-alias-template
+               command-node)))
+           (name (nshell.domain.parsing:command-node-command command-node)))
+      (if (or forced-p
+              (nshell.domain.parsing:command-node-force-external-p command-node))
+          (values :external nil command-node)
+          (multiple-value-bind (sexp-alias sexp-alias-found-p)
+              (gethash name (shell-context-sexp-alias-table context))
+            (if (and (null package-name)
+                     (not escaped-p)
+                     sexp-alias-found-p)
+                (values :alias sexp-alias command-node)
+                (multiple-value-bind (shell-binding shell-found-p)
+                    (lookup-shell-function
+                     (context-shell-function-registry context)
+                     name :scope (active-shell-function-scope)
+                     :escaped-p escaped-p)
+                  (if shell-found-p
+                      (values :shell-function shell-binding command-node)
+                      (multiple-value-bind (function-body function-found-p)
+                          (gethash name (shell-context-function-table context))
+                        (if function-found-p
+                            (values :source-function function-body command-node)
+                            (multiple-value-bind (builtin-binding builtin-found-p)
+                                (lookup-builtin-binding name)
+                              (cond
+                                (builtin-found-p
+                                 (values
+                                  :builtin
+                                  (if (string= name "alias")
+                                      (%make-sexp-alias-builtin-binding
+                                       command-node builtin-binding)
+                                      builtin-binding)
+                                  command-node))
+                                ((%command-path-candidate-p context name)
+                                 (values :external nil command-node))
+                                (t
+                                 (values :external nil command-node))))))))))))))
 
 (defun evaluate-command-stage-in-context (context command-node)
-  (multiple-value-bind (dispatch-kind binding)
+  (multiple-value-bind (dispatch-kind binding command-node)
       (%resolve-command-stage-binding context command-node)
     (if (eq dispatch-kind :alias)
         (progn
@@ -778,25 +916,45 @@
             *command-stage-lexical-environment*)
            (%evaluate-redirect-target-values
             command-node *command-stage-reader-result*
-            *command-stage-lexical-environment*))))))
+            *command-stage-lexical-environment*)
+           (mapcar
+            (lambda (assignment)
+              (%assignment-word-binding
+               context
+               (nshell.domain.parsing:command-arg-value assignment)))
+            (nshell.domain.parsing:command-node-environment-assignments
+             command-node)))))))
+
+
 
 (defun %eval-command-ast-in-position
     (context ast reader-result lexical-environment position)
-  (let* ((*command-test-position-p* (eq position :test))
+  (let* ((*command-test-position-p*
+          (and (not *command-failure-handler-active-p*)
+               (or (eq position :test)
+                   (eq position :value)
+                   (eq position :status-value))))
          (*command-stage-reader-result* reader-result)
          (*command-stage-lexical-environment* lexical-environment)
          (*command-evaluation-position* position)
          (*command-stage-call-position*
-           (if (and (nshell.domain.parsing:command-node-p ast)
-                    (eq position :value))
-               :value
-               :stream))
+          (if (and (nshell.domain.parsing:command-node-p ast)
+                   (member position (list :value :status-value) :test (function eq)))
+              :value
+              :stream))
          (*current-user-evaluator-context* context)
-         (*current-user-evaluator-position* position))
-    (handler-bind ((command-failed
-                    (lambda (condition)
-                      (setf *current-evaluation-status*
-                            (car (last (command-failed-stage-statuses condition)))))))
+         (*current-user-evaluator-position* position)
+         (*command-pipefail-p* (shell-context-pipefail-p context)))
+    (handler-bind
+        ((command-failed
+          (lambda (condition)
+            (unless (member position (quote (:test :status-value))
+                            :test (function eq))
+              (setf *current-evaluation-status*
+                    (or (command-failed-pipeline-status condition)
+                        (car (last
+                              (command-failed-stage-statuses
+                               condition)))))))))
       (multiple-value-bind (value status pipeline-result)
           (if (nshell.domain.parsing:sequence-node-p ast)
               (execute-reader-ast-in-context
@@ -816,8 +974,15 @@
                     (evaluate-command-stage-in-context
                      stage-context command-node))))))
         (declare (ignore pipeline-result))
-        (setf *current-evaluation-status* status)
-        (values (if (eq position :test) (zerop status) value))))))
+        (unless (member position (quote (:test :status-value))
+                        :test (function eq))
+          (setf *current-evaluation-status* status))
+        (values
+         (case position
+           (:test (zerop status))
+           (:status-value status)
+           (:value value)
+           (otherwise value)))))))
 
 (defun %eval-body (context forms reader-result lexical-environment position)
   (cond
@@ -952,8 +1117,9 @@
                           (throw tag (list :handler clause condition)))))))
                (cons :values
                      (multiple-value-list
-                      (%eval-form context protected-form reader-result
-                                  lexical-environment position)))))))
+                      (let ((*command-failure-handler-active-p* t))
+                        (%eval-form context protected-form reader-result
+                                    lexical-environment position))))))))
     (if (eq (first outcome) :values)
         (let* ((values (rest outcome))
                (no-error-clause (find :no-error clauses :key #'first)))
@@ -997,10 +1163,10 @@
        (if (%eval-form context (second form) reader-result
                        lexical-environment :test)
            (%eval-form context (third form) reader-result
-                       lexical-environment position)
+                       lexical-environment :stream)
            (if (cdddr form)
                (%eval-form context (fourth form) reader-result
-                           lexical-environment position)
+                           lexical-environment :stream)
                nil)))
       (cl:when
        (%check-special-form-arity 'cl:when form 1)
@@ -1175,7 +1341,11 @@
 
 (defun %make-evaluator-function (lambda-list body reader-result)
   (let* ((lambda-list (%materialize-reader-form lambda-list reader-result))
-         (variables (%function-lambda-list-variables lambda-list)))
+         (variables (%function-lambda-list-variables lambda-list))
+         (rest-variable
+          (loop for tail on lambda-list
+                when (member (first tail) (quote (&rest &body)) :test (function eq))
+                return (second tail))))
     (multiple-value-bind (documentation declarations executable-body)
         (%ordinary-function-body-parts body reader-result)
       (eval
@@ -1185,18 +1355,26 @@
                       (%materialize-reader-form declaration reader-result))
                     declarations)
           (%eval-user-function-body
-           ',executable-body ',reader-result
+           (quote ,executable-body)
+           (quote ,reader-result)
            (list ,@(mapcar (lambda (variable)
-                             `(cons ',variable ,variable))
-                           variables))))))))
+                             `(cons (quote ,variable) ,variable))
+                           variables))
+           (quote ,rest-variable)))))))
 
-(defun %eval-user-function-body (body reader-result bindings)
+(defun %eval-user-function-body (body reader-result bindings rest-variable)
   (let* ((context *current-user-evaluator-context*)
          (position (if (eq *current-user-evaluator-position* :test)
                        :value
-                       *current-user-evaluator-position*))
+                     *current-user-evaluator-position*))
+         (positional-args
+          (loop for binding in bindings
+                append (if (eq (car binding) rest-variable)
+                           (copy-list (cdr binding))
+                         (list (cdr binding)))))
          (*interactive-top-level-p* nil)
-         (*command-test-position-p* nil))
+         (*command-test-position-p* nil)
+         (nshell.domain.expansion:*positional-args* positional-args))
     (%eval-body context body reader-result
                 (%extend-lexical-environment nil bindings)
                 position)))
@@ -1431,7 +1609,9 @@
          (arguments
            (mapcar (lambda (argument)
                      (%eval-form context argument reader-result
-                                 lexical-environment :value))
+                                 lexical-environment
+                                 (if (eq operator 'cl:=)
+                                     :status-value :value)))
                    (rest form))))
     (unless (functionp function)
       (error 'undefined-function :name operator))
@@ -1485,18 +1665,11 @@
        (%eval-defun-form form reader-result))
       ((eq operator 'cl:defmacro)
        (%eval-defmacro-form form reader-result))
-      ((and (symbolp raw-operator)
+      ((and (eq operator 'nshell.user::define-shell-function)
             (let ((origin (%reader-symbol-origin reader-result raw-operator)))
-              (if origin
+              (or (null origin)
                   (and (not (%origin-field origin :escaped-p))
-                       (null (%origin-field origin :package-qualifier :package))
-                       (string-equal
-                        (%origin-field origin :source-name)
-                        "DEFINE-SHELL-FUNCTION"))
-                  (and (eq (symbol-package raw-operator)
-                           (find-package "NSHELL.USER"))
-                       (string-equal (symbol-name raw-operator)
-                                     "DEFINE-SHELL-FUNCTION")))))
+                       (null (%origin-field origin :package-qualifier :package))))))
        (%eval-define-shell-function-form
         context form reader-result lexical-environment))
       ((and (eq classification :host-form)
@@ -1515,13 +1688,10 @@
       ((%reader-pipeline-form-p form reader-result)
        (%eval-command-ast-in-position
         context
-        (if (%source-backed-form-p form reader-result)
-            (%command-form->ast context form reader-result)
-            (%macro-generated-form->ast
-             context form reader-result (%source-form-span form reader-result)))
+        (if (%source-backed-command-form-p form reader-result) (%command-form->ast context form reader-result) (%macro-generated-form->ast context form reader-result (%source-form-span form reader-result)))
         reader-result lexical-environment position))
       ((eq classification :command-island)
-       (if (%source-backed-form-p form reader-result)
+       (if (%source-backed-command-form-p form reader-result)
            (%eval-command-ast-in-position
             context (%command-form->ast context form reader-result)
             reader-result lexical-environment position)
@@ -1581,21 +1751,21 @@
 
 (defun evaluate-reader-result-in-context (context reader-result)
   (let ((*current-evaluation-status*
-          (shell-context-last-exit-code context)))
+         (shell-context-last-exit-code context)))
     (%with-reader-evaluation-state
      reader-result
      (lambda ()
        (let* ((form (nshell.domain.parsing:reader-result-form reader-result))
               (classification
-                (and (consp form) (symbolp (first form))
-                     (%form-command-classification
-                      context form reader-result)))
+               (and (consp form) (symbolp (first form))
+                    (%form-command-classification
+                     context form reader-result)))
               (stream-form-p
-                (or (nshell.domain.parsing::ast-node-p form)
-                    (%reader-pipeline-form-p form reader-result)
-                    (eq classification :command-island)))
+               (or (nshell.domain.parsing::ast-node-p form)
+                   (%reader-pipeline-form-p form reader-result)
+                   (eq classification :command-island)))
               (position (if stream-form-p :stream :value))
               (value
-                (%eval-form context form reader-result nil position
-                            classification)))
+               (%eval-form context form reader-result nil position
+                           classification)))
          (values value *current-evaluation-status*))))))

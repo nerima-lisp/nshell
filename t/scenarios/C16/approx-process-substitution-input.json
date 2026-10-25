@@ -7,7 +7,8 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "dumb",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -26,10 +27,11 @@
     "exit_code": 0
   },
   "invocation": {
-    "kind": "command",
-    "text": "cat <(printf 'C16_PROCESS_VALUE')"
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "cat <(/usr/bin/printf 'C16_PROCESS_VALUE')"
   },
   "expected_failure": {
-    "reason": "WP-L08 owns process substitution."
+    "reason": "WP-L08 owns typed process substitution; WP-L05 owns foreground stage execution and process-substitution stage execution."
   }
 }

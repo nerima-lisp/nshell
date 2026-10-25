@@ -481,15 +481,11 @@
       (expect nil :to-equal
               (nshell.domain.parsing:evaluated-command-arg-expand-p
                evaluated-value))))
-  (it "signals-owner-tagged-interface-stubs"
-    (let ((owner-wp nil))
-      (handler-case
-          (nshell.application:command-argv-strings nil nil)
-        (nshell.application:wp-interface-not-implemented (condition)
-          (setf owner-wp
-                (nshell.application:wp-interface-not-implemented-owner-wp
-                 condition))))
-      (expect "L03" :to-equal owner-wp))))
+  (it "returns-no-argv-for-empty-evaluated-command-arguments"
+    (expect nil :to-equal
+            (nshell.application:command-argv-strings
+             (nshell.application:make-shell-context)
+             nil))))
 
 (describe "p2-owner-interface-contracts"
   (it "signals each new owner-tagged stub"
@@ -504,12 +500,12 @@
                  (expect expected-owner :to-equal owner-wp))))
       (dolist (contract
                (list
-                (list "E04" #'nshell.presentation:apply-sexp-structural-edit
-                      (list nil nil :forward-sexp))
                 (list "E05" #'nshell.presentation::highlight-line-from-scanner
-                      (list "" nil 0 0))
+                      (list "" (nshell.domain.parsing:scan-input "") 0 0))
                 (list "L08" #'nshell.application:execute-reader-ast-in-context
-                      (list nil nil #'identity))))
+                      (list (nshell.application:make-shell-context)
+                            (nshell.domain.parsing:scan-input "")
+                            #'identity))))
         (signals-owner (first contract) (second contract) (third contract))))))
 
 (describe "p2-owner-contract-types"

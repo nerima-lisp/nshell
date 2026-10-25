@@ -1066,13 +1066,20 @@ class TmuxSession:
                 )
             self._read(remaining)
 
-    def wait_for_screen(self, text: str, timeout: float) -> None:
+    def wait_for_screen(self, text: str, timeout: float) -> str | None:
         self._validate_timeout(timeout, self.scenario["id"])
         deadline = min(self.deadline, time.monotonic() + timeout)
         while True:
             screen = self._capture()
             if text in screen:
-                return
+                return None
+            if self.exit_waiter is not None and self.exit_waiter.poll() is not None:
+                self._read(0)
+                screen = self._capture()
+                return (
+                    f"{self.scenario['id']}: pane exited before {text!r} appeared on screen; "
+                    f"current screen:\n{screen}"
+                )
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise ScenarioError(
@@ -1153,6 +1160,7 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
         with _read_only_directory_modes(scenario, root):
             sessions: list[tuple[TmuxSession, dict[str, Any]]] = []
             exit_codes: list[int] = []
+            failures: list[str] = []
             try:
                 for spec in _pty_sessions(scenario):
                     session_scenario = dict(scenario)
@@ -1184,7 +1192,23 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                         elif kind == "wait":
                             session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
                         elif kind == "wait_screen":
-                            session.wait_for_screen(step["contains"], step.get("timeout_seconds", 10))
+                            failure = session.wait_for_screen(
+                                step["contains"], step.get("timeout_seconds", 10)
+                            )
+                            if failure:
+                                failures.append(failure)
+                                exit_step = next(
+                                    (candidate for candidate in reversed(spec["steps"])
+                                     if candidate["type"] == "wait_exit"),
+                                    None,
+                                )
+                                exit_codes.append(
+                                    session.wait_exit(
+                                        exit_step.get("timeout_seconds", 10) if exit_step else 10
+                                    )
+                                )
+                                session.drain()
+                                break
                         elif kind == "wait_exit":
                             exit_codes.append(session.wait_exit(step.get("timeout_seconds", 10)))
                             session.drain()
@@ -1197,9 +1221,9 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                 )
                 screen = "\n".join(session.capture_screen() for session, _ in sessions)
                 exit_code = next((code for code in exit_codes if code != 0), exit_codes[-1] if exit_codes else -1)
-                failures = _check_expected(
+                failures.extend(_check_expected(
                     scenario, stream, screen, exit_code, home, cwd
-                )
+                ))
             finally:
                 for session, _ in reversed(sessions):
                     session.close()

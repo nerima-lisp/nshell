@@ -253,6 +253,7 @@ class ScenarioRunnerTests(unittest.TestCase):
         session = runner.TmuxSession.__new__(runner.TmuxSession)
         session.deadline = 10.0
         session.scenario = {"id": "screen-wait"}
+        session.exit_waiter = None
 
         with (
             patch.object(runner.time, "monotonic", side_effect=[1.0, 1.05]),
@@ -263,6 +264,77 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual(capture.call_count, 2)
         read.assert_called_once_with(0.1)
+
+    def test_tmux_wait_for_screen_reports_pane_exit_before_marker(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.deadline = 10.0
+        session.scenario = {"id": "screen-exit"}
+        session.exit_waiter = mock.Mock()
+        session.exit_waiter.poll.return_value = 1
+
+        with (
+            patch.object(runner.time, "monotonic", return_value=1.0),
+            patch.object(session, "_capture", side_effect=["initial screen", "L07 fatal error"]) as capture,
+            patch.object(session, "_read") as read,
+        ):
+            failure = session.wait_for_screen("EXPECTED_SCREEN", 5)
+
+        self.assertIsNotNone(failure)
+        self.assertIn("pane exited before", failure)
+        self.assertIn("EXPECTED_SCREEN", failure)
+        self.assertIn("L07 fatal error", failure)
+        self.assertEqual(capture.call_count, 2)
+        read.assert_called_once_with(0)
+
+    def test_dead_pane_screen_wait_is_classified_as_expected_failure(self) -> None:
+        events: list[tuple[str, Any]] = []
+
+        class FakeSession:
+            def __init__(self, scenario: dict[str, Any], binary: Path, root: Path,
+                         env: dict[str, str], cwd: Path):
+                self.scenario = scenario
+                self.stream = bytearray()
+                self.deadline_seconds = 45
+                self.deadline = 0.0
+
+            def wait_for_screen(self, text: str, timeout: float) -> str:
+                events.append(("wait_screen", (text, timeout)))
+                return f"{self.scenario['id']}: pane exited before {text!r} appeared on screen"
+
+            def wait_exit(self, timeout: float) -> int:
+                events.append(("wait_exit", timeout))
+                return 1
+
+            def drain(self) -> None:
+                pass
+
+            def capture_screen(self) -> str:
+                return "L07 fatal error"
+
+            def close(self) -> None:
+                pass
+
+        scenario = _pty_scenario(
+            "expected-screen-failure",
+            [
+                {"type": "wait_screen", "contains": "STRUCTURAL_RESULT"},
+                {"type": "keys", "text": "must not be sent"},
+                {"type": "wait_exit", "timeout_seconds": 8},
+            ],
+            {"exit_code": 0},
+        )
+        scenario["expected_failure"] = {"reason": "WP-L07 has not implemented the scanner registry"}
+
+        with patch.object(runner, "TmuxSession", FakeSession), \
+                patch.object(runner.shutil, "which", return_value="tmux"):
+            status, detail = runner._run_once(scenario, Path("/unused/nshell"))
+
+        self.assertEqual(status, "XFAIL")
+        self.assertIn("WP-L07", detail)
+        self.assertEqual(events, [
+            ("wait_screen", ("STRUCTURAL_RESULT", 10)),
+            ("wait_exit", 8),
+        ])
 
     def test_tmux_wait_exit_drains_output_while_waiting_for_pane_death(self) -> None:
         session = runner.TmuxSession.__new__(runner.TmuxSession)

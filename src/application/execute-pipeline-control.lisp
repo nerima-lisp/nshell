@@ -370,7 +370,7 @@ following the data/logic separation principle."
                    (and (eq previous-separator :or) (= last-status 0)))))
         (unless skip-p
           (let ((*command-test-position-p*
-                  (and separator (member separator (list :and :or)))))
+                  (and separator (or (eq separator :and) (eq separator :or)))))
             (multiple-value-bind (value status pipeline-result)
                 (if (eq separator :amp)
                     (%reader-spawn-background-node-in-context
@@ -381,7 +381,10 @@ following the data/logic separation principle."
                     last-status status
                     last-result pipeline-result)
               (%record-last-exit-code context status))))
-        (setf previous-separator separator)))
+        (setf previous-separator separator)
+        (when (or *loop-control-signal*
+                  (not (shell-context-running context)))
+          (return))))
     (values last-value
             last-status
             (or last-result

@@ -20,21 +20,24 @@
       (expect 2 :to-equal (length commands))
       (expect first :to-be (first commands))
       (expect second :to-be (second commands))))
-  (it "reports direction mismatches at the redirect span"
+  (it "preflight reports direction mismatches for unvalidated redirect entries"
     (let* ((form (nshell.domain.parsing:make-command-node "producer" nil))
            (entry
-             (nshell.domain.parsing:make-ast-redirect-entry :input-file
-              0
-              (nshell.domain.parsing:make-redirect-procsub-target :output form)
-              '(4 19)
-              0))
+             (nshell.domain.parsing::%make-ast-redirect-entry
+              :kind :process-substitution-input
+              :file-descriptor nil
+              :target
+              (nshell.domain.parsing:make-redirect-procsub-target
+               :output form)
+              :source-span (list 4 19)
+              :source-order 0))
            (condition nil))
       (handler-case
           (nshell.application::%preflight-reader-process-substitution-entry
            entry)
         (nshell.application:command-execution-plan-error (caught)
           (setf condition caught)))
-      (expect '(4 19) :to-equal
+      (expect (list 4 19) :to-equal
               (nshell.application:command-execution-plan-error-source-span
                condition))
       (expect :preflight :to-be
@@ -74,7 +77,7 @@
               (nshell.application:command-execution-plan-error-operation
                condition))))
   (it "reader-sequence-short-circuits-and-records-final-status"
-    (let* ((context (nshell.application:make-shell-context))
+    (let* ((context (nshell.application:make-shell-context :running t))
            (executor-symbol
              (find-symbol "EXECUTE-READER-AST-IN-CONTEXT"
                           "NSHELL.APPLICATION"))
@@ -130,7 +133,40 @@
                (expect
                 7
                 :to-equal
-                (nshell.application:shell-context-last-exit-code context))))
+                (nshell.application:shell-context-last-exit-code context)))
+             (dolist (stop-kind (list :loop-control :shell-shutdown))
+               (let* ((stop-context
+                        (nshell.application:make-shell-context :running t))
+                      (stop-calls nil)
+                      (stop-sequence
+                        (nshell.domain.parsing:make-sequence-node
+                         (list
+                          (nshell.domain.parsing:make-command-node "stop" nil)
+                          (nshell.domain.parsing:make-command-node "after" nil))
+                         (list :semicolon))))
+                 (let ((nshell.application::*loop-control-signal* nil))
+                   (setf (symbol-function executor-symbol)
+                         (lambda (ignored-context command ignored-stage-evaluator)
+                           (declare (ignore ignored-context ignored-stage-evaluator))
+                           (let ((name
+                                   (nshell.domain.parsing:command-node-command
+                                    command)))
+                             (push name stop-calls)
+                             (when (string= name "stop")
+                               (if (eq stop-kind :loop-control)
+                                   (setf nshell.application::*loop-control-signal*
+                                         (cons :break 1))
+                                   (setf
+                                    (nshell.application:shell-context-running
+                                     stop-context)
+                                    nil)))
+                             (values
+                              nil 0
+                              (nshell.application:make-pipeline-execution-result
+                               0 '(0) '(nil))))))
+                   (nshell.application::%execute-reader-sequence-node-in-context
+                    stop-context stop-sequence nil)
+                   (expect '("stop") :to-equal (nreverse stop-calls))))))
         (setf (symbol-function executor-symbol) original-executor)))))
 
 (describe "reader-process-substitution-fd-flags"

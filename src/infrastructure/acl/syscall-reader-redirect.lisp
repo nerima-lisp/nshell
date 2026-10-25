@@ -15,10 +15,10 @@
                 duplicate)
             (unless keep-duplicate-p
               (when duplicate
-                (ignore-errors (sb-posix:close duplicate)))))
-          (progn
-            (%spawn-set-close-on-exec fd)
-            fd)))))
+                (ignore-errors (sb-posix:close duplicate))))))
+      (progn
+        (%spawn-set-close-on-exec fd)
+        fd))))
 
 (defun open-reader-redirect-file (path mode &key avoid-descriptors)
   "Open PATH for a reader redirect and return its parent-owned source fd.

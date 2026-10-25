@@ -62,19 +62,12 @@
       "timeout_seconds": 10
     },
     {
-      "type": "keys",
-      "text": "exit"
-    },
-    {
       "type": "key",
-      "key": "Enter"
+      "key": "C-d"
     },
     {
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
-  }
+  ]
 }

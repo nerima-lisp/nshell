@@ -9,6 +9,7 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "P03> ",
+      "SCENARIO_MARKER": "P03_AFTER_2",
       "NSHELL_READER": "sexp"
     },
     "home": "home",
@@ -29,7 +30,8 @@
   "expected": {
     "stream": {
       "contains": [
-        "P03_FUNCTION_DIRECTORY_OK"
+        "P03_FUNCTION_DIRECTORY_OK",
+        "P03_AFTER_2"
       ]
     },
     "exit_code": 0
@@ -38,7 +40,20 @@
   "steps": [
     {
       "type": "keys",
-      "text": "p03_greet; echo P03_AFTER_$((1+1))"
+      "text": "p03_greet"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P03_FUNCTION_DIRECTORY_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo $SCENARIO_MARKER"
     },
     {
       "type": "key",
@@ -50,19 +65,12 @@
       "timeout_seconds": 10
     },
     {
-      "type": "keys",
-      "text": "exit"
-    },
-    {
       "type": "key",
-      "key": "Enter"
+      "key": "C-d"
     },
     {
       "type": "wait_exit",
       "timeout_seconds": 10
     }
-  ],
-  "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
-  }
+  ]
 }

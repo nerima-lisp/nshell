@@ -1,5 +1,6 @@
 ;;; REPL output-event execution helpers
 (in-package #:nshell.presentation)
+(declaim (special nshell.infrastructure.acl:*command-not-found-hook*))
 (defun %read-command-failure-restart-choice (condition continue-restart return-restart)
   (let ((selected-p nil))
     (format t

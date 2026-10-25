@@ -1,4 +1,5 @@
 (in-package #:nshell.application)
+(declaim (special nshell.infrastructure.acl:*command-not-found-hook*))
 
 (define-condition byte-stream-execution-error (error)
   ((operation :initarg :operation :reader byte-stream-execution-error-operation)
@@ -188,11 +189,15 @@
 
   (defun %byte-stream-launch-thread (state index thunk)
     (let ((stage-io (nth index (%byte-stream-execution-state-stage-ios state)))
-          (cache (aref (%byte-stream-execution-state-stream-caches state) index)))
+          (cache (aref (%byte-stream-execution-state-stream-caches state) index))
+          (command-not-found-hook
+            nshell.infrastructure.acl:*command-not-found-hook*))
       (setf (aref (%byte-stream-execution-state-threads state) index)
             (sb-thread:make-thread
              (lambda ()
                (let ((*pipeline-stage-io* stage-io)
+                     (nshell.infrastructure.acl:*command-not-found-hook*
+                      command-not-found-hook)
                      (*pipeline-stage-stream-cache* cache)
                      (*pipeline-stage-stream-cache-active-p* t))
                  (unwind-protect

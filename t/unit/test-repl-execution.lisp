@@ -1103,7 +1103,24 @@ path must be converted from a pathname before being appended."
                 :to-equal
                 (nshell.infrastructure.acl::%external-command-not-found-message
                  "missing-command")))
-      (expect "missing-command" :to-equal command-seen))))
+      (expect "missing-command" :to-equal command-seen)))
+  (it "propagates-command-not-found-hook-to-pipeline-worker-threads"
+    (with-repl-test-state
+      (let* ((command "nshell_missing_command_hook_test")
+             (command-seen nil)
+             (hook (lambda (seen-command)
+                     (setf command-seen seen-command))))
+        (unwind-protect
+             (progn
+               (nshell.application:clear-shell-hooks :command-not-found)
+               (nshell.application:register-shell-hook :command-not-found hook)
+               (with-repl-input-state (:buffer command
+                                       :cursor-pos (length command))
+                 (let ((nshell.presentation::*history-persistence-enabled-p* nil))
+                   (capture-process-output-event :execute)))
+               (expect 127 :to-equal nshell.presentation::*last-exit-code*)
+               (expect command :to-equal command-seen))
+          (nshell.application:clear-shell-hooks :command-not-found))))))
 
 (describe "failure-explain-lifecycle-tests"
   (it "keeps-the-explain-mark-only-for-the-latest-failed-command"

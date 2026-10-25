@@ -264,6 +264,48 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(capture.call_count, 2)
         read.assert_called_once_with(0.1)
 
+    def test_tmux_wait_exit_drains_output_while_waiting_for_pane_death(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.deadline = runner.time.monotonic() + 1
+        session.scenario = {"id": "exit-wait"}
+        session.pane = "%7"
+
+        class WaitingProcess:
+            returncode: int | None = None
+
+            def poll(self) -> int | None:
+                return self.returncode
+
+            def communicate(self, *_args: Any, **_kwargs: Any) -> tuple[bytes, bytes]:
+                self.returncode = 0
+                return b"", b""
+
+        waiter = WaitingProcess()
+        session.exit_waiter = waiter
+        reads: list[float] = []
+
+        def read(timeout: float) -> bytes:
+            reads.append(timeout)
+            if timeout > 0:
+                waiter.returncode = 0
+                return b"Goodbye!"
+            return b""
+
+        with (
+            patch.object(session, "_read", side_effect=read),
+            patch.object(session, "_tmux", return_value=subprocess.CompletedProcess(
+                [], 0, stdout=b"0 \n", stderr=b"")) as tmux,
+        ):
+            status = session.wait_exit(1)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(len(reads), 2)
+        self.assertGreater(reads[0], 0)
+        self.assertEqual(reads[1], 0)
+        tmux.assert_called_once_with([
+            "display-message", "-p", "-t", "%7", "#{pane_dead_status} #{pane_dead_signal}",
+        ])
+
     def test_multiple_sessions_start_before_any_steps_run_and_share_a_root(self) -> None:
         events: list[tuple[str, str, Path | None]] = []
 

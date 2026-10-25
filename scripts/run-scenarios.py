@@ -1098,16 +1098,20 @@ class TmuxSession:
 
     def wait_exit(self, timeout: float) -> int:
         _require(self.exit_waiter is not None, f"{self.scenario['id']}: tmux exit waiter is missing")
-        try:
-            stdout, stderr = self.exit_waiter.communicate(timeout=min(timeout, self.deadline - time.monotonic()))
-        except subprocess.TimeoutExpired as error:
-            screen = self._capture()
-            raise ScenarioError(
-                f"{self.scenario['id']}: timed out waiting for nshell exit; current screen:\n{screen}"
-            ) from error
+        deadline = min(self.deadline, time.monotonic() + timeout)
+        while self.exit_waiter.poll() is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                screen = self._capture()
+                raise ScenarioError(
+                    f"{self.scenario['id']}: timed out waiting for nshell exit; current screen:\n{screen}"
+                )
+            self._read(min(remaining, 0.1))
+        stdout, stderr = self.exit_waiter.communicate()
         _require(self.exit_waiter.returncode == 0,
                  f"{self.scenario['id']}: tmux exit wait failed: "
                  f"{stderr.decode('utf-8', errors='replace').strip()}")
+        self.drain()
         result = self._tmux([
             "display-message", "-p", "-t", self.pane,
             "#{pane_dead_status} #{pane_dead_signal}",

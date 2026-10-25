@@ -141,6 +141,33 @@
                     (+ (search "1>&3" source) (length "1>&3")))
               :to-equal
               (nshell.domain.parsing:ast-redirect-entry-source-span redirect))))
+  (it "builds-bare-line-default-fd-duplication-redirect"
+    (let* ((source "cat >&2")
+           (result (first (nshell.domain.parsing:read-submission source)))
+           (command (nshell.domain.parsing:reader-result-form result))
+           (redirect
+            (first (nshell.domain.parsing:command-node-redirects command)))
+           (target (nshell.domain.parsing:ast-redirect-entry-target redirect)))
+      (expect (nshell.domain.parsing:command-node-p command) :to-be-truthy)
+      (expect "cat"
+              :to-equal
+              (nshell.domain.parsing:command-node-command command))
+      (expect nil :to-equal (nshell.domain.parsing:command-node-args command))
+      (expect :duplicate-output-fd
+              :to-equal
+              (nshell.domain.parsing:ast-redirect-entry-kind redirect))
+      (expect 1
+              :to-equal
+              (nshell.domain.parsing:ast-redirect-entry-file-descriptor
+               redirect))
+      (expect (nshell.domain.parsing:redirect-fd-target-p target) :to-be-truthy)
+      (expect 2
+              :to-equal
+              (nshell.domain.parsing:redirect-fd-target-file-descriptor target))
+      (expect
+       (list (search ">&2" source) (+ (search ">&2" source) (length ">&2")))
+       :to-equal
+       (nshell.domain.parsing:ast-redirect-entry-source-span redirect))))
   (it "builds-bare-line-force-output-file-redirect"
     (let* ((source "cat >| force.txt")
            (result (first (nshell.domain.parsing:read-submission source)))

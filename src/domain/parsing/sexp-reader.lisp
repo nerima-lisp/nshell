@@ -1393,18 +1393,22 @@
             ((and previous
                   (eq (token-type previous) :redirect)
                   (string= (token-value previous) ">")
-                  (eq (token-type token) :pipe)
-                  (string= (token-value token) "|")
+                  (or (and (eq (token-type token) :pipe)
+                           (string= (token-value token) "|"))
+                      (and (eq (token-type token) :ampersand)
+                           (string= (token-value token) "&")))
                   (= (token-end previous) (token-start token)))
-              (pop reversed)
-              (push
-               (make-token :redirect
-                           ">|"
-                           (token-start previous)
-                           (token-end token)
-                           nil
-                           nil)
-               reversed))
+             (pop reversed)
+             (push
+              (make-token :redirect
+                          (concatenate 'string
+                                       (token-value previous)
+                                       (token-value token))
+                          (token-start previous)
+                          (token-end token)
+                          nil
+                          nil)
+              reversed))
             ((and previous
                   (eq (token-type previous) :word)
                   (eq (token-type token) :word)

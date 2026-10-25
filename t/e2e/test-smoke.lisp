@@ -12,7 +12,9 @@
   "Build the subprocess form used by the command-line integration tests."
   (format nil
           "(progn
-             (let ((*error-output* (make-broadcast-stream)))
+             (let ((*error-output* (make-broadcast-stream))
+                   (*standard-output* (make-broadcast-stream))
+                   (*trace-output* (make-broadcast-stream)))
                (asdf:load-system :nshell))
              (let ((sb-ext:*posix-argv* (list ~{~S~^ ~})))
                (funcall (symbol-function (find-symbol \"MAIN\" \"NSHELL\")))))"

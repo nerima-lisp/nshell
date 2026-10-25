@@ -31,6 +31,19 @@
                    (meta-event (nshell.infrastructure.terminal:read-key-event)))
               (expect :alt-e :to-be
                       (nshell.infrastructure.terminal:key-event-type meta-event))))))))
+  (it "terminal-stream-preserves-unrecognized-escape-prefix-character"
+    "An unrecognized ESC prefix leaves the following character available."
+    (let* ((events
+             (read-key-events-from-string
+              (format nil "~cJx" #\Esc)))
+           (next-event (second events)))
+      (expect 3 :to-equal (length events))
+      (expect :escape :to-be
+              (nshell.infrastructure.terminal:key-event-type (first events)))
+      (expect :char :to-be
+              (nshell.infrastructure.terminal:key-event-type next-event))
+      (expect #\J :to-equal
+              (nshell.infrastructure.terminal:key-event-char next-event))))
 
 
   (it "terminal-stream-decodes-printable-and-control-keys"

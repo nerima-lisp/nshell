@@ -95,7 +95,7 @@ Returns NIL when BODY/FINAL is not an SGR mouse report."
           (make-key-event :unknown))))
 
 (defun decode-meta-key (ch)
-  "Decode ESC-prefixed Meta key chords emitted by common terminals."
+  "Decode an ESC-prefixed Meta key chord, returning NIL for unknown prefixes."
   (or (case (char-code ch)
         (2 (make-key-event :alt-ctrl-b))
         (4 (make-key-event :alt-ctrl-d))
@@ -103,8 +103,7 @@ Returns NIL when BODY/FINAL is not an SGR mouse report."
         (11 (make-key-event :alt-ctrl-k))
         (21 (make-key-event :alt-ctrl-u)))
       (key-event-from-spec (char-code ch) +meta-code-specs+)
-      (key-event-from-spec ch +meta-char-specs+ :test #'char-equal)
-      (make-key-event :escape)))
+      (key-event-from-spec ch +meta-char-specs+ :test (function char-equal))))
 
 (defun decode-control-key (ch)
   (key-event-from-spec (char-code ch) +control-key-specs+))

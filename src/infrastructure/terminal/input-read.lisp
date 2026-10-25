@@ -142,7 +142,10 @@ The terminator is consumed and not included in the returned text."
       (vi-mode-p
        (unread-char prefix *standard-input*)
        (make-key-event :escape))
-      (t (decode-meta-key prefix)))))
+      (t (or (decode-meta-key prefix)
+             (progn
+               (unread-char prefix *standard-input*)
+               (make-key-event :escape)))))))
 
 (defun read-key-event (&key interrupt-predicate vi-mode-p vi-insert-mode-p)
   "Read and decode one terminal key event from standard input.

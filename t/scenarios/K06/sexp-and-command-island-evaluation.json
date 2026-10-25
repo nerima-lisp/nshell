@@ -34,8 +34,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L07: batch source evaluation discards the final Lisp value, so (+ 20 22) does not print 42 (src/application/builtin-source-reader.lisp:255; t/scenarios/K06/sexp-and-command-island-evaluation.json:27)."
   }
 }

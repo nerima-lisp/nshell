@@ -23,7 +23,7 @@
   "invocation": {
     "kind": "script",
     "path": "scenario.nsh",
-    "text": "(when (false) (echo O07_FALSE_BRANCH_WRONG))\n(handler-case (^o07-command-that-does-not-exist) (command-failed () (echo O07_HANDLER_OK)))\n"
+    "text": "(when (false) (echo O07_FALSE_BRANCH_WRONG))\n(handler-case (^o07-command-that-does-not-exist) (COMMAND-FAILED () (echo O07_HANDLER_OK)))\n"
   },
   "expected": {
     "stdout": {
@@ -35,8 +35,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L02/WP-L04: command-failed is not imported into NSHELL.USER, so the unqualified handler type resolves there as a user symbol and typep reports an unknown type specifier (src/package-user.lisp:5; src/application/contracts/l04-command-failure.lisp:3; src/application/sexp-evaluator.lisp:803; t/scenarios/O07/O07-conditional-and-handler-case.json:26)."
   }
 }

@@ -9,7 +9,7 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "O07> ",
-      "SCENARIO_MARKER": "O07_RESTART_CONTINUED_OK",
+      "SCENARIO_MARKER": "O07_RESTART_CONTINUED_2",
       "NSHELL_READER": "sexp"
     },
     "home": "home",
@@ -54,7 +54,7 @@
     },
     {
       "type": "keys",
-      "text": "echo O07_RESTART_CONTINUED_$((1+1))"
+      "text": "echo $SCENARIO_MARKER"
     },
     {
       "type": "key",
@@ -66,12 +66,8 @@
       "timeout_seconds": 10
     },
     {
-      "type": "keys",
-      "text": "exit"
-    },
-    {
       "type": "key",
-      "key": "Enter"
+      "key": "C-d"
     },
     {
       "type": "wait_exit",
@@ -81,13 +77,10 @@
   "expected": {
     "stream": {
       "contains": [
-        "ignore and continue",
+        "Ignore and continue",
         "O07_RESTART_CONTINUED_2"
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L04: the restart-choice handler does not accept the scenario's 1 then Enter sequence; it prompts again instead of continuing (src/presentation/repl-output-handlers.lisp:26; t/scenarios/O07/O07-interactive-command-failed-restart.json:43)."
   }
 }

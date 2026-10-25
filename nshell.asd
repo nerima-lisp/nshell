@@ -547,6 +547,7 @@
    (:file "unit/test-input-state-vi")
    (:file "unit/test-input-state-search")
    (:file "unit/test-input-state-ask")
+   (:file "unit/test-input-state-structural-editing")
    (:file "unit/test-input-state-search-results")
    (:file "unit/test-input-state-core-properties")
    (:file "unit/test-input-state-navigation-properties")

@@ -10,6 +10,7 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NO_COLOR": "1",
+      "NSHELL_READER": "sexp",
       "NSHELL_PROMPT": "G08-structural-editing> "
     },
     "home": "home",
@@ -166,5 +167,8 @@
     { "type": "keys", "text": "exit" },
     { "type": "key", "key": "Enter" },
     { "type": "wait_exit", "timeout_seconds": 10 }
-  ]
+  ],
+  "expected_failure": {
+    "reason": "WP-L07 owns the unimplemented CONTEXT-SHELL-FUNCTION-REGISTRY required by the S-expression input scanner."
+  }
 }

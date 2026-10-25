@@ -34,5 +34,8 @@
       ]
     },
     "exit_code": 1
+  },
+  "expected_failure": {
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

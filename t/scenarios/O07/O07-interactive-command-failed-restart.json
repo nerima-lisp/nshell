@@ -40,6 +40,11 @@
       "key": "Enter"
     },
     {
+      "type": "wait",
+      "contains": "Ignore and continue",
+      "timeout_seconds": 10
+    },
+    {
       "type": "keys",
       "text": "1"
     },

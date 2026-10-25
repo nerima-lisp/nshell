@@ -35,8 +35,18 @@
           "key": "C-r"
         },
         {
+          "type": "wait",
+          "contains": "絞り込み:",
+          "timeout_seconds": 10
+        },
+        {
           "type": "keys",
           "text": "T05_"
+        },
+        {
+          "type": "wait",
+          "contains": "echo T05_HISTORY_IMPORTED_OK",
+          "timeout_seconds": 10
         },
         {
           "type": "key",

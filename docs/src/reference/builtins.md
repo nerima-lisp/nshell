@@ -46,33 +46,19 @@ one, `prompt preview FORMAT` renders a format without installing it, and
 `prompt reset` restores the defaults. See
 [Customizing the prompt](../guide/customization.md#customizing-the-prompt).
 
-**`string`** is the fish-style string toolkit (`string upper`, `string split`,
-and friends) rather than a single-purpose command. Each subcommand rejects a
-leading option it does not define instead of treating it as data; `--` ends
-option parsing and a lone `-` is a literal argument. `string split` supports
-`-m`/`--max N` (split at most N times; left splitting leaves the remainder in
-the last field) and `-r`/`--right` (split from the right, leaving the remainder
-in the first field); `string trim` supports
-`-l`/`--left`, `-r`/`--right`, and `-c`/`--chars CHARS`. `string match -r`
-matches with regular expressions and supports `-i`/`--ignore-case`; `string
-replace -r` is unsupported and reports an error instead of falling back to a
-literal match.
+**`string`** provides subcommands such as `string upper`, `string split`, and
+`string match`. Each subcommand rejects a leading option it does not define
+instead of treating it as data; `--` ends option parsing and a lone `-` is a
+literal argument. `string split` supports `-m`/`--max N` (split at most N
+times; left splitting leaves the remainder in the last field) and
+`-r`/`--right` (split from the right, leaving the remainder in the first
+field); `string trim` supports `-l`/`--left`, `-r`/`--right`, and
+`-c`/`--chars CHARS`. `string match -r` matches with regular expressions and
+supports `-i`/`--ignore-case`; `string replace -r` is unsupported and reports
+an error.
 
-**`complete`** registers completion metadata for a command, feeding the same
-knowledge base the built-in command catalog uses. `complete -C LINE` is the
-scriptable entry point: it prints the completions for `LINE`, one per line,
-without registering anything.
-
-**`and` / `or`** run their command based on `$status`, the previous command's
-exit code: `and` only if it was `0`, `or` only if it was nonzero. Otherwise
-they leave `$status` unchanged. `not` (see above) already exists for
-inverting a status; `and`/`or` chain on it the way `&&`/`||` chain commands
-within one line.
-
-**`math`** is fish's calculator: `math '1 + 2 * 3'`, parentheses, unary
-minus, and decimals. Division renders as a decimal (`math '10 / 4'` is
-`2.5`), trimmed to at most 6 fraction digits. Division by zero exits 1;
-a malformed expression exits 2.
+**`complete -C LINE`** prints the completion candidates for `LINE`, one per
+line.
 
 **`dirs`**, **`pushd`**, **`popd`** manage a directory stack: `pushd DIR`
 remembers the current directory and switches to `DIR`; `popd` returns to the
@@ -81,20 +67,13 @@ first, `~`-shortened. `pushd` with no argument swaps the current directory
 with the top of the stack. **`prevd`** / **`nextd`** walk a separate,
 append-only history of every directory visited via `cd`, `pushd`, or `popd`.
 
-**`functions`** lists defined function names (one per line); `functions
-NAME` prints its reconstructed definition, noting the source file when the
-function came from one; `functions -e NAME` erases it. **`builtin` NAME**
-runs a builtin directly, bypassing any function or alias of the same name.
+**`builtin NAME`** runs a builtin directly, bypassing any function or alias
+of the same name.
 
-**`set`** manages shell variables: bare `set` lists everything currently
-visible, `set -x NAME VALUE...` exports, `set -e NAME` erases, and `set -q
-NAME` tests whether a name is defined. `-l`/`--local` and `-g`/`--global`
-pick the scope explicitly and combine with `-x` (`-lx`, `-gx`); with neither
-flag, `set` updates a name already visible in an enclosing scope in place and
-otherwise creates a new local one. Every function call gets its own local
-scope, popped when the call returns, so a local variable set inside one
-disappears at the end of that call. `-U`/`--universal` is rejected (exit 2);
-nshell has no universal-variable store.
+**`set`** manages shell variables: bare `set` lists visible variables,
+`set -x NAME VALUE...` exports, `set -e NAME` erases, and `set -q NAME` tests
+whether a name is defined. `-l`/`--local` and `-g`/`--global` select a scope
+and combine with `-x` (`-lx`, `-gx`). `-U`/`--universal` is rejected.
 
 **`disown`** removes a job from the shell's job table so it survives exit,
 complementing `jobs`, `fg`, and `bg`. With no argument it acts on the
@@ -104,3 +83,54 @@ current job, the same convention `fg` and `bg` use.
 (`-n -z = !=`), and numeric comparisons (`-eq -ne -lt -le -gt -ge`). An
 unrecognized operator or a non-integer operand to a numeric comparison is a
 diagnosed usage error (exit 2), distinct from a false result (exit 1).
+
+## S-expression input
+
+An unparenthesized line remains shell-command syntax. A parenthesized list with
+a simple symbol head is a Common Lisp form when the head resolves to a host
+form; otherwise, it is a command island whose head names a command. Arguments
+in a command island are quoted as command values by default. Use `$NAME` to
+pass a shell variable's value, and `,EXPR` to evaluate an expression and pass
+its value. String literals remain literal; value escapes do not interpolate
+text into them.
+
+```lisp
+(set example "preserved")
+(echo $example ,(+ 2 3))
+```
+
+Every evaluated form has value, stream, or test position. Value position
+returns a Lisp value. Stream position reads or writes bytes. A direct command
+in test position uses its exit status as a boolean.
+
+In bare-line input, `|` connects byte streams. In an S-expression pipeline,
+`(| ...)` connects byte streams and `->` passes structured values between
+internal commands and transformations. The example filters records by their
+`:state` field and selects two fields:
+
+```lisp
+(-> '((:state "stopped" :id 7 :command "demo")
+      (:state "running" :id 8 :command "other"))
+    (where (= :state "stopped"))
+    (select :id :command))
+```
+
+The value library provides `to-json` and `from-json`,
+`to-tsv` and `from-tsv`, and `to-lines` and `from-lines` for JSON, TSV,
+and line-text conversion. It also provides `regex-match-p`, `regex-find`,
+and `regex-replace`. The `string match -r` builtin matches regular
+expressions.
+
+## S-expression functions and command failures
+
+Define shell functions with `defun`. A definition can appear inside a control
+form. When a function call requests a name that has not been loaded, nshell
+checks `$XDG_CONFIG_HOME/nshell/functions/NAME.nsh` if
+`XDG_CONFIG_HOME` is absolute. Otherwise it checks
+`~/.config/nshell/functions/NAME.nsh`. The file defines the requested
+function with `defun`.
+
+A command failure in a function can signal `command-failed`; `handler-case`
+can handle it. At an interactive prompt, a failed function call offers the
+`Ignore and continue` restart, which skips the failed command and continues the
+remaining forms in the function. Press Ctrl-C to return to the prompt.

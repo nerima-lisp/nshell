@@ -1,6 +1,6 @@
-.TH NSHELL 1 "2026-09-30" "nshell 0.6.6" "User Commands"
+.TH NSHELL 1 "2026-10-26" "nshell development" "User Commands"
 .SH NAME
-nshell \- a fish-inspired interactive shell written in Common Lisp
+nshell \- an interactive shell with an S-expression command language
 .SH SYNOPSIS
 .B nshell
 .RB [ \-\-help ]
@@ -17,13 +17,10 @@ nshell \- a fish-inspired interactive shell written in Common Lisp
 .RI [ ARGS .\|.\|.]]
 .RB [ \-\-command
 .IR COMMAND
-.RI [ ARGS .\|.\|.]]
-.RI [ SCRIPT
-.RI [ ARGS .\|.\|.]]
 .SH DESCRIPTION
 .B nshell
 provides real-time syntax highlighting, history-aware autosuggestions,
-fish-style abbreviations, and context-aware completion.
+inline abbreviations, and context-aware completion.
 .PP
 When started with standard input connected to a terminal,
 .B nshell
@@ -36,17 +33,10 @@ With
 .BR \-\-command ,
 it executes a single nshell
 .I COMMAND
-and exits; any following
-.I ARGS
-are exposed to that command as
-.BR $argv .
-Given a
-.I SCRIPT
-file argument, it runs the script (with multiline blocks); any following
-.I ARGS
-are exposed to the script as
-.BR $argv .
-Indexing is 1-based: \fB$argv[1]\fR selects the first argument.
+and exits.
+.PP
+This manual describes the default branch. The published v0.6.6 release
+predates the S-expression command language documented here.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help
@@ -61,13 +51,10 @@ Delegate
 and its trailing arguments to
 .BR /bin/sh .
 .TP
-.BI \-\-command " COMMAND " "[ARGS...]"
+.BI \-\-command " COMMAND"
 Execute
 .I COMMAND
-once in nshell batch mode and exit with its status. Trailing
-.I ARGS
-are exposed as
-.BR $argv .
+once in nshell batch mode and exit with its status.
 .TP
 .BR \-l ", " \-\-login
 Load the login environment before starting nshell or delegating a command.
@@ -145,6 +132,9 @@ Press \fBM\-e\fR (\fBAlt\-E\fR) to open the current line in the external editor
 selected by \fBNSHELL_EDITOR\fR, \fBVISUAL\fR, or \fBEDITOR\fR, falling back to
 \fBvi\fR; the edited line is returned to the prompt without being executed.
 .PP
+On macOS, configure the terminal's Option key to send Meta or an Escape prefix
+if Alt bindings do not register.
+.PP
 Press \fBC\-x\fR to request a captured rerun of the previous command.
 Review the complete command and safety classification, then press the displayed
 confirmation binding again to execute it. Long commands wrap without truncation.
@@ -160,60 +150,77 @@ builtin lists, sets, erases, and resets these bindings; run
 with no arguments to see the current table. In vi mode, the cursor changes
 shape with the mode: a block in normal mode, a bar while inserting. Disabling
 vi mode restores the terminal's default cursor shape.
-.SH EXPANSIONS
-.B nshell
-performs, in order, brace expansion (\fB{a,b}\fR, \fB{1..5}\fR), tilde
-expansion (\fB~\fR), arithmetic expansion (\fB$((expr))\fR), variable and
-parameter expansion, command substitution (\fB$(cmd)\fR and fish-style
-\fB(cmd)\fR), and globbing (\fB* ? [\&.\&.\&.]\fR).
+.SH SYNTAX
+An unparenthesized line uses shell-command syntax. A parenthesized list with
+a simple symbol head is a Common Lisp host form when its head resolves to a
+host form; otherwise, the head names a command and the list is a command
+island. Command-island arguments are quoted as command values by default.
 .PP
-\fB${VAR}\fR expands to the variable's value; \fB${#VAR}\fR gives its length.
-\fB${VAR:-word}\fR uses \fBword\fR when VAR is unset or empty;
-\fB${VAR:=word}\fR also assigns that value to VAR.
-\fB${VAR:+word}\fR uses \fBword\fR only when VAR is set and non-empty;
-\fB${VAR:?message}\fR reports an error when VAR is unset or empty.
+Use \fB$NAME\fR to pass a shell variable's value as an argument, and
+\fB,EXPR\fR to evaluate a Common Lisp expression and pass its value. String
+literals stay literal; value escapes do not interpolate into string text.
+.RS
+.EX
+(set example "preserved")
+(echo $example ,(+ 2 3))
+.EE
+.RE
 .PP
-\fB${VAR:offset}\fR takes a substring from the zero-based offset to the end;
-\fB${VAR:offset:length}\fR specifies a length.
-\fB${VAR#pat}\fR and \fB${VAR##pat}\fR remove the shortest and longest
-glob-matching prefixes; \fB${VAR%pat}\fR and \fB${VAR%%pat}\fR do the same
-for suffixes.
-\fB${VAR/pat/rep}\fR replaces the first literal occurrence of \fBpat\fR
-with \fBrep\fR; \fB${VAR//pat/rep}\fR replaces all occurrences.
+Every evaluated form has value, stream, or test position. Value position
+returns a Lisp value. Stream position reads or writes bytes. A direct command
+in test position uses its exit status as a boolean.
 .PP
-Double quotes suppress globbing and word-splitting but allow variable,
-arithmetic, and command-substitution expansion; single quotes are fully
-literal. File-descriptor redirections \fB2> 2>> 2>&1 &> &>>\fR and the usual
-\fB> >> <\fR are supported, along with here-documents \fB<<\fR and here-strings
-\fB<<<\fR. Pipelines (\fB|\fR), logical operators (\fB&& ||\fR), sequencing
-(\fB;\fR), and background execution (\fB&\fR) are supported.
+In bare-line input, \fB|\fR connects byte streams. In an S-expression pipeline,
+\fB(| ...)\fR connects byte streams and \fB->\fR passes structured values
+between internal commands and transformations. For example:
+.RS
+.EX
+(-> '((:state "stopped" :id 7 :command "demo")
+      (:state "running" :id 8 :command "other"))
+    (where (= :state "stopped"))
+    (select :id :command))
+.EE
+.RE
+.PP
+The value library provides \fBto-json\fR/\fBfrom-json\fR,
+\fBto-tsv\fR/\fBfrom-tsv\fR, and \fBto-lines\fR/\fBfrom-lines\fR for
+converting between Lisp values and JSON, TSV, or line text. It also provides
+\fBregex-match-p\fR, \fBregex-find\fR, and \fBregex-replace\fR. The
+\fBstring match -r\fR builtin also matches regular expressions.
 .SH HISTORY EXPANSION
-Interactive input supports history designators \fB!!\fR (the previous command),
-\fB!$\fR (the previous command's last argument), \fB!-\fIN\fR (the command
-\fIN\fR entries back), \fB!?\fItext\fB?\fR (the most recent command containing
-\fItext\fR), and \fB!\fIprefix\fR (the most recent command beginning with
-\fIprefix\fR). An unresolved designator reports an error instead of being
+Interactive bare-line input supports history designators \fB!!\fR (the previous
+command), \fB!$\fR (the previous command's last argument), \fB!-\fIN\fR (the
+command \fIN\fR entries back), \fB!?\fItext\fB?\fR (the most recent command
+containing \fItext\fR), and \fB!\fIprefix\fR (the most recent command beginning
+with \fIprefix\fR). An unresolved designator reports an error instead of being
 parsed or stored. Exclamation marks in single quotes or preceded by a
 backslash remain literal.
-
 .SH CONTROL FLOW
-Fish-style control flow is available: \fBif\fR, \fBfor\fR, \fBwhile\fR,
-\fBswitch\fR, \fBbegin\fR/\fBend\fR, and user-defined \fBfunction\fRs. A
-function's arguments are available as \fB$argv\fR and indexed \fB$argv[N]\fR.
-Each function call gets its own local variable scope: a plain
-.B set
-.I name value
-inside a function creates a variable that disappears when the function
-returns, unless
-.I name
-is already visible in an enclosing scope, in which case it is updated there
-instead.
-.B set \-l/\-\-local
-forces a new local variable, and
-.B set \-g/\-\-global
-always targets the outermost scope, however deep the current call nesting is;
-.B set \-U/\-\-universal
-is rejected, since nshell has no universal-variable store.
+S-expression input supports Common Lisp control forms including \fBif\fR,
+\fBwhen\fR, \fBunless\fR, \fBcond\fR, \fBcase\fR, and \fBdotimes\fR. A direct
+command used as a conditional test is evaluated in test position, where its
+exit status supplies the boolean result.
+.SH FUNCTIONS AND ERRORS
+Define shell functions with \fBdefun\fR:
+.RS
+.EX
+(defun greet (name) (echo $name))
+(greet "hello")
+.EE
+.RE
+.PP
+A function can be defined inside a control form. When a function call resolves
+to a name not yet loaded, nshell checks
+\fB$XDG_CONFIG_HOME/nshell/functions/NAME.nsh\fR when
+\fBXDG_CONFIG_HOME\fR is absolute; otherwise it checks
+\fB~/.config/nshell/functions/NAME.nsh\fR. The file must define the requested
+function with \fBdefun\fR.
+.PP
+A command failure in a function can signal \fBcommand-failed\fR, which
+\fBhandler-case\fR can handle. At an interactive prompt, a failed function
+call offers the \fBIgnore and continue\fR restart; choosing it skips the failed
+command and continues the remaining forms in the function. Pressing Ctrl-C
+returns control to the prompt.
 .SH BUILTINS
 .B nshell
 provides the following builtins:
@@ -390,7 +397,7 @@ nshell \-\-command 'string upper hello'
 Iterate over a generated sequence:
 .RS
 .EX
-for i in (seq 1 5); echo $i; end
+(dotimes (i 5) (echo ,i))
 .EE
 .RE
 .SH EXIT STATUS

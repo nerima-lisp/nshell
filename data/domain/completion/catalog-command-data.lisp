@@ -4,8 +4,8 @@
   (%command-catalog
    (list
    (list :command "echo"
-         :synopsis "echo [string ...]"
-         :description "print arguments")
+         :synopsis "echo [argument ...]"
+         :description "print arguments; use $NAME or ,EXPR for S-expression values")
    (list :command "printf"
          :synopsis "printf FORMAT [argument ...]"
          :description "format and print arguments")
@@ -105,10 +105,10 @@
          ;; Assembled: longer than 100 columns, and a string literal cannot be
          ;; split across source lines without changing its value.
          :synopsis (concatenate 'string
-                                "complete -c command [-f flag ...] [-l option ...]"
-                                " [-s option ...] [-a arguments] [-d description] [-e]"
-                                " | complete -C line")
-         :description "define completions"
+                                "complete -C LINE: print completion candidates for the supplied command line"
+                                " in the current shell context, one candidate per line"
+                                "")
+         :description "print completion candidates"
          :flags '("-c" "--command" "-f" "--flag" "-l" "--long-option"
                   "-s" "--short-option" "-a" "--arguments" "-d" "--description"
                   "-e" "--erase" "-C" "--do-complete"))
@@ -153,8 +153,8 @@
          :description "read line of input"
          :flags '("-p"))
    (list :command "function"
-         :synopsis "function [name body... end] | function -e name... | function -q name..."
-         :description "manage functions"
+         :synopsis "(defun NAME (ARGS...) BODY...) | function -e NAME... | function -q NAME..."
+         :description "define shell functions with defun"
          :flags '("-e" "-q"))
    (list :command "history"
          ;; Assembled: longer than 100 columns, and a string literal cannot be

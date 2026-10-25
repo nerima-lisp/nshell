@@ -487,6 +487,22 @@
              (nshell.application:make-shell-context)
              nil))))
 
+(describe "p2-owner-interface-contracts"
+  (it "uses concrete behavior for implemented owner interfaces"
+    (expect t :to-be
+            (stringp
+             (nshell.presentation::highlight-line-from-scanner
+              "" (nshell.domain.parsing:scan-input "") 0 0)))
+    (expect t :to-be
+            (handler-case
+                (progn
+                  (nshell.application:execute-reader-ast-in-context
+                   (nshell.application:make-shell-context)
+                   (nshell.domain.parsing:scan-input "")
+                   (function identity))
+                  nil)
+              (nshell.application:command-execution-plan-error () t)))))
+
 (describe "p2-owner-contract-types"
   (it "loads the L06 conversion condition"
     (expect t :to-equal

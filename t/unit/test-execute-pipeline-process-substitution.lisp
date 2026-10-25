@@ -242,6 +242,39 @@
                          inner-fd nshell.infrastructure.acl::+spawn-f-getfd+))))
           (nshell.infrastructure.acl::close-reader-process-substitution-resource
            resource)))))
+  (it "limits inherited process-substitution descriptors to their owning pipeline stage"
+    (let* ((state (nshell.application::%make-reader-execution-state))
+           (resource
+             (nshell.infrastructure.acl::%make-reader-process-substitution-resource
+              :input 91 92))
+           (substitution
+             (nshell.application::%make-reader-process-substitution
+              nil resource nil 1))
+           (bindings
+             (list (cons (make-hash-table :test #'eql) nil)
+                   (cons (make-hash-table :test #'eql) nil))))
+      (setf (nshell.application::%reader-execution-state-process-substitutions
+             state)
+            (list substitution))
+      (let ((outer-stage-io
+              (nshell.application::%reader-stage-io-list bindings state))
+            (body-stage-io
+              (nshell.application::%reader-stage-io-list bindings state nil)))
+        (expect nil :to-equal
+                (nshell.application:pipeline-stage-io-preserved-descriptors
+                 (first outer-stage-io)))
+        (expect '(91) :to-equal
+                (nshell.application:pipeline-stage-io-preserved-descriptors
+                 (second outer-stage-io)))
+        (expect '(91) :to-equal
+                (nshell.application:pipeline-stage-io-transient-descriptors
+                 (second outer-stage-io)))
+        (expect nil :to-equal
+                (nshell.application:pipeline-stage-io-preserved-descriptors
+                 (first body-stage-io)))
+        (expect nil :to-equal
+                (nshell.application:pipeline-stage-io-preserved-descriptors
+                 (second body-stage-io))))))
 )
 
 (describe "reader-allocation-error-wrapping"

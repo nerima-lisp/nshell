@@ -76,6 +76,7 @@ permitted to know both the domain and infrastructure.")
             #:pipeline-stage-io #:pipeline-stage-io-p #:make-pipeline-stage-io
             #:pipeline-stage-io-descriptor-map
             #:pipeline-stage-io-transient-descriptors
+            #:pipeline-stage-io-preserved-descriptors
             #:pipeline-execution-handle #:pipeline-execution-handle-p
             #:*pipeline-stage-io* #:pipeline-stage-stream
             #:spawn-byte-stream-node-in-context

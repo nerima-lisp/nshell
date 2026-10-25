@@ -21,13 +21,16 @@
 
 (define-value-struct pipeline-stage-io
     ((descriptor-map nil :type list :copy :list)
-     (transient-descriptors nil :type list :copy :list))
+     (transient-descriptors nil :type list :copy :list)
+     (preserved-descriptors nil :type list :copy :list))
   :keyword-constructor t)
 
-(defun make-pipeline-stage-io (descriptor-map transient-descriptors)
+(defun make-pipeline-stage-io (descriptor-map transient-descriptors
+                               &optional preserved-descriptors)
   (%make-pipeline-stage-io
    :descriptor-map descriptor-map
-   :transient-descriptors transient-descriptors))
+   :transient-descriptors transient-descriptors
+   :preserved-descriptors preserved-descriptors))
 
 (defstruct (pipeline-execution-handle
              (:constructor %make-pipeline-execution-handle (token)))
@@ -300,8 +303,7 @@
                                          :error (%byte-stream-standard-source
                                                  2 stage-io)
                                          :preserve-fds
-                                         (pipeline-stage-io-transient-descriptors
-                                          stage-io)
+                                         (pipeline-stage-io-preserved-descriptors stage-io)
                                          :process-group (or process-group :new))))
                                   (setf (aref processes index) process)
                                   (unless process-group

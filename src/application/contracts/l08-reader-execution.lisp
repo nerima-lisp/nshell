@@ -183,21 +183,27 @@
         collect (cons destination
                       (gethash destination (car bindings)))))
 
-(defun %reader-stage-io-list (bindings state)
+(defun %reader-stage-io-list
+    (bindings state
+     &optional
+       (process-substitutions
+        (%reader-execution-state-process-substitutions state)))
   (loop for stage-bindings in bindings
         for stage-index from 0
         collect
-        (make-pipeline-stage-io
-         (%reader-binding-alist stage-bindings)
-         (loop for substitution
-               in (%reader-execution-state-process-substitutions state)
-               when (= stage-index
-                       (%reader-process-substitution-stage-index
-                        substitution))
-                 collect
-                 (nshell.infrastructure.acl::reader-process-substitution-resource-parent-fd
-                  (%reader-process-substitution-resource
-                   substitution))))))
+        (let ((process-substitution-fds
+                (loop for substitution in process-substitutions
+                      when (= stage-index
+                              (%reader-process-substitution-stage-index
+                               substitution))
+                        collect
+                        (nshell.infrastructure.acl::reader-process-substitution-resource-parent-fd
+                         (%reader-process-substitution-resource
+                          substitution)))))
+          (make-pipeline-stage-io
+           (%reader-binding-alist stage-bindings)
+           process-substitution-fds
+           process-substitution-fds))))
 
 (defun %reader-open-redirect (context state redirect evaluated-stage)
   (let* ((target
@@ -619,7 +625,7 @@
                 :input-fd (and (eq direction :output) inner-fd)
                 :output-fd (and (eq direction :input) inner-fd)))
              (stage-io
-               (%reader-stage-io-list bindings state))
+               (%reader-stage-io-list bindings state nil))
              (handle
                (handler-case
                    (spawn-byte-stream-node-in-context

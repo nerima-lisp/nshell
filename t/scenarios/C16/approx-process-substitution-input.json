@@ -30,8 +30,5 @@
     "kind": "script",
     "path": "scenario.nsh",
     "text": "cat <(/usr/bin/printf 'C16_PROCESS_VALUE')"
-  },
-  "expected_failure": {
-    "reason": "WP-L01/WP-L07: scan-input reports this process-substitution source as incomplete, and the source reader aborts before execution (src/domain/parsing/sexp-scanner.lisp:1289; src/application/builtin-source-reader.lisp:226)."
   }
 }

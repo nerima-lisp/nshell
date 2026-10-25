@@ -33,8 +33,5 @@
     "kind": "script",
     "path": "scenario.nsh",
     "text": "cat <<'C08_END'\nC08_HEREDOC\nC08_END\ncat <<< C08_HERESTRING"
-  },
-  "expected_failure": {
-    "reason": "WP-L07/WP-L01: the here-document source-map builder produces a map whose length differs from the source, so read-submission rejects the input before either redirect runs (src/application/builtin-source-reader.lisp:268; src/domain/parsing/sexp-reader.lisp:813)."
   }
 }

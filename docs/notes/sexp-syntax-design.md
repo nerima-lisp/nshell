@@ -321,6 +321,8 @@ before a pipeline is invalid at that next separator: `a && ; b` is invalid at
 `;`, and `a && && b` is invalid at the second `&&`. A trailing `&&`, `||`,
 `|`, or `|&` at end of input is incomplete because its right operand is
 missing. A trailing `;` or `&` is complete as specified above.
+A single `;` immediately after a terminal `&` is also accepted as a redundant
+delimiter; a second `;` without a pipeline is invalid.
 
 WP-L08 owns execution of these bare-line sequence operators. L02 supplies an
 optional `command-failure-policy` callback when it dispatches a sequence AST.
@@ -792,12 +794,6 @@ this callback and remains host syntax. The callback's lexical shell-function
 lookup uses the active shell-function scope; it does not infer Common Lisp
 lexical function bindings from `shell-context`.
 
-Host-form Common Lisp names use uppercase name lookup, so unescaped `nil`,
-`t`, special forms, macros, and fallback functions work in lowercase. Exact
-lexical or package-local `NSHELL.USER` definitions retain the spelling read
-with `:preserve`. Escaped names never undergo this case conversion. Explicit
-package qualifiers use the canonical names `CL:` and `NSHELL.USER:`.
-
 ### Command-island token rules
 
 Command-island arguments are tokenized before Common Lisp reads host forms. The reader preserves each ordinary argument token's source spelling. Reader syntax is enabled only in the host-form and reader-prefix positions shown below.
@@ -825,7 +821,9 @@ of the operator token and never consumes digits from a preceding argument.
 The target is always the next direct element. In command-island syntax,
 `(cmd 2>& 1)` is a descriptor duplication redirect; `(cmd 2>&1)` has one
 ordinary direct element and is not a redirect. Bare-line syntax retains its
-own shell tokenization rules.
+own shell tokenization rules; decimal destination descriptors may prefix `<`,
+`>`, and `>>` there, as in `3>dup.txt`. This file-redirection form does not
+change the command-island rule above.
 
 An unquoted command-island source word expands when it crosses an argv boundary
 to an external process or a `:argv` builtin. This covers C14 (tilde and brace
@@ -1076,20 +1074,9 @@ these functions need no wrappers. The pinned `cl-regex-kit` flake input already 
 library; L06 adds its `nshell.asd` dependency when implementing these regex
 functions, without changing `flake.nix`.
 
-This scalar conversion is used only when building argv for an external process
-or a `:argv` builtin, converting a file redirect path, or producing here-string
-bytes. WP-L03 owns brace, tilde, and glob expansion when building argv for
-external commands and `:argv` builtins, using the public
-`nshell.domain.expansion:expand-braces`, `expand-tilde`, and `expand-glob` APIs
-with the context environment and filesystem.
-WP-L02 preserves `expand-p`, `glob-p`, and source spans on evaluated arguments
-originating from source `command-arg` values but does not expand them. WP-L03
-expands eligible source strings before scalar conversion; expanded results
-retain the originating span for diagnostics. Each argument that does not
-expand contributes one string. Brace and glob results contribute one string
-each; a glob no-match contributes its original pattern. Host-function
-calls, shell-function calls, `:value` builtins, and `->` pass Lisp values
-without this conversion. No conversion splits or reparses a string.
+Scalar conversion runs only when building argv for an external process or a
+`:argv` builtin, converting a file redirect path, or producing here-string
+bytes. It does not split or reparse strings.
 
 ### Typed redirects and pipeline edges
 
@@ -1182,6 +1169,10 @@ parenthesized form normally, including its delimiter pair and nested tokens.
 The reader preserves the full source spelling as one positional argument and
 adds the matching standalone redirect entry. The argument and entry share the
 full-form source span.
+
+In bare-line input, a process-substitution body is scanned as shell command
+input. Shell quote delimiters inside it, such as `'...'`, remain argument
+syntax rather than Common Lisp reader prefixes.
 
 `body` stores the raw body text, including its line endings, without the
 terminating delimiter line. `body-span` is the matching half-open character
@@ -1641,14 +1632,6 @@ In `:sexp` context, pipeline-head position means the first direct element after
 an opening parenthesis. At that position, `|` and `|&` use the pipeline token
 kinds with `reader-context` `:command-island`. In any other list position,
 they are argument tokens with `reader-context` `:command-island`.
-
-In a command-island argument list, the scanner emits `:redirect` only when a
-complete direct reader token exactly matches a spelling in the typed redirect
-map. It does not split an ordinary token at `<` or `>`: `(cat<input)` has the
-head token `cat<input`, and `(echo hi>out)` has the argument token `hi>out`.
-The redirect target is the next direct element. A process-substitution marker
-is the exception: `<(` or `>(` is recognized at the start of a direct argument
-element, with no separator between the marker and its nested form.
 
 WP-E05 consumes `delimiter-pairs` to highlight the matching parenthesis when
 the cursor is on either member of the pair; unmatched parentheses have no

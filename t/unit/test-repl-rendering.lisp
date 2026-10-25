@@ -120,7 +120,7 @@
           (expect (search (esc-sequence "[1;1H") output) :to-be-truthy)
           (expect 1 :to-equal nshell.presentation::*prompt-rendered-lines*)
           (expect 0 :to-equal nshell.presentation::*prompt-rendered-cursor-row*)
-          (expect 0 :to-equal nshell.presentation::*completion-rendered-lines*)
+          (expect 1 :to-equal nshell.presentation::*completion-rendered-lines*)
           (is-input-state nshell.presentation::*input-state*
                           :buffer "git"
                           :cursor-pos 3

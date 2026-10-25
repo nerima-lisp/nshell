@@ -44,28 +44,37 @@ set it."
 
 (defun %load-interactive-config (&key (enabled-p t) path)
   (when enabled-p
-    (let ((source-name (%config-source-name path)))
-      (handler-case
-          (let ((lines (if path
-                           (nshell.infrastructure.persistence:load-config path)
-                           (nshell.infrastructure.persistence:load-config))))
-            (when lines
-              (multiple-value-bind (output code)
-                  (%with-repl-shell-context (context)
-                    (nshell.application:source-lines
-                     context
-                     lines
-                     source-name))
-                (declare (ignore output))
-                (unless (zerop code)
-                  (format *error-output*
-                          "nshell: ~a exited with status ~a~%"
+    (handler-case
+        (dolist
+            (source
+             (if path
+                 (nshell.infrastructure.persistence:load-config-sources path)
+                 (nshell.infrastructure.persistence:load-config-sources)))
+          (let* ((source-path (car source))
+                 (lines (cdr source))
+                 (source-name (%config-source-name source-path)))
+            (when *running*
+              (handler-case
+                  (multiple-value-bind (output code)
+                      (%with-repl-shell-context (context)
+                        (nshell.application:source-lines
+                         context
+                         lines
+                         source-name))
+                    (declare (ignore output))
+                    (unless (zerop code)
+                      (format *error-output*
+                              "nshell: ~a exited with status ~a~%"
+                              source-name
+                              code)))
+                (error (condition)
+                  (format *error-output* "nshell: ~a: ~a~%"
                           source-name
-                  code)))))
-        (error (condition)
-          (format *error-output* "nshell: ~a: ~a~%"
-                  source-name
-                  condition))))))
+                          condition))))))
+      (error (condition)
+        (format *error-output* "nshell: ~a: ~a~%"
+                (%config-source-name path)
+                condition)))))
 
 (defun %east-asian-locale-wide-p (environment)
   (loop for name in '("LC_ALL" "LC_CTYPE" "LANG")
@@ -207,6 +216,7 @@ history remains available in private mode."
         *prompt-rendered-origin-row* 1
         *prompt-rendered-origin-column* 1
         *prompt-rendered-origin-known-p* nil
+        *prompt-hook-pending-p* t
         *interactive-terminal-installed-p* nil
         *environment* (nshell.application:seed-shell-status-environment
                        (nshell.domain.environment:inject-os-environment

@@ -8,7 +8,8 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "P03> "
+      "NSHELL_PROMPT": "P03> ",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -62,6 +63,6 @@
     }
   ],
   "expected_failure": {
-    "reason": "WP-L07 owns autoloading functions from the configured function directory."
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

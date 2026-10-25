@@ -9,7 +9,8 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "P02> ",
-      "SCENARIO_MARKER": "P02_PROMPT_READY"
+      "SCENARIO_MARKER": "P02_PROMPT_READY",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -74,6 +75,6 @@
     }
   ],
   "expected_failure": {
-    "reason": "WP-L07 owns XDG init and conf.d loading order."
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

@@ -24,13 +24,14 @@
                                 :source-span
                                 source-span))
 
-(define-value-struct shell-function-registry
-                     ((global-table (make-hash-table :test #'equal)
-                                    :type
-                                    hash-table)
-                      (lookup-miss-hook nil :type (or null function)))
-                     :keyword-constructor
-                     t)
+(defstruct (shell-function-registry
+            (:constructor %make-shell-function-registry
+                (&key (global-table
+                        (make-hash-table :test (function equal)))
+                      (lookup-miss-hook nil)))
+            (:copier nil))
+  (global-table (make-hash-table :test (function equal)) :type hash-table)
+  (lookup-miss-hook nil :type (or null function)))
 
 (defun make-shell-function-registry (&optional
                                      (global-table

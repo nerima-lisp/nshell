@@ -146,3 +146,117 @@
                                (shell-function-scope-table ,scope)) ,binding))
        (let ((*active-shell-function-scope* ,scope))
          ,@body))))
+(defun %autoload-shell-function-from-directory (context canonical-key)
+  (labels ((absolute-directory-p (value)
+                                 (and (stringp value)
+                                      (plusp (length value))
+                                      (eq :absolute
+                                          (first (pathname-directory (pathname value))))))
+           (autoload-name (key)
+                          (cond
+                           ((stringp key)
+                            (values key nil))
+                           ((and (consp key)
+                                 (eq (first key) :escaped)
+                                 (stringp (second key))
+                                 (null (cddr key)))
+                            (values (second key) t))))
+           (simple-function-name-p (name)
+                                   (and (stringp name)
+                                        (plusp (length name))
+                                        (every (lambda (character)
+                                                 (or (char<= #\A character #\Z)
+                                                     (char<= #\a character #\z)
+                                                     (char<= #\0 character #\9)
+                                                     (find character "_-")))
+                                               name)))
+           (function-directory ()
+                               (let* ((environment (shell-context-environment context))
+                                      (xdg-config-home
+                                       (and environment
+                                            (nshell.domain.environment:env-get
+                                             environment "XDG_CONFIG_HOME")))
+                                      (home
+                                       (and environment
+                                            (nshell.domain.environment:env-get environment
+                                                                               "HOME"))))
+                                 (cond
+                                  ((absolute-directory-p xdg-config-home)
+                                   (merge-pathnames
+                                    #P"nshell/functions/"
+                                    (uiop:ensure-directory-pathname
+                                     (pathname xdg-config-home))))
+                                  ((absolute-directory-p home)
+                                   (merge-pathnames
+                                    #P".config/nshell/functions/"
+                                    (uiop:ensure-directory-pathname (pathname home))))
+                                  (t
+                                   (merge-pathnames
+                                    #P".config/nshell/functions/"
+                                    (user-homedir-pathname))))))
+           (requested-defun-form (reader-results name escaped-p)
+                                 (some
+                                  (lambda (reader-result)
+                                    (let ((form
+                                           (nshell.domain.parsing:reader-result-form reader-result)))
+                                      (and (consp form)
+                                           (symbolp (first form))
+                                           (string-equal (symbol-name (first form)) "DEFUN")
+                                           (symbolp (second form))
+                                           (if escaped-p
+                                               (string= name (symbol-name (second form)))
+                                             (string= (string-upcase name)
+                                                      (string-upcase (symbol-name (second form)))))
+                                           form)))
+                                  reader-results)))
+    (multiple-value-bind (name escaped-p)
+        (autoload-name canonical-key)
+      (when (simple-function-name-p name)
+        (let* ((file-name (if escaped-p name (string-downcase name)))
+               (path
+                (merge-pathnames
+                 (make-pathname :name file-name :type "nsh")
+                 (function-directory)))
+               (registry (context-shell-function-registry context)))
+          (when (probe-file path)
+            (let* ((source (uiop:read-file-string path))
+                   (scan-result
+                    (funcall
+                     (symbol-function '%source-reader-scan-result)
+                     context source)))
+              (unless (eq (nshell.domain.parsing:scan-result-status
+                           scan-result)
+                          :complete)
+                (error "Function file ~a is incomplete." path))
+              (let* ((reader-results
+                      (nshell.domain.parsing:read-submission
+                       source :reader-context :auto :source-path path))
+                     (requested-defun
+                      (requested-defun-form reader-results name escaped-p)))
+                (dolist (reader-result reader-results)
+                  (evaluate-reader-result-in-context context reader-result))
+                (unless (nth-value 1
+                                   (%find-shell-function registry canonical-key nil))
+                  (when requested-defun
+                    (multiple-value-bind (symbol status)
+                        (find-symbol name "NSHELL.USER")
+                      (when (and symbol
+                                 (or (eq status :internal)
+                                     (eq status :external))
+                                 (fboundp symbol))
+                        (let ((function (symbol-function symbol)))
+                          (register-shell-function
+                           registry name
+                           (make-shell-function-binding
+                            (lambda (call-context evaluated-command-args call-position)
+                              (let ((*current-user-evaluator-context* call-context)
+                                    (*current-user-evaluator-position* call-position))
+                                (apply
+                                 function
+                                 (mapcar
+                                  (function
+                                   nshell.domain.parsing:evaluated-command-arg-value)
+                                  evaluated-command-args))))
+                            (third requested-defun) name path nil)
+                           :escaped-p escaped-p))))))))))))))
+

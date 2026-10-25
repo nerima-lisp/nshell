@@ -70,26 +70,40 @@
   (check-type last-exit-code integer)
   (check-type terminal-rows (integer 1 *))
   (check-type terminal-cols (integer 1 *))
-  (%allocate-shell-context
-   :history history
-   :config config
-   :knowledge-base knowledge-base
-   :environment environment
-   :filesystem filesystem
-   :job-monitor job-monitor
-   :alias-table (%shell-context-hash-table alias-table)
-   :abbreviation-table (%shell-context-hash-table abbreviation-table)
-   :function-table (%shell-context-hash-table function-table)
-   :function-source-table (%shell-context-hash-table function-source-table)
-   :shell-function-registry shell-function-registry
-   :execution-strategy execution-strategy
-   :pipefail-p pipefail-p
-   :running running
-   :last-exit-code last-exit-code
-   :input-state input-state
-   :process-registry (%shell-context-hash-table process-registry)
-   :terminal-rows terminal-rows
-   :terminal-cols terminal-cols))
+  (let ((context
+          (%allocate-shell-context
+           :history history
+           :config config
+           :knowledge-base knowledge-base
+           :environment environment
+           :filesystem filesystem
+           :job-monitor job-monitor
+           :alias-table (%shell-context-hash-table alias-table)
+           :abbreviation-table (%shell-context-hash-table abbreviation-table)
+           :function-table (%shell-context-hash-table function-table)
+           :function-source-table (%shell-context-hash-table
+                                   function-source-table)
+           :shell-function-registry shell-function-registry
+           :execution-strategy execution-strategy
+           :pipefail-p pipefail-p
+           :running running
+           :last-exit-code last-exit-code
+           :input-state input-state
+           :process-registry (%shell-context-hash-table process-registry)
+           :terminal-rows terminal-rows
+           :terminal-cols terminal-cols)))
+    (unless (shell-function-registry-lookup-miss-hook
+             shell-function-registry)
+      (setf (shell-function-registry-lookup-miss-hook
+             shell-function-registry)
+            (lambda (ignored-registry canonical-key)
+              (declare (ignore ignored-registry))
+              (funcall
+               (symbol-function '%autoload-shell-function-from-directory)
+               context canonical-key))))
+    context))
+
+
 
 (defun %store-shell-function-definition (context name body-lines source-path)
   (setf (gethash name (shell-context-function-table context)) body-lines)

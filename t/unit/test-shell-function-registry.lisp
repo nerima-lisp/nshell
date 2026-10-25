@@ -189,3 +189,49 @@
           (nshell.application:peek-shell-function registry "mixedcase")
         (expect nil :to-be binding)
         (expect nil :to-be found-p)))))
+(describe "shell-function-directory-autoload"
+  (it "loads a real XDG function file into the shell-function registry"
+    (host-kit:with-temporary-directory (config-home)
+      (let* ((functions-directory
+               (merge-pathnames
+                #P"nshell/functions/"
+                (uiop:ensure-directory-pathname config-home)))
+             (function-file
+               (merge-pathnames "autoloaded-from-directory.nsh"
+                                functions-directory)))
+        (ensure-directories-exist function-file)
+        (with-open-file (stream function-file
+                                :direction :output
+                                :if-exists :supersede
+                                :if-does-not-exist :create)
+          (write-line "(defun autoloaded-from-directory (value) value)" stream))
+        (let* ((environment
+                 (nshell.domain.environment:env-set
+                  (nshell.domain.environment:make-default-environment)
+                  "XDG_CONFIG_HOME"
+                  (namestring config-home)
+                  t))
+               (context
+                 (nshell.application:make-shell-context
+                  :environment environment))
+               (registry
+                 (nshell.application:context-shell-function-registry context)))
+          (multiple-value-bind (binding found-p)
+              (nshell.application:lookup-shell-function
+               registry "autoloaded-from-directory")
+            (expect t :to-be found-p)
+            (expect (namestring function-file)
+                    :to-equal
+                    (namestring
+                     (nshell.application:shell-function-binding-source-path
+                      binding)))
+            (progn
+              (expect (quote (value)) :to-equal
+                      (nshell.application:shell-function-binding-lambda-list binding))
+              (expect "loaded" :to-equal
+                      (funcall
+                       (nshell.application:shell-function-binding-callable binding)
+                       context
+                       (list
+                        (nshell.domain.parsing:make-evaluated-command-arg "loaded"))
+                       :value)))))))))

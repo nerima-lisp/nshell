@@ -1,60 +1,53 @@
 # nshell
 
-A fish-inspired interactive shell written in Common Lisp.
+nshell is an interactive shell written in Common Lisp. Its command language
+uses S-expressions, with bare command lines as shorthand for ordinary shell
+commands. A parenthesized form is evaluated as Common Lisp when its head
+resolves to a Lisp form; otherwise, the form names a shell command.
 
-nshell provides real-time syntax highlighting, history-aware autosuggestions,
-fish-style abbreviations, and context-aware completion. It is built with Nix.
+!!! note "Development preview"
 
-!!! note "Status: development preview (0.6.x)"
-
-    The shell implements a tested subset of shell syntax, not full POSIX/fish
-    compatibility. For supported features and known limits,
-    see the [roadmap](project/roadmap.md).
-    It is not a script-compatible `/bin/sh` replacement.
+    The command language implements a tested subset of shell behavior. Bare
+    command lines are not a claim of POSIX or fish script compatibility. The
+    `-c` option delegates commands to `/bin/sh`.
 
 ## Highlights
 
-- **Syntax highlighting** as you type: a command that would fail with
-  `command not found` is red before you run it, existing paths are underlined,
-  and strings, variables, keywords, and operators each get their own color.
-- **Autosuggestions** from your history, fish-style, accepted with `→` /
-  `Ctrl-F`.
-- **Abbreviations** (`abbr`) expand inline as you type.
-- **Context-aware completion**: a knowledge base of commands and flags plus
-  filesystem completion, git branches, environment variables, and
-  directory-only completion for `cd`, in a colored candidate menu with
-  common-prefix `Tab` extension.
-- **Line editing**: Emacs keybindings, kill-ring and yank, multi-level
-  undo/redo, multiline editing, and a `Ctrl-R` history picker that lists
-  matches under the prompt.
-- **Vi key bindings** (optional, `NSHELL_VI_MODE=1`): normal-mode motions,
-  counts, operators (`dd`, `cw`, …), visual selection, and insert/append.
-- **Themes**: one named palette drives the prompt, the highlighter, and the
-  completion menu; ten presets ship with the shell, `theme use` switches live,
-  and colors downsample to 256- or 16-color terminals.
-- **Prompt status**: working directory, git branch and dirty marker,
-  a prompt character that turns red after a failure, and, on the right, the
-  failing exit code plus the duration of anything slower than a second.
-- **Job control**: background jobs (`&`), `jobs`, `fg`, `bg`, `disown`.
-- **Pipelines and redirection**: `|`, `>`, `>>`, `<`, `<<`, `<<<`, logical
-  `&&` / `||`, and command sequencing.
-- **Control flow and functions**: `if`, `for`, `while`, `switch`,
-  `begin`/`end`, and user-defined `function`s.
-- **History expansion**: `!!`, `!$`, `!-N`, `!?text?`, and `!prefix`, with
-  single-quoted and backslash-escaped exclamation marks kept literal.
-- **External editing**: `Alt-E` opens the current line with the configured
-  editor and returns the edited buffer to the prompt.
-- **Nix build**: a dumped SBCL image and its process-launch helper;
-  start the shell with `nix run`.
+- **S-expression command language**: use forms such as `(echo ,(+ 2 3))` to
+  pass a computed value to a command. `$NAME` passes a shell variable's value;
+  `,EXPR` evaluates an expression for an argument.
+- **Bare command-line sugar**: enter commands such as `echo hello` without
+  wrapping them in parentheses.
+- **Byte and value pipelines**: `|` connects byte streams, while `->` passes
+  records through transformations such as `where` and `select`.
+- **Syntax highlighting and diagnostics**: commands, paths, and strings are
+  highlighted as you type; malformed S-expressions show a diagnostic and
+  leave the input available for correction.
+- **Completion knowledge base**: command and option facts describe candidates,
+  including command names, flags, subcommands, and filesystem paths.
+- **History-based editing**: suggestions use command history, `Ctrl-R` opens
+  reverse search, and history expansion is available on bare interactive
+  command lines.
+- **Structural editing**: move through S-expressions, delete expressions, and
+  slurp or barf list elements with editor key bindings.
+- **Interactive controls**: themes, left and right prompts, key bindings,
+  Emacs-style editing, and optional Vi mode.
+- **Pipelines and control**: bare commands support byte pipelines, redirects,
+  command sequencing, logical operators, and background jobs.
+- **Lisp functions and control forms**: define functions with `defun`, bind
+  local values with `let`, and use forms such as `if`, `when`, `cond`, and
+  `dotimes`.
 
 ## Where to go next
 
-- [Getting started](getting-started.md): install nshell and run your first
-  command.
-- [Core concepts](guide/concepts.md): how the interactive layer is put
-  together.
-- [Recipes](guide/recipes.md): scripting, pipeline diagrams, and the test
-  workflow.
-- [Built-in commands](reference/builtins.md): the shell's own command set.
-- [Architecture](reference/architecture.md): the layered design and the
-  toolkit family it builds on.
+- [Getting started](getting-started.md): run nshell and enter your first forms
+  and commands.
+- [Core concepts](guide/concepts.md): learn how forms, embedded values, and
+  pipelines work.
+- [Customization](guide/customization.md): configure hooks, themes, prompts,
+  and editing keys.
+- [Recipes](guide/recipes.md): work with structured pipelines and data
+  conversions.
+- [Built-in commands](reference/builtins.md): inspect the shell's command set.
+- [Architecture](reference/architecture.md): read about the layered design and
+  toolkit family.

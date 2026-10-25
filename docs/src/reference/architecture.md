@@ -37,8 +37,9 @@ it loads `/etc/profile`. It also loads Home Manager session variables and
 `-c` and `-lc` invocations go to `/bin/sh` before the Lisp image loads, keeping
 plain shell-command startup independent of nshell initialization. The launcher
 sends `-ilc` and separated `-i -l -c` invocations through the image so nshell's
-startup configuration (by default `~/.nshellrc`) can add exported values
-before the command is delegated to `/bin/sh`. `nshell.asd`
+startup configuration (`$XDG_CONFIG_HOME/nshell/init.lisp` when
+`XDG_CONFIG_HOME` is absolute, or `~/.config/nshell/init.lisp` otherwise) can
+add exported values before the command is delegated to `/bin/sh`. `nshell.asd`
 declares the runtime and feature modules and their load order.
 
 ## Assistant feature

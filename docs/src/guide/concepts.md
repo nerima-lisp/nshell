@@ -1,5 +1,75 @@
 # Core concepts
 
+## S-expressions and bare command lines
+
+An input whose first non-whitespace character is `(` is read as an
+S-expression. A list whose head resolves to a Common Lisp form uses Lisp
+evaluation; otherwise, the list is a shell command form. This rule also applies
+to nested lists. Inputs that do not start with `(` remain bare command lines.
+
+Inside a command form, `$NAME` passes a shell variable's value and `,EXPR`
+evaluates an expression and passes its value to the command:
+
+```lisp
+(set o02_value "preserved")
+(echo $o02_value ,(+ 2 3))
+```
+
+The command prints `preserved` and `5`. The first argument is a shell value;
+the second comes from the Common Lisp addition form `(+ 2 3)`.
+
+## Byte pipelines and value pipelines
+
+`|` connects byte streams between commands. `->` passes values through
+transformations such as `where` and `select`. Use the value pipeline when
+commands return records that should be filtered or projected without parsing
+text:
+
+```lisp
+(echo ,(length
+         (-> '((:state "stopped" :id 7 :command "demo")
+               (:state "running" :id 8 :command "other"))
+             (where (= :state "stopped"))
+             (select :id :command))))
+```
+
+This expression prints `1`, the number of records whose state is `stopped`.
+
+## Control forms and functions
+
+Common Lisp forms provide conditionals, loops, and function definitions. A
+command can appear in a form's body:
+
+```lisp
+(if (= 1 1) (echo O04_IF_OK) (echo O04_IF_WRONG))
+(defun o05_greet (name) (echo $name))
+(o05_greet "O05_TOPLEVEL_OK")
+(when t (defun o05_nested (name) (echo $name)))
+(o05_nested "O05_NESTED_OK")
+```
+
+The first form prints `O04_IF_OK`; the function calls print
+`O05_TOPLEVEL_OK` and `O05_NESTED_OK`. `let`
+creates lexical bindings, while `set` assigns a shell variable that remains
+available to later forms:
+
+```lisp
+(set o03_shared "outer")
+(let ((o03_local "inner")) (echo $o03_local))
+(echo $o03_shared)
+```
+
+The forms print `inner` and `outer`. See [Recipes](recipes.md) for JSON, TSV,
+and regular expression examples.
+
+## Command failures and restarts
+
+At the interactive top level, a failed command updates the shell status and
+returns to the prompt. When a command failure escapes from a function, nshell
+offers restart choices at the point of failure. One choice ignores the failure
+and continues with the remaining forms in the function. Failures in a test position,
+such as an `if` condition, are treated as a boolean result.
+
 ## The input state is a value
 
 The reducer returns a new `input-state` value. The REPL stores the current
@@ -15,7 +85,7 @@ The REPL drives the reducer through a continuation-passing trampoline loop.
 ## Color is a theme, not a pile of escape codes
 
 The prompt, command line, and completion menu read styles from a shared theme:
-a mapping from a named role to a fish-style spec such as `5fafff --bold` or
+a mapping from a named role to a style such as `5fafff --bold` or
 `gray --italics`. `theme use` selects a palette; `theme set` changes a role.
 Theme roles control colors and text styles. Cursor movement and other terminal
 controls use separate escape sequences. Colors are downsampled for 256-color
@@ -24,13 +94,11 @@ or 16-color terminals; a nonempty `NO_COLOR` disables color output. See
 
 ## Highlighting answers a question before you press Enter
 
-The syntax highlighter is not a lexer painting tokens by shape. It resolves the
-command word against the same sources the executor will use: shell keywords,
-the builtin registry, functions, aliases, abbreviations, then PATH. A command
-that will fail with `command not found` is therefore red while you are still
-typing it, an existing path is underlined, and a variable reference is colored
-as one. When a command does fail that way, nshell proposes the names one edit
-away from what you typed.
+The syntax highlighter resolves the command word against the same sources the
+executor will use: shell keywords, the builtin registry, functions, aliases,
+then PATH. A command that will fail with `command not found` is therefore red
+while you are still typing it, an existing path is underlined, and a variable
+reference is colored as one.
 
 ## Completion is a knowledge base, not a table
 
@@ -58,17 +126,11 @@ were typing.
 
 ## History expansion is explicit
 
-Interactive lines can refer to recent history with `!!`, `!$`, `!-N`,
-`!?text?`, and `!prefix`. Expansion happens before parsing, so a failed
+Bare interactive command lines can refer to recent history with `!!`, `!$`,
+`!-N`, `!?text?`, and `!prefix`. Expansion happens before parsing, so a failed
 designator is reported without executing or recording the invalid line.
 Exclamation marks in single quotes and backslash-escaped exclamation marks
-remain literal.
-
-## Abbreviations expand in place
-
-An abbreviation registered with `abbr` expands inline as you type, so history
-records the expanded command. An alias is resolved during execution; history
-retains the entered alias name.
+remain literal. S-expression input does not use history expansion.
 
 ## External editing preserves the prompt state
 
@@ -77,15 +139,11 @@ the first non-empty value among `NSHELL_EDITOR`, `VISUAL`, and `EDITOR`, or
 `vi`. After a successful exit, the edited file replaces the current buffer;
 the command is not executed until the normal submit key is pressed.
 
-## The prompt states what the last command did
+## Prompt fields report command state
 
-The left prompt carries the working directory (shortened fish-style when the
-terminal is narrow) and the git branch with a `*` when the tree is dirty. The
-prompt character is green after a success and red after a failure, so the last
-result is visible without reading anything. The right prompt adds the failing
-exit code, the wall-clock duration of any command that took a second or more,
-and the current time when the prompt is rendered. The default clock remains
-visible after fast, successful commands too.
+The prompt can include the previous command's status, exit code, duration, and
+background-job count. The left and right prompt formats can be set separately;
+see [Customization](customization.md).
 
 ## Layers, and what is allowed to do I/O
 
@@ -103,10 +161,8 @@ full layer map.
 
 Set `NSHELL_VI_MODE=1` to start with vi key bindings. At an interactive prompt,
 `set -o vi` enables them and `set +o vi` disables them for the current session.
-Normal mode supports motions, character finds, counts, operators, text objects,
-character-wise visual selection, and insert/append. `j` and `k` navigate
-history. These bindings edit the input buffer; they do not change how nshell
-parses or executes commands.
+The terminal cursor shape changes with the editing mode. Vi mode changes how
+editing keys act; it does not change how nshell parses or executes commands.
 
 ## A function call gets its own variable scope
 

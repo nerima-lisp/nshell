@@ -35,6 +35,7 @@
     "text": "cat <<'C08_END'\nC08_HEREDOC\nC08_END\ncat <<< C08_HERESTRING"
   },
   "expected_failure": {
-    "reason": "WP-L02fix: the source reader now accepts the here-document source map, but executing this script signals COMMAND-EXECUTION-PLAN-ERROR in the application command-planning path. This remaining execution failure is outside the reader/source-map fix."
+    "reason": "WP-L02fix: the source reader now accepts the here-document source map, but executing this script signals COMMAND-EXECUTION-PLAN-ERROR in the application command-planning path. This remaining execution failure is outside the reader/source-map fix.",
+    "platform": "darwin"
   }
 }

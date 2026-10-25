@@ -143,7 +143,7 @@
                          (list
                           (nshell.domain.parsing:make-command-node "stop" nil)
                           (nshell.domain.parsing:make-command-node "after" nil))
-                         (list :semicolon))))
+                         (list :semi))))
                  (let ((nshell.application::*loop-control-signal* nil))
                    (setf (symbol-function executor-symbol)
                          (lambda (ignored-context command ignored-stage-evaluator)

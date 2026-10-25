@@ -255,6 +255,50 @@
               (nshell.domain.parsing:scan-token-kind token))
       (expect "#\\)" :to-equal
               (nshell.domain.parsing:scan-token-text token))))
+  (it "scans-shell-quoted-bare-line-process-substitution"
+    (let* ((source "cat <(/usr/bin/printf 'C16_PROCESS_VALUE')")
+           (result
+             (nshell.domain.parsing:scan-input
+              source :reader-context :bare-line))
+           (tokens (nshell.domain.parsing:scan-result-tokens result))
+           (process-substitution
+             (find :process-substitution tokens
+                   :key #'nshell.domain.parsing:scan-token-kind))
+           (inner-command
+             (find-if
+              (lambda (token)
+                (and (eq (nshell.domain.parsing:scan-token-kind token)
+                         :command-head)
+                     (string= (nshell.domain.parsing:scan-token-text token)
+                              "/usr/bin/printf")))
+              tokens))
+           (quoted-argument
+             (find :string tokens
+                   :key #'nshell.domain.parsing:scan-token-kind))
+           (pair
+             (first
+              (nshell.domain.parsing:scan-result-delimiter-pairs result))))
+      (expect :complete :to-be
+              (nshell.domain.parsing:scan-result-status result))
+      (expect "<" :to-equal
+              (nshell.domain.parsing:scan-token-text process-substitution))
+      (expect '(4 5) :to-equal
+              (nshell.domain.parsing:scan-token-span process-substitution))
+      (expect "/usr/bin/printf" :to-equal
+              (nshell.domain.parsing:scan-token-text inner-command))
+      (expect :command-island :to-be
+              (nshell.domain.parsing:scan-token-reader-context inner-command))
+      (expect "'C16_PROCESS_VALUE'" :to-equal
+              (nshell.domain.parsing:scan-token-text quoted-argument))
+      (expect :bare-line :to-be
+              (nshell.domain.parsing:scan-token-reader-context quoted-argument))
+      (expect 1 :to-equal
+              (length
+               (nshell.domain.parsing:scan-result-delimiter-pairs result)))
+      (expect '(5 6) :to-equal
+              (nshell.domain.parsing:delimiter-pair-open-span pair))
+      (expect (list (1- (length source)) (length source)) :to-equal
+              (nshell.domain.parsing:delimiter-pair-close-span pair))))
 
   (it "tokenizes-bare-line-pipelines-separators-and-redirects"
     (let* ((pipeline-result

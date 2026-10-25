@@ -579,6 +579,18 @@
           frame :escaped-symbol token start (%depth-scan-state-position state))))
       ((char= character #\;)
        (%depth-scan-comment start effective-context))
+      ((and frame
+            (eq (%depth-scan-frame-parent-context frame) :bare-line)
+            (char= character #\'))
+       (let* ((quote-end (position #\' source :start (1+ start)))
+              (closed-p quote-end)
+              (token-end (if quote-end (1+ quote-end) length))
+              (token (%depth-scan-emit
+                      :string start token-end :bare-line :argument)))
+         (setf (%depth-scan-state-position state) token-end)
+         (unless closed-p (%depth-scan-incomplete))
+         (%depth-scan-record-top-datum
+          frame :string token start token-end)))
       ((member character '(#\' #\`))
        (%depth-scan-emit :reader-prefix start (1+ start) effective-context
                          :host-form)
@@ -829,7 +841,7 @@
                                   :argument))))
                   (setf (%depth-scan-state-position state) (1+ position))
                   (%depth-scan-bare-note-word :argument token)
-                  (%depth-scan-list :host-form)))
+                  (%depth-scan-list :bare-line)))
                ((%depth-scan-bare-redirect-at source position)
                 (let* ((operator (%depth-scan-bare-redirect-at source position))
                        (kind (cond

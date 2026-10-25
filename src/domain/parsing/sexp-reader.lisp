@@ -957,7 +957,7 @@
       (%sexp-reader-command-error "A pipeline stage must be a command-island form."
                                   span))
     t))
-(defun %sexp-reader-command-redirect-spec (operator)
+(defun %sexp-reader-command-redirect-spec (operator &optional bare-line-p)
   (let ((spec (assoc operator
                      '(("<" :input-file 0)
                        ("0<" :input-file 0)
@@ -976,19 +976,33 @@
                        ("<<-" :here-document-strip-tabs 0)
                        ("<<<" :here-string 0))
                      :test #'string=)))
-    (cond
-      (spec (values (second spec) (third spec)))
-      (t
-       (let ((separator (or (search "<&" operator :from-end t)
-                            (search ">&" operator :from-end t))))
-         (when (and separator
-                    (plusp separator)
-                    (= (+ separator 2) (length operator))
-                    (every #'digit-char-p (subseq operator 0 separator)))
-           (values (if (string= (subseq operator separator) "<&")
-                       :duplicate-input-fd
-                       :duplicate-output-fd)
-                   (parse-integer operator :end separator))))))))
+    (when spec
+      (return-from %sexp-reader-command-redirect-spec
+        (values (second spec) (third spec)))))
+  (when bare-line-p
+    (let ((descriptor-end (position-if-not #'digit-char-p operator)))
+      (when (and descriptor-end (plusp descriptor-end))
+        (let* ((base-operator (subseq operator descriptor-end))
+               (base-spec
+                 (assoc base-operator
+                        '(("<" :input-file 0)
+                          (">" :output-file 1)
+                          (">>" :append-output-file 1))
+                        :test #'string=)))
+          (when base-spec
+            (return-from %sexp-reader-command-redirect-spec
+              (values (second base-spec)
+                      (parse-integer operator :end descriptor-end))))))))
+  (let ((separator (or (search "<&" operator :from-end t)
+                       (search ">&" operator :from-end t))))
+    (when (and separator
+               (plusp separator)
+               (= (+ separator 2) (length operator))
+               (every #'digit-char-p (subseq operator 0 separator)))
+      (values (if (string= (subseq operator separator) "<&")
+                  :duplicate-input-fd
+                  :duplicate-output-fd)
+              (parse-integer operator :end separator)))))
 (defun %sexp-reader-command-fd-target (form span)
   (let* ((argument (%sexp-reader-command-argument form span))
          (value (command-arg-value argument)))
@@ -1709,7 +1723,7 @@
          (operator-span (list (token-start operator-token)
                               (token-end operator-token))))
     (multiple-value-bind (kind descriptor)
-        (%sexp-reader-command-redirect-spec operator)
+        (%sexp-reader-command-redirect-spec operator t)
       (unless kind
         (%sexp-reader-command-error "Unsupported redirect operator."
                                     operator-span))

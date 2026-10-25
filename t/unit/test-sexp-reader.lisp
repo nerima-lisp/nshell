@@ -77,17 +77,32 @@
               (nshell.domain.parsing:ast-node-span sequence))))
 
   (it "builds-bare-line-typed-file-redirects-in-source-order"
-    (let* ((source "cat < input >> log")
+    (let* ((source "cat < input >> log 3>dup.txt")
            (result (first (nshell.domain.parsing:read-submission source)))
            (command (nshell.domain.parsing:reader-result-form result))
-           (redirects (nshell.domain.parsing:command-node-redirects command)))
+           (redirects (nshell.domain.parsing:command-node-redirects command))
+           (island-command
+             (let* ((island-source "(cat 3> dup.txt)")
+                    (island-result
+                      (first
+                       (nshell.domain.parsing:read-submission
+                        island-source :reader-context :sexp))))
+               (nshell.domain.parsing:command-form->ast
+                island-source
+                (nshell.domain.parsing:reader-result-form island-result)
+                (nshell.domain.parsing:reader-result-form-span-map island-result)
+                (lambda (head)
+                  (declare (ignore head))
+                  :command-island)))))
       (expect (nshell.domain.parsing:command-node-p command) :to-be-truthy)
       (expect "cat" :to-equal
               (nshell.domain.parsing:command-node-command command))
       (expect nil :to-equal (nshell.domain.parsing:command-node-args command))
-      (expect '(:input-file :append-output-file) :to-equal
+      (expect '(:input-file :append-output-file :output-file) :to-equal
               (mapcar #'nshell.domain.parsing:ast-redirect-entry-kind redirects))
-      (expect '("input" "log") :to-equal
+      (expect '(0 1 3) :to-equal
+              (mapcar #'nshell.domain.parsing:ast-redirect-entry-file-descriptor redirects))
+      (expect '("input" "log" "dup.txt") :to-equal
               (mapcar
                (lambda (redirect)
                  (nshell.domain.parsing:command-arg-value
@@ -96,10 +111,15 @@
       (expect (list (list (search "<" source)
                           (+ (search "input" source) (length "input")))
                     (list (search ">>" source)
-                          (+ (search "log" source) (length "log"))))
+                          (+ (search "log" source) (length "log")))
+                    (list (search "3>" source)
+                          (+ (search "dup.txt" source) (length "dup.txt"))))
               :to-equal
               (mapcar #'nshell.domain.parsing:ast-redirect-entry-source-span
-                      redirects))))
+                      redirects))
+      (expect '("3>" "dup.txt") :to-equal
+              (mapcar #'nshell.domain.parsing:command-arg-value
+                      (nshell.domain.parsing:command-node-args island-command)))))
 
   (it "rejects-bare-line-trailing-operators-and-redirects-with-reader-errors"
     (dolist (source '("echo &&" "echo ||" "echo |" "echo |&" "echo >"))

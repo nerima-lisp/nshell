@@ -5,7 +5,13 @@
                 :reader command-execution-plan-error-source-span)
    (operation :initarg :operation
               :reader command-execution-plan-error-operation)
-   (cause :initarg :cause :reader command-execution-plan-error-cause)))
+   (cause :initarg :cause :reader command-execution-plan-error-cause))
+  (:report
+   (lambda (condition stream)
+     (format stream
+             "Command execution plan failed during ~S: ~A"
+             (command-execution-plan-error-operation condition)
+             (command-execution-plan-error-cause condition)))))
 
 (declaim
   (ftype

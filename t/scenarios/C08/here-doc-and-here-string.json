@@ -33,9 +33,5 @@
     "kind": "script",
     "path": "scenario.nsh",
     "text": "cat <<'C08_END'\nC08_HEREDOC\nC08_END\ncat <<< C08_HERESTRING"
-  },
-  "expected_failure": {
-    "reason": "WP-C08fix: the reader accepts this here-document and here-string script, but execution signals COMMAND-EXECUTION-PLAN-ERROR before either assertion. A direct reproduction exposes no plan operation or nested cause, so this needs a separate command-planning diagnosis before it can be fixed safely.",
-    "platform": "darwin"
   }
 }

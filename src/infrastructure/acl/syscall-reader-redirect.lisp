@@ -55,7 +55,7 @@ MODE is :INPUT, :OUTPUT, or :APPEND."
   (let ((template
          (namestring
           (merge-pathnames "nshell-reader-redirect-XXXXXX"
-                           (uiop:temporary-directory))))
+                           (uiop:default-temporary-directory))))
         (fd nil)
         (temporary-path nil)
         (complete-p nil))

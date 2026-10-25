@@ -79,6 +79,19 @@
       (expect :preflight :to-be
               (nshell.application:command-execution-plan-error-operation
                condition))))
+  (it "reports plan-error operation and nested cause"
+    (let* ((condition
+             (make-condition
+              'nshell.application:command-execution-plan-error
+              :source-span '(1 2)
+              :operation :preflight
+              :cause
+              (make-condition 'simple-error
+                              :format-control "nested failure"
+                              :format-arguments nil)))
+           (report (format nil "~A" condition)))
+      (expect (search "PREFLIGHT" report) :to-be-truthy)
+      (expect (search "nested failure" report) :to-be-truthy)))
   (it "rejects nested substitutions at the outer substitution span"
     (let* ((nested-entry
              (nshell.domain.parsing:make-ast-redirect-entry

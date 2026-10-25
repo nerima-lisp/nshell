@@ -148,4 +148,34 @@
           (unwind-protect
                (expect (format nil "$NAME~%") :to-equal
                        (read-source source-fd))
-            (sb-posix:close source-fd)))))))
+            (sb-posix:close source-fd))))))
+  (it "uses live TMPDIR when materializing reader redirect data"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((name "TMPDIR")
+             (old-value (host-kit:getenv name))
+             (contents "live TMPDIR contents")
+             (stale-directory (merge-pathnames "missing/" directory)))
+        (flet ((read-source (fd)
+                 (let ((octets (make-array 128 :element-type (quote (unsigned-byte 8)))))
+                   (let ((count (sb-sys:with-pinned-objects (octets)
+                                  (sb-posix:read fd
+                                                 (sb-sys:vector-sap octets)
+                                                 (length octets)))))
+                     (sb-ext:octets-to-string
+                      (subseq octets 0 count) :external-format :utf-8)))))
+          (unwind-protect
+               (progn
+                 (sb-posix:setenv name (namestring directory) 1)
+                 (with-temporary-function
+                     ((quote uiop:temporary-directory)
+                      (lambda () stale-directory))
+                   (let ((source-fd
+                           (nshell.infrastructure.acl:open-reader-redirect-data
+                            contents)))
+                     (unwind-protect
+                          (expect contents :to-equal
+                                  (read-source source-fd))
+                       (sb-posix:close source-fd)))))
+            (if old-value
+                (sb-posix:setenv name old-value 1)
+                (sb-posix:unsetenv name))))))))

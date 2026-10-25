@@ -36,6 +36,6 @@
     "exit_code": 1
   },
   "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
+    "reason": "WP-L02: an error raised during user macro expansion is emitted as a generic source error without the macro call-site location; the current source remapping preserves typed syntax conditions (src/application/sexp-evaluator.lisp:1129; src/application/builtin-source-reader.lisp:231)."
   }
 }

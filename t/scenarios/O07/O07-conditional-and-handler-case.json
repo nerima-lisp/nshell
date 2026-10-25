@@ -37,6 +37,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
+    "reason": "WP-L02/WP-L04: command-failed is not imported into NSHELL.USER, so the unqualified handler type resolves there as a user symbol and typep reports an unknown type specifier (src/package-user.lisp:5; src/application/contracts/l04-command-failure.lisp:3; src/application/sexp-evaluator.lisp:803; t/scenarios/O07/O07-conditional-and-handler-case.json:26)."
   }
 }

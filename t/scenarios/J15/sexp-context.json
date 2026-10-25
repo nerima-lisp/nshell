@@ -33,6 +33,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
+    "reason": "WP-E03: the reader REPL creates a local shell context and returns only status; the exit builtin stops that context, but the stop state is not propagated to the REPL loop (src/presentation/repl-execution.lisp:33; src/application/builtin-commands.lisp:174; t/scenarios/J15/sexp-context.json:25)."
   }
 }

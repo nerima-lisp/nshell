@@ -28,5 +28,8 @@
       "contains": ["next"]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L02/WP-L04: the evaluator passes the whole sequence node to call-with-command-failure-policy, which accepts only command or pipeline nodes (src/application/sexp-evaluator.lisp:684; src/application/contracts/l04-command-failure.lisp:28)."
   }
 }

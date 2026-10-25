@@ -37,6 +37,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
+    "reason": "WP-L06: the exported converter is defined as uppercase TO-JSON while the reader preserves lowercase package-local to-json, which is undefined (src/application/sexp-value-conversion.lisp:147; src/package-user.lisp:9; docs/notes/sexp-syntax-design.md:786)."
   }
 }

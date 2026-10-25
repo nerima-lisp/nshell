@@ -79,6 +79,6 @@
     }
   },
   "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution after Ctrl-C recovery."
+    "reason": "WP-L03: command argv expansion handles braces, tilde, and glob but not arithmetic expansion, so the scenario's arithmetic form stays literal and fails its K04_AFTER_2 assertion (src/application/contracts/l03-builtin.lisp:41; t/scenarios/K04/unbalanced-parenthesis-diagnostic.json:41)."
   }
 }

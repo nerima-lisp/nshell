@@ -83,6 +83,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
+    "reason": "WP-L04: the restart-choice handler does not accept the scenario's 1 then Enter sequence; it prompts again instead of continuing (src/presentation/repl-output-handlers.lisp:26; t/scenarios/O07/O07-interactive-command-failed-restart.json:43)."
   }
 }

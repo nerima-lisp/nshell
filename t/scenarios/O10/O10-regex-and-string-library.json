@@ -34,6 +34,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
+    "reason": "WP-L03: the scenario invokes string match -r, but this builtin reports that regex support is unavailable in this build (src/application/builtin-string.lisp:155; t/scenarios/O10/O10-regex-and-string-library.json:26)."
   }
 }

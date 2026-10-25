@@ -32,5 +32,8 @@
     "kind": "script",
     "path": "scenario.nsh",
     "text": "sleep 0.1 &; wait; printf \"C09_BACKGROUND_DONE\\n\""
+  },
+  "expected_failure": {
+    "reason": "WP-L01: the reader rejects the scenario's sleep 0.1 &; sequence because the separator has no command on its left (src/domain/parsing/sexp-reader.lisp:1906; t/scenarios/C09/background-command-returns.json:34)."
   }
 }

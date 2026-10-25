@@ -71,11 +71,12 @@
         (format *error-output* "nshell error: ~a~%" condition)
         (setf *last-exit-code* 1)))))
 
-(defun run-repl-batch (&key line script-args)
+(defun run-repl-batch (&key line script-args (errexit-p nil))
   "Batch mode for stdin or the nshell-specific --command option.
 SCRIPT-ARGS are exposed as $argv for --command."
   (%initialize-batch-state)
-  (let ((nshell.domain.expansion:*positional-args* script-args))
+  (let ((nshell.domain.expansion:*positional-args* script-args)
+        (nshell.application:*errexit-p* errexit-p))
     (if line
         (%run-batch-source-lines (list line))
         (%run-batch-source-lines

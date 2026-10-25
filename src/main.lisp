@@ -28,6 +28,8 @@ result representation."
                         :description "Run the stdio MCP server.")
     (cl-cli:make-option :key :interactive :name "interactive" :short #\i :kind :flag
                         :description "Force the interactive line editor.")
+    (cl-cli:make-option :key :errexit :name "errexit" :short #\e :kind :flag
+                        :description "Exit after a command failure.")
     (cl-cli:make-option :key :login :name "login" :short #\l :kind :flag
                         :description "Load the login environment.")
     (cl-cli:make-option :key :no-config :name "no-config" :kind :flag
@@ -110,7 +112,8 @@ true when cl-cli rejected the arguments as a usage error."
                                      (load-config-p t)
                                      config-path
                                      (history-p t)
-                                     (private-p nil))
+                                     (private-p nil)
+                                     (errexit-p nil))
   "Use interactive mode when requested or when input is a terminal."
   (let* ((private-p
           (or private-p
@@ -120,26 +123,29 @@ true when cl-cli rejected the arguments as a usage error."
                                   (list "" "0" "false" "no")
                                   :test (function string-equal))))))))
     (if (or interactive-p (tty-p))
-        (%run-interactive
-         :config-path config-path
-         :load-config-p load-config-p
-         :history-p history-p
-         :private-p private-p
-         ;; Show the greeting only for the default interactive invocation.
-         :greeting-p (and (tty-p)
-                          (not interactive-p)
-                          load-config-p
-                          (null config-path)
-                          history-p
-                          (not private-p)))
-      (nshell.presentation:run-repl-batch))))
+        (let ((nshell.application:*errexit-p* errexit-p))
+          (%run-interactive
+           :config-path config-path
+           :load-config-p load-config-p
+           :history-p history-p
+           :private-p private-p
+           ;; Show the greeting only for the default interactive invocation.
+           :greeting-p (and (tty-p)
+                            (not interactive-p)
+                            load-config-p
+                            (null config-path)
+                            history-p
+                            (not private-p))))
+        (nshell.presentation:run-repl-batch
+         :errexit-p errexit-p))))
 
 (defun %parsed-startup-options (invocation)
   (values (not (null (cl-cli:option-value invocation :interactive)))
           (not (null (cl-cli:option-value invocation :no-config)))
           (cl-cli:option-value invocation :config)
           (not (null (cl-cli:option-value invocation :no-history)))
-          (not (null (cl-cli:option-value invocation :private)))))
+          (not (null (cl-cli:option-value invocation :private)))
+          (not (null (cl-cli:option-value invocation :errexit)))))
 
 (defun %print-startup-option-error (message)
   (format *error-output* "nshell: ~a~%" message)
@@ -156,7 +162,8 @@ true when cl-cli rejected the arguments as a usage error."
     ((cl-cli:option-value invocation :mcp)
      (nshell.feature.assistant:run-assistant-mcp-server))
     (t
-     (multiple-value-bind (interactive-p no-config-p config-path no-history-p private-p)
+     (multiple-value-bind (interactive-p no-config-p config-path no-history-p
+                           private-p errexit-p)
          (%parsed-startup-options invocation)
        (let ((shell-command
                (cl-cli:option-value invocation :shell-command))
@@ -183,18 +190,21 @@ true when cl-cli rejected the arguments as a usage error."
             ;; --command executes nshell syntax; -c is reserved for /bin/sh.
             (nshell.presentation:run-repl-batch
              :line (cl-cli:option-value invocation :command)
-             :script-args command-args))
+             :script-args command-args
+             :errexit-p errexit-p))
            ((and command-args (first command-args))
-            (nshell.presentation:run-repl-script
-             (first command-args)
-             (rest command-args)))
+            (let ((nshell.application:*errexit-p* errexit-p))
+              (nshell.presentation:run-repl-script
+               (first command-args)
+               (rest command-args))))
            (t
             (%run-default-invocation
              :interactive-p interactive-p
              :load-config-p (not no-config-p)
              :config-path config-path
              :history-p (not no-history-p)
-             :private-p private-p))))))))
+             :private-p private-p
+             :errexit-p errexit-p))))))))
 
 (defparameter *main-exit-function*
   (lambda (&key unix-status)

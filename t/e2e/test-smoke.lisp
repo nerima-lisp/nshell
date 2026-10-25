@@ -55,16 +55,18 @@
               #'%executable-on-path-p))
       (error "e2e test setup: ~a not found on PATH" name)))
 
-(defun %run-nshell-main (arguments &key input)
+(defun %run-nshell-main (arguments &key input environment)
   (let* ((root (asdf:system-source-directory :nshell))
          (program (append (list (current-sbcl-executable)
                                 "--noinform")
                           (%asdf-bootstrap-forms (namestring root))
                           (list "--eval" (%nshell-main-form arguments))))
-         (result (host-kit:run-program (first program) (rest program)
-                                       :directory root
-                                       :input input
-                                       :timeout 120)))
+         (run-options
+           (append (list :directory root :input input)
+                   (when environment (list :environment environment))
+                   (list :timeout 120)))
+         (result (apply #'host-kit:run-program
+                        (first program) (rest program) run-options)))
     (values (host-kit:process-result-stdout result)
             (host-kit:process-result-stderr result)
             (host-kit:process-result-exit-code result))))

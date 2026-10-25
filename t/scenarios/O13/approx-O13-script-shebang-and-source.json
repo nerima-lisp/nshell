@@ -6,6 +6,7 @@
   "mode": "batch",
   "environment": {
     "variables": {
+      "NSHELL_READER": "sexp",
       "PATH": "/usr/bin:/bin",
       "TERM": "dumb"
     },
@@ -38,6 +39,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L07 owns script execution and source."
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

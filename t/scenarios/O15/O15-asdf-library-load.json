@@ -6,6 +6,7 @@
   "mode": "batch",
   "environment": {
     "variables": {
+      "NSHELL_READER": "sexp",
       "PATH": "/usr/bin:/bin",
       "TERM": "dumb"
     },
@@ -31,7 +32,7 @@
   "invocation": {
     "kind": "script",
     "path": "scenario.nsh",
-    "text": "(eval-when (:execute) (pushnew (truename \".\") asdf:*central-registry* :test #'equal))\n(asdf:load-system \"scenario-helper\")\n(echo ,(scenario-helper:greeting))\n"
+    "text": "(eval-when (:execute) (pushnew (truename \".\") asdf:*central-registry* :test #'equal))\n(asdf:load-system \"scenario-helper\")\n(format t \"~a~%\" (scenario-helper:greeting))\n"
   },
   "expected": {
     "stdout": {
@@ -40,8 +41,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L07 owns ASDF library loading."
   }
 }

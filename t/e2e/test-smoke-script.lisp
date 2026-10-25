@@ -374,4 +374,29 @@
     (%assert-nshell-main-result
      '("--command" "eval 'false'; echo eval-status=$?")
      "eval-status=1"
-     0)))
+     0))
+  (it "e2e-main-script-errexit-option-and-shell-command-delegation"
+    "The -e option binds script failure policy while -c remains delegated to /bin/sh."
+    (with-temporary-output-file (path :prefix "nshell-main-errexit")
+      (with-open-file (stream path :direction :output
+                                   :if-exists :supersede
+                                   :if-does-not-exist :create)
+        (write-string
+         "(format t \"ERREXIT=~a~%\" nshell.application:*errexit-p*)~%"
+         stream))
+      (let ((environment
+              (append (%e2e-child-environment)
+                      (list "NSHELL_READER=sexp"))))
+        (multiple-value-bind (stdout stderr exit-code)
+            (%run-nshell-main (list path) :environment environment)
+          (expect (format nil "ERREXIT=NIL~%") :to-equal stdout)
+          (expect "" :to-equal stderr)
+          (expect 0 :to-equal exit-code))
+        (multiple-value-bind (stdout stderr exit-code)
+            (%run-nshell-main (list "-e" path) :environment environment)
+          (expect (format nil "ERREXIT=T~%") :to-equal stdout)
+          (expect "" :to-equal stderr)
+          (expect 0 :to-equal exit-code)))
+      (%assert-nshell-main-result '("-e" "-c" "printf O13_C_DELEGATED")
+                                  "O13_C_DELEGATED"
+                                  0))))

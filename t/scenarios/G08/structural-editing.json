@@ -167,8 +167,5 @@
     { "type": "keys", "text": "exit" },
     { "type": "key", "key": "Enter" },
     { "type": "wait_exit", "timeout_seconds": 10 }
-  ],
-  "expected_failure": {
-    "reason": "WP-E03: the reader REPL creates a local shell context and returns only status; the exit builtin stops that context, but the stop state is not propagated to the REPL loop (src/presentation/repl-execution.lisp:33; src/application/builtin-commands.lisp:174; t/scenarios/G08/structural-editing.json:167)."
-  }
+  ]
 }

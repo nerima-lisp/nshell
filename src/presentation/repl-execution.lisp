@@ -45,7 +45,7 @@
                      context reader-result)))
                (declare (ignore value))
                (setf status result-status))
-          finally (return status)))))
+          finally (return (%sync-repl-shell-context context status))))))
 
 (define-value-struct source-text-request
     ((lines nil :type list :copy :list))

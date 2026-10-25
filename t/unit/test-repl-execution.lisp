@@ -998,6 +998,24 @@ path must be converted from a pathname before being appended."
                       :to-equal
                       (nshell.presentation:input-state-buffer
                        nshell.presentation::*input-state*))))))))
+  (it "repl-reader-exit-propagates-stop-to-repl-sentinel"
+    "A reader-local exit must stop the outer REPL with its explicit sentinel."
+    (with-repl-test-state
+      (with-temporary-functions
+          (('nshell.infrastructure.acl:consume-terminal-resize-p
+            (lambda () nil))
+           ('nshell.infrastructure.terminal:read-key-event
+            (lambda (&key interrupt-predicate)
+              (declare (ignore interrupt-predicate))
+              (input-key-event :char #\a))))
+        (let ((status
+                (nshell.presentation::%evaluate-repl-reader-submission
+                 "exit 7" :bare-line)))
+          (expect (nshell.presentation::read-key-cont) :to-be
+                  nshell.presentation::+repl-exit+)
+          (expect 7 :to-equal status)
+          (expect 7 :to-equal nshell.presentation::*last-exit-code*)
+          (expect nil :to-be nshell.presentation::*running*)))))
 )
 (describe "repl-shell-context-branch-tests"
   (it "repl-external-command-availability-distinguishes-paths"

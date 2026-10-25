@@ -7,7 +7,8 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "dumb",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -32,8 +33,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L02 owns command-island evaluation; WP-X01 connects the new reader after P5."
   }
 }

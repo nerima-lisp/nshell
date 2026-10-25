@@ -10,3 +10,5 @@ user modules are loaded by the application layer.")
     (:export |to-json| |from-json| |to-tsv| |from-tsv| |to-lines| |from-lines|
              |regex-match-p| |regex-find| |regex-replace|
              |split-string| |join-strings| |replace-string|)))
+
+(deftype nshell.user::|command-failed| () 'nshell.application:command-failed)

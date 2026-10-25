@@ -681,14 +681,23 @@
                       (setf *current-evaluation-status*
                             (car (last (command-failed-stage-statuses condition)))))))
       (multiple-value-bind (value status pipeline-result)
-          (call-with-command-failure-policy
-           ast
-           (lambda ()
-             (execute-reader-ast-in-context
-              context ast
-              (lambda (stage-context command-node)
-                (evaluate-command-stage-in-context
-                 stage-context command-node)))))
+          (if (nshell.domain.parsing:sequence-node-p ast)
+              (execute-reader-ast-in-context
+               context ast
+               (lambda (stage-context command-node)
+                 (evaluate-command-stage-in-context
+                  stage-context command-node))
+               (lambda (command-ast evaluator-thunk)
+                 (call-with-command-failure-policy
+                  command-ast evaluator-thunk)))
+              (call-with-command-failure-policy
+               ast
+               (lambda ()
+                 (execute-reader-ast-in-context
+                  context ast
+                  (lambda (stage-context command-node)
+                    (evaluate-command-stage-in-context
+                     stage-context command-node))))))
         (declare (ignore pipeline-result))
         (setf *current-evaluation-status* status)
         (values (if (eq position :test) (zerop status) value))))))

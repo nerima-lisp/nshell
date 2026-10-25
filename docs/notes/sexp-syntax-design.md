@@ -322,12 +322,17 @@ before a pipeline is invalid at that next separator: `a && ; b` is invalid at
 `|`, or `|&` at end of input is incomplete because its right operand is
 missing. A trailing `;` or `&` is complete as specified above.
 
-WP-L08 owns execution of these bare-line sequence operators. In `&&` and `||`
-chains, an item whose following separator is `:and` or `:or` runs in test
-position because its status controls the next item. Every other foreground
-item, including an item followed by `:semi` and the final item, follows the
-active D-06 failure policy. Exit status `0` is true and every nonzero status is
-false. The status of the sequence is the status of its last executed item.
+WP-L08 owns execution of these bare-line sequence operators. L02 supplies an
+optional `command-failure-policy` callback when it dispatches a sequence AST.
+L08 invokes that callback once for each executed foreground command or pipeline
+item, after deciding whether short-circuiting skips it. L02's callback applies
+the L04 policy to that command or pipeline; skipped items receive no callback.
+In `&&` and `||` chains, an item whose following separator is `:and` or `:or`
+runs in test position because its status controls the next item. Every other
+foreground item, including an item followed by `:semi` and the final item,
+follows the active D-06 failure policy. Exit status `0` is true and every
+nonzero status is false. The status of the sequence is the status of its last
+executed item.
 Thus, in `a && b || c`, the statuses of `a` and `b` control short-circuiting,
 while `c` is the final item and follows the surrounding failure policy.
 
@@ -504,16 +509,19 @@ Test position applies only to a command form evaluated directly as the test or o
 
 The pipeline evaluator retains each stage's raw signal while selecting failures. A nonzero upstream stage terminated by `SIGPIPE` is excluded. If several other stages have nonzero statuses, select the first one in source order for `command`, `status`, and `signal`. The pipeline's ordinary `$status` remains the final stage status, even when an earlier stage supplies the condition's `status`.
 
-L02 invokes `call-with-command-failure-policy(command-ast thunk)` once at the
-command or pipeline evaluation boundary. The thunk returns
+For a standalone command or pipeline, L02 invokes
+`call-with-command-failure-policy(command-ast thunk)` once at its evaluation
+boundary. For a sequence AST, L02 passes L08 an optional callback that applies
+the same L04 policy to each executed foreground command or pipeline item. The
+evaluator thunk returns
 `(values value integer-status pipeline-execution-result)`. L04 applies the
 failure policy and is the only owner that constructs and signals
 `command-failed`. It uses the final stage status for `$status` and test-position
 truth, and the source-ordered `pipeline-execution-result` to select a failure.
 Direct interactive top-level commands and direct test-position commands do
 not signal. This is separate from E03's `call-with-command-failure-restarts`,
-which encloses each top-level result; L02's policy call handles commands and
-pipelines evaluated within that result.
+which encloses each top-level result; L02's policy wrapper handles commands
+and pipelines evaluated within that result.
 
 The REPL's continuation trampoline runs the prompt cycle around E03's
 submission/resume flow and L04's nested command-failure restart loop. Each
@@ -525,10 +533,14 @@ step. Ordinary completion returns a continuation. Ctrl-D and `exit` return
 SIGHUP return it directly. After cleanup, `run-repl` returns
 `*last-exit-code*`.
 
-`execute-reader-ast-in-context(context ast stage-evaluator)` returns
-`(values value integer-status pipeline-execution-result)`. A standalone command
-returns a one-stage result. For a pipeline, stage index `i` in the result maps
-to AST stage `i`; existing callers may continue to use the first two values.
+`execute-reader-ast-in-context(context ast stage-evaluator &optional
+command-failure-policy)` returns
+`(values value integer-status pipeline-execution-result)`. The optional
+callback applies L04's policy to an executed command or pipeline item in a
+sequence AST. L08 invokes it once per executed foreground item; three-argument
+callers continue to omit it. A standalone command returns a one-stage result.
+For a pipeline, stage index `i` in the result maps to AST stage `i`; existing
+callers may continue to use the first two values.
 
 WP-L04 defines these special variables in `nshell.application`:
 
@@ -1224,12 +1236,14 @@ their copies under the `transient-descriptors` rule below.
 The reader-produced AST path is explicitly separate from the legacy executor.
 WP-L02 sends every command, pipeline, or sequence AST obtained from a
 `reader-result` to WP-L08's
-`execute-reader-ast-in-context(context ast stage-evaluator)` entry point.
-`stage-evaluator` has type `(function (context command-node)
-evaluated-command-stage)` and is WP-L02's
+`execute-reader-ast-in-context(context ast stage-evaluator
+&optional command-failure-policy)` entry point. `stage-evaluator` has type
+`(function (context command-node) evaluated-command-stage)` and is WP-L02's
 `evaluate-command-stage-in-context`. L08 calls it only for command stages it
 will execute, after sequence short-circuiting and process-substitution
-preflight. The legacy input path continues through its existing executor and
+preflight. For a sequence AST, L08 calls the optional policy callback once per
+executed foreground command or pipeline item; L02 owns that callback and wraps
+L04's policy. The legacy input path continues through its existing executor and
 `split-command-node-redirects` adapter until WP-X01; presence or absence of
 redirects is not used to distinguish the paths.
 
@@ -1774,14 +1788,14 @@ L01 owns `read-submission`, `scan-input`, `command-form->ast`, and their reader/
 | L02 to L03 | `register-builtin(name binding) => binding`; `lookup-builtin-binding(name) => (values binding found-p)`; `dispatch-builtin(context binding evaluated-command-args &key argv-strings) => (values result integer-status)`; `command-argv-strings(context evaluated-command-args) => list-of string`. `builtin-binding(handler argument-mode)` uses `:argv` or `:value`. | L03; `src/application/contracts/l03-builtin.lisp`. |
 | L02 to L04 | `command-failed(command status stage-statuses signal)`. Dynamic variables: `*interactive-top-level-p*`, `*command-test-position-p*`, and `*errexit-p*`, all boolean. `call-with-command-failure-restarts(thunk)` returns all values from the thunk. | L04; `src/application/contracts/l04-command-failure.lisp` and `src/presentation/contracts/l04-command-failure.lisp`. |
 | L02 to L07 | `peek-shell-function(registry name &key scope escaped-p) => (values binding found-p)`; `lookup-shell-function(registry name &key scope escaped-p) => (values binding found-p)`; `register-shell-function(registry name binding &key escaped-p) => binding`; `define-shell-function(name lambda-list &body body)`; `with-shell-functions((name binding)...) &body body`. Binding, registry, and scope slots are fixed. | L07; `src/application/contracts/l07-shell-functions.lisp`. L00b creates `NSHELL.USER` before L01 loads. |
-| L02 to L08 | `evaluate-command-stage-in-context(context command-node) => evaluated-command-stage`; `execute-reader-ast-in-context(context ast stage-evaluator) => (values value integer-status pipeline-execution-result)`. The callback is `(function (context command-node) evaluated-command-stage)`. | L02 in `src/application/contracts/l02-evaluator.lisp`; L08 in `src/application/contracts/l08-reader-execution.lisp`. |
+| L02 to L08 | `evaluate-command-stage-in-context(context command-node) => evaluated-command-stage`; `execute-reader-ast-in-context(context ast stage-evaluator &optional command-failure-policy) => (values value integer-status pipeline-execution-result)`. `stage-evaluator` is `(function (context command-node) evaluated-command-stage)`. L02's optional policy callback is `(function (command-or-pipeline-ast evaluator-thunk) (values value integer-status))`; L08 invokes it for each executed foreground sequence item. | L02 in `src/application/contracts/l02-evaluator.lisp`; L08 in `src/application/contracts/l08-reader-execution.lisp`. |
 | E03 to L02/L04 | `classify-sexp-head(context head-source) => :host-form or :command-island`; `evaluate-reader-result-in-context(context reader-result) => (values value integer-status)`; `call-with-command-failure-restarts(thunk)` returns all values from the thunk. | L02 in `src/application/contracts/l02-evaluator.lisp`; L04 in `src/presentation/contracts/l04-command-failure.lisp`. E03 calls the wrapper once per top-level result. |
 | C06 to L02 | `scan-input(source &key cursor reader-context indent-width head-classifier) => scan-result`; in `:sexp`, the callback is L02 side-effect-free `classify-sexp-head`. | L01 adds the scanner skeleton in its first commit; L02 supplies classification in `src/application/contracts/l02-evaluator.lisp`; C06 projects `cursor-role`. |
 | L03/L08 to L06 | `argv-scalar-string(value &key source-span) => string`, or signals `command-argument-type-error(value source-span)`. | L06; `src/application/contracts/l06-value-conversion.lisp`. |
 | L04 to L05 | `pipeline-execution-result(status stage-statuses stage-signals)`. Stage status and signal lists are source ordered; signal entries are positive integers or `nil`. | L05; `src/application/contracts/l05-pipeline.lisp`. |
 | L05 to L08 and L08 to L05 | `pipeline-stage-io(descriptor-map transient-descriptors)`; `spawn-byte-stream-node-in-context(context evaluated-stages stage-io internal-stage-dispatcher) => opaque pipeline-execution-handle`; `wait-byte-stream-execution(handle) => pipeline-execution-result`; `pipeline-stage-stream(descriptor &optional stage-io) => (or stream :closed)`; `command-node-external-p(context command-node) => boolean`. The dispatcher signature is `(function (context evaluated-command-stage pipeline-stage-io argv-strings) (values integer-status nullable-signal))`. | L05 in `src/application/contracts/l05-pipeline.lisp`; L08 in `src/application/contracts/l08-reader-execution.lisp`. |
 | E06 to E03/L01 diagnostics | `expand-history-input(raw-source) => (values expanded-source source-map)`; `source-span-to-origin-span(source-map expanded-span) => raw-editor-span`. `source-map` is a vector mapping each expanded character to one raw editor `[start,end)` span. | E06; `src/presentation/contracts/e06-history-expansion.lisp`. E03 passes the map to L01 and translates scanner diagnostics; L01 stores it in each reader result/error. |
-| L02 to L04 failure policy | `call-with-command-failure-policy(command-ast thunk) => (values value integer-status)`. The thunk returns `(values value integer-status pipeline-execution-result)`; L04 alone constructs and signals `command-failed`. | L04; `src/application/contracts/l04-command-failure.lisp`. L02 owns the single evaluator call boundary. |
+| L02 to L04 failure policy | `call-with-command-failure-policy(command-ast thunk) => (values value integer-status)`. The thunk returns `(values value integer-status pipeline-execution-result)`; L04 alone constructs and signals `command-failed`. | L04; `src/application/contracts/l04-command-failure.lisp`. L02 owns the wrapper and passes it to L08 as an optional per-item callback for sequence ASTs. |
 | L02 to L07 shell-function context | `context-shell-function-registry(context) => shell-function-registry`; `active-shell-function-scope() => (or null shell-function-scope)`; callables receive `(context evaluated-command-args call-position)`. | L07; `src/application/contracts/l07-shell-functions.lisp`. L02 supplies `:value` or `:stream`, independently of test position. |
 | L06 user-library conversions | O09: JSON, TSV, and line converters; O10: regex and literal string helpers; O11: existing Common Lisp arithmetic functions, without wrappers. Exact signatures and representations are defined above. | L06; `src/application/contracts/l06-value-conversion.lisp`; public functions are in `NSHELL.USER`. |
 | E03 to E04 structural editing | `apply-sexp-structural-edit(state scan-result action) => (updated-state output-event)` for the eight structural actions defined above. | E04; `src/presentation/contracts/e04-structural-editing.lisp`. E03 owns scanner invocation and the generic reducer; E04 owns its action-specific dispatch entries and branches. |

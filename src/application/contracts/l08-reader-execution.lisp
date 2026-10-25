@@ -7,11 +7,17 @@
               :reader command-execution-plan-error-operation)
    (cause :initarg :cause :reader command-execution-plan-error-cause)))
 
-(declaim (ftype (function (t t function) (values t integer pipeline-execution-result)) execute-reader-ast-in-context))
-(defun execute-reader-ast-in-context (context ast stage-evaluator)
+(declaim
+  (ftype
+   (function (t t function &optional function)
+    (values t integer pipeline-execution-result))
+   execute-reader-ast-in-context))
+(defun execute-reader-ast-in-context
+    (context ast stage-evaluator &optional command-failure-policy)
   (cond
     ((nshell.domain.parsing:sequence-node-p ast)
-     (%execute-reader-sequence-node-in-context context ast stage-evaluator))
+     (%execute-reader-sequence-node-in-context
+      context ast stage-evaluator command-failure-policy))
     ((or (nshell.domain.parsing:command-node-p ast)
          (nshell.domain.parsing:pipeline-node-p ast))
      (%reader-execute-foreground-in-context context ast stage-evaluator))

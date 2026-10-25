@@ -355,7 +355,8 @@ following the data/logic separation principle."
   (nshell.domain.parsing:begin-end-node-p  %execute-begin-end-node-in-context)
   (nshell.domain.parsing:sequence-node-p   %execute-sequence-node-in-context))
 
-(defun %execute-reader-sequence-node-in-context (context ast stage-evaluator)
+(defun %execute-reader-sequence-node-in-context
+    (context ast stage-evaluator &optional command-failure-policy)
   (let ((previous-separator nil)
         (last-value nil)
         (last-status (shell-context-last-exit-code context))
@@ -372,11 +373,26 @@ following the data/logic separation principle."
           (let ((*command-test-position-p*
                   (and separator (or (eq separator :and) (eq separator :or)))))
             (multiple-value-bind (value status pipeline-result)
-                (if (eq separator :amp)
-                    (%reader-spawn-background-node-in-context
-                     context command stage-evaluator)
-                    (execute-reader-ast-in-context
-                     context command stage-evaluator))
+                (cond
+                  ((eq separator :amp)
+                   (%reader-spawn-background-node-in-context
+                    context command stage-evaluator))
+                  (command-failure-policy
+                   (let ((item-pipeline-result nil))
+                     (multiple-value-bind (value status)
+                         (funcall
+                          command-failure-policy
+                          command
+                          (lambda ()
+                            (multiple-value-bind (value status pipeline-result)
+                                (execute-reader-ast-in-context
+                                 context command stage-evaluator)
+                              (setf item-pipeline-result pipeline-result)
+                              (values value status pipeline-result))))
+                       (values value status item-pipeline-result))))
+                  (t
+                   (execute-reader-ast-in-context
+                    context command stage-evaluator)))
               (setf last-value value
                     last-status status
                     last-result pipeline-result)

@@ -215,7 +215,22 @@
              (%evaluate-sexp-evaluator-test-source
               context "(handler-case (fail) (command-failed () 18))")
            (expect 18 :to-equal value)
-           (expect 7 :to-equal status)))))))
+           (expect 7 :to-equal status))))))
+  (it "resolves-lowercase-command-failed-through-production-reader"
+      (let* ((context (make-test-shell-context))
+             (reader-result
+              (first
+               (nshell.domain.parsing:read-submission
+                "(handler-case (fail) (command-failed () 18))"
+                :reader-context :sexp))))
+        (%call-with-sexp-evaluator-test-boundaries
+         context
+         (lambda ()
+           (multiple-value-bind (value status)
+               (nshell.application:evaluate-reader-result-in-context
+                context reader-result)
+             (expect 18 :to-equal value)
+             (expect 7 :to-equal status)))))))
 (describe "sexp-evaluator-positions"
   (it "propagates-test-and-value-positions"
     (let ((context (make-test-shell-context)))
@@ -869,4 +884,151 @@
             :to-throw 'nshell.application:sexp-evaluation-syntax-error)
            (expect nil :to-equal *sexp-evaluator-test-calls*)
            (expect 1 :to-equal
-                   *sexp-evaluator-test-failure-policy-calls*)))))))
+                   *sexp-evaluator-test-failure-policy-calls*))))))
+  (it "applies-command-failure-policy-at-sequence-item-boundaries"
+      (let* ((context (make-test-shell-context :running t))
+             (builtins (make-hash-table :test #'equal))
+             (executed nil)
+             (policy-count 0)
+             (policy-kinds nil)
+             (pipeline-visible nil)
+             (real-policy
+              (symbol-function
+               'nshell.application:call-with-command-failure-policy)))
+        (dolist (name '("false" "true" "echo" "printf"))
+          (setf (gethash name builtins)
+                (nshell.application:make-builtin-binding
+                 (lambda (&rest arguments)
+                   (declare (ignore arguments))
+                   0)
+                 :argv)))
+        (with-temporary-functions
+         (('nshell.application:lookup-builtin-binding
+           (lambda (name)
+             (gethash (string-downcase name) builtins)))
+          ('nshell.application:call-with-command-failure-policy
+           (lambda (ast thunk)
+             (incf policy-count)
+             (push (cond
+                    ((nshell.domain.parsing:command-node-p ast) :command)
+                    ((nshell.domain.parsing:pipeline-node-p ast) :pipeline)
+                    (t :other))
+                   policy-kinds)
+             (funcall real-policy ast thunk)))
+          ('nshell.application::%reader-execute-foreground-in-context
+           (lambda (execution-context ast stage-evaluator)
+             (let* ((commands
+                     (if (nshell.domain.parsing:pipeline-node-p ast)
+                         (nshell.domain.parsing:pipeline-node-commands ast)
+                       (list ast)))
+                    (stages
+                     (mapcar
+                      (lambda (command)
+                        (funcall stage-evaluator execution-context command))
+                      commands))
+                    (statuses
+                     (mapcar
+                      (lambda (stage)
+                        (let* ((node
+                                (nshell.application:evaluated-command-stage-command-node
+                                 stage))
+                               (name
+                                (nshell.domain.parsing:command-node-command node))
+                               (arguments
+                                (nshell.application:evaluated-command-stage-arguments
+                                 stage)))
+                          (push
+                           (list
+                            name
+                            (mapcar
+                             #'nshell.domain.parsing:evaluated-command-arg-value
+                             arguments))
+                           executed)
+                          (when (string-equal name "printf")
+                            (let ((environment
+                                   (nshell.application:shell-context-environment
+                                    execution-context)))
+                              (setf pipeline-visible
+                                    (list
+                                     (nshell.domain.environment:env-get
+                                      environment "status")
+                                     (nshell.domain.environment:env-get-values
+                                      environment "pipestatus")))))
+                          (cond
+                           ((string-equal name "false") 1)
+                           ((string-equal name "fail") 7)
+                           (t 0))))
+                      stages))
+                    (status (car (last statuses)))
+                    (pipeline-result
+                     (nshell.application:make-pipeline-execution-result
+                      status statuses (make-list (length statuses) :initial-element nil))))
+               (when (nshell.domain.parsing:pipeline-node-p ast)
+                 (nshell.application::%record-pipeline-statuses
+                  execution-context statuses))
+               (values nil status pipeline-result)))))
+         (flet ((evaluate-sequence (source)
+                                   (let ((reader-result
+                                          (first
+                                           (nshell.domain.parsing:read-submission
+                                            source :reader-context :auto))))
+                                     (progn
+                                       (expect t :to-equal
+                                               (nshell.domain.parsing:sequence-node-p
+                                                (nshell.domain.parsing:reader-result-form reader-result)))
+                                       (let ((nshell.application:*interactive-top-level-p* t))
+                                         (nshell.application:evaluate-reader-result-in-context
+                                          context reader-result))))))
+           (multiple-value-bind (ignored-value status)
+               (evaluate-sequence "false && echo skipped; echo continued")
+             (declare (ignore ignored-value))
+             (expect 0 :to-equal status)
+             (expect '(("false" nil) ("echo" ("continued")))
+                     :to-equal (nreverse executed))
+             (expect 2 :to-equal policy-count)
+             (expect '(:command :command) :to-equal (nreverse policy-kinds)))
+           (setf executed nil
+                 policy-count 0
+                 policy-kinds nil
+                 pipeline-visible nil)
+           (multiple-value-bind (ignored-value status)
+               (evaluate-sequence
+                "false | true; printf \"<%s,%s,%s>\\n\" $status $pipestatus")
+             (declare (ignore ignored-value))
+             (expect 0 :to-equal status)
+             (expect '(("false" nil) ("true" nil) ("printf" ("<%s,%s,%s>\\n" "0" "1 0")))
+                     :to-equal (nreverse executed))
+             (expect 2 :to-equal policy-count)
+             (expect '(:pipeline :command) :to-equal (nreverse policy-kinds))
+             (expect '("0" ("1" "0")) :to-equal pipeline-visible))))))
+  (it "evaluates-reader-command-island-with-variable-and-comma-splice"
+      (let* ((context (make-test-shell-context))
+             (source "(echo $o02_value ,(+ 2 3))")
+             (reader-result
+              (first
+               (nshell.domain.parsing:read-submission
+                source :reader-context :sexp))))
+        (setf (nshell.application:shell-context-environment context)
+              (nshell.domain.environment:env-set
+               (nshell.application:shell-context-environment context)
+               "o02_value" "preserved" nil))
+        (let ((*sexp-evaluator-test-use-real-command-form->ast-p* t))
+          (%call-with-sexp-evaluator-test-boundaries
+           context
+           (lambda ()
+             (multiple-value-bind (value status)
+                 (nshell.application:evaluate-reader-result-in-context
+                  context reader-result)
+               (let* ((call (first *sexp-evaluator-test-calls*))
+                      (stage (first call))
+                      (arguments
+                       (nshell.application:evaluated-command-stage-arguments
+                        stage)))
+                 (expect (format nil "echo output~%") :to-equal value)
+                 (expect 0 :to-equal status)
+                 (expect '("preserved" 5)
+                         :to-equal
+                         (mapcar
+                          #'nshell.domain.parsing:evaluated-command-arg-value
+                          arguments))
+                 (expect :stream :to-equal (second call))))))))))

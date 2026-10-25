@@ -992,7 +992,24 @@
           (when base-spec
             (return-from %sexp-reader-command-redirect-spec
               (values (second base-spec)
-                      (parse-integer operator :end descriptor-end))))))))
+                      (parse-integer operator :end descriptor-end)))))))
+    (let* ((separator (or (search "<&" operator :from-end t)
+                          (search ">&" operator :from-end t)))
+           (descriptor-prefix
+             (and separator (subseq operator 0 separator)))
+           (inline-target-start (and separator (+ separator 2))))
+      (when (and inline-target-start
+                 (< inline-target-start (length operator))
+                 (every #'digit-char-p descriptor-prefix))
+        (let ((duplicate-input-p
+                (string= (subseq operator separator) "<&")))
+          (return-from %sexp-reader-command-redirect-spec
+            (values (if duplicate-input-p
+                        :duplicate-input-fd
+                        :duplicate-output-fd)
+                    (if (plusp (length descriptor-prefix))
+                        (parse-integer descriptor-prefix)
+                        (if duplicate-input-p 0 1))))))))
   (let ((separator (or (search "<&" operator :from-end t)
                        (search ">&" operator :from-end t))))
     (when (and separator

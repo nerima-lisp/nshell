@@ -120,6 +120,27 @@
       (expect '("3>" "dup.txt") :to-equal
               (mapcar #'nshell.domain.parsing:command-arg-value
                       (nshell.domain.parsing:command-node-args island-command)))))
+  (it "builds-bare-line-inline-fd-duplication-redirect"
+    (let* ((source "cat 1>&3")
+           (result (first (nshell.domain.parsing:read-submission source)))
+           (command (nshell.domain.parsing:reader-result-form result))
+           (redirect (first (nshell.domain.parsing:command-node-redirects command)))
+           (target (nshell.domain.parsing:ast-redirect-entry-target redirect)))
+      (expect (nshell.domain.parsing:command-node-p command) :to-be-truthy)
+      (expect "cat" :to-equal
+              (nshell.domain.parsing:command-node-command command))
+      (expect nil :to-equal (nshell.domain.parsing:command-node-args command))
+      (expect :duplicate-output-fd :to-equal
+              (nshell.domain.parsing:ast-redirect-entry-kind redirect))
+      (expect 1 :to-equal
+              (nshell.domain.parsing:ast-redirect-entry-file-descriptor redirect))
+      (expect (nshell.domain.parsing:redirect-fd-target-p target) :to-be-truthy)
+      (expect 3 :to-equal
+              (nshell.domain.parsing:redirect-fd-target-file-descriptor target))
+      (expect (list (search "1>&3" source)
+                    (+ (search "1>&3" source) (length "1>&3")))
+              :to-equal
+              (nshell.domain.parsing:ast-redirect-entry-source-span redirect))))
 
   (it "rejects-bare-line-trailing-operators-and-redirects-with-reader-errors"
     (dolist (source '("echo &&" "echo ||" "echo |" "echo |&" "echo >" "sleep &;; wait" "echo && ; next"))

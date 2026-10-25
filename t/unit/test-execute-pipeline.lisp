@@ -559,7 +559,10 @@
                      nil
                      nil)
                     (nshell.application::make-evaluated-command-stage
-                     (nshell.domain.parsing:make-command-node "/bin/cat" nil)
+                     (nshell.domain.parsing:make-command-node
+                      (or (nshell.infrastructure.acl::%resolve-external-command "cat")
+                          (error "External cat is required for this streaming pipeline test"))
+                      nil)
                      :external
                      nil
                      nil

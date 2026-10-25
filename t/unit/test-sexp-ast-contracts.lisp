@@ -489,6 +489,8 @@
 
 (describe "p2-owner-interface-contracts"
   (it "uses concrete behavior for implemented owner interfaces"
+    (expect 'nshell.application:command-failed :to-be
+            (find-symbol "COMMAND-FAILED" "NSHELL.USER"))
     (expect t :to-be
             (stringp
              (nshell.presentation::highlight-line-from-scanner

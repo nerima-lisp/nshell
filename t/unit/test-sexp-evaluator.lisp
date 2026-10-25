@@ -612,7 +612,96 @@
                   (expect 1 :to-equal value)
                   (expect 0 :to-equal status)))))
         (when (macro-function recursive-name) (fmakunbound recursive-name))
-        (when (macro-function constant-name) (fmakunbound constant-name))))))
+        (when (macro-function constant-name) (fmakunbound constant-name)))))
+  (it "reports-macro-expansion-errors-at-call-site-and-keeps-runtime-errors-distinct"
+  (let* ((context (make-test-shell-context))
+         (source-path "k08-macro-expansion-error.nsh")
+         (source
+           (format nil
+                   "(defmacro l02-k08-bad-form () (error ~S))~%(l02-k08-bad-form)"
+                   "K08_EXPANSION_ERROR"))
+         (runtime-source-path "k08-macro-runtime-error.nsh")
+         (runtime-source
+           (format nil
+                   "(defmacro l02-k08-runtime-bad-form () '(error ~S))~%(l02-k08-runtime-bad-form)"
+                   "K08_RUNTIME_EVAL_ERROR"))
+         (reader-results
+           (nshell.domain.parsing:read-submission
+            source :reader-context :sexp :source-path source-path))
+         (runtime-reader-results
+           (nshell.domain.parsing:read-submission
+            runtime-source :reader-context :sexp
+            :source-path runtime-source-path))
+         (macro-name
+           (intern "L02-K08-BAD-FORM" (find-package "NSHELL.USER")))
+         (runtime-macro-name
+           (intern "L02-K08-RUNTIME-BAD-FORM" (find-package "NSHELL.USER")))
+         (call-span
+           (let* ((call "(l02-k08-bad-form)")
+                  (start (search call source)))
+             (list start (+ start (length call)))))
+         (expansion-condition nil)
+         (runtime-condition nil))
+    (unwind-protect
+         (%call-with-sexp-evaluator-test-boundaries
+          context
+          (lambda ()
+            (nshell.application:evaluate-reader-result-in-context
+             context (first reader-results))
+            (setf expansion-condition
+                  (handler-case
+                      (progn
+                        (nshell.application:evaluate-reader-result-in-context
+                         context (second reader-results))
+                        nil)
+                    (error (condition) condition)))
+            (nshell.application:evaluate-reader-result-in-context
+             context (first runtime-reader-results))
+            (setf runtime-condition
+                  (handler-case
+                      (progn
+                        (nshell.application:evaluate-reader-result-in-context
+                         context (second runtime-reader-results))
+                        nil)
+                    (error (condition) condition)))
+            (expect t :to-equal
+                    (typep expansion-condition
+                           'nshell.application:command-macro-syntax-error))
+            (expect call-span :to-equal
+                    (and (typep expansion-condition
+                                'nshell.application:command-macro-syntax-error)
+                         (nshell.application:command-macro-syntax-error-source-span
+                          expansion-condition)))
+            (expect source-path :to-equal
+                    (and (typep expansion-condition
+                                'nshell.application:command-macro-syntax-error)
+                         (nshell.application:command-macro-syntax-error-source-path
+                          expansion-condition)))
+            (expect t :to-equal
+                    (and (typep expansion-condition
+                                'nshell.application:command-macro-syntax-error)
+                         (typep
+                          (nshell.application:command-macro-syntax-error-cause
+                           expansion-condition)
+                          'simple-error)))
+            (expect "K08_EXPANSION_ERROR" :to-equal
+                    (and (typep expansion-condition
+                                'nshell.application:command-macro-syntax-error)
+                         (let ((cause
+                                 (nshell.application:command-macro-syntax-error-cause
+                                  expansion-condition)))
+                           (and (typep cause 'simple-error)
+                                (simple-condition-format-control cause)))))
+            (expect t :to-equal (typep runtime-condition 'simple-error))
+            (expect nil :to-equal
+                    (typep runtime-condition
+                           'nshell.application:command-macro-syntax-error))
+            (expect "K08_RUNTIME_EVAL_ERROR" :to-equal
+                    (and (typep runtime-condition 'simple-error)
+                         (simple-condition-format-control runtime-condition)))))
+      (when (macro-function macro-name) (fmakunbound macro-name))
+      (when (macro-function runtime-macro-name)
+        (fmakunbound runtime-macro-name))))))
 
 (describe "sexp-evaluator-reader-integration"
   (it "reads-host-and-command-forms-through-the-real-ast-adapter"

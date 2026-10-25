@@ -1140,7 +1140,17 @@
         (lambda ()
           (let ((*package* (find-package "NSHELL.USER")))
             (multiple-value-bind (expansion expanded-p)
-                (macroexpand-1 host-form nil)
+                (handler-case
+                    (macroexpand-1 host-form nil)
+                  (command-macro-syntax-error (condition)
+                    (error condition))
+                  (error (cause)
+                    (error 'command-macro-syntax-error
+                           :source-span call-span
+                           :source-path
+                           (nshell.domain.parsing:reader-result-source-path
+                            reader-result)
+                           :cause cause)))
               (if expanded-p
                   (progn
                     (%propagate-expansion-origin expansion call-span)

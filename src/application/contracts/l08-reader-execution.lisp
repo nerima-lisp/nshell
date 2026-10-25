@@ -142,13 +142,19 @@
                    (let ((inner-commands
                            (%preflight-reader-process-substitution-entry entry)))
                      (dolist (inner-command inner-commands)
-                       (unless (command-node-external-p context inner-command)
-                         (%reader-plan-error
-                          (nshell.domain.parsing:ast-redirect-entry-source-span
-                           entry)
-                          :preflight
-                          (%reader-simple-condition
-                           "Process substitution requires external stages."))))
+                       (multiple-value-bind (dispatch-kind binding)
+                           (%resolve-command-stage-binding context inner-command)
+                         (unless (or (eq dispatch-kind :external)
+                                     (and (eq dispatch-kind :builtin)
+                                          (eq :argv
+                                              (builtin-binding-argument-mode
+                                               binding))))
+                           (%reader-plan-error
+                            (nshell.domain.parsing:ast-redirect-entry-source-span
+                             entry)
+                            :preflight
+                            (%reader-simple-condition
+                             "Process substitution requires external commands or :argv builtins.")))))
                      (push (list stage-index entry inner-commands) entries))))))
     (nreverse entries)))
 

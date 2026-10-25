@@ -203,7 +203,24 @@
                    (nshell.application::%execute-reader-sequence-node-in-context
                     stop-context stop-sequence nil)
                    (expect '("stop") :to-equal (nreverse stop-calls))))))
-        (setf (symbol-function executor-symbol) original-executor)))))
+        (setf (symbol-function executor-symbol) original-executor))))
+  (it "reader process substitution passes argv builtin output"
+    (let* ((source "grep -q C16_PROCESS_VALUE <(printf 'C16_PROCESS_VALUE')")
+           (reader-result
+             (first
+              (nshell.domain.parsing:read-submission
+               source :reader-context :auto)))
+           (context (make-test-shell-context :execution-strategy :os-pipes)))
+      (setf (nshell.application:shell-context-environment context)
+            (nshell.domain.environment:env-set
+             (nshell.application:shell-context-environment context)
+             "PATH" "/usr/bin:/bin" nil))
+      (multiple-value-bind (output status)
+          (nshell.application:evaluate-reader-result-in-context
+           context reader-result)
+        (declare (ignore output))
+        (expect 0 :to-equal status))))
+)
 
 (describe "reader-process-substitution-fd-flags"
   (it "sets close-on-exec on both pipeline endpoints"

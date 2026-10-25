@@ -29,6 +29,6 @@
   "invocation": {
     "kind": "script",
     "path": "scenario.nsh",
-    "text": "cat <(env printf 'C16_PROCESS_VALUE')"
+    "text": "cat <(printf 'C16_PROCESS_VALUE')"
   }
 }

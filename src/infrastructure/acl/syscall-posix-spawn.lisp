@@ -23,6 +23,13 @@
                                 %posix-spawn-file-actions-addclose) sb-alien:int
   (actions sb-sys:system-area-pointer)
   (fd sb-alien:int))
+(sb-alien:define-alien-routine ("posix_spawn_file_actions_addopen"
+                                %posix-spawn-file-actions-addopen) sb-alien:int
+  (actions sb-sys:system-area-pointer)
+  (fd sb-alien:int)
+  (path sb-alien:c-string)
+  (oflag sb-alien:int)
+  (mode sb-alien:unsigned-int))
 #+darwin
 (sb-alien:define-alien-routine ("posix_spawn_file_actions_addinherit_np"
                                 %posix-spawn-file-actions-addinherit) sb-alien:int
@@ -69,6 +76,7 @@
 (defconstant +spawn-f-setfd+ 2)
 (defconstant +spawn-f-dupfd+ 0)
 (defconstant +spawn-posix-spawn-setpgroup+ #x02)
+(defconstant +spawn-posix-spawn-setsid+ #+linux #x0080 #+darwin #x0400)
 (defconstant +spawn-posix-spawn-setsigdef+ #x04)
 (defconstant +spawn-posix-spawn-setsigmask+ #x08)
 (defconstant +spawn-posix-spawn-cloexec-default+ #x4000)
@@ -545,7 +553,7 @@
         when (and symbol (boundp symbol))
           collect (symbol-value symbol)))
 
-(defun %spawn-configure-attributes (attributes process-group)
+(defun %spawn-configure-attributes (attributes process-group &optional new-session-p)
   (let ((flags 0)
         (signals (sb-alien:make-alien sb-alien:unsigned-long 16)))
     (unwind-protect
@@ -556,6 +564,8 @@
               (%posix-spawnattr-setpgroup
                attributes (if (eq process-group :new) 0 process-group)))
              (setf flags (logior flags +spawn-posix-spawn-setpgroup+)))
+           (when new-session-p
+             (setf flags (logior flags +spawn-posix-spawn-setsid+)))
            (%spawn-check-result "sigemptyset"
                                 (%posix-sigemptyset (sb-alien:alien-sap signals)))
            (dolist (signal (%spawn-default-signal-numbers))

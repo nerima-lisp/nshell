@@ -5,29 +5,67 @@
       (get-terminal-size)
     (error () (values 24 80))))
 
-(defun %pty-fork-exec (program args environment master-fd slave-name rows cols
-                       new-session-p)
-  (let ((ready-read nil)
-        (ready-write nil)
-        (child-pid nil))
-    (%with-pty-exec-vectors (argv envp program args environment)
-      (unwind-protect
-           (progn
-             (multiple-value-setq (ready-read ready-write) (sb-posix:pipe))
-             (let ((pid (sb-posix:fork)))
-               (when (zerop pid)
-                 (%pty-close-fd ready-read)
-                 (%pty-child-exec program argv envp master-fd slave-name ready-write rows cols
-                                  new-session-p))
-               (%pty-close-fd ready-write)
-               (setf ready-write nil)
-               (%wait-for-pty-child-ready ready-read pid)
-               (%pty-close-fd ready-read)
-               (setf ready-read nil)
-               (setf child-pid pid)))
-        (%pty-close-fd ready-read)
-        (%pty-close-fd ready-write)))
-    child-pid))
+(defun %pty-posix-spawn (program args environment slave-name new-session-p)
+  (let ((actions (sb-alien:make-alien sb-alien:unsigned-long
+                                      +spawn-opaque-storage-words+))
+        (attributes (sb-alien:make-alien sb-alien:unsigned-long
+                                          +spawn-opaque-storage-words+))
+        (argv nil)
+        (envp nil)
+        (pid-storage nil)
+        (actions-initialized-p nil)
+        (attributes-initialized-p nil))
+    (unwind-protect
+         (progn
+           (setf argv (%spawn-c-string-vector (cons program args))
+                 envp (%spawn-c-string-vector environment)
+                 pid-storage (sb-alien:make-alien sb-alien:int))
+           (%spawn-check-result
+            "posix_spawn_file_actions_init"
+            (%posix-spawn-file-actions-init (sb-alien:alien-sap actions)))
+           (setf actions-initialized-p t)
+           (%spawn-check-result
+            "posix_spawnattr_init"
+            (%posix-spawnattr-init (sb-alien:alien-sap attributes)))
+           (setf attributes-initialized-p t)
+           (%spawn-check-result
+            "posix_spawn_file_actions_addopen"
+            (%posix-spawn-file-actions-addopen
+             (sb-alien:alien-sap actions)
+             0
+             slave-name
+             (logior sb-posix:o-rdwr
+                     (if new-session-p 0 sb-posix:o-noctty))
+             0))
+           (%spawn-add-file-actions
+            (sb-alien:alien-sap actions)
+            '((0 1) (0 2))
+            nil)
+           (%spawn-configure-attributes
+            (sb-alien:alien-sap attributes)
+            (if new-session-p nil :new)
+            new-session-p)
+           (%spawn-check-result
+            "posix_spawn"
+            (%posix-spawn
+             (sb-alien:alien-sap pid-storage)
+             program
+             (sb-alien:alien-sap actions)
+             (sb-alien:alien-sap attributes)
+             (sb-alien:alien-sap argv)
+             (sb-alien:alien-sap envp)))
+           (sb-alien:deref pid-storage))
+      (when attributes-initialized-p
+        (%posix-spawnattr-destroy (sb-alien:alien-sap attributes)))
+      (when actions-initialized-p
+        (%posix-spawn-file-actions-destroy (sb-alien:alien-sap actions)))
+      (sb-alien:free-alien attributes)
+      (sb-alien:free-alien actions)
+      (when pid-storage
+        (sb-alien:free-alien pid-storage))
+      (%spawn-free-c-string-vector argv)
+      (%spawn-free-c-string-vector envp)))
+)
 
 (defun %set-pty-window-size (slave-fd rows cols)
   (let ((winsize (sb-alien:make-alien sb-alien:unsigned-short 4)))
@@ -65,12 +103,13 @@
     (let ((master-stream nil))
       (handler-case
           (progn
-            (%pty-close-fd slave-fd)
-            (setf slave-fd nil)
-            (let* ((pid (%pty-fork-exec program args environment master-fd slave-name
-                                        rows cols new-session-p))
+            (%set-pty-window-size slave-fd rows cols)
+            (let* ((pid (%pty-posix-spawn program args environment slave-name
+                                          new-session-p))
                    (pgid pid))
-              (setf master-stream (make-pty-stream master-fd))
+              (%pty-close-fd slave-fd)
+              (setf slave-fd nil
+                    master-stream (make-pty-stream master-fd))
               (make-pty-process :pid pid
                                 :pgid pgid
                                 :master-fd master-fd
@@ -80,7 +119,8 @@
           (when master-stream
             (ignore-errors (close master-stream)))
           (pty-close master-fd slave-fd)
-          (error condition))))))
+          (error condition)))))
+)
 
 (defun %pty-output-tee (process output)
   (let ((buffer (make-array 4096 :element-type '(unsigned-byte 8)))

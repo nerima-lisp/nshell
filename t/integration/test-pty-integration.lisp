@@ -214,6 +214,42 @@
                           (nshell.infrastructure.acl:pty-process-master-fd pty)
                           "pty-ready")) :to-be-truthy))
         (pty-test-close-process pty)))))
+  (it "pty-spawn-works-with-live-background-threads"
+    "An unrelated live worker cannot prevent PTY child creation."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (let ((started (sb-thread:make-semaphore :count 0))
+            (release (sb-thread:make-semaphore :count 0))
+            (worker nil)
+            (pty nil))
+        (unwind-protect
+             (progn
+               (setf worker
+                     (sb-thread:make-thread
+                      (lambda ()
+                        (sb-thread:signal-semaphore started)
+                        (unless (sb-thread:wait-on-semaphore release :timeout 5)
+                          (error "PTY live worker was not released")))
+                      :name "PTY live worker regression test"))
+               (expect (sb-thread:wait-on-semaphore started :timeout 2)
+                       :to-be-truthy)
+               (setf pty
+                     (nshell.infrastructure.acl:pty-spawn
+                      "/bin/sh" '("-c" "printf pty-live-thread-ready")))
+               (expect (search "pty-live-thread-ready"
+                               (pty-test-read-until
+                                (nshell.infrastructure.acl:pty-process-master-fd pty)
+                                "pty-live-thread-ready"))
+                       :to-be-truthy)
+               (expect :exited :to-be
+                 (nshell.infrastructure.acl:pty-process-wait pty)))
+          (sb-thread:signal-semaphore release)
+          (when worker
+            (sb-thread:join-thread worker))
+          (pty-test-close-process pty))))
+)
 
   (it "pty-tee-retains-output-while-forwarding-it"
     "The foreground runner tees child output into the bounded ring buffer."

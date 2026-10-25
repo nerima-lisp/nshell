@@ -149,14 +149,14 @@ left or the right, so the caller sees at most MAX-SPLITS+1 fields."
       (%parse-string-flags args "string" flag-specs)
     (when error
       (return-from %string-pattern-builtin (values error 1)))
-    (when regex-p
+    (when (and regex-p regex-error-builtin)
       (return-from %string-pattern-builtin
         (values
-          (format nil "~a: -r requires regular expressions, which this build does not provide~%"
+          (format nil "~a: -r is not supported~%"
                   regex-error-builtin)
           2)))
     (if (< (length remaining) required-args) (%builtin-string-usage)
-      (funcall collector quiet-p all-p ignore-case-p remaining))))
+      (funcall collector quiet-p all-p ignore-case-p regex-p remaining))))
 
 (define-builtin %builtin-string-replace (context args) ()
   (%string-pattern-builtin
@@ -164,7 +164,8 @@ left or the right, so the caller sees at most MAX-SPLITS+1 fields."
     +string-replace-flag-option-specs+
     3
     "string replace"
-    (lambda (quiet-p all-p ignore-case-p remaining)
+    (lambda (quiet-p all-p ignore-case-p regex-p remaining)
+      (declare (ignore regex-p))
       (let ((pattern (first remaining))
             (replacement (second remaining))
             (values (cddr remaining)))
@@ -186,8 +187,8 @@ left or the right, so the caller sees at most MAX-SPLITS+1 fields."
     args
     +string-match-flag-option-specs+
     2
-    "string match"
-    (lambda (quiet-p all-p ignore-case-p remaining)
+    nil
+    (lambda (quiet-p all-p ignore-case-p regex-p remaining)
       (declare (ignore all-p))
       (let ((pattern (first remaining))
             (values (rest remaining)))
@@ -195,8 +196,12 @@ left or the right, so the caller sees at most MAX-SPLITS+1 fields."
           values
           quiet-p
           (lambda (text)
-            (if (%string-wildcard-match-p pattern text :ignore-case ignore-case-p) (values text t)
-              (values nil nil))))))))
+            (if (if regex-p
+                    (nshell.user::%regex-match-p
+                     pattern text :case-insensitive-p ignore-case-p)
+                    (%string-wildcard-match-p pattern text :ignore-case ignore-case-p))
+                (values text t)
+                (values nil nil))))))))
 
 (defun %parse-string-sub-options (remaining)
   (let ((start 1)

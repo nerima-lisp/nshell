@@ -365,19 +365,26 @@
          :code 0
          :output (format nil "-~%")))))
 
-  (it "string-builtin-match-and-replace-report-missing-regex-support"
-    "string match/replace -r fails with a regex-support error instead of a silent literal match."
+  (it "O10-string-builtin-matches-regular-expressions"
+    "string match -r honors case-insensitive matching and leaves string replace -r rejected."
+    (cl-weave:expect-assertions 10)
     (with-builtins-context (context)
       (assert-string-builtin-cases (context)
-        ('("match" "-r" "a.b" "aXb")
+        ((list "match" "-r" "^a.b$" "aXb")
+         :code 0
+         :output (format nil "aXb~%"))
+        ((list "match" "--regex" "^a.b$" "aXb")
+         :code 0
+         :output (format nil "aXb~%"))
+        ((list "match" "-i" "-r" "^a.b$" "AXB")
+         :code 0
+         :output (format nil "AXB~%"))
+        ((list "match" "-r" "^a.b$" "ab")
+         :code 1
+         :output "")
+        ((list "replace" "-r" "a.b" "X" "aXb")
          :code 2
-         :contains '("string match: -r requires regular expressions, which this build does not provide"))
-        ('("match" "--regex" "a.b" "aXb")
-         :code 2
-         :contains '("string match: -r requires regular expressions, which this build does not provide"))
-        ('("replace" "-r" "a.b" "X" "aXb")
-         :code 2
-         :contains '("string replace: -r requires regular expressions, which this build does not provide")))))
+         :contains (list "string replace: -r is not supported")))))
 
   (it "string-prefix-p-tests-leading-substring"
     "string-prefix-p returns true only when prefix is a leading substring of string."

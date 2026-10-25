@@ -47,14 +47,16 @@ one, `prompt preview FORMAT` renders a format without installing it, and
 [Customizing the prompt](../guide/customization.md#customizing-the-prompt).
 
 **`string`** is the fish-style string toolkit (`string upper`, `string split`,
-and friends) rather than a single-purpose command. Every subcommand rejects an
-option it does not define instead of silently treating it as data; `--` ends
+and friends) rather than a single-purpose command. Each subcommand rejects a
+leading option it does not define instead of treating it as data; `--` ends
 option parsing and a lone `-` is a literal argument. `string split` supports
-`-m`/`--max N` (split at most N times, leaving the remainder in the last
-field) and `-r`/`--right` (split from the right); `string trim` supports
-`-l`/`--left`, `-r`/`--right`, and `-c`/`--chars CHARS`. `string match -r` and
-`string replace -r` report that this build has no regex engine rather than
-falling back to a literal match.
+`-m`/`--max N` (split at most N times; left splitting leaves the remainder in
+the last field) and `-r`/`--right` (split from the right, leaving the remainder
+in the first field); `string trim` supports
+`-l`/`--left`, `-r`/`--right`, and `-c`/`--chars CHARS`. `string match -r`
+matches with regular expressions and supports `-i`/`--ignore-case`; `string
+replace -r` is unsupported and reports an error instead of falling back to a
+literal match.
 
 **`complete`** registers completion metadata for a command, feeding the same
 knowledge base the built-in command catalog uses. `complete -C LINE` is the

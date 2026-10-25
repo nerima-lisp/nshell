@@ -50,15 +50,26 @@
   (%reset-repl-state-tables))
 
 (defun %run-batch-source-lines (lines)
-  (handler-case
-         (multiple-value-bind (output code)
-             (%with-repl-shell-context (context)
-               (nshell.application:source-lines context lines))
-        (declare (ignore output))
-        (setf *last-exit-code* (or code 0)))
-    (error (condition)
-      (format *error-output* "nshell error: ~a~%" condition)
-      (setf *last-exit-code* 1))))
+  (let ((command-not-found-command nil))
+    (handler-case
+        (multiple-value-bind (output code)
+            (let ((nshell.infrastructure.acl:*command-not-found-hook*
+                    (lambda (command)
+                      (setf command-not-found-command command))))
+              (%with-repl-shell-context (context)
+                (nshell.application:source-lines context lines)))
+          (declare (ignore output))
+          (setf *last-exit-code* (or code 0))
+          (when (and (= *last-exit-code* 127)
+                     command-not-found-command)
+            (let ((corrections
+                    (%repl-command-corrections command-not-found-command)))
+              (when corrections
+                (format t "nshell: did you mean: ~{~a~^, ~}?~%" corrections))))
+          *last-exit-code*)
+      (error (condition)
+        (format *error-output* "nshell error: ~a~%" condition)
+        (setf *last-exit-code* 1)))))
 
 (defun run-repl-batch (&key line script-args)
   "Batch mode for stdin or the nshell-specific --command option.

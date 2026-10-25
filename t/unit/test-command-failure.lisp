@@ -215,3 +215,64 @@
                           (expect read-count :to-equal 2)
                           (expect results :to-equal (list nil 0))))
                     (setf (symbol-function executor-symbol) original-executor))))))
+
+(describe "missing-command-suggestion-tests"
+  (it "uses external knowledge and PATH candidates without spawning commands"
+    (with-repl-test-state
+      (nshell.presentation::seed-repl-completion-knowledge-base
+       nshell.presentation::*kb*)
+      (repl-test-set-env "PATH" "/__nshell_c04_empty_path__")
+      (expect (nshell.domain.completion:kb-command-present-p
+               nshell.presentation::*kb* "git")
+              :to-be-truthy)
+      (expect (member "git" (nshell.presentation::%repl-path-command-names)
+                      :test #'string=)
+              :to-be-null)
+      (let ((spawn-count 0))
+        (with-rebound-function
+            (nshell.infrastructure.acl::%spawn-posix-process
+             (lambda (&rest arguments)
+               (declare (ignore arguments))
+               (incf spawn-count)
+               (error "missing-command suggestions must not spawn processes")))
+          (expect (member "git"
+                          (nshell.presentation::%repl-command-corrections "gti")
+                          :test #'string=)
+                  :to-be-truthy)
+          (setf nshell.presentation::*kb*
+                (nshell.domain.completion:make-empty-knowledge-base))
+          (repl-test-set-env "PATH" "/usr/bin:/bin")
+          (expect (nshell.domain.completion:kb-command-present-p
+                   nshell.presentation::*kb* "grep")
+                  :to-be-null)
+          (expect (member "grep"
+                          (nshell.presentation::%repl-command-corrections "grpe")
+                          :test #'string=)
+                  :to-be-truthy))
+        (expect 0 :to-equal spawn-count))))
+  (it "batch diagnostics suggest known commands and preserve status 127 without spawning"
+      (with-repl-test-state
+       (nshell.presentation::seed-repl-completion-knowledge-base
+        nshell.presentation::*kb*)
+       (repl-test-set-env "PATH" "/__nshell_c04_empty_path__")
+       (let ((spawn-count 0)
+             (code nil)
+             (printed nil))
+         (setf printed
+               (with-output-to-string (*standard-output*)
+                 (let ((*error-output* *standard-output*))
+                   (with-rebound-function
+                    (nshell.infrastructure.acl::%spawn-posix-process
+                     (lambda (&rest arguments)
+                       (declare (ignore arguments))
+                       (incf spawn-count)
+                       (error "batch missing-command suggestions must not spawn processes")))
+                    (setf code
+                          (nshell.presentation::%run-batch-source-lines
+                           (list "gti")))))))
+         (expect 127 :to-equal code)
+         (expect 127 :to-equal nshell.presentation::*last-exit-code*)
+         (expect (search "nshell: gti: command not found" printed) :to-be-truthy)
+         (expect (search "nshell: did you mean: git" printed) :to-be-truthy)
+         (expect 0 :to-equal spawn-count)))))
+

@@ -29,9 +29,6 @@
     },
     "exit_code": 127
   },
-  "expected_failure": {
-    "reason": "WP-C04 owns the missing-command candidate knowledge base and suggestions; the current diagnostic omits candidate commands."
-  },
   "invocation": {
     "kind": "command",
     "text": "echp C04"

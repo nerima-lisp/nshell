@@ -86,6 +86,8 @@ directory listing so a correction never walks PATH itself."
           (%repl-table-names *functions*)
           (%repl-table-names *aliases*)
           (%repl-table-names *abbreviations*)
+          (when *kb*
+            (nshell.domain.completion::kb-registered-commands *kb*))
           (%repl-path-command-names)))
 
 (defun %repl-command-corrections (name &key (limit 3))

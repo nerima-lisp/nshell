@@ -68,6 +68,11 @@
       "text": "sh -c 'stty -a | grep -Eq \"(^|[[:space:];])icanon([[:space:];]|$)\" && printf \"%s%s\" D11_CANON_ OK; stty -a | grep -Eq \"(^|[[:space:];])isig([[:space:];]|$)\" && printf \"%s%s\" D11_ISIG_ OK; stty -a | grep -Eq \"(^|[[:space:];])echo([[:space:];]|$)\" && printf \"%s%s\" D11_ECHO_ OK; printf \"%s%s\" D11_CHECK_ DONE'"
     },
     {
+      "type": "wait_input",
+      "contains": "D11_CHECK_ DONE",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "Enter"
     },

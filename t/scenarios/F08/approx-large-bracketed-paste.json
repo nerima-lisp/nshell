@@ -46,6 +46,11 @@
       "text": "' | wc -c; echo $F08_DONE"
     },
     {
+      "type": "wait_input",
+      "contains": "F08_DONE",
+      "timeout_seconds": 30
+    },
+    {
       "type": "key",
       "key": "Enter"
     },

@@ -39,7 +39,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo \"$F07_FIRST"
+      "text": "printf '%s\\n' \"$F07_FIRST\" &&"
     },
     {
       "type": "key",
@@ -47,7 +47,7 @@
     },
     {
       "type": "keys",
-      "text": "and $F07_SECOND\""
+      "text": "echo \"$F07_SECOND\""
     },
     {
       "type": "key",

@@ -8,8 +8,7 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb",
-      "NSHELL_READER": "sexp"
+      "TERM": "dumb"
     },
     "home": "home",
     "cwd": "work",

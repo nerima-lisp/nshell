@@ -38,7 +38,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "begin"
+      "text": "(progn"
     },
     {
       "type": "key",
@@ -46,7 +46,7 @@
     },
     {
       "type": "keys",
-      "text": "touch G05_FIRST"
+      "text": "(^touch G05_FIRST"
     },
     {
       "type": "key",
@@ -54,7 +54,19 @@
     },
     {
       "type": "keys",
-      "text": "touch G05_SECOND"
+      "text": ")"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "(^touch G05_SECOND)"
+    },
+    {
+      "type": "key",
+      "key": "Up"
     },
     {
       "type": "key",
@@ -74,11 +86,19 @@
     },
     {
       "type": "key",
+      "key": "Down"
+    },
+    {
+      "type": "key",
+      "key": "C-e"
+    },
+    {
+      "type": "key",
       "key": "Enter"
     },
     {
       "type": "keys",
-      "text": "end"
+      "text": ")"
     },
     {
       "type": "key",

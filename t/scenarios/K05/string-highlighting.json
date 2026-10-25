@@ -27,6 +27,11 @@
       "text": "echo \"K05_STRING_VALUE\""
     },
     {
+      "type": "wait_input",
+      "contains": "K05_STRING_VALUE",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "C-c"
     },

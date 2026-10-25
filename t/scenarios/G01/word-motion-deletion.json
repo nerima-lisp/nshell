@@ -24,6 +24,7 @@
     {"type": "key", "key": "M-b"},
     {"type": "key", "key": "M-b"},
     {"type": "key", "key": "M-d"},
+    {"type": "wait_screen", "contains": "checker.sh  proof", "timeout_seconds": 10},
     {"type": "key", "key": "Enter"},
     {"type": "wait", "contains": "G01_WORD_MOTION_DELETE_OK"},
     {"type": "keys", "text": "exit"},

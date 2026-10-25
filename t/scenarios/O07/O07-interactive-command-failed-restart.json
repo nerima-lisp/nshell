@@ -9,8 +9,7 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "O07> ",
-      "SCENARIO_MARKER": "O07_RESTART_CONTINUED_2",
-      "NSHELL_READER": "sexp"
+      "SCENARIO_MARKER": "O07_RESTART_CONTINUED_2"
     },
     "home": "home",
     "cwd": "work",

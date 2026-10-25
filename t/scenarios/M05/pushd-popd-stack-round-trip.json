@@ -22,7 +22,7 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "mkdir a b; pushd a; pushd ../b; popd; pwd > stack.txt"
+    "text": "mkdir a b; pushd a; pushd ../b; popd; pwd > ../stack.txt"
   },
   "expected": {
     "exit_code": 0,

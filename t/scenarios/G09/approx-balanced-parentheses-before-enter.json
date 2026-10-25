@@ -33,7 +33,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo $G09_MESSAGE $(echo G09_SUB"
+      "text": "(echo $G09_MESSAGE G09_SUB"
     },
     {
       "type": "key",
@@ -79,7 +79,7 @@
     },
     {
       "type": "keys",
-      "text": "echo G09_AFTER_$((1+1))"
+      "text": "(format t \"G09_AFTER_~d~%\" (+ 1 1))"
     },
     {
       "type": "key",

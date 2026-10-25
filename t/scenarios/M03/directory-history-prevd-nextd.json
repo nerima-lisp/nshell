@@ -22,7 +22,7 @@
   },
   "invocation": {
     "kind": "command",
-    "text": "mkdir a b; cd a; cd ../b; prevd; pwd > visits.txt; nextd; pwd >> visits.txt"
+    "text": "mkdir a b; cd a; cd ../b; prevd; pwd > ../visits.txt; nextd; pwd >> ../visits.txt"
   },
   "expected": {
     "exit_code": 0,

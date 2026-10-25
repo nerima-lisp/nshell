@@ -25,7 +25,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "touch \"$SCENARIO_FILE\"; echo I06_$((1+1))"
+      "text": "(progn (touch $SCENARIO_FILE) (format t \"I06_~d~%\" (+ 1 1)))"
     },
     {
       "type": "key",
@@ -38,7 +38,7 @@
     },
     {
       "type": "keys",
-      "text": "rm \"$SCENARIO_FILE\"; printf 'I06_MARKER_%s\\n' \"$((1+1))\""
+      "text": "(progn (rm $SCENARIO_FILE) (format t \"I06_MARKER_~d~%\" (+ 1 1)))"
     },
     {
       "type": "key",
@@ -63,7 +63,7 @@
     },
     {
       "type": "keys",
-      "text": "echo I06_AFTER_$((1+1))"
+      "text": "(format t \"I06_AFTER_~d~%\" (+ 1 1))"
     },
     {
       "type": "key",
@@ -73,6 +73,14 @@
       "type": "wait",
       "contains": "I06_AFTER_2",
       "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "true"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
     },
     {
       "type": "keys",

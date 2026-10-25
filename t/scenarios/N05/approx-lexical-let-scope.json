@@ -21,8 +21,9 @@
     "files": []
   },
   "invocation": {
-    "kind": "command",
-    "text": "set lexical_scope outer; function scope_probe; set -l lexical_scope inner; echo $lexical_scope; end; scope_probe; echo $lexical_scope"
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(set lexical_scope \"outer\")\n(defun scope_probe () (let ((lexical_scope \"inner\")) (echo $lexical_scope)))\n(scope_probe)\n(echo $lexical_scope)\n"
   },
   "expected": {
     "stdout": {

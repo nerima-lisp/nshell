@@ -6,7 +6,6 @@
   "mode": "batch",
   "environment": {
     "variables": {
-      "NSHELL_READER": "sexp",
       "PATH": "/usr/bin:/bin",
       "TERM": "dumb"
     },

@@ -52,6 +52,11 @@
       "key": "Enter"
     },
     {
+      "type": "wait",
+      "contains": "G13_YANK",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "C-c"
     },

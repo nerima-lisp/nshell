@@ -69,6 +69,11 @@
       "text": "jobs > stopped-pipeline-jobs.txt; grep -c Stopped stopped-pipeline-jobs.txt > stopped-pipeline-count.txt; kill %1; wait %1; echo E07_JOBS_CAPTURED_$((3+4))"
     },
     {
+      "type": "wait_input",
+      "contains": "E07_JOBS_CAPTURED_$((3+4))",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "Enter"
     },

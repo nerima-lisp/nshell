@@ -8,7 +8,6 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "NSHELL_READER": "sexp",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "K04_READY ",
       "NSHELL_RIGHT_PROMPT": "{time}"

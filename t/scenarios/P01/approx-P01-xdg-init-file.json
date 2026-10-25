@@ -9,8 +9,7 @@
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
       "NSHELL_PROMPT": "P01> ",
-      "SCENARIO_MARKER": "P01_SYNC_17",
-      "NSHELL_READER": "sexp"
+      "SCENARIO_MARKER": "P01_SYNC_17"
     },
     "home": "home",
     "cwd": "work",

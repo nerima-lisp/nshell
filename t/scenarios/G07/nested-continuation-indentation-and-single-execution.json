@@ -47,7 +47,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo G07_ONCE $(echo $(printf x >> G07_COUNT; echo G07_SUB"
+      "text": "(progn)        (progn (progn (format t \"G07_ONCE \") (printf x >> G07_COUNT) (format t \"G07_SUB~%\")"
     },
     {
       "type": "key",

@@ -1,13 +1,17 @@
 {
   "id": "J04-home-and-variable-path",
-  "uc": ["J04"],
+  "uc": [
+    "J04"
+  ],
   "mode": "pty",
   "input_delay_seconds": 0.1,
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "SCENARIO_J04-home-and-variable-path> "
+      "NSHELL_PROMPT": "SCENARIO_J04-home-and-variable-path> ",
+      "TARGET": "../home/target",
+      "NOTE": "../home/target/variable-note.txt"
     },
     "home": "home",
     "cwd": "work",
@@ -29,23 +33,76 @@
     ]
   },
   "steps": [
-    {"type": "keys", "text": "export TARGET=$HOME/target"},
-    {"type": "key", "key": "Enter"},
-    {"type": "keys", "text": "cat $TARGET/variable-"},
-    {"type": "key", "key": "Tab"},
-    {"type": "key", "key": "Enter"},
-    {"type": "wait", "contains": "J04_VARIABLE_PATH_OK"},
-    {"type": "keys", "text": "cat ~/target/home-"},
-    {"type": "key", "key": "Tab"},
-    {"type": "key", "key": "Enter"},
-    {"type": "wait", "contains": "J04_HOME_PATH_OK"},
-    {"type": "keys", "text": "exit"},
-    {"type": "key", "key": "Enter"},
-    {"type": "wait_exit"}
+    {
+      "type": "keys",
+      "text": "(cat $TARGET/variable-)"
+    },
+    {
+      "type": "key",
+      "key": "C-b"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "wait_screen",
+      "contains": "$TARGET/variable-note.txt"
+    },
+    {
+      "type": "key",
+      "key": "C-a"
+    },
+    {
+      "type": "key",
+      "key": "C-k"
+    },
+    {
+      "type": "keys",
+      "text": "(cat $NOTE)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "J04_VARIABLE_PATH_OK"
+    },
+    {
+      "type": "keys",
+      "text": "cat ~/target/home-"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "J04_HOME_PATH_OK"
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit"
+    }
   ],
   "expected": {
     "stream": {
-      "contains": ["J04_VARIABLE_PATH_OK", "J04_HOME_PATH_OK"]
+      "contains": [
+        "J04_VARIABLE_PATH_OK",
+        "J04_HOME_PATH_OK"
+      ]
     },
     "exit_code": 0
   }

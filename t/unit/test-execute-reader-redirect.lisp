@@ -22,8 +22,7 @@
                              (sb-sys:with-pinned-objects (octets)
                                (sb-posix:write fd
                                                (sb-sys:vector-sap octets)
-                                               (length octets))))))
-            (dolist (redirect-case
+                                               (length octets))))))) (dolist (redirect-case
                       (list
                        (list :output-file 1 :output "new" "new")
                        (list :force-output-file 1 :output "new" "new")
@@ -52,7 +51,7 @@
                          (write-source source-fd text))
                     (sb-posix:close source-fd))
                   (expect expected :to-equal
-                          (host-kit:read-file-string path)))))))))))
+                          (host-kit:read-file-string path))))))))))
 
   (it "opens-input-files-and-here-strings-as-parent-owned-readable-fds"
     (with-temporary-function
@@ -72,9 +71,7 @@
                                                    (sb-sys:vector-sap octets)
                                                    (length octets)))))
                        (sb-ext:octets-to-string
-                        (subseq octets 0 count) :external-format :utf-8))))
-            (host-kit:write-file-string (format nil "input~%") path)
-            (let* ((redirect
+                        (subseq octets 0 count) :external-format :utf-8))))) (host-kit:write-file-string (format nil "input~%") path) (let* ((redirect
                      (nshell.domain.parsing:make-ast-redirect-entry
                       :input-file 0
                       (nshell.domain.parsing:make-command-arg path-string)
@@ -92,8 +89,7 @@
                              (member source-fd (list 0 3) :test #'eql))
                      (expect (format nil "input~%") :to-equal
                              (read-source source-fd)))
-                (sb-posix:close source-fd)))
-            (let* ((redirect
+                (sb-posix:close source-fd))) (let* ((redirect
                      (nshell.domain.parsing:make-ast-redirect-entry
                       :here-string 0
                       (nshell.domain.parsing:make-command-arg "unused")
@@ -108,7 +104,7 @@
               (unwind-protect
                    (expect (format nil "here~%") :to-equal
                            (read-source source-fd))
-                (sb-posix:close source-fd)))))))))
+                (sb-posix:close source-fd))))))))
 
   (it "strips-tabs-before-expansion-and-preserves-quoted-heredoc-text"
     (let* ((environment

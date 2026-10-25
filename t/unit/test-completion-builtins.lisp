@@ -74,12 +74,12 @@
     (dolist (case '(("he" "help" "show help")
                     ("his" "history" "show and manage command history")
                     ("str" "string" "manipulate strings")
-                    ("ec" "echo" "print arguments")
+                    ("ec" "echo" "print arguments; use $NAME or ,EXPR for S-expression values")
                     ("pw" "pwd" "print working directory")
                     ("ex" "exit" "exit the shell")
                     ("so" "source" "execute commands from file")
                     ("re" "read" "read line of input")
-                    ("fu" "function" "manage functions")
+                    ("fu" "function" "define shell functions with defun")
                     ("co" "contains" "test whether a value is present")
                     ("no" "not" "invert command status")))
       (destructuring-bind (prefix text description) case
@@ -174,7 +174,7 @@
         (expect '("echo")
                 :to-equal
                 (completion-texts catalog-candidates))
-        (expect "print arguments"
+        (expect "print arguments; use $NAME or ,EXPR for S-expression values"
                 :to-equal
                 (nshell.domain.completion:candidate-description
                  (first catalog-candidates))))))

@@ -459,7 +459,7 @@
     (with-builtins-context (context)
       (assert-builtin-call (context "help" nil)
         :code 0
-        :contains '("nshell builtin commands:" "echo [string ...] - print arguments"
+        :contains '("nshell builtin commands:" "echo [argument ...] - print arguments; use $NAME or ,EXPR for S-expression values"
                     "help [command] - show help"
                     "history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size] - show and manage command history"
                     "contains [-i|--index] string [values...] - test whether a value is present"))

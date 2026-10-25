@@ -86,11 +86,23 @@ def _run_main_for_pty_scenario(
                 return real_session.wait_for(self, text, start, timeout)
             return 0
 
+        def send_text(self, _text: str) -> None:
+            pass
+
+        def wait_after_input(self, _delay: float) -> None:
+            pass
+
         def wait_for_screen(self, text: str | None, timeout: float,
                             excludes: list[str] | None = None) -> str | None:
             if timeout_at == "wait_screen":
                 self.deadline = 0
                 return real_session.wait_for_screen(self, text, timeout, excludes)
+            return None
+
+        def wait_for_input(self, text: str, timeout: float) -> str | None:
+            if timeout_at == "wait_input":
+                self.deadline = 0
+                return real_session.wait_for_screen(self, text, timeout)
             return None
 
         def wait_exit(self, timeout: float) -> int:
@@ -290,6 +302,9 @@ class ScenarioRunnerTests(unittest.TestCase):
                                 excludes: list[str] | None = None) -> None:
                 events.append(("wait_screen", (text, timeout, excludes or [])))
 
+            def wait_for_input(self, text: str, timeout: float) -> None:
+                events.append(("wait_input", (text, timeout)))
+
             def wait_exit(self, timeout: float) -> int:
                 events.append(("wait_exit", timeout))
                 return 23
@@ -309,6 +324,7 @@ class ScenarioRunnerTests(unittest.TestCase):
                 {"type": "keys", "text": "before"},
                 {"type": "key", "key": "C-c", "input_delay_seconds": 0},
                 {"type": "keys", "text": "after"},
+                {"type": "wait_input", "contains": "after", "timeout_seconds": 6},
                 {"type": "resize", "columns": 24, "rows": 20},
                 {"type": "wait_screen", "contains": "VISIBLE_SCREEN", "excludes": ["STALE_SCREEN"],
                  "timeout_seconds": 6},
@@ -328,6 +344,7 @@ class ScenarioRunnerTests(unittest.TestCase):
             ("delay", 0),
             ("keys", "after"),
             ("delay", 0.5),
+            ("wait_input", ("after", 6)),
             ("resize", (24, 20)),
             ("wait_screen", ("VISIBLE_SCREEN", 6, ["STALE_SCREEN"])),
             ("wait_exit", 8),
@@ -358,6 +375,22 @@ class ScenarioRunnerTests(unittest.TestCase):
             patch.object(session, "_read") as read,
         ):
             session.wait_for_screen("VISIBLE_SCREEN", 1)
+
+        self.assertEqual(capture.call_count, 2)
+        read.assert_called_once_with(0.1)
+
+    def test_tmux_wait_for_input_polls_until_typed_input_is_visible(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.deadline = 10.0
+        session.scenario = {"id": "input-wait"}
+        session.exit_waiter = None
+
+        with (
+            patch.object(runner.time, "monotonic", side_effect=[1.0, 1.05]),
+            patch.object(session, "_capture", side_effect=["initial screen", "TYPED_INPUT"]) as capture,
+            patch.object(session, "_read") as read,
+        ):
+            session.wait_for_input("TYPED_INPUT", 1)
 
         self.assertEqual(capture.call_count, 2)
         read.assert_called_once_with(0.1)
@@ -633,6 +666,36 @@ class ScenarioRunnerTests(unittest.TestCase):
         scenario["timeout_seconds"] = 1.2
         with self.assertRaisesRegex(runner.ScenarioError, "fit within timeout_seconds"):
             self._load_one(scenario, "paced-input.json")
+
+    def test_pty_wait_input_requires_and_allows_matching_typed_input(self) -> None:
+        scenario = _pty_scenario(
+            "typed-input-wait",
+            [
+                {"type": "keys", "text": "suffix TYPED_INPUT"},
+                {"type": "wait_input", "contains": "TYPED_INPUT", "timeout_seconds": 5},
+                {"type": "wait_exit"},
+            ],
+            {"exit_code": 0},
+        )
+        self._load_one(scenario, "typed-input-wait.json")
+
+        scenario["steps"][0]["text"] = "suffix OTHER_INPUT"
+        with self.assertRaisesRegex(runner.ScenarioError, "must match preceding typed input"):
+            self._load_one(scenario, "typed-input-wait.json")
+
+    def test_pty_wait_input_does_not_allow_input_echo_as_output(self) -> None:
+        scenario = _pty_scenario(
+            "typed-input-is-not-output",
+            [
+                {"type": "keys", "text": "echo INPUT_OUTPUT_OVERLAP"},
+                {"type": "wait_input", "contains": "INPUT_OUTPUT_OVERLAP"},
+                {"type": "wait_exit"},
+            ],
+            {"stream": {"contains": ["INPUT_OUTPUT_OVERLAP"]}, "exit_code": 0},
+        )
+
+        with self.assertRaisesRegex(runner.ScenarioError, "input echo"):
+            self._load_one(scenario, "typed-input-is-not-output.json")
 
     def test_pty_input_delay_checks_remaining_deadline(self) -> None:
         session = runner.TmuxSession.__new__(runner.TmuxSession)
@@ -1301,12 +1364,14 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertNotIn("XFAIL timeout-stays-fail", output.getvalue())
 
     def test_pty_wait_timeouts_are_xfail_with_expected_failure_marker(self) -> None:
-        for kind in ("wait", "wait_screen", "wait_exit"):
+        for kind in ("wait", "wait_input", "wait_screen", "wait_exit"):
             with self.subTest(kind=kind):
                 step = {"type": kind}
-                if kind in ("wait", "wait_screen"):
+                if kind in ("wait", "wait_input", "wait_screen"):
                     step["contains"] = "READY"
                 steps = [step] if kind == "wait_exit" else [step, {"type": "wait_exit"}]
+                if kind == "wait_input":
+                    steps.insert(0, {"type": "keys", "text": "READY"})
                 scenario = _pty_scenario(
                     f"pty-{kind}-timeout-xfail", steps, {"exit_code": 0}
                 )

@@ -10,19 +10,22 @@
                line
                (format nil "~%")))
 
+(defun %source-continuation-uses-here-document-p (result)
+  (or (nshell.domain.parsing:parse-diagnostic-kind-p
+       result :incomplete-here-document)
+      (and (nshell.domain.parsing:parse-result-incomplete result)
+           (not (nshell.domain.parsing:parse-diagnostic-kind-p
+                 result :trailing-continuation))
+           (not (nshell.domain.parsing:parse-diagnostic-kind-p
+                 result :unclosed-block)))))
+
 (defun %append-source-continuation (text line result)
-  (if (or (nshell.domain.parsing:parse-diagnostic-kind-p
-           result :incomplete-here-document)
-          (and (nshell.domain.parsing:parse-result-incomplete result)
-               (not (nshell.domain.parsing:parse-diagnostic-kind-p
-                     result :trailing-continuation))
-               (not (nshell.domain.parsing:parse-diagnostic-kind-p
-                     result :unclosed-block))))
+  (if (%source-continuation-uses-here-document-p result)
       (%append-source-here-document-line text line)
       (concatenate 'string
                    text
                    (if (nshell.domain.parsing:parse-diagnostic-kind-p
-                       result :trailing-continuation)
+                        result :trailing-continuation)
                        " "
                        "; ")
                    line)))
@@ -419,7 +422,9 @@ which are skipped rather than parsed."
                                           (%append-source-continuation
                                            text next-line parse-result)))
                                     (next-source-map
-                                      (if sexp-p
+                                      (if (or sexp-p
+                                              (%source-continuation-uses-here-document-p
+                                               parse-result))
                                           (append-here-document-source-map
                                            source-map text next-line
                                            next-line-offset source-length)

@@ -149,6 +149,30 @@
       (expect "inline-doc" :to-equal (nshell.domain.environment:env-get
                     (nshell.application:shell-context-environment context)
                     "captured"))))
+  (it "source-pipeline-file-backed-heredoc-keeps-following-command-source-map"
+    "source preserves reader spans after a file-backed here-document continuation."
+    (with-builtins-source-tree
+        (context root source :prefix "nshell-test-source-heredoc-map")
+      (write-test-lines source
+                        '("read captured << EOF"
+                          "inline-doc"
+                          "EOF"
+                          "read following <<< after"))
+      (with-temporary-function
+          ('uiop:getenv
+           (lambda (name)
+             (when (string= name "NSHELL_READER") "sexp")))
+        (expect 0 :to-equal
+                (nth-value 1
+                 (call-source-file context source)))
+        (expect "inline-doc" :to-equal
+                (nshell.domain.environment:env-get
+                 (nshell.application:shell-context-environment context)
+                 "captured"))
+        (expect "after" :to-equal
+                (nshell.domain.environment:env-get
+                 (nshell.application:shell-context-environment context)
+                 "following")))))
 
   (it "source-pipeline-input-redirect-overrides-pipe-input"
     "source applies input redirects on builtin pipeline stages."

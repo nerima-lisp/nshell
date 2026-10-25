@@ -28,8 +28,5 @@
       "contains": ["next"]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L08 owns short-circuiting and sequencing; WP-L05 owns foreground stage execution."
   }
 }

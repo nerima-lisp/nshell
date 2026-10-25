@@ -34,8 +34,5 @@
       "equals": ""
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L08 reader execution and WP-L06 scalar argv conversion are not implemented."
   }
 }

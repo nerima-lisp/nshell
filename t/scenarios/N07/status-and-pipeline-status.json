@@ -33,8 +33,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L08 owns the new-reader status interface; WP-L05 owns pipeline execution and per-stage status."
   }
 }

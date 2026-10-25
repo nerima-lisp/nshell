@@ -33,8 +33,5 @@
     "kind": "script",
     "path": "scenario.nsh",
     "text": "cat <<'C08_END'\nC08_HEREDOC\nC08_END\ncat <<< C08_HERESTRING"
-  },
-  "expected_failure": {
-    "reason": "WP-L08 owns typed here-document and here-string redirects; WP-L05 owns foreground stage execution."
   }
 }

@@ -32,8 +32,5 @@
     "kind": "script",
     "path": "scenario.nsh",
     "text": "sleep 0.1 &; wait; printf \"C09_BACKGROUND_DONE\\n\""
-  },
-  "expected_failure": {
-    "reason": "WP-L08 owns background execution and sequencing; WP-L05 owns foreground stage execution after wait."
   }
 }

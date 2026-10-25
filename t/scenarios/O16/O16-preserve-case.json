@@ -39,6 +39,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L03 owns pathname expansion; WP-X01 connects the new reader after P5."
+    "reason": "WP-X01 connects the new reader to script submissions after P5."
   }
 }

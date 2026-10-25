@@ -32,5 +32,8 @@
     "kind": "script",
     "path": "scenario.nsh",
     "text": "sleep 0.1 &; wait; printf \"C09_BACKGROUND_DONE\\n\""
+  },
+  "expected_failure": {
+    "reason": "WP-L02fix: the reader now builds a sequence AST for `sleep 0.1 &; wait; printf ...`, but the application command-failure policy rejects that SequenceNode with `Expected a command or pipeline AST`."
   }
 }

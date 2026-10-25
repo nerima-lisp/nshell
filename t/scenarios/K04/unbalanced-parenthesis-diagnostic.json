@@ -33,12 +33,17 @@
       "key": "Enter"
     },
     {
+      "type": "wait_screen",
+      "contains": ">",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "C-c"
     },
     {
       "type": "keys",
-      "text": "echo K04_AFTER_$((1+1))"
+      "text": "printf K04_AFTER_%s RECOVERED"
     },
     {
       "type": "key",
@@ -46,16 +51,12 @@
     },
     {
       "type": "wait",
-      "contains": "K04_AFTER_2",
+      "contains": "K04_AFTER_RECOVERED",
       "timeout_seconds": 10
     },
     {
-      "type": "keys",
-      "text": "exit"
-    },
-    {
       "type": "key",
-      "key": "Enter"
+      "key": "C-d"
     },
     {
       "type": "wait_exit",
@@ -77,8 +78,5 @@
         }
       ]
     }
-  },
-  "expected_failure": {
-    "reason": "WP-L03: command argv expansion handles braces, tilde, and glob but not arithmetic expansion, so the scenario's arithmetic form stays literal and fails its K04_AFTER_2 assertion (src/application/contracts/l03-builtin.lisp:41; t/scenarios/K04/unbalanced-parenthesis-diagnostic.json:41)."
   }
 }

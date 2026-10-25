@@ -28,6 +28,37 @@
                   (nshell.presentation:input-state-buffer continued-state))
           (expect (+ cursor 1 indent) :to-equal
                   (nshell.presentation:input-state-cursor-pos continued-state)))))
+  (it "K04-incomplete-parenthesis-enters-continuation-before-cancel"
+    (cl-weave:expect-assertions 7)
+    (let ((nshell.presentation::*repl-new-reader-route-enabled-p* t))
+      (let* ((source "(touch K04_SHOULD_NOT_EXIST")
+             (cursor (length source))
+             (scan-result
+               (nshell.presentation::%repl-input-scan-result
+                source cursor :sexp))
+             (indent
+               (nshell.domain.parsing:scan-result-next-indent scan-result))
+             (expected-buffer
+               (concatenate 'string
+                            source
+                            (string #\Newline)
+                            (make-string indent :initial-element #\Space))))
+        (expect :incomplete :to-be
+                (nshell.domain.parsing:scan-result-status scan-result))
+        (multiple-value-bind (continued-state enter-output)
+            (reduce-once (input-state :buffer source :cursor-pos cursor) :enter)
+          (expect :suggest-update :to-be enter-output)
+          (expect expected-buffer :to-equal
+                  (nshell.presentation:input-state-buffer continued-state))
+          (expect (+ cursor 1 indent) :to-equal
+                  (nshell.presentation:input-state-cursor-pos continued-state))
+          (multiple-value-bind (cancelled-state cancel-output)
+              (reduce-once continued-state :ctrl-c)
+            (expect :redraw :to-be cancel-output)
+            (expect "" :to-equal
+                    (nshell.presentation:input-state-buffer cancelled-state))
+            (expect 0 :to-equal
+                    (nshell.presentation:input-state-cursor-pos cancelled-state)))))))
 
   (it "e03-complete-and-invalid-enter-leave-buffer-for-execute-handler"
     (dolist (case '(("echo > out" :complete)

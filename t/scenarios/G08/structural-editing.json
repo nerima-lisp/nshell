@@ -169,6 +169,6 @@
     { "type": "wait_exit", "timeout_seconds": 10 }
   ],
   "expected_failure": {
-    "reason": "WP-L07 owns the unimplemented CONTEXT-SHELL-FUNCTION-REGISTRY required by the S-expression input scanner."
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

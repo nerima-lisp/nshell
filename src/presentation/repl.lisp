@@ -295,6 +295,8 @@ the next shell could start with SGR mouse reporting still on."
 
       (setf *interactive-terminal-installed-p* nil)
       (unwind-protect
-          (ignore-errors (nshell.feature.assistant:assistant-model-stop))
-        (restore-interactive-terminal))
+          (unwind-protect
+              (ignore-errors (nshell.feature.assistant:assistant-model-stop))
+            (restore-interactive-terminal))
+        (%completion-help-drain-workers))
       (format t "Goodbye!~%"))))

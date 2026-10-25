@@ -939,5 +939,139 @@
           (nshell.domain.completion:candidate-description (first candidates)))
         (expect "graphical history browser" :to-equal
           (nshell.domain.completion:candidate-description (second candidates))))))
+  (it "completion-help-worker-lifecycle-prevents-overlapping-learning"
+  (with-repl-test-state
+    (repl-test-set-env "NSHELL_COMPLETION_HELP_ALLOWLIST" "zz-worker-overlap")
+    (host-kit:with-temporary-directory (cache-directory)
+      (let* ((resolved-path "/test/bin/zz-worker-overlap")
+             (mtime 1)
+             (fetch-count 0)
+             (fetch-count-lock (sb-thread:make-mutex :name "completion help fetch count"))
+             (fetch-started (sb-thread:make-semaphore :count 0))
+             (release-fetch (sb-thread:make-semaphore :count 0))
+             (nshell.presentation::*completion-help-command-info-function*
+               (lambda (command)
+                 (declare (ignore command))
+                 (list resolved-path mtime)))
+             (nshell.presentation::*completion-help-cache-directory-override*
+               cache-directory)
+             (nshell.presentation::*completion-help-fetcher*
+               (lambda (command path)
+                 (declare (ignore command path))
+                 (sb-thread:with-mutex (fetch-count-lock)
+                   (incf fetch-count))
+                 (sb-thread:signal-semaphore fetch-started)
+                 (unless (sb-thread:wait-on-semaphore release-fetch :timeout 3)
+                   (error "Timed out waiting to release completion help worker"))
+                 (values (format nil "Usage: zz-worker-overlap~%Options:~%  --sample Sample option~%") 0))))
+        (labels ((worker-threads ()
+                   (remove-if-not
+                    (lambda (thread)
+                      (string= "nshell completion help zz-worker-overlap"
+                               (sb-thread:thread-name thread)))
+                    (sb-thread:list-all-threads)))
+                 (fetch-count-value ()
+                   (sb-thread:with-mutex (fetch-count-lock)
+                     fetch-count)))
+          (unwind-protect
+               (progn
+                 (nshell.presentation::%warm-command-completion-help
+                  "zz-worker-overlap")
+                 (expect (sb-thread:wait-on-semaphore fetch-started :timeout 1) :to-be-truthy)
+                 (expect 1 :to-equal (fetch-count-value))
+                 (let ((state
+                         (gethash "zz-worker-overlap"
+                                  nshell.presentation::*completion-help-cache*)))
+                   (expect :loading :to-be (getf state :status))
+                   (expect 1 :to-equal (getf state :mtime)))
+                 (setf mtime 2)
+                 (nshell.presentation::%warm-command-completion-help
+                  "zz-worker-overlap")
+                 (expect nil :to-be
+                   (sb-thread:wait-on-semaphore fetch-started :timeout 0.1))
+                 (expect 1 :to-equal (fetch-count-value))
+                 (let ((state
+                         (gethash "zz-worker-overlap"
+                                  nshell.presentation::*completion-help-cache*)))
+                   (expect :loading :to-be (getf state :status))
+                   (expect 1 :to-equal (getf state :mtime))))
+            (sb-thread:signal-semaphore release-fetch)
+            (sb-thread:signal-semaphore release-fetch)
+            (dolist (thread (worker-threads))
+              (sb-thread:join-thread thread))
+            (nshell.presentation::%completion-help-drain-results)))))))
+  (it "completion-help-worker-lifecycle-waits-for-worker-on-repl-exit"
+  (with-repl-test-state
+    (repl-test-set-env "NSHELL_COMPLETION_HELP_ALLOWLIST" "zz-worker-exit")
+    (host-kit:with-temporary-directory (cache-directory)
+      (let* ((fetch-count 0)
+             (fetch-count-lock (sb-thread:make-mutex :name "completion help exit fetch count"))
+             (worker-started (sb-thread:make-semaphore :count 0))
+             (release-fetch (sb-thread:make-semaphore :count 0))
+             (exit-finished (sb-thread:make-semaphore :count 0))
+             (nshell.presentation::*completion-help-command-info-function*
+               (lambda (name)
+                 (declare (ignore name))
+                 (list "/test/bin/zz-worker-exit" 1)))
+             (nshell.presentation::*completion-help-cache-directory-override*
+               cache-directory)
+             (nshell.presentation::*completion-help-fetcher*
+               (lambda (name path)
+                 (declare (ignore name path))
+                 (sb-thread:with-mutex (fetch-count-lock)
+                   (incf fetch-count))
+                 (sb-thread:signal-semaphore worker-started)
+                 (unless (sb-thread:wait-on-semaphore release-fetch :timeout 3)
+                   (error "Timed out waiting to release completion help worker"))
+                 (values (format nil "Usage: zz-worker-exit~%Options:~%  --sample Sample option~%") 0))))
+        (let ((worker nil)
+              (exit-thread nil)
+              (exit-result :not-returned))
+          (unwind-protect
+               (progn
+                 (nshell.presentation::%warm-command-completion-help
+                  "zz-worker-exit")
+                 (expect (sb-thread:wait-on-semaphore worker-started :timeout 1) :to-be-truthy)
+                 (expect 1 :to-equal
+                   (sb-thread:with-mutex (fetch-count-lock)
+                     fetch-count))
+                 (let ((state
+                         (gethash "zz-worker-exit"
+                                  nshell.presentation::*completion-help-cache*)))
+                   (expect :loading :to-be (getf state :status))
+                   (expect 1 :to-equal (getf state :mtime)))
+                 (setf worker
+                       (find-if
+                        (lambda (thread)
+                          (string= "nshell completion help zz-worker-exit"
+                                   (sb-thread:thread-name thread)))
+                        (sb-thread:list-all-threads)))
+                 (expect t :to-be (and worker (sb-thread:thread-alive-p worker)))
+                 (setf exit-thread
+                       (sb-thread:make-thread
+                        (lambda ()
+                          (setf exit-result
+                                (handler-case
+                                    (nshell.presentation::run-repl
+                                     :load-config-p nil :history-p nil)
+                                  (error (condition) condition)))
+                          (sb-thread:signal-semaphore exit-finished))
+                        :name "nshell test completion help exit"))
+                 (let ((exit-finished-before-release
+                         (sb-thread:wait-on-semaphore exit-finished :timeout 0.1)))
+                   (expect nil :to-be exit-finished-before-release)
+                   (expect t :to-be (sb-thread:thread-alive-p worker))
+                   (sb-thread:signal-semaphore release-fetch)
+                   (unless exit-finished-before-release
+                     (expect (sb-thread:wait-on-semaphore exit-finished :timeout 2) :to-be-truthy)))
+                 (sb-thread:join-thread exit-thread)
+                 (expect 1 :to-equal exit-result)
+                 (expect nil :to-be (sb-thread:thread-alive-p worker)))
+            (sb-thread:signal-semaphore release-fetch)
+            (when exit-thread
+              (sb-thread:join-thread exit-thread))
+            (when worker
+              (sb-thread:join-thread worker))
+            (nshell.presentation::%completion-help-drain-results)))))))
 )
 

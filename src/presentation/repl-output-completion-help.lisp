@@ -69,8 +69,15 @@
     (mutex (sb-thread:make-mutex :name "nshell completion help results"))
     (results nil))
 
-  (defparameter *completion-help-result-channel*
-    (%make-completion-help-result-channel))
+  (progn
+    (defparameter *completion-help-result-channel*
+      (%make-completion-help-result-channel))
+    (defvar *completion-help-worker-threads*
+      (make-hash-table :test #'equal))
+    (defvar *completion-help-worker-lock*
+      (sb-thread:make-mutex :name "nshell completion help workers"))
+    (defvar *completion-help-workers-draining-p*
+      nil))
 
   (defparameter *completion-help-catalog-command-cache*
     (let ((cache (make-hash-table :test #'equal)))
@@ -493,16 +500,51 @@
          (equal path (getf state :path))
          (eql mtime (getf state :mtime))))
 
-  (defun %completion-help-start-worker
+  (defun %unregister-completion-help-worker (command thread)
+    (sb-thread:with-mutex (*completion-help-worker-lock*)
+      (when (eq thread
+                (gethash command *completion-help-worker-threads*))
+        (remhash command *completion-help-worker-threads*))))
+
+  (defun %completion-help-drain-workers ()
+    (let ((workers
+            (sb-thread:with-mutex (*completion-help-worker-lock*)
+              (setf *completion-help-workers-draining-p* t)
+              (prog1
+                  (loop for thread being the hash-values of
+                        *completion-help-worker-threads*
+                        collect thread)
+                (clrhash *completion-help-worker-threads*)))))
+      (unwind-protect
+          (progn
+            (dolist (thread workers)
+              (unless (eq thread sb-thread:*current-thread*)
+                (handler-case
+                    (sb-thread:join-thread thread)
+                  (error () nil))))
+            nil)
+        (sb-thread:with-mutex (*completion-help-worker-lock*)
+          (setf *completion-help-workers-draining-p* nil)))))
+
+  (defun %completion-help-start-worker-locked
       (command path mtime request-id)
     (let ((channel *completion-help-result-channel*)
           (directory (%completion-help-cache-directory))
-          (fetcher *completion-help-fetcher*))
-      (sb-thread:make-thread
-       (lambda ()
-         (%completion-help-run-worker
-          channel command path mtime request-id directory fetcher))
-       :name (format nil "nshell completion help ~a" command))))
+          (fetcher *completion-help-fetcher*)
+          (start-gate (sb-thread:make-semaphore :count 0)))
+      (let ((thread
+              (sb-thread:make-thread
+               (lambda ()
+                 (sb-thread:wait-on-semaphore start-gate)
+                 (unwind-protect
+                      (%completion-help-run-worker
+                       channel command path mtime request-id directory fetcher)
+                   (%unregister-completion-help-worker
+                    command sb-thread:*current-thread*)))
+               :name (format nil "nshell completion help ~a" command))))
+        (setf (gethash command *completion-help-worker-threads*) thread)
+        (sb-thread:signal-semaphore start-gate)
+        thread)))
 
   (defun %completion-help-mark-result (result)
     (let* ((command (getf result :command))
@@ -546,33 +588,50 @@
   (defun %warm-command-completion-help (command)
     (when (%completion-help-eligible-command-p command)
       (let* ((command-name (first (%completion-help-command-parts command)))
-             (state (gethash command *completion-help-cache*))
-             (info
-               (funcall *completion-help-command-info-function* command-name))
+             (info (funcall *completion-help-command-info-function* command-name))
              (path (first info))
              (mtime (second info)))
-        (unless (%completion-help-state-matches-p state path mtime)
-          (let ((baseline
-                  (or (getf state :baseline)
-                      (%completion-help-command-baseline command))))
-            (when state
-              (%completion-help-restore-command-baseline command baseline))
-            (let ((request-id (gensym "COMPLETION-HELP-")))
-              (if (and path (integerp mtime))
-                  (progn
-                    (%completion-help-mark-state
-                     command :loading path mtime request-id baseline)
-                    (handler-case
-                        (%completion-help-start-worker
-                         command path mtime request-id)
-                      (error (condition)
-                        (format *error-output*
-                                "nshell: unable to start completion help for ~a: ~a~%"
-                                command condition)
-                        (%completion-help-mark-state
-                         command :missing path mtime request-id baseline))))
-                  (%completion-help-mark-state
-                   command :missing path mtime request-id baseline))))))))
+        (sb-thread:with-mutex (*completion-help-worker-lock*)
+          (let ((state (gethash command *completion-help-cache*)))
+            (unless
+                (or *completion-help-workers-draining-p*
+                    (gethash command *completion-help-worker-threads*)
+                    (%completion-help-state-matches-p state path mtime))
+              (let ((baseline
+                     (or (getf state :baseline)
+                         (%completion-help-command-baseline command))))
+                (when state
+                  (%completion-help-restore-command-baseline command baseline))
+                (let ((request-id (gensym "COMPLETION-HELP-")))
+                  (if (and path (integerp mtime))
+                      (handler-case (progn
+                                      (%completion-help-mark-state command
+                                                                   :loading
+                                                                   path
+                                                                   mtime
+                                                                   request-id
+                                                                   baseline)
+                                      (%completion-help-start-worker-locked command
+                                                                            path
+                                                                            mtime
+                                                                            request-id))
+                        (error (condition)
+                          (format *error-output*
+                                  "nshell: unable to start completion help for ~a: ~a~%"
+                                  command
+                                  condition)
+                          (%completion-help-mark-state command
+                                                       :missing
+                                                       path
+                                                       mtime
+                                                       request-id
+                                                       baseline)))
+                      (%completion-help-mark-state command
+                                                   :missing
+                                                   path
+                                                   mtime
+                                                   request-id
+                                                   baseline))))))))))
 
   (defun %warm-command-completion-help-path
       (knowledge-base command argument-words prefix)

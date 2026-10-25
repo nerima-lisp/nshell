@@ -508,9 +508,20 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                     key = step.get("key")
                     _require(isinstance(key, str) and TMUX_KEY.fullmatch(key),
                              f"{scenario_id}: invalid tmux key {key!r}")
-                if kind in ("wait", "wait_screen"):
+                if kind == "wait":
                     _require(isinstance(step.get("contains"), str) and step["contains"],
                              f"{scenario_id}: {kind} requires a non-empty contains string")
+                if kind == "wait_screen":
+                    contains = step.get("contains")
+                    excludes = step.get("excludes", [])
+                    _require(contains is None or isinstance(contains, str) and bool(contains),
+                             f"{scenario_id}: wait_screen.contains must be a non-empty string")
+                    _require(isinstance(excludes, list) and all(isinstance(item, str) for item in excludes),
+                             f"{scenario_id}: wait_screen.excludes must be an array of strings")
+                    _require(all(excludes),
+                             f"{scenario_id}: wait_screen.excludes must contain non-empty strings")
+                    _require(contains is not None or bool(excludes),
+                             f"{scenario_id}: wait_screen requires contains or excludes")
                 if kind in ("wait", "wait_screen", "wait_exit"):
                     timeout = step.get("timeout_seconds", 10)
                     _require(
@@ -635,7 +646,9 @@ def _validate_pty_match_sources(scenario: dict[str, Any]) -> None:
         if step["type"] in ("wait", "wait_screen"):
             sources = [("input echo", text) for text in inputs]
             sources.append(("prompt redraw", prompt))
-            reject_overlap(step["type"], step["contains"], sources)
+            marker = step.get("contains")
+            if marker is not None:
+                reject_overlap(step["type"], marker, sources)
         if step["type"] in ("keys", "paste"):
             inputs.append(step["text"])
         elif step["type"] == "key":
@@ -1070,24 +1083,27 @@ class TmuxSession:
                 )
             self._read(remaining)
 
-    def wait_for_screen(self, text: str, timeout: float) -> str | None:
+    def wait_for_screen(self, text: str | None, timeout: float,
+                        excludes: list[str] | None = None) -> str | None:
         self._validate_timeout(timeout, self.scenario["id"])
+        excludes = excludes or []
+        condition = f"contains={text!r}, excludes={excludes!r}"
         deadline = min(self.deadline, time.monotonic() + timeout)
         while True:
             screen = self._capture()
-            if text in screen:
+            if (text is None or text in screen) and all(marker not in screen for marker in excludes):
                 return None
             if self.exit_waiter is not None and self.exit_waiter.poll() is not None:
                 self._read(0)
                 screen = self._capture()
                 return (
-                    f"{self.scenario['id']}: pane exited before {text!r} appeared on screen; "
+                    f"{self.scenario['id']}: pane exited before screen conditions ({condition}) were met; "
                     f"current screen:\n{screen}"
                 )
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise ScenarioTimeout(
-                    f"{self.scenario['id']}: timed out waiting for {text!r} on screen; "
+                    f"{self.scenario['id']}: timed out waiting for screen conditions ({condition}); "
                     f"current screen:\n{screen}"
                 )
             self._read(min(remaining, 0.1))
@@ -1196,8 +1212,9 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                         elif kind == "wait":
                             session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
                         elif kind == "wait_screen":
+                            excludes = step.get("excludes", [])
                             failure = session.wait_for_screen(
-                                step["contains"], step.get("timeout_seconds", 10)
+                                step.get("contains"), step.get("timeout_seconds", 10), excludes
                             )
                             if failure:
                                 failures.append(failure)

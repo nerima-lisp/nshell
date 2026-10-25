@@ -86,10 +86,11 @@ def _run_main_for_pty_scenario(
                 return real_session.wait_for(self, text, start, timeout)
             return 0
 
-        def wait_for_screen(self, text: str, timeout: float) -> str | None:
+        def wait_for_screen(self, text: str | None, timeout: float,
+                            excludes: list[str] | None = None) -> str | None:
             if timeout_at == "wait_screen":
                 self.deadline = 0
-                return real_session.wait_for_screen(self, text, timeout)
+                return real_session.wait_for_screen(self, text, timeout, excludes)
             return None
 
         def wait_exit(self, timeout: float) -> int:
@@ -97,6 +98,9 @@ def _run_main_for_pty_scenario(
                 self.deadline = 0
                 return real_session.wait_exit(self, timeout)
             return 0
+
+        def _capture(self) -> str:
+            return ""
 
         def drain(self) -> None:
             pass
@@ -273,8 +277,9 @@ class ScenarioRunnerTests(unittest.TestCase):
             def resize(self, columns: int, rows: int) -> None:
                 events.append(("resize", (columns, rows)))
 
-            def wait_for_screen(self, text: str, timeout: float) -> None:
-                events.append(("wait_screen", (text, timeout)))
+            def wait_for_screen(self, text: str | None, timeout: float,
+                                excludes: list[str] | None = None) -> None:
+                events.append(("wait_screen", (text, timeout, excludes or [])))
 
             def wait_exit(self, timeout: float) -> int:
                 events.append(("wait_exit", timeout))
@@ -293,7 +298,8 @@ class ScenarioRunnerTests(unittest.TestCase):
             "resize-dispatch",
             [
                 {"type": "resize", "columns": 24, "rows": 20},
-                {"type": "wait_screen", "contains": "VISIBLE_SCREEN", "timeout_seconds": 6},
+                {"type": "wait_screen", "contains": "VISIBLE_SCREEN", "excludes": ["STALE_SCREEN"],
+                 "timeout_seconds": 6},
                 {"type": "wait_exit", "timeout_seconds": 8},
             ],
             {"exit_code": 23},
@@ -304,7 +310,7 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual(events, [
             ("resize", (24, 20)),
-            ("wait_screen", ("VISIBLE_SCREEN", 6)),
+            ("wait_screen", ("VISIBLE_SCREEN", 6, ["STALE_SCREEN"])),
             ("wait_exit", 8),
         ])
         self.assertEqual(exit_code, 23)
@@ -336,6 +342,38 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual(capture.call_count, 2)
         read.assert_called_once_with(0.1)
+
+    def test_tmux_wait_for_screen_polls_until_excluded_text_disappears(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.deadline = 10.0
+        session.scenario = {"id": "screen-clears"}
+        session.exit_waiter = None
+
+        with (
+            patch.object(runner.time, "monotonic", side_effect=[1.0, 1.05]),
+            patch.object(session, "_capture", side_effect=["STALE_INPUT", "PROMPT> "]) as capture,
+            patch.object(session, "_read") as read,
+        ):
+            session.wait_for_screen(None, 1, ["STALE_INPUT"])
+
+        self.assertEqual(capture.call_count, 2)
+        read.assert_called_once_with(0.1)
+
+    def test_tmux_wait_for_screen_times_out_while_excluded_text_remains(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.deadline = 10.0
+        session.scenario = {"id": "screen-stays-stale"}
+        session.exit_waiter = None
+
+        with (
+            patch.object(runner.time, "monotonic", side_effect=[1.0, 1.3]),
+            patch.object(session, "_capture", return_value="STALE_INPUT"),
+            patch.object(session, "_read") as read,
+        ):
+            with self.assertRaisesRegex(runner.ScenarioTimeout, "current screen:\\nSTALE_INPUT"):
+                session.wait_for_screen(None, 0.2, ["STALE_INPUT"])
+
+        read.assert_not_called()
 
     def test_tmux_wait_for_screen_reports_pane_exit_before_marker(self) -> None:
         session = runner.TmuxSession.__new__(runner.TmuxSession)
@@ -369,9 +407,10 @@ class ScenarioRunnerTests(unittest.TestCase):
                 self.deadline_seconds = 45
                 self.deadline = 0.0
 
-            def wait_for_screen(self, text: str, timeout: float) -> str:
+            def wait_for_screen(self, text: str | None, timeout: float,
+                                excludes: list[str] | None = None) -> str:
                 events.append(("wait_screen", (text, timeout)))
-                return f"{self.scenario['id']}: pane exited before {text!r} appeared on screen"
+                return f"{self.scenario['id']}: pane exited before screen conditions were met"
 
             def wait_exit(self, timeout: float) -> int:
                 events.append(("wait_exit", timeout))

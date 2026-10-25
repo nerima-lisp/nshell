@@ -31,8 +31,26 @@
       "text": "if"
     },
     {
+      "type": "wait_screen",
+      "contains": "I04_MULTILINE_TAIL",
+      "timeout_seconds": 10
+    },
+    {
       "type": "key",
       "key": "C-c"
+    },
+    {
+      "type": "wait_screen",
+      "excludes": [
+        "if",
+        "I04_MULTILINE_TAIL"
+      ],
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait",
+      "contains": "\u001b[0 q",
+      "timeout_seconds": 10
     },
     {
       "type": "keys",

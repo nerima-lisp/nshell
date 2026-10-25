@@ -25,12 +25,11 @@
       "contains": [
         "C07_OVERWRITE",
         "C07_APPEND",
-        "C07_MERGED",
         "C07_PIPE_ERR"
       ]
     },
     "stderr": {
-      "equals": ""
+      "equals": "C07_MERGED\n"
     },
     "exit_code": 0,
     "side_effects": {
@@ -73,6 +72,6 @@
     "text": "printf 'C07_OVERWRITE\\n' > redirected.txt; printf 'C07_APPEND\\n' >> redirected.txt; cat < redirected.txt; printf 'C07_DUP\\n' 3>dup.txt 1>&3; printf 'C07_FORCE\\n' >| force.txt; printf 'C07_BOTH\\n' &> both.txt; printf 'C07_ERR\\n' 2>err.txt; printf 'C07_MERGED\\n' >&2 2>&1; printf 'C07_PIPE_ERR\\n' >&2 |& cat"
   },
   "expected_failure": {
-    "reason": "WP-L02fix: the reader accepts the bare-line fd redirects, but this multi-command script builds a SequenceNode that the application command-failure policy rejects with `Expected a command or pipeline AST`. Sequence execution is outside the reader fix."
+    "reason": "WP-L08: the reader accepts the bare-line fd redirects, but pipeline execution leaves `C07_PIPE_ERR` on shell stderr instead of routing it through `|&` to the next stage. This remaining pipeline stage IO failure is outside the reader fix."
   }
 }

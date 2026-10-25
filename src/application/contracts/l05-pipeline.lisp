@@ -299,6 +299,9 @@
                                                   1 stage-io)
                                          :error (%byte-stream-standard-source
                                                  2 stage-io)
+                                         :preserve-fds
+                                         (pipeline-stage-io-transient-descriptors
+                                          stage-io)
                                          :process-group (or process-group :new))))
                                   (setf (aref processes index) process)
                                   (unless process-group

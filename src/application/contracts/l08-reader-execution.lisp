@@ -183,12 +183,21 @@
         collect (cons destination
                       (gethash destination (car bindings)))))
 
-(defun %reader-stage-io-list (bindings transient-descriptors)
-  (mapcar (lambda (stage-bindings)
-            (make-pipeline-stage-io
-             (%reader-binding-alist stage-bindings)
-             transient-descriptors))
-          bindings))
+(defun %reader-stage-io-list (bindings state)
+  (loop for stage-bindings in bindings
+        for stage-index from 0
+        collect
+        (make-pipeline-stage-io
+         (%reader-binding-alist stage-bindings)
+         (loop for substitution
+               in (%reader-execution-state-process-substitutions state)
+               when (= stage-index
+                       (%reader-process-substitution-stage-index
+                        substitution))
+                 collect
+                 (nshell.infrastructure.acl::reader-process-substitution-resource-parent-fd
+                  (%reader-process-substitution-resource
+                   substitution))))))
 
 (defun %reader-open-redirect (context state redirect evaluated-stage)
   (let* ((target
@@ -515,6 +524,9 @@
   (mapcar (lambda (command)
             (funcall stage-evaluator context command))
           commands))
+(defun %reader-process-substitution-form (entry)
+  (nshell.domain.parsing:redirect-procsub-target-form
+   (nshell.domain.parsing:ast-redirect-entry-target entry)))
 
 (defun %reader-evaluate-process-substitutions
     (context plans stage-evaluator)
@@ -607,9 +619,7 @@
                 :input-fd (and (eq direction :output) inner-fd)
                 :output-fd (and (eq direction :input) inner-fd)))
              (stage-io
-               (%reader-stage-io-list
-                bindings
-                (%reader-execution-state-descriptors state)))
+               (%reader-stage-io-list bindings state))
              (handle
                (handler-case
                    (spawn-byte-stream-node-in-context
@@ -680,9 +690,7 @@
                       (%reader-build-stage-bindings
                        context state ast evaluated-stages))
                     (stage-io
-                      (%reader-stage-io-list
-                       bindings
-                       (%reader-execution-state-descriptors state)))
+                      (%reader-stage-io-list bindings state))
                     (handle
                       (handler-case
                           (spawn-byte-stream-node-in-context

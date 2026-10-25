@@ -20,6 +20,42 @@
       (expect 2 :to-equal (length commands))
       (expect first :to-be (first commands))
       (expect second :to-be (second commands))))
+  (it "evaluation plans retain process-substitution command and pipeline forms"
+    (let* ((command-form (nshell.domain.parsing:make-command-node "producer" nil))
+           (first-stage (nshell.domain.parsing:make-command-node "first" nil))
+           (second-stage (nshell.domain.parsing:make-command-node "second" nil))
+           (pipeline-form
+             (nshell.domain.parsing:make-pipeline-node
+              (list first-stage second-stage)))
+           (command-entry
+             (nshell.domain.parsing:make-ast-redirect-entry
+              :process-substitution-input
+              nil
+              (nshell.domain.parsing:make-redirect-procsub-target
+               :input command-form)
+              (list 1 2)
+              0))
+           (pipeline-entry
+             (nshell.domain.parsing:make-ast-redirect-entry
+              :process-substitution-input
+              nil
+              (nshell.domain.parsing:make-redirect-procsub-target
+               :input pipeline-form)
+              (list 3 4)
+              0))
+           (evaluated
+             (nshell.application::%reader-evaluate-process-substitutions
+              nil
+              (list (list 0 command-entry (list command-form))
+                    (list 1 pipeline-entry (list first-stage second-stage)))
+              (lambda (context command)
+                (declare (ignore context))
+                command))))
+      (expect command-form :to-be (third (first evaluated)))
+      (expect command-form :to-be (first (fourth (first evaluated))))
+      (expect pipeline-form :to-be (third (second evaluated)))
+      (expect first-stage :to-be (first (fourth (second evaluated))))
+      (expect second-stage :to-be (second (fourth (second evaluated))))))
   (it "preflight reports direction mismatches for unvalidated redirect entries"
     (let* ((form (nshell.domain.parsing:make-command-node "producer" nil))
            (entry

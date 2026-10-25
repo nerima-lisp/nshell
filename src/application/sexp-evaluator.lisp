@@ -1264,8 +1264,12 @@
 
 (defun %eval-host-form
     (context form reader-result lexical-environment position)
-  (let* ((operator (%resolve-form-operator context form reader-result))
-         (form (%materialize-reader-form form reader-result)))
+  (let* ((source-form form)
+         (operator (%resolve-form-operator context source-form reader-result))
+         (form (%copy-form-origins
+                source-form
+                (%materialize-reader-form source-form reader-result)
+                reader-result)))
     (setf (first form) operator)
     (cond
       ((and (symbolp operator) (special-operator-p operator))

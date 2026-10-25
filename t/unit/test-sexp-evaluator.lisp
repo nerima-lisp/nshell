@@ -1032,3 +1032,30 @@
                           #'nshell.domain.parsing:evaluated-command-arg-value
                           arguments))
                  (expect :stream :to-equal (second call))))))))))
+
+(describe "sexp-evaluator-package-qualified-head"
+  (it "evaluates-qualified-call-inside-materialized-host-form"
+    (let* ((package (make-package "NSHELL.TEST.O15.QUALIFIED-HEAD"))
+           (function (intern "GREETING" package))
+           (context (make-test-shell-context)))
+      (export function package)
+      (setf (symbol-function function)
+            (lambda () "O15_QUALIFIED_HEAD_OK"))
+      (unwind-protect
+           (let* ((source
+                   "(cl:format cl:nil \"~A\" (nshell.test.o15.qualified-head:greeting))")
+                  (reader-result
+                   (first
+                    (nshell.domain.parsing:read-submission
+                     source :reader-context :sexp))))
+             (%call-with-sexp-evaluator-test-boundaries
+              context
+              (lambda ()
+                (multiple-value-bind (value status)
+                    (nshell.application:evaluate-reader-result-in-context
+                     context reader-result)
+                  (expect "O15_QUALIFIED_HEAD_OK" :to-equal value)
+                  (expect 0 :to-equal status)
+                  (expect nil :to-equal *sexp-evaluator-test-calls*)))))
+        (fmakunbound function)
+        (delete-package package)))))

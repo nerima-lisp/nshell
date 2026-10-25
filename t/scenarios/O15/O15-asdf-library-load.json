@@ -41,8 +41,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L02 owns reader evaluation and head classification (docs/notes/sexp-syntax-design.md:788-789). Materializing the outer host form drops the nested package-qualified form's reader origin, so the evaluator reclassifies scenario-helper:greeting as a command island and exits 1 with nshell: GREETING: command not found after ASDF compiles the helper (src/application/sexp-evaluator.lisp:122-154, 382-414, 1302-1314; src/infrastructure/acl/syscall-process-resolution.lisp:8-11)."
   }
 }

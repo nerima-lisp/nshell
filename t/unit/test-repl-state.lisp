@@ -283,7 +283,9 @@
       (call-repl-builtin "alias" '("ll" "ls -l"))
       (expect "ls -l" :to-equal (repl-test-alias "ll"))
       (call-repl-builtin "abbr" '("-a" "gco" "git" "checkout"))
-      (expect "git checkout" :to-equal (repl-test-abbreviation "gco"))
+      (expect "git checkout" :to-equal
+              (nshell.domain.abbreviation:abbreviation-expansion
+               (repl-test-abbreviation "gco")))
       (call-repl-builtin "function" '("hi" "echo" "hello" "end"))
       (expect '("echo hello") :to-equal (repl-test-function "hi"))
       (call-repl-builtin "exit" nil)

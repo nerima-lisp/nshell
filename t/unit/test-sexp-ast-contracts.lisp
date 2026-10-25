@@ -492,7 +492,7 @@
     (expect 'nshell.application:command-failed :to-be
             (find-symbol "COMMAND-FAILED" "NSHELL.USER"))
     (expect t :to-be
-            (stringp
+            (listp
              (nshell.presentation::highlight-line-from-scanner
               "" (nshell.domain.parsing:scan-input "") 0 0)))
     (expect t :to-be

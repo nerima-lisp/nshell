@@ -291,5 +291,37 @@
       (setf nshell.presentation::*running* nil)
       (expect nshell.presentation::+repl-exit+ :to-be
               (nshell.presentation::render-prompt-cont))))
+  (it "repl-render-prompt-skips-delimiter-scan-with-no-candidate-at-cursor"
+    "Shell redraws should scan only when the cursor can match a delimiter."
+    (with-repl-test-state
+      (let ((scan-count 0))
+        (with-temporary-function
+            ('nshell.presentation::%repl-input-scan-result
+             (lambda (source cursor reader-context)
+               (declare (ignore cursor reader-context))
+               (incf scan-count)
+               (nshell.domain.parsing:make-scan-result
+                :delimiter-pairs
+                (when (string= source "(x)")
+                  (list
+                   (nshell.domain.parsing:make-delimiter-pair
+                    :open-span '(0 1)
+                    :close-span '(2 3)))))))
+          (with-stable-repl-prompt ()
+            (with-fixed-terminal-size (24 80)
+              (with-repl-render-state
+                  (:buffer (make-string 1000 :initial-element #\x)
+                   :cursor-pos 1000)
+                (capture-standard-output
+                  (nshell.presentation::render-prompt-cont))
+                (expect 0 :to-equal scan-count))
+              (with-repl-render-state (:buffer "abc" :cursor-pos 2)
+                (capture-standard-output
+                  (nshell.presentation::render-prompt-cont))
+                (expect 0 :to-equal scan-count))
+              (with-repl-render-state (:buffer "(x)" :cursor-pos 0)
+                (capture-standard-output
+                  (nshell.presentation::render-prompt-cont))
+                (expect 1 :to-equal scan-count))))))))
 
 )

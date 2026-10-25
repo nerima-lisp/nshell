@@ -9,27 +9,33 @@
 (defun %active-matching-delimiter-spans (&optional provided-scan-result)
   (when *input-state*
     (let* ((source (input-state-buffer *input-state*))
-           (cursor (input-state-cursor-pos *input-state*))
-           (reader-context (%repl-reader-context-for-source source))
-           (scan-result
-             (or provided-scan-result
-                 (%repl-input-scan-result source cursor reader-context)))
-           (pair
-             (find-if
-              (lambda (candidate)
-                (or (= cursor
-                       (first
-                        (nshell.domain.parsing:delimiter-pair-open-span
-                         candidate)))
-                    (= cursor
-                       (first
-                        (nshell.domain.parsing:delimiter-pair-close-span
-                         candidate)))))
-              (nshell.domain.parsing:scan-result-delimiter-pairs
-               scan-result))))
-      (when pair
-        (list (nshell.domain.parsing:delimiter-pair-open-span pair)
-              (nshell.domain.parsing:delimiter-pair-close-span pair))))))
+           (cursor (input-state-cursor-pos *input-state*)))
+      (unless (and (integerp cursor)
+                   (<= 0 cursor (length source))
+                   (or (= cursor (length source))
+                       (not (find (char source cursor) "()"))))
+        (let* ((scan-result
+                 (or provided-scan-result
+                     (%repl-input-scan-result
+                      source
+                      cursor
+                      (%repl-reader-context-for-source source))))
+               (pair
+                 (find-if
+                  (lambda (candidate)
+                    (or (= cursor
+                           (first
+                            (nshell.domain.parsing:delimiter-pair-open-span
+                             candidate)))
+                        (= cursor
+                           (first
+                            (nshell.domain.parsing:delimiter-pair-close-span
+                             candidate)))))
+                  (nshell.domain.parsing:scan-result-delimiter-pairs
+                   scan-result))))
+          (when pair
+            (list (nshell.domain.parsing:delimiter-pair-open-span pair)
+                  (nshell.domain.parsing:delimiter-pair-close-span pair))))))))
 
 (defun %completion-pager-row-budget ()
   (let ((terminal-rows
@@ -268,7 +274,8 @@
            (cursor-position (input-state-cursor-pos *input-state*))
            (reader-context (%repl-reader-context-for-source text))
            (scan-result
-             (%repl-input-scan-result text cursor-position reader-context))
+             (when (eq reader-context :sexp)
+               (%repl-input-scan-result text cursor-position reader-context)))
            (highlight-scan-result
              (and (eq reader-context :sexp) scan-result))
            (theme (nshell.domain.configuration:config-theme *config*))

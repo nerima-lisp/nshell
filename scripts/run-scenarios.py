@@ -90,6 +90,10 @@ class ScenarioError(Exception):
     """A scenario could not be prepared or executed."""
 
 
+class ScenarioTimeout(ScenarioError):
+    """A PTY wait did not finish before its timeout."""
+
+
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ScenarioError(message)
@@ -1060,7 +1064,7 @@ class TmuxSession:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 screen = self._capture()
-                raise ScenarioError(
+                raise ScenarioTimeout(
                     f"{self.scenario['id']}: timed out waiting for {text!r}; "
                     f"current screen:\n{screen}"
                 )
@@ -1082,7 +1086,7 @@ class TmuxSession:
                 )
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise ScenarioError(
+                raise ScenarioTimeout(
                     f"{self.scenario['id']}: timed out waiting for {text!r} on screen; "
                     f"current screen:\n{screen}"
                 )
@@ -1110,7 +1114,7 @@ class TmuxSession:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 screen = self._capture()
-                raise ScenarioError(
+                raise ScenarioTimeout(
                     f"{self.scenario['id']}: timed out waiting for nshell exit; current screen:\n{screen}"
                 )
             self._read(min(remaining, 0.1))
@@ -1249,10 +1253,15 @@ def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code
 
 
 def _run_once(scenario: dict[str, Any], binary: Path) -> tuple[str, str]:
-    _, _, _, failures = _run_batch(scenario, binary) if scenario["mode"] == "batch" else _run_pty(scenario, binary)
     expected_failure = scenario.get("expected_failure")
     if expected_failure is not None and expected_failure.get("platform", sys.platform) != sys.platform:
         expected_failure = None
+    try:
+        _, _, _, failures = _run_batch(scenario, binary) if scenario["mode"] == "batch" else _run_pty(scenario, binary)
+    except ScenarioTimeout as error:
+        if expected_failure is None:
+            raise
+        return "XFAIL", f"{expected_failure['reason']} Failed: {error}"
     if expected_failure is not None:
         if failures:
             return "XFAIL", f"{expected_failure['reason']} Failed: {'; '.join(failures)}"

@@ -65,6 +65,78 @@ def _write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def _run_main_for_pty_scenario(
+    scenario: dict[str, Any],
+    timeout_at: str | None,
+) -> tuple[int, str]:
+    real_session = runner.TmuxSession
+
+    class FakeSession:
+        def __init__(self, session_scenario: dict[str, Any], *_args: Any):
+            self.scenario = session_scenario
+            self.stream = bytearray()
+            self.deadline_seconds = 45
+            self.deadline = 0.0
+            self.exit_waiter = mock.Mock()
+            self.exit_waiter.poll.return_value = None
+
+        def wait_for(self, text: str, start: int, timeout: float) -> int:
+            if timeout_at == "wait":
+                self.deadline = 0
+                return real_session.wait_for(self, text, start, timeout)
+            return 0
+
+        def wait_for_screen(self, text: str, timeout: float) -> str | None:
+            if timeout_at == "wait_screen":
+                self.deadline = 0
+                return real_session.wait_for_screen(self, text, timeout)
+            return None
+
+        def wait_exit(self, timeout: float) -> int:
+            if timeout_at == "wait_exit":
+                self.deadline = 0
+                return real_session.wait_exit(self, timeout)
+            return 0
+
+        def drain(self) -> None:
+            pass
+
+        def capture_screen(self) -> str:
+            return ""
+
+        def _capture(self) -> str:
+            return ""
+
+        @staticmethod
+        def _validate_timeout(value: Any, scenario_id: str) -> None:
+            real_session._validate_timeout(value, scenario_id)
+
+        def close(self) -> None:
+            pass
+
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        scenario_dir = root / "scenarios"
+        _write_json(scenario_dir / "J99/test.json", scenario)
+        binary = root / "nshell"
+        binary.write_text("placeholder", encoding="utf-8")
+        binary.chmod(0o755)
+        output = io.StringIO()
+        argv = [
+            "run-scenarios.py", "--binary", str(binary), "--scenario-dir", str(scenario_dir),
+            "--mode", "pty", "--scenario-id", scenario["id"],
+        ]
+        with (
+            mock.patch.object(sys, "argv", argv),
+            mock.patch.object(runner, "TmuxSession", FakeSession),
+            mock.patch.object(runner.shutil, "which", return_value="tmux"),
+            contextlib.redirect_stdout(output),
+        ):
+            exit_code = runner.main()
+
+    return exit_code, output.getvalue()
+
+
 def _multi_pty_scenario(scenario_id: str = "shared-pty") -> dict[str, Any]:
     scenario = _pty_scenario(
         scenario_id,
@@ -1154,6 +1226,47 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(1, exit_code)
         self.assertIn("FAIL timeout-stays-fail", output.getvalue())
         self.assertNotIn("XFAIL timeout-stays-fail", output.getvalue())
+
+    def test_pty_wait_timeouts_are_xfail_with_expected_failure_marker(self) -> None:
+        for kind in ("wait", "wait_screen", "wait_exit"):
+            with self.subTest(kind=kind):
+                step = {"type": kind}
+                if kind in ("wait", "wait_screen"):
+                    step["contains"] = "READY"
+                steps = [step] if kind == "wait_exit" else [step, {"type": "wait_exit"}]
+                scenario = _pty_scenario(
+                    f"pty-{kind}-timeout-xfail", steps, {"exit_code": 0}
+                )
+                scenario["expected_failure"] = {"reason": "known PTY issue"}
+
+                exit_code, output = _run_main_for_pty_scenario(scenario, kind)
+
+                self.assertEqual(0, exit_code)
+                self.assertIn(f"XFAIL pty-{kind}-timeout-xfail: known PTY issue Failed:", output)
+                self.assertIn("timed out waiting", output)
+
+    def test_pty_wait_timeout_without_expected_failure_stays_fail(self) -> None:
+        scenario = _pty_scenario(
+            "pty-wait-exit-timeout-fail", [{"type": "wait_exit"}], {"exit_code": 0}
+        )
+
+        exit_code, output = _run_main_for_pty_scenario(scenario, "wait_exit")
+
+        self.assertEqual(1, exit_code)
+        self.assertIn("FAIL pty-wait-exit-timeout-fail:", output)
+        self.assertIn("timed out waiting for nshell exit", output)
+        self.assertNotIn("XFAIL pty-wait-exit-timeout-fail", output)
+
+    def test_pty_expected_failure_that_passes_stays_xpass(self) -> None:
+        scenario = _pty_scenario(
+            "pty-timeout-xpass", [{"type": "wait_exit"}], {"exit_code": 0}
+        )
+        scenario["expected_failure"] = {"reason": "known PTY issue"}
+
+        exit_code, output = _run_main_for_pty_scenario(scenario, None)
+
+        self.assertEqual(1, exit_code)
+        self.assertIn("XPASS pty-timeout-xpass: expected failure now satisfies all assertions:", output)
 
     def test_platform_expected_failure_only_applies_on_selected_platform(self) -> None:
         scenario = _batch_scenario("linux-only-expected-failure")

@@ -1389,25 +1389,42 @@
     (let ((reversed nil))
       (dolist (token tokens)
         (let ((previous (first reversed)))
-          (if (and previous
-                   (eq (token-type previous) :word)
-                   (eq (token-type token) :word)
-                   (= (token-end previous) (token-start token))
-                   (not (process-substitution-token-p previous))
-                   (not (process-substitution-token-p token)))
-              (let* ((previous (pop reversed))
-                     (fragments (append (token-fragments previous)
-                                        (token-fragments token))))
-                (push (make-token :word
-                                  (concatenate 'string
-                                               (token-value previous)
-                                               (token-value token))
-                                  (token-start previous)
-                                  (token-end token)
-                                  nil
-                                  fragments)
-                      reversed))
-              (push token reversed))))
+          (cond
+            ((and previous
+                  (eq (token-type previous) :redirect)
+                  (string= (token-value previous) ">")
+                  (eq (token-type token) :pipe)
+                  (string= (token-value token) "|")
+                  (= (token-end previous) (token-start token)))
+              (pop reversed)
+              (push
+               (make-token :redirect
+                           ">|"
+                           (token-start previous)
+                           (token-end token)
+                           nil
+                           nil)
+               reversed))
+            ((and previous
+                  (eq (token-type previous) :word)
+                  (eq (token-type token) :word)
+                  (= (token-end previous) (token-start token))
+                  (not (process-substitution-token-p previous))
+                  (not (process-substitution-token-p token)))
+             (let* ((previous (pop reversed))
+                    (fragments
+                     (append (token-fragments previous) (token-fragments token))))
+               (push
+                (make-token :word
+                            (concatenate 'string
+                                         (token-value previous)
+                                         (token-value token))
+                            (token-start previous)
+                            (token-end token)
+                            nil
+                            fragments)
+                reversed)))
+            (t (push token reversed)))))
       (nreverse reversed))))
 (defun %sexp-reader-bare-tokenize (source &optional (offset 0))
   (let* ((tokenization (%tokenize-here-doc-aware source nil))

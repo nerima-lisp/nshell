@@ -141,6 +141,33 @@
                     (+ (search "1>&3" source) (length "1>&3")))
               :to-equal
               (nshell.domain.parsing:ast-redirect-entry-source-span redirect))))
+  (it "builds-bare-line-force-output-file-redirect"
+    (let* ((source "cat >| force.txt")
+           (result (first (nshell.domain.parsing:read-submission source)))
+           (command (nshell.domain.parsing:reader-result-form result))
+           (redirect (first (nshell.domain.parsing:command-node-redirects command)))
+           (target (nshell.domain.parsing:ast-redirect-entry-target redirect))
+           (separated-operator-error
+             (%sexp-reader-test-capture-error
+              (lambda ()
+                (nshell.domain.parsing:read-submission "cat > | force.txt")))))
+      (expect (nshell.domain.parsing:command-node-p command) :to-be-truthy)
+      (expect "cat" :to-equal
+              (nshell.domain.parsing:command-node-command command))
+      (expect nil :to-equal (nshell.domain.parsing:command-node-args command))
+      (expect :force-output-file :to-equal
+              (nshell.domain.parsing:ast-redirect-entry-kind redirect))
+      (expect 1 :to-equal
+              (nshell.domain.parsing:ast-redirect-entry-file-descriptor redirect))
+      (expect "force.txt" :to-equal
+              (nshell.domain.parsing:command-arg-value target))
+      (expect (list (search ">|" source)
+                    (+ (search "force.txt" source) (length "force.txt")))
+              :to-equal
+              (nshell.domain.parsing:ast-redirect-entry-source-span redirect))
+      (expect (typep separated-operator-error
+                     'nshell.domain.parsing:sexp-reader-error)
+              :to-be-truthy)))
 
   (it "rejects-bare-line-trailing-operators-and-redirects-with-reader-errors"
     (dolist (source '("echo &&" "echo ||" "echo |" "echo |&" "echo >" "sleep &;; wait" "echo && ; next"))

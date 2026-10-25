@@ -5,7 +5,8 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "dumb",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -18,7 +19,8 @@
     "files": []
   },
   "invocation": {
-    "kind": "command",
+    "kind": "script",
+    "path": "scenario.nsh",
     "text": "false && echo a; echo next"
   },
   "expected": {
@@ -28,6 +30,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "Plan C3 records that a short-circuited &&/|| chain prevents later sequence commands; implementation is assigned to WP-L08."
+    "reason": "WP-L08 owns short-circuiting and sequencing; WP-L05 owns foreground stage execution."
   }
 }

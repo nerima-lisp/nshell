@@ -247,6 +247,13 @@
       "path": "C06/builtin-reads-stdin.json"
     },
     {
+      "id": "C06-pipeline-streams-mixed-stages",
+      "uc": [
+        "C06"
+      ],
+      "path": "C06/pipeline-streams-mixed-stages.json"
+    },
+    {
       "id": "C07-redirection-family",
       "uc": [
         "C07"

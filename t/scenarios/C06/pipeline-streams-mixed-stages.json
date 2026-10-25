@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "id": "C06-pipeline-streams-mixed-stages",
+  "uc": [
+    "C06"
+  ],
+  "mode": "batch",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "dumb",
+      "NSHELL_READER": "sexp"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "invocation": {
+    "kind": "script",
+    "path": "scenario.nsh",
+    "text": "(| (echo \"C06_MIXED_STREAM\") (cat))\n"
+  },
+  "expected": {
+    "stdout": {
+      "equals": "C06_MIXED_STREAM\n"
+    },
+    "stderr": {
+      "equals": ""
+    },
+    "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L08 reader execution and WP-L06 scalar argv conversion are not implemented."
+  }
+}

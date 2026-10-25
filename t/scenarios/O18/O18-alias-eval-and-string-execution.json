@@ -35,6 +35,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "The L08 reader executor and L05 stage dispatcher are stubs; alias resolution also needs L02/L07 integration."
+    "reason": "WP-L08 reader execution is not implemented; echo argv conversion still needs WP-L06, and alias resolution needs WP-L02/WP-L07 integration."
   }
 }

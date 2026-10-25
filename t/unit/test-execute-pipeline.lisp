@@ -460,6 +460,285 @@
     (expect (nshell.infrastructure.acl:timeout-seconds-p
              nshell.infrastructure.acl:*external-command-timeout*)
             :to-be-truthy))
+  (it "pipeline-timeout-preserves-stage-ordered-statuses"
+    "A multi-stage timeout keeps every reaped stage status in source order."
+    (let ((terminated nil)
+          (waited nil))
+      (with-temporary-functions
+          (((quote nshell.infrastructure.acl::%start-process-output-copier)
+            (lambda (process output)
+              (declare (ignore process output))
+              nil))
+           ((quote nshell.infrastructure.acl::%start-stream-copier)
+            (lambda (input output name)
+              (declare (ignore input output name))
+              nil))
+           ((quote nshell.infrastructure.acl:process-error)
+            (lambda (process)
+              (declare (ignore process))
+              nil))
+           ((quote nshell.infrastructure.acl::%wait-processes-with-output-copiers)
+            (lambda (procs copiers timeout-seconds terminate-fn)
+              (declare (ignore procs copiers timeout-seconds))
+              (funcall terminate-fn)
+              (values t t)))
+           ((quote nshell.infrastructure.acl::%terminate-pipeline-processes)
+            (lambda (procs)
+              (setf terminated procs)))
+           ((quote nshell.infrastructure.acl::%wait-pipeline-processes)
+            (lambda (procs pipefail-p)
+              (setf waited (list procs pipefail-p))
+              (values 0 (list 143 143)))))
+        (multiple-value-bind (code statuses)
+            (nshell.infrastructure.acl::%wait-pipeline-with-output
+             (list :first :second) 1 (lambda () 124) t)
+          (expect 124 :to-equal code)
+          (expect (list 143 143) :to-equal statuses)
+          (expect (list :first :second) :to-equal terminated)
+          (expect (list (list :first :second) t) :to-equal waited)))))
+
+  (it "byte-stream-pipeline-streams-through-external-stage"
+    "The downstream internal stage reads before the internal producer returns."
+    (let ((first-read nil)
+          (first-write nil)
+          (second-read nil)
+          (second-write nil)
+          (descriptors nil))
+      (multiple-value-setq (first-read first-write)
+        (sb-posix:pipe))
+      (multiple-value-setq (second-read second-write)
+        (sb-posix:pipe))
+      (setf descriptors
+            (list first-read first-write second-read second-write))
+      (unwind-protect
+           (let* ((producer-io
+                   (nshell.application::make-pipeline-stage-io
+                    (list (cons 0 0) (cons 1 first-write) (cons 2 2))
+                    descriptors))
+                  (external-io
+                   (nshell.application::make-pipeline-stage-io
+                    (list (cons 0 first-read) (cons 1 second-write) (cons 2 2))
+                    descriptors))
+                  (consumer-io
+                   (nshell.application::make-pipeline-stage-io
+                    (list (cons 0 second-read) (cons 1 1) (cons 2 2))
+                    descriptors))
+                  (context (make-test-shell-context))
+                  (consumer-started (sb-thread:make-semaphore :count 0))
+                  (producer-waited-p nil)
+                  (producer-wrote-prefix-p nil)
+                  (consumer-read-first-byte-p nil)
+                  (received nil)
+                  (dispatch-results (make-array 3 :initial-element :not-run))
+                  (stages
+                   (list
+                    (nshell.application::make-evaluated-command-stage
+                     (nshell.domain.parsing:make-command-node "builtin-producer" nil)
+                     :builtin
+                     (nshell.application:make-builtin-binding
+                       (lambda (ignored-context ignored-arguments)
+                         (declare (ignore ignored-context ignored-arguments))
+                         (let ((stream
+                                (nshell.application::pipeline-stage-stream 1)))
+                           (write-string "prefix" stream)
+                           (progn
+                             (finish-output stream)
+                             (setf producer-wrote-prefix-p t))
+                           (setf producer-waited-p
+                                 (sb-thread:wait-on-semaphore
+                                  consumer-started
+                                  :timeout
+                                  2))
+                           (unless producer-waited-p
+                             (error
+                              "The downstream stage did not start during production."))
+                           (write-string "suffix" stream)
+                           (finish-output stream))
+                         (values "" 0))
+                       :argv)
+                     nil
+                     nil)
+                    (nshell.application::make-evaluated-command-stage
+                     (nshell.domain.parsing:make-command-node "/bin/cat" nil)
+                     :external
+                     nil
+                     nil
+                     nil)
+                    (nshell.application::make-evaluated-command-stage
+                     (nshell.domain.parsing:make-command-node "function-consumer" nil)
+                     :shell-function
+                     (nshell.application:make-shell-function-binding
+                       (lambda (&rest arguments)
+                         (declare (ignore arguments))
+                         (let ((stream
+                                (nshell.application::pipeline-stage-stream 0)))
+                           (setf received
+                                 (with-output-to-string (output)
+                                   (let ((first (read-char stream nil nil)))
+                                     (unless first
+                                       (error
+                                        "The downstream stage received no bytes."))
+                                     (progn
+                                       (setf consumer-read-first-byte-p t)
+                                       (sb-thread:signal-semaphore
+                                        consumer-started))
+                                     (write-char first output))
+                                   (loop for character = (read-char stream nil nil)
+                                         while character
+                                         do (write-char character output)))))
+                           (values nil 0))
+                       nil
+                       "function-consumer"
+                       nil
+                       nil)
+                     nil
+                     nil)))
+                  (dispatcher
+                   (lambda (context stage stage-io argv-strings)
+                     (declare (ignore stage-io))
+                     (let* ((binding
+                              (nshell.application:evaluated-command-stage-binding
+                               stage))
+                            (stage-index (position stage stages :test (function eq)))
+                            (kind
+                              (nshell.application:evaluated-command-stage-dispatch-kind
+                               stage)))
+                       (setf (aref dispatch-results stage-index)
+                             (list :stage-index stage-index :kind kind :entered t))
+                       (case kind
+                         (:builtin
+                          (multiple-value-bind (output status)
+                              (nshell.application:dispatch-builtin
+                               context
+                               binding
+                               (nshell.application:evaluated-command-stage-arguments
+                                stage)
+                               :argv-strings
+                               argv-strings)
+                            (setf (aref dispatch-results stage-index)
+                                  (list :stage-index stage-index
+                                        :kind :builtin
+                                        :builtin-return-values (list output status)
+                                        :dispatcher-return-values
+                                        (list status nil)))
+                            (values status nil)))
+                         (:shell-function
+                          (let ((callable-return-values
+                                  (multiple-value-list
+                                   (funcall
+                                    (nshell.application:shell-function-binding-callable
+                                     binding)))))
+                            (setf (aref dispatch-results stage-index)
+                                  (list :stage-index stage-index
+                                        :kind :shell-function
+                                        :callable-return-values
+                                        callable-return-values
+                                        :dispatcher-return-values (list 0 nil)))
+                            (values 0 nil))))))))
+             (let* ((handle nil)
+                    (spawn-error nil)
+                    (result nil))
+               (handler-case
+                   (setf handle
+                         (nshell.application::spawn-byte-stream-node-in-context
+                          context stages (list producer-io external-io consumer-io)
+                          dispatcher))
+                 (nshell.application::byte-stream-execution-error (condition)
+                   (error "Byte stream operation ~s failed: ~a; dispatch results: ~s; producer wrote prefix: ~s; consumer read first byte: ~s; producer waited: ~s"
+                          (nshell.application::byte-stream-execution-error-operation
+                           condition)
+                          (let ((cause
+                                  (nshell.application::byte-stream-execution-error-cause
+                                   condition)))
+                            (typecase cause
+                              (simple-condition
+                               (apply (function format) nil
+                                      (simple-condition-format-control cause)
+                                      (simple-condition-format-arguments cause)))
+                              (t cause)))
+                          (coerce dispatch-results (quote list))
+                          producer-wrote-prefix-p
+                          consumer-read-first-byte-p
+                          producer-waited-p))
+                 (nshell.application::wp-interface-not-implemented (condition)
+                   (unless
+                       (and (string= "L05"
+                                     (nshell.application::wp-interface-not-implemented-owner-wp
+                                      condition))
+                            (eq (quote nshell.application::spawn-byte-stream-node-in-context)
+                                (nshell.application::wp-interface-not-implemented-interface
+                                 condition)))
+                     (error condition))
+                   (setf spawn-error condition)))
+               (progn
+                 (expect :builtin
+                         :to-equal
+                         (nshell.application:evaluated-command-stage-dispatch-kind
+                          (first stages)))
+                 (expect :argv
+                         :to-equal
+                         (nshell.application:builtin-binding-argument-mode
+                          (nshell.application:evaluated-command-stage-binding
+                           (first stages))))
+                 (expect nil
+                         :to-equal
+                         (aref
+                          (nshell.application::%byte-stream-stage-argvs
+                           context stages)
+                          0))
+                 (expect (list nil t)
+                         :to-equal
+                         (list spawn-error (not (null handle)))))
+               (when handle
+                 (dolist (descriptor descriptors)
+                   (sb-posix:close descriptor))
+                 (setf descriptors nil)
+                 (setf result
+                       (handler-case
+                           (nshell.application::wait-byte-stream-execution handle)
+                         (nshell.application::byte-stream-execution-error (condition)
+                           (error "Byte stream operation ~s failed: ~a; dispatch results: ~s; producer wrote prefix: ~s; consumer read first byte: ~s; producer waited: ~s"
+                                  (nshell.application::byte-stream-execution-error-operation
+                                   condition)
+                                  (let ((cause
+                                          (nshell.application::byte-stream-execution-error-cause
+                                           condition)))
+                                    (typecase cause
+                                      (simple-condition
+                                       (apply (function format) nil
+                                              (simple-condition-format-control cause)
+                                              (simple-condition-format-arguments cause)))
+                                      (t cause)))
+                                  (coerce dispatch-results (quote list))
+                                  producer-wrote-prefix-p
+                                  consumer-read-first-byte-p
+                                  producer-waited-p))))
+                 (progn
+                   (expect t :to-be producer-wrote-prefix-p)
+                   (expect t :to-be consumer-read-first-byte-p)
+                   (expect
+                    (list
+                     (list :stage-index 0
+                           :kind :builtin
+                           :builtin-return-values (list "" 0)
+                           :dispatcher-return-values (list 0 nil))
+                     :not-run
+                     (list :stage-index 2
+                           :kind :shell-function
+                           :callable-return-values (list nil 0)
+                           :dispatcher-return-values (list 0 nil)))
+                    :to-equal
+                    (coerce dispatch-results (quote list)))
+                   (expect t :to-be (not (null producer-waited-p))))
+                 (expect "prefixsuffix" :to-equal received)
+                 (expect (list 0 0 0)
+                         :to-equal
+                         (nshell.application::pipeline-execution-result-stage-statuses result))
+                 (expect (list nil nil nil)
+                         :to-equal
+                         (nshell.application::pipeline-execution-result-stage-signals result))))
+             (dolist (descriptor descriptors)
+               (ignore-errors (sb-posix:close descriptor)))))))
 
   (it "timeout-seconds-p-rejects-invalid-boundaries"
     "Timeout validation accepts finite non-negative values only."
@@ -1253,6 +1532,19 @@
             (expect nil :to-be executed-p)
             (expect 126 :to-equal code)
             (expect (search "blocked" output) :to-be-truthy))))))
+  (it "structured-pipeline-projects-plist-records"
+    (let* ((*package* (find-package "NSHELL.USER"))
+           (form
+             (read-from-string
+              "(-> (quote ((:state \"stopped\" :id 7 :command \"demo\") (:state \"running\" :id 8 :command \"other\"))) (where (= :state \"stopped\")) (select :id :command))"))
+           (expanded-p nil)
+           (result nil))
+      (multiple-value-bind (expansion macro-p) (macroexpand-1 form)
+        (setf expanded-p macro-p)
+        (when macro-p (setf result (eval expansion))))
+      (expect t :to-be expanded-p)
+      (when expanded-p
+        (expect (quote ((:id 7 :command "demo"))) :to-equal result))))
 
   (it "rechecks-agent-command-arguments-after-variable-expansion"
     (let ((context (nshell.application:make-shell-context

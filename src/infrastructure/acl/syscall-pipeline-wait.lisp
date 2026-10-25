@@ -72,7 +72,10 @@
                    (error "Pipeline output copier did not reach EOF")))
              (if timed-out-p
                  (let ((code (funcall timeout-fn)))
-                   (values code (list code)))
+                   (multiple-value-bind (ignored statuses)
+                       (%wait-pipeline-processes procs pipefail-p)
+                     (declare (ignore ignored))
+                     (values code statuses)))
                  (%wait-pipeline-processes procs pipefail-p))))
       (dolist (copier copiers)
         (when (sb-thread:thread-alive-p copier)

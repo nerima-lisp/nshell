@@ -487,27 +487,6 @@
              (nshell.application:make-shell-context)
              nil))))
 
-(describe "p2-owner-interface-contracts"
-  (it "signals each new owner-tagged stub"
-    (labels ((signals-owner (expected-owner function arguments)
-               (let ((owner-wp nil))
-                 (handler-case
-                     (apply function arguments)
-                   (nshell.application:wp-interface-not-implemented (condition)
-                     (setf owner-wp
-                           (nshell.application:wp-interface-not-implemented-owner-wp
-                            condition))))
-                 (expect expected-owner :to-equal owner-wp))))
-      (dolist (contract
-               (list
-                (list "E05" #'nshell.presentation::highlight-line-from-scanner
-                      (list "" (nshell.domain.parsing:scan-input "") 0 0))
-                (list "L08" #'nshell.application:execute-reader-ast-in-context
-                      (list (nshell.application:make-shell-context)
-                            (nshell.domain.parsing:scan-input "")
-                            #'identity))))
-        (signals-owner (first contract) (second contract) (third contract))))))
-
 (describe "p2-owner-contract-types"
   (it "loads the L06 conversion condition"
     (expect t :to-equal

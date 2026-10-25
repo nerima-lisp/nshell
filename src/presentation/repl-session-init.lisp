@@ -57,7 +57,7 @@ set it."
               (handler-case
                   (multiple-value-bind (output code)
                       (%with-repl-shell-context (context)
-                        (nshell.application:source-lines
+                        (nshell.application:source-lines-to-stream
                          context
                          lines
                          source-name))

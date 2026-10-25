@@ -55,12 +55,10 @@
 (defun %redraw-input-state (state)
   (values state :redraw))
 (defun %enter-input-state (state)
-  (let* ((raw-source (input-state-buffer state))
-         (reader-context (%repl-reader-context-for-source raw-source))
-         (prepared-state
-           (if (%repl-new-reader-route-enabled-p)
-               (clear-completion-session-state state)
-               (nth-value 0 (finalize-enter-input-state state))))
+  (let* ((prepared-state (nth-value 0 (finalize-enter-input-state state)))
+         (reader-context
+           (%repl-reader-context-for-source
+            (input-state-buffer prepared-state)))
          (result
            (%repl-input-scan-result
             (input-state-buffer prepared-state)

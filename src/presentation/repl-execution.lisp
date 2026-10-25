@@ -31,21 +31,25 @@
        :indent-width +editor-indent-width+
        :head-classifier classifier)))
   (defun %evaluate-repl-reader-submission (source reader-context)
-  (let ((context (%make-repl-shell-context))
-        (reader-results
-          (nshell.domain.parsing:read-submission
-           source
-           :reader-context reader-context)))
-    (loop with status = 0
-          for reader-result in reader-results
-          do (multiple-value-bind (value result-status)
-                 (call-with-command-failure-restarts
-                  (lambda ()
-                    (nshell.application:evaluate-reader-result-in-context
-                     context reader-result)))
-               (declare (ignore value))
-               (setf status result-status))
-          finally (return (%sync-repl-shell-context context status))))))
+  (multiple-value-bind (output status)
+      (%execute-with-repl-shell-context
+       (lambda (context)
+         (let ((reader-results
+                 (nshell.domain.parsing:read-submission
+                  source
+                  :reader-context reader-context)))
+           (loop with last-status = 0
+                 for reader-result in reader-results
+                 do (multiple-value-bind (value result-status)
+                        (call-with-command-failure-restarts
+                         (lambda ()
+                           (nshell.application:evaluate-reader-result-in-context
+                            context reader-result)))
+                      (declare (ignore value))
+                      (setf last-status result-status))
+                 finally (return (values nil last-status))))))
+    (declare (ignore output))
+    status)))
 
 (define-value-struct source-text-request
     ((lines nil :type list :copy :list))

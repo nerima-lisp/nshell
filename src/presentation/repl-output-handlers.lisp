@@ -727,15 +727,19 @@ wrapped line's other rows on screen as stale duplicates."
                   (funcall evaluator)
                 (nshell.domain.parsing:sexp-reader-error (condition)
                   (format *error-output* "~a~%"
-                          (format-sexpr-source-diagnostic-for-input condition text))
-                  1)
+                          (format-sexpr-source-diagnostic-for-input
+                           condition text))
+                  (%set-command-failure-state 2)
+                  2)
                 (nshell.application:sexp-evaluation-syntax-error (condition)
                   (format *error-output* "~a~%"
-                          (format-sexpr-source-diagnostic-for-input condition text))
+                          (format-sexpr-source-diagnostic-for-input
+                           condition text))
                   1)
                 (nshell.application:command-macro-syntax-error (condition)
                   (format *error-output* "~a~%"
-                          (format-sexpr-source-diagnostic-for-input condition text))
+                          (format-sexpr-source-diagnostic-for-input
+                           condition text))
                   1))
               (execute-ast ast))
           0)))
@@ -825,17 +829,20 @@ wrapped line's other rows on screen as stale duplicates."
     (report-parse-diagnostics result *error-output*)
     (%set-command-failure-state 2)))
 
-(defun %execute-incomplete-command (result)
+(defun %execute-incomplete-command (result &optional explicit-indent)
   (format t "~%")
   (reset-rendered-prompt-state)
   (multiple-value-bind (continued-state output)
-      (insert-newline-at-cursor *input-state*
-                                :indent (if (or (nshell.domain.parsing:parse-diagnostic-kind-p
-                                                 result :trailing-continuation)
-                                                (nshell.domain.parsing:parse-diagnostic-kind-p
-                                                 result :unclosed-block))
-                                            2
-                                            0))
+      (insert-newline-at-cursor
+       *input-state*
+       :indent
+       (or explicit-indent
+           (if (or (nshell.domain.parsing:parse-diagnostic-kind-p
+                    result :trailing-continuation)
+                   (nshell.domain.parsing:parse-diagnostic-kind-p
+                    result :unclosed-block))
+               2
+               0)))
     (declare (ignore output))
     (setf *input-state* continued-state))
   (lambda () (render-prompt-cont)))
@@ -1157,24 +1164,86 @@ wrapped line's other rows on screen as stale duplicates."
                (with-reset-rendered-prompt-state-and-prompt-cont
                 (format t "~%nshell error: ~a~%" condition)
                 (%set-command-failure-state 1))))))
-(defun %execute-command-line (text)
-  (cond
-    ((%assistant-proposal-confirmation-required-p)
-     (%confirm-assistant-proposal))
-    ((%repl-new-reader-route-enabled-p)
-     (if (every (lambda (character)
-                  (find character (list #\Space #\Tab #\Newline #\Return)))
-                text)
-         (%execute-empty-input)
-         (%execute-complete-command
-          nil
-          text
-          (lambda ()
-            (%evaluate-repl-reader-submission
-             text
-             (%repl-reader-context-for-source text))))))
-    (t
-     (%execute-command-line-legacy text))))
+(defun %execute-new-reader-command-line (text)
+  (if (every (lambda (character)
+               (find character (list #\Space #\Tab #\Newline #\Return)))
+             text)
+      (%execute-empty-input)
+      (let ((reader-context (%repl-reader-context-for-source text)))
+        (multiple-value-bind (expanded-text expansion-error)
+            (if (eq reader-context :bare-line)
+                (nshell.domain.history:history-expand-line *history* text)
+                (values text nil))
+          (cond
+            (expansion-error
+             (with-reset-rendered-prompt-state-and-prompt-cont
+               (progn
+                 (format t "~%nshell: ~a~%" expansion-error)
+                 (setf *osc133-state* :none))
+               (%set-command-failure-state 2)))
+            ((every (lambda (character)
+                      (find character
+                            (list #\Space #\Tab #\Newline #\Return)))
+                    expanded-text)
+             (%execute-empty-input))
+            (t
+             (let* ((scan-result
+                      (%repl-input-scan-result
+                       expanded-text (length expanded-text) reader-context))
+                    (function-parse-result
+                      (when
+                          (nshell.application:function-definition-line-p
+                           expanded-text)
+                        (nshell.domain.parsing:parse-command-line
+                         expanded-text))))
+               (cond
+                 ((and function-parse-result
+                       (eq :incomplete
+                           (nshell.domain.parsing:parse-result-state
+                            function-parse-result)))
+                  (%execute-incomplete-command function-parse-result))
+                 ((and function-parse-result
+                       (eq :complete
+                           (nshell.domain.parsing:parse-result-state
+                            function-parse-result)))
+                  (%execute-complete-command
+                   (make-source-text-request expanded-text)
+                   expanded-text))
+                 ((eq :incomplete
+                      (nshell.domain.parsing:scan-result-status scan-result))
+                  (%execute-incomplete-command
+                   scan-result
+                   (nshell.domain.parsing:scan-result-next-indent scan-result)))
+                 (t
+                  (%execute-complete-command
+                   nil
+                   expanded-text
+                   (lambda ()
+                     (%evaluate-repl-reader-submission
+                      expanded-text reader-context))))))))))))
+  (defun %execute-command-line (text)
+    (cond
+      ((%assistant-proposal-confirmation-required-p)
+       (%confirm-assistant-proposal))
+      ((%repl-new-reader-route-enabled-p)
+       (handler-case
+           (%execute-new-reader-command-line text)
+         (nshell.infrastructure.terminal:terminal-mode-operation-failed
+             (condition)
+           (format *error-output* "~%nshell: ~a~%" condition)
+           (%set-command-failure-state 1)
+           (setf *running* nil)
+           +repl-exit+)
+         (storage-condition ()
+           (with-reset-rendered-prompt-state-and-prompt-cont
+             (format t "~%nshell: storage exhausted~%")
+             (%set-command-failure-state 1)))
+         (error (condition)
+           (with-reset-rendered-prompt-state-and-prompt-cont
+             (format t "~%nshell error: ~a~%" condition)
+             (%set-command-failure-state 1)))))
+      (t
+       (%execute-command-line-legacy text))))
 
   (defun %process-execute-output-event ()
     (clear-rendered-completions)

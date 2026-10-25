@@ -57,7 +57,16 @@
                     (lambda (command)
                       (setf command-not-found-command command))))
               (%with-repl-shell-context (context)
-                (nshell.application:source-lines context lines)))
+                (handler-case
+                    (nshell.application:source-lines-to-stream context lines)
+                  (nshell.application:command-failed (condition)
+                    (values
+                     nil
+                     (or
+                      (nshell.application::command-failed-pipeline-status
+                       condition)
+                      (nshell.application:command-failed-status
+                       condition)))))))
           (declare (ignore output))
           (setf *last-exit-code* (or code 0))
           (when (and (= *last-exit-code* 127)
@@ -103,7 +112,18 @@ SCRIPT-ARGS are exposed as $argv for --command."
   (format *error-output* "~a~%"
           (format-sexpr-source-diagnostic
            condition (%read-repl-script-source-text path)))
-  (setf *last-exit-code* 1))
+  (let ((span
+          (and (typep condition 'nshell.domain.parsing:sexp-reader-error)
+               (nshell.domain.parsing:sexp-reader-error-source-span
+                condition))))
+    (setf *last-exit-code*
+          (if (and (consp span)
+                   (consp (cdr span))
+                   (integerp (first span))
+                   (integerp (second span))
+                   (< (first span) (second span)))
+              2
+              1))))
 
 (defun run-repl-script (path &optional script-args)
   "Execute the script file at PATH (multiline blocks supported, via the same
@@ -114,9 +134,21 @@ script as $argv. Returns the exit status of the last command."
       (let ((nshell.domain.expansion:*positional-args* script-args))
         (multiple-value-bind (output code)
             (%with-repl-shell-context (context)
-              (funcall (nshell.application:lookup-builtin "source")
-                       context (list path)))
-          (declare (ignore output))
+              (handler-case
+                  (with-open-file (stream path :direction :input)
+                    (nshell.application:source-lines-to-stream
+                     context
+                     (nshell.application:collect-source-lines stream)
+                     path))
+                (nshell.domain.parsing:sexp-reader-error (condition)
+                  (error condition))
+                (nshell.application:sexp-evaluation-syntax-error (condition)
+                  (error condition))
+                (nshell.application:command-macro-syntax-error (condition)
+                  (error condition))
+                (error (condition)
+                  (values (format nil "source: ~a: ~a~%" path condition) 1))))
+          (when output (write-string output *standard-output*))
           (setf *last-exit-code* (or code 0))))
     (nshell.domain.parsing:sexp-reader-error (condition)
       (%report-repl-script-source-diagnostic condition path))

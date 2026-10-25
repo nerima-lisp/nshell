@@ -1,23 +1,44 @@
 (in-package #:nshell.presentation)
 
-(defun %make-repl-shell-context ()
-  (nshell.application:make-shell-context
-   :history *history*
-   :config *config*
-   :knowledge-base *kb*
-   :environment (ensure-environment)
-   :filesystem (nshell.infrastructure.acl:make-host-filesystem)
-   :job-monitor nshell.application:*job-monitor*
-   :alias-table *aliases*
-   :abbreviation-table *abbreviations*
-   :function-table *functions*
-   :function-source-table *function-sources*
-   :execution-strategy :os-pipes
-   :running *running*
-   :pipefail-p *pipefail*
-   :last-exit-code *last-exit-code*
-   :input-state *input-state*
-   :process-registry *proc-registry*))
+(defvar *repl-shell-function-registry-owner* nil)
+  (defvar *repl-shell-function-registry* nil)
+  (defun %repl-shell-function-registry ()
+    (unless (eq *repl-shell-function-registry-owner* *functions*)
+      (setf *repl-shell-function-registry-owner* *functions*
+            *repl-shell-function-registry*
+            (nshell.application:make-shell-function-registry)))
+    *repl-shell-function-registry*)
+  (defun %make-repl-shell-context ()
+    (let* ((registry (%repl-shell-function-registry))
+           (context
+             (nshell.application:make-shell-context
+              :history *history*
+              :config *config*
+              :knowledge-base *kb*
+              :environment (ensure-environment)
+              :filesystem (nshell.infrastructure.acl:make-host-filesystem)
+              :job-monitor nshell.application:*job-monitor*
+              :alias-table *aliases*
+              :abbreviation-table *abbreviations*
+              :function-table *functions*
+              :function-source-table *function-sources*
+              :shell-function-registry registry
+              :execution-strategy :os-pipes
+              :running *running*
+              :pipefail-p *pipefail*
+              :last-exit-code *last-exit-code*
+              :input-state *input-state*
+              :process-registry *proc-registry*)))
+      (setf (nshell.application:shell-function-registry-lookup-miss-hook
+             registry)
+            (lambda (ignored-registry canonical-key)
+              (declare (ignore ignored-registry))
+              (funcall
+               (symbol-function
+                (find-symbol "%AUTOLOAD-SHELL-FUNCTION-FROM-DIRECTORY"
+                             "NSHELL.APPLICATION"))
+               context canonical-key)))
+      context))
 
 (defun %repl-external-command-available-p (command)
   (multiple-value-bind (kind path)

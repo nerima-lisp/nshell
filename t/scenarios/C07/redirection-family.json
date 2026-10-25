@@ -7,7 +7,8 @@
   "environment": {
     "variables": {
       "PATH": "/usr/bin:/bin",
-      "TERM": "dumb"
+      "TERM": "dumb",
+      "NSHELL_READER": "sexp"
     },
     "home": "home",
     "cwd": "work",
@@ -67,10 +68,11 @@
     }
   },
   "invocation": {
-    "kind": "command",
+    "kind": "script",
+    "path": "scenario.nsh",
     "text": "printf 'C07_OVERWRITE\\n' > redirected.txt; printf 'C07_APPEND\\n' >> redirected.txt; cat < redirected.txt; printf 'C07_DUP\\n' 3>dup.txt 1>&3; printf 'C07_FORCE\\n' >| force.txt; printf 'C07_BOTH\\n' &> both.txt; printf 'C07_ERR\\n' 2>err.txt; printf 'C07_MERGED\\n' >&2 2>&1; printf 'C07_PIPE_ERR\\n' >&2 |& cat"
   },
   "expected_failure": {
-    "reason": "WP-L08 owns redirection operators and descriptor duplication."
+    "reason": "WP-L08 owns typed redirection and descriptor duplication; WP-L05 owns foreground stage execution and the |& pipeline."
   }
 }

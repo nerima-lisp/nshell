@@ -109,46 +109,86 @@
                 (nshell.infrastructure.acl:process-status process))
         (expect (sb-ext:process-exit-code process) :to-be-null)))
     (with-stopped-resume-process (process)
-      (with-temporary-function
-          ('nshell.infrastructure.acl:kill-process
-           (lambda (pid signal)
-             (expect -4321 :to-equal pid)
-             (expect :sigcont :to-equal signal)
-             0))
-        (expect t :to-be
-                (nshell.infrastructure.acl:process-continue-group
-                 4321 (list process)))
-        (expect :running :to-be
-                (nshell.infrastructure.acl:process-status process))
-        (expect (sb-ext:process-exit-code process) :to-be-null))))
+      (let ((pgid (sb-posix:getpgid
+                   (nshell.infrastructure.acl:process-pid process)))
+            (group-signals 0))
+        (with-temporary-function
+            ('nshell.infrastructure.acl:kill-process
+             (lambda (pid signal)
+               (incf group-signals)
+               (expect (- pgid) :to-equal pid)
+               (expect :sigcont :to-equal signal)
+               0))
+          (expect t :to-be
+                  (nshell.infrastructure.acl:process-continue-group
+                   pgid (list process)))
+          (expect 1 :to-equal group-signals)
+          (expect :running :to-be
+                  (nshell.infrastructure.acl:process-status process))
+          (expect (sb-ext:process-exit-code process) :to-be-null)))))
   (it "process-resume-group-refreshes-cache-after-esrch"
     (with-stopped-resume-process (process)
       (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
         (setf (sb-impl::process-%exit-code process) 7))
-      (with-temporary-function
-          ('nshell.infrastructure.acl:kill-process
-           (lambda (pid signal)
-             (expect -4321 :to-equal pid)
-             (expect :sigcont :to-equal signal)
-             (error 'sb-posix:syscall-error :name "kill" :errno sb-posix:esrch)))
+      (let ((pgid (sb-posix:getpgid
+                   (nshell.infrastructure.acl:process-pid process)))
+            (group-signals 0))
+        (with-temporary-function
+            ('nshell.infrastructure.acl:kill-process
+             (lambda (pid signal)
+               (incf group-signals)
+               (expect (- pgid) :to-equal pid)
+               (expect :sigcont :to-equal signal)
+               (error 'sb-posix:syscall-error
+                      :name "kill" :errno sb-posix:esrch)))
+          (expect t :to-be
+                  (nshell.infrastructure.acl:process-continue-group
+                   pgid (list process)))
+          (expect 1 :to-equal group-signals)
+          (expect :running :to-be
+                  (nshell.infrastructure.acl:process-status process))
+          (expect (sb-ext:process-exit-code process) :to-be-null))))
+    (with-stopped-resume-process (process)
+      (let ((pgid (sb-posix:getpgid
+                   (nshell.infrastructure.acl:process-pid process)))
+            (group-signals 0))
+        (with-temporary-function
+            ('nshell.infrastructure.acl:kill-process
+             (lambda (pid signal)
+               (incf group-signals)
+               (expect (- pgid) :to-equal pid)
+               (expect :sigcont :to-equal signal)
+               (error 'sb-posix:syscall-error
+                      :name "kill" :errno sb-posix:eperm)))
+          (expect (lambda ()
+                    (nshell.infrastructure.acl:process-continue-group
+                     pgid (list process)))
+                  :to-throw 'sb-posix:syscall-error)
+          (expect 1 :to-equal group-signals)
+          (expect :stopped :to-be
+                  (nshell.infrastructure.acl:process-status process))))))
+  (it "process-resume-does-not-signal-an-unowned-stale-group"
+  "A stale saved process-group ID is never signaled when no registered process belongs to it."
+  (with-stopped-resume-process (process)
+    (let* ((pid (nshell.infrastructure.acl:process-pid process))
+           (stale-pgid (1+ (sb-posix:getpgid pid)))
+           (original-process-kill (symbol-function 'sb-ext:process-kill)))
+      (with-temporary-functions
+          (('nshell.infrastructure.acl:kill-process
+            (lambda (observed-pid signal)
+              (declare (ignore observed-pid signal))
+              (error "Stale process group was signaled")))
+           ('sb-ext:process-kill
+            (lambda (observed-process signal &optional target)
+              (expect process :to-be observed-process)
+              (expect sb-unix:sigcont :to-equal signal)
+              (expect :pid :to-be target)
+              (funcall original-process-kill observed-process signal target))))
         (expect t :to-be
                 (nshell.infrastructure.acl:process-continue-group
-                 4321 (list process)))
+                 stale-pgid (list process)))
         (expect :running :to-be
-                (nshell.infrastructure.acl:process-status process))
-        (expect (sb-ext:process-exit-code process) :to-be-null)))
-    (with-stopped-resume-process (process)
-      (with-temporary-function
-          ('nshell.infrastructure.acl:kill-process
-           (lambda (pid signal)
-             (declare (ignore pid signal))
-             (error 'sb-posix:syscall-error :name "kill" :errno sb-posix:eperm)))
-        (expect (lambda ()
-                  (nshell.infrastructure.acl:process-continue-group
-                   4321 (list process)))
-                :to-throw 'sb-posix:syscall-error)
-        (expect :stopped :to-be
-                (nshell.infrastructure.acl:process-status process)))))
+                (nshell.infrastructure.acl:process-status process))))))
   (it "posix-spawn-process-resume-refreshes-group-cache"
     (let* ((process (nshell.infrastructure.acl::%spawn-posix-process
                      "/bin/sh"

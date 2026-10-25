@@ -55,24 +55,84 @@
              (setf (sb-impl::process-%status process) :running
                    (sb-impl::process-%exit-code process) nil))
            (values sent errno)))))))
+(defun %registered-process-group-owned-p (pgid processes)
+  (and (integerp pgid)
+       (plusp pgid)
+       (some
+        (lambda (process)
+          (and
+           (member (%registered-process-status process) '(:running :stopped))
+           (eql pgid (ignore-errors (sb-posix:getpgid (process-pid process))))))
+        processes)))
+(defun %registered-process-status (process)
+  (cond
+    ((pty-process-p process) (pty-process-state process))
+    ((native-process-p process)
+     (sb-thread:with-mutex ((native-process-status-lock process))
+                           (native-process-%status process)))
+    (t (sb-impl::process-%status process))))
+
+(defun %continue-registered-process-pid (process)
+  (unless (pty-process-p process)
+    (when
+        (and (eq :stopped (%registered-process-status process))
+             (ignore-errors (sb-posix:getpgid (process-pid process))))
+      (if (native-process-p process)
+          (multiple-value-bind (sent errno)
+              (%native-process-kill process sb-unix:sigcont)
+            (cond
+              ((and sent (eq :stopped (%registered-process-status process)))
+               (%mark-native-process-running process))
+              ((and (not sent) (/= errno sb-posix:esrch))
+               (error 'sb-posix:syscall-error :name "kill" :errno errno))))
+          (multiple-value-bind (sent errno)
+              (sb-ext:process-kill process sb-unix:sigcont :pid)
+            (cond
+              ((and sent (eq :stopped (%registered-process-status process)))
+               (setf (sb-impl::process-%status process) :running
+                     (sb-impl::process-%exit-code process) nil))
+              ((and (not sent) (/= errno sb-posix:esrch))
+               (error 'sb-posix:syscall-error :name "kill" :errno errno))))))))
+
 (defun process-continue-group (pgid processes)
-  "Continue PGID and refresh its registered process statuses under the waitpid lock."
+  "Continue an owned process group and refresh its registered process statuses."
   (sb-sys:without-interrupts
     (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
-      (handler-case
-          (funcall (symbol-function 'kill-process) (- pgid) :sigcont)
-        (sb-posix:syscall-error (condition)
-          (unless (= (sb-posix:syscall-errno condition) sb-posix:esrch)
-            (error condition))))
-      (dolist (process processes)
-        (cond
-          ((native-process-p process)
-           (%mark-native-process-running process))
-          ((not (pty-process-p process))
-           (when (eq :stopped (sb-impl::process-%status process))
-             (setf (sb-impl::process-%status process) :running
-                   (sb-impl::process-%exit-code process) nil)))))
-      t)))
+      (if (%registered-process-group-owned-p pgid processes)
+          (handler-case
+              (progn
+                (funcall (symbol-function 'kill-process) (- pgid) :sigcont)
+                (dolist (process processes)
+                  (when (and (member (%registered-process-status process)
+                                     '(:running :stopped))
+                             (eql pgid
+                                  (ignore-errors
+                                    (sb-posix:getpgid (process-pid process)))))
+                    (cond
+                      ((native-process-p process)
+                       (sb-thread:with-mutex
+                           ((native-process-status-lock process))
+                         (when (eq :stopped
+                                   (native-process-%status process))
+                           (setf (native-process-%status process) :running
+                                 (native-process-%exit-code process) nil))))
+                      ((not (pty-process-p process))
+                       (when (eq :stopped
+                                 (sb-impl::process-%status process))
+                         (setf (sb-impl::process-%status process) :running
+                               (sb-impl::process-%exit-code process) nil))))))
+                t)
+            (sb-posix:syscall-error (condition)
+              (if (= (sb-posix:syscall-errno condition) sb-posix:esrch)
+                  (progn
+                    (dolist (process processes)
+                      (%continue-registered-process-pid process))
+                    t)
+                  (error condition))))
+          (progn
+            (dolist (process processes)
+              (%continue-registered-process-pid process))
+            t)))))
 
 (defun process-alive-p (process)
   (cond

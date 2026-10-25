@@ -14,14 +14,7 @@
     (values (%pipeline-exit-status statuses pipefail-p)
             statuses)))
 (defun %pipeline-process-group-owned-p (procs pgid)
-  (and (integerp pgid)
-       (plusp pgid)
-       (some (lambda (proc)
-               (and (process-alive-p proc)
-                    (eql pgid
-                         (ignore-errors
-                           (sb-posix:getpgid (process-pid proc))))))
-             procs)))
+  (%registered-process-group-owned-p pgid procs))
 
 (defun %terminate-pipeline-processes (procs)
   (when procs

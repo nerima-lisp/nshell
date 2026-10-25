@@ -2,9 +2,15 @@
 
 (describe "search-history-service-tests"
   (it "history-suggestion-returns-suffix"
-    "Suggestions return only the completion suffix for the newest prefix match."
+    "Suggestions include the rest of a multiline entry after the matching prefix."
     (with-history (history "git status" "git stash" "echo done")
-      (expect " stash" :to-equal (nshell.application:history-suggestion history "git"))))
+      (expect " stash" :to-equal (nshell.application:history-suggestion history "git")))
+    (with-history (history "if true
+echo I04_MULTILINE_TAIL
+end")
+      (expect (format nil " true~%echo I04_MULTILINE_TAIL~%end")
+              :to-equal
+              (nshell.application:history-suggestion history "if"))))
 
   (it "history-suggestion-returns-nil-without-match"
     "Suggestions are NIL when no command has the requested prefix."

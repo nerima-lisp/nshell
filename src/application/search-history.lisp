@@ -97,26 +97,41 @@
       (first matches)))
 
 (defun history-suggestion (history input &key cwd)
-  (unless (nshell.domain.parsing:shell-input-blank-p input)
-    (let* ((matches
-             (history-kit:history-search history input :mode :line-prefix))
-           (cwd-matches
-             (and (stringp cwd)
-                  (remove-if-not
-                   (lambda (entry)
-                     (%interactive-history-entry-filter-p
-                      history entry (list :cwd cwd)))
-                   matches)))
-           (ranked-matches (or cwd-matches matches)))
-      (when ranked-matches
-        (let* ((best (%interactive-history-best-entry ranked-matches))
-               (suffix
-                 (history-kit:history-entry-line-suffix
-                  best
-                  input
-                  :case-sensitive (some #'upper-case-p input))))
-          (when (and suffix (< 0 (length suffix)))
-            suffix))))))
+  (labels ((entry-suffix (entry)
+             (let* ((text (history-kit:history-entry-text entry))
+                    (input-length (length input))
+                    (case-sensitive (some #'upper-case-p input)))
+               (loop with line-start = 0
+                     for line-end = (or (position #\Newline text :start line-start)
+                                        (length text))
+                     for prefix-end = (+ line-start input-length)
+                     do (when (and (<= prefix-end line-end)
+                                   (if case-sensitive
+                                       (string= text input
+                                                :start1 line-start
+                                                :end1 prefix-end)
+                                       (string-equal text input
+                                                     :start1 line-start
+                                                     :end1 prefix-end)))
+                          (return (subseq text prefix-end)))
+                     while (< line-end (length text))
+                     do (setf line-start (1+ line-end))))))
+    (unless (nshell.domain.parsing:shell-input-blank-p input)
+      (let* ((matches
+               (history-kit:history-search history input :mode :line-prefix))
+             (cwd-matches
+               (and (stringp cwd)
+                    (remove-if-not
+                     (lambda (entry)
+                       (%interactive-history-entry-filter-p
+                        history entry (list :cwd cwd)))
+                     matches)))
+             (ranked-matches (or cwd-matches matches)))
+        (when ranked-matches
+          (let* ((best (%interactive-history-best-entry ranked-matches))
+                 (suffix (entry-suffix best)))
+            (when (and suffix (< 0 (length suffix)))
+              suffix)))))))
 
 (defun search-history-use-case (history query mode &key (exit-code :any) cwd origin)
   (remove-if-not

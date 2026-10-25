@@ -429,7 +429,9 @@ which are skipped rather than parsed."
       (values (apply #'concatenate 'string (nreverse output)) code))))
 
     (defun source-lines (context lines &optional source-path)
-    "Execute source LINES in CONTEXT through the application source use case."
-    (if (and source-path (%source-new-reader-route-enabled-p))
-        (%source-lines-with-reader context lines source-path)
-        (%source-lines context lines source-path))))
+      "Execute source LINES in CONTEXT through the application source use case."
+      (let ((*interactive-top-level-p*
+             (if source-path nil *interactive-top-level-p*)))
+        (if (and source-path (%source-new-reader-route-enabled-p))
+            (%source-lines-with-reader context lines source-path)
+          (%source-lines context lines source-path)))))

@@ -41,6 +41,7 @@
 (defvar *prompt-rendered-origin-row* 1)
 (defvar *prompt-rendered-origin-column* 1)
 (defvar *prompt-rendered-origin-known-p* nil)
+(defvar *prompt-hook-pending-p* nil)
 (defvar *interactive-terminal-installed-p* nil)
 (defvar *osc133-state* :none)
 (defvar *mouse-reporting-enabled-p* nil)

@@ -169,4 +169,27 @@
                (string= (concatenate 'string prefix " " expansion " " suffix)
                         new-buffer)
                (= (+ (length prefix) 1 (length expansion))
-                  new-cursor)))))))
+                  new-cursor))))))
+  (it "abbreviation-domain-matches-regex-and-sets-cursor-marker"
+    (let ((abbr (nshell.domain.abbreviation:make-abbreviation
+                 :expansion "echo %tail"
+                 :position :anywhere
+                 :regex "^foo[0-9]+$"
+                 :set-cursor-marker "%")))
+      (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+               abbr "label" "foo12")
+              :to-be-truthy)
+      (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+               abbr "label" "xfoo12")
+              :to-be-falsy)
+      (multiple-value-bind (buffer cursor expanded-p)
+          (nshell.domain.abbreviation:expand-abbreviation
+           "foo12"
+           5
+           (lambda (token)
+             (when (nshell.domain.abbreviation:abbreviation-matches-token-p
+                    abbr "label" token)
+               abbr)))
+        (expect expanded-p :to-be-truthy)
+        (expect "echo tail" :to-equal buffer)
+        (expect 5 :to-equal cursor)))))

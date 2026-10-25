@@ -10,6 +10,37 @@ commands at startup. `--no-config` skips it, and `--config PATH` selects another
 file. Batch and script runs do not load it. With default path selection,
 `~/.nshellrc` is ignored and nshell prints a one-line notice.
 
+## Shell hooks
+
+Register hooks from `init.lisp` with `nshell.application:register-shell-hook`.
+Hooks run in registration order. `nshell.application:remove-shell-hook` removes
+one callback, and `nshell.application:clear-shell-hooks` clears all callbacks
+or one hook's callbacks.
+
+| Hook | Boundary | Arguments |
+|---|---|---|
+| `:preexec` | Before an interactive command runs | Command text |
+| `:postexec` | After an interactive command finishes | Command text, exit status, duration in milliseconds |
+| `:prompt` | Before the initial prompt and each prompt after Enter | Current directory, previous exit status |
+| `:cd` | After `cd` changes the directory | Previous directory, current directory |
+| `:command-not-found` | When interactive command lookup cannot find an executable | Command name |
+
+For example, append a line to a trace file before each command:
+
+```lisp
+(nshell.application:register-shell-hook
+ :preexec
+ (lambda (command)
+   (with-open-file (stream "/tmp/nshell-commands.log"
+                           :direction :output
+                           :if-exists :append
+                           :if-does-not-exist :create)
+     (write-line command stream))))
+```
+
+If a hook signals an error, nshell reports it on standard error and continues
+with the remaining hooks and the shell session.
+
 ## East Asian ambiguous character width
 
 Some Unicode characters, such as `·`, `…`, and `○`, have an East Asian

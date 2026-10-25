@@ -334,13 +334,20 @@
     "abbr stores fish-style multi-token expansions in the current shell context."
     (with-builtins-context (context)
       (assert-fish-style-table-builtin-roundtrip
-          (context "abbr" (nshell.application:shell-context-abbreviation-table context)
-                   "gco" "git checkout" '("-a" "gco" "git" "checkout")
-                   "abbr -a gco git checkout"
-                   "abbr: -e requires a name
+       (context "abbr"
+                (nshell.application:shell-context-abbreviation-table context)
+                "gco" "git checkout"
+                '("-a" "gco" "git" "checkout")
+                "abbr -a gco git checkout"
+                "abbr: -e requires a name
 "
-                   '("-e" "gco")
-                   "missing"))))
+                '("-e" "gco")
+                "missing"
+                :stored-value-form
+                (nshell.domain.abbreviation:abbreviation-expansion
+                 (gethash "gco"
+                          (nshell.application:shell-context-abbreviation-table
+                           context)))))))
 
   (it "abbr-accepts-fish-style-long-options"
     "abbr accepts long option names for add, query, list, show, and erase."
@@ -361,8 +368,8 @@
       (expect 1 :to-equal (nth-value 1 (call-builtin context "abbr"
                                            '("--query" "gst"))))))
 
-  (it "abbr-adds-position-scoped-expansions"
-    "abbr stores optional fish-style position metadata for expansion-time checks."
+  (it "abbr-adds-position-regex-function-and-cursor-metadata"
+    "abbr preserves its expansion-time position, regex, function, and cursor options."
     (with-builtins-context (context)
       (expect 0 :to-equal (nth-value 1 (call-builtin context "abbr"
                                            '("--add" "--position" "command"
@@ -375,13 +382,45 @@
         (expect :command :to-be (nshell.domain.abbreviation:abbreviation-position value)))
       (multiple-value-bind (output code) (call-builtin context "abbr" '("--show"))
         (expect 0 :to-equal code)
-        (expect (search "abbr -a --position command gco git checkout" output) :to-be-truthy))
+        (expect (search "abbr -a gco git checkout" output) :to-be-truthy))
       (expect 0 :to-equal (nth-value 1 (call-builtin context "abbr"
                                            '("-a" "-p" "anywhere"
                                              "gst" "git" "status"))))
       (multiple-value-bind (output code) (call-builtin context "abbr" '("--show"))
         (expect 0 :to-equal code)
-        (expect (search "abbr -a --position anywhere gst git status" output) :to-be-truthy))))
+        (expect (search "abbr -a --position anywhere gst git status" output) :to-be-truthy))
+      (expect 0 :to-equal (nth-value 1 (call-builtin context "abbr"
+                                           '("-a" "--regex" "^foo[0-9]+$"
+                                             "--set-cursor=!" "numeric" "echo!"))))
+      (let ((value (gethash "numeric"
+                            (nshell.application:shell-context-abbreviation-table
+                             context))))
+        (expect "^foo[0-9]+$" :to-equal (nshell.domain.abbreviation:abbreviation-regex value))
+        (expect "!" :to-equal (nshell.domain.abbreviation:abbreviation-set-cursor-marker value)))
+      (expect 0 :to-equal (nth-value 1 (call-builtin context "abbr"
+                                           '("-a" "--set-cursor" "cursor" "echo %"))))
+      (expect "%" :to-equal
+              (nshell.domain.abbreviation:abbreviation-set-cursor-marker
+               (gethash "cursor"
+                        (nshell.application:shell-context-abbreviation-table context))))
+      (expect 0 :to-equal (nth-value 1 (call-builtin context "abbr"
+                                           '("-a" "--function" "make-expansion"
+                                             "dynamic"))))
+      (let ((value (gethash "dynamic"
+                            (nshell.application:shell-context-abbreviation-table
+                             context))))
+        (expect "make-expansion"
+                :to-equal (nshell.domain.abbreviation:abbreviation-function-name value))
+        (expect "" :to-equal (nshell.domain.abbreviation:abbreviation-expansion value)))
+      (multiple-value-bind (output code) (call-builtin context "abbr" '("--show"))
+        (expect 0 :to-equal code)
+        (expect (search "abbr -a --regex ^foo[0-9]+$ --set-cursor=! numeric echo!" output)
+                :to-be-truthy)
+        (expect (search "abbr -a --function make-expansion dynamic" output) :to-be-truthy))
+      (multiple-value-bind (output code)
+          (call-builtin context "abbr" '("-a" "--regex" "[" "invalid" "echo"))
+        (expect 2 :to-equal code)
+        (expect (search "invalid regular expression" output) :to-be-truthy))))
 
   (it "abbr-rejects-invalid-position-option"
     "abbr rejects missing or unknown --position values."

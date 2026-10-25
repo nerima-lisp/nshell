@@ -17,4 +17,6 @@
     (:export #:abbreviation-boundary-p #:abbreviation-target-before-cursor
              #:abbreviation-command-position-p #:abbreviation-p
              #:make-abbreviation #:abbreviation-expansion #:abbreviation-position
-             #:expand-abbreviation)))
+             #:abbreviation-regex #:abbreviation-function-name
+             #:abbreviation-set-cursor-marker #:abbreviation-order
+             #:abbreviation-matches-token-p #:expand-abbreviation)))

@@ -533,4 +533,24 @@
           :suggest-update
           (:buffer (concatenate 'string buffer "ab")
            :cursor-pos limit)
-        (expect limit :to-equal (length (nshell.presentation:input-state-buffer new-state)))))))
+        (expect limit :to-equal (length (nshell.presentation:input-state-buffer new-state))))))
+  (it "input-state-function-abbreviation-expands-and-sets-cursor"
+    (let ((nshell.presentation::*abbreviations* (make-hash-table :test #'equal))
+          (nshell.presentation::*repl-abbreviation-function-invoker*
+            (lambda (function-name token)
+              (expect "make-expansion" :to-equal function-name)
+              (expect "hello" :to-equal token)
+              (values "echo %tail" t))))
+      (setf (gethash "hello-regex" nshell.presentation::*abbreviations*)
+            (nshell.domain.abbreviation:make-abbreviation
+             :function-name "make-expansion"
+             :position :anywhere
+             :regex "^hello$"
+             :set-cursor-marker "%"
+             :order 1))
+      (let ((state (nshell.presentation::make-repl-input-state :buffer "hello")))
+        (with-expected-input-state-reduction (new-state output)
+            state
+            (reduce-once state :char #\Space)
+            :suggest-update
+            (:buffer "echo  tail" :cursor-pos 6))))))

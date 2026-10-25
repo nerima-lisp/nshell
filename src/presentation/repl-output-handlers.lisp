@@ -671,6 +671,7 @@ wrapped line's other rows on screen as stale duplicates."
     (setf *last-command-duration-ms* nil)
     (setf *last-command-output* nil
           *failure-explain-available-p* nil)
+    (setf *prompt-hook-pending-p* t)
     (setf *assistant-command-origin* :typed
           *assistant-command-confirmed-p* nil)
     (progn
@@ -709,13 +710,16 @@ wrapped line's other rows on screen as stale duplicates."
      (unwind-protect
          (let ((nshell.infrastructure.acl:*command-not-found-hook*
                 (lambda (command)
-                  (setf *command-not-found-command* command)))
+                  (setf *command-not-found-command* command)
+                  (nshell.application:run-shell-hooks
+                   :command-not-found command)))
                (nshell.application:*execution-origin*
                 *assistant-command-origin*)
                (nshell.application:*execution-confirmed-p*
                 *assistant-command-confirmed-p*))
            (setf *command-not-found-command* nil)
            (setf *last-command-output* nil)
+           (nshell.application:run-shell-hooks :preexec text)
            (setf exit-code
       (or (if evaluator
               (handler-case
@@ -740,7 +744,10 @@ wrapped line's other rows on screen as stale duplicates."
                              (boundary-monotonic))))
            (setf *last-exit-code* recorded-exit-code
                  *last-command-duration-ms* duration-ms
-                 *failure-explain-available-p* (not (zerop recorded-exit-code)))
+                 *failure-explain-available-p* (not (zerop recorded-exit-code))
+                 *prompt-hook-pending-p* t)
+           (nshell.application:run-shell-hooks
+            :postexec text recorded-exit-code duration-ms)
            (if (and (= recorded-exit-code 127)
                     *command-not-found-command*
                     (not *agent-session*))

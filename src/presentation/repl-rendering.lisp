@@ -241,6 +241,10 @@
     (clear-rendered-transient-panel)
     (clear-rendered-search-results)
     (clear-rendered-prompt)
+    (when *prompt-hook-pending-p*
+      (setf *prompt-hook-pending-p* nil)
+      (nshell.application:run-shell-hooks
+       :prompt (boundary-current-directory) *last-exit-code*))
     (%ensure-rendered-prompt-origin)
     (let* ((terminal-width (terminal-width))
            (prompt-width

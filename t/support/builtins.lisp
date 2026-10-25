@@ -166,13 +166,14 @@ form should return (values output exit-code).  Example:
 
 (defmacro assert-fish-style-table-builtin-roundtrip
     ((context name table-form key expansion add-args list-fragment erase-error-output erase-args missing-key
-      &key body-contains))
+      &key body-contains stored-value-form))
   `(progn
      (multiple-value-bind (output code)
          (call-builtin ,context ,name ,add-args)
        (expect output :to-be-null)
        (expect 0 :to-equal code))
-     (expect ,expansion :to-equal (gethash ,key ,table-form))
+     (expect ,expansion :to-equal
+             ,(or stored-value-form `(gethash ,key ,table-form)))
      (expect 0 :to-equal (nth-value 1 (call-builtin ,context ,name (list "-q" ,key))))
      (expect 1 :to-equal (nth-value 1 (call-builtin ,context ,name (list "-q" ,missing-key))))
      ,@(when body-contains

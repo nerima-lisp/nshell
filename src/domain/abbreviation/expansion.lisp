@@ -3,15 +3,42 @@
 
 (define-value-struct abbreviation
     ((expansion "" :type string)
-     (position :anywhere :type (member :anywhere :command)))
+     (position :command :type (member :anywhere :command))
+     (regex nil :type (or null string))
+     (function-name nil :type (or null string))
+     (set-cursor-marker nil :type (or null string))
+     (order 0 :type integer))
   :documentation "Abbreviation expansion metadata."
   :constructor %allocate-abbreviation)
 
-(defun make-abbreviation (&key (expansion "") (position :anywhere))
+(defun make-abbreviation (&key (expansion "")
+                               (position :command)
+                               regex
+                               function-name
+                               set-cursor-marker
+                               (order 0))
   "Create validated abbreviation expansion metadata."
   (check-type expansion string)
   (check-type position (member :anywhere :command))
-  (%allocate-abbreviation (copy-seq expansion) position))
+  (check-type regex (or null string))
+  (check-type function-name (or null string))
+  (check-type set-cursor-marker (or null string))
+  (check-type order (integer 0 *))
+  (when (and function-name (string= function-name ""))
+    (error "Abbreviation function name cannot be empty."))
+  (when (and function-name (not (string= expansion "")))
+    (error "Function abbreviations cannot also have a literal expansion."))
+  (when (and set-cursor-marker (string= set-cursor-marker ""))
+    (error "Abbreviation cursor marker cannot be empty."))
+  (when regex
+    (cl-regex-kit:compile-regex regex))
+  (%allocate-abbreviation
+   (copy-seq expansion)
+   position
+   (and regex (copy-seq regex))
+   (and function-name (copy-seq function-name))
+   (and set-cursor-marker (copy-seq set-cursor-marker))
+   order))
 
 (define-value-struct abbreviation-token-range
     ((start 0 :type fixnum)
@@ -68,27 +95,41 @@
             do (return (abbreviation-token-range-values buffer range))
           finally (return (values nil nil nil nil nil nil)))))
 
-(defun abbreviation-command-position-p
-    (buffer token-start &key head-classifier)
-  "Return true when TOKEN-START is a scanner command-head token."
-  (let* ((position (min token-start (length buffer)))
-         (result
-           (nshell.domain.parsing:scan-input
-            buffer
-            :cursor position
-            :head-classifier
-            (or head-classifier
-                (lambda (head)
-                  (declare (ignore head))
-                  :host-form)))))
-    (some (lambda (token)
-            (let ((span (nshell.domain.parsing:scan-token-span token)))
-              (and (= (first span) position)
-                   (eq (nshell.domain.parsing:scan-token-kind token) :command-head)
-                   (member (nshell.domain.parsing:scan-token-reader-context token)
-                           '(:bare-line :command-island)
-                           :test #'eq))))
-          (nshell.domain.parsing:scan-result-tokens result))))
+(progn
+  (defun abbreviation-matches-token-p (abbreviation name token)
+    (if (and (abbreviation-p abbreviation)
+             (abbreviation-regex abbreviation))
+        (let* ((regex
+                 (cl-regex-kit:compile-regex
+                  (abbreviation-regex abbreviation)))
+               (match (cl-regex-kit:scan regex token)))
+          (and match
+               (zerop (cl-regex-kit:match-start match))
+               (= (length token) (cl-regex-kit:match-end match))))
+        (string= name token)))
+
+  (defun abbreviation-command-position-p
+      (buffer token-start &key head-classifier)
+    "Return true when TOKEN-START is a scanner command-head token."
+    (let* ((position (min token-start (length buffer)))
+           (result
+             (nshell.domain.parsing:scan-input
+              buffer
+              :cursor position
+              :head-classifier
+              (or head-classifier
+                  (lambda (head)
+                    (declare (ignore head))
+                    :host-form)))))
+      (some (lambda (token)
+              (let ((span (nshell.domain.parsing:scan-token-span token)))
+                (and (= (first span) position)
+                     (eq (nshell.domain.parsing:scan-token-kind token)
+                         :command-head)
+                     (member (nshell.domain.parsing:scan-token-reader-context token)
+                             '(:bare-line :command-island)
+                             :test #'eq))))
+            (nshell.domain.parsing:scan-result-tokens result)))))
 
 (defun abbreviation-expansion-value (expansion)
   (cond
@@ -121,19 +162,31 @@ expansions that would exceed it.
         (if (or (not found-p) (eq kind :string)
                 (not (member context '(:bare-line :command-island) :test #'eq)))
             (values buffer cursor nil)
-            (let ((expansion (funcall expander token)))
+            (let* ((entry (funcall expander token))
+                   (value (abbreviation-expansion-value entry))
+                   (marker
+                     (and (abbreviation-p entry)
+                          (abbreviation-set-cursor-marker entry)))
+                   (marker-position (and marker (stringp value) (search marker value)))
+                   (replacement
+                     (if marker-position
+                         (concatenate 'string
+                                      (subseq value 0 marker-position)
+                                      (subseq value
+                                              (+ marker-position (length marker))))
+                         value)))
               (if (and (abbreviation-position-eligible-p
-                        expansion buffer start head-classifier)
-                       (stringp (abbreviation-expansion-value expansion))
-                       (let ((value (abbreviation-expansion-value expansion)))
-                         (and (not (string= value ""))
-                              (not (string= value token)))))
-                  (let* ((value (abbreviation-expansion-value expansion))
-                         (new-buffer (concatenate 'string
+                        entry buffer start head-classifier)
+                       (stringp value)
+                       (not (string= value ""))
+                       (not (string= value token)))
+                  (let* ((new-buffer (concatenate 'string
                                                   (subseq buffer 0 start)
-                                                  value
-                                                  (subseq buffer end))))
+                                                  replacement
+                                                  (subseq buffer end)))
+                         (new-cursor
+                           (+ start (or marker-position (length replacement)))))
                     (if (and max-length (> (length new-buffer) max-length))
                         (values buffer cursor nil)
-                        (values new-buffer (+ start (length value)) t)))
+                        (values new-buffer new-cursor t)))
                   (values buffer cursor nil)))))))

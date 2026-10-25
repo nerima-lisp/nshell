@@ -134,5 +134,5 @@ permitted to know both the domain and infrastructure.")
             #:agent-session-propose-step #:agent-session-reclassify-step
             #:agent-session-record-step #:agent-session-skip-step
             #:agent-session-stop #:agent-session-limit-reached-p
-            #:agent-max-steps-from-context #:define-shell-function #:with-shell-functions))
+            #:agent-max-steps-from-context #:define-shell-function #:with-shell-functions #:register-shell-hook #:remove-shell-hook #:clear-shell-hooks #:run-shell-hooks))
 )

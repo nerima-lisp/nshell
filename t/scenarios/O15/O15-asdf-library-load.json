@@ -32,7 +32,7 @@
   "invocation": {
     "kind": "script",
     "path": "scenario.nsh",
-    "text": "(eval-when (:execute) (pushnew (truename \".\") asdf:*central-registry* :test #'equal))\n(asdf:load-system \"scenario-helper\")\n(format t \"~a~%\" (scenario-helper:greeting))\n"
+    "text": "(eval-when (:EXECUTE) (pushnew (truename \".\") asdf:*central-registry* :TEST #'equal))\n(asdf:load-system \"scenario-helper\")\n(format t \"~a~%\" (scenario-helper:greeting))\n"
   },
   "expected": {
     "stdout": {
@@ -41,5 +41,8 @@
       ]
     },
     "exit_code": 0
+  },
+  "expected_failure": {
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

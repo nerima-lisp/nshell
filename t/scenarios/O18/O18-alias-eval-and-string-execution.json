@@ -35,6 +35,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L08 reader execution is not implemented; echo argv conversion still needs WP-L06, and alias resolution needs WP-L02/WP-L07 integration."
+    "reason": "WP-O18fix: the NSHELL_READER=sexp command-stage resolver does not expand aliases before resolving shell functions, builtins, and PATH commands. Integrating alias expansion into reader-backed command planning remains a separate execution task."
   }
 }

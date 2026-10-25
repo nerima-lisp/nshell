@@ -53,8 +53,8 @@
               (nshell.domain.parsing:command-value-form-source-span
                (second forms)))))
 
-  (it "builds-bare-line-sequence-and-pipeline-ast-with-mixed-separators"
-    (let* ((source "one |& two && three || four; five &")
+  (it "builds-bare-line-sequence-and-pipeline-ast-including-background-semicolon"
+    (let* ((source "one |& two && three || four; five &; six")
            (result (first (nshell.domain.parsing:read-submission source)))
            (sequence (nshell.domain.parsing:reader-result-form result))
            (items (nshell.domain.parsing:sequence-node-commands sequence))
@@ -62,7 +62,7 @@
       (expect (nshell.domain.parsing:sequence-node-p sequence) :to-be-truthy)
       (expect '(:and :or :semi :amp) :to-equal
               (nshell.domain.parsing:sequence-node-separators sequence))
-      (expect 4 :to-equal (length items))
+      (expect 5 :to-equal (length items))
       (expect (nshell.domain.parsing:pipeline-node-p pipeline) :to-be-truthy)
       (expect '("one" "two") :to-equal
               (mapcar #'nshell.domain.parsing:command-node-command
@@ -70,7 +70,7 @@
       (expect '(:pipe-stderr-to-stdout) :to-equal
               (mapcar #'nshell.domain.parsing:pipeline-edge-kind
                       (nshell.domain.parsing:pipeline-node-edges pipeline)))
-      (expect '("three" "four" "five") :to-equal
+      (expect '("three" "four" "five" "six") :to-equal
               (mapcar #'nshell.domain.parsing:command-node-command
                       (rest items)))
       (expect (list 0 (length source)) :to-equal
@@ -122,7 +122,7 @@
                       (nshell.domain.parsing:command-node-args island-command)))))
 
   (it "rejects-bare-line-trailing-operators-and-redirects-with-reader-errors"
-    (dolist (source '("echo &&" "echo ||" "echo |" "echo |&" "echo >"))
+    (dolist (source '("echo &&" "echo ||" "echo |" "echo |&" "echo >" "sleep &;; wait" "echo && ; next"))
       (let ((condition
               (%sexp-reader-test-capture-error
                (lambda () (nshell.domain.parsing:read-submission source)))))

@@ -1913,7 +1913,8 @@
         (segment-reversed nil)
         (commands-reversed nil)
         (separators-reversed nil)
-        (last-separator-end nil))
+        (last-separator-end nil)
+        (background-semicolon-allowed-p nil))
     (labels ((finish-segment (separator)
                (when (null segment-reversed)
                  (%sexp-reader-command-error
@@ -1944,23 +1945,30 @@
                   token
                   "A bare-line separator requires a command on its left."))
                (finish-segment separator)
-               (setf last-separator-end (token-end token))))
+               (setf background-semicolon-allowed-p nil last-separator-end (token-end token))))
       (dolist (token tokens)
         (case (token-type token)
           ((:word :redirect :pipe)
+           (setf background-semicolon-allowed-p nil)
            (push token segment-reversed))
           (:newline
+           (setf background-semicolon-allowed-p nil)
            (unless (or (null segment-reversed)
                        (continuation-newline-p))
              (finish-segment :semi)))
           (:semicolon
-           (record-separator token :semi))
+           (if (and (null segment-reversed)
+                    background-semicolon-allowed-p)
+               (setf background-semicolon-allowed-p nil
+                     last-separator-end (token-end token))
+               (record-separator token :semi)))
           (:and
            (record-separator token :and))
           (:or
            (record-separator token :or))
           (:ampersand
-           (record-separator token :amp))
+           (record-separator token :amp)
+           (setf background-semicolon-allowed-p t))
           (otherwise
            (separator-error token "Unsupported bare-line token."))))
       (when segment-reversed

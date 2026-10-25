@@ -12,22 +12,41 @@
       (setf state (logand #xffffffff (logxor state (ash state 5))))
       (setf (char source position) (code-char (logand state #xff))))))
 (describe "sexp-scanner-malformed-bare-line-and-fuzz-contracts"
-  (it "reports-misordered-bare-line-separators-at-the-offending-token"
-    (dolist (case (list (list "; echo" 0 1)
-                        (list "echo && ; next" 8 9)
-                        (list "echo && && next" 8 10)))
-      (let* ((source (first case))
-             (start (second case))
-             (end (third case))
+  (it "accepts-one-semicolon-after-background-and-rejects-misordered-separators"
+    (progn
+      (let* ((source "sleep 0.1 &; wait")
              (result
                (nshell.domain.parsing:scan-input
-                source :reader-context :bare-line)))
-        (expect :invalid :to-be
+                source :reader-context :bare-line))
+             (tokens (nshell.domain.parsing:scan-result-tokens result)))
+        (expect :complete :to-be
                 (nshell.domain.parsing:scan-result-status result))
-        (expect (list start end) :to-equal
-                (nshell.domain.parsing:scan-result-invalid-span result))
+        (expect 1 :to-equal
+                (count :background tokens
+                       :key (function nshell.domain.parsing:scan-token-kind)))
+        (expect 1 :to-equal
+                (count :sequence-separator tokens
+                       :key (function nshell.domain.parsing:scan-token-kind)))
+        (expect (nshell.domain.parsing:scan-result-invalid-span result)
+                :to-be-null)
         (expect (nshell.domain.parsing:scan-result-incomplete-span result)
-                :to-be-null))))
+                :to-be-null))
+      (dolist (case (list (list "; echo" 0 1)
+                          (list "echo && ; next" 8 9)
+                          (list "echo && && next" 8 10)
+                          (list "sleep &;; wait" 8 9)))
+        (let* ((source (first case))
+               (start (second case))
+               (end (third case))
+               (result
+                 (nshell.domain.parsing:scan-input
+                  source :reader-context :bare-line)))
+          (expect :invalid :to-be
+                  (nshell.domain.parsing:scan-result-status result))
+          (expect (list start end) :to-equal
+                  (nshell.domain.parsing:scan-result-invalid-span result))
+          (expect (nshell.domain.parsing:scan-result-incomplete-span result)
+                  :to-be-null)))))
 
   (it "reports-trailing-bare-line-pipeline-and-sequence-operators-incomplete"
     (dolist (source '("echo &&" "echo ||" "echo |" "echo |&"))

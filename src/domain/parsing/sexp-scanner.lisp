@@ -745,9 +745,15 @@
                (%depth-scan-state-bare-pending-operator state) kind
                (%depth-scan-state-bare-last-kind state) kind))
         ((member kind '(:sequence-separator :background) :test #'eq)
-         (when (or (%depth-scan-state-bare-expect-command-p state)
-                   (%depth-scan-state-bare-pending-operator state)
-                   (%depth-scan-state-bare-pending-redirect state))
+         (when (and (or (%depth-scan-state-bare-expect-command-p state)
+                        (%depth-scan-state-bare-pending-operator state)
+                        (%depth-scan-state-bare-pending-redirect state))
+                    (not (and (eq kind :sequence-separator)
+                              (eq (%depth-scan-state-bare-last-kind state)
+                                  :background)
+                              (%depth-scan-state-bare-expect-command-p state)
+                              (null (%depth-scan-state-bare-pending-operator state))
+                              (null (%depth-scan-state-bare-pending-redirect state)))))
            (%depth-scan-invalid start end))
          (setf (%depth-scan-state-bare-expect-command-p state) t
                (%depth-scan-state-bare-pending-operator state) nil

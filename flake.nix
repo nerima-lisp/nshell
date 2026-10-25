@@ -217,11 +217,14 @@
         }
       '';
       deliveryRun = lib.escapeShellArg ''
-        ${loginEnvironment}
         case "''${1-}" in
           -c)
             exec /bin/sh "$@"
             ;;
+        esac
+
+        ${loginEnvironment}
+        case "''${1-}" in
           -lc)
             nshell_login_environment
             shift

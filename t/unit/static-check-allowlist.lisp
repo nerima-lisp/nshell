@@ -30,10 +30,7 @@
      ("["
       "The test alias is described alongside test in the prose section and omitted from the short inventory."))
     :nested-test-declarations
-    (("t/integration/test-assistant-export.lisp" "IT"
-      "does not create state files for batch or script execution"
-      "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
-     ("t/unit/test-east-asian-width.lisp" "IT"
+    (("t/unit/test-east-asian-width.lisp" "IT"
       "matches-only-locale-language-prefixes"
       "This pre-existing declaration is nested in its parent test form; retain it as an exact baseline exception.")
      ("t/unit/test-east-asian-width.lisp" "IT"

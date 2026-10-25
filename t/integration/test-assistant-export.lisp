@@ -85,7 +85,7 @@
               (expect #o600
                       :to-equal
                       (logand (sb-posix:stat-mode
-                               (sb-posix:stat snapshot-path)) #o777))))))))
+                               (sb-posix:stat snapshot-path)) #o777)))))))))
 
   (it "marks pending Git status as explicitly unknown"
     (host-kit:with-temporary-directory (directory)
@@ -151,5 +151,5 @@
           (expect nil :to-be (probe-file state-directory))
           (expect nil :to-be
                   (probe-file
-                   (merge-pathnames "snapshot.json" state-directory))))))))
+                   (merge-pathnames "snapshot.json" state-directory)))))))
 )

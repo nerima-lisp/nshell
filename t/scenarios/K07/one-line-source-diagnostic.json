@@ -34,8 +34,5 @@
       ]
     },
     "exit_code": 1
-  },
-  "expected_failure": {
-    "reason": "WP-L07 owns the unimplemented CONTEXT-SHELL-FUNCTION-REGISTRY interface required to load this script."
   }
 }

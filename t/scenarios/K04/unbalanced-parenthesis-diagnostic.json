@@ -77,8 +77,5 @@
         }
       ]
     }
-  },
-  "expected_failure": {
-    "reason": "WP-L07 owns the unimplemented CONTEXT-SHELL-FUNCTION-REGISTRY interface required to start this PTY session."
   }
 }

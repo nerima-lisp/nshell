@@ -131,7 +131,80 @@
         (expect :quote :to-be (%highlight-span-role-at spans (search "quoted" input)))
         (expect :variable :to-be (%highlight-span-role-at spans (search "$HOME" input)))
         (expect :path :to-be (%highlight-span-role-at spans (search "/tmp" input)))
-        (expect :comment :to-be (%highlight-span-role-at spans (search "# note" input)))))))
+        (expect :comment :to-be (%highlight-span-role-at spans (search "# note" input))))))
+  (it "e05-highlight-sexpression-uses-scanner-context-and-spans"
+    "Scanner offsets map to line-relative spans, with distinct form roles and matching delimiters."
+    (let* ((nshell.presentation::*highlight-command-resolver* nil)
+           (buffer (format nil "~%(echo (list ~S))" "x"))
+           (absolute-start 1)
+           (line (subseq buffer absolute-start))
+           (head-classifier (lambda (head)
+                              (if (string= head "echo") :command-island :host-form)))
+           (scan-result
+             (nshell.domain.parsing:scan-input
+              buffer :reader-context :sexp :head-classifier head-classifier))
+           (cursor-scan-result
+             (nshell.domain.parsing:scan-input
+              buffer :cursor absolute-start :reader-context :sexp
+              :head-classifier head-classifier))
+           (spans
+             (nshell.presentation:highlight-line
+              line :scan-result scan-result :absolute-start absolute-start))
+           (cursor-spans
+             (nshell.presentation:highlight-line
+              line :scan-result cursor-scan-result :cursor-position absolute-start
+              :absolute-start absolute-start))
+           (unmatched-input "(echo")
+           (unmatched-scan-result
+             (nshell.domain.parsing:scan-input
+              unmatched-input :reader-context :sexp :head-classifier head-classifier))
+           (unmatched-spans
+             (nshell.presentation:highlight-line
+              unmatched-input :scan-result unmatched-scan-result))
+           (unmatched-open-span
+             (find 0 unmatched-spans
+                   :key (lambda (span) (nshell.presentation:highlight-span-start span))))
+           (command-span
+             (find (search "echo" line) spans
+                   :key (lambda (span) (nshell.presentation:highlight-span-start span))))
+           (host-span
+             (find (search "list" line) spans
+                   :key (lambda (span) (nshell.presentation:highlight-span-start span))))
+           (string-start (position #\" line))
+           (string-span
+             (find string-start spans
+                   :key (lambda (span) (nshell.presentation:highlight-span-start span))))
+           (open-span
+             (find 0 spans
+                   :key (lambda (span) (nshell.presentation:highlight-span-start span))))
+           (close-span
+             (find (1- (length line)) spans
+                   :key (lambda (span) (nshell.presentation:highlight-span-start span))))
+           (cursor-open-span
+             (find 0 cursor-spans
+                   :key (lambda (span) (nshell.presentation:highlight-span-start span))))
+           (cursor-close-span
+             (find (1- (length line)) cursor-spans
+                   :key (lambda (span) (nshell.presentation:highlight-span-start span))))
+           (command-role (nshell.presentation:highlight-span-role command-span))
+           (host-role (nshell.presentation:highlight-span-role host-span))
+           (string-role (nshell.presentation:highlight-span-role string-span))
+           (cursor-open-role (nshell.presentation:highlight-span-role cursor-open-span))
+           (cursor-close-role (nshell.presentation:highlight-span-role cursor-close-span)))
+      (expect (search "echo" line) :to-equal (nshell.presentation:highlight-span-start command-span))
+      (expect (+ (search "echo" line) (length "echo")) :to-equal (nshell.presentation:highlight-span-end command-span))
+      (expect (search "list" line) :to-equal (nshell.presentation:highlight-span-start host-span))
+      (expect (+ (search "list" line) (length "list")) :to-equal (nshell.presentation:highlight-span-end host-span))
+      (expect string-start :to-equal (nshell.presentation:highlight-span-start string-span))
+      (expect (+ string-start 3) :to-equal (nshell.presentation:highlight-span-end string-span))
+      (expect :command :to-be command-role)
+      (expect :host-form :to-be host-role)
+      (expect :quote :to-be string-role)
+      (expect :matching-delimiter :to-be cursor-open-role)
+      (expect :matching-delimiter :to-be cursor-close-role)
+      (expect :normal :to-be (nshell.presentation:highlight-span-role open-span))
+      (expect :normal :to-be (nshell.presentation:highlight-span-role close-span))
+      (expect :error :to-be (nshell.presentation:highlight-span-role unmatched-open-span)))))
 
 (describe "highlight-ansi-render-tests"
   (it "highlight-ansi-emits-one-reset-per-colored-span-and-none-for-empty"

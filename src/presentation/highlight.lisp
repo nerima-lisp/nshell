@@ -167,7 +167,76 @@ when reading past a comment #."
         (when span (push span spans))))
     (nreverse spans)))
 
-(defun highlight-line (input)
+(defun %scanner-delimiter-role (token matching-spans unmatched-spans)
+  (let ((token-span (nshell.domain.parsing:scan-token-span token)))
+    (cond
+      ((gethash token-span matching-spans) :matching-delimiter)
+      ((and (eq (nshell.domain.parsing:scan-token-kind token) :delimiter-open)
+            (gethash token-span unmatched-spans))
+       :error)
+      (t :normal))))
+(defun %scanner-token-highlight-role (token)
+  (let ((kind (nshell.domain.parsing:scan-token-kind token))
+        (text (nshell.domain.parsing:scan-token-text token))
+        (context (nshell.domain.parsing:scan-token-reader-context token)))
+    (case kind
+      (:command-head (%command-word-role text))
+      (:argument
+       (if (eq context :host-form)
+           :host-form
+         (%highlight-word-role text nil nil)))
+      (:string :quote)
+      ((:host-form :escaped-symbol :reader-prefix :character-literal
+                   :comma-unquote :dollar-unquote)
+       :host-form)
+      ((:pipeline :pipeline-stderr :sequence-separator :and :or :background
+                  :redirect :here-doc-delimiter :process-substitution)
+       :operator)
+      ((:line-comment :block-comment) :comment)
+      (:invalid :error)
+      (otherwise :normal))))
+(defun highlight-line-from-scanner (input scan-result cursor-position absolute-start)
+  (let ((line-end (+ absolute-start (length input)))
+        (matching-spans (make-hash-table :test #'equal))
+        (unmatched-spans (make-hash-table :test #'equal))
+        (spans nil))
+    (when (integerp cursor-position)
+      (dolist (pair (nshell.domain.parsing:scan-result-delimiter-pairs scan-result))
+        (let ((open-span
+               (nshell.domain.parsing:delimiter-pair-open-span pair))
+              (close-span
+               (nshell.domain.parsing:delimiter-pair-close-span pair)))
+          (when (or (= cursor-position (first open-span))
+                    (= cursor-position (first close-span)))
+            (setf (gethash open-span matching-spans) t
+                  (gethash close-span matching-spans) t)))))
+    (dolist (frame (nshell.domain.parsing:scan-result-open-delimiters scan-result))
+      (setf (gethash
+             (nshell.domain.parsing:delimiter-frame-opener-span frame)
+             unmatched-spans)
+            t))
+    (dolist (token (nshell.domain.parsing:scan-result-tokens scan-result))
+      (let* ((token-span (nshell.domain.parsing:scan-token-span token))
+             (start (max absolute-start (first token-span)))
+             (end (min line-end (second token-span)))
+             (kind (nshell.domain.parsing:scan-token-kind token)))
+        (when (and (< start end)
+                   (not (member kind '(:whitespace :here-doc-body) :test #'eq)))
+          (push (%make-highlight-span
+                 (- start absolute-start)
+                 (- end absolute-start)
+                 (if (member kind '(:delimiter-open :delimiter-close) :test #'eq)
+                     (%scanner-delimiter-role
+                      token matching-spans unmatched-spans)
+                   (%scanner-token-highlight-role token)))
+                spans))))
+    (sort spans #'< :key #'highlight-span-start)))
+(defun highlight-line
+    (input &key scan-result cursor-position (absolute-start 0))
+  (if scan-result
+      (highlight-line-from-scanner input scan-result cursor-position absolute-start)
+    (%highlight-line-legacy input)))
+(defun %highlight-line-legacy (input)
   "Parse INPUT and return highlight spans for fish-style syntax coloring."
   (let* ((tokenization (nshell.domain.parsing:tokenize input))
          (tokens (nshell.domain.parsing:tokenization-result-tokens tokenization))

@@ -192,41 +192,170 @@ which are skipped rather than parsed."
      (lambda (head-source)
        (classify-sexp-head context head-source))))
 
-  (defun %source-evaluate-reader-submission (context source source-path)
+  (defun %source-evaluate-reader-submission (context source source-path source-map)
+  (labels ((source-span-in-file (span)
+             (let* ((start (and (consp span) (first span)))
+                    (end (and (consp span) (second span)))
+                    (map-length (if (vectorp source-map)
+                                    (length source-map)
+                                    0)))
+               (if (and (vectorp source-map)
+                        (integerp start)
+                        (integerp end)
+                        (<= 0 start end map-length)
+                        (or (= start end)
+                            (and (consp (aref source-map start))
+                                 (consp (aref source-map (1- end))))))
+                   (if (= start end)
+                       (let ((anchor
+                               (if (< start map-length)
+                                   (first (aref source-map start))
+                                   (if (plusp map-length)
+                                       (second (aref source-map
+                                                     (1- map-length)))
+                                       0))))
+                         (list anchor anchor))
+                       (list (first (aref source-map start))
+                             (second (aref source-map (1- end)))))
+                   span))))
     (let* ((scan-result (%source-reader-scan-result context source))
            (reader-results
              (nshell.domain.parsing:read-submission
-              source :reader-context :auto :source-path source-path)))
+              source :reader-context :auto :source-path source-path
+              :source-map source-map)))
       (unless (eq (nshell.domain.parsing:scan-result-status scan-result) :complete)
         (error "source: incomplete reader input"))
       (let ((code 0))
         (dolist (reader-result reader-results)
           (multiple-value-bind (value result-code)
-              (evaluate-reader-result-in-context context reader-result)
+              (handler-case
+                  (evaluate-reader-result-in-context context reader-result)
+                (sexp-evaluation-syntax-error (condition)
+                  (error
+                   (make-condition
+                    'sexp-evaluation-syntax-error
+                    :source-span
+                    (source-span-in-file
+                     (sexp-evaluation-syntax-error-source-span condition))
+                    :source-path
+                    (sexp-evaluation-syntax-error-source-path condition)
+                    :cause
+                    (sexp-evaluation-syntax-error-cause condition))))
+                (command-macro-syntax-error (condition)
+                  (error
+                   (make-condition
+                    'command-macro-syntax-error
+                    :source-span
+                    (source-span-in-file
+                     (command-macro-syntax-error-source-span condition))
+                    :source-path
+                    (command-macro-syntax-error-source-path condition)
+                    :cause
+                    (command-macro-syntax-error-cause condition)))))
             (declare (ignore value))
             (setf code result-code)
             (%record-last-exit-code context code))
           (unless (shell-context-running context)
             (return)))
-        (values nil code))))
+        (values nil code)))))
 
   (defun %source-lines-with-reader (context lines &optional source-path)
-    (let ((output nil)
-          (code 0)
-          (remaining lines))
+  (labels ((source-map-for-line (line offset)
+             (coerce
+              (loop for position from offset below (+ offset (length line))
+                    collect (list position (1+ position)))
+              'vector))
+           (append-here-document-source-map
+               (source-map text line line-offset source-length)
+             (let* ((line-end (+ line-offset (length line)))
+                    (added
+                      (append
+                       (unless (and (plusp (length text))
+                                    (char= (char text (1- (length text)))
+                                           #\Newline))
+                         (list (list (1- line-offset) line-offset)))
+                       (loop for position from line-offset below line-end
+                             collect (list position (1+ position)))
+                       (list (if (< line-end source-length)
+                                 (list line-end (1+ line-end))
+                                 (list line-end line-end))))))
+               (concatenate 'vector source-map (coerce added 'vector))))
+           (append-continuation-source-map
+               (source-map separator line line-offset)
+             (let ((added
+                     (append
+                      (loop repeat (length separator)
+                            collect (list line-offset line-offset))
+                      (loop for position from line-offset
+                            below (+ line-offset (length line))
+                            collect (list position (1+ position))))))
+               (concatenate 'vector source-map (coerce added 'vector))))
+           (source-line-entries (source-lines)
+             (loop with offset = 0
+                   for tail on source-lines
+                   for source-line = (car tail)
+                   collect (prog1 (cons source-line offset)
+                             (incf offset (+ (length source-line)
+                                             (if (rest tail) 1 0))))))
+           (source-tail-index (candidate source-lines)
+             (loop for tail on source-lines
+                   for index from 0
+                   when (eq candidate tail) return index
+                   finally
+                      (when (null candidate)
+                        (return (length source-lines)))))
+           (source-function-remaining-entries
+               (line line-offset remaining raw-remaining returned)
+             (let* ((shared-tail
+                      (loop for tail on returned
+                            for prefix-count from 0
+                            for suffix-index =
+                              (source-tail-index tail raw-remaining)
+                            when suffix-index
+                              return (list prefix-count suffix-index)))
+                    (prefix-count
+                      (if shared-tail (first shared-tail) (length returned)))
+                    (suffix-index
+                      (if shared-tail (second shared-tail)
+                          (length raw-remaining)))
+                    (search-start 0))
+               (append
+                (loop for inline-line in (subseq returned 0 prefix-count)
+                      collect
+                      (let* ((found (search inline-line line
+                                            :start2 search-start))
+                             (start (or found search-start)))
+                        (setf search-start (+ start (length inline-line)))
+                        (cons inline-line (+ line-offset start))))
+                (nthcdr suffix-index remaining)))))
+    (let* ((source-length (length (format nil "~{~a~^~%~}" lines)))
+           (output nil)
+           (code 0)
+           (remaining (source-line-entries lines)))
       (loop while remaining
-            for line = (pop remaining)
+            for entry = (pop remaining)
+            for line = (car entry)
+            for line-offset = (cdr entry)
             do (cond
                  ((%comment-or-blank-source-line-p line) nil)
                  ((and (not (%function-start-p line))
                        (source-line-function-split line))
                   (multiple-value-bind (prefix definition)
                       (source-line-function-split line)
-                    (setf remaining (list* prefix definition remaining))))
+                    (setf remaining
+                          (list* (cons prefix line-offset)
+                                 (cons definition
+                                       (+ line-offset
+                                          (or (search definition line) 0)))
+                                 remaining))))
                  ((%function-start-p line)
-                  (let ((step (%source-lines-handle-function-start
-                               context line remaining source-path output)))
-                    (setf remaining (%source-lines-step-result-remaining-lines step)
+                  (let* ((raw-remaining (mapcar #'car remaining))
+                         (step (%source-lines-handle-function-start
+                                context line raw-remaining source-path output)))
+                    (setf remaining
+                          (source-function-remaining-entries
+                           line line-offset remaining raw-remaining
+                           (%source-lines-step-result-remaining-lines step))
                           output (%source-lines-step-result-output-chunks step)
                           code (%source-lines-step-result-exit-code step))
                     (%record-last-exit-code context code)
@@ -242,8 +371,10 @@ which are skipped rather than parsed."
                             line))
                          (sexp-p
                            (and first-nonwhite
-                                (char= (char line first-nonwhite) (code-char 40))))
+                                (char= (char line first-nonwhite)
+                                       (code-char 40))))
                          (text line)
+                         (source-map (source-map-for-line line line-offset))
                          (scan-result (%source-reader-scan-result context line))
                          (parse-result
                            (and (not sexp-p)
@@ -254,29 +385,48 @@ which are skipped rather than parsed."
                                         scan-result)
                                        :incomplete)
                                    (and parse-result
-                                        (%source-line-needs-more-input-p parse-result))))
-                          for next-line = (pop remaining)
-                          do (setf text
-                                   (if sexp-p
-                                       (%append-source-here-document-line
-                                        text next-line)
-                                       (%append-source-continuation
-                                        text next-line parse-result))
-                                   scan-result (%source-reader-scan-result
-                                                context text)
-                                   parse-result
-                                   (and (not sexp-p)
-                                        (nshell.domain.parsing:parse-command-line
-                                         text))))
+                                        (%source-line-needs-more-input-p
+                                         parse-result))))
+                          for next-entry = (pop remaining)
+                          for next-line = (car next-entry)
+                          for next-line-offset = (cdr next-entry)
+                          do (let* ((separator
+                                      (and (not sexp-p)
+                                           (if (nshell.domain.parsing:parse-diagnostic-kind-p
+                                                parse-result :trailing-continuation)
+                                               " "
+                                               "; ")))
+                                    (next-text
+                                      (if sexp-p
+                                          (%append-source-here-document-line
+                                           text next-line)
+                                          (%append-source-continuation
+                                           text next-line parse-result)))
+                                    (next-source-map
+                                      (if sexp-p
+                                          (append-here-document-source-map
+                                           source-map text next-line
+                                           next-line-offset source-length)
+                                          (append-continuation-source-map
+                                           source-map separator next-line
+                                           next-line-offset))))
+                               (setf text next-text
+                                     source-map next-source-map
+                                     scan-result
+                                     (%source-reader-scan-result context text)
+                                     parse-result
+                                     (and (not sexp-p)
+                                          (nshell.domain.parsing:parse-command-line
+                                           text)))))
                     (multiple-value-bind (chunk exit-code)
                         (%source-evaluate-reader-submission
-                         context text source-path)
+                         context text source-path source-map)
                       (setf output (%source-lines-add-chunk chunk output)
                             code exit-code)
                       (%record-last-exit-code context code)
                       (when (not (shell-context-running context))
                         (return)))))))
-      (values (apply #'concatenate 'string (nreverse output)) code)))
+      (values (apply #'concatenate 'string (nreverse output)) code))))
 
     (defun source-lines (context lines &optional source-path)
     "Execute source LINES in CONTEXT through the application source use case."

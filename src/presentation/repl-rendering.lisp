@@ -6,13 +6,14 @@
           (end (input-state-mouse-selection-end *input-state*)))
       (when (and (integerp anchor) (integerp end))
         (list (min anchor end) (max anchor end))))))
-(defun %active-matching-delimiter-spans ()
+(defun %active-matching-delimiter-spans (&optional provided-scan-result)
   (when *input-state*
     (let* ((source (input-state-buffer *input-state*))
            (cursor (input-state-cursor-pos *input-state*))
            (reader-context (%repl-reader-context-for-source source))
-           (scan-result (%repl-input-scan-result
-                         source cursor reader-context))
+           (scan-result
+             (or provided-scan-result
+                 (%repl-input-scan-result source cursor reader-context)))
            (pair
              (find-if
               (lambda (candidate)
@@ -102,7 +103,8 @@
                   :theme (nshell.domain.configuration:config-theme *config*)))))))))
 
 (defun %render-edit-buffer-line
-    (line absolute-start theme selection-start selection-end matching-spans)
+    (line absolute-start theme selection-start selection-end matching-spans
+     scan-result cursor-position)
   (loop with local-start = 0
         with line-length = (length line)
         while (< local-start line-length)
@@ -141,13 +143,20 @@
                (t
                 (handler-case
                     (format t "~a"
-                            (highlight->ansi (highlight-line segment) segment theme))
+                            (highlight->ansi
+                             (highlight-line
+                              segment
+                              :scan-result scan-result
+                              :cursor-position cursor-position
+                              :absolute-start (+ absolute-start local-start))
+                             segment theme))
                   (error ()
                     (format t "~a" segment)))))
              (setf local-start local-end))))
 
 (defun render-edit-buffer
-    (text theme &key selection-start selection-end matching-spans)
+    (text theme &key selection-start selection-end matching-spans
+                    scan-result cursor-position)
   (loop with start = 0
         with absolute-start = 0
         with first-line = t
@@ -158,9 +167,9 @@
                (format t "~%")
                (%write-styled "> " :prompt-continuation theme))
              (let ((line (subseq text start (or newline-pos (length text)))))
-               (%render-edit-buffer-line line absolute-start theme
-                                         selection-start selection-end
-                                         matching-spans))
+               (%render-edit-buffer-line
+                line absolute-start theme selection-start selection-end
+                matching-spans scan-result cursor-position))
              (setf first-line nil)
              (if newline-pos
                  (setf start (1+ newline-pos)
@@ -252,6 +261,12 @@
                               (and *interactive-terminal-installed-p*
                                    (eq *osc133-state* :prompt)))))
            (text (input-state-buffer *input-state*))
+           (cursor-position (input-state-cursor-pos *input-state*))
+           (reader-context (%repl-reader-context-for-source text))
+           (scan-result
+             (%repl-input-scan-result text cursor-position reader-context))
+           (highlight-scan-result
+             (and (eq reader-context :sexp) scan-result))
            (theme (nshell.domain.configuration:config-theme *config*))
            (suggestion (input-state-suggestion *input-state*))
            (ask-suffix (when (member (input-state-mode *input-state*)
@@ -259,7 +274,7 @@
                                      :test #'eq)
                         "ask>"))
            (selection-range (%active-mouse-selection-range))
-           (matching-spans (%active-matching-delimiter-spans)))
+           (matching-spans (%active-matching-delimiter-spans scan-result)))
       (when ask-suffix
         (format t " ")
         (%write-styled ask-suffix :prompt-assistant theme)
@@ -268,7 +283,13 @@
         (when (eq *osc133-state* :prompt)
           (%emit-terminal-integration-sequence :osc133 "B")
           (setf *osc133-state* :input))
-        (render-edit-buffer text theme :selection-start (first selection-range) :selection-end (second selection-range) :matching-spans matching-spans))
+        (render-edit-buffer
+         text theme
+         :selection-start (first selection-range)
+         :selection-end (second selection-range)
+         :matching-spans matching-spans
+         :scan-result highlight-scan-result
+         :cursor-position cursor-position))
       (when (and suggestion (> (length suggestion) 0))
         (%write-styled suggestion :autosuggestion theme))
       (%move-cursor-to-rendered-position text

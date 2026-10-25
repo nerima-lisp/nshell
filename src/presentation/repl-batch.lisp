@@ -82,9 +82,20 @@ SCRIPT-ARGS are exposed as $argv for --command."
   (nshell.infrastructure.acl:run-shell-command
    command arguments (exported-environment-strings)))
 
+(defun %read-repl-script-source-text (path)
+  (with-open-file (stream path :direction :input)
+    (format nil "~{~a~^~%~}"
+            (nshell.application:collect-source-lines stream))))
+
+(defun %report-repl-script-source-diagnostic (condition path)
+  (format *error-output* "~a~%"
+          (format-sexpr-source-diagnostic
+           condition (%read-repl-script-source-text path)))
+  (setf *last-exit-code* 1))
+
 (defun run-repl-script (path &optional script-args)
   "Execute the script file at PATH (multiline blocks supported, via the same
-block-aware reader as the `source' builtin). SCRIPT-ARGS are exposed to the
+block-aware reader as the source builtin). SCRIPT-ARGS are exposed to the
 script as $argv. Returns the exit status of the last command."
   (%initialize-batch-state)
   (handler-case
@@ -95,6 +106,12 @@ script as $argv. Returns the exit status of the last command."
                        context (list path)))
           (declare (ignore output))
           (setf *last-exit-code* (or code 0))))
+    (nshell.domain.parsing:sexp-reader-error (condition)
+      (%report-repl-script-source-diagnostic condition path))
+    (nshell.application:sexp-evaluation-syntax-error (condition)
+      (%report-repl-script-source-diagnostic condition path))
+    (nshell.application:command-macro-syntax-error (condition)
+      (%report-repl-script-source-diagnostic condition path))
     (error (condition)
       (format *error-output* "nshell: ~a~%" condition)
       (setf *last-exit-code* 1)))

@@ -5,6 +5,12 @@
       (handler-case
           (with-open-file (stream (first args) :direction :input)
             (source-lines context (%collect-source-lines stream) (first args)))
+        (nshell.domain.parsing:sexp-reader-error (condition)
+          (error condition))
+        (nshell.application:sexp-evaluation-syntax-error (condition)
+          (error condition))
+        (nshell.application:command-macro-syntax-error (condition)
+          (error condition))
         (error (condition)
           (values (format nil "source: ~a: ~a~%" (first args) condition) 1)))
       (%builtin-usage "source" "source file")))

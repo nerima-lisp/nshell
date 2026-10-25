@@ -716,7 +716,24 @@ wrapped line's other rows on screen as stale duplicates."
                 *assistant-command-confirmed-p*))
            (setf *command-not-found-command* nil)
            (setf *last-command-output* nil)
-           (setf exit-code (or (if evaluator (funcall evaluator) (execute-ast ast)) 0)))
+           (setf exit-code
+      (or (if evaluator
+              (handler-case
+                  (funcall evaluator)
+                (nshell.domain.parsing:sexp-reader-error (condition)
+                  (format *error-output* "~a~%"
+                          (format-sexpr-source-diagnostic-for-input condition text))
+                  1)
+                (nshell.application:sexp-evaluation-syntax-error (condition)
+                  (format *error-output* "~a~%"
+                          (format-sexpr-source-diagnostic-for-input condition text))
+                  1)
+                (nshell.application:command-macro-syntax-error (condition)
+                  (format *error-output* "~a~%"
+                          (format-sexpr-source-diagnostic-for-input condition text))
+                  1))
+              (execute-ast ast))
+          0)))
        (let ((recorded-exit-code (if (integerp exit-code) exit-code 1)))
          (let ((duration-ms (%elapsed-command-duration-ms
                              start-time

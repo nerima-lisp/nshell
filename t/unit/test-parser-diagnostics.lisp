@@ -361,3 +361,145 @@
         (expect (format nil "~A~%" expected)
                 :to-equal
                 (get-output-stream-string stream))))))
+(describe "e05-source-diagnostic-tests"
+  (it "e05-reader-diagnostic-includes-location-span-and-cause"
+    (let* ((source (format nil "echo~%(+ 1)"))
+           (cause
+             (make-condition
+              (find-class (intern "SIMPLE-ERROR" :common-lisp))
+              :format-control "reader broken"
+              :format-arguments nil))
+           (condition
+             (make-condition
+              (find-class (intern "SEXP-READER-ERROR" :nshell.domain.parsing))
+              :source-span (list 6 7)
+              :source-path "demo.nsh"
+              :source-map nil
+              :cause cause))
+           (line
+             (nshell.presentation::format-sexpr-source-diagnostic condition source)))
+      (expect (search "demo.nsh" line) :to-be-truthy)
+      (expect (search "2:2" line) :to-be-truthy)
+      (expect (search "[6,7)" line) :to-be-truthy)
+      (expect (search "reader broken" line) :to-be-truthy)
+      (expect nil :to-be (position #\Newline line))))
+  (it "e05-source-diagnostic-prefers-condition-source-path"
+    (with-test-source-file (source nil :prefix "nshell-e05-diagnostic")
+      (write-test-lines source (list "first" "(+ 1)"))
+      (let* ((cause
+               (make-condition
+                (find-class (intern "SIMPLE-ERROR" :common-lisp))
+                :format-control "source file cause"
+                :format-arguments nil))
+             (condition
+               (make-condition
+                (find-class (intern "SEXP-READER-ERROR" :nshell.domain.parsing))
+                :source-span (list 6 7)
+                :source-path source
+                :source-map nil
+                :cause cause))
+             (line
+               (nshell.presentation::format-sexpr-source-diagnostic-for-input
+                condition "fallback")))
+        (expect (search (format nil "~a:2:1" (namestring source)) line)
+                :to-be-truthy)
+        (expect (search "source file cause" line) :to-be-truthy))))
+  (it "e05-reader-diagnostic-maps-submission-span-through-source-map"
+    (let* ((source (format nil "first~%(+ 1)"))
+           (source-map
+             (coerce
+              (loop for position from 6 below (length source)
+                    collect (list position (1+ position)))
+              'vector))
+           (cause
+             (make-condition
+              (find-class (intern "SIMPLE-ERROR" :common-lisp))
+              :format-control "mapped reader cause"
+              :format-arguments nil))
+           (condition
+             (make-condition
+              (find-class (intern "SEXP-READER-ERROR" :nshell.domain.parsing))
+              :source-span (list 0 5)
+              :source-path "demo.nsh"
+              :source-map source-map
+              :cause cause))
+           (line
+             (nshell.presentation::format-sexpr-source-diagnostic condition source)))
+      (expect (search "demo.nsh:2:1" line) :to-be-truthy)
+      (expect (search "[6,11)" line) :to-be-truthy)
+      (expect (search "mapped reader cause" line) :to-be-truthy)))
+  (it "e05-source-reader-reader-error-retains-physical-line-after-skipped-lines"
+    (with-test-source-file (source nil :prefix "nshell-e05-source-line")
+      (let* ((lines
+               (list
+                "(cl:+ 1 2)"
+                "# leading comment"
+                ""
+                "(cl:+ 3 4)"
+                "# error follows"
+                ""
+                "(cl:+ 1/0)"))
+             (context (make-test-builtins-context))
+             (condition nil))
+        (expect
+         (nshell.domain.parsing:scan-result-status
+          (nshell.application::%source-reader-scan-result context "(cl:+ 1/0)"))
+         :to-equal :complete)
+        (write-test-lines source lines)
+        (with-temporary-function
+            ('uiop:getenv
+             (lambda (name)
+               (when (string= name "NSHELL_READER") "sexp")))
+          (handler-case
+              (with-open-file (stream source)
+                (nshell.application:source-lines
+                 context
+                 (nshell.application:collect-source-lines stream)
+                 source))
+            (nshell.domain.parsing:sexp-reader-error (caught)
+              (setf condition caught))))
+        (expect condition :to-be-truthy)
+        (let ((diagnostic
+                (nshell.presentation::format-sexpr-source-diagnostic-for-input
+                 condition nil)))
+          (expect (search ":7:" diagnostic) :to-be-truthy)))))
+  (it "e05-evaluator-diagnostic-includes-location-span-and-cause"
+    (let* ((source (format nil "echo~%(+ 1)"))
+           (cause
+             (make-condition
+              (find-class (intern "SIMPLE-ERROR" :common-lisp))
+              :format-control "evaluation broken"
+              :format-arguments nil))
+           (condition
+             (make-condition
+              (find-class (intern "SEXP-EVALUATION-SYNTAX-ERROR" :nshell.application))
+              :source-span (list 6 7)
+              :source-path "demo.nsh"
+              :cause cause))
+           (line
+             (nshell.presentation::format-sexpr-source-diagnostic condition source)))
+      (expect (search "demo.nsh" line) :to-be-truthy)
+      (expect (search "2:2" line) :to-be-truthy)
+      (expect (search "[6,7)" line) :to-be-truthy)
+      (expect (search "evaluation broken" line) :to-be-truthy)
+      (expect nil :to-be (position #\Newline line))))
+  (it "e05-macro-diagnostic-points-to-user-call-and-includes-cause"
+    (let* ((source (format nil "x~%(macro)"))
+           (cause
+             (make-condition
+              (find-class (intern "SIMPLE-ERROR" :common-lisp))
+              :format-control "macro expansion failed"
+              :format-arguments nil))
+           (condition
+             (make-condition
+              (find-class (intern "COMMAND-MACRO-SYNTAX-ERROR" :nshell.application))
+              :source-span (list 2 9)
+              :source-path "macro.nsh"
+              :cause cause))
+           (line
+             (nshell.presentation::format-sexpr-source-diagnostic condition source)))
+      (expect (search "macro.nsh" line) :to-be-truthy)
+      (expect (search "2:1" line) :to-be-truthy)
+      (expect (search "[2,9)" line) :to-be-truthy)
+      (expect (search "macro expansion failed" line) :to-be-truthy)
+      (expect nil :to-be (position #\Newline line)))))

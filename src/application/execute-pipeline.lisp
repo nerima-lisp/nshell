@@ -411,7 +411,7 @@ the assignments of any stage that named no command."
                 (list form current)))
           forms
           :initial-value value))
-(defmacro where (records predicate)
+(defmacro |where| (records predicate)
   (unless (and (listp predicate)
                (= (length predicate) 3)
                (eq (first predicate) (quote =))
@@ -424,7 +424,7 @@ the assignments of any stage that named no command."
                     (list (quote getf) (quote record) (second predicate))
                     (third predicate)))
         records))
-(defun select (records &rest keys)
+(defun |select| (records &rest keys)
   (mapcar (lambda (record)
             (loop for key in keys
                   append (list key (getf record key))))

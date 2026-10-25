@@ -23,7 +23,7 @@
   "invocation": {
     "kind": "script",
     "path": "scenario.nsh",
-    "text": "(echo ,(to-json (from-json \"{\\\"name\\\":\\\"Ada\\\"}\")))\n(echo ,(to-tsv (from-tsv \"name\\tAda\\n\")))\n(echo ,(to-lines (from-lines \"first\\nsecond\\n\")))\n"
+    "text": "(echo ,(to-json (from-json \"{\\\"name\\\":\\\"Ada\\\"}\")))\n(echo ,(to-tsv (from-tsv (concatenate (quote string) \"name\" (string #\\Tab) \"Ada\" (string #\\Newline)))))\n(echo ,(from-lines (to-lines (concatenate (quote string) \"first\" (string #\\Newline) \"second\" (string #\\Newline)))))\n"
   },
   "expected": {
     "stdout": {
@@ -35,8 +35,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L06: the exported converter is defined as uppercase TO-JSON while the reader preserves lowercase package-local to-json, which is undefined (src/application/sexp-value-conversion.lisp:147; src/package-user.lisp:9; docs/notes/sexp-syntax-design.md:786)."
   }
 }

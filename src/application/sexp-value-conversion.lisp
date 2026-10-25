@@ -99,9 +99,10 @@
               :expected-type '(or null string real
                                   (satisfies %proper-list-p))))))
 
-  (defun %compile-user-regex (pattern operation)
+  (defun %compile-user-regex (pattern operation &key case-insensitive-p)
     (handler-case
-        (cl-regex-kit:compile-regex pattern)
+        (cl-regex-kit:compile-regex pattern
+                                    :case-insensitive case-insensitive-p)
       (cl-regex-kit:regex-syntax-error (cause)
         (%conversion-failure operation pattern cause))))
 
@@ -144,17 +145,17 @@
                                (subseq text (+ match (length needle))))
                   text))))))
 
-(defun to-json (value)
+(defun |to-json| (value)
   (json-kit:stringify (%json-value-for-output value)))
 
-(defun from-json (text)
+(defun |from-json| (text)
   (check-type text string)
   (handler-case
       (json-kit:parse text :object-type :alist :array-type :list)
     (json-kit:json-parse-error (cause)
       (%conversion-failure :from-json text cause))))
 
-(defun to-tsv (rows)
+(defun |to-tsv| (rows)
   (%ensure-proper-list rows)
   (let ((tab (string #\Tab))
         (newline (string #\Newline))
@@ -177,7 +178,7 @@
         (write-string record output)
         (write-string newline output)))))
 
-(defun from-tsv (text)
+(defun |from-tsv| (text)
   (check-type text string)
   (when (find #\Return text)
     (%conversion-failure :from-tsv text "TSV must use LF line endings"))
@@ -193,7 +194,7 @@
                  (%split-literal record (string #\Tab)))
                records)))))
 
-(defun to-lines (text)
+(defun |to-lines| (text)
   (check-type text string)
   (let ((normalized (%normalize-crlf text)))
     (when (find #\Return normalized)
@@ -206,7 +207,7 @@
               (butlast lines)
               lines)))))
 
-(defun from-lines (lines)
+(defun |from-lines| (lines)
   (%ensure-proper-list lines)
   (with-output-to-string (output)
     (dolist (line lines)
@@ -217,13 +218,19 @@
       (write-string line output)
       (write-char #\Newline output))))
 
-(defun regex-match-p (pattern text)
-  (check-type pattern string)
-  (check-type text string)
-  (let ((regex (%compile-user-regex pattern :regex-match-p)))
-    (not (null (cl-regex-kit:scan regex text)))))
+(progn
+  (defun %regex-match-p (pattern text &key case-insensitive-p)
+    (check-type pattern string)
+    (check-type text string)
+    (let ((regex (%compile-user-regex
+                  pattern :regex-match-p
+                  :case-insensitive-p case-insensitive-p)))
+      (not (null (cl-regex-kit:scan regex text)))))
 
-(defun regex-find (pattern text &key (start 0))
+  (defun |regex-match-p| (pattern text)
+    (%regex-match-p pattern text)))
+
+(defun |regex-find| (pattern text &key (start 0))
   (check-type pattern string)
   (check-type text string)
   (check-type start (integer 0 *))
@@ -238,7 +245,7 @@
                         'list))
         (values nil nil nil nil))))
 
-(defun regex-replace (pattern replacement text &key (all-p nil))
+(defun |regex-replace| (pattern replacement text &key (all-p nil))
   (check-type pattern string)
   (check-type replacement string)
   (check-type text string)
@@ -252,7 +259,7 @@
         (cl-regex-kit:replace-all regex text literal-replacement)
         (cl-regex-kit:replace-first regex text literal-replacement))))
 
-(defun split-string (text separator &key (omit-empty-p nil))
+(defun |split-string| (text separator &key (omit-empty-p nil))
   (check-type text string)
   (check-type separator string)
   (check-type omit-empty-p boolean)
@@ -261,14 +268,14 @@
         (remove "" parts :test #'string=)
         parts)))
 
-(defun join-strings (strings separator)
+(defun |join-strings| (strings separator)
   (%ensure-proper-list strings)
   (check-type separator string)
   (dolist (string strings)
     (check-type string string))
   (%join-literal strings separator))
 
-(defun replace-string (text needle replacement &key (all-p nil))
+(defun |replace-string| (text needle replacement &key (all-p nil))
   (check-type text string)
   (check-type needle string)
   (check-type replacement string)

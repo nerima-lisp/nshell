@@ -32,8 +32,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "WP-L05: the host file defines WHERE in uppercase while the S-expression context preserves lowercase package-local symbols; the lowercase where call is not macroexpanded, so = receives :state and signals a numeric type error (src/application/execute-pipeline.lisp:414; docs/notes/sexp-syntax-design.md:786)."
   }
 }

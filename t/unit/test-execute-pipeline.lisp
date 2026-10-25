@@ -1535,19 +1535,24 @@
             (expect nil :to-be executed-p)
             (expect 126 :to-equal code)
             (expect (search "blocked" output) :to-be-truthy))))))
-  (it "structured-pipeline-projects-plist-records"
-    (let* ((*package* (find-package "NSHELL.USER"))
-           (form
-             (read-from-string
-              "(-> (quote ((:state \"stopped\" :id 7 :command \"demo\") (:state \"running\" :id 8 :command \"other\"))) (where (= :state \"stopped\")) (select :id :command))"))
-           (expanded-p nil)
-           (result nil))
-      (multiple-value-bind (expansion macro-p) (macroexpand-1 form)
-        (setf expanded-p macro-p)
-        (when macro-p (setf result (eval expansion))))
-      (expect t :to-be expanded-p)
-      (when expanded-p
-        (expect (quote ((:id 7 :command "demo"))) :to-equal result))))
+  (it "O08-lowercase-pipeline-operators-dispatch-through-reader"
+    (cl-weave:expect-assertions 4)
+    (let* ((source "(-> (quote ((:state \"stopped\" :id 7 :command \"demo\") (:state \"running\" :id 8 :command \"other\"))) (where (= :state \"stopped\")) (select :id :command))")
+           (reader-result
+             (first
+              (nshell.domain.parsing:read-submission
+               source :reader-context :sexp)))
+           (form (nshell.domain.parsing:reader-result-form reader-result))
+           (context (make-test-shell-context)))
+      (expect "where" :to-equal
+              (symbol-name (first (third form))))
+      (expect "select" :to-equal
+              (symbol-name (first (fourth form))))
+      (multiple-value-bind (value status)
+          (nshell.application:evaluate-reader-result-in-context
+           context reader-result)
+        (expect (quote ((:|id| 7 :|command| "demo"))) :to-equal value)
+        (expect 0 :to-equal status))))
 
   (it "rechecks-agent-command-arguments-after-variable-expansion"
     (let ((context (nshell.application:make-shell-context

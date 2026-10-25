@@ -228,28 +228,35 @@
       (expect (member "git" (nshell.presentation::%repl-path-command-names)
                       :test #'string=)
               :to-be-null)
-      (let ((spawn-count 0))
-        (with-rebound-function
-            (nshell.infrastructure.acl::%spawn-posix-process
-             (lambda (&rest arguments)
-               (declare (ignore arguments))
-               (incf spawn-count)
-               (error "missing-command suggestions must not spawn processes")))
-          (expect (member "git"
-                          (nshell.presentation::%repl-command-corrections "gti")
-                          :test #'string=)
-                  :to-be-truthy)
-          (setf nshell.presentation::*kb*
-                (nshell.domain.completion:make-empty-knowledge-base))
-          (repl-test-set-env "PATH" "/usr/bin:/bin")
-          (expect (nshell.domain.completion:kb-command-present-p
-                   nshell.presentation::*kb* "grep")
-                  :to-be-null)
-          (expect (member "grep"
-                          (nshell.presentation::%repl-command-corrections "grpe")
-                          :test #'string=)
-                  :to-be-truthy))
-        (expect 0 :to-equal spawn-count))))
+      (host-kit:with-temporary-directory (directory)
+        (let ((grep-path (merge-pathnames "grep" directory))
+              (spawn-count 0))
+          (host-kit:write-file-string "#!/bin/sh" grep-path)
+          (sb-posix:chmod (namestring grep-path) #o700)
+          (with-rebound-function
+              (nshell.infrastructure.acl::%spawn-posix-process
+               (lambda (&rest arguments)
+                 (declare (ignore arguments))
+                 (incf spawn-count)
+                 (error "missing-command suggestions must not spawn processes")))
+            (expect (member "git"
+                            (nshell.presentation::%repl-command-corrections "gti")
+                            :test #'string=)
+                    :to-be-truthy)
+            (setf nshell.presentation::*kb*
+                  (nshell.domain.completion:make-empty-knowledge-base))
+            (repl-test-set-env "PATH" (namestring directory))
+            (expect (member "grep" (nshell.presentation::%repl-path-command-names)
+                            :test #'string=)
+                    :to-be-truthy)
+            (expect (nshell.domain.completion:kb-command-present-p
+                     nshell.presentation::*kb* "grep")
+                    :to-be-null)
+            (expect (member "grep"
+                            (nshell.presentation::%repl-command-corrections "grpe")
+                            :test #'string=)
+                    :to-be-truthy))
+          (expect 0 :to-equal spawn-count)))))
   (it "batch diagnostics suggest known commands and preserve status 127 without spawning"
       (with-repl-test-state
        (nshell.presentation::seed-repl-completion-knowledge-base

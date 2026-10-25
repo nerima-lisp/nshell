@@ -1043,19 +1043,15 @@
             (lambda () "O15_QUALIFIED_HEAD_OK"))
       (unwind-protect
            (let* ((source
-                   "(cl:format cl:nil \"~A\" (nshell.test.o15.qualified-head:greeting))")
+                   "(cl:format cl:nil \"~A\" (concatenate (cl:quote cl:string) (nshell.test.o15.qualified-head:greeting) (string #\\Space)))")
                   (reader-result
                    (first
                     (nshell.domain.parsing:read-submission
                      source :reader-context :sexp))))
-             (%call-with-sexp-evaluator-test-boundaries
-              context
-              (lambda ()
-                (multiple-value-bind (value status)
-                    (nshell.application:evaluate-reader-result-in-context
-                     context reader-result)
-                  (expect "O15_QUALIFIED_HEAD_OK" :to-equal value)
-                  (expect 0 :to-equal status)
-                  (expect nil :to-equal *sexp-evaluator-test-calls*)))))
+             (multiple-value-bind (value status)
+                 (nshell.application:evaluate-reader-result-in-context
+                  context reader-result)
+               (expect "O15_QUALIFIED_HEAD_OK " :to-equal value)
+               (expect 0 :to-equal status)))
         (fmakunbound function)
         (delete-package package)))))

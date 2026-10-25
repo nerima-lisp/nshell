@@ -53,19 +53,29 @@
               names)))
       (expect expected :to-equal actual)))
   (it "O09-lowercase-conversion-api-dispatches-through-reader"
-    (cl-weave:expect-assertions 3)
+    (cl-weave:expect-assertions 5)
     (let* ((reader-result
              (first
               (nshell.domain.parsing:read-submission
                "(to-json CL:NIL)" :reader-context :sexp)))
            (form
              (nshell.domain.parsing:reader-result-form reader-result))
-           (context (make-test-shell-context)))
+           (context (make-test-shell-context))
+           (nested-reader-result
+             (first
+              (nshell.domain.parsing:read-submission
+               "(from-lines (to-lines (concatenate (cl:quote cl:string) \"first\" (string #\\Newline) \"second\" (string #\\Newline))))"
+               :reader-context :sexp))))
       (expect "to-json" :to-equal (symbol-name (first form)))
       (multiple-value-bind (value status)
           (nshell.application:evaluate-reader-result-in-context
            context reader-result)
         (expect "[]" :to-equal value)
+        (expect 0 :to-equal status))
+      (multiple-value-bind (value status)
+          (nshell.application:evaluate-reader-result-in-context
+           context nested-reader-result)
+        (expect (format nil "first~%second~%") :to-equal value)
         (expect 0 :to-equal status))))
   (it "wraps malformed JSON with its operation, input, and parser cause"
     (let ((caught nil))

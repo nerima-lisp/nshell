@@ -390,10 +390,12 @@
          (name (or source-name (symbol-name symbol))))
     (cond
       (package-qualifier :host-form)
+      ((and package
+            (string= (package-name package) "COMMON-LISP"))
+       :host-form)
       ((and (null origin)
             (or (null package)
-           (member (package-name package) '("COMMON-LISP" "KEYWORD")
-                   :test #'string=)))
+                (string= (package-name package) "KEYWORD")))
        :host-form)
       ((and (not escaped-p)
             (%evaluator-aware-head-p name nil))

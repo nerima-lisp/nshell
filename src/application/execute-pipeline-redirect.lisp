@@ -57,3 +57,54 @@ Redirect args (and their targets) are removed from the args list."
   "Restore I/O streams to their pre-redirect state."
   (declare (ignore context))
   (nshell.infrastructure.acl:restore-redirects))
+
+(defun %strip-reader-here-doc-leading-tabs (body)
+  (with-output-to-string (output)
+    (loop with line-start-p = t
+          for character across body
+          do (unless (and line-start-p (char= character #\Tab))
+               (write-char character output)
+               (setf line-start-p (char= character #\Newline))))))
+
+(defun %open-reader-redirect-source
+    (context redirect evaluated-target &key avoid-descriptors)
+  (let ((kind (nshell.domain.parsing:ast-redirect-entry-kind redirect)))
+    (labels ((target-string ()
+               (argv-scalar-string
+                (nshell.domain.parsing:evaluated-command-arg-value
+                 evaluated-target)
+                :source-span
+                (nshell.domain.parsing:evaluated-command-arg-source-span
+                 evaluated-target)))
+             (open-file (mode)
+               (nshell.infrastructure.acl::open-reader-redirect-file
+                (target-string) mode
+                :avoid-descriptors avoid-descriptors))
+             (open-data (contents)
+               (nshell.infrastructure.acl::open-reader-redirect-data
+                contents :avoid-descriptors avoid-descriptors)))
+      (case kind
+        (:input-file (open-file :input))
+        ((:output-file :force-output-file :error-file :both-output-files)
+         (open-file :output))
+        ((:append-output-file :append-error-file :append-both-output-files)
+         (open-file :append))
+        (:here-string
+         (open-data (format nil "~a~%" (target-string))))
+        ((:here-document :here-document-strip-tabs)
+         (let* ((target
+                  (nshell.domain.parsing:ast-redirect-entry-target redirect))
+                (body
+                  (nshell.domain.parsing:redirect-heredoc-target-body target))
+                (body
+                  (if (nshell.domain.parsing:redirect-heredoc-target-strip-tabs-p
+                       target)
+                      (%strip-reader-here-doc-leading-tabs body)
+                      body))
+                (body
+                  (if (nshell.domain.parsing:redirect-heredoc-target-expand-p target)
+                      (%expand-here-doc-body-in-context context body)
+                      body)))
+           (open-data body)))
+        (t
+         (error "Unsupported reader redirect kind ~S" kind))))))

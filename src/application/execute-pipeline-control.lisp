@@ -354,3 +354,35 @@ following the data/logic separation principle."
   (nshell.domain.parsing:case-node-p       %execute-case-node-in-context)
   (nshell.domain.parsing:begin-end-node-p  %execute-begin-end-node-in-context)
   (nshell.domain.parsing:sequence-node-p   %execute-sequence-node-in-context))
+
+(defun %execute-reader-sequence-node-in-context (context ast stage-evaluator)
+  (let ((previous-separator nil)
+        (last-value nil)
+        (last-status (shell-context-last-exit-code context))
+        (last-result nil))
+    (dolist (entry (nshell.domain.parsing:sequence-node-command-separators ast))
+      (let* ((command
+               (nshell.domain.parsing:sequence-node-command-separator-command entry))
+             (separator
+               (nshell.domain.parsing:sequence-node-command-separator-separator entry))
+             (skip-p
+               (or (and (eq previous-separator :and) (/= last-status 0))
+                   (and (eq previous-separator :or) (= last-status 0)))))
+        (unless skip-p
+          (let ((*command-test-position-p*
+                  (and separator (member separator (list :and :or)))))
+            (multiple-value-bind (value status pipeline-result)
+                (if (eq separator :amp)
+                    (%reader-spawn-background-node-in-context
+                     context command stage-evaluator)
+                    (execute-reader-ast-in-context
+                     context command stage-evaluator))
+              (setf last-value value
+                    last-status status
+                    last-result pipeline-result)
+              (%record-last-exit-code context status))))
+        (setf previous-separator separator)))
+    (values last-value
+            last-status
+            (or last-result
+                (make-pipeline-execution-result last-status nil nil)))))

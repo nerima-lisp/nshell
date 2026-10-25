@@ -76,6 +76,15 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:sidecar-exit-status
             #:with-git-runner #:clear-git-status-cache
             #:get-git-status)
+  (:export #:make-reader-pipeline-pipe #:close-reader-descriptor
+           #:reader-process-substitution-resource-p
+           #:reader-process-substitution-resource-direction
+           #:reader-process-substitution-resource-parent-fd
+           #:reader-process-substitution-resource-inner-fd
+           #:reader-process-substitution-fd-path
+           #:make-reader-process-substitution-resource
+           #:close-reader-process-substitution-resource
+           #:open-reader-redirect-file #:open-reader-redirect-data)
   (:export #:process-input #:process-output #:process-error #:process-close))
 
 (defpackage #:nshell.infrastructure.terminal

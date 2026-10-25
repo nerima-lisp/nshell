@@ -128,3 +128,135 @@ owns the parent-side fd and the child processes until it is closed."
            (%terminate-pipeline-processes processes)
         (setf (process-substitution-resource-processes resource) nil))))
   resource)
+
+(defstruct (reader-process-substitution-resource
+             (:constructor %make-reader-process-substitution-resource
+                 (direction parent-fd inner-fd)))
+  direction
+  parent-fd
+  inner-fd)
+
+(defun reader-process-substitution-fd-path (fd)
+  (unless (and (integerp fd) (<= 0 fd))
+    (error "process substitution fd must be a non-negative integer: ~S" fd))
+  (format nil "~A~D" (%process-substitution-fd-directory) fd))
+
+(defun %close-reader-process-substitution-fds (fds)
+  (let ((first-error nil))
+    (dolist (fd (remove-duplicates fds :test #'eql))
+      (when (integerp fd)
+        (handler-case
+            (sb-posix:close fd)
+          (error (condition)
+            (unless first-error
+              (setf first-error condition))))))
+    (when first-error
+      (error first-error))))
+
+(defun make-reader-pipeline-pipe (&key avoid-descriptors)
+  (unless (and (listp avoid-descriptors)
+               (every (lambda (fd)
+                        (and (integerp fd) (<= 0 fd)))
+                      avoid-descriptors))
+    (error "reader pipeline avoid-descriptors must be non-negative integers: ~S"
+           avoid-descriptors))
+  (let ((read-fd nil)
+        (write-fd nil)
+        (owned-fds nil)
+        (complete-p nil)
+        (primary-error nil))
+    (unwind-protect
+         (handler-bind
+             ((error (lambda (condition)
+                       (setf primary-error condition))))
+           (multiple-value-setq (read-fd write-fd)
+             (%spawn-pipe))
+           (setf owned-fds (list read-fd write-fd))
+           (%spawn-set-close-on-exec read-fd)
+           (%spawn-set-close-on-exec write-fd)
+           (labels
+               ((relocate-endpoint (fd)
+                  (if (not (member fd avoid-descriptors :test #'eql))
+                      (values fd nil)
+                      (loop with minimum = 3
+                            for duplicate =
+                              (sb-posix:fcntl fd +spawn-f-dupfd+ minimum)
+                            do (push duplicate owned-fds)
+                               (%spawn-set-close-on-exec duplicate)
+                               (if (member duplicate avoid-descriptors
+                                           :test #'eql)
+                                   (progn
+                                     (sb-posix:close duplicate)
+                                     (setf owned-fds
+                                           (delete duplicate owned-fds
+                                                   :test #'eql))
+                                     (setf minimum (1+ duplicate)))
+                                   (return (values duplicate fd))))))
+                (close-owned-fd (fd)
+                  (sb-posix:close fd)
+                  (setf owned-fds (delete fd owned-fds :test #'eql))))
+             (multiple-value-bind (reserved-fd old-fd)
+                 (relocate-endpoint read-fd)
+               (when old-fd
+                 (close-owned-fd old-fd))
+               (setf read-fd reserved-fd))
+             (multiple-value-bind (reserved-fd old-fd)
+                 (relocate-endpoint write-fd)
+               (when old-fd
+                 (close-owned-fd old-fd))
+               (setf write-fd reserved-fd)))
+           (setf complete-p t)
+           (values read-fd write-fd))
+      (unless complete-p
+        (handler-case
+            (%close-reader-process-substitution-fds owned-fds)
+          (error (condition)
+            (unless primary-error
+              (error condition))))))))
+
+(defun %spawn-clear-close-on-exec (fd)
+  (let ((flags (sb-posix:fcntl fd +spawn-f-getfd+)))
+    (sb-posix:fcntl fd +spawn-f-setfd+
+                    (logand flags (lognot +spawn-fd-cloexec+))))
+  fd)
+
+(defun close-reader-descriptor (fd)
+  (when (integerp fd)
+    (sb-posix:close fd)))
+
+(defun make-reader-process-substitution-resource
+    (direction &key avoid-descriptors)
+  (unless (member direction '(:input :output))
+    (error "invalid process substitution direction ~S" direction))
+  (%process-substitution-fd-directory)
+  (let ((read-fd nil)
+        (write-fd nil)
+        (complete-p nil))
+    (unwind-protect
+         (progn
+           (multiple-value-setq (read-fd write-fd)
+             (make-reader-pipeline-pipe :avoid-descriptors avoid-descriptors))
+           (let* ((parent-fd
+                    (if (eq direction :input) read-fd write-fd))
+                  (inner-fd
+                    (if (eq direction :input) write-fd read-fd)))
+             (%spawn-clear-close-on-exec parent-fd)
+             (let ((resource
+                     (%make-reader-process-substitution-resource
+                      direction parent-fd inner-fd)))
+               (setf complete-p t)
+               resource)))
+      (unless complete-p
+        (%close-reader-process-substitution-fds
+         (list read-fd write-fd))))))
+
+(defun close-reader-process-substitution-resource (resource)
+  (unless (reader-process-substitution-resource-p resource)
+    (error "not a reader process-substitution resource: ~S" resource))
+  (let ((fds (list
+              (reader-process-substitution-resource-parent-fd resource)
+              (reader-process-substitution-resource-inner-fd resource))))
+    (setf (reader-process-substitution-resource-parent-fd resource) nil
+          (reader-process-substitution-resource-inner-fd resource) nil)
+    (%close-reader-process-substitution-fds fds))
+  resource)

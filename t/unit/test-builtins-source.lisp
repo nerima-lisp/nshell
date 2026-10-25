@@ -55,9 +55,7 @@
       (expect legacy-output :to-equal batch-output)
       (expect legacy-code :to-equal batch-code)
       (expect 0 :to-equal sexp-code)
-      (expect (or (not (string= legacy-output sexp-output))
-                  (/= legacy-code sexp-code))
-              :to-be-truthy))))
+      (expect (format nil "1~%") :to-equal sexp-output))))
 
 (defun %source-sequence-call-order (line first-code second-code)
   (let ((calls nil))

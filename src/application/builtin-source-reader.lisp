@@ -225,39 +225,55 @@ which are skipped rather than parsed."
               :source-map source-map)))
       (unless (eq (nshell.domain.parsing:scan-result-status scan-result) :complete)
         (error "source: incomplete reader input"))
-      (let ((code 0))
+      (let ((output nil)
+            (code 0))
         (dolist (reader-result reader-results)
-          (multiple-value-bind (value result-code)
-              (handler-case
-                  (evaluate-reader-result-in-context context reader-result)
-                (sexp-evaluation-syntax-error (condition)
-                  (error
-                   (make-condition
-                    'sexp-evaluation-syntax-error
-                    :source-span
-                    (source-span-in-file
-                     (sexp-evaluation-syntax-error-source-span condition))
-                    :source-path
-                    (sexp-evaluation-syntax-error-source-path condition)
-                    :cause
-                    (sexp-evaluation-syntax-error-cause condition))))
-                (command-macro-syntax-error (condition)
-                  (error
-                   (make-condition
-                    'command-macro-syntax-error
-                    :source-span
-                    (source-span-in-file
-                     (command-macro-syntax-error-source-span condition))
-                    :source-path
-                    (command-macro-syntax-error-source-path condition)
-                    :cause
-                    (command-macro-syntax-error-cause condition)))))
-            (declare (ignore value))
-            (setf code result-code)
-            (%record-last-exit-code context code))
+          (let* ((form
+                   (nshell.domain.parsing:reader-result-form reader-result))
+                 (classification
+                   (and (consp form)
+                        (symbolp (first form))
+                        (%form-command-classification
+                         context form reader-result)))
+                 (stream-form-p
+                   (or (nshell.domain.parsing::ast-node-p form)
+                       (%reader-pipeline-form-p form reader-result)
+                       (eq classification :command-island))))
+            (multiple-value-bind (value result-code)
+                (handler-case
+                    (evaluate-reader-result-in-context context reader-result)
+                  (sexp-evaluation-syntax-error (condition)
+                    (error
+                     (make-condition
+                      'sexp-evaluation-syntax-error
+                      :source-span
+                      (source-span-in-file
+                       (sexp-evaluation-syntax-error-source-span condition))
+                      :source-path
+                      (sexp-evaluation-syntax-error-source-path condition)
+                      :cause
+                      (sexp-evaluation-syntax-error-cause condition))))
+                  (command-macro-syntax-error (condition)
+                    (error
+                     (make-condition
+                      'command-macro-syntax-error
+                      :source-span
+                      (source-span-in-file
+                       (command-macro-syntax-error-source-span condition))
+                      :source-path
+                      (command-macro-syntax-error-source-path condition)
+                      :cause
+                      (command-macro-syntax-error-cause condition)))))
+              (unless stream-form-p
+                (setf output
+                      (%source-lines-add-chunk
+                       (format nil "~a~%" value)
+                       output)))
+              (setf code result-code)
+              (%record-last-exit-code context code)))
           (unless (shell-context-running context)
             (return)))
-        (values nil code)))))
+        (values (apply #'concatenate 'string (nreverse output)) code)))))
 
   (defun %source-lines-with-reader (context lines &optional source-path)
   (labels ((source-map-for-line (line offset)

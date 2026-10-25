@@ -1,4 +1,8 @@
 (in-package #:nshell.application)
+(defvar *source-lines-stream-output-p* nil)
+(defun %source-evaluate-reader-result (context reader-result form-type)
+  (let ((*interactive-top-level-p* (eq form-type :command-island)))
+    (evaluate-reader-result-in-context context reader-result)))
 
 (defun %append-source-here-document-line (text line)
   (concatenate 'string
@@ -103,7 +107,13 @@
      (%source-function-definition-result-stop-p result))))
 
 (defun %source-lines-add-chunk (chunk output)
-  (if chunk (cons chunk output) output))
+  (if chunk
+      (if *source-lines-stream-output-p*
+          (progn
+            (write-string chunk *standard-output*)
+            output)
+          (cons chunk output))
+      output))
 
 (defun %source-line-needs-more-input-p (result)
   (or (nshell.domain.parsing:parse-diagnostic-kind-p
@@ -139,11 +149,11 @@
            t)))))
 
 (defun %comment-or-blank-source-line-p (line)
-  "True for blank lines and whole-line comments (including a leading #! shebang),
-which are skipped rather than parsed."
-  (let ((trimmed (string-trim '(#\Space #\Tab #\Newline #\Return) line)))
+  "True for blank, shell-comment, or Lisp-comment lines and shebangs."
+  (let ((trimmed (string-trim (quote (#\Space #\Tab #\Newline #\Return)) line)))
     (or (string= trimmed "")
-        (char= (char trimmed 0) #\#))))
+        (char= (char trimmed 0) #\#)
+        (char= (char trimmed 0) #\;))))
 
 (defun %source-lines (context lines &optional source-path)
   (let ((output nil)
@@ -183,19 +193,15 @@ which are skipped rather than parsed."
                     (return))))))
     (values (apply #'concatenate 'string (nreverse output)) code)))
 
-(progn
-  (defun %source-reader-opted-in-p ()
-    (equal "sexp" (uiop:getenv "NSHELL_READER")))
+(defun %source-reader-scan-result (context source)
+  (nshell.domain.parsing:scan-input
+   source
+   :reader-context :auto
+   :head-classifier
+   (lambda (head-source)
+     (classify-sexp-head context head-source))))
 
-  (defun %source-reader-scan-result (context source)
-    (nshell.domain.parsing:scan-input
-     source
-     :reader-context :auto
-     :head-classifier
-     (lambda (head-source)
-       (classify-sexp-head context head-source))))
-
-  (defun %source-evaluate-reader-submission (context source source-path source-map)
+(defun %source-evaluate-reader-submission (context source source-path source-map)
   (labels ((source-span-in-file (span)
              (let* ((start (and (consp span) (first span)))
                     (end (and (consp span) (second span)))
@@ -238,17 +244,29 @@ which are skipped rather than parsed."
                         (symbolp (first form))
                         (%form-command-classification
                          context form reader-result)))
-                 (stream-form-p
-                   (or (nshell.domain.parsing::ast-node-p form)
-                       (%reader-pipeline-form-p form reader-result)
-                       (eq classification :command-island))))
+                 (form-type
+                   (cond
+                     ((or (nshell.domain.parsing::ast-node-p form)
+                          (%reader-pipeline-form-p form reader-result)
+                          (eq classification :command-island))
+                      :command-island)
+                     ((and (consp form)
+                           (symbolp (first form))
+                           (member
+                            (%resolve-form-operator context form reader-result)
+                            (quote (cl:defun cl:defmacro
+                                     nshell.user::define-shell-function))
+                            :test (function eq)))
+                      :definition)
+                     (t :lisp-value))))
             (multiple-value-bind (value result-code)
                 (handler-case
-                    (evaluate-reader-result-in-context context reader-result)
+                    (%source-evaluate-reader-result
+                     context reader-result form-type)
                   (sexp-evaluation-syntax-error (condition)
                     (error
                      (make-condition
-                      'sexp-evaluation-syntax-error
+                      (quote sexp-evaluation-syntax-error)
                       :source-span
                       (source-span-in-file
                        (sexp-evaluation-syntax-error-source-span condition))
@@ -259,7 +277,7 @@ which are skipped rather than parsed."
                   (command-macro-syntax-error (condition)
                     (error
                      (make-condition
-                      'command-macro-syntax-error
+                      (quote command-macro-syntax-error)
                       :source-span
                       (source-span-in-file
                        (command-macro-syntax-error-source-span condition))
@@ -267,18 +285,24 @@ which are skipped rather than parsed."
                       (command-macro-syntax-error-source-path condition)
                       :cause
                       (command-macro-syntax-error-cause condition)))))
-              (unless stream-form-p
-                (setf output
-                      (%source-lines-add-chunk
-                       (format nil "~a~%" value)
-                       output)))
+              (setf output
+                    (%source-lines-add-chunk
+                     (cond
+                      ((and (eq form-type :command-island)
+                            (stringp value))
+                       value)
+                      ((and (eq form-type :lisp-value)
+                            (not (null value))
+                            (not (eq value t)))
+                       (format nil "~a~%" value)))
+                     output))
               (setf code result-code)
               (%record-last-exit-code context code)))
           (unless (shell-context-running context)
             (return)))
         (values (apply #'concatenate 'string (nreverse output)) code)))))
 
-  (defun %source-lines-with-reader (context lines &optional source-path)
+(defun %source-lines-with-reader (context lines &optional source-path)
   (labels ((source-map-for-line (line offset)
              (coerce
               (loop for position from offset below (+ offset (length line))
@@ -449,10 +473,27 @@ which are skipped rather than parsed."
                         (return)))))))
       (values (apply #'concatenate 'string (nreverse output)) code))))
 
-    (defun source-lines (context lines &optional source-path)
-      "Execute source LINES in CONTEXT through the application source use case."
-      (let ((*interactive-top-level-p*
-             (if source-path nil *interactive-top-level-p*)))
-        (if (and source-path (%source-reader-opted-in-p))
-            (%source-lines-with-reader context lines source-path)
-          (%source-lines context lines source-path)))))
+(defun %source-lines-in-mode (context lines source-path output-mode)
+  (let ((*interactive-top-level-p*
+         (if source-path nil *interactive-top-level-p*))
+        (*source-lines-stream-output-p* (eq output-mode :stream)))
+    (ecase output-mode
+      (:stream
+       (%source-lines-with-reader context lines source-path))
+      (:return
+       (let ((code 0))
+         (let ((output
+                (with-output-to-string (stream)
+                  (let ((*standard-output* stream))
+                    (multiple-value-bind (result result-code)
+                        (%source-lines-with-reader context lines source-path)
+                      (when result
+                        (write-string result stream))
+                      (setf code result-code))))))
+           (values output code)))))))
+(defun source-lines (context lines &optional source-path)
+  "Execute source LINES in CONTEXT through the application source use case."
+  (%source-lines-in-mode context lines source-path :return))
+(defun source-lines-to-stream (context lines &optional source-path)
+  "Execute source LINES in CONTEXT and write output to *STANDARD-OUTPUT*."
+  (%source-lines-in-mode context lines source-path :stream))

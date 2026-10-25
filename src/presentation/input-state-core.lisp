@@ -2,7 +2,7 @@
 
 (in-package #:nshell.presentation)
 (progn
-  (defvar *repl-new-reader-route-enabled-p* nil)
+  (defvar *repl-new-reader-route-enabled-p* t)
   (declaim (ftype function
                   %repl-new-reader-route-enabled-p
                   %repl-reader-context-for-source

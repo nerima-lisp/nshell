@@ -45,69 +45,54 @@
        (not (agent-step-blocked-p step))))
 
 (defun %agent-step-from-text (text)
-  (if (%source-new-reader-route-enabled-p)
-      (handler-case
-          (let ((reader-results
-                 (nshell.domain.parsing:read-submission
-                  text :reader-context :auto)))
-            (if (and
-                 (= 1 (length reader-results))
-                 (nshell.domain.parsing:reader-result-p
-                  (first reader-results)))
-                (let* ((reader-result (first reader-results))
-                       (form
-                        (nshell.domain.parsing:reader-result-form
-                         reader-result))
-                       (ast
-                        (cond
-                         ((or (nshell.domain.parsing:command-node-p form)
-                              (nshell.domain.parsing:pipeline-node-p form)
-                              (nshell.domain.parsing:sequence-node-p form))
-                          form)
-                         ((consp form)
-                          (nshell.domain.parsing:command-form->ast
-                           (nshell.domain.parsing:reader-result-source
-                            reader-result)
-                           form
-                           (nshell.domain.parsing:reader-result-form-span-map
-                            reader-result)
-                           (lambda (head-source)
-                             (declare (ignore head-source))
-                             :command-island))))))
-                  (if ast
-                      (make-agent-step
-                       :text text
-                       :ast ast
-                       :classification
-                       (nshell.feature.assistant:classify-ast reader-results)
-                       :status :awaiting-approval)
-                    (make-agent-step
-                     :text text
-                     :status :parse-error
-                     :reason "agent: proposed command could not be parsed")))
-              (make-agent-step
-               :text text
-               :status :parse-error
-               :reason "agent: proposed command could not be parsed")))
-        (nshell.domain.parsing:sexp-reader-error ()
-                                                 (make-agent-step
-                                                  :text text
-                                                  :status :parse-error
-                                                  :reason "agent: proposed command could not be parsed")))
-    (let ((result (nshell.domain.parsing:parse-command-line text)))
-      (if (and (nshell.domain.parsing:parse-complete-p result)
-               (nshell.domain.parsing:parse-result-ast result))
-          (let ((ast (nshell.domain.parsing:parse-result-ast result)))
+  (handler-case
+      (let ((reader-results
+              (nshell.domain.parsing:read-submission
+               text :reader-context :auto)))
+        (if (and
+             (= 1 (length reader-results))
+             (nshell.domain.parsing:reader-result-p
+              (first reader-results)))
+            (let* ((reader-result (first reader-results))
+                   (form
+                     (nshell.domain.parsing:reader-result-form
+                      reader-result))
+                   (ast
+                     (cond
+                       ((or (nshell.domain.parsing:command-node-p form)
+                            (nshell.domain.parsing:pipeline-node-p form)
+                            (nshell.domain.parsing:sequence-node-p form))
+                        form)
+                       ((consp form)
+                        (nshell.domain.parsing:command-form->ast
+                         (nshell.domain.parsing:reader-result-source
+                          reader-result)
+                         form
+                         (nshell.domain.parsing:reader-result-form-span-map
+                          reader-result)
+                         (lambda (head-source)
+                           (declare (ignore head-source))
+                           :command-island))))))
+              (if ast
+                  (make-agent-step
+                   :text text
+                   :ast ast
+                   :classification
+                   (nshell.feature.assistant:classify-ast reader-results)
+                   :status :awaiting-approval)
+                  (make-agent-step
+                   :text text
+                   :status :parse-error
+                   :reason "agent: proposed command could not be parsed")))
             (make-agent-step
              :text text
-             :ast ast
-             :classification
-             (nshell.feature.assistant:classify-ast ast)
-             :status :awaiting-approval))
-        (make-agent-step
-         :text text
-         :status :parse-error
-         :reason "agent: proposed command could not be parsed")))))
+             :status :parse-error
+             :reason "agent: proposed command could not be parsed")))
+    (nshell.domain.parsing:sexp-reader-error ()
+      (make-agent-step
+       :text text
+       :status :parse-error
+       :reason "agent: proposed command could not be parsed"))))
 
 (defun agent-session-propose-step (session text)
   (check-type session agent-session)

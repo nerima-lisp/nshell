@@ -446,23 +446,20 @@
           (nshell.application::%source-reader-scan-result context "(cl:+ 1/0)"))
          :to-equal :complete)
         (write-test-lines source lines)
-        (with-temporary-function
-            ('uiop:getenv
-             (lambda (name)
-               (when (string= name "NSHELL_READER") "sexp")))
-          (handler-case
-              (with-open-file (stream source)
-                (nshell.application:source-lines
-                 context
-                 (nshell.application:collect-source-lines stream)
-                 source))
-            (nshell.domain.parsing:sexp-reader-error (caught)
-              (setf condition caught))))
+        (handler-case
+            (with-open-file (stream source)
+              (nshell.application:source-lines
+               context
+               (nshell.application:collect-source-lines stream)
+               source))
+          (nshell.domain.parsing:sexp-reader-error (caught)
+            (setf condition caught)))
         (expect condition :to-be-truthy)
         (let ((diagnostic
                 (nshell.presentation::format-sexpr-source-diagnostic-for-input
                  condition nil)))
           (expect (search ":7:" diagnostic) :to-be-truthy)))))
+
   (it "e05-evaluator-diagnostic-includes-location-span-and-cause"
     (let* ((source (format nil "echo~%(+ 1)"))
            (cause

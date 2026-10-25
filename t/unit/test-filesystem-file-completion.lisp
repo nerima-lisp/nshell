@@ -138,8 +138,21 @@
                   (directory-reader
                     (nshell.domain.filesystem:filesystem-subdirectories filesystem))
                   (file-names
-                    (mapcar #'nshell.domain.completion::%entry-path-name
-                            (funcall file-reader directory)))
+                    (let ((lstat-count 0))
+                      (with-rebound-function
+                          (sb-posix:lstat
+                           (lambda (path)
+                             (incf lstat-count)
+                             (funcall original-function path)))
+                        (let ((names
+                                (mapcar
+                                 (function nshell.domain.completion::%entry-path-name)
+                                 (funcall file-reader directory))))
+                          (expect #+(and darwin 64-bit) 3
+                                  #-(and darwin 64-bit) 6
+                                  :to-equal
+                                  lstat-count)
+                          names))))
                   (directory-names
                     (mapcar #'nshell.domain.completion::%entry-path-name
                             (funcall directory-reader directory)))

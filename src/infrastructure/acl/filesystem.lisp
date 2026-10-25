@@ -117,13 +117,15 @@ grow it without bound.")
                  (if (and (plusp (length directory))
                           (char= (char directory (1- (length directory))) #\/))
                      directory
-                     (concatenate 'string directory "/"))
+                     (concatenate (quote string) directory "/"))
                  (namestring (host-kit:ensure-directory-pathname directory))))
            (files nil)
            (subdirectories nil)
            (symlink-target-kinds nil))
+      ;; On 64-bit Darwin d_type is the byte before the generated d_name offset.
+      ;; Keep unknown types and symlinks on the lstat path below.
       (labels ((entry-path (name)
-                 (concatenate 'string directory-path name))
+                 (concatenate (quote string) directory-path name))
                (entry-value (path directory-p)
                  (let ((pathname (ignore-errors (pathname path))))
                    (if (and pathname
@@ -133,45 +135,63 @@ grow it without bound.")
                            (host-kit:ensure-directory-pathname pathname)
                            pathname)
                        (if directory-p
-                           (concatenate 'string path "/")
+                           (concatenate (quote string) path "/")
                            path))))
-               (entry-kind (path)
-                 (let ((mode (sb-posix:stat-mode (sb-posix:lstat path))))
-                   (cond
-                     ((sb-posix:s-isreg mode) :regular-file)
-                     ((sb-posix:s-isdir mode) :directory)
-                     ((sb-posix:s-islnk mode) :symbolic-link)
-                     (t :other))))
+               (dirent-type-hint (dirent)
+                 #+(and darwin 64-bit)
+                 (sb-sys:sap-ref-8
+                  (sb-alien:alien-sap dirent)
+                  (1- sb-posix::offset-of-dirent-name))
+                 #-(and darwin 64-bit)
+                 (progn
+                   (declare (ignore dirent))
+                   nil))
+               (entry-kind (path type-hint)
+                 ;; Darwin DT_DIR and DT_REG are 4 and 8; other values fall back.
+                 (case type-hint
+                   (4 :directory)
+                   (8 :regular-file)
+                   (otherwise
+                    (let ((mode (sb-posix:stat-mode (sb-posix:lstat path))))
+                      (cond
+                        ((sb-posix:s-isreg mode) :regular-file)
+                        ((sb-posix:s-isdir mode) :directory)
+                        ((sb-posix:s-islnk mode) :symbolic-link)
+                        (t :other))))))
                (visit-entries ()
                  (let ((stream (sb-posix:opendir directory-path)))
                    (unwind-protect
-                        (let ((names
+                        (let ((entries
                                 (sort
-                                 (loop for entry = (sb-posix:readdir stream)
-                                       while (and entry
-                                                  (not (sb-alien:null-alien entry)))
-                                       for name = (sb-posix:dirent-name entry)
-                                       unless (member name '("." "..") :test #'string=)
-                                         collect name)
-                                 #'string<)))
-                          (dolist (name names)
-                            (let* ((entry (entry-path name))
-                                   (kind (entry-kind entry)))
+                                 (loop for dirent = (sb-posix:readdir stream)
+                                       while (and dirent
+                                                  (not (sb-alien:null-alien dirent)))
+                                       for type-hint = (dirent-type-hint dirent)
+                                       for name = (sb-posix:dirent-name dirent)
+                                       unless (member name (list "." "..")
+                                                      :test (function string=))
+                                         collect (cons name type-hint))
+                                 (function string<)
+                                 :key (function car))))
+                          (dolist (record entries)
+                            (let* ((name (car record))
+                                   (path (entry-path name))
+                                   (kind (entry-kind path (cdr record))))
                               (case kind
                                 (:regular-file
-                                 (push (entry-value entry nil) files))
+                                 (push (entry-value path nil) files))
                                 (:directory
-                                 (push (entry-value entry t) subdirectories))
+                                 (push (entry-value path t) subdirectories))
                                 (:symbolic-link
                                  (let ((target-kind
                                          (%filesystem-completion-symlink-target-kind
-                                          entry)))
-                                   (push (cons entry target-kind) symlink-target-kinds)
+                                          path)))
+                                   (push (cons path target-kind) symlink-target-kinds)
                                    (case target-kind
                                      (:directory
-                                      (push (entry-value entry t) subdirectories))
+                                      (push (entry-value path t) subdirectories))
                                      ((:regular-file :missing)
-                                      (push (entry-value entry nil) files))))))))
+                                      (push (entry-value path nil) files))))))))
                      (sb-posix:closedir stream))))))
         (visit-entries)
         (list :files (nreverse files)

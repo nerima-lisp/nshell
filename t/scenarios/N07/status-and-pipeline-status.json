@@ -8,8 +8,8 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "SCENARIO_N07-status-and-pipeline-status> ",
-      "NSHELL_READER": "sexp"
+      "NSHELL_READER": "sexp",
+      "NSHELL_PROMPT": "SCENARIO_N07-status-and-pipeline-status> "
     },
     "home": "home",
     "cwd": "work",
@@ -35,6 +35,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L08 has not landed the reader AST execution interface required by N07."
+    "reason": "WP-L08 owns the new-reader status interface; WP-L05 owns pipeline execution and per-stage status."
   }
 }

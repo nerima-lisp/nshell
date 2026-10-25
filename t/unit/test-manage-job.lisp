@@ -614,35 +614,46 @@
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))
            (job (make-test-job 0 "sleep" :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))
-           (calls nil))
+           (process-registry (make-hash-table :test #'eql))
+           (processes '(:first :second))
+           (calls nil)
+           (continue-calls nil))
       (nshell.domain.job-control:background-job monitor job-id)
+      (setf (gethash job-id process-registry) processes)
       (with-temporary-function
           ((quote nshell.infrastructure.acl:kill-process)
            (lambda (pid signal)
              (push (list pid signal) calls)
              0))
-        (expect job :to-be
-                (nshell.application::signal-job job-id :sigstop monitor))
-        (expect :stopped :to-be
-                (nshell.domain.execution:job-state job))
-        (expect (list (list -4321 :sigstop)) :to-equal calls)
-        (expect job :to-be
-                (nshell.application::signal-job job-id :sigcont monitor))
-        (expect :background :to-be
-                (nshell.domain.execution:job-state job))
-        (expect (list (list -4321 :sigcont) (list -4321 :sigstop))
-                :to-equal calls)
-        (dolist (termination-signal (list :sigterm :sigint :sighup))
-          (nshell.domain.job-control:suspend-job monitor job-id nil)
-          (setf calls nil)
+        (with-temporary-function
+            ((quote nshell.infrastructure.acl:process-continue-group)
+             (lambda (pgid registered-processes)
+               (push (list pgid registered-processes) continue-calls)
+               t))
           (expect job :to-be
                   (nshell.application::signal-job
-                   job-id termination-signal monitor))
+                   job-id :sigstop monitor process-registry))
+          (expect :stopped :to-be
+                  (nshell.domain.execution:job-state job))
+          (expect '((-4321 :sigstop)) :to-equal calls)
+          (expect job :to-be
+                  (nshell.application::signal-job
+                   job-id :sigcont monitor process-registry))
           (expect :background :to-be
                   (nshell.domain.execution:job-state job))
-          (expect (list (list -4321 :sigcont)
-                        (list -4321 termination-signal))
-                  :to-equal calls))))
+          (expect '((-4321 :sigstop)) :to-equal calls)
+          (expect '((4321 (:first :second))) :to-equal continue-calls)
+          (dolist (termination-signal (list :sigterm :sigint :sighup))
+            (nshell.domain.job-control:suspend-job monitor job-id nil)
+            (setf calls nil
+                  continue-calls nil)
+            (expect job :to-be
+                    (nshell.application::signal-job
+                     job-id termination-signal monitor process-registry))
+            (expect :background :to-be
+                    (nshell.domain.execution:job-state job))
+            (expect (list (list -4321 termination-signal)) :to-equal calls)
+            (expect '((4321 (:first :second))) :to-equal continue-calls)))))
     (let* ((monitor (nshell.domain.job-control:make-job-monitor))
            (job (make-test-job 0 "sleep" :pgid 4321))
            (job-id (nshell.domain.job-control:monitor-add-job monitor job))

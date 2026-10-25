@@ -82,13 +82,15 @@ changing its value.")
     (let ((batch-call nil))
       (with-temporary-function
           ((quote nshell.presentation:run-repl-batch)
-           (lambda (&key line script-args)
-             (setf batch-call (list line script-args))
+           (lambda (&key line script-args errexit-p)
+             (setf batch-call (list line script-args errexit-p))
              23))
         (expect 23 :to-equal
                 (nshell::%run-parsed-invocation
                  (parse (list "--command" "echo ready" "literal" "--not-an-option"))))
-        (expect (list "echo ready" (list "literal" "--not-an-option"))
+        (expect (list "echo ready"
+                      (list "literal" "--not-an-option")
+                      nil)
                 :to-equal batch-call)))
     (with-temporary-function
         ((quote nshell::%run-default-invocation)

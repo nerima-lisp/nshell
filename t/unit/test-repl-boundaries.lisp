@@ -52,6 +52,27 @@ reflects the injected values instead of the real machine."
         (cl-boundary-kit:advance-fake-clock clock 0 :monotonic-delta 500)
         (let ((elapsed (- (nshell.presentation::boundary-monotonic) start)))
           (expect 500 :to-equal elapsed)))))
+  (it "cwd-lookup-failure-falls-back-to-PWD-and-warns"
+    "When getcwd fails, the current directory falls back to the shell PWD and emits an actionable warning."
+    (let* ((wd (cl-boundary-kit:make-working-directory
+                :get-fn (lambda () (error "getcwd failed"))
+                :set-fn (lambda (path) path)))
+           (nshell.presentation::*environment*
+             (nshell.domain.environment:env-set
+              (nshell.domain.environment:make-default-environment)
+              "PWD" "/tmp/nshell-removed" t))
+           (nshell.presentation::*boundaries*
+             (cl-boundary-kit:make-boundary-context :working-dir wd))
+           (warning-output (make-string-output-stream)))
+      (let ((cwd nil)
+            (warning nil))
+        (let ((*error-output* warning-output))
+          (setf cwd (nshell.presentation::boundary-current-directory))
+          (setf warning (get-output-stream-string warning-output)))
+        (expect "/tmp/nshell-removed" :to-equal cwd)
+        (expect (and (search "current directory" warning)
+                     (search "PWD" warning))
+                :to-be-truthy))))
 
   (it "real-boundary-context-exposes-repl-boundaries"
     "make-real-boundary-context wires the boundaries used by the REPL edge."

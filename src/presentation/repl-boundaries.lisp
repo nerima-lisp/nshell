@@ -49,8 +49,20 @@ initialized."
   (or (cl-boundary-kit:host-info-hostname (boundary-host-info)) "localhost"))
 
 (defun boundary-current-directory ()
-  "Current working directory namestring via the working-directory boundary."
-  (namestring (cl-boundary-kit:working-directory-get (boundary-working-directory))))
+  "Current working directory namestring, falling back to shell PWD when getcwd fails."
+  (handler-case
+      (namestring
+       (cl-boundary-kit:working-directory-get (boundary-working-directory)))
+    (error (condition)
+      (let ((pwd (nshell.domain.environment:env-get
+                  (ensure-environment) "PWD")))
+        (if pwd
+            (progn
+              (format *error-output*
+                      "nshell: warning: could not determine the current directory (~a); using PWD=~a~%"
+                      condition pwd)
+              pwd)
+            (error condition))))))
 
 (defun boundary-monotonic ()
   "Monotonic tick from the clock boundary (internal-time-units for the real

@@ -55,8 +55,5 @@
       ]
     },
     "exit_code": 0
-  },
-  "expected_failure": {
-    "reason": "Plan section 3 records that an internal condition can terminate nshell; deleting cwd reproduces a fatal getcwd failure before the follow-up command."
   }
 }

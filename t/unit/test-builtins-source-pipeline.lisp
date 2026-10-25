@@ -1,5 +1,10 @@
 (in-package #:nshell/test)
 
+(defun %make-source-pipeline-test-filesystem (&rest extra-executable-paths)
+  (%make-test-builtins-filesystem
+   :files (append '("/bin/echo" "/bin/sh" "/tmp/file.txt")
+                  extra-executable-paths)))
+
 (describe "builtin-tests"
   (it "source-pipeline-feeds-builtin-output-to-read"
     "source executes builtin pipeline stages in the current shell context."
@@ -11,18 +16,19 @@
                     (nshell.application:shell-context-environment context)
                     "captured"))))
 
-  (it "source-pipeline-feeds-function-output-to-read"
-    "source lets fish-style functions participate in pipelines."
-    (with-builtins-source (output code context
-                                   '("function produce"
-                                     "echo function-value"
-                                     "end"
-                                     "produce | read captured"))
+  (it "source-pipeline-feeds-sexp-function-output-to-read"
+    "source lets S-expression-defined functions participate in pipelines."
+    (with-builtins-source
+        (output code context
+                (list "(define-shell-function produce () (echo function-value))"
+                      "(| (produce) (read captured))"))
       (expect "" :to-equal output)
       (expect 0 :to-equal code)
-      (expect "function-value" :to-equal (nshell.domain.environment:env-get
-                    (nshell.application:shell-context-environment context)
-                    "captured"))))
+      (expect "function-value"
+              :to-equal
+              (nshell.domain.environment:env-get
+               (nshell.application:shell-context-environment context)
+               "captured"))))
 
   (it "source-pipeline-redirects-builtin-output"
     "source supports redirection on builtin pipeline stages."
@@ -37,28 +43,30 @@
           (expect 0 :to-equal code)
           (expect "redirected" :to-equal (read-test-file-line target))))))
 
-  (it "source-pipeline-redirects-function-output"
-    "source redirects fish-style function output from pipeline stages."
+  (it "source-pipeline-redirects-sexp-function-output"
+    "source redirects output from S-expression-defined functions."
     (with-builtins-source-tree (context root source :prefix "nshell-test-source-function-redirect")
       (let ((target (merge-pathnames "function.txt" root)))
-        (write-test-lines source
-                          (list "function produce"
-                                "echo function-redirected"
-                                "end"
-                                (format nil "produce > ~a" (namestring target))))
+        (write-test-lines
+         source
+         (list "(define-shell-function produce () (echo function-redirected))"
+               (format nil "(produce > ~s)" (namestring target))))
         (multiple-value-bind (output code)
             (call-source-file context source)
           (expect "" :to-equal output)
           (expect 0 :to-equal code)
-          (expect "function-redirected" :to-equal (read-test-file-line target))))))
+          (expect "function-redirected" :to-equal
+                  (read-test-file-line target))))))
 
   (it "source-pipeline-redirects-internal-stderr-to-file"
-    "source applies 2> to stderr written by internal commands."
+    "source applies a S-expression command redirect to internal command stderr."
     (with-builtins-source-tree (context root source :prefix "nshell-test-source-stderr-redirect")
       (let ((target (merge-pathnames "stderr.txt" root)))
         (write-test-lines source
-                          (list (format nil "errcmd 2> ~a" (namestring target))))
-        (with-stubbed-command-executor
+                          (list (format nil "(errcmd 2> ~s)" (namestring target))))
+        (setf (nshell.application:shell-context-filesystem context)
+              (%make-source-pipeline-test-filesystem "/bin/errcmd"))
+        (with-stubbed-command-builtin
             (("errcmd"
               (write-line "stderr-line" *error-output*)
               (values (format nil "stdout-line~%") 7)))
@@ -69,12 +77,14 @@
             (expect "stderr-line" :to-equal (read-test-file-line target)))))))
 
   (it "source-pipeline-ampersand-redirects-internal-stdout-and-stderr"
-    "source applies &> to both stdout and stderr from internal commands."
+    "source applies a S-expression command redirect to internal stdout and stderr."
     (with-builtins-source-tree (context root source :prefix "nshell-test-source-amp-redirect")
       (let ((target (merge-pathnames "combined.txt" root)))
         (write-test-lines source
-                          (list (format nil "errcmd &> ~a" (namestring target))))
-        (with-stubbed-command-executor
+                          (list (format nil "(errcmd &> ~s)" (namestring target))))
+        (setf (nshell.application:shell-context-filesystem context)
+              (%make-source-pipeline-test-filesystem "/bin/errcmd"))
+        (with-stubbed-command-builtin
             (("errcmd"
               (write-line "stderr-line" *error-output*)
               (values (format nil "stdout-line~%") 7)))
@@ -87,12 +97,14 @@
               (expect (search "stderr-line" contents) :to-be-truthy)))))))
 
   (it "source-pipeline-redirects-internal-stderr-to-stdout"
-    "source applies 2>&1 after stdout has been redirected."
+    "source preserves S-expression redirect order when stdout is redirected before stderr is merged."
     (with-builtins-source-tree (context root source :prefix "nshell-test-source-stderr-to-stdout")
       (let ((target (merge-pathnames "combined.txt" root)))
         (write-test-lines source
-                          (list (format nil "errcmd > ~a 2>&1" (namestring target))))
-        (with-stubbed-command-executor
+                          (list (format nil "(errcmd > ~s 2>& 1)" (namestring target))))
+        (setf (nshell.application:shell-context-filesystem context)
+              (%make-source-pipeline-test-filesystem "/bin/errcmd"))
+        (with-stubbed-command-builtin
             (("errcmd"
               (write-line "stderr-line" *error-output*)
               (values (format nil "stdout-line~%") 7)))
@@ -153,34 +165,30 @@
     "source preserves reader spans after a file-backed here-document continuation."
     (with-builtins-source-tree
         (context root source :prefix "nshell-test-source-heredoc-map")
-      (write-test-lines source
-                        '("read captured << EOF"
-                          "inline-doc"
-                          "EOF"
-                          "read following <<< after"))
-      (with-temporary-function
-          ('uiop:getenv
-           (lambda (name)
-             (when (string= name "NSHELL_READER") "sexp")))
-        (expect 0 :to-equal
-                (nth-value 1
-                 (call-source-file context source)))
-        (expect "inline-doc" :to-equal
-                (nshell.domain.environment:env-get
-                 (nshell.application:shell-context-environment context)
-                 "captured"))
-        (expect "after" :to-equal
-                (nshell.domain.environment:env-get
-                 (nshell.application:shell-context-environment context)
-                 "following")))))
+      (write-test-lines
+       source
+       (list "read captured << EOF"
+             "inline-doc"
+             "EOF"
+             "read following <<< after"))
+      (expect 0 :to-equal
+              (nth-value 1 (call-source-file context source)))
+      (expect "inline-doc" :to-equal
+              (nshell.domain.environment:env-get
+               (nshell.application:shell-context-environment context)
+               "captured"))
+      (expect "after" :to-equal
+              (nshell.domain.environment:env-get
+               (nshell.application:shell-context-environment context)
+               "following"))))
 
   (it "source-pipeline-input-redirect-overrides-pipe-input"
-    "source applies input redirects on builtin pipeline stages."
+    "source applies an input redirect to a S-expression pipeline stage."
     (with-builtins-source-tree (context root source :prefix "nshell-test-source-input-redirect")
       (let ((input (merge-pathnames "input.txt" root)))
-        (write-test-lines input '("from-file"))
+        (write-test-lines input (list "from-file"))
         (write-test-lines source
-                          (list (format nil "echo from-pipe | read captured < ~a"
+                          (list (format nil "(| (echo from-pipe) (read captured < ~s))"
                                         (namestring input))))
         (multiple-value-bind (output code)
             (call-source-file context source)
@@ -191,23 +199,23 @@
                         "captured"))))))
 
   (it "source-pipeline-uses-source-strategy-for-external-pipelines"
-    "source keeps external pipelines on the source execution path when strategy is :cps."
+    "source keeps S-expression external pipelines on the source execution path when strategy is :cps."
     (skip-in-sandbox "executes /bin/echo and /bin/cat"
-    (let ((context (make-test-builtins-context)))
-      (setf (nshell.application:shell-context-execution-strategy context) :cps)
-      (with-temporary-function
-          ('nshell.infrastructure.acl:spawn-pipeline
-           (lambda (&rest _args)
-             (declare (ignore _args))
-             (error "spawn-pipeline should not run for :cps")))
-        (with-called-source (output code context
-                                    '("/bin/echo cps-strategy | /bin/cat"))
-          (expect 0 :to-equal code)
-          (expect (format nil "cps-strategy~%") :to-equal output))))))
+      (let ((context (make-test-builtins-context)))
+        (setf (nshell.application:shell-context-execution-strategy context) :cps)
+        (with-temporary-function
+            ('nshell.infrastructure.acl:spawn-pipeline
+             (lambda (&rest _args)
+               (declare (ignore _args))
+               (error "spawn-pipeline should not run for :cps")))
+          (with-called-source (output code context
+                                      (list "(| (/bin/echo cps-strategy) (/bin/cat))"))
+            (expect 0 :to-equal code)
+            (expect (format nil "cps-strategy~%") :to-equal output))))))
 
   (it "source-pipeline-uses-os-pipes-strategy-for-external-pipelines"
-    "source dispatches external pipelines to spawn-pipeline when strategy is :os-pipes."
-    (let ((context (make-test-builtins-context))
+    "source dispatches S-expression external pipelines to spawn-pipeline for :os-pipes."
+    (let ((context (make-test-builtins-context :filesystem (%make-source-pipeline-test-filesystem "/bin/cat")))
           (called nil)
           (command-count nil)
           (captured-redirects nil))
@@ -220,9 +228,9 @@
                    command-count (length commands)
                    captured-redirects redirects)
              (format t "spawned-path~%")
-             37))
+             (values 37 '(0 37))))
         (with-called-source (output code context
-                                    '("/bin/echo os-pipes-strategy | /bin/cat"))
+                                    (list "(| (/bin/echo \"os-pipes-strategy\") (/bin/cat))"))
           (expect (null called) :to-be-falsy)
           (expect 2 :to-equal command-count)
           (expect (listp captured-redirects) :to-be-truthy)
@@ -230,7 +238,7 @@
           (expect (format nil "spawned-path~%") :to-equal output)))))
 
   (it "source-pipeline-keeps-internal-commands-on-source-path-under-os-pipes"
-    "source still executes pipelines with internal commands through the source path even when strategy is :os-pipes."
+    "source keeps S-expression pipelines with internal commands on the source path under :os-pipes."
     (let ((context (make-test-builtins-context)))
       (setf (nshell.application:shell-context-execution-strategy context) :os-pipes)
       (with-temporary-function
@@ -239,7 +247,7 @@
              (declare (ignore _args))
              (error "spawn-pipeline should not run for internal commands")))
         (with-called-source (output code context
-                                    '("echo internal-value | read captured"))
+                                    (list "(| (echo internal-value) (read captured))"))
           (expect 0 :to-equal code)
           (expect "" :to-equal output)
           (expect "internal-value" :to-equal (nshell.domain.environment:env-get

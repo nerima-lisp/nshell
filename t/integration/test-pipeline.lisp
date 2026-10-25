@@ -56,22 +56,24 @@
         (expect 0 :to-equal code)
         (expect (format nil "$(printf substituted)~%") :to-equal output))))
 
-  (it "source-loads-real-file-and-registers-function"
+  (it "source-loads-real-file-and-registers-sexp-function"
     (with-builtins-context (context)
       (with-test-source-file (source nil :prefix "nshell-source-integration")
-        (write-test-lines source
-                          '("function greet"
-                            "echo from-file"
-                            "end"
-                            "greet"
-                            "echo after-file"))
+        (write-test-lines
+         source
+         (list "(define-shell-function greet () (echo from-file))"
+               "(greet)"
+               "(echo after-file)"))
         (multiple-value-bind (output code)
             (call-source-file context source)
           (expect 0 :to-equal code)
           (expect (format nil "from-file~%after-file~%") :to-equal output)
-          (expect '("echo from-file") :to-equal (gethash "greet"
-                              (nshell.application:shell-context-function-table
-                               context)))))))
+          (expect t :to-be
+                  (nth-value
+                   1
+                   (nshell.application:lookup-shell-function
+                    (nshell.application:context-shell-function-registry context)
+                    "greet")))))))
 
   (it "pipeline-parsing"
     (with-complete-ast (ast "ls | grep foo")

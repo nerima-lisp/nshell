@@ -37,7 +37,7 @@
     (with-repl-test-state
       (dolist (case '(("echo hi |" . "echo hi |~%  ")
                       ("echo hi &&" . "echo hi &&~%  ")
-                      ("if true" . "if true~%  ")))
+                      ("(if t" . "(if t~%  ")))
         (destructuring-bind (line . expected-format) case
           (setf nshell.presentation::*input-state*
                 (nshell.presentation::make-repl-input-state :buffer line))

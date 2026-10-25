@@ -6,10 +6,11 @@
     (with-temporary-output-file (path :prefix "nshell-script")
       (with-open-file (out path :direction :output :if-exists :supersede
                                 :if-does-not-exist :create)
-        (write-string (format nil "function show~%echo hi $argv[1]~%end~%for i in (seq 1 2)~%echo n=$i~%end~%show $argv~%")
-                      out))
+        (write-string
+         (format nil "(define-shell-function show (name)~%  (echo hi $name))~%(dotimes (i 2)~%  (progn~%    (set n (1+ i))~%    (echo n=$n)))~%(show $argv[1])~%")
+         out))
       (let ((output (capture-standard-output
-                      (nshell.presentation:run-repl-script path '("World")))))
+                      (nshell.presentation:run-repl-script path (list "World")))))
         (expect (search "n=1" output) :to-be-truthy)
         (expect (search "n=2" output) :to-be-truthy)
         (expect (search "hi World" output) :to-be-truthy))))
@@ -19,10 +20,11 @@
     (with-temporary-output-file (path :prefix "nshell-main-script")
       (with-open-file (out path :direction :output :if-exists :supersede
                                 :if-does-not-exist :create)
-        (write-string (format nil "function show~%echo hi $argv[1]~%end~%for i in (seq 1 2)~%echo n=$i~%end~%show $argv~%")
-                      out))
+        (write-string
+         (format nil "(define-shell-function show (name)~%  (echo hi $name))~%(dotimes (i 2)~%  (progn~%    (set n (1+ i))~%    (echo n=$n)))~%(show $argv[1])~%")
+         out))
       (%assert-nshell-main-result (list path "World")
-                                  '("n=1" "n=2" "hi World")
+                                  (list "n=1" "n=2" "hi World")
                                   0)))
 
   (it "e2e-main-script-preserves-flag-like-argv"
@@ -43,13 +45,12 @@
     (with-temporary-output-file (path :prefix "nshell-script-parse-error")
       (with-open-file (out path :direction :output :if-exists :supersede
                                 :if-does-not-exist :create)
-        (write-string (format nil "| echo bad~%echo should-not-run~%") out))
+        (write-string (format nil "(echo bad~%(echo should-not-run)~%") out))
       (multiple-value-bind (stdout stderr exit-code)
           (%run-nshell-main (list path))
-        (expect 2 :to-equal exit-code)
-        (expect (search "source: parse error" stdout) :to-be-truthy)
-        (expect (search "should-not-run" stdout) :to-be-falsy)
-        (expect "" :to-equal stderr))))
+        (expect 1 :to-equal exit-code)
+        (expect (search "syntax error" stderr) :to-be-truthy)
+        (expect (search "should-not-run" stdout) :to-be-falsy))))
 
   (it "e2e-main-shell-command-delegates-with-argv-and-login-config"
     "The entry point delegates -c to /bin/sh and -ilc hands off config exports."
@@ -111,13 +112,13 @@
 
   (it "e2e-main-command-supports-inline-function-definition"
     "The --command path supports source-reader function definitions."
-    (%assert-nshell-main-result '("--command" "function greet; echo hi $argv[1]; end; greet World")
+    (%assert-nshell-main-result '("--command" "(progn (defun greet (name) (echo hi $name)) (greet \"World\"))")
                                 "hi World"
                                 0))
 
   (it "e2e-main-command-supports-inline-function-definition-after-prefix-command"
     "The --command path executes a prefix command before a same-line function block."
-    (%assert-nshell-main-result '("--command" "echo hi; function f; echo hi; end; f")
+    (%assert-nshell-main-result '("--command" "(progn (echo hi) (defun f () (echo hi)) (f))")
                                 (format nil "hi~%hi")
                                 0))
 
@@ -125,7 +126,8 @@
     "The --command path supports inline source-reader control-flow forms."
     (multiple-value-bind (stdout stderr exit-code)
         (%run-nshell-main
-         '("--command" "for i in (seq 1 2); echo n=$i; end; if true; echo conditional; end; switch yes; case yes; echo switched; end; begin; echo grouped; end; while false; echo should-not-run; end; echo after-while"))
+         (list "--command"
+               "(progn (dotimes (i 2) (progn (set n (1+ i)) (echo n=$n))) (if t (echo conditional)) (case 1 ((1) (echo switched))) (progn (echo grouped)) (if (= 1 2) (echo should-not-run)) (echo after-while))"))
       (expect 0 :to-equal exit-code)
       (expect (search "n=1" stdout) :to-be-truthy)
       (expect (search "n=2" stdout) :to-be-truthy)
@@ -152,7 +154,7 @@
   (it "e2e-main-command-applies-pipefail"
     "The public --command path returns an earlier non-zero pipeline status when pipefail is enabled."
     (%assert-nshell-main-result
-     '("--command" "set -o pipefail; sh -c 'exit 7' | sh -c 'exit 0'")
+     '("--command" "(progn (set -o pipefail) (| (sh -c \"exit 7\") (sh -c \"exit 0\")))")
      nil
      7))
 
@@ -239,7 +241,7 @@
             (%run-nshell-main
              (list "--command"
                    (format nil
-                           "sh -c 'echo out; echo err >&2' &> ~A; sh -c 'echo merge-out; echo merge-err >&2' > ~A 2>&1"
+                           "(sh -c \"echo out; echo err >&2\" &> ~S)~%(sh -c \"echo merge-out; echo merge-err >&2\" > ~S 2>& 1)"
                            amp-target
                            merge-target)))
           (expect 0 :to-equal exit-code)
@@ -258,9 +260,7 @@
       (multiple-value-bind (stdout stderr exit-code)
           (%run-nshell-main
            (list "--command"
-                 (format nil
-                         "sh -c 'echo out; echo err >&2' 1>&2 > ~A"
-                         target)))
+                 (format nil "(sh -c \"echo out; echo err >&2\" 1>& 2 > ~S)" target)))
         (expect 0 :to-equal exit-code)
         (expect "" :to-equal stdout)
         (expect (search "err" stderr) :to-be-truthy)
@@ -273,23 +273,19 @@
       (multiple-value-bind (stdout stderr exit-code)
           (%run-nshell-main
            (list "--command"
-                 (format nil
-                         "sh -c 'printf out; printf fd3 >&3' 3>&1 1>~A"
-                         target)))
+                 (format nil "(sh -c \"printf out; printf fd3 >&3\" 3>& 1 1> ~S)" target)))
         (expect 0 :to-equal exit-code)
         (expect "fd3" :to-equal stdout)
         (expect "" :to-equal stderr)
         (expect "out" :to-equal (host-kit:read-file-string target)))))
 
-  (it "e2e-main-command-reports-internal-fd-redirect-errors"
-    "The public --command path turns unsupported builtin fd redirects into a shell status."
+  (it "e2e-main-command-parses-builtin-fd-dup-redirect"
+    "The --command reader treats an arbitrary descriptor duplication as a redirect, not as an argument."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main (list "--command" "echo builtin 3>&1"))
-      (expect "" :to-equal stdout)
-      (expect 1 :to-equal exit-code)
-      (expect (not (null (search "Unsupported file-descriptor duplication 3>&1"
-                                 stderr)))
-              :to-be-truthy)))
+        (%run-nshell-main (list "--command" "(echo builtin 3>& 1)"))
+      (expect (format nil "builtin~%") :to-equal stdout)
+      (expect "" :to-equal stderr)
+      (expect 0 :to-equal exit-code)))
 
   (it "e2e-main-command-reports-signal-exit-status"
     "External commands killed by a signal report the shell-compatible 128+signal status."
@@ -308,16 +304,14 @@
     (%assert-nshell-main-result nil
                                 "stdin-ok"
                                 0
-                                :input (format nil "if true~%echo stdin-ok~%end~%")))
+                                :input (format nil "(if t (echo stdin-ok))~%")))
 
   (it "e2e-main-stdin-batch-stops-after-parse-error"
     "The no-argument non-interactive entry point must not run later forms after a parse error."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main nil :input (format nil "| echo bad~%echo should-not-run~%"))
-      (expect 2 :to-equal exit-code)
-      (expect (search "source: parse error" stdout) :to-be-truthy)
-      (expect (search "should-not-run" stdout) :to-be-falsy)
-      (expect "" :to-equal stderr)))
+        (%run-nshell-main nil :input (format nil "(echo bad~%(echo should-not-run)~%"))
+      (expect 1 :to-equal exit-code)
+      (progn (expect (search "nshell error:" stderr) :to-be-truthy) (expect (search "should-not-run" stdout) :to-be-falsy))))
 
   (it "e2e-main-here-string-feeds-external-stdin"
     "The batch command path should feed here-strings to external stdin."
@@ -350,7 +344,7 @@
       (%assert-nshell-main-result
        (list "--command"
              (format nil
-                     "function greet; echo function-body; end; command -v echo; command -v greet; command -V greet; command -v ~a; command greet"
+                     "(progn (define-shell-function greet () (echo function-body)) (command -v echo) (command -v greet) (command -V greet) (command -v ~S) (command greet))"
                      real-echo))
        (list "echo" "greet" "greet is a function" real-echo "function-body")
        0)))
@@ -382,19 +376,17 @@
                                    :if-exists :supersede
                                    :if-does-not-exist :create)
         (write-string
-         "(format t \"ERREXIT=~a~%\" nshell.application:*errexit-p*)~%"
+         "(format *standard-output* \"ERREXIT=~a~%\" nshell.application:*errexit-p*)"
          stream))
-      (let ((environment
-              (append (%e2e-child-environment)
-                      (list "NSHELL_READER=sexp"))))
+      (let ((environment (%e2e-child-environment)))
         (multiple-value-bind (stdout stderr exit-code)
             (%run-nshell-main (list path) :environment environment)
-          (expect (format nil "ERREXIT=NIL~%NIL~%~%") :to-equal stdout)
+          (expect (format nil "ERREXIT=NIL~%") :to-equal stdout)
           (expect "" :to-equal stderr)
           (expect 0 :to-equal exit-code))
         (multiple-value-bind (stdout stderr exit-code)
             (%run-nshell-main (list "-e" path) :environment environment)
-          (expect (format nil "ERREXIT=T~%NIL~%~%") :to-equal stdout)
+          (expect (format nil "ERREXIT=T~%") :to-equal stdout)
           (expect "" :to-equal stderr)
           (expect 0 :to-equal exit-code)))
       (%assert-nshell-main-result '("-e" "-c" "printf O13_C_DELEGATED")

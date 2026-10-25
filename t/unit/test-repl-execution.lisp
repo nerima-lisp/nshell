@@ -371,11 +371,11 @@
             (ecase failure
               (:parse
                (let ((*error-output* *standard-output*))
-                 (nshell.presentation::%execute-command-line "case vanilla")))
+                 (nshell.presentation::%execute-command-line "(echo ) ) (")))
               (:runtime
                (with-temporary-function
-                   ('nshell.presentation::execute-ast
-                    (lambda (ast) (declare (ignore ast)) (error "execution failed")))
+                   ('nshell.application:evaluate-reader-result-in-context
+                    (lambda (context reader-result) (declare (ignore context reader-result)) (error "execution failed")))
                  (nshell.presentation::%execute-command-line "true")))))
           (expect (format nil "status:<~D,~D>" (if (eq failure :parse) 2 1)
                           (if (eq failure :parse) 2 1))
@@ -404,10 +404,8 @@
                 (setf reentered t)
                 (error 'nshell.infrastructure.terminal:terminal-mode-operation-failed
                        :operation :enable :fd 0 :reason "injected reentry failure")))
-             ('nshell.presentation::execute-ast
-              (lambda (ast)
-                (declare (ignore ast))
-                (nshell.presentation::%call-with-cooked-terminal (lambda () 0))))
+             ('nshell.application:evaluate-reader-result-in-context
+              (lambda (context reader-result) (declare (ignore context reader-result)) (nshell.presentation::%call-with-cooked-terminal (lambda () 0))))
              ('nshell.presentation::render-prompt-cont
               (lambda ()
                 (let ((next (nshell.presentation::%execute-command-line "true")))
@@ -773,10 +771,8 @@ path must be converted from a pathname before being appended."
              (lambda (text)
                (declare (ignore text))))
           (with-temporary-function
-              ('nshell.presentation::execute-ast
-               (lambda (ignored-ast)
-                 (declare (ignore ignored-ast))
-                 7))
+              ('nshell.application:evaluate-reader-result-in-context
+               (lambda (context reader-result) (declare (ignore context reader-result)) (values nil 7)))
             (capture-process-output-event :execute)
             (let ((entry (first
                           (history-kit:history-entries
@@ -971,7 +967,7 @@ path must be converted from a pathname before being appended."
     (with-repl-test-state
       (with-stable-repl-prompt ()
         (with-fixed-terminal-size (24 80)
-          (with-repl-input-state (:buffer "case vanilla" :cursor-pos 12)
+          (with-repl-input-state (:buffer "(echo ) ) (" :cursor-pos 11)
             (let ((output
                     (capture-standard-output
                       (let ((*error-output* *standard-output*))
@@ -979,7 +975,7 @@ path must be converted from a pathname before being appended."
                                 (nshell.presentation::process-output-event :execute)))
                           (when continuation
                             (funcall continuation)))))))
-              (expect (search "nshell: syntax error:" output) :to-be-truthy)
+              (expect (search "syntax error [8,9):" output) :to-be-truthy)
               (expect 2 :to-equal nshell.presentation::*last-exit-code*)
               (is-input-state nshell.presentation::*input-state*
                               :buffer ""
@@ -994,10 +990,18 @@ path must be converted from a pathname before being appended."
             (let ((output (capture-process-output-event :execute)))
               (expect (search (format nil "~%") output) :to-be-truthy)
               (expect 0 :to-equal nshell.presentation::*last-exit-code*)
-              (expect (format nil "echo '~%")
-                      :to-equal
-                      (nshell.presentation:input-state-buffer
-                       nshell.presentation::*input-state*))))))))
+              (expect
+                (concatenate 'string
+                             "echo '"
+                             (string #\Newline)
+                             (make-string
+                              (nshell.domain.parsing:scan-result-next-indent
+                               (nshell.presentation::%repl-input-scan-result
+                                "echo '" 6 :bare-line))
+                              :initial-element #\Space))
+                :to-equal
+                (nshell.presentation:input-state-buffer
+                 nshell.presentation::*input-state*))))))))
   (it "repl-reader-exit-propagates-stop-to-repl-sentinel"
     "A reader-local exit must stop the outer REPL with its explicit sentinel."
     (with-repl-test-state
@@ -1151,61 +1155,32 @@ path must be converted from a pathname before being appended."
                     nshell.presentation::*failure-explain-available-p*)))))))
 
 (describe "function-definition-submission-tests"
-  (it "an-unterminated-function-header-reads-as-incomplete-input"
-    "Typing `function greet' and pressing Enter must continue the line, the way
-an unterminated for-loop already does."
-    (expect :incomplete :to-be
-            (nshell.domain.parsing:parse-result-state
-             (nshell.domain.parsing:parse-command-line "function greet")))
-    (expect :incomplete :to-be
-            (nshell.domain.parsing:parse-result-state
-             (nshell.domain.parsing:parse-command-line
-              (format nil "function greet~%echo hi"))))
-    (expect :complete :to-be
-            (nshell.domain.parsing:parse-result-state
-             (nshell.domain.parsing:parse-command-line
-              (format nil "function greet~%echo hi~%end"))))
-    (expect :complete :to-be
-            (nshell.domain.parsing:parse-result-state
-             (nshell.domain.parsing:parse-command-line
-              "function greet; echo hi; end"))))
-
-  (it "a-function-definition-runs-through-the-source-reader"
-    "The AST executor cannot run a function body, so the submitted text goes to
-the source reader instead."
+  (it "repl-submit-buffers-a-multiline-sexp-function-before-executing-it"
+    "An incomplete define-shell-function form stays pending until its closing parenthesis."
     (with-repl-test-state
-      (let ((request (nshell.presentation::make-source-text-request
-                      (format nil "function greet~%echo hello~%end"))))
-        (expect '("function greet" "echo hello" "end")
-                :to-equal
-                (nshell.presentation::source-text-request-lines request))
-        (nshell.presentation::execute-ast request)
-        (expect (nth-value 1 (gethash "greet" nshell.presentation::*functions*))
-                :to-be-truthy))))
-
-  (it "repl-submit-buffers-a-multiline-function-before-executing-it"
-    "A function header entered on its own line must remain pending until `end'."
-    (with-repl-test-state
-      (with-stable-repl-prompt ()
-        (with-fixed-terminal-size (24 80)
-          (with-repl-input-state (:buffer "function greet" :cursor-pos 14)
+      (let ((header "(define-shell-function greet ()")
+            (definition
+              (format nil "(define-shell-function greet ()~%(echo hello))")))
+        (with-stable-repl-prompt ()
+          (with-fixed-terminal-size (24 80)
+            (with-repl-input-state (:buffer header :cursor-pos (length header))
+              (let* ((pending-output (capture-process-output-event :execute))
+                     (buffer
+                       (nshell.presentation:input-state-buffer
+                        nshell.presentation::*input-state*)))
+                (expect nil :to-be (search "hello" pending-output))
+                (expect header :to-equal (subseq buffer 0 (length header)))
+                (expect (search (format nil "~%") buffer) :to-be-truthy)))
+            (setf nshell.presentation::*input-state*
+                  (nshell.presentation::make-repl-input-state
+                   :buffer definition))
             (capture-process-output-event :execute)
-            (expect (format nil "function greet~%  ")
-                    :to-equal
-                    (nshell.presentation:input-state-buffer
-                     nshell.presentation::*input-state*)))
-          (setf nshell.presentation::*input-state*
-                (nshell.presentation::make-repl-input-state
-                 :buffer (format nil "function greet~%  echo hello~%end")))
-          (capture-process-output-event :execute)
-          (expect '(("  echo hello"))
-                  :to-equal
-                  (list (gethash "greet" nshell.presentation::*functions*)))
-          (setf nshell.presentation::*input-state*
-                (nshell.presentation::make-repl-input-state :buffer "greet"))
-          (expect (search "hello" (capture-process-output-event :execute))
-                  :to-be-truthy)))))
-
+            (setf nshell.presentation::*input-state*
+                  (nshell.presentation::make-repl-input-state
+                   :buffer "(greet)"))
+            (expect
+             (search "hello" (capture-process-output-event :execute))
+             :to-be-truthy))))))
   (it "a-plain-command-is-not-mistaken-for-a-definition"
     (expect (nshell.application:function-definition-line-p "function greet")
             :to-be-truthy)
@@ -1236,17 +1211,17 @@ the source reader instead."
 
   (it "storage-conditions-are-reported-and-the-repl-recovers"
     (with-repl-test-state
-      (let ((original-execute-ast
-              (symbol-function 'nshell.presentation::execute-ast))
+      (let ((original-evaluator
+              (symbol-function 'nshell.application:evaluate-reader-result-in-context))
             (fail-once-p t))
         (with-temporary-function
-            ('nshell.presentation::execute-ast
-             (lambda (ast)
+            ('nshell.application:evaluate-reader-result-in-context
+             (lambda (context reader-result)
                (if fail-once-p
                    (progn
                      (setf fail-once-p nil)
                      (signal (make-condition 'storage-condition)))
-                   (funcall original-execute-ast ast))))
+                   (funcall original-evaluator context reader-result))))
           (let ((error-output
                   (capture-standard-output
                     (nshell.presentation::%execute-command-line "true"))))
@@ -1328,4 +1303,20 @@ the source reader instead."
                      (nshell.presentation:input-state-buffer
                       nshell.presentation::*input-state*)))))
             (expect (search "Q08_OK" command-output) :to-be-truthy))
-          (expect t :to-equal nshell.presentation::*running*))))))
+          (expect t :to-equal nshell.presentation::*running*)))))
+  (it "batch-command-failed-returns-pipeline-status"
+  (cl-weave:expect-assertions 2)
+  (with-repl-test-state
+    (with-temporary-function
+        ((quote nshell.application:source-lines-to-stream)
+         (lambda (context lines &optional source-path)
+           (declare (ignore context lines source-path))
+           (error (quote nshell.application:command-failed)
+                  :command "failing-stage"
+                  :status 7
+                  :stage-statuses (quote (7 0))
+                  :signal nil
+                  :pipeline-status 7)))
+      (let ((code (nshell.presentation:run-repl-batch :line "true")))
+        (expect 7 :to-equal code)
+        (expect 7 :to-equal nshell.presentation::*last-exit-code*))))))

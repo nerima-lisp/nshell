@@ -2,140 +2,61 @@
 
 (describe "builtin-tests"
   (it "source-function-body-supports-nested-control-flow"
-    "source keeps nested blocks inside function definitions instead of closing at the first end."
+    "source preserves nested conditional control flow in an S-expression shell function."
     (with-builtins-source-ok (output code context
-                                     '("function nested"
-                                       "if true"
-                                       "echo function-inner"
-                                       "else"
-                                       "echo function-else"
-                                       "end"
-                                       "echo function-after"
-                                       "end"
-                                       "nested"
-                                       "echo script-after"))
+                                     '("(define-shell-function nested () (if t (echo function-inner) (echo function-else)) (echo function-after))"
+                                       "(nested)"
+                                       "(echo script-after)"))
         (format nil "function-inner~%function-after~%script-after~%")
-      (expect '("if true"
-                   "echo function-inner"
-                   "else"
-                   "echo function-else"
-                   "end"
-                   "echo function-after") :to-equal (gethash "nested"
-                          (nshell.application:shell-context-function-table
-                           context)))))
-
-  (it "source-function-definition-supports-inline-body"
-    "source registers functions defined on a single line with an inline body."
-    (with-builtins-source-ok (output code context
-                                     '("function foo; echo hi; end"
-                                       "foo"))
-        (format nil "hi~%")
-      (expect '("echo hi") :to-equal (gethash "foo"
-                          (nshell.application:shell-context-function-table
-                           context)))))
-
-  (it "source-function-definition-preserves-trailing-inline-commands"
-    "source keeps commands that follow an inline function definition on the same line."
-    (with-builtins-source-ok (output code context
-                                     '("function foo; echo hi; end; foo"))
-        (format nil "hi~%")
-      (expect '("echo hi") :to-equal (gethash "foo"
-                          (nshell.application:shell-context-function-table
-                           context)))))
+      (expect t :to-equal
+              (nth-value 1
+                         (nshell.application:lookup-shell-function
+                          (nshell.application:context-shell-function-registry context)
+                          "nested")))))
 
   (it "source-switch-case-executes-matching-clause"
-    "source executes fish-style switch/case blocks."
+    "source uses S-expression case to execute the matching clause."
     (with-builtins-source-ok (output code context
-                                     '("switch chocolate"
-                                       "case vanilla"
-                                       "echo plain"
-                                       "case chocolate strawberry"
-                                       "echo sweet"
-                                       "case '*'"
-                                       "echo default"
-                                       "end"))
+                                     '("(case 2 ((1) (echo plain)) ((2 3) (echo sweet)) (otherwise (echo default)))"))
         (format nil "sweet~%")))
 
   (it "source-switch-case-matches-later-pattern-in-clause"
-    "source matches every fish-style pattern listed on a single case clause."
+    "source case matches any listed exact selector in a clause."
     (with-builtins-source-ok (output code context
-                                     '("switch strawberry"
-                                       "case vanilla chocolate"
-                                       "echo plain"
-                                       "case mint strawberry"
-                                       "echo sweet"
-                                       "case '*'"
-                                       "echo default"
-                                       "end"))
+                                     '("(case 3 ((1 2) (echo plain)) ((2 3) (echo sweet)) (otherwise (echo default)))"))
         (format nil "sweet~%")))
 
   (it "source-switch-case-supports-default-pattern"
-    "source executes the default switch/case clause when no exact pattern matches."
+    "source case executes its otherwise clause when no exact selector matches."
     (with-builtins-source-ok (output code context
-                                     '("switch mint"
-                                       "case vanilla"
-                                       "echo plain"
-                                       "case chocolate strawberry"
-                                       "echo sweet"
-                                       "case '*'"
-                                       "echo default"
-                                       "end"))
+                                     '("(case 4 ((1) (echo plain)) ((2 3) (echo sweet)) (otherwise (echo default)))"))
         (format nil "default~%")))
 
-  (it "source-switch-case-supports-glob-patterns"
-    "source switch/case patterns use the same glob semantics as expansion."
+  (it "source-reader-string-match-supports-glob-patterns"
+    "source string match uses the shell glob matcher through the S-expression reader."
     (with-builtins-source-ok (output code context
-                                     '("switch plugin42.lisp"
-                                       "case '*.md'"
-                                       "echo markdown"
-                                       "case 'plugin[0-9][0-9].lisp'"
-                                       "echo lisp"
-                                       "case '*'"
-                                       "echo default"
-                                       "end"))
+                                     '("(if (= 0 (string match -q \"plugin[0-9][0-9].lisp\" \"plugin42.lisp\")) (echo lisp) (echo default))"))
         (format nil "lisp~%")))
 
   (it "source-if-supports-not-command-modifier"
-    "source lets fish-style if conditions invert command status with not."
+    "source evaluates not around command tests in S-expression conditionals."
     (with-builtins-source-ok (output code context
-                                     '("if not test -f /etc/hosts"
-                                       "echo missing"
-                                       "else"
-                                       "echo exists"
-                                       "end"
-                                       "if not test -f /definitely/not/a/nshell-file"
-                                       "echo absent"
-                                       "else"
-                                       "echo present"
-                                       "end"))
+                                     '("(progn (if (not (= 0 (test -f \"/etc/hosts\"))) (echo missing) (echo exists)) (if (not (= 0 (test -f \"/definitely/not/a/nshell-file\"))) (echo absent) (echo present)))"))
         (format nil "exists~%absent~%")))
 
   (it "source-if-supports-else-if-branches"
-    "source treats fish-style else if as a nested conditional branch."
+    "source represents else-if branches as nested S-expression conditionals."
     (with-builtins-source-ok (output code context
-                                     '("if false"
-                                       "echo first"
-                                       "else if false"
-                                       "echo second"
-                                       "else"
-                                       "echo fallback"
-                                       "end"
-                                       "if false"
-                                       "echo skip"
-                                       "else if true"
-                                       "echo nested"
-                                       "end"))
+                                     '("(progn (if (not t) (echo first) (if (not t) (echo second) (echo fallback))) (if (not t) (echo skip) (if t (echo nested))))"))
         (format nil "fallback~%nested~%")))
 
-  (it "source-command-substitution-expands-function-output"
-    "source expands fish-style command substitutions and splits output on newlines."
-    (with-builtins-source-ok (output code context
-                                     '("function produce"
-                                       "echo alpha"
-                                       "echo beta"
-                                       "end"
-                                       "echo before (produce) after"))
-        (format nil "before alpha beta after~%")))
+  (it "source-command-substitution-expands-sexp-function-output"
+    "source expands S-expression function output in command substitutions and splits output on newlines."
+    (with-builtins-source-ok
+        (output code context
+                (list "(define-shell-function produce () (echo alpha) (echo beta))"
+                      "echo before (produce) after"))
+      (format nil "before alpha beta after~%")))
 
   (it "source-command-substitution-expands-inside-double-quotes"
     "source supports embedded command substitutions inside double-quoted words."
@@ -192,74 +113,89 @@
         (expect 0 :to-equal code)
         (expect (format nil "quoted-command-word~%") :to-equal output))))
 
-  (it "source-keeps-single-quoted-command-position-word-literal"
-    "Single-quoted command words remain literal and are not variable-expanded."
-    (let ((seen nil))
-      (with-builtins-context-environment
-          (context (make-test-builtins-context)
-                   ("CMD" "echo"))
-        (with-test-external-capture-runner
-            (lambda (command args)
-              (setf seen (cons command args))
-              (values "" 127))
-          (with-called-source (output code context '("'$CMD' command-word"))
-            (expect 127 :to-equal code)
-            (expect "" :to-equal output)
-            (expect '("$CMD" "command-word") :to-equal seen))))))
+  (it "source-reader-keeps-escaped-command-name-literal"
+    "Escaped S-expression command heads remain literal and are not variable-expanded."
+    (let* ((seen nil)
+           (context (make-test-builtins-context)))
+      (setf (nshell.application:shell-context-environment context)
+            (nshell.domain.environment:env-set
+             (nshell.application:shell-context-environment context)
+             "CMD" "echo" t))
+      (with-stubbed-command-builtin
+          (("$CMD"
+            (expect (list "command-word") :to-equal *stubbed-command-builtin-arguments*)
+            (setf seen t)
+            (values "" 0)))
+        (multiple-value-bind (output code)
+            (nshell.application:source-lines
+             context (list "(|$CMD| command-word)"))
+          (expect 0 :to-equal code)
+          (expect "" :to-equal output)
+          (expect t :to-equal seen)))))
 
-  (it "source-rejects-multi-field-command-position-expansion"
-    "source should not dispatch an ambiguous expanded command name."
-    (with-builtins-context-environment
-        (context (make-test-builtins-context)
-                 ("CMD" "echo split"))
-      (with-called-source (output code context '("$CMD command-word"))
-        (expect 127 :to-equal code)
-        (expect (format nil "nshell: $CMD: command name expansion produced 2 fields~%") :to-equal output))))
+  (it "source-rejects-computed-command-heads-in-reader-pipelines"
+    "source rejects computed S-expression pipeline stage heads."
+    (let ((condition
+            (handler-case
+                (progn
+                  (nshell.application:source-lines
+                   (make-test-builtins-context)
+                   '("(| (cat) ((computed) arg))"))
+                  nil)
+              (nshell.domain.parsing:sexp-reader-error (condition)
+                condition))))
+      (expect condition :to-be-truthy)))
 
   (it "source-if-without-else-returns-zero-on-failure"
-    "if with a failing condition and no else branch exits 0 with no output."
+    "an S-expression if with a false value test and no alternate returns zero without output."
     (with-builtins-source-ok (output code context
-                                     '("if false"
-                                       "echo should-not-run"
-                                       "end"))
+                                     '("(if (not t) (echo should-not-run))"))
         ""))
 
   (it "source-switch-case-no-match-returns-zero"
-    "switch with no matching clause exits 0 with no output."
+    "source case with no matching clause returns zero and emits no output."
     (with-builtins-source-ok (output code context
-                                     '("switch unmatched"
-                                       "case vanilla"
-                                       "echo vanilla"
-                                       "case chocolate"
-                                       "echo chocolate"
-                                       "end"))
+                                     '("(case 9 ((1) (echo vanilla)) ((2) (echo chocolate)))"))
         ""))
 
   (it "source-begin-end-executes-body-in-current-context"
-    "begin/end runs its body and accumulates output like an inline block."
+    "source progn runs its body in the current shell context."
     (with-builtins-source-ok (output code context
-                                     '("begin"
-                                       "echo first"
-                                       "echo second"
-                                       "end"))
+                                     '("(progn (echo first) (echo second))"))
         (format nil "first~%second~%")))
 
   (it "source-for-with-empty-values-runs-no-iterations"
-    "for loop with no in-values iterates zero times, producing no output."
+    "dolist over an empty list runs no body iterations and emits no output."
     (with-builtins-source-ok (output code context
-                                     '("for x in"
-                                       "echo $x"
-                                       "end"))
+                                     '("(dolist (x (list)) (echo ,x))"))
         ""))
 
   (it "source-for-loop-updates-current-environment"
-    "for loop assignment updates the current shell environment for following commands."
+    "dolist can update the current shell environment for following commands."
     (with-builtins-source-ok (output code context
-                                     '("for item in first second"
-                                       "end"
-                                       "echo $item"))
+                                     '("(progn (dolist (item '(\"first\" \"second\")) (set item ,item)) (echo $item))"))
         (format nil "second~%")
       (expect "second" :to-equal (nshell.domain.environment:env-get
                   (nshell.application:shell-context-environment context)
                   "item")))))
+(describe "legacy-source-function-reader-tests"
+  (it "source-function-definition-supports-inline-body"
+    "source registers functions defined on a single line with an inline body."
+    (with-builtins-source-ok (output code context
+                                     '("function foo; echo hi; end"
+                                       "foo"))
+        (format nil "hi~%")
+      (expect '("echo hi") :to-equal
+              (gethash "foo"
+                       (nshell.application:shell-context-function-table
+                        context)))))
+  (it "source-function-definition-preserves-trailing-inline-commands"
+    "source keeps commands that follow an inline function definition on the same line."
+    (with-builtins-source-ok (output code context
+                                     '("function foo; echo hi; end; foo"))
+        (format nil "hi~%")
+      (expect '("echo hi") :to-equal
+              (gethash "foo"
+                       (nshell.application:shell-context-function-table
+                        context))))))
 

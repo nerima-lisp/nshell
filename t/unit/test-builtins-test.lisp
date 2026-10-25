@@ -128,18 +128,31 @@
 
   (it "prefers functions and falls back to external commands"
     (with-builtins-context (context)
-      (let ((table (nshell.application:shell-context-function-table context)))
-        (setf (gethash "greet" table) '("echo" "hello")))
+      (multiple-value-bind (definition-output definition-code)
+          (nshell.application:source-lines
+           context
+           '("(define-shell-function greet ()"
+             "(echo hello))"))
+        (expect "" :to-equal definition-output)
+        (expect 0 :to-equal definition-code))
       (assert-builtin-call (context "command" '("-V" "greet"))
         :code 0 :contains '("greet is a function"))
       (with-test-external-capture-runner
           (lambda (command args)
-            (values (format nil "external ~a ~{~a~^,~}" command args) 3))
-        (multiple-value-bind (output code)
-            (nshell.application::%execute-command-by-name-in-context
-             context "greet" nil)
-          (expect (search "external hello" output) :to-be-truthy)
-          (expect code :to-be-truthy))
+            (values (format nil "external ~a ~{~a~^,~}" command args)
+                    (if (string= command "hello") 0 3)))
+        (let ((function-output nil)
+              (function-code nil))
+          (setf function-output
+                (with-output-to-string (stream)
+                  (let ((*standard-output* stream))
+                    (setf function-code
+                          (nth-value
+                           1
+                           (nshell.application::%execute-command-by-name-in-context
+                            context "greet" nil))))))
+          (expect (search "hello" function-output) :to-be-truthy)
+          (expect 0 :to-equal function-code))
         (multiple-value-bind (output code)
             (nshell.application::%execute-command-by-name-in-context
              context "unknown" '("arg"))

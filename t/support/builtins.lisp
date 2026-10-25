@@ -1,4 +1,5 @@
 (in-package #:nshell/test)
+(defvar *stubbed-command-builtin-arguments* nil)
 
 (defun %make-test-builtins-filesystem (&key (files '("/bin/echo" "/bin/sh" "/tmp/file.txt")))
   (make-test-filesystem
@@ -139,6 +140,28 @@ form should return (values output exit-code).  Example:
                               (destructuring-bind (command-str &body c-body) c
                                 `((string= ,cmd ,command-str) ,@c-body)))
                             cases))))
+       ,@body)))
+(defmacro with-stubbed-command-builtin ((&rest cases) &body body)
+  "Register internal command test doubles in an isolated builtin registry."
+  (let ((context (gensym "CONTEXT-"))
+        (arguments (gensym "ARGUMENTS-")))
+    `(let ((nshell.application::*builtin-binding-registry*
+            (let ((registry (make-hash-table :test #'equal)))
+              (maphash (lambda (name binding)
+                         (setf (gethash name registry) binding))
+                       nshell.application::*builtin-binding-registry*)
+              registry)))
+       ,@(mapcar (lambda (case)
+                   (destructuring-bind (command &body handler-body) case
+                     `(nshell.application:register-builtin
+                       ,command
+                       (nshell.application:make-builtin-binding
+                        (lambda (,context ,arguments)
+                          (declare (ignore ,context))
+                          (setf *stubbed-command-builtin-arguments* ,arguments)
+                          ,@handler-body)
+                        :argv))))
+                 cases)
        ,@body)))
 
 (defmacro with-builtins-source-tree ((context root source &key (prefix "nshell-test-source")) &body body)

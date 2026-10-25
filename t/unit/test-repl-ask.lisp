@@ -339,7 +339,9 @@
                   (lambda () :next-key)))
                ('nshell.feature.assistant:classify-ast
                 (lambda (ast)
-                  (incf classification-count)
+                  (when (and (consp ast)
+                             (every #'nshell.domain.parsing:reader-result-p ast))
+                    (incf classification-count))
                   (funcall original-classify ast))))
             (labels ((process-tab ()
                        (let ((redraw-count prompt-redraw-count)
@@ -408,9 +410,9 @@
           (let ((nshell.presentation::*assistant-command-origin* :proposal)
                 (nshell.presentation::*assistant-command-confirmed-p* nil))
             (with-temporary-functions
-                (('nshell.presentation::execute-ast
-                  (lambda (ast)
-                    (declare (ignore ast))
+                (('nshell.application:evaluate-reader-result-in-context
+                  (lambda (context reader-result)
+                    (declare (ignore context reader-result))
                     (incf execute-count)
                     0))
                  ('nshell.presentation::render-transient-panel

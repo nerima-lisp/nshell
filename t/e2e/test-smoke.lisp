@@ -295,7 +295,7 @@ The regular read timeout remains short for command-response assertions.")
   (it "e2e-main-background-pid-is-shell-visible"
     "A background command publishes its process ID through $!."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main '("--command" "true & echo $!"))
+        (%run-nshell-main '("--command" "sh -c 'exit 0' & echo $!"))
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (let ((pid (ignore-errors
@@ -306,7 +306,7 @@ The regular read timeout remains short for command-response assertions.")
   (it "e2e-main-wait-returns-background-status"
     "wait propagates a background command's final status."
     (multiple-value-bind (stdout stderr exit-code)
-        (%run-nshell-main '("--command" "false & wait %1"))
+        (%run-nshell-main '("--command" "sh -c 'exit 1' & wait %1"))
       (expect 1 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (expect "" :to-equal stdout)))
@@ -330,22 +330,30 @@ The regular read timeout remains short for command-response assertions.")
     (multiple-value-bind (stdout stderr exit-code)
         (%run-nshell-main
          (list "--command"
-               "false | true; printf \"<%s,%s>\\n\" $pipestatus"))
+               (format nil "(| (false) (true))~%(printf \"<%s>\" $pipestatus)")))
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
-      (expect (format nil "<1,0>~%") :to-equal stdout)))
+      (expect "<1 0>" :to-equal stdout)))
   (it "e2e-main-pipestatus-reports-external-stage-statuses"
     "$pipestatus exposes each external pipeline stage in source order."
     (multiple-value-bind (stdout stderr exit-code)
         (%run-nshell-main
          (list "--command"
-               "sh -c 'exit 3' | sh -c 'exit 0'; printf \"<%s,%s>\\n\" $pipestatus"))
+               (format nil "(| (sh -c \"exit 3\") (sh -c \"exit 0\"))~%(printf \"<%s>\" $pipestatus)")))
       (expect 0 :to-equal exit-code)
       (expect "" :to-equal stderr)
-      (expect (format nil "<3,0>~%") :to-equal stdout))))
+      (expect "<3 0>" :to-equal stdout))))
   (it "e2e-main-adjacent-quoted-fragments-concatenate" "Adjacent quoted and unquoted fragments form one shell word." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "--command" "printf \"%s\\n\" \"a\"b")) (expect (format nil "ab~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
   (it "e2e-main-escaped-dollar-remains-literal" "A backslash protects a dollar from parameter expansion." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "--command" "printf \"%s\\n\" \\$HOME")) (expect (format nil "\$HOME~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
-  (it "e2e-main-heredoc-quoted-fragment-delimiter" "Quoted and unquoted delimiter fragments combine into one here-document marker." (multiple-value-bind (stdout stderr exit-code) (%run-nshell-main (list "--command" (format nil "cat << E\"OF\"~%fragment-heredoc~%EOF~%"))) (expect (format nil "fragment-heredoc~%") :to-equal stdout) (expect "" :to-equal stderr) (expect 0 :to-equal exit-code)))
+  (it "e2e-main-sexp-heredoc-feeds-external-stdin"
+    "The S-expression command form sends a quoted here-document body to external stdin."
+    (multiple-value-bind (stdout stderr exit-code)
+        (%run-nshell-main
+         (list "--command"
+               (format nil "(cat <<\"EOF\"~%fragment-heredoc~%EOF~%)")))
+      (expect (format nil "fragment-heredoc~%") :to-equal stdout)
+      (expect "" :to-equal stderr)
+      (expect 0 :to-equal exit-code)))
 
   (it "e2e-main-interactive-pty-smoke"
     "The public entry point runs an interactive command loop under a real PTY."

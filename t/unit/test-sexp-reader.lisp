@@ -52,6 +52,25 @@
               :to-equal
               (nshell.domain.parsing:command-value-form-source-span
                (second forms)))))
+  (it "keeps-shell-command-substitution-out-of-bare-line-reader-prefixes"
+    (let* ((substitution (format nil "$(echo X~%~%)"))
+           (source (concatenate 'string "echo " substitution))
+           (reader-result
+             (first (nshell.domain.parsing:read-submission source)))
+           (command (nshell.domain.parsing:reader-result-form reader-result))
+           (arguments (nshell.domain.parsing:command-node-args command))
+           (argument-form
+             (first
+              (nshell.domain.parsing:command-node-argument-forms command))))
+      (expect (nshell.domain.parsing:command-node-p command) :to-be-truthy)
+      (expect "echo" :to-equal
+              (nshell.domain.parsing:command-node-command command))
+      (expect 1 :to-equal (length arguments))
+      (expect substitution :to-equal
+              (nshell.domain.parsing:command-arg-value (first arguments)))
+      (expect (nshell.domain.parsing:command-arg-p argument-form) :to-be-truthy)
+      (expect nil :to-equal
+              (nshell.domain.parsing:command-value-form-p argument-form))))
 
   (it "builds-bare-line-sequence-and-pipeline-ast-including-background-semicolon"
     (let* ((source "one |& two && three || four; five &; six")

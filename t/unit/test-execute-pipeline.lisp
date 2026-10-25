@@ -102,23 +102,27 @@
                                    (error "External printf is required for this test")))))))
 
   (it "function-pipeline-keeps-capture-under-terminal-runner"
-    (let ((nshell.application::*foreground-terminal-runner*
-            (lambda (thunk)
-              (declare (ignore thunk))
-              (error "Pipeline stages must not inherit the foreground terminal"))))
+  (let ((nshell.application::*foreground-terminal-runner*
+          (lambda (thunk)
+            (declare (ignore thunk))
+            (error "Pipeline stages must not inherit the foreground terminal"))))
+    (dolist (function-line
+             (list
+              (format nil "~S captured"
+                      (or (nshell.infrastructure.acl::%resolve-external-command "printf")
+                          (error "External printf is required for this test")))
+              "echo captured"))
       (with-builtins-source (output code context
                              (list "function produce"
-                               (format nil "~S captured"
-                                       (or (nshell.infrastructure.acl::%resolve-external-command "printf")
-                                           (error "External printf is required for this test")))
-                               "end"
-                               "produce | read captured"))
+                                   function-line
+                                   "end"
+                                   "produce | read captured"))
         (expect "" :to-equal output)
         (expect 0 :to-equal code)
         (expect "captured" :to-equal
                 (nshell.domain.environment:env-get
                  (nshell.application:shell-context-environment context)
-                 "captured")))))
+                 "captured"))))))
 
   (it "sequence-stop-predicate-stops-and-on-failure"
     "The sequence control rule stops && after a non-zero status."
@@ -1164,7 +1168,7 @@
             (with-output-to-string (*error-output*)
               (let ((nshell.application::*command-substitution-timeout* 0.001))
                 (with-temporary-function
-                    ('nshell.application::execute-ast-in-context
+                    ('nshell.application::source-lines
                      (lambda (ctx ast)
                        (declare (ignore ctx ast))
                        (sleep 5)
@@ -1640,8 +1644,7 @@
          context (nshell.domain.parsing:make-command-node "true" nil)))
       (expect (member "EXPORTED_ONE=1" seen :test #'string=) :to-be-truthy))))
 
-(describe "pipeline-prefix-assignment-tests"
-  (it "each-stage-sees-only-its-own-prefix-assignment"
+(describe "pipeline-prefix-assignment-tests" (it "each-stage-sees-only-its-own-prefix-assignment"
     "A prefix assignment on one stage must not reach a sibling stage's process."
     (let ((context (make-test-builtins-context))
           (seen nil))
@@ -1726,7 +1729,75 @@ context environment for the pipeline instead of a per-stage environment."
       (expect "bar" :to-equal seen)
       (expect (nshell.domain.environment:env-defined-p
                (nshell.application:shell-context-environment context) "FOO")
-              :to-be-falsy))))
+              :to-be-falsy)))
+ (it "reader-prefix-assignment-is-stage-local-across-concurrent-source-functions"
+  (cl-weave:expect-assertions 7)
+  (let* ((environment
+           (nshell.domain.environment:env-push-scope
+            (nshell.domain.environment:make-default-environment)))
+         (context (make-test-shell-context :environment environment))
+         (prefix-entered (sb-thread:make-semaphore :count 0))
+         (observer-entered (sb-thread:make-semaphore :count 0))
+         (prefixed-value :unset)
+         (sibling-called-p nil)
+         (sibling-defined-p nil)
+         (sibling-value :unset)
+         (reader-result
+           (first
+            (nshell.domain.parsing:read-submission
+             "X01_VALUE=inside x01-prefix-probe | x01-prefix-observer"
+             :reader-context :auto))))
+    (expect (nshell.domain.environment:env-defined-p environment "X01_VALUE")
+            :to-be-falsy)
+    (setf (gethash "x01-prefix-probe"
+                   (nshell.application:shell-context-function-table context))
+          '("prefix")
+          (gethash "x01-prefix-observer"
+                   (nshell.application:shell-context-function-table context))
+          '("observer"))
+    (with-temporary-functions
+        (('nshell.application:source-lines-to-stream
+          (lambda (stage-context function-body &optional source-path)
+            (declare (ignore source-path))
+            (let ((stage-environment
+                    (nshell.application:shell-context-environment stage-context)))
+              (cond
+                ((equal function-body '("prefix"))
+                 (setf prefixed-value
+                       (nshell.domain.environment:env-get
+                        stage-environment "X01_VALUE"))
+                 (sb-thread:signal-semaphore prefix-entered)
+                 (unless (sb-thread:wait-on-semaphore
+                          observer-entered :timeout 2)
+                   (error "Observer stage did not start during the prefix assignment.")))
+                ((equal function-body '("observer"))
+                 (setf sibling-called-p t
+                       sibling-defined-p
+                         (nshell.domain.environment:env-defined-p
+                          stage-environment "X01_VALUE")
+                       sibling-value
+                         (nshell.domain.environment:env-get
+                          stage-environment "X01_VALUE"))
+                 (sb-thread:signal-semaphore observer-entered)
+                 (unless (sb-thread:wait-on-semaphore
+                          prefix-entered :timeout 2)
+                   (error "Prefix stage did not start with the observer.")))
+                (t
+                 (error "Unexpected source function body: ~s" function-body))))
+            (values nil 0))))
+      (multiple-value-bind (value status)
+          (nshell.application:evaluate-reader-result-in-context
+           context reader-result)
+        (declare (ignore value))
+        (expect 0 :to-equal status)
+        (expect "inside" :to-equal prefixed-value)
+        (expect t :to-equal sibling-called-p)
+        (expect nil :to-equal sibling-defined-p)
+        (expect nil :to-equal sibling-value)
+        (expect (nshell.domain.environment:env-defined-p
+                 (nshell.application:shell-context-environment context)
+                 "X01_VALUE")
+                :to-be-falsy))))))
 
 (describe "external-stage-environment-tests"
   (it "an-in-process-pipeline-stage-spawns-with-the-shell-environment"
@@ -1738,4 +1809,461 @@ process; those children still need the shell's exported variables."
               (nshell.infrastructure.acl:external-command-environment)))
     (let ((nshell.infrastructure.acl:*exported-environment* nil))
       (expect (nshell.infrastructure.acl:external-command-environment)
-              :to-be-truthy))))
+              :to-be-truthy)))
+
+  (it "reader-missing-command-keeps-standalone-stdout-out-of-pipelines"
+    (cl-weave:expect-assertions 7)
+    (flet ((evaluate-reader-source (context source)
+             (handler-case
+                 (nshell.application:evaluate-reader-result-in-context
+                  context
+                  (first
+                   (nshell.domain.parsing:read-submission
+                    source :reader-context :auto)))
+               (nshell.application:command-failed (condition)
+                 (values nil
+                         (or
+                          (nshell.application::command-failed-pipeline-status condition)
+                          (nshell.application:command-failed-status condition)))))))
+      (let* ((diagnostic
+               (format nil "nshell: x01-missing-stage-command: command not found~%"))
+             (standalone-context
+               (make-test-shell-context
+                :environment (nshell.domain.environment:make-default-environment)))
+             (standalone-error (make-string-output-stream))
+             (standalone-output nil)
+             (standalone-status nil))
+        (let ((*error-output* standalone-error)
+              (nshell.infrastructure.acl:*command-not-found-hook* nil))
+          (setf standalone-output
+                (capture-standard-output
+                  (multiple-value-bind (value status)
+                      (evaluate-reader-source
+                       standalone-context "x01-missing-stage-command")
+                    (declare (ignore value))
+                    (setf standalone-status status)))))
+        (expect 127 :to-equal standalone-status)
+        (expect diagnostic :to-equal standalone-output)
+        (expect "" :to-equal (get-output-stream-string standalone-error))
+        (let* ((pipeline-context
+                 (make-test-shell-context
+                  :environment (nshell.domain.environment:make-default-environment)))
+               (pipeline-error (make-string-output-stream))
+               (pipeline-output nil)
+               (pipeline-status nil)
+               (downstream-input :unset))
+          (setf (gethash "x01-downstream-capture"
+                         (nshell.application:shell-context-function-table
+                          pipeline-context))
+                '("consume"))
+          (with-temporary-functions
+              (('nshell.application:source-lines-to-stream
+                (lambda (context function-body &optional source-path)
+                  (declare (ignore context source-path))
+                  (unless (equal function-body '("consume"))
+                    (error "Unexpected source function body: ~s" function-body))
+                  (setf downstream-input
+                        (with-output-to-string (output)
+                          (loop for character = (read-char *standard-input* nil nil)
+                                while character
+                                do (write-char character output))))
+                  (values downstream-input 0))))
+            (let ((*error-output* pipeline-error)
+                  (nshell.infrastructure.acl:*command-not-found-hook* nil))
+              (setf pipeline-output
+                    (capture-standard-output
+                      (multiple-value-bind (value status)
+                          (evaluate-reader-source
+                           pipeline-context
+                           "x01-missing-stage-command | x01-downstream-capture")
+                        (declare (ignore value))
+                        (setf pipeline-status status)))))
+            (expect 0 :to-equal pipeline-status)
+            (expect "" :to-equal pipeline-output)
+            (expect diagnostic :to-equal
+                    (get-output-stream-string pipeline-error))
+            (expect "" :to-equal downstream-input)))))))
+(describe "execute-pipeline-reader-terminal-dispatch-tests"
+  (it "reader-single-external-command-uses-evaluated-terminal-arguments"
+      (cl-weave:expect-assertions 6)
+      (let* ((command
+              (or (nshell.infrastructure.acl::%resolve-external-command "printf")
+                  (error "External printf is required for this terminal test")))
+             (environment
+              (nshell.domain.environment:env-set
+               (nshell.domain.environment:make-default-environment)
+               "X01_TERM_ARG" "reader value" t))
+             (context (make-test-shell-context :environment environment))
+             (reader-result
+              (let ((result
+                      (first
+                       (nshell.domain.parsing:read-submission
+                        (format nil "~a \"$X01_TERM_ARG\"" command)
+                        :reader-context :auto))))
+                (expect
+                 (nshell.domain.parsing:command-node-p
+                  (nshell.domain.parsing:reader-result-form result))
+                 :to-be-truthy)
+                result))
+             (runner-calls 0)
+             (seen nil)
+             (exported-before nshell.infrastructure.acl:*exported-environment*))
+        (with-temporary-functions
+         (((quote nshell.application::%run-terminal-command)
+           (lambda (inner-context inner-command arguments)
+             (declare (ignore inner-context))
+             (setf seen
+                   (list inner-command arguments
+                         (not
+                          (null
+                           (member "X01_TERM_ARG=reader value"
+                                   nshell.infrastructure.acl:*exported-environment*
+                                   :test (function string=))))))
+             (values nil 23)))
+          ((quote nshell.application::%run-terminal-pipeline)
+           (lambda (&rest arguments)
+             (declare (ignore arguments))
+             (error "A standalone command must use the terminal command runner"))))
+         (let ((nshell.application:*foreground-terminal-runner*
+                (lambda (thunk)
+                  (incf runner-calls)
+                  (funcall thunk))))
+           (multiple-value-bind (output status)
+               (nshell.presentation::call-with-command-failure-restarts
+                (lambda ()
+                  (nshell.application:evaluate-reader-result-in-context
+                   context reader-result)))
+             (expect nil :to-equal output)
+             (expect 23 :to-equal status)))
+         (expect 1 :to-equal runner-calls)
+         (expect (list command (list "reader value") t) :to-equal seen)
+         (expect exported-before
+                 :to-equal nshell.infrastructure.acl:*exported-environment*))))
+  (it "reader-single-external-command-redirects-through-terminal-pipeline"
+      (cl-weave:expect-assertions 6)
+      (let* ((command
+              (or (nshell.infrastructure.acl::%resolve-external-command "printf")
+                  (error "External printf is required for this terminal test")))
+             (context (make-test-shell-context :execution-strategy :os-pipes))
+             (reader-result
+              (let ((result
+                     (first
+                      (nshell.domain.parsing:read-submission
+                       (format nil "~a redirected > /dev/null" command)
+                       :reader-context :auto))))
+                (expect
+                 (nshell.domain.parsing:command-node-p
+                  (nshell.domain.parsing:reader-result-form result))
+                 :to-be-truthy)
+                result))
+             (runner-calls 0)
+             (seen nil)
+             (exported-before nshell.infrastructure.acl:*exported-environment*))
+        (with-temporary-functions
+         (((quote nshell.application::%run-terminal-command)
+           (lambda (&rest arguments)
+             (declare (ignore arguments))
+             (error "A redirected command must use the terminal pipeline runner")))
+          ((quote nshell.application::%run-terminal-pipeline)
+           (lambda (inner-context commands redirects)
+             (declare (ignore inner-context))
+             (setf seen
+                   (list
+                    (mapcar
+                     (function nshell.domain.parsing:command-node-command)
+                     commands)
+                    (mapcar
+                     (function nshell.domain.parsing:command-node-arg-values)
+                     commands)
+                    redirects))
+             (values nil 19 (list 19)))))
+         (let ((nshell.application:*foreground-terminal-runner*
+                (lambda (thunk)
+                  (incf runner-calls)
+                  (funcall thunk))))
+           (multiple-value-bind (output status)
+               (nshell.presentation::call-with-command-failure-restarts
+                (lambda ()
+                  (nshell.application:evaluate-reader-result-in-context
+                   context reader-result)))
+             (expect nil :to-equal output)
+             (expect 19 :to-equal status)))
+         (expect 1 :to-equal runner-calls)
+         (expect
+          (list (list command)
+                (list (list "redirected"))
+                (list (list (cons :> "/dev/null"))))
+          :to-equal seen)
+         (expect exported-before
+                 :to-equal nshell.infrastructure.acl:*exported-environment*))))
+  (it "reader-single-external-command-fd-duplication-uses-terminal-pipeline"
+      (cl-weave:expect-assertions 6)
+      (let* ((command
+              (or (nshell.infrastructure.acl::%resolve-external-command "printf")
+                  (error "External printf is required for this terminal test")))
+             (context (make-test-shell-context))
+             (reader-result
+              (let ((result
+                     (first
+                      (nshell.domain.parsing:read-submission
+                       (format nil "~a redirected 3>&1" command)
+                       :reader-context :auto))))
+                (expect
+                 (nshell.domain.parsing:command-node-p
+                  (nshell.domain.parsing:reader-result-form result))
+                 :to-be-truthy)
+                result))
+             (runner-calls 0)
+             (seen nil)
+             (exported-before nshell.infrastructure.acl:*exported-environment*))
+        (with-temporary-functions
+         (((quote nshell.application::%run-terminal-command)
+           (lambda (&rest arguments)
+             (declare (ignore arguments))
+             (error "A redirected command must use the terminal pipeline runner")))
+          ((quote nshell.application::%run-terminal-pipeline)
+           (lambda (inner-context commands redirects)
+             (declare (ignore inner-context commands))
+             (setf seen redirects)
+             (values nil 19 (list 19)))))
+         (let ((nshell.application:*foreground-terminal-runner*
+                (lambda (thunk)
+                  (incf runner-calls)
+                  (funcall thunk))))
+           (multiple-value-bind (output status)
+               (nshell.presentation::call-with-command-failure-restarts
+                (lambda ()
+                  (nshell.application:evaluate-reader-result-in-context
+                   context reader-result)))
+             (expect nil :to-equal output)
+             (expect 19 :to-equal status)))
+         (expect 1 :to-equal runner-calls)
+         (let* ((stage-redirects (first seen))
+                (redirect-entry (first stage-redirects)))
+           (expect
+            (and (= 1 (length seen))
+                 (= 1 (length stage-redirects))
+                 (consp redirect-entry)
+                 (eq :fd-dup (car redirect-entry))
+                 (let ((target (cdr redirect-entry)))
+                   (and (nshell.domain.parsing:redirect-fd-dup-target-p target)
+                        (= 3
+                           (nshell.domain.parsing:redirect-fd-dup-target-source
+                            target))
+                        (= 1
+                           (nshell.domain.parsing:redirect-fd-dup-target-target
+                            target))
+                        (eq :output
+                            (nshell.domain.parsing:redirect-fd-dup-target-operator
+                             target)))))
+            :to-be-truthy))
+         (expect exported-before
+                 :to-equal nshell.infrastructure.acl:*exported-environment*))))
+  (it "reader-external-only-pipeline-uses-terminal-pipeline-runner"
+    (cl-weave:expect-assertions 8)
+    (let* ((printf-command
+             (or (nshell.infrastructure.acl::%resolve-external-command "printf")
+                 (error "External printf is required for this terminal test")))
+           (tr-command
+             (or (nshell.infrastructure.acl::%resolve-external-command "tr")
+                 (error "External tr is required for this terminal test")))
+           (environment
+             (nshell.domain.environment:env-set
+              (nshell.domain.environment:make-default-environment)
+              "X01_TERM_ARG" "reader value" t))
+           (context (make-test-shell-context :environment environment))
+           (reader-result
+              (let ((result
+                      (first
+                       (nshell.domain.parsing:read-submission
+                        (format nil "~a \"%s\" \"$X01_TERM_ARG\" | ~a a-z A-Z"
+                                printf-command tr-command)
+                        :reader-context :auto))))
+                (expect
+                 (nshell.domain.parsing:pipeline-node-p
+                  (nshell.domain.parsing:reader-result-form result))
+                 :to-be-truthy)
+                result))
+           (runner-calls 0)
+           (seen-commands nil)
+           (seen-arguments nil)
+           (seen-redirects :unset)
+           (seen-exported-p nil))
+      (with-temporary-functions
+          (((quote nshell.application::%run-terminal-command)
+            (lambda (&rest arguments)
+              (declare (ignore arguments))
+              (error "An external pipeline must use the terminal pipeline runner")))
+           ((quote nshell.application::%run-terminal-pipeline)
+            (lambda (inner-context commands redirects)
+              (declare (ignore inner-context))
+              (setf seen-commands
+                    (mapcar
+                     (function nshell.domain.parsing:command-node-command)
+                     commands)
+                    seen-arguments
+                    (mapcar
+                     (function nshell.domain.parsing:command-node-arg-values)
+                     commands)
+                    seen-redirects redirects
+                    seen-exported-p
+                    (not
+                     (null
+                      (member "X01_TERM_ARG=reader value"
+                              nshell.infrastructure.acl:*exported-environment*
+                              :test (function string=)))))
+              (values nil 7 (list 0 7)))))
+        (let ((nshell.application:*foreground-terminal-runner*
+                (lambda (thunk)
+                  (incf runner-calls)
+                  (funcall thunk))))
+          (multiple-value-bind (output status)
+              (nshell.presentation::call-with-command-failure-restarts
+                (lambda ()
+                  (nshell.application:evaluate-reader-result-in-context
+                   context reader-result)))
+            (expect nil :to-equal output)
+            (expect 7 :to-equal status)))
+        (expect 1 :to-equal runner-calls)
+        (expect (list printf-command tr-command) :to-equal seen-commands)
+        (expect (list (list "%s" "reader value") (list "a-z" "A-Z"))
+                :to-equal seen-arguments)
+        (expect nil :to-equal seen-redirects)
+        (expect t :to-equal seen-exported-p))))
+  (it "reader-shell-function-pipeline-enforces-function-call-depth"
+    (cl-weave:expect-assertions 3)
+    (let* ((context (make-test-shell-context))
+           (stage nil)
+           (stage-io
+             (nshell.application::make-pipeline-stage-io
+              nil nil nil
+              (list (cons 0 *standard-input*)
+                    (cons 1 *standard-output*)
+                    (cons 2 *error-output*))))
+           (observed-depth nil)
+           (binding
+             (nshell.application:make-shell-function-binding
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (setf observed-depth nshell.application::*function-call-depth*)
+                (nshell.application::%reader-dispatch-internal-stage
+                 context stage stage-io nil))
+              nil "recursive-shell-function" nil nil)))
+      (setf stage
+            (nshell.application:make-evaluated-command-stage
+             (nshell.domain.parsing:make-command-node
+              "recursive-shell-function" nil)
+             :shell-function binding nil nil nil))
+      (let ((nshell.application::*function-call-depth* 127))
+        (expect
+         (lambda ()
+           (nshell.application::%reader-dispatch-internal-stage
+            context stage stage-io nil))
+         :to-throw (quote simple-error))
+        (expect 127 :to-equal nshell.application::*function-call-depth*))
+      (expect 128 :to-equal observed-depth)))
+  (it "reader-single-internal-stage-runs-synchronously-with-stage-io"
+      (cl-weave:expect-assertions 5)
+      (let* ((context (make-test-shell-context))
+             (command-node
+              (nshell.domain.parsing:make-command-node
+               "sync-function" nil))
+             (observed-depth nil)
+             (binding
+              (nshell.application:make-shell-function-binding
+               (lambda (&rest arguments)
+                 (declare (ignore arguments))
+                 (setf observed-depth nshell.application::*function-call-depth*)
+                 (write-string "sync")
+                 0)
+               nil "sync-function" nil nil))
+             (stage
+              (nshell.application:make-evaluated-command-stage
+               command-node :shell-function binding nil nil nil)))
+        (with-temporary-function
+         ('nshell.application::spawn-byte-stream-node-in-context
+          (lambda (&rest arguments)
+            (declare (ignore arguments))
+            (error "A single internal stage must not spawn a worker thread")))
+         (let ((nshell.application::*function-call-depth* 0))
+           (let ((output
+                  (with-output-to-string (stream)
+                    (let ((*standard-output* stream))
+                      (multiple-value-bind (value status)
+                          (nshell.application:execute-reader-ast-in-context
+                           context command-node
+                           (lambda (ignored-context ignored-command)
+                             (declare (ignore ignored-context ignored-command))
+                             stage))
+                        (expect nil :to-equal value)
+                        (expect 0 :to-equal status))))))
+             (expect "sync" :to-equal output))
+           (expect 1 :to-equal observed-depth)
+           (expect 0 :to-equal nshell.application::*function-call-depth*)))))
+  (it "reader-pipeline-stage-thread-inherits-function-call-depth"
+    (cl-weave:expect-assertions 2)
+    (let* ((threads (make-array 1 :initial-element nil))
+           (failures (make-array 1 :initial-element nil))
+           (observed-depth :unset)
+           (stage-io
+             (nshell.application::make-pipeline-stage-io
+              nil nil nil
+              (list (cons 0 *standard-input*)
+                    (cons 1 *standard-output*)
+                    (cons 2 *error-output*))))
+           (state
+             (nshell.application::%make-byte-stream-execution-state
+              :stage-ios (list stage-io)
+              :threads threads
+              :failures failures
+              :stream-caches (make-array 1 :initial-element nil))))
+      (let ((nshell.application::*function-call-depth* 17))
+        (nshell.application::%byte-stream-launch-thread
+         state 0
+         (lambda ()
+           (setf observed-depth
+                 nshell.application::*function-call-depth*))))
+      (sb-thread:join-thread (aref threads 0))
+      (expect nil :to-equal (aref failures 0))
+      (expect 17 :to-equal observed-depth)))
+  (it "reader-byte-stream-pipeline-honors-pipefail"
+    (cl-weave:expect-assertions 2)
+    (let* ((context (make-test-shell-context))
+           (stages
+             (list
+              (nshell.application:make-evaluated-command-stage
+               (nshell.domain.parsing:make-command-node "pipefail-producer" nil)
+               :shell-function nil nil nil)
+              (nshell.application:make-evaluated-command-stage
+               (nshell.domain.parsing:make-command-node "pipefail-consumer" nil)
+               :shell-function nil nil nil)))
+           (stage-ios
+             (loop repeat 2
+                   collect
+                   (nshell.application:make-pipeline-stage-io
+                    nil nil nil
+                    (list (cons 0 *standard-input*)
+                          (cons 1 *standard-output*)
+                          (cons 2 *error-output*)))))
+           (dispatcher
+             (lambda (ignored-context stage ignored-stage-io ignored-argv)
+               (declare (ignore ignored-context ignored-stage-io ignored-argv))
+               (values
+                (if (string=
+                     "pipefail-producer"
+                     (nshell.domain.parsing:command-node-command
+                      (nshell.application:evaluated-command-stage-command-node
+                       stage)))
+                    7 0)
+                nil))))
+      (setf (nshell.application:shell-context-pipefail-p context) t)
+      (let* ((handle
+               (nshell.application::spawn-byte-stream-node-in-context
+                context stages stage-ios dispatcher))
+             (result
+               (nshell.application::wait-byte-stream-execution handle)))
+        (expect (quote (7 0)) :to-equal
+                (nshell.application:pipeline-execution-result-stage-statuses
+                 result))
+        (expect 7 :to-equal
+                (nshell.application:pipeline-execution-result-status result))))))

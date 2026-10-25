@@ -33,7 +33,12 @@
     (with-repl-test-state
       (let ((code (nshell.presentation:run-repl-batch :line "false")))
         (expect 1 :to-equal code)
-        (expect 1 :to-equal nshell.presentation::*last-exit-code*))))
+        (expect 1 :to-equal nshell.presentation::*last-exit-code*)
+        (expect (format nil "batch output~%")
+        :to-equal
+        (capture-standard-output
+          (nshell.presentation:run-repl-batch
+           :line "echo batch output"))))))
 
   (it "repl-copy-output-event-copies-first-kill-ring-selection"
     "The copy output event sends the first kill-ring selection before redrawing the prompt."

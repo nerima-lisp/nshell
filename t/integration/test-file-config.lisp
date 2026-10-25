@@ -234,7 +234,7 @@
                  (write-line (cdr entry) stream)))
              (let ((source-paths nil))
                (with-temporary-function
-                ((quote nshell.application:source-lines)
+                ((quote nshell.application:source-lines-to-stream)
                  (lambda (context lines source-path)
                    (declare (ignore context lines))
                    (push source-path source-paths)

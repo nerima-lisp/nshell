@@ -208,8 +208,7 @@
                                   (lambda ()
                                     (let ((nshell.application:*errexit-p* t))
                                       (multiple-value-bind (value)
-                                          (nshell.application::%eval-command-ast-in-position
-                                           nil command nil nil :stream)
+                                          (nshell.application::%eval-command-ast-in-position (make-test-shell-context) command nil nil :stream)
                                         (values value
                                                 nshell.application::*current-evaluation-status*))))))))
                           (expect read-count :to-equal 2)

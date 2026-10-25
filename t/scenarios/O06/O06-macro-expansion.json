@@ -34,6 +34,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L04 owns CALL-WITH-COMMAND-FAILURE-POLICY; the current interface stub prevents this scenario from reaching its assertions."
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

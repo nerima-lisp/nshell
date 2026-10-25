@@ -83,6 +83,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L07 has not landed the shell-function registry interface required by O07."
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

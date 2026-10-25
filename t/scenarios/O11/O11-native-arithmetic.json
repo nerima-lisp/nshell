@@ -34,6 +34,6 @@
     "exit_code": 0
   },
   "expected_failure": {
-    "reason": "WP-L07's shell-function registry stub blocks S-expression evaluation before this scenario reaches its API."
+    "reason": "WP-L08 has not implemented execute-reader-ast-in-context, which blocks S-expression command execution."
   }
 }

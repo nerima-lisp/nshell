@@ -239,7 +239,7 @@
                                    (%find-shell-function registry canonical-key nil))
                   (when requested-defun
                     (multiple-value-bind (symbol status)
-                        (find-symbol name "NSHELL.USER")
+                        (find-symbol (symbol-name (second requested-defun)) "NSHELL.USER")
                       (when (and symbol
                                  (or (eq status :internal)
                                      (eq status :external))

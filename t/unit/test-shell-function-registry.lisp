@@ -226,8 +226,10 @@
                      (nshell.application:shell-function-binding-source-path
                       binding)))
             (progn
-              (expect (quote (value)) :to-equal
-                      (nshell.application:shell-function-binding-lambda-list binding))
+              (expect (quote ("value"))
+              :to-equal
+              (mapcar (function symbol-name)
+                      (nshell.application:shell-function-binding-lambda-list binding)))
               (expect "loaded" :to-equal
                       (funcall
                        (nshell.application:shell-function-binding-callable binding)

@@ -143,8 +143,8 @@ grow it without bound.")
                   (sb-alien:alien-sap dirent)
                   (1- sb-posix::offset-of-dirent-name))
                  #-(and darwin 64-bit)
-                 (progn
-                   (declare (ignore dirent))
+                 (let ((ignored dirent))
+                   (declare (ignore ignored))
                    nil))
                (entry-kind (path type-hint)
                  ;; Darwin DT_DIR and DT_REG are 4 and 8; other values fall back.

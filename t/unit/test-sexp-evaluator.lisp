@@ -205,7 +205,17 @@
            (multiple-value-bind (value status)
                (%evaluate-sexp-evaluator-test-source context (first case))
              (expect (second case) :to-equal value)
-             (expect (or (third case) 0) :to-equal status))))))))
+             (expect (or (third case) 0) :to-equal status)))))))
+  (it "resolves-unqualified-command-failed-in-user-package"
+    (let ((context (make-test-shell-context)))
+      (%call-with-sexp-evaluator-test-boundaries
+       context
+       (lambda ()
+         (multiple-value-bind (value status)
+             (%evaluate-sexp-evaluator-test-source
+              context "(handler-case (fail) (command-failed () 18))")
+           (expect 18 :to-equal value)
+           (expect 7 :to-equal status)))))))
 (describe "sexp-evaluator-positions"
   (it "propagates-test-and-value-positions"
     (let ((context (make-test-shell-context)))

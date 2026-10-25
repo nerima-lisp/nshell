@@ -120,9 +120,11 @@
        ((zerop (length setting))
         nil)
        (t
-        (member command
-                (%completion-help-environment-command-names setting)
-                :test (function string=))))))
+        (not
+         (null
+          (member command
+                  (%completion-help-environment-command-names setting)
+                  :test (function string=))))))))
 
   (defun %completion-help-catalogued-command-p (command)
     (gethash command *completion-help-catalog-command-cache*))

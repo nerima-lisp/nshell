@@ -143,18 +143,18 @@
       (expect (nshell.presentation::%completion-session-valid-p
                 (nshell.presentation::copy-input-state-with
                  state :buffer "git stash")) :to-be-falsy)))
-  (it "completion-pager-reducer-ctrl-c-restores-original-input"
+  (it "completion-pager-reducer-escape-restores-original-input"
     (let ((state (input-state
                   :buffer "echo original "
                   :cursor-pos 15
                   :completion-base-buffer "echo original "
                   :completion-base-cursor 15
-                  :last-candidates '("alpha" "beta")
+                  :last-candidates (quote ("alpha" "beta"))
                   :completion-pager (list :query "b" :index 1))))
       (multiple-value-bind (new-state output)
           (nshell.presentation:reduce-input-state
            state
-           (input-key-event :ctrl-c))
+           (input-key-event :escape))
         (expect "echo original " :to-equal
                 (nshell.presentation:input-state-buffer new-state))
         (expect nil :to-be
@@ -162,6 +162,39 @@
         (expect nil :to-be
                 (nshell.presentation:input-state-last-candidates new-state))
         (expect :redraw :to-be output))))
+
+  (it "completion-pager-reducer-ctrl-c-clears-input-before-next-command"
+    (let ((state (input-state
+                  :buffer "unknown-tool "
+                  :cursor-pos 13
+                  :completion-base-buffer "unknown-tool "
+                  :completion-base-cursor 13
+                  :last-candidates (list "tool")
+                  :completion-pager (list :query "" :index 0))))
+      (multiple-value-bind (cleared-state clear-output)
+          (nshell.presentation:reduce-input-state
+           state
+           (input-key-event :ctrl-c))
+        (expect "" :to-equal
+                (nshell.presentation:input-state-buffer cleared-state))
+        (expect nil :to-be
+                (nshell.presentation::input-state-completion-pager cleared-state))
+        (expect :redraw :to-be clear-output)
+        (multiple-value-bind (typed-state type-output)
+            (nshell.presentation:reduce-input-state
+             cleared-state
+             (input-key-event :paste nil nil
+                              (quote (:protocol :bracketed :text "echo J17_NEXT_COMMAND"))))
+          (expect "echo J17_NEXT_COMMAND" :to-equal
+                  (nshell.presentation:input-state-buffer typed-state))
+          (expect :suggest-update :to-be type-output)
+          (multiple-value-bind (submitted-state submit-output)
+              (nshell.presentation:reduce-input-state
+               typed-state
+               (input-key-event :enter))
+            (expect "echo J17_NEXT_COMMAND" :to-equal
+                    (nshell.presentation:input-state-buffer submitted-state))
+            (expect :execute :to-be submit-output))))))
   (it "completion-pager-reducer-down-moves-selection"
     (let ((state (input-state
                   :buffer "echo "

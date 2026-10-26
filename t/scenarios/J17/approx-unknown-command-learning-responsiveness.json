@@ -25,11 +25,13 @@
   "steps": [
     {
       "type": "keys",
-      "text": "scenario-unknown-tool "
+      "text": "scenario-unknown-tool ",
+      "input_delay_seconds": 0.5
     },
     {
       "type": "key",
-      "key": "Tab"
+      "key": "Tab",
+      "input_delay_seconds": 0.5
     },
     {
       "type": "key",

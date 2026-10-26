@@ -277,6 +277,15 @@ class ScenarioRunnerTests(unittest.TestCase):
             def resize(self, columns: int, rows: int) -> None:
                 events.append(("resize", (columns, rows)))
 
+            def send_text(self, text: str) -> None:
+                events.append(("keys", text))
+
+            def send_key(self, key: str) -> None:
+                events.append(("key", key))
+
+            def wait_after_input(self, delay: float) -> None:
+                events.append(("delay", delay))
+
             def wait_for_screen(self, text: str | None, timeout: float,
                                 excludes: list[str] | None = None) -> None:
                 events.append(("wait_screen", (text, timeout, excludes or [])))
@@ -297,6 +306,9 @@ class ScenarioRunnerTests(unittest.TestCase):
         scenario = _pty_scenario(
             "resize-dispatch",
             [
+                {"type": "keys", "text": "before"},
+                {"type": "key", "key": "C-c", "input_delay_seconds": 0},
+                {"type": "keys", "text": "after"},
                 {"type": "resize", "columns": 24, "rows": 20},
                 {"type": "wait_screen", "contains": "VISIBLE_SCREEN", "excludes": ["STALE_SCREEN"],
                  "timeout_seconds": 6},
@@ -304,11 +316,18 @@ class ScenarioRunnerTests(unittest.TestCase):
             ],
             {"exit_code": 23},
         )
+        scenario["input_delay_seconds"] = 0.5
         with patch.object(runner, "TmuxSession", FakeSession), \
                 patch.object(runner.shutil, "which", return_value="tmux"):
             _, _, exit_code, failures = runner._run_pty(scenario, Path("/unused/nshell"))
 
         self.assertEqual(events, [
+            ("keys", "before"),
+            ("delay", 0.5),
+            ("key", "C-c"),
+            ("delay", 0),
+            ("keys", "after"),
+            ("delay", 0.5),
             ("resize", (24, 20)),
             ("wait_screen", ("VISIBLE_SCREEN", 6, ["STALE_SCREEN"])),
             ("wait_exit", 8),
@@ -589,6 +608,21 @@ class ScenarioRunnerTests(unittest.TestCase):
         scenario["input_delay_seconds"] = runner.MAX_INPUT_DELAY_SECONDS + 0.01
         with self.assertRaisesRegex(runner.ScenarioError, "input_delay_seconds"):
             self._load_one(scenario, "paced-input.json")
+
+        scenario["input_delay_seconds"] = 0.6
+        scenario["steps"] = [
+            {"type": "keys", "text": "first", "input_delay_seconds": 0.8},
+            {"type": "key", "key": "C-c", "input_delay_seconds": 0},
+            {"type": "wait_exit"},
+        ]
+        scenario["timeout_seconds"] = 1.2
+        self._load_one(scenario, "paced-input.json")
+
+        scenario["steps"][0]["input_delay_seconds"] = runner.MAX_INPUT_DELAY_SECONDS + 0.01
+        with self.assertRaisesRegex(runner.ScenarioError, "step input_delay_seconds"):
+            self._load_one(scenario, "paced-input.json")
+
+        scenario["steps"][0].pop("input_delay_seconds")
 
         scenario["steps"] = [
             {"type": "keys", "text": "first"},

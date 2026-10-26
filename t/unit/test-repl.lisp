@@ -132,6 +132,49 @@
               (expect event :to-be (second received-reduction))
               (expect :redraw :to-be processed-output)))))))
 
+  (it "read-key-cont-clears-input-before-consuming-keys-buffered-after-sigint"
+    "A SIGINT arriving during a key read clears the old line before queued keys are submitted."
+    (with-repl-test-state
+      (with-repl-input-state
+          (:buffer "unknown-tool "
+           :cursor-pos (length "unknown-tool ")
+           :completion-base-buffer "unknown-tool "
+           :completion-base-cursor (length "unknown-tool ")
+           :last-candidates (list "tool")
+           :completion-pager (list :query "" :index 0))
+        (let ((interrupt-polls 0)
+              (buffer-after-interrupt :not-seen)
+              (executed-input nil))
+          (with-input-from-string
+              (*standard-input* (format nil "echo~c" (code-char 13)))
+            (with-temporary-functions
+                (('nshell.infrastructure.acl:consume-terminal-resize-p
+                  (lambda () nil))
+                 ('nshell.infrastructure.acl:consume-sigint-received-p
+                  (lambda ()
+                    (incf interrupt-polls)
+                    (= interrupt-polls 2)))
+                 ('nshell.infrastructure.acl:consume-shell-termination-status
+                  (lambda () nil))
+                 ('nshell.presentation::process-output-event
+                  (lambda (output-event)
+                    (when (eq output-event :execute)
+                      (setf executed-input
+                            (nshell.presentation:input-state-buffer
+                             nshell.presentation::*input-state*)))
+                    (when (and (eq buffer-after-interrupt :not-seen)
+                               (>= interrupt-polls 2))
+                      (setf buffer-after-interrupt
+                            (nshell.presentation:input-state-buffer
+                             nshell.presentation::*input-state*)))
+                    nil)))
+              (loop repeat 6
+                    for continuation = (nshell.presentation::read-key-cont)
+                    do (expect (functionp continuation) :to-be-truthy)
+                       (funcall continuation))
+              (expect "" :to-equal buffer-after-interrupt)
+              (expect "echo" :to-equal executed-input)))))))
+
   (it "read-key-cont-commits-an-ask-panel-on-v"
     "The physical v key commits an ask panel through read-key-event."
     (with-repl-test-state

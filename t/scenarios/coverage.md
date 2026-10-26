@@ -149,7 +149,7 @@ executable scenarios and manual checks.
 | J14 | direct | 1 | 0 | `t/scenarios/J14/case-and-fuzzy-match.json` |
 | J15 | direct | 1 | 0 | `t/scenarios/J15/sexp-context.json` |
 | J16 | approximation | 1 | 0 | `t/scenarios/J16/approx-user-defined-completion.json` |
-| J17 | approximation | 1 | 0 | `t/scenarios/J17/approx-unknown-command-learning-responsiveness.json` |
+| J17 | approximation | 2 | 0 | `t/scenarios/J17/approx-unknown-command-learning-responsiveness.json`, `t/scenarios/J17/ctrl-c-immediate-next-command.json` |
 | J18 | approximation | 1 | 0 | `t/scenarios/J18/approx-completion-candidate-preview.json` |
 | K01 | direct | 1 | 0 | `t/scenarios/K01/command-existence-colors.json` |
 | K02 | direct | 1 | 0 | `t/scenarios/K02/existing-path-is-underlined.json` |

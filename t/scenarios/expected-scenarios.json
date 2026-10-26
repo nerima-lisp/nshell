@@ -975,6 +975,13 @@
       "path": "J17/approx-unknown-command-learning-responsiveness.json"
     },
     {
+      "id": "J17-ctrl-c-immediate-next-command",
+      "uc": [
+        "J17"
+      ],
+      "path": "J17/ctrl-c-immediate-next-command.json"
+    },
+    {
       "id": "J18-approx-completion-candidate-preview",
       "uc": [
         "J18"

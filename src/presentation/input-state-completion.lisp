@@ -143,6 +143,7 @@
                       (max 0 (1- (length
                                   (completion-pager-filtered-candidates state))))))
         ((:enter :tab) (accept-selection))
-        ((:escape :ctrl-g :ctrl-c)
+        ((:escape :ctrl-g)
          (values (clear-completion-session-state state) :redraw))
+        (:ctrl-c (clear-input-state state))
         (otherwise (values state :none))))))

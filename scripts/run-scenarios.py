@@ -494,6 +494,16 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                 kind = step.get("type")
                 _require(kind in ("keys", "paste", "key", "wait", "wait_screen", "wait_exit", "resize"),
                          f"{scenario_id}: unsupported pty step type {kind!r}")
+                if "input_delay_seconds" in step:
+                    step_input_delay = step["input_delay_seconds"]
+                    _require(kind in ("keys", "paste", "key"),
+                             f"{scenario_id}: step input_delay_seconds is supported only for input steps")
+                    _require(
+                        isinstance(step_input_delay, (int, float))
+                        and not isinstance(step_input_delay, bool)
+                        and 0 <= step_input_delay <= MAX_INPUT_DELAY_SECONDS,
+                        f"{scenario_id}: step input_delay_seconds must be between 0 and {MAX_INPUT_DELAY_SECONDS}",
+                    )
                 if kind in ("keys", "paste"):
                     _require(isinstance(step.get("text"), str), f"{scenario_id}: {kind} requires text")
                 if kind == "resize":
@@ -554,13 +564,14 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         f"{scenario_id}: timeout_seconds must be in (0, {MAX_TIMEOUT_SECONDS}]",
     )
     if scenario["mode"] == "pty":
-        input_count = sum(
-            step["type"] in ("keys", "paste", "key")
+        total_input_delay = sum(
+            step.get("input_delay_seconds", input_delay)
             for session in _pty_sessions(scenario)
             for step in session["steps"]
+            if step["type"] in ("keys", "paste", "key")
         )
         _require(
-            input_delay * input_count < timeout,
+            total_input_delay < timeout,
             f"{scenario_id}: configured input delays must fit within timeout_seconds",
         )
     expected = scenario["expected"]
@@ -1234,7 +1245,9 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                             exit_codes.append(session.wait_exit(step.get("timeout_seconds", 10)))
                             session.drain()
                         if kind in ("keys", "paste", "key"):
-                            session.wait_after_input(scenario.get("input_delay_seconds", 0))
+                            session.wait_after_input(
+                                step.get("input_delay_seconds", scenario.get("input_delay_seconds", 0))
+                            )
                 total_output = sum(len(session.stream) for session, _ in sessions)
                 _require(total_output <= MAX_OUTPUT_BYTES, f"{scenario['id']}: PTY output limit exceeded")
                 stream = "\n".join(

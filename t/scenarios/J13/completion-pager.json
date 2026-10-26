@@ -9,7 +9,8 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_PROMPT": "SCENARIO_J13-completion-pager> "
+      "NSHELL_PROMPT": "SCENARIO_J13-completion-pager> ",
+      "SCENARIO_VALUE": "J13_CTRL_C_NEXT_EXECUTED"
     },
     "home": "home",
     "cwd": "work",
@@ -166,24 +167,27 @@
       ]
     },
     {
-      "id": "ctrl-c-restores-input",
+      "id": "ctrl-c-clears-input",
       "prompt": "J13_CTRL_C> ",
       "steps": [
         {
           "type": "keys",
-          "text": "echo J13_CTRL_C_ORIGINAL "
+          "text": "echo J13_CTRL_C_ORIGINAL ",
+          "input_delay_seconds": 0.5
         },
         {
           "type": "key",
-          "key": "Tab"
+          "key": "Tab",
+          "input_delay_seconds": 0.5
         },
         {
           "type": "key",
-          "key": "C-c"
+          "key": "C-c",
+          "input_delay_seconds": 0
         },
         {
           "type": "keys",
-          "text": "J13_CTRL_C_SUFFIX"
+          "text": "echo \"$SCENARIO_VALUE\""
         },
         {
           "type": "key",
@@ -191,7 +195,7 @@
         },
         {
           "type": "wait",
-          "contains": "J13_CTRL_C_ORIGINAL J13_CTRL_C_SUFFIX",
+          "contains": "J13_CTRL_C_NEXT_EXECUTED",
           "timeout_seconds": 10
         },
         {
@@ -215,7 +219,7 @@
         "arrows move",
         "J13_SEARCH_BETA",
         "J13_ESC_ORIGINAL J13_ESC_SUFFIX",
-        "J13_CTRL_C_ORIGINAL J13_CTRL_C_SUFFIX"
+        "J13_CTRL_C_NEXT_EXECUTED"
       ]
     },
     "screen": {

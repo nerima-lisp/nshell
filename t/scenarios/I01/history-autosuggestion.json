@@ -29,11 +29,13 @@
   "steps": [
     {
       "type": "keys",
-      "text": "echo I01_HISTORY"
+      "text": "echo I01_HISTORY",
+      "input_delay_seconds": 0.5
     },
     {
       "type": "key",
-      "key": "C-c"
+      "key": "C-c",
+      "input_delay_seconds": 0
     },
     {
       "type": "keys",

@@ -36,6 +36,18 @@
       "key": "C-c"
     },
     {
+      "type": "wait",
+      "contains": "AI 未起動",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait_screen",
+      "excludes": [
+        "tool"
+      ],
+      "timeout_seconds": 10
+    },
+    {
       "type": "keys",
       "text": "echo \"$SCENARIO_VALUE\""
     },

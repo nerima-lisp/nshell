@@ -1,0 +1,80 @@
+name: WP NFR performance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wp-nfr-performance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    name: measure (${{ matrix.system }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - system: aarch64-darwin
+            runner: macos-15
+          - system: x86_64-linux
+            runner: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/nix-setup
+        with:
+          cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
+
+      - name: Verify native runner
+        run: |
+          test "$(nix eval --impure --raw --expr builtins.currentSystem)" = "${{ matrix.system }}"
+          case "${{ matrix.system }}" in
+            aarch64-darwin) test "$(uname -m)" = arm64 ;;
+            x86_64-linux) test "$(uname -m)" = x86_64 ;;
+          esac
+
+      - name: Build nshell
+        run: >-
+          nix build --max-jobs 1 --print-build-logs
+          ".#packages.${{ matrix.system }}.default"
+          --out-link "$RUNNER_TEMP/nshell-nfr-binary"
+
+      - name: Measure NFR-01 through NFR-07
+        run: >-
+          nix develop .#scenarios -c python3
+          scripts/measure-wp-perf-nfr-ci.py
+          --binary "$RUNNER_TEMP/nshell-nfr-binary/bin/nshell"
+          --output-dir "$RUNNER_TEMP/nshell-nfr-results"
+          --system "${{ matrix.system }}"
+          --revision "$GITHUB_SHA"
+
+      - name: Publish NFR job summary
+        if: always()
+        run: |
+          summary="$RUNNER_TEMP/nshell-nfr-results/summary.md"
+          if [ -s "$summary" ]; then
+            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "# NFR-01 to NFR-07 performance results"
+              echo
+              echo "No complete measurement summary was produced. Inspect the build result and partial measurement artifacts."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload raw measurements and summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nshell-wp-nfr-${{ matrix.system }}
+          path: ${{ runner.temp }}/nshell-nfr-results
+          if-no-files-found: warn
+          retention-days: 90

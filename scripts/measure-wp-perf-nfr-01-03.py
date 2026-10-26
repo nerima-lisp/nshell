@@ -23,6 +23,8 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Callable
 
+from wp_perf_nfr_thresholds import NFR_THRESHOLDS
+
 
 PROMPT_PREFIX = "__WP_PERF_PROMPT_"
 CPR_QUERY = b"\x1b[6n"
@@ -35,17 +37,17 @@ NFR_CONFIG = {
     "01": {
         "target": "nshell startup to first prompt",
         "control": "interactive /bin/sh startup to the same unique prompt marker",
-        "threshold_ms": 150.0,
+        "threshold_ms": NFR_THRESHOLDS["01"]["limit"],
     },
     "02": {
         "target": "nshell -c true",
         "control": "/bin/sh -c true",
-        "threshold_ms": 15.0,
+        "threshold_ms": NFR_THRESHOLDS["02"]["limit"],
     },
     "03": {
         "target": "input script launching /usr/bin/true 1000 times",
         "control": "/bin/sh loop launching /usr/bin/true 1000 times",
-        "threshold_ms": 5000.0,
+        "threshold_ms": NFR_THRESHOLDS["03"]["limit"],
     },
 }
 

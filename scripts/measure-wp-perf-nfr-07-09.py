@@ -22,10 +22,12 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Callable
 
+from wp_perf_nfr_thresholds import NFR_THRESHOLDS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SEED = 0x6D2B79F5
-NFR07_RSS_LIMIT_MIB = 150.0
+NFR07_RSS_LIMIT_MIB = NFR_THRESHOLDS["07"]["limit"] * 1_000_000 / (1024 * 1024)
 NFR09_COVERAGE_LIMIT = 85.0
 NFR09_NEW_CODE_LIMIT = 90.0
 PTY_ROWS = 24
@@ -253,6 +255,7 @@ def measure_idle_process(
     sample_count: int,
     sample_interval: float,
     prompt_timeout: float,
+    enforce_threshold: bool,
 ) -> dict[str, Any]:
     master_fd, slave_fd = pty.openpty()
     window_size = struct.pack("HHHH", PTY_ROWS, PTY_COLUMNS, 0, 0)
@@ -284,8 +287,9 @@ def measure_idle_process(
             rss_samples.append(process_rss_kib(process.pid))
         rss_mib = [value / 1024.0 for value in rss_samples]
         center = median(rss_mib)
-        return {
-            "status": "success" if center <= NFR07_RSS_LIMIT_MIB else "fail",
+        limit_met = center <= NFR07_RSS_LIMIT_MIB
+        result = {
+            "status": "success" if not enforce_threshold or limit_met else "fail",
             "command": command,
             "ready_marker_seen": True,
             "pty_size_rows": PTY_ROWS,
@@ -296,8 +300,11 @@ def measure_idle_process(
             "rss_mib_median": round(center, 3),
             "rss_mib_max": round(max(rss_mib), 3),
             "target_mib": NFR07_RSS_LIMIT_MIB,
-            "target_passed": center <= NFR07_RSS_LIMIT_MIB,
+            "limit_applies": enforce_threshold,
+            "limit_met": limit_met,
+            "target_passed": limit_met,
         }
+        return result
     finally:
         if process is not None:
             stop_owned_process(process, master_fd)
@@ -346,6 +353,7 @@ def nfr07_operations(args: argparse.Namespace, log_path: Path) -> list[dict[str,
                     sample_count=args.rss_samples,
                     sample_interval=args.rss_interval,
                     prompt_timeout=args.prompt_timeout,
+                    enforce_threshold=True,
                 ),
                 log_path,
             ),
@@ -358,6 +366,7 @@ def nfr07_operations(args: argparse.Namespace, log_path: Path) -> list[dict[str,
                     sample_count=args.rss_samples,
                     sample_interval=args.rss_interval,
                     prompt_timeout=args.prompt_timeout,
+                    enforce_threshold=False,
                 ),
                 log_path,
             ),

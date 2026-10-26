@@ -28,6 +28,8 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
+from wp_perf_nfr_thresholds import NFR_THRESHOLDS
+
 
 DEFAULT_BUFFER_SIZES = (1000,)
 PROMPT_TIMEOUT_SECONDS = 15
@@ -748,8 +750,8 @@ def run_suggestion_key_group(
         "paired_sequence_p99_delta_median_ms": statistics.median(sequence_p99_deltas),
         "paired_sequence_p99_delta_p99_ms": percentile_nearest_rank(sequence_p99_deltas, 0.99),
         "specified_nfr06_keypress_p99_threshold_ms": None,
-        "inferred_nfr05_p99_threshold_ms": 16.0,
-        "inferred_nfr05_threshold_met_by_target": target_stats["p99_ms"] <= 16.0,
+        "inferred_nfr05_p99_threshold_ms": NFR_THRESHOLDS["05"]["limit"],
+        "inferred_nfr05_threshold_met_by_target": target_stats["p99_ms"] <= NFR_THRESHOLDS["05"]["limit"],
         "inference_note": "p99 <= 16 ms is an inference borrowed from NFR-05, not a specified NFR-06 threshold",
         "uptime_before": load_before,
         "uptime_after": load_after,
@@ -805,7 +807,7 @@ def run_completion_group(
         },
         samples,
         warmups,
-        100.0,
+        NFR_THRESHOLDS["06"]["limit"],
         "median",
         target,
         control,
@@ -932,7 +934,7 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                     {"context": label, "git_prompt_enabled": git_enabled},
                     args.samples,
                     args.warmups,
-                    60.0,
+                    NFR_THRESHOLDS["04"]["limit"],
                     "median",
                     target,
                     control,
@@ -965,7 +967,7 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                     {"buffer_length": buffer_length, "trigger": "Ctrl-L-to-full-line-redraw"},
                     args.samples,
                     args.warmups,
-                    16.0,
+                    NFR_THRESHOLDS["05"]["limit"],
                     "p99",
                     target,
                     control,

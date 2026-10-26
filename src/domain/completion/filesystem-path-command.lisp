@@ -68,7 +68,7 @@
 (defun %path-command-entry-candidate (entry prefix executable-p)
   (let ((name (%entry-command-name entry)))
     (when (and name
-               (%starts-with-p prefix name)
+               (%candidate-match-stage prefix name)
                (funcall executable-p entry))
       (make-candidate name :kind :command))))
 

@@ -14,13 +14,13 @@
   (%sorted-candidates-by-text
    (loop for entry in +builtin-command-catalog+
          for name = (%catalog-command-entry-command entry)
-         when (%starts-with-p prefix name)
+         when (%candidate-match-stage prefix name)
            collect (%command-entry-candidate name (%catalog-command-entry-description entry)))))
 
 (defun knowledge-base-command-candidates (kb prefix)
   (loop for name in (kb-registered-commands kb)
         when (and (not (position #\Space name))
-                  (%starts-with-p prefix name))
+                  (%candidate-match-stage prefix name))
           collect (%command-entry-candidate name (kb-command-description kb name))))
 
 (defun %unique-kb-argument-names (kb command)
@@ -59,7 +59,7 @@
 (defun %matching-kb-option-values (kb command option value-prefix)
   (loop for value in (%kb-option-values kb command option)
         when (and (stringp value)
-                  (%starts-with-p value-prefix value))
+                  (%candidate-match-stage value-prefix value))
           collect value))
 
 (define-value-struct %argument-word-sequence
@@ -202,7 +202,7 @@
 
 (defun %available-kb-argument-names (kb command prefix argument-words)
   (loop for name in (%unique-kb-argument-names kb command)
-        when (and (%starts-with-p prefix name)
+        when (and (%candidate-match-stage prefix name)
                   (not (%kb-exclusive-option-blocked-p kb command name argument-words)))
           collect name))
 

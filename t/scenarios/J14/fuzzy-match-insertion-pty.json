@@ -1,0 +1,65 @@
+{
+  "id": "J14-fuzzy-match-insertion-pty",
+  "uc": ["J14"],
+  "mode": "pty",
+  "input_delay_seconds": 0.5,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "SCENARIO_J14-fuzzy-match-insertion-pty> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "complete -c scenario-search -a status\nfunction scenario-search; echo \"J14_SEARCH_LINE<scenario-search $argv>\"; end\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "scenario-search stt"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "J14_SEARCH_LINE<scenario-search status>",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": ["J14_SEARCH_LINE<scenario-search status>"]
+    },
+    "exit_code": 0
+  },
+  "load_config": true
+}

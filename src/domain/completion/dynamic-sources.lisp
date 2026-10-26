@@ -33,7 +33,7 @@ against VARIABLE-NAMES, an alist of (NAME . VALUE) shell bindings."
                for name = (car entry)
                for value = (cdr entry)
                when (and (stringp name)
-                         (%candidate-matches-prefix-policy-p name-prefix name))
+                         (%candidate-match-stage name-prefix name))
                  collect (%variable-candidate lead-in name value))
          (function string<)
          :key (function candidate-text))))))
@@ -115,11 +115,11 @@ a deterministic clock.")
     (cond
       ((%git-branch-argument-position-p argument-words)
        (loop for name in (%git-branches-for-directory directory)
-             when (and (stringp name) (%candidate-matches-prefix-policy-p prefix name))
+             when (and (stringp name) (%candidate-match-stage prefix name))
                collect (%git-branch-candidate name)))
       ((%git-path-argument-position-p argument-words)
        (loop for path in (%git-modified-paths-for-directory directory)
-             when (and (stringp path) (%candidate-matches-prefix-policy-p prefix path))
+             when (and (stringp path) (%candidate-match-stage prefix path))
                collect (%git-modified-path-candidate path))))))
 
 ;;; Pure text parsing for the git plumbing output the composition root feeds
@@ -258,7 +258,7 @@ rename's arrow to its destination path."
         (sort (remove-duplicates
                (loop for name in names
                      when (and (%username-name-p name)
-                               (%candidate-matches-prefix-policy-p name-prefix name))
+                               (%candidate-match-stage name-prefix name))
                        collect (make-candidate (concatenate 'string "~" name "/")
                                                :kind :directory
                                                :description "user"))
@@ -269,7 +269,7 @@ rename's arrow to its destination path."
     (when (and (string= command "ssh") home-directory (functionp *ssh-host-lister*))
       (loop for name in (or (ignore-errors (funcall *ssh-host-lister* home-directory)) nil)
             when (and (stringp name)
-                      (%candidate-matches-prefix-policy-p prefix name))
+                      (%candidate-match-stage prefix name))
               collect (make-candidate name :kind :command :description "SSH host"))))
 
   (defun %make-target-candidates (command prefix directory)
@@ -277,18 +277,18 @@ rename's arrow to its destination path."
                directory (functionp *make-target-lister*))
       (loop for name in (or (ignore-errors (funcall *make-target-lister* directory)) nil)
             when (and (stringp name)
-                      (%candidate-matches-prefix-policy-p prefix name))
+                      (%candidate-match-stage prefix name))
               collect (make-candidate name :kind :command :description "make target"))))
 
   (defun %kill-dynamic-candidates (command prefix process-ids)
     (when (string= command "kill")
       (if (%starts-with-p "-" prefix)
           (loop for name in +kill-signal-names+
-                when (%candidate-matches-prefix-policy-p prefix name)
+                when (%candidate-match-stage prefix name)
                   collect (make-candidate name :kind :option :description "signal"))
           (loop for pid in process-ids
                 for text = (if (stringp pid) pid (princ-to-string pid))
-                when (%candidate-matches-prefix-policy-p prefix text)
+                when (%candidate-match-stage prefix text)
                   collect (make-candidate text :kind :command :description "process id")))))
 
   (defun %wrapper-option-value-p (wrapper word)

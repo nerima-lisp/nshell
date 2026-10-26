@@ -146,7 +146,7 @@ executable scenarios and manual checks.
 | J11 | direct | 1 | 0 | `t/scenarios/J11/wrapper-command-completion.json` |
 | J12 | direct | 2 | 0 | `t/scenarios/J12/twenty-thousand-entry-directory.json`, `t/scenarios/J12/large-directory-completion.json` |
 | J13 | direct | 1 | 0 | `t/scenarios/J13/completion-pager.json` |
-| J14 | direct | 1 | 0 | `t/scenarios/J14/case-and-fuzzy-match.json` |
+| J14 | direct | 2 | 0 | `t/scenarios/J14/case-and-fuzzy-match.json`, `t/scenarios/J14/fuzzy-match-insertion-pty.json` |
 | J15 | direct | 1 | 0 | `t/scenarios/J15/sexp-context.json` |
 | J16 | approximation | 1 | 0 | `t/scenarios/J16/approx-user-defined-completion.json` |
 | J17 | approximation | 2 | 0 | `t/scenarios/J17/approx-unknown-command-learning-responsiveness.json`, `t/scenarios/J17/ctrl-c-immediate-next-command.json` |

@@ -124,7 +124,7 @@
                   (subseq prefix 0 (length typed-prefix))))))
 
 (defun maybe-extend-completion-common-prefix (state candidates)
-  "Apply an unambiguous completion prefix, if CANDIDATES advance the token."
+  "Apply an unambiguous candidate or a common prefix when it advances the token."
   (with-normalized-input-state (state state)
     (let ((buffer (input-state-buffer state))
           (cursor (input-state-cursor-pos state))
@@ -135,8 +135,9 @@
                 (variable-p (every (lambda (candidate)
                                      (eq (%candidate-kind candidate) :variable))
                                    candidates)))
-            (if (%completion-prefix-extends-token-p
-                 prefix context buffer cursor)
+            (if (or (%completion-prefix-extends-token-p
+                     prefix context buffer cursor)
+                    (= (length candidates) 1))
                 (multiple-value-bind (new-buffer new-cursor)
                     (%completion-replace-token
                      buffer

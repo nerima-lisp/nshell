@@ -5,42 +5,36 @@
 (defconstant +%case-insensitive-prefix-rank-bonus+ 5000)
 (defconstant +%described-candidate-rank-bonus+ 1000)
 
-(defun %smart-case-query-p (prefix)
-  "True when PREFIX carries an uppercase letter. A query typed with an
-uppercase letter pins completion matching to case-sensitive comparisons
-(smart-case, as in Vim or fzf); an all-lowercase query stays case-blind."
-  (some #'upper-case-p prefix))
-
 (defun %case-insensitive-prefix-match-p (prefix text)
   (%starts-with-p prefix text))
-
-(defun %case-sensitive-substring-match-p (prefix text)
-  (and (plusp (length prefix)) (search prefix text :test #'char=) t))
 
 (defun %case-insensitive-substring-match-p (prefix text)
   (and (plusp (length prefix)) (search prefix text :test #'char-equal) t))
 
-(defun %candidate-matches-prefix-policy-p (prefix text)
-  "Return true when TEXT is an admissible completion for PREFIX under the
-smart-case policy: outside smart-case, a case-insensitive prefix or a
-substring anywhere in TEXT qualifies; under smart-case, only a case-sensitive
-prefix or substring does."
-  (if (%smart-case-query-p prefix)
-      (or (string-prefix-p prefix text)
-          (%case-sensitive-substring-match-p prefix text))
-      (or (%case-insensitive-prefix-match-p prefix text)
-          (%case-insensitive-substring-match-p prefix text))))
+(defun %case-insensitive-subsequence-match-p (prefix text)
+  (let ((text-position 0))
+    (loop for character across prefix
+          for match-position = (position character text
+                                          :start text-position
+                                          :test #'char-equal)
+          do (unless match-position
+               (return-from %case-insensitive-subsequence-match-p nil))
+             (setf text-position (1+ match-position)))
+    t))
+
+(defun %candidate-match-stage (prefix text)
+  (cond
+    ((> (length prefix) (length text)) nil)
+    ((string-prefix-p prefix text) 0)
+    ((%case-insensitive-prefix-match-p prefix text) 1)
+    ((%case-insensitive-substring-match-p prefix text) 2)
+    ((%case-insensitive-subsequence-match-p prefix text) 3)))
 
 (defun candidate-prefix-match-p (prefix candidate)
-  "Return true when CANDIDATE's text is a genuine prefix match for PREFIX
-(exact, case-sensitive, or -- outside smart-case -- case-insensitive), never
-a substring-only match. Callers such as autosuggestion, which insert text
-the user never explicitly typed, use this to keep a suggestion to what the
-user actually prefixed."
-  (let ((text (candidate-text candidate)))
-    (if (%smart-case-query-p prefix)
-        (string-prefix-p prefix text)
-        (%case-insensitive-prefix-match-p prefix text))))
+  "Return true for case-sensitive or case-insensitive prefix matches.
+Autosuggestions use prefixes only because they insert text the user did not type."
+  (let ((stage (%candidate-match-stage prefix (candidate-text candidate))))
+    (and stage (< stage 2))))
 
 (defun %candidate-description-present-p (candidate)
   (plusp (length (candidate-description candidate))))
@@ -120,10 +114,17 @@ user actually prefixed."
       results)))
 
 (defun %rank-candidates (prefix candidates)
-  (stable-sort
-   (remove-if-not
-    (lambda (candidate)
-      (%candidate-matches-prefix-policy-p prefix (candidate-text candidate)))
-    (copy-list candidates))
-   (lambda (left right)
-     (%completion-candidate< prefix left right))))
+  (let ((best-stage
+          (loop for candidate in candidates
+                for stage = (%candidate-match-stage prefix (candidate-text candidate))
+                when stage
+                  minimize stage)))
+    (stable-sort
+     (remove-if-not
+      (lambda (candidate)
+        (and best-stage
+             (eql (%candidate-match-stage prefix (candidate-text candidate))
+                  best-stage)))
+      (copy-list candidates))
+     (lambda (left right)
+       (%completion-candidate< prefix left right)))))

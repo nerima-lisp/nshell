@@ -184,4 +184,18 @@
                      (nshell.presentation:apply-completion
                       (concatenate 'string "cat " backslash-prefix)
                       backslash-candidate)))
-        (nshell.infrastructure.acl:clear-directory-listing-cache))))))
+        (nshell.infrastructure.acl:clear-directory-listing-cache)))))
+  (it "file-completion-filters-subsequence-candidates-when-a-prefix-exists"
+    (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
+      (with-test-filesystem
+          (:directory-files
+           (lambda (directory)
+             (declare (ignore directory))
+             (list #p"status" #p"s-t-a-t-u-s"))
+           :subdirectories
+           (constantly nil))
+        (expect (list "status")
+                :to-equal
+                (completion-texts
+                 (nshell.domain.completion:complete
+                  kb "cat st" :filesystem *completion-test-filesystem*)))))))

@@ -135,7 +135,7 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
                (or (and (plusp (length name-prefix))
                         (char= (char name-prefix 0) #\.))
                    (char/= (char name 0) #\.))
-               (%starts-with-p name-prefix name))
+               (%candidate-match-stage name-prefix name))
       (let* ((raw-text (concatenate 'string
                                     (%file-completion-query-directory-prefix query)
                                     name))

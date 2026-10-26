@@ -76,35 +76,38 @@ expanded rather than listed literally."
                          :filesystem *completion-test-filesystem*)))
         (expect candidates :to-be-null))))
 
-  (it "ranking-orders-case-sensitive-prefix-then-case-insensitive-then-substring"
+  (it "ranking-keeps-only-the-best-match-stage"
     (let* ((cs (nshell.domain.completion:make-candidate "gitk"))
            (ci (nshell.domain.completion:make-candidate "GitHub"))
            (substring-only (nshell.domain.completion:make-candidate "digit"))
            (ranked (nshell.domain.completion::%rank-candidates
                     "git" (list substring-only ci cs))))
-      (expect '("gitk" "GitHub" "digit") :to-equal (completion-texts ranked))))
+      (expect (list "gitk") :to-equal (completion-texts ranked))))
 
-  (it "ranking-smart-case-excludes-case-insensitive-only-matches"
+  (it "ranking-keeps-case-sensitive-prefix-ahead-of-case-insensitive-prefix"
     (let* ((cs (nshell.domain.completion:make-candidate "GitHub"))
            (ci-only (nshell.domain.completion:make-candidate "github-cli"))
            (ranked (nshell.domain.completion::%rank-candidates
                     "Git" (list ci-only cs))))
-      (expect '("GitHub") :to-equal (completion-texts ranked))))
+      (expect (list "GitHub") :to-equal (completion-texts ranked))))
 
-  (it "candidate-prefix-match-p-rejects-a-substring-only-match"
-    "Exercises the not-yet-exported predicate via an internal reference; see
-this agent's report for the NSHELL.DOMAIN.COMPLETION export it still needs."
+  (it "candidate-prefix-match-p-accepts-case-insensitive-prefixes-but-not-substrings"
     (let ((substring-only (nshell.domain.completion:make-candidate "digit"))
-          (real-prefix (nshell.domain.completion:make-candidate "gitk")))
-      (expect (nshell.domain.completion::candidate-prefix-match-p "git" substring-only) :to-be-falsy)
-      (expect (nshell.domain.completion::candidate-prefix-match-p "git" real-prefix) :to-be-truthy)))
+          (real-prefix (nshell.domain.completion:make-candidate "gitk"))
+          (case-insensitive-prefix (nshell.domain.completion:make-candidate "GitHub")))
+      (expect (nshell.domain.completion:candidate-prefix-match-p "git" substring-only)
+              :to-be-falsy)
+      (expect (nshell.domain.completion:candidate-prefix-match-p "git" real-prefix)
+              :to-be-truthy)
+      (expect (nshell.domain.completion:candidate-prefix-match-p "git" case-insensitive-prefix)
+              :to-be-truthy)))
 
-  (it "runtime-alias-completion-falls-back-to-substring-match"
-    (let ((alias-table (make-hash-table :test #'equal)))
+  (it "runtime-alias-completion-falls-back-to-fuzzy-subsequence-match"
+    (let ((alias-table (make-hash-table :test (function equal))))
       (setf (gethash "zz-mytool-deploy" alias-table) t)
       (let ((candidates (nshell.domain.completion:complete
                          (nshell.domain.completion:make-empty-knowledge-base)
-                         "deploy"
+                         "dply"
                          :alias-table alias-table)))
         (assert-completion-texts-include candidates "zz-mytool-deploy"))))
 
@@ -243,5 +246,41 @@ this agent's report for the NSHELL.DOMAIN.COMPLETION export it still needs."
           (expect command-position-p :to-equal
                   (nshell.domain.completion:completion-context-command-position-p context)))))))
 
+(describe "completion-match-stage-tests"
+  (it "keeps-only-the-best-match-stage"
+    (let* ((candidates (list (nshell.domain.completion:make-candidate "status")
+                             (nshell.domain.completion:make-candidate "Status")
+                             (nshell.domain.completion:make-candidate "the status")
+                             (nshell.domain.completion:make-candidate "s-t-a-t-u-s")))
+           (ranked (nshell.domain.completion::%rank-candidates "st" candidates)))
+      (expect (list "status") :to-equal (completion-texts ranked))))
 
+  (it "falls-back-to-case-insensitive-prefix-matches"
+    (let* ((candidates (list (nshell.domain.completion:make-candidate "Status")
+                             (nshell.domain.completion:make-candidate "the Status")))
+           (ranked (nshell.domain.completion::%rank-candidates "st" candidates)))
+      (expect (list "Status") :to-equal (completion-texts ranked))))
+  (it "uppercase-query-falls-back-to-case-insensitive-prefix-match"
+    (let ((ranked
+            (nshell.domain.completion::%rank-candidates
+             "STATUS"
+             (list (nshell.domain.completion:make-candidate "status")))))
+      (expect (list "status") :to-equal (completion-texts ranked))))
 
+  (it "falls-back-to-case-insensitive-substring-matches"
+    (let* ((candidates (list (nshell.domain.completion:make-candidate "staTUs")
+                             (nshell.domain.completion:make-candidate "t-u-s")))
+           (ranked (nshell.domain.completion::%rank-candidates "tus" candidates)))
+      (expect (list "staTUs") :to-equal (completion-texts ranked))))
+
+  (it "falls-back-to-case-insensitive-subsequence-matches"
+    (let* ((candidates (list (nshell.domain.completion:make-candidate "s-T-s")))
+           (ranked (nshell.domain.completion::%rank-candidates "STS" candidates)))
+      (expect (list "s-T-s") :to-equal (completion-texts ranked)))))
+
+(describe "completion-insertion-tests"
+  (it "replaces-input-token-when-inserting-a-subsequence-match"
+    (let ((candidate (nshell.domain.completion:make-candidate "status" :kind :command)))
+      (expect "git status"
+              :to-equal
+              (nshell.presentation:apply-completion "git stt" candidate)))))

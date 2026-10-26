@@ -26,7 +26,7 @@
   (remove-duplicates
    (loop for solution in solutions
          for value = (%rule-solution-value variable solution)
-         when (and (stringp value) (%starts-with-p prefix value))
+         when (and (stringp value) (%candidate-match-stage prefix value))
            collect value)
    :test (function equal)))
 
@@ -35,7 +35,7 @@
   (sort (%merge-candidates
          (loop for solution in solutions
                for value = (%rule-solution-value variable solution)
-               when (and (stringp value) (%starts-with-p prefix value))
+               when (and (stringp value) (%candidate-match-stage prefix value))
                  collect (make-candidate value
                                          :kind kind
                                          :description

@@ -90,7 +90,7 @@
       (expect "other" :to-equal (nshell.domain.completion:candidate-text (first results)))
       (expect high :to-be (second results))))
 
-  (it "pbt-path-command-completion-is-prefixed-and-deduped"
+  (it "pbt-completion-uses-best-match-stage-and-dedupes"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "git")
       (with-test-path-filesystem
@@ -105,9 +105,16 @@
                           kb prefix
                           :path "/bin:/usr/bin"
                           :filesystem *completion-test-filesystem*)))
-                 (unique-texts (remove-duplicates texts :test #'string=)))
-            (and (every (lambda (text) (completion-prefix-p prefix text)) texts)
-  	               (= (length texts) (length unique-texts))))))))
+                 (unique-texts (remove-duplicates texts :test (function string=)))
+                 (stages (mapcar
+                          (lambda (text)
+                            (nshell.domain.completion::%candidate-match-stage prefix text))
+                          texts)))
+            (and (= (length texts) (length unique-texts))
+                 (or (null stages)
+                     (and (every (function numberp) stages)
+                          (let ((best-stage (reduce (function min) stages)))
+                            (every (lambda (stage) (= stage best-stage)) stages))))))))))
 
   (it "pbt-rule-prover-fact-round-trips-generated-values"
     (check-property (:trials 50)
@@ -154,19 +161,20 @@
                         (nshell.domain.completion:candidate-text
                          (first candidates))))))))
 
-  (it "pbt-command-completion-ranks-case-sensitive-prefix-first"
+  (it "pbt-command-completion-keeps-only-case-sensitive-prefix-stage"
     (check-property (:trials 50)
-        ((suffix (gen-command-prefix :min-length 1 :max-length 8) #'shrink-shell-word))
-      (let* ((prefix (concatenate 'string "zzcase-" suffix))
-             (typed-case (concatenate 'string prefix "-typed"))
-             (folded-case (concatenate 'string (string-upcase prefix) "-folded"))
+        ((suffix (gen-command-prefix :min-length 1 :max-length 8) (function shrink-shell-word)))
+      (let* ((prefix (concatenate (quote string) "zzcase-" suffix))
+             (typed-case (concatenate (quote string) prefix "-typed"))
+             (folded-case (concatenate (quote string) (string-upcase prefix) "-folded"))
              (kb (nshell.domain.completion:make-empty-knowledge-base)))
         (nshell.domain.completion:kb-add-command kb folded-case)
         (nshell.domain.completion:kb-add-command kb typed-case)
         (let ((texts (completion-texts
                       (nshell.domain.completion:complete kb prefix))))
-          (< (position typed-case texts :test #'string=)
-             (position folded-case texts :test #'string=))))))
+          (and (= 1 (length texts))
+               (string= typed-case (first texts))
+               (not (member folded-case texts :test (function string=))))))))
 
   (it "pbt-completion-ranking-prefers-higher-score"
     (check-property (:trials 50)

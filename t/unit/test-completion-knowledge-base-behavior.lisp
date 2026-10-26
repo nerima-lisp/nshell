@@ -489,13 +489,14 @@
                     (nshell.domain.completion:complete kb "git"))))
         (expect '("git" "gitk") :to-equal texts))))
 
-  (it "command-completion-ranks-case-sensitive-prefix-before-case-folded-match"
+  (it "command-completion-filters-subsequence-candidates-when-a-prefix-exists"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))
       (nshell.domain.completion:kb-add-command kb "ZZCase-tool")
       (nshell.domain.completion:kb-add-command kb "zzcase-tool")
+      (nshell.domain.completion:kb-add-command kb "z-z-c-a-s-e-tool")
       (let ((texts (completion-texts
                     (nshell.domain.completion:complete kb "zzcase"))))
-        (expect '("zzcase-tool" "ZZCase-tool") :to-equal texts))))
+        (expect (list "zzcase-tool") :to-equal texts))))
 
   (it "command-completion-keeps-best-duplicate-metadata"
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base)))

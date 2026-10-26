@@ -44,7 +44,7 @@
       (maphash
        (lambda (name definition)
          (declare (ignore definition))
-         (when (and (stringp name) (%candidate-matches-prefix-policy-p prefix name))
+         (when (and (stringp name) (%candidate-match-stage prefix name))
            (push (make-candidate name :kind :command :description description) candidates)))
        table))
     (sort candidates (function string<) :key (function candidate-text))))

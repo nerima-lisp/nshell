@@ -954,6 +954,13 @@
       "path": "J14/case-and-fuzzy-match.json"
     },
     {
+      "id": "J14-fuzzy-match-insertion-pty",
+      "uc": [
+        "J14"
+      ],
+      "path": "J14/fuzzy-match-insertion-pty.json"
+    },
+    {
       "id": "J15-sexp-context",
       "uc": [
         "J15"

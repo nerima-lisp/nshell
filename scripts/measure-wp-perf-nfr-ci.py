@@ -319,8 +319,9 @@ def main() -> int:
     py = sys.executable
     script_01_03 = str(ROOT / "scripts/measure-wp-perf-nfr-01-03.py")
     input_path = output_dir / "nfr03-input.sh"
+    target_iterations = " ".join(str(index) for index in range(1, 1_001))
     input_path.write_text(
-        'i=0; while [ "$i" -lt 1000 ]; do /usr/bin/true; i=$((i + 1)); done\n',
+        f"for i in {target_iterations}; /usr/bin/true; end\n",
         encoding="utf-8",
     )
 

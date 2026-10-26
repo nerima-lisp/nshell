@@ -29,10 +29,8 @@ from wp_perf_nfr_thresholds import NFR_THRESHOLDS
 PROMPT_PREFIX = "__WP_PERF_PROMPT_"
 CPR_QUERY = b"\x1b[6n"
 CPR_RESPONSE = b"\x1b[1;1R"
-CONTROL_SCRIPT = (
-    "i=0; while [ \"$i\" -lt 1000 ]; do /usr/bin/true; "
-    "i=$((i + 1)); done"
-)
+CONTROL_ITERATIONS = " ".join(str(index) for index in range(1, 1_001))
+CONTROL_SCRIPT = f"for i in {CONTROL_ITERATIONS}; do /usr/bin/true; done"
 NFR_CONFIG = {
     "01": {
         "target": "nshell startup to first prompt",

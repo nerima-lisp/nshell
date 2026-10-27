@@ -67,6 +67,8 @@
                       for stage-signal in stage-signals
                       for index from 0
                       when (and (not (zerop stage-status))
+                                (or (= index (1- stage-count))
+                                    *command-pipefail-p*)
                                 (not (and (< index (1- stage-count))
                                           (eql stage-signal sb-unix:sigpipe))))
                         return (list stage stage-status stage-signal))))

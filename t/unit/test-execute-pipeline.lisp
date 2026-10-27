@@ -102,27 +102,26 @@
                                    (error "External printf is required for this test")))))))
 
   (it "function-pipeline-keeps-capture-under-terminal-runner"
-  (let ((nshell.application::*foreground-terminal-runner*
-          (lambda (thunk)
-            (declare (ignore thunk))
-            (error "Pipeline stages must not inherit the foreground terminal"))))
-    (dolist (function-line
-             (list
-              (format nil "~S captured"
-                      (or (nshell.infrastructure.acl::%resolve-external-command "printf")
-                          (error "External printf is required for this test")))
-              "echo captured"))
-      (with-builtins-source (output code context
-                             (list "function produce"
-                                   function-line
-                                   "end"
-                                   "produce | read captured"))
-        (expect "" :to-equal output)
-        (expect 0 :to-equal code)
-        (expect "captured" :to-equal
-                (nshell.domain.environment:env-get
-                 (nshell.application:shell-context-environment context)
-                 "captured"))))))
+    (let ((nshell.application::*foreground-terminal-runner*
+            (lambda (thunk)
+              (declare (ignore thunk))
+              (error "Pipeline stages must not inherit the foreground terminal"))))
+      (dolist (function-definition
+               (list
+                (format nil
+                        "(define-shell-function produce () (~A \"captured\"))"
+                        (or (nshell.infrastructure.acl::%resolve-external-command "printf")
+                            (error "External printf is required for this test")))
+                "(define-shell-function produce () (echo captured))"))
+        (with-builtins-source (output code context
+                               (list function-definition
+                                     "(| (produce) (read captured))"))
+          (expect "" :to-equal output)
+          (expect 0 :to-equal code)
+          (expect "captured" :to-equal
+                  (nshell.domain.environment:env-get
+                   (nshell.application:shell-context-environment context)
+                   "captured"))))))
 
   (it "sequence-stop-predicate-stops-and-on-failure"
     "The sequence control rule stops && after a non-zero status."
@@ -1168,7 +1167,7 @@
             (with-output-to-string (*error-output*)
               (let ((nshell.application::*command-substitution-timeout* 0.001))
                 (with-temporary-function
-                    ('nshell.application::source-lines
+                    ('nshell.application::execute-ast-in-context
                      (lambda (ctx ast)
                        (declare (ignore ctx ast))
                        (sleep 5)

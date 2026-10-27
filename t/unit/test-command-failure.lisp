@@ -31,22 +31,23 @@
 
 (describe "command-failure-policy"
           (it
-           "ignores upstream SIGPIPE and reports the first other failure in source order"
+           "with pipefail, ignores upstream SIGPIPE and reports the first other failure in source order"
            (multiple-value-bind (command pipeline-result)
                (%make-command-failure-fixture
                 '("upstream" "first-failure" "later-failure")
-                4
+                141
                 '(141 5 4)
                 (list sb-unix:sigpipe nil nil))
              (let ((failure
                     (let ((nshell.application:*interactive-top-level-p* nil)
                           (nshell.application:*errexit-p* nil)
-                          (nshell.application:*command-test-position-p* nil))
+                          (nshell.application:*command-test-position-p* nil)
+                          (nshell.application::*command-pipefail-p* t))
                       (handler-case (progn
                                       (nshell.application:call-with-command-failure-policy
                                        command
                                        (lambda ()
-                                         (values :value 4 pipeline-result)))
+                                         (values :value 141 pipeline-result)))
                                       nil)
                         (nshell.application:command-failed (condition)
                           condition)))))
@@ -188,7 +189,7 @@
                     (expect results :to-equal '(nil 11))))))
           (it "preserves the continue restart through the evaluator status handler"
               (multiple-value-bind (command pipeline-result)
-                  (%make-command-failure-fixture '("upstream" "final") 0 '(7 0) '(nil nil))
+                  (%make-command-failure-fixture '("upstream" "final") 7 '(7 0) '(nil nil))
                 (let* ((executor-symbol
                         (find-symbol "EXECUTE-READER-AST-IN-CONTEXT" "NSHELL.APPLICATION"))
                        (original-executor (symbol-function executor-symbol)))
@@ -197,7 +198,7 @@
                         (setf (symbol-function executor-symbol)
                               (lambda (context ast command-executor)
                                 (declare (ignore context ast command-executor))
-                                (values :original-value 0 pipeline-result)))
+                                (values :original-value 7 pipeline-result)))
                         (multiple-value-bind (results read-count)
                             (%call-with-command-failure-test-input
                              (list (nshell.domain.input:make-key-event :char (code-char 49))
@@ -206,13 +207,16 @@
                                (let ((nshell.application::*current-evaluation-status* 0))
                                  (nshell.presentation:call-with-command-failure-restarts
                                   (lambda ()
-                                    (let ((nshell.application:*errexit-p* t))
+                                    (let ((nshell.application:*errexit-p* t)
+                                          (context (make-test-shell-context)))
+                                      (setf (nshell.application:shell-context-pipefail-p context) t)
                                       (multiple-value-bind (value)
-                                          (nshell.application::%eval-command-ast-in-position (make-test-shell-context) command nil nil :stream)
+                                          (nshell.application::%eval-command-ast-in-position
+                                           context command nil nil :stream)
                                         (values value
                                                 nshell.application::*current-evaluation-status*))))))))
                           (expect read-count :to-equal 2)
-                          (expect results :to-equal (list nil 0))))
+                          (expect results :to-equal (list nil 7))))
                     (setf (symbol-function executor-symbol) original-executor))))))
 
 (describe "missing-command-suggestion-tests"

@@ -20,7 +20,7 @@
     "files": [
       {
         "path": "home/.config/nshell/init.lisp",
-        "content": "complete -c scenario-search -a status\nfunction scenario-search; echo \"J14_SEARCH_LINE<scenario-search $argv>\"; end\n"
+        "content": "complete -c scenario-search -a status\n(defun scenario-search (&rest argv) (echo (format nil \"J14_SEARCH_LINE<scenario-search ~a>\" (car argv))))\n"
       }
     ]
   },

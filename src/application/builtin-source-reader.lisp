@@ -1,7 +1,10 @@
 (in-package #:nshell.application)
 (defvar *source-lines-stream-output-p* nil)
+(defvar *current-source-reader-source-path* nil)
 (defun %source-evaluate-reader-result (context reader-result form-type)
-  (let ((*interactive-top-level-p* (eq form-type :command-island)))
+  (let ((*interactive-top-level-p* (eq form-type :command-island))
+        (*current-source-reader-source-path*
+         (nshell.domain.parsing:reader-result-source-path reader-result)))
     (evaluate-reader-result-in-context context reader-result)))
 
 (defun %append-source-here-document-line (text line)

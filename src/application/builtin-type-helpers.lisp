@@ -129,13 +129,24 @@
 (defun %type-command-shell-shadowed-p (context command)
   (or (nth-value 1 (gethash command (shell-context-alias-table context)))
       (nth-value 1 (gethash command (shell-context-function-table context)))
+      (nth-value 1
+                 (peek-shell-function (context-shell-function-registry context)
+                                      command
+                                      :scope (active-shell-function-scope)))
       (nth-value 1 (gethash command (shell-context-abbreviation-table context)))))
 
 (defun %type-command-builtin-present-p (command)
   (not (null (lookup-builtin command))))
 
 (defun %type-command-source-path (context command)
-  (nth-value 0 (gethash command (shell-context-function-source-table context))))
+  (if (nth-value 1 (gethash command (shell-context-function-table context)))
+      (nth-value 0 (gethash command (shell-context-function-source-table context)))
+      (multiple-value-bind (binding found-p)
+          (peek-shell-function (context-shell-function-registry context)
+                               command
+                               :scope (active-shell-function-scope))
+        (when found-p
+          (shell-function-binding-source-path binding)))))
 
 (defun %type-add-candidate (candidates kind text)
   (cons (list kind text) candidates))
@@ -176,8 +187,14 @@
     (unless (%type-options-no-functions-p options)
       (multiple-value-bind (function-body function-present-p)
           (gethash command (shell-context-function-table context))
-        (when function-present-p
-          (setf candidates (%type-add-candidate candidates :function function-body)))))
+        (if function-present-p
+            (setf candidates (%type-add-candidate candidates :function function-body))
+            (multiple-value-bind (binding binding-present-p)
+                (peek-shell-function (context-shell-function-registry context)
+                                     command
+                                     :scope (active-shell-function-scope))
+              (when binding-present-p
+                (setf candidates (%type-add-candidate candidates :function binding)))))))
     (multiple-value-bind (abbreviation abbreviation-present-p)
         (gethash command (shell-context-abbreviation-table context))
       (when abbreviation-present-p
@@ -208,7 +225,8 @@
        (format out (getf spec :alias-format) name text))
       (:function
        (format out (getf spec :function-format) name)
-       (unless (%type-options-short-p options)
+       (unless (or (%type-options-short-p options)
+                   (shell-function-binding-p text))
          (let ((definition (%format-function-definition name text)))
            (write-string (if (%type-options-color-p options)
                              (%colorize-function-definition-output definition)

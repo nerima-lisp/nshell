@@ -36,7 +36,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "function q02_recurse; q02_recurse; end"
+      "text": "(define-shell-function q02_recurse () (q02_recurse))"
     },
     {
       "type": "key",

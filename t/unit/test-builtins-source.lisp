@@ -305,16 +305,14 @@
         (expect (format nil "first~%second~%") :to-equal output))))
 
   (it "source-lines-defines-sexp-function-and-executes-tail"
-    "source registers and calls an S-expression function before running later source forms."
+    "source executes forms around an S-expression function on the same line."
     (let ((context (make-test-builtins-context)))
       (multiple-value-bind (output code)
           (nshell.application:source-lines
            context
-           (list "(define-shell-function foo () (echo hi))"
-                 "(foo)"
-                 "(echo tail)"))
+           (list "(echo pre) (define-shell-function foo () (echo hi)) (foo) (echo tail)"))
         (expect 0 :to-equal code)
-        (expect (format nil "hi~%tail~%") :to-equal output)
+        (expect (format nil "pre~%hi~%tail~%") :to-equal output)
         (expect t :to-equal
                 (nth-value
                  1
@@ -322,11 +320,13 @@
                   (nshell.application:context-shell-function-registry context)
                   "foo"))))))
   (it "source-sexp-function-body-runs-forms-in-order"
-    "source runs the forms in an S-expression function body in order."
+    "source collects a multiline function definition and runs its body in order."
     (multiple-value-bind (output code)
         (nshell.application:source-lines
          (make-test-builtins-context)
-         (list "(define-shell-function foo () (echo one) (echo two))"
+         (list "(define-shell-function foo ()"
+               "(echo one)"
+               "(echo two))"
                "(foo)"))
       (expect 0 :to-equal code)
       (expect (format nil "one~%two~%") :to-equal output))))

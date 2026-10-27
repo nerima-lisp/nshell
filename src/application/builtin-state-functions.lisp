@@ -19,7 +19,7 @@
                                       (if (string= body-line "")
                                           nil
                                           (list body-line))
-                                      nil)
+                                      *current-source-reader-source-path*)
     (values nil 0)))
 
 (defun %format-functions (table &optional names)

@@ -4,8 +4,8 @@
   (it "function-receives-arguments-via-argv"
     "An S-expression function receives all arguments through its rest parameter."
     (with-builtins-source-ok (output code context
-                                     (list "(defun greet (&rest argv) (echo hi $argv))"
-                                           "(greet \"world\" \"and\" \"friends\")"))
+                                     (list "(defun argv-greet (&rest argv) (echo hi $argv))"
+                                           "(argv-greet \"world\" \"and\" \"friends\")"))
         (format nil "hi world and friends~%")))
 
   (it "function-argv-indexing-selects-single-argument"
@@ -25,11 +25,8 @@
   (it "function-argv-compound-ranges-expand-as-fields"
     "Compound unquoted $argv ranges produce one field per list value."
     (with-builtins-source-ok (output code context
-                                     '("function decorate"
-                                       "count pre-$argv[1..2].txt"
-                                       "echo pre-$argv[1..2].txt"
-                                       "end"
-                                       "decorate alpha beta gamma"))
+                                     (list "(defun decorate (&rest argv) (count pre-$argv[1..2].txt) (echo pre-$argv[1..2].txt))"
+                                           "(decorate \"alpha\" \"beta\" \"gamma\")"))
         (format nil "2~%pre-alpha.txt pre-beta.txt~%")))
 
   (it "source-variable-list-compound-ranges-expand-as-fields"

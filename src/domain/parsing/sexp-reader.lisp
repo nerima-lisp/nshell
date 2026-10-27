@@ -861,7 +861,15 @@
                 (getf head-origin :reader-prefix-kind)))
          (value-form (second form))
          (quote-symbol (find-symbol "QUOTE" (find-package "CL")))
-         (argv-symbol (find-symbol "ARGV" (find-package "NSHELL.USER"))))
+         (positional-reference-p
+           (let* ((origin (%sexp-reader-command-origin value-form))
+                  (source-name (and origin (getf origin :source-name))))
+             (and source-name
+                  (not (getf origin :escaped-p))
+                  (null (getf origin :package-qualifier))
+                  (or (string= source-name "argv")
+                      (and (>= (length source-name) 6)
+                           (string= source-name "argv[" :end1 5 :end2 5)))))))
     (labels ((source-symbol (source-form)
                (let* ((origin (%sexp-reader-command-origin source-form))
                       (source-name (and origin (getf origin :source-name)))
@@ -881,9 +889,7 @@
          (make-command-value-form :splice value-form span))
         (:unquote
          (make-command-value-form
-          (if (eq (source-symbol value-form) argv-symbol)
-              :splice
-              :value)
+          (if positional-reference-p :splice :value)
           value-form span))
         (:quote
          (make-command-value-form :quoted value-form span))

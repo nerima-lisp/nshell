@@ -383,9 +383,7 @@
     (with-builtins-context (context)
       (with-test-source-file (source nil)
         (write-test-lines source
-                          '("function sourced-hi"
-                            "  echo hello"
-                            "end"))
+                          '("(define-shell-function sourced-hi () (echo hello))"))
         (multiple-value-bind (output code)
             (call-source-file context source)
           (expect 0 :to-equal code)

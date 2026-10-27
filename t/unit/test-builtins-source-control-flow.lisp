@@ -88,6 +88,14 @@
     (with-builtins-source-ok (output code context
                                      '("echo price$"))
         (format nil "price$~%")))
+  (it "source-command-substitution-reads-later-sexp-lines-after-bare-line"
+    "source reads multiline command substitution lines with their own reader context."
+    (let ((context (make-test-builtins-context)))
+      (expect (format nil "bare-line~%sexp-line")
+              :to-equal
+              (nshell.application::%execute-command-substitution-output
+               context
+               (format nil "echo bare-line~%(progn (echo sexp-line))")))))
 
   (it "source-command-substitution-keeps-single-quoted-words-literal"
     "source does not expand command substitutions in single-quoted words."

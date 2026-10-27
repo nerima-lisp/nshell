@@ -568,7 +568,7 @@
         else
           let
             # `${ctx.executable}/bin/nshell.cl-nix-forge-unwrapped` -- not
-            # `ctx.package` -- is the dumped, `:compression t` image:
+            # `ctx.package` -- is the dumped, `:compression nil` image:
             # `ctx.package` is the plain ASDF system build, without the
             # `program-op` dump `mkExecutable` performs internally before
             # wrapping it. That internal build writes the image to
@@ -802,7 +802,7 @@
       # `packages.nshell`. Nothing here repeats what nshell.asd already
       # declares -- `:build-operation "program-op"`, `:build-pathname "nshell"`
       # and `:entry-point "nshell:main"` live in the system definition, as does
-      # the `:perform` that dumps the image with `:compression t` (the one
+      # the `:perform` that dumps the image with `:compression nil` (the one
       # thing `mkExecutable` cannot pass, and the reason that method exists).
       #
       # `installSource = false`: nshell runs only what was dumped into the

@@ -403,14 +403,9 @@
   :build-operation "program-op"
   :build-pathname "nshell"
   :entry-point "nshell:main"
-  ;; Why this method exists at all: ASDF's own `perform ((o image-op) (c
-  ;; system))` calls `uiop:dump-image` and never passes :compression, and SBCL
-  ;; offers no global that would add it, so a system that wants a compressed
-  ;; core must dump it itself. nshell has shipped a compressed image since
-  ;; before this file declared an entry point (flake.nix dumped it by hand);
-  ;; performing the dump here is what let that Nix code be replaced by
-  ;; cl-nix-forge's mkExecutable, which drives program-op and documents
-  ;; :compression as the one thing it cannot express.
+  ;; Save the core directly so SBCL retains the runtime-option handling needed
+  ;; for nshell's command-line flags. An uncompressed core stays file-backed,
+  ;; allowing the OS to page in only the portions used during startup.
   ;;
   ;; ASDF:OUTPUT-FILE rather than a literal "nshell": it resolves
   ;; :build-pathname through whatever output translations are configured, so
@@ -428,7 +423,7 @@
              (sb-ext:save-lisp-and-die
               (asdf:output-file o c)
               :executable t
-              :compression t
+              :compression nil
               ;; Stop the SBCL C runtime from intercepting --version/--help and
               ;; other runtime flags before nshell:main runs.
               :save-runtime-options t

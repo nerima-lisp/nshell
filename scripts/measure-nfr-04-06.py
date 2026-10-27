@@ -32,6 +32,7 @@ from nfr_thresholds import NFR_THRESHOLDS
 
 
 NFR06_SAME_PROCESS_REPEAT_COUNT = 3
+NFR06_COMPUTE_SIDECAR_ENV = "NSHELL_NFR06_CANDIDATE_COMPUTE_SIDECAR"
 DEFAULT_BUFFER_SIZES = (1000,)
 PROMPT_TIMEOUT_SECONDS = 15
 OUTPUT_TIMEOUT_SECONDS = 5
@@ -189,7 +190,12 @@ def validate_fixtures(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
-def child_environment(home: Path, prompt: str | None = None, git_prompt: bool = False) -> dict[str, str]:
+def child_environment(
+    home: Path,
+    prompt: str | None = None,
+    git_prompt: bool = False,
+    candidate_compute_sidecar: Path | None = None,
+) -> dict[str, str]:
     for name in ("config", "data", "state", "cache", "tmp"):
         (home / name).mkdir(parents=True, exist_ok=True)
     env = {
@@ -208,6 +214,8 @@ def child_environment(home: Path, prompt: str | None = None, git_prompt: bool = 
     }
     if prompt is not None:
         env["NSHELL_PROMPT"] = ("{git} " if git_prompt else "") + prompt
+    if candidate_compute_sidecar is not None:
+        env[NFR06_COMPUTE_SIDECAR_ENV] = str(candidate_compute_sidecar)
     return env
 
 
@@ -278,65 +286,65 @@ class PtySession:
 
     def wait_for_completion_render(
         self,
-        expected_output: bytes,
         start: int,
         marker: bytes,
+        expected_candidates: set[bytes] | None = None,
         timeout_seconds: float = OUTPUT_TIMEOUT_SECONDS,
-    ) -> int:
-        expected_rows = expected_output.splitlines()
-        expected_candidates = set(expected_rows)
-        if len(expected_candidates) != FIXTURE_FILE_COUNT:
-            raise ValueError("NFR-06 reference output does not contain 20,000 unique candidates")
+    ) -> dict[str, int | None]:
         deadline = time.monotonic() + timeout_seconds
-        scan_offset = start
-        pending = b""
-        pending_start = start
-        seen_candidates: set[bytes] = set()
-        candidate_end = start
-        while len(seen_candidates) < len(expected_candidates):
-            chunk = pending + bytes(self.data[scan_offset:])
-            scan_offset = len(self.data)
-            if chunk:
-                chunk_start = pending_start
-                lines = chunk.split(b"\n")
-                if chunk.endswith(b"\n"):
-                    pending = b""
-                    lines = lines[:-1]
+        marker_search_offset = start
+        marker_end: int | None = None
+        cursor_restore_search_offset: int | None = None
+        prompt_shape_search_offset: int | None = None
+        candidate_scan_offset = start
+        candidate_pending = b""
+        candidate_output_first_visible_ns: int | None = None
+        while True:
+            if expected_candidates and candidate_output_first_visible_ns is None:
+                chunk = candidate_pending + bytes(self.data[candidate_scan_offset:])
+                candidate_scan_offset = len(self.data)
+                if chunk:
+                    lines = chunk.split(b"\n")
+                    if chunk.endswith(b"\n"):
+                        candidate_pending = b""
+                    else:
+                        candidate_pending = lines.pop()
+                    for line in lines:
+                        candidate = visible_terminal_text(line).rstrip(b"\r")
+                        if candidate in expected_candidates:
+                            candidate_output_first_visible_ns = time.monotonic_ns()
+                            break
+            if marker_end is None:
+                marker_start = self.data.find(marker, marker_search_offset)
+                if marker_start < 0:
+                    marker_search_offset = max(start, len(self.data) - len(marker) + 1)
                 else:
-                    pending = lines.pop()
-                pending_start = chunk_start + len(chunk) - len(pending)
-                for line in lines:
-                    candidate = visible_terminal_text(line).rstrip(b"\r")
-                    if candidate in expected_candidates:
-                        seen_candidates.add(candidate)
-                        candidate_end = max(candidate_end, chunk_start + len(line.rstrip(b"\r")))
-                    chunk_start += len(line) + 1
-            if len(seen_candidates) == len(expected_candidates):
-                break
+                    marker_end = marker_start + len(marker)
+                    cursor_restore_search_offset = marker_end
+            if marker_end is not None and cursor_restore_search_offset is not None:
+                cursor_restore = self.data.find(CURSOR_RESTORE, cursor_restore_search_offset)
+                if cursor_restore < 0:
+                    cursor_restore_search_offset = max(
+                        marker_end, len(self.data) - len(CURSOR_RESTORE) + 1
+                    )
+                else:
+                    prompt_shape_search_offset = cursor_restore + len(CURSOR_RESTORE)
+                    cursor_restore_search_offset = None
+            if prompt_shape_search_offset is not None:
+                if self.data.find(PROMPT_CURSOR_SHAPE, prompt_shape_search_offset) >= 0:
+                    return {
+                        "prompt_render_complete_ns": time.monotonic_ns(),
+                        "candidate_output_first_visible_ns": candidate_output_first_visible_ns,
+                    }
+                prompt_shape_search_offset = max(
+                    prompt_shape_search_offset,
+                    len(self.data) - len(PROMPT_CURSOR_SHAPE) + 1,
+                )
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError(
-                    "NFR-06 completion output timed out after observing "
-                    f"{len(seen_candidates)} of {len(expected_candidates)} candidates; "
-                    f"tail={bytes(self.data[-800:])!r}"
+                    f"NFR-06 completion prompt timed out; tail={bytes(self.data[-800:])!r}"
                 )
-            self._read_once(remaining)
-
-        while True:
-            marker_start = self.data.rfind(marker, candidate_end)
-            cursor_restore = (
-                self.data.find(CURSOR_RESTORE, marker_start + len(marker))
-                if marker_start >= candidate_end
-                else -1
-            )
-            if cursor_restore >= 0 and self.data.find(
-                PROMPT_CURSOR_SHAPE,
-                cursor_restore + len(CURSOR_RESTORE),
-            ) >= 0:
-                return time.monotonic_ns()
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(f"NFR-06 completion prompt timed out; tail={bytes(self.data[-800:])!r}")
             self._read_once(remaining)
 
     def pump_for(self, duration_seconds: float) -> None:
@@ -636,11 +644,31 @@ def completion_reference_output(
     return result.stdout
 
 
+def read_candidate_compute_measurement(sidecar_path: Path) -> dict[str, float]:
+    fields = sidecar_path.read_text(encoding="ascii").split()
+    if len(fields) != 3:
+        raise RuntimeError(
+            "NFR-06 candidate-compute sidecar must contain compute ticks, "
+            "output-preparation ticks, and time units"
+        )
+    try:
+        compute_ticks, output_preparation_ticks, time_units = (int(field) for field in fields)
+    except ValueError as error:
+        raise RuntimeError("NFR-06 candidate-compute sidecar contains a non-integer value") from error
+    if min(compute_ticks, output_preparation_ticks) < 0 or time_units <= 0:
+        raise RuntimeError("NFR-06 candidate-compute sidecar contains an invalid duration")
+    return {
+        "candidate_compute_duration_ms": compute_ticks * 1000 / time_units,
+        "candidate_output_preparation_duration_ms": output_preparation_ticks * 1000 / time_units,
+    }
+
+
 def run_interactive_completion_round(
     session: PtySession,
     command_bytes: bytes,
     marker: bytes,
     expected_output: bytes,
+    candidate_compute_sidecar: Path | None = None,
 ) -> dict[str, object]:
     paste = BRACKETED_PASTE_START + command_bytes + BRACKETED_PASTE_END
     input_start = len(session.data)
@@ -655,37 +683,57 @@ def run_interactive_completion_round(
     if os.write(session.master, b"\r") != 1:
         raise RuntimeError("NFR-06 completion trigger was not fully written to the PTY")
 
-    end_ns = session.wait_for_completion_render(
-        expected_output,
+    expected_rows = expected_output.splitlines()
+    expected_candidates = set(expected_rows)
+    render_timing = session.wait_for_completion_render(
         response_start,
         marker,
+        expected_candidates if candidate_compute_sidecar is not None else None,
     )
+    end_ns = int(render_timing["prompt_render_complete_ns"])
     response = bytes(session.data[response_start:])
-    expected_candidates = set(expected_output.splitlines())
     visible_lines = [
         visible_terminal_text(line).rstrip(b"\r")
         for line in response.splitlines()
     ]
     candidate_rows = [line for line in visible_lines if line in expected_candidates]
-    if len(candidate_rows) != FIXTURE_FILE_COUNT or set(candidate_rows) != expected_candidates:
+    if candidate_rows != expected_rows:
+        first_mismatch = next(
+            (
+                index
+                for index, (actual, expected) in enumerate(zip(candidate_rows, expected_rows))
+                if actual != expected
+            ),
+            min(len(candidate_rows), len(expected_rows)),
+        )
         raise RuntimeError(
-            "NFR-06 interactive completion output did not contain every verified candidate "
-            f"exactly once: observed {len(candidate_rows)} rows and "
-            f"{len(set(candidate_rows))} unique of {FIXTURE_FILE_COUNT}"
+            "NFR-06 interactive completion output did not match the ordered reference candidates: "
+            f"observed {len(candidate_rows)} rows, expected {len(expected_rows)}, "
+            f"first mismatch at row {first_mismatch}"
         )
     if not prompt_render_complete(response, marker):
         raise RuntimeError("NFR-06 completion did not return to a fully rendered prompt")
-    return {
+    observed_candidate_output = b"\n".join(candidate_rows)
+    result: dict[str, object] = {
         "latency_ms": (end_ns - started_ns) / 1_000_000,
         "candidate_count": FIXTURE_FILE_COUNT,
         "output_bytes": len(expected_output),
-        "output_sha256": hashlib.sha256(expected_output).hexdigest(),
+        "output_sha256": hashlib.sha256(observed_candidate_output).hexdigest(),
         "response_bytes": len(response),
         "prompt_cursor_restored": CURSOR_RESTORE in response,
         "prompt_render_complete_detected": PROMPT_CURSOR_SHAPE in response,
         "observed_candidate_count": len(candidate_rows),
         "cursor_queries": session.responses_sent,
     }
+    if candidate_compute_sidecar is not None:
+        candidate_output_start_ns = render_timing["candidate_output_first_visible_ns"]
+        if candidate_output_start_ns is None:
+            raise RuntimeError("NFR-06 diagnostic did not observe a visible expected candidate row")
+        result["candidate_output_to_prompt_ms"] = (
+            end_ns - candidate_output_start_ns
+        ) / 1_000_000
+        result.update(read_candidate_compute_measurement(candidate_compute_sidecar))
+    return result
 
 
 def run_interactive_completion_sample(
@@ -695,30 +743,65 @@ def run_interactive_completion_sample(
     home_root: Path,
     expected_output: bytes,
     settle_seconds: float,
+    candidate_compute_diagnostics: bool = False,
 ) -> dict[str, object]:
     marker_text = f"NSHELL_NFR06_{uuid.uuid4().hex}_PROMPT"
     marker = marker_text.encode()
     home = home_root / f"home-{uuid.uuid4().hex}"
-    session = PtySession(
-        [str(binary), "--no-config"],
-        fixture,
-        child_environment(home, marker_text),
+    candidate_compute_sidecar = home / "tmp" / "nfr06-candidate-compute"
+    environment = child_environment(
+        home,
+        marker_text,
+        candidate_compute_sidecar=(
+            candidate_compute_sidecar if candidate_compute_diagnostics else None
+        ),
     )
+    session: PtySession | None = None
     command_bytes = completion_command(binary, fixture, prefix)[-1].encode()
     try:
+        session = PtySession([str(binary), "--no-config"], fixture, environment)
         session.wait_for_marker(marker)
         session.pump_for(settle_seconds)
+        if candidate_compute_diagnostics:
+            candidate_compute_sidecar.unlink(missing_ok=True)
         first = run_interactive_completion_round(
-            session, command_bytes, marker, expected_output
+            session,
+            command_bytes,
+            marker,
+            expected_output,
+            candidate_compute_sidecar=(
+                candidate_compute_sidecar if candidate_compute_diagnostics else None
+            ),
         )
         repeated_latencies = []
+        repeated_candidate_compute_durations = []
+        repeated_candidate_output_preparation_durations = []
+        repeated_candidate_output_to_prompt_durations = []
         for _ in range(NFR06_SAME_PROCESS_REPEAT_COUNT):
             session.reset_transcript()
+            if candidate_compute_diagnostics:
+                candidate_compute_sidecar.unlink(missing_ok=True)
             repeated = run_interactive_completion_round(
-                session, command_bytes, marker, expected_output
+                session,
+                command_bytes,
+                marker,
+                expected_output,
+                candidate_compute_sidecar=(
+                    candidate_compute_sidecar if candidate_compute_diagnostics else None
+                ),
             )
             repeated_latencies.append(float(repeated["latency_ms"]))
-        return {
+            if candidate_compute_diagnostics:
+                repeated_candidate_compute_durations.append(
+                    float(repeated["candidate_compute_duration_ms"])
+                )
+                repeated_candidate_output_preparation_durations.append(
+                    float(repeated["candidate_output_preparation_duration_ms"])
+                )
+                repeated_candidate_output_to_prompt_durations.append(
+                    float(repeated["candidate_output_to_prompt_ms"])
+                )
+        result: dict[str, object] = {
             "latency_ms": first["latency_ms"],
             "trigger": "Enter on an already-visible complete -C command",
             "candidate_count": first["candidate_count"],
@@ -731,8 +814,21 @@ def run_interactive_completion_sample(
             "cursor_queries": first["cursor_queries"],
             "same_process_repeat_latencies_ms": repeated_latencies,
         }
+        if candidate_compute_diagnostics:
+            result.update({
+                "candidate_compute_duration_ms": first["candidate_compute_duration_ms"],
+                "candidate_output_preparation_duration_ms": first["candidate_output_preparation_duration_ms"],
+                "candidate_output_to_prompt_ms": first["candidate_output_to_prompt_ms"],
+                "same_process_repeat_candidate_compute_durations_ms": repeated_candidate_compute_durations,
+                "same_process_repeat_candidate_output_preparation_durations_ms": repeated_candidate_output_preparation_durations,
+                "same_process_repeat_candidate_output_to_prompt_durations_ms": repeated_candidate_output_to_prompt_durations,
+            })
+        return result
     finally:
-        session.close()
+        if session is not None:
+            session.close()
+        if candidate_compute_diagnostics:
+            candidate_compute_sidecar.unlink(missing_ok=True)
 
 
 def run_suggestion_key_sample(
@@ -873,6 +969,54 @@ def run_target_group(
             "measured_samples": len(repeat_values),
             **stats(repeat_values),
         }
+        if rows and "candidate_compute_duration_ms" in rows[0]["target"]:
+            first_compute_values = [
+                float(row["target"]["candidate_compute_duration_ms"]) for row in rows
+            ]
+            first_output_preparation_values = [
+                float(row["target"]["candidate_output_preparation_duration_ms"]) for row in rows
+            ]
+            first_output_to_prompt_values = [
+                float(row["target"]["candidate_output_to_prompt_ms"]) for row in rows
+            ]
+            repeat_compute_values = [
+                float(value)
+                for row in rows
+                for value in row["target"]["same_process_repeat_candidate_compute_durations_ms"]
+            ]
+            repeat_output_preparation_values = [
+                float(value)
+                for row in rows
+                for value in row["target"]["same_process_repeat_candidate_output_preparation_durations_ms"]
+            ]
+            repeat_output_to_prompt_values = [
+                float(value)
+                for row in rows
+                for value in row["target"]["same_process_repeat_candidate_output_to_prompt_durations_ms"]
+            ]
+            if (
+                len(first_compute_values) != samples
+                or len(first_output_preparation_values) != samples
+                or len(first_output_to_prompt_values) != samples
+                or len(repeat_compute_values) != expected_repeat_count
+                or len(repeat_output_preparation_values) != expected_repeat_count
+                or len(repeat_output_to_prompt_values) != expected_repeat_count
+            ):
+                raise ValueError("NFR-06 candidate-compute phase data is incomplete")
+            summary["candidate_compute_phase_timing"] = {
+                "first_completion": {
+                    "measured_samples": len(first_compute_values),
+                    "candidate_compute": stats(first_compute_values),
+                    "candidate_output_preparation": stats(first_output_preparation_values),
+                    "candidate_output_to_prompt": stats(first_output_to_prompt_values),
+                },
+                "same_process_repeats": {
+                    "measured_samples": len(repeat_compute_values),
+                    "candidate_compute": stats(repeat_compute_values),
+                    "candidate_output_preparation": stats(repeat_output_preparation_values),
+                    "candidate_output_to_prompt": stats(repeat_output_to_prompt_values),
+                },
+            }
     stream.write(json.dumps(summary, sort_keys=True) + "\n")
     stream.flush()
     return summary
@@ -1042,6 +1186,7 @@ def run_completion_group(
     samples: int,
     warmups: int,
     settle_seconds: float,
+    candidate_compute_diagnostics: bool = False,
 ) -> dict[str, object]:
     expected_output = completion_reference_output(binary, completion_fixture, prefix, home_root)
     target = lambda: run_interactive_completion_sample(
@@ -1051,6 +1196,7 @@ def run_completion_group(
         home_root,
         expected_output,
         settle_seconds,
+        candidate_compute_diagnostics,
     )
     return run_target_group(
         stream,
@@ -1121,6 +1267,13 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
             "terminal_size": {"rows": 24, "columns": 100},
             "percentile": "nearest-rank p99",
         }
+        if args.nfr06_candidate_compute_diagnostics:
+            metadata["nfr06_candidate_compute_diagnostics"] = {
+                "candidate_compute_boundary": "get-internal-real-time immediately before the domain completion:complete call through its return; excludes candidate-text assembly and PTY rendering",
+                "candidate_output_preparation_boundary": "get-internal-real-time around formatting all candidate texts into the command output string; excludes completion:complete and PTY rendering",
+                "candidate_output_to_prompt_boundary": "Python time.monotonic_ns from observing the first expected candidate row in PTY output through the fully restored prompt cursor; excludes Enter dispatch and candidate computation, and includes candidate output through the PTY and prompt restoration",
+                "observer_delivery": "The diagnostic-only sidecar writes three integer timing values to a per-sample file after candidate text preparation and before returning command output. The regular NFR-06 gate runs without this instrumentation.",
+            }
 
         with output_path.open("w", encoding="utf-8") as stream:
             stream.write(json.dumps(metadata, sort_keys=True) + "\n")
@@ -1214,6 +1367,7 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                     args.samples,
                     args.warmups,
                     args.settle_ms / 1000,
+                    args.nfr06_candidate_compute_diagnostics,
                 ))
 
             if args.start_from != "nfr05":
@@ -1275,6 +1429,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--completion-fixture", required=True, help="existing directory with exactly 20,000 item files for NFR-06 completion and key responsiveness")
     parser.add_argument("--completion-prefix", default="item-", help="required filename prefix in completion fixture (default: item-)")
     parser.add_argument(
+        "--nfr06-candidate-compute-diagnostics",
+        action="store_true",
+        help="opt in to per-trial candidate-computation timing and post-completion phase diagnostics",
+    )
+    parser.add_argument(
         "--buffer-sizes",
         type=int,
         nargs="+",
@@ -1299,6 +1458,8 @@ def main() -> int:
         parser.error("--settle-ms must be zero or greater")
     if not args.completion_prefix:
         parser.error("--completion-prefix must not be empty")
+    if args.nfr06_candidate_compute_diagnostics and args.start_from not in ("nfr04", "nfr06"):
+        parser.error("--nfr06-candidate-compute-diagnostics requires an NFR-06 completion run")
     try:
         output_path = Path(args.output).expanduser().resolve()
         summaries = run_measurements(args, output_path)

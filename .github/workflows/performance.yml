@@ -42,6 +42,7 @@ jobs:
           esac
 
       - name: Build nshell
+        id: binary
         run: >-
           nix build --max-jobs 1 --print-build-logs
           ".#packages.${{ matrix.system }}.default"
@@ -56,10 +57,22 @@ jobs:
           --system "${{ matrix.system }}"
           --revision "$GITHUB_SHA"
 
+      - name: Profile NFR-06 CPU
+        if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' }}
+        env:
+          NFR06_PROFILE_BINARY: ${{ runner.temp }}/nshell-nfr-binary/bin/nshell
+          NFR06_PROFILE_FIXTURE: ${{ runner.temp }}/nshell-nfr06-fixture
+          NFR06_PROFILE_OUTPUT: ${{ runner.temp }}/nshell-nfr-results/nfr06-profile
+        run: >-
+          nix develop .#scenarios -c python3
+          scripts/profile-nfr06-ci.py
+          --mode cpu --iterations 100
+
       - name: Publish NFR job summary
         if: always()
         run: |
           summary="$RUNNER_TEMP/nshell-nfr-results/summary.md"
+          profile_root="$RUNNER_TEMP/nshell-nfr-results/nfr06-profile"
           if [ -s "$summary" ]; then
             cat "$summary" >> "$GITHUB_STEP_SUMMARY"
           else
@@ -68,6 +81,38 @@ jobs:
               echo
               echo "No complete measurement summary was produced. Inspect the build result and partial measurement artifacts."
             } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          profile_result=$(find "$profile_root" -path '*/gate-cpu-*/result.json' -type f -print -quit 2>/dev/null || true)
+          if [ -n "$profile_result" ]; then
+            python3 - "$profile_result" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          result_path = Path(sys.argv[1])
+          result = json.loads(result_path.read_text(encoding="utf-8"))
+          counts = result.get("profile_sample_counts", {})
+          print("\n## NFR-06 CPU profile")
+          print(f"Status: **{result.get('status', 'unknown')}**")
+          print(f"Iterations: {result.get('iterations_validated', 0)} / {result.get('iterations_requested', 0)}")
+          print(f"Validated samples: {counts.get('raw_vector_trace_count', 'unavailable')} (graph {counts.get('graph_header_count', 'unavailable')}, thread CSV {counts.get('thread_counts_csv_total', 'unavailable')})")
+          print(f"Completion-thread samples: {counts.get('target_thread_count', 'unavailable')}")
+          print(f"Profile artifacts: `{result_path.parent}`")
+          flat_path = Path(result.get("target_flat", result_path.parent / "cpu.target.flat.txt"))
+          if flat_path.is_file():
+              flat_rows = []
+              for line in flat_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                  fields = line.split()
+                  if len(fields) > 8 and fields[0].isdigit():
+                      flat_rows.append(line)
+              print("\nTop completion-thread flat-profile functions:")
+              print("\n```text")
+              print("\n".join(flat_rows[:20]))
+              print("```")
+          PY
+          else
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "NFR-06 CPU profile did not produce a validated result; inspect the uploaded profile artifact." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload raw measurements and summary

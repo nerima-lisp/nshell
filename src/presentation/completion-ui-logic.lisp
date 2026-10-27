@@ -173,66 +173,34 @@
              (integerp max-width)
              (>= max-width 0)
              (not (find 0 octets)))
-    (labels ((continuation-byte-p (index length)
-                                  (and (< index length)
-                                       (<= #x80 (aref octets index) #xbf)))
-             (valid-utf8-p ()
-                           (block valid-utf8-p
-                             (let ((index 0)
-                                   (length (length octets)))
-                               (loop while (< index length)
-                                     do (let* ((lead (aref octets index))
-                                               (continuation-count
-                                                (cond
-                                                 ((<= lead #x7f) 0)
-                                                 ((<= #xc2 lead #xdf) 1)
-                                                 ((<= #xe0 lead #xef) 2)
-                                                 ((<= #xf0 lead #xf4) 3)
-                                                 (t nil))))
-                                          (unless
-                                              (and (integerp continuation-count)
-                                                   (< (+ index continuation-count) length)
-                                                   (or (zerop continuation-count)
-                                                       (let ((second (aref octets (1+ index))))
-                                                         (and (continuation-byte-p (1+ index) length)
-                                                              (case lead
-                                                                (#xe0 (<= #xa0 second #xbf))
-                                                                (#xed (<= #x80 second #x9f))
-                                                                (#xf0 (<= #x90 second #xbf))
-                                                                (#xf4 (<= #x80 second #x8f))
-                                                                (otherwise t))
-                                                              (loop for offset from 2 to continuation-count
-                                                                    always
-                                                                    (continuation-byte-p
-                                                                     (+ index offset) length))))))
-                                            (return-from valid-utf8-p nil))
-                                          (incf index (1+ continuation-count))))
-                               t)))
-             (safe-line (line)
-                        (%truncate-string-to-width
-                         (with-output-to-string (output)
-                           (loop for character across line
-                                 for code = (char-code character)
-                                 do (cond
-                                     ((char= character #\Tab)
-                                      (write-string "    " output))
-                                     ((or (< code #x20)
-                                          (<= #x7f code #x9f))
-                                      (format output "\\x~(~2,'0X~)" code))
-                                     ((or (= code #x061c)
-                                          (= code #x200e)
-                                          (= code #x200f)
-                                          (<= #x202a code #x202e)
-                                          (= code #x2028)
-                                          (= code #x2029)
-                                          (<= #x2066 code #x2069))
-                                      (format output "\\u~(~4,'0X~)" code))
-                                     (t
-                                      (write-char character output)))))
-                         max-width)))
-      (when (valid-utf8-p)
-        (let* ((text (sb-ext:octets-to-string octets :external-format :utf-8))
-               (text-length (length text))
+    (let ((text
+            (handler-case
+                (sb-ext:octets-to-string octets :external-format :utf-8)
+              (sb-int:character-decoding-error ()
+                (return-from format-file-preview-lines nil)))))
+      (labels ((safe-line (line)
+                 (%truncate-string-to-width
+                  (with-output-to-string (output)
+                    (loop for character across line
+                          for code = (char-code character)
+                          do (cond
+                               ((char= character #\Tab)
+                                (write-string "    " output))
+                               ((or (< code #x20)
+                                    (<= #x7f code #x9f))
+                                (format output "\\x~(~2,'0X~)" code))
+                               ((or (= code #x061c)
+                                    (= code #x200e)
+                                    (= code #x200f)
+                                    (<= #x202a code #x202e)
+                                    (= code #x2028)
+                                    (= code #x2029)
+                                    (<= #x2066 code #x2069))
+                                (format output "\\u~(~4,'0X~)" code))
+                               (t
+                                (write-char character output)))))
+                  max-width)))
+        (let* ((text-length (length text))
                (start 0)
                (lines nil))
           (loop repeat max-lines
@@ -240,11 +208,11 @@
                 do (let* ((end (position #\Newline text :start start))
                           (raw-end (or end text-length))
                           (content-end
-                           (if (and end
-                                    (> raw-end start)
-                                    (char= (char text (1- raw-end)) #\Return))
-                               (1- raw-end)
-                             raw-end)))
+                            (if (and end
+                                     (> raw-end start)
+                                     (char= (char text (1- raw-end)) #\Return))
+                                (1- raw-end)
+                              raw-end)))
                      (push (safe-line (subseq text start content-end)) lines)
                      (setf start (if end (1+ end) text-length))))
           (nreverse lines))))))

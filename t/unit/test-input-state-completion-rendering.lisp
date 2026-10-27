@@ -338,7 +338,7 @@
       (expect (loop for code in (list #x202e #x2066 #x2028 #x2029)
                     always (null (position (code-char code) line)))
               :to-be-truthy)))
-  (it "file-preview-formatting-escapes-controls-and-rejects-binary"
+  (it "file-preview-formatting-escapes-controls-and-rejects-invalid-utf8"
     (let* ((control-bytes
              (make-array
               9 :element-type (quote (unsigned-byte 8))
@@ -354,7 +354,27 @@
            (invalid-utf8
              (make-array
               2 :element-type (quote (unsigned-byte 8))
-              :initial-contents (list #xc3 #x28))))
+              :initial-contents (list #xc3 #x28)))
+           (invalid-utf8-cases
+             (list
+              invalid-utf8
+              (make-array
+               2 :element-type (quote (unsigned-byte 8))
+               :initial-contents (list #xc0 #xaf))
+              (make-array
+               3 :element-type (quote (unsigned-byte 8))
+               :initial-contents (list #xed #xa0 #x80))
+              (make-array
+               2 :element-type (quote (unsigned-byte 8))
+               :initial-contents (list #xe2 #x82))
+              (let ((bytes
+                      (make-array
+                       0 :element-type (quote (unsigned-byte 8))
+                       :adjustable t :fill-pointer 0)))
+                (loop repeat 4095 do
+                  (vector-push-extend #x61 bytes))
+                (vector-push-extend #xc3 bytes)
+                bytes))))
       (expect 1 :to-equal (length lines))
       (expect (search "\\x1b" line) :to-be-truthy)
       (expect nil :to-equal (position #\Tab line))
@@ -367,13 +387,19 @@
                 (and before-tab after-tab
                      (> after-tab (1+ before-tab))
                      (loop for index from (1+ before-tab) below after-tab
-                           always (char= (char line index) #\Space)))) :to-be-truthy)
+                           always (char= (char line index) #\Space))))
+              :to-be-truthy)
       (expect nil :to-equal
               (nshell.presentation::format-file-preview-lines
                nul-bytes :max-lines 3 :max-width 80))
-      (expect nil :to-equal
+      (expect
+       (loop for bytes in invalid-utf8-cases
+             always
+             (null
               (nshell.presentation::format-file-preview-lines
-               invalid-utf8 :max-lines 3 :max-width 80))))
+               bytes :max-lines 3 :max-width 80)))
+       :to-be-truthy)))
+
   (it "completion-rendering-skips-preview-for-command-and-directory"
     (host-kit:with-temporary-directory (directory)
       (let ((path (merge-pathnames "preview.txt" directory)))

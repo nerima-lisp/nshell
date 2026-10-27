@@ -167,6 +167,11 @@ data object; infrastructure constructs it from host operations.")
   (:use #:cl)
   (:export #:filesystem #:filesystem-p #:make-filesystem
            #:filesystem-directory-files #:filesystem-subdirectories
+           #:filesystem-completion-entries
+           #:filesystem-completion-entry #:make-filesystem-completion-entry
+           #:filesystem-completion-entry-name
+           #:filesystem-completion-entry-kind
+           #:filesystem-completion-entry-target-kind
            #:filesystem-executable-p #:filesystem-directory-map))
 
 (defpackage #:nshell.domain.expansion

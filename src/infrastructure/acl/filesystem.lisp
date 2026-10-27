@@ -1,5 +1,7 @@
 (in-package #:nshell.infrastructure.acl)
-(eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
+(declaim (ftype function cached-completion-entries))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :sb-posix))
 
 ;;; Completion lists a directory on every keystroke, so a directory with
 ;;; thousands of entries (a busy /tmp) costs a full listing per character. The
@@ -90,6 +92,16 @@ grow it without bound.")
 
 (defun cached-subdirectories (directory)
   (%cached-directory-listing :subdirectories directory #'host-kit:subdirectories))
+(defun %filesystem-completion-dirent-type-hint (dirent)
+  ;; Both supported 64-bit ABIs place d_type before d_name.
+  #+(and 64-bit (or darwin linux))
+  (sb-sys:sap-ref-8
+   (sb-alien:alien-sap dirent)
+   (1- sb-posix::offset-of-dirent-name))
+  #-(and 64-bit (or darwin linux))
+  (let ((ignored dirent))
+    (declare (ignore ignored))
+    nil))
 (defun read-regular-file-bytes (pathname byte-limit)
   (when (and (integerp byte-limit) (plusp byte-limit))
     (let ((fd nil)
@@ -246,8 +258,109 @@ grow it without bound.")
     (getf (%cached-filesystem-completion-entry-lists directory) :subdirectories))
 
   (defun make-host-filesystem ()
-    (nshell.domain.filesystem:make-filesystem
-     :directory-files #'cached-completion-directory-files
-     :subdirectories #'cached-completion-subdirectories
-     :executable-p #'executable-file-p
-     :directory-map #'map-path-command-directories)))
+  (nshell.domain.filesystem:make-filesystem
+   :directory-files #'cached-completion-directory-files
+   :subdirectories #'cached-completion-subdirectories
+   :completion-entries #'cached-completion-entries
+   :executable-p #'executable-file-p
+   :directory-map #'map-path-command-directories)))
+(progn
+  (defun %filesystem-completion-entry-batch-valid-p (entry-batch)
+    (every (lambda (target)
+             (eq (cdr target)
+                 (%filesystem-completion-symlink-target-kind (car target))))
+           (getf entry-batch :symlink-target-kinds)))
+
+  (defun %filesystem-completion-entry-batch (directory)
+    (let* ((directory-path
+             (if (stringp directory)
+                 (if (and (plusp (length directory))
+                          (char= (char directory (1- (length directory))) #\/))
+                     directory
+                     (concatenate 'string directory "/"))
+                 (namestring (host-kit:ensure-directory-pathname directory))))
+           (directories nil)
+           (files nil)
+           (unknown nil)
+           (symlink-target-kinds nil))
+      (labels ((entry-path (name)
+                 (concatenate 'string directory-path name))
+               (entry-kind (path type-hint)
+                 (case type-hint
+                   (4 :directory)
+                   (8 :regular-file)
+                   (otherwise
+                    (let ((mode (sb-posix:stat-mode (sb-posix:lstat path))))
+                      (cond
+                        ((sb-posix:s-isreg mode) :regular-file)
+                        ((sb-posix:s-isdir mode) :directory)
+                        ((sb-posix:s-islnk mode) :symbolic-link)
+                        (t :unknown))))))
+               (record-entry (name kind)
+                 (case kind
+                   (:directory
+                    (push
+                     (nshell.domain.filesystem:make-filesystem-completion-entry
+                      :name name :kind :directory)
+                     directories))
+                   (:regular-file
+                    (push
+                     (nshell.domain.filesystem:make-filesystem-completion-entry
+                      :name name :kind :regular-file)
+                     files))
+                   (:symbolic-link
+                    (let* ((path (entry-path name))
+                           (target-kind
+                             (%filesystem-completion-symlink-target-kind path))
+                           (entry
+                             (nshell.domain.filesystem:make-filesystem-completion-entry
+                              :name name :kind :symbolic-link
+                              :target-kind (if (eq target-kind :other) :unknown target-kind))))
+                      (push (cons path target-kind) symlink-target-kinds)
+                      (cond
+                        ((eq target-kind :directory)
+                         (push entry directories))
+                        ((member target-kind '(:regular-file :missing))
+                         (push entry files))
+                        (t
+                         (push entry unknown)))))
+                   (otherwise
+                    (push
+                     (nshell.domain.filesystem:make-filesystem-completion-entry
+                      :name name :kind :unknown)
+                     unknown))))
+               (visit-entries ()
+                 (let ((stream (sb-posix:opendir directory-path)))
+                   (unwind-protect
+                        (let ((entries
+                                (sort
+                                 (loop for dirent = (sb-posix:readdir stream)
+                                       while (and dirent
+                                                  (not (sb-alien:null-alien dirent)))
+                                       for type-hint = (%filesystem-completion-dirent-type-hint dirent)
+                                       for name = (sb-posix:dirent-name dirent)
+                                       unless (member name '("." "..")
+                                                      :test #'string=)
+                                         collect (cons name type-hint))
+                                 #'string<
+                                 :key #'car)))
+                          (dolist (record entries)
+                            (record-entry
+                             (car record)
+                             (entry-kind (entry-path (car record))
+                                         (cdr record)))))
+                     (sb-posix:closedir stream)))))
+        (visit-entries)
+        (list :entries (append (nreverse directories)
+                               (nreverse files)
+                               (nreverse unknown))
+              :symlink-target-kinds (nreverse symlink-target-kinds)))))
+
+  (defun %cached-filesystem-completion-entry-batch (directory)
+    (%cached-directory-listing :filesystem-completion-entry-batch
+                               directory
+                               #'%filesystem-completion-entry-batch
+                               #'%filesystem-completion-entry-batch-valid-p))
+
+  (defun cached-completion-entries (directory)
+    (getf (%cached-filesystem-completion-entry-batch directory) :entries)))

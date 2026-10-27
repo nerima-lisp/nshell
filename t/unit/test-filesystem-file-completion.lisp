@@ -260,3 +260,276 @@
                      (sb-thread:thread-alive-p reader-thread))
             (sb-thread:terminate-thread reader-thread)
             (sb-thread:join-thread reader-thread)))))))
+(describe "filesystem-completion-port-tests"
+  (it "host port preserves kinds and ordered legacy candidates"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((target-file (merge-pathnames "target.txt" directory))
+             (target-directory (merge-pathnames "target-dir/" directory))
+             (file-link (merge-pathnames "file-link" directory))
+             (directory-link (merge-pathnames "directory-link" directory))
+             (broken-link (merge-pathnames "broken-link" directory))
+             (hidden-file (merge-pathnames ".hidden-file" directory))
+             (hidden-directory (merge-pathnames ".hidden-directory/" directory))
+             (special-file (merge-pathnames "special.fifo" directory))
+             (filesystem (nshell.infrastructure.acl:make-host-filesystem))
+             (entries nil)
+             (directory-prefix (namestring (host-kit:ensure-directory-pathname directory)))
+             (legacy-filesystem nil))
+        (host-kit:write-file-string "target" target-file)
+        (host-kit:write-file-string "hidden" hidden-file)
+        (host-kit:ensure-directory-tree target-directory)
+        (host-kit:ensure-directory-tree hidden-directory)
+        (host-kit:create-symbolic-link target-file file-link)
+        (host-kit:create-symbolic-link target-directory directory-link)
+        (host-kit:create-symbolic-link
+         (merge-pathnames "missing.txt" directory) broken-link)
+        (sb-posix:mkfifo (namestring special-file) #o600)
+        (nshell.infrastructure.acl:clear-directory-listing-cache)
+        (unwind-protect
+             (progn
+               (setf entries
+                     (funcall
+                      (nshell.domain.filesystem:filesystem-completion-entries filesystem)
+                      directory)
+                     legacy-filesystem
+                     (nshell.domain.filesystem:make-filesystem
+                      :directory-files
+                      (nshell.domain.filesystem:filesystem-directory-files filesystem)
+                      :subdirectories
+                      (nshell.domain.filesystem:filesystem-subdirectories filesystem)
+                      :executable-p (constantly nil)))
+               (labels ((entry (name)
+                          (find name entries
+                                :key (function nshell.domain.filesystem:filesystem-completion-entry-name)
+                                :test (function string=)))
+                        (signature (source prefix)
+                          (mapcar
+                           (lambda (candidate)
+                             (list (nshell.domain.completion:candidate-text candidate)
+                                   (nshell.domain.completion:candidate-kind candidate)
+                                   (nshell.domain.completion:candidate-score candidate)
+                                   (nshell.domain.completion:candidate-description candidate)))
+                           (nshell.domain.completion::%file-candidates-from-directory
+                            source (concatenate (quote string) directory-prefix prefix))))
+                        (path-text (name) (concatenate (quote string) directory-prefix name))
+                        (texts (source prefix)
+                          (mapcar (function first) (signature source prefix))))
+                 (expect :regular-file :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-kind
+                          (entry "target.txt")))
+                 (expect :directory :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-kind
+                          (entry "target-dir")))
+                 (expect :symbolic-link :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-kind
+                          (entry "file-link")))
+                 (expect :regular-file :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-target-kind
+                          (entry "file-link")))
+                 (expect :symbolic-link :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-kind
+                          (entry "directory-link")))
+                 (expect :directory :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-target-kind
+                          (entry "directory-link")))
+                 (expect :missing :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-target-kind
+                          (entry "broken-link")))
+                 (expect :unknown :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-kind
+                          (entry "special.fifo")))
+                 (expect (signature legacy-filesystem "") :to-equal
+                         (signature filesystem ""))
+                 (expect (signature legacy-filesystem ".") :to-equal
+                         (signature filesystem "."))
+                 (expect (member (path-text "file-link") (texts filesystem "")
+                                 :test (function string=)) :to-be-truthy)
+                 (expect (member (path-text "broken-link") (texts filesystem "")
+                                 :test (function string=)) :to-be-truthy)
+                 (expect (member (path-text "directory-link/") (texts filesystem "")
+                                 :test (function string=)) :to-be-truthy)
+                 (expect (member (path-text "target-dir/") (texts filesystem "")
+                                 :test (function string=)) :to-be-truthy)
+                 (expect (member (path-text "special.fifo") (texts filesystem "")
+                                 :test (function string=)) :to-be-falsy)
+                 (expect (member (concatenate (quote string) directory-prefix ".hidden-file") (texts filesystem "")
+                                 :test (function string=)) :to-be-falsy)
+                 (expect (member (concatenate (quote string) directory-prefix ".hidden-file") (texts filesystem ".")
+                                 :test (function string=)) :to-be-truthy)
+                 (expect (member (path-text ".hidden-directory/") (texts filesystem ".")
+                                 :test (function string=)) :to-be-truthy))) (nshell.infrastructure.acl:clear-directory-listing-cache)))
+
+  ) )
+  (it "uses known dirent kinds and falls back for unknown types"
+  (host-kit:with-temporary-directory (directory)
+    (let* ((regular-file (merge-pathnames "regular.txt" directory))
+           (subdirectory (merge-pathnames "sample-dir/" directory))
+           (special-file (merge-pathnames "special.fifo" directory))
+           (filesystem (nshell.infrastructure.acl:make-host-filesystem))
+           (completion-entries
+             (nshell.domain.filesystem:filesystem-completion-entries filesystem))
+           (lstat-paths nil))
+      (host-kit:write-file-string "regular" regular-file)
+      (host-kit:ensure-directory-tree subdirectory)
+      (sb-posix:mkfifo (namestring special-file) #o600)
+      (nshell.infrastructure.acl:clear-directory-listing-cache)
+      (unwind-protect
+           (progn
+             (with-rebound-function
+                 (nshell.infrastructure.acl::%filesystem-completion-dirent-type-hint
+                  (lambda (dirent)
+                    (let ((name (sb-posix:dirent-name dirent)))
+                      (cond
+                        ((string= name "regular.txt") 8)
+                        ((string= name "sample-dir") 4)
+                        (t 0)))))
+               (with-rebound-function
+                   (sb-posix:lstat
+                    (lambda (path)
+                      (push path lstat-paths)
+                      (funcall original-function path)))
+                 (funcall completion-entries directory)))
+             (expect
+              (member (namestring regular-file) lstat-paths
+                      :test (function string=))
+              :to-be-falsy)
+             (expect
+              (member (namestring subdirectory) lstat-paths
+                      :test (function string=))
+              :to-be-falsy)
+             (expect
+              (member (namestring special-file) lstat-paths
+                      :test (function string=))
+              :to-be-truthy))
+        (nshell.infrastructure.acl:clear-directory-listing-cache))))) (it "preserves directory-first duplicate precedence and deduplication"
+    (let* ((entries
+             (list (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "duplicate" :kind :directory)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "duplicate" :kind :regular-file)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "repeat" :kind :regular-file)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "repeat" :kind :regular-file)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "unknown" :kind :unknown)))
+           (port-filesystem
+             (nshell.domain.filesystem:make-filesystem
+              :directory-files
+              (lambda (directory)
+                (declare (ignore directory))
+                (list #p"duplicate" #p"repeat" #p"repeat"))
+              :subdirectories
+              (lambda (directory)
+                (declare (ignore directory))
+                (list #p"duplicate/" #p"duplicate/"))
+              :completion-entries
+              (lambda (directory)
+                (declare (ignore directory))
+                entries)
+              :executable-p (constantly nil)))
+           (legacy-filesystem
+             (nshell.domain.filesystem:make-filesystem
+              :directory-files
+              (nshell.domain.filesystem:filesystem-directory-files port-filesystem)
+              :subdirectories
+              (nshell.domain.filesystem:filesystem-subdirectories port-filesystem)
+              :executable-p (constantly nil)))
+           (legacy-candidates
+             (nshell.domain.completion::%file-candidates-from-directory
+              legacy-filesystem ""))
+           (port-candidates
+             (nshell.domain.completion::%file-candidates-from-directory
+              port-filesystem ""))
+           (texts (mapcar (function nshell.domain.completion:candidate-text)
+                          port-candidates)))
+      (expect
+       (mapcar
+        (lambda (candidate)
+          (list (nshell.domain.completion:candidate-text candidate)
+                (nshell.domain.completion:candidate-kind candidate)
+                (nshell.domain.completion:candidate-score candidate)
+                (nshell.domain.completion:candidate-description candidate)))
+        legacy-candidates)
+       :to-equal
+       (mapcar
+        (lambda (candidate)
+          (list (nshell.domain.completion:candidate-text candidate)
+                (nshell.domain.completion:candidate-kind candidate)
+                (nshell.domain.completion:candidate-score candidate)
+                (nshell.domain.completion:candidate-description candidate)))
+        port-candidates))
+      (expect (list "repeat" "duplicate" "duplicate/") :to-equal texts)
+      (expect 3 :to-equal (length texts)))) (it "reclassifies cached symlinks after external target changes"
+    (host-kit:with-temporary-directory (directory)
+      (host-kit:with-temporary-directory (target-directory)
+        (let* ((target (merge-pathnames "external-target" target-directory))
+               (link (merge-pathnames "external-link" directory))
+               (directory-prefix
+                 (namestring (host-kit:ensure-directory-pathname directory)))
+               (filesystem (nshell.infrastructure.acl:make-host-filesystem))
+               (completion-entries
+                 (nshell.domain.filesystem:filesystem-completion-entries filesystem))
+               (legacy-filesystem
+                 (nshell.domain.filesystem:make-filesystem
+                  :directory-files
+                  (nshell.domain.filesystem:filesystem-directory-files filesystem)
+                  :subdirectories
+                  (nshell.domain.filesystem:filesystem-subdirectories filesystem)
+                  :executable-p (constantly nil)))
+               (signature
+                 (lambda (source)
+                   (mapcar
+                    (lambda (candidate)
+                      (list (nshell.domain.completion:candidate-text candidate)
+                            (nshell.domain.completion:candidate-kind candidate)
+                            (nshell.domain.completion:candidate-score candidate)
+                            (nshell.domain.completion:candidate-description candidate)))
+                    (nshell.domain.completion::%file-candidates-from-directory
+                     source directory-prefix))))
+               (before-entries nil)
+               (entries nil)
+               (before-port-signature nil)
+               (before-legacy-signature nil)
+               (port-signature nil)
+               (legacy-signature nil))
+          (host-kit:write-file-string "target" target)
+          (host-kit:create-symbolic-link target link)
+          (nshell.infrastructure.acl:clear-directory-listing-cache)
+          (unwind-protect
+               (progn
+                 (setf before-entries
+                       (funcall completion-entries directory)
+                       before-port-signature
+                       (funcall signature filesystem)
+                       before-legacy-signature
+                       (funcall signature legacy-filesystem))
+                 (expect :regular-file :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-target-kind
+                          (find "external-link" before-entries
+                                :key (function nshell.domain.filesystem:filesystem-completion-entry-name)
+                                :test (function string=))))
+                 (expect before-port-signature :to-equal before-legacy-signature)
+                 (expect (member
+                          (concatenate (quote string) directory-prefix "external-link")
+                          (mapcar (function first) before-port-signature)
+                          :test (function string=))
+                         :to-be-truthy)
+                 (sb-posix:unlink (namestring target))
+                 (sb-posix:mkdir (namestring target) #o700)
+                 (setf entries (funcall completion-entries directory)
+                       port-signature (funcall signature filesystem)
+                       legacy-signature (funcall signature legacy-filesystem))
+                 (expect :directory :to-be
+                         (nshell.domain.filesystem:filesystem-completion-entry-target-kind
+                          (find "external-link" entries
+                                :key (function nshell.domain.filesystem:filesystem-completion-entry-name)
+                                :test (function string=))))
+                 (expect legacy-signature :to-equal port-signature)
+                 (expect (member
+                          (list (concatenate (quote string) directory-prefix "external-link/")
+                                :directory 70 "directory")
+                          port-signature
+                          :test (function equal))
+                         :to-be-truthy))
+            (nshell.infrastructure.acl:clear-directory-listing-cache)))))))

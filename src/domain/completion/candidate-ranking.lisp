@@ -114,17 +114,18 @@ Autosuggestions use prefixes only because they insert text the user did not type
       results)))
 
 (defun %rank-candidates (prefix candidates)
-  (let ((best-stage
-          (loop for candidate in candidates
-                for stage = (%candidate-match-stage prefix (candidate-text candidate))
-                when stage
-                  minimize stage)))
-    (stable-sort
-     (remove-if-not
-      (lambda (candidate)
-        (and best-stage
-             (eql (%candidate-match-stage prefix (candidate-text candidate))
-                  best-stage)))
-      (copy-list candidates))
-     (lambda (left right)
-       (%completion-candidate< prefix left right)))))
+  (let ((best-stage nil)
+        (best-candidates nil))
+    (dolist (candidate candidates)
+      (let ((stage (%candidate-match-stage prefix (candidate-text candidate))))
+        (when stage
+          (cond
+            ((or (null best-stage)
+                 (< stage best-stage))
+             (setf best-stage stage
+                   best-candidates (list candidate)))
+            ((= stage best-stage)
+             (push candidate best-candidates))))))
+    (stable-sort (nreverse best-candidates)
+                 (lambda (left right)
+                   (%completion-candidate< prefix left right)))))

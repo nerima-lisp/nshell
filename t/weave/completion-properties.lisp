@@ -57,3 +57,64 @@
       (expect (length (benchmark-result-samples result)) :to-equal 5)
       (expect (mean-ms result) :to-satisfy #'realp)
       (expect (maximum-ms result) :to-satisfy (lambda (ms) (>= ms 0))))))
+(describe "filesystem completion port properties"
+  (it-property "completion port matches legacy candidate order"
+      ((prefix (gen-string :max-length 6)))
+    (let* ((entries
+             (list (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name ".hidden-directory" :kind :directory)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "alpha" :kind :directory)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "link-directory" :kind :symbolic-link
+                    :target-kind :directory)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name ".hidden-file" :kind :regular-file)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "alpha" :kind :regular-file)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "broken-link" :kind :symbolic-link
+                    :target-kind :missing)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "link-file" :kind :symbolic-link
+                    :target-kind :regular-file)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "repeat" :kind :regular-file)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "repeat" :kind :regular-file)
+                   (nshell.domain.filesystem:make-filesystem-completion-entry
+                    :name "special" :kind :unknown)))
+           (port-filesystem
+             (nshell.domain.filesystem:make-filesystem
+              :directory-files (constantly nil)
+              :subdirectories (constantly nil)
+              :completion-entries
+              (lambda (directory)
+                (declare (ignore directory))
+                entries)
+              :executable-p (constantly nil)))
+           (legacy-filesystem
+             (nshell.domain.filesystem:make-filesystem
+              :directory-files
+              (lambda (directory)
+                (declare (ignore directory))
+                (list #p".hidden-file" #p"alpha" #p"broken-link"
+                      #p"link-file" #p"repeat" #p"repeat"))
+              :subdirectories
+              (lambda (directory)
+                (declare (ignore directory))
+                (list #p".hidden-directory/" #p"alpha/"
+                      #p"link-directory/"))
+              :executable-p (constantly nil))))
+      (flet ((signature (filesystem)
+               (mapcar
+                (lambda (candidate)
+                  (list (nshell.domain.completion:candidate-text candidate)
+                        (nshell.domain.completion:candidate-kind candidate)
+                        (nshell.domain.completion:candidate-score candidate)
+                        (nshell.domain.completion:candidate-description candidate)))
+                (nshell.domain.completion::%file-candidates-from-directory
+                 filesystem prefix))))
+        (expect (signature legacy-filesystem) :to-equal
+                (signature port-filesystem)))))
+)

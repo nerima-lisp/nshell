@@ -127,27 +127,30 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
      include-files
      include-directories)))
 
-(defun %file-completion-entry-candidate (entry kind query)
-  (let* ((name (%entry-path-name entry))
-         (name-prefix (%file-completion-query-name-prefix query)))
-    (when (and name
-               (not (string= name ""))
-               (or (and (plusp (length name-prefix))
-                        (char= (char name-prefix 0) #\.))
-                   (char/= (char name 0) #\.))
-               (%candidate-match-stage name-prefix name))
-      (let* ((raw-text (concatenate 'string
-                                    (%file-completion-query-directory-prefix query)
-                                    name))
-             (text (if (eq kind :directory)
-                       (%ensure-directory-candidate-suffix raw-text)
-                       raw-text)))
-        (make-candidate text
-                        :kind kind
-                        :score (if (eq kind :directory) 70 60)
-                        :description (if (eq kind :directory)
-                                         "directory"
-                                         "file"))))))
+(progn
+  (defun %file-completion-name-candidate (name kind query)
+    (let ((name-prefix (%file-completion-query-name-prefix query)))
+      (when (and name
+                 (not (string= name ""))
+                 (or (and (plusp (length name-prefix))
+                          (char= (char name-prefix 0) #\.))
+                     (char/= (char name 0) #\.))
+                 (%candidate-match-stage name-prefix name))
+        (let* ((raw-text (concatenate 'string
+                                      (%file-completion-query-directory-prefix query)
+                                      name))
+               (text (if (eq kind :directory)
+                         (%ensure-directory-candidate-suffix raw-text)
+                         raw-text)))
+          (make-candidate text
+                          :kind kind
+                          :score (if (eq kind :directory) 70 60)
+                          :description (if (eq kind :directory)
+                                           "directory"
+                                           "file"))))))
+
+  (defun %file-completion-entry-candidate (entry kind query)
+    (%file-completion-name-candidate (%entry-path-name entry) kind query)))
 
 (defun %add-file-completion-entries (entries kind query candidates)
   (dolist (entry entries candidates)
@@ -156,36 +159,76 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
            candidates
            (%file-completion-entry-candidate entry kind query)))))
 
-(defun %file-candidates-from-directory
-    (filesystem prefix &key (include-files t) (include-directories t) home-directory)
-  "Return filesystem completion candidates matching PREFIX."
-  (let* ((directory-files-fn
-           (and (nshell.domain.filesystem:filesystem-p filesystem)
-                (nshell.domain.filesystem:filesystem-directory-files filesystem)))
-         (subdirectories-fn
-           (and (nshell.domain.filesystem:filesystem-p filesystem)
-                (nshell.domain.filesystem:filesystem-subdirectories filesystem)))
-         (query (%file-completion-query-from-prefix
-                 prefix
-                 include-files
-                 include-directories
-                 :home-directory home-directory))
-        (candidates (%make-empty-filesystem-candidate-set)))
-    (when (%file-completion-query-include-directories query)
-      (setf candidates (%add-file-completion-entries
-       (%safe-file-completion-list subdirectories-fn
-                                   (%file-completion-query-directory query))
-       :directory
-       query
-       candidates)))
-    (when (%file-completion-query-include-files query)
-      (setf candidates (%add-file-completion-entries
-       (%safe-file-completion-list directory-files-fn
-                                   (%file-completion-query-directory query))
-       :file
-       query
-       candidates)))
-    (%filesystem-candidate-set-candidates candidates)))
+(progn
+  (defun %file-completion-entry-candidate-kind (entry)
+    (case (nshell.domain.filesystem:filesystem-completion-entry-kind entry)
+      (:regular-file :file)
+      (:directory :directory)
+      (:symbolic-link
+       (case (nshell.domain.filesystem:filesystem-completion-entry-target-kind entry)
+         (:directory :directory)
+         ((:regular-file :missing) :file)))
+      (otherwise nil)))
+
+  (defun %add-file-completion-port-entries (entries query candidates)
+    ;; The adapter keeps directories before files, matching the legacy callback order.
+    (dolist (entry entries candidates)
+      (let ((kind (%file-completion-entry-candidate-kind entry)))
+        (when (and kind
+                   (or (and (eq kind :directory)
+                            (%file-completion-query-include-directories query))
+                       (and (eq kind :file)
+                            (%file-completion-query-include-files query))))
+          (setf candidates
+                (%filesystem-candidate-set-add
+                 candidates
+                 (%file-completion-name-candidate
+                  (nshell.domain.filesystem:filesystem-completion-entry-name entry)
+                  kind
+                  query)))))))
+
+  (defun %file-candidates-from-directory
+      (filesystem prefix &key (include-files t) (include-directories t) home-directory)
+    "Return filesystem completion candidates matching PREFIX."
+    (let* ((directory-files-fn
+            (and (nshell.domain.filesystem:filesystem-p filesystem)
+                 (nshell.domain.filesystem:filesystem-directory-files filesystem)))
+           (subdirectories-fn
+            (and (nshell.domain.filesystem:filesystem-p filesystem)
+                 (nshell.domain.filesystem:filesystem-subdirectories filesystem)))
+           (completion-entries-fn
+            (and (nshell.domain.filesystem:filesystem-p filesystem)
+                 (nshell.domain.filesystem:filesystem-completion-entries filesystem)))
+           (query (%file-completion-query-from-prefix
+                   prefix
+                   include-files
+                   include-directories
+                   :home-directory home-directory))
+           (candidates (%make-empty-filesystem-candidate-set)))
+      (if (functionp completion-entries-fn)
+          (setf candidates
+                (%add-file-completion-port-entries
+                 (%safe-file-completion-list
+                  completion-entries-fn
+                  (%file-completion-query-directory query))
+                 query
+                 candidates))
+        (progn
+          (when (%file-completion-query-include-directories query)
+            (setf candidates
+                  (%add-file-completion-entries
+                   (%safe-file-completion-list
+                    subdirectories-fn
+                    (%file-completion-query-directory query))
+                   :directory query candidates)))
+          (when (%file-completion-query-include-files query)
+            (setf candidates
+                  (%add-file-completion-entries
+                   (%safe-file-completion-list
+                    directory-files-fn
+                    (%file-completion-query-directory query))
+                   :file query candidates)))))
+      (%filesystem-candidate-set-candidates candidates))))
 
 (defun %path-like-completion-prefix-p (prefix)
   "Return true when PREFIX syntactically denotes a filesystem path."

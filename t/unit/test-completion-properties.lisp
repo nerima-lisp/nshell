@@ -352,3 +352,26 @@
                 (format nil "~a \"~a ~a\" ~a" command left right prefix))
                (completion-has-only-prefixed-flag-p
                 (format nil "~a ~a\\ ~a ~a" command left right prefix))))))))
+(describe "completion-ranking-stage-count-tests"
+  (it "computes each candidate match stage once and preserves ranking"
+    (let ((prefix "git")
+          (candidates
+            (list (nshell.domain.completion:make-candidate "github")
+                  (nshell.domain.completion:make-candidate "git")
+                  (nshell.domain.completion:make-candidate "GitHub")
+                  (nshell.domain.completion:make-candidate "xxgitxx")
+                  (nshell.domain.completion:make-candidate "gxxixt")
+                  (nshell.domain.completion:make-candidate "none")))
+          (stage-calls 0))
+      (with-rebound-function
+          (nshell.domain.completion::%candidate-match-stage
+           (lambda (prefix text)
+             (incf stage-calls)
+             (funcall original-function prefix text)))
+        (let* ((ranked
+                 (nshell.domain.completion::%rank-candidates prefix candidates))
+               (texts
+                 (mapcar (function nshell.domain.completion:candidate-text) ranked)))
+          (expect (length candidates) :to-equal stage-calls)
+          (expect (list "git" "github") :to-equal texts)))))
+)

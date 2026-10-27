@@ -131,6 +131,8 @@ def result_from_04_06(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
         "context": summary.get("context"),
         "git_prompt_enabled": summary.get("git_prompt_enabled"),
     }
+    if "same_process_repeat" in summary:
+        details["same_process_repeat"] = summary["same_process_repeat"]
     if "control" in summary:
         details["control"] = summary["control"]
     return make_result(
@@ -248,6 +250,20 @@ def build_summary(
         if status == "ERROR":
             status += f": {result['error']}"
         lines.append(f"| {result['nfr']} | {value} | {threshold} | **{status}** |")
+    repeat = rows["NFR-06"]["details"].get("same_process_repeat")
+    if repeat is not None:
+        lines.extend(
+            [
+                "",
+                "NFR-06 first-completion median per new nshell process: "
+                f"{display_number(rows['NFR-06']['value'])} ms "
+                f"({rows['NFR-06']['sample_count']} samples).",
+                "NFR-06 same-process completions after the first: "
+                f"{display_number(repeat['median_ms'])} ms median across "
+                f"{repeat['measured_samples']} repeats "
+                f"({repeat['repeats_per_process']} per process).",
+            ]
+        )
     if diagnostic is not None:
         lines.extend(
             [

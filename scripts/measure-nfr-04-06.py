@@ -31,6 +31,7 @@ from typing import Callable
 from nfr_thresholds import NFR_THRESHOLDS
 
 
+NFR06_SAME_PROCESS_REPEAT_COUNT = 3
 DEFAULT_BUFFER_SIZES = (1000,)
 PROMPT_TIMEOUT_SECONDS = 15
 OUTPUT_TIMEOUT_SECONDS = 5
@@ -248,6 +249,10 @@ class PtySession:
         while self.responses_sent < query_count:
             os.write(self.master, CPR_RESPONSE)
             self.responses_sent += 1
+
+    def reset_transcript(self) -> None:
+        self.data.clear()
+        self.responses_sent = 0
 
     def wait_for_marker(self, marker: bytes, occurrence: int = 1, timeout_seconds: float = PROMPT_TIMEOUT_SECONDS) -> int:
         deadline = time.monotonic() + timeout_seconds
@@ -631,6 +636,58 @@ def completion_reference_output(
     return result.stdout
 
 
+def run_interactive_completion_round(
+    session: PtySession,
+    command_bytes: bytes,
+    marker: bytes,
+    expected_output: bytes,
+) -> dict[str, object]:
+    paste = BRACKETED_PASTE_START + command_bytes + BRACKETED_PASTE_END
+    input_start = len(session.data)
+    if os.write(session.master, paste) != len(paste):
+        raise RuntimeError("NFR-06 completion command was not fully written to the PTY")
+    session.wait_for_output(
+        lambda data: command_bytes in strip_terminal_sequences(data[input_start:])
+    )
+    session.pump_for(0.05)
+    response_start = len(session.data)
+    started_ns = time.monotonic_ns()
+    if os.write(session.master, b"\r") != 1:
+        raise RuntimeError("NFR-06 completion trigger was not fully written to the PTY")
+
+    end_ns = session.wait_for_completion_render(
+        expected_output,
+        response_start,
+        marker,
+    )
+    response = bytes(session.data[response_start:])
+    expected_candidates = set(expected_output.splitlines())
+    visible_lines = [
+        visible_terminal_text(line).rstrip(b"\r")
+        for line in response.splitlines()
+    ]
+    candidate_rows = [line for line in visible_lines if line in expected_candidates]
+    if len(candidate_rows) != FIXTURE_FILE_COUNT or set(candidate_rows) != expected_candidates:
+        raise RuntimeError(
+            "NFR-06 interactive completion output did not contain every verified candidate "
+            f"exactly once: observed {len(candidate_rows)} rows and "
+            f"{len(set(candidate_rows))} unique of {FIXTURE_FILE_COUNT}"
+        )
+    if not prompt_render_complete(response, marker):
+        raise RuntimeError("NFR-06 completion did not return to a fully rendered prompt")
+    return {
+        "latency_ms": (end_ns - started_ns) / 1_000_000,
+        "candidate_count": FIXTURE_FILE_COUNT,
+        "output_bytes": len(expected_output),
+        "output_sha256": hashlib.sha256(expected_output).hexdigest(),
+        "response_bytes": len(response),
+        "prompt_cursor_restored": CURSOR_RESTORE in response,
+        "prompt_render_complete_detected": PROMPT_CURSOR_SHAPE in response,
+        "observed_candidate_count": len(candidate_rows),
+        "cursor_queries": session.responses_sent,
+    }
+
+
 def run_interactive_completion_sample(
     binary: Path,
     fixture: Path,
@@ -648,53 +705,31 @@ def run_interactive_completion_sample(
         child_environment(home, marker_text),
     )
     command_bytes = completion_command(binary, fixture, prefix)[-1].encode()
-    paste = BRACKETED_PASTE_START + command_bytes + BRACKETED_PASTE_END
     try:
         session.wait_for_marker(marker)
         session.pump_for(settle_seconds)
-        input_start = len(session.data)
-        if os.write(session.master, paste) != len(paste):
-            raise RuntimeError("NFR-06 completion command was not fully written to the PTY")
-        session.wait_for_output(
-            lambda data: command_bytes in strip_terminal_sequences(data[input_start:])
+        first = run_interactive_completion_round(
+            session, command_bytes, marker, expected_output
         )
-        session.pump_for(0.05)
-        response_start = len(session.data)
-        started_ns = time.monotonic_ns()
-        if os.write(session.master, b"\r") != 1:
-            raise RuntimeError("NFR-06 completion trigger was not fully written to the PTY")
-
-        end_ns = session.wait_for_completion_render(
-            expected_output,
-            response_start,
-            marker,
-        )
-        response = bytes(session.data[response_start:])
-        expected_candidates = set(expected_output.splitlines())
-        visible_lines = [
-            visible_terminal_text(line).rstrip(b"\r")
-            for line in response.splitlines()
-        ]
-        candidate_rows = [line for line in visible_lines if line in expected_candidates]
-        if len(candidate_rows) != FIXTURE_FILE_COUNT or set(candidate_rows) != expected_candidates:
-            raise RuntimeError(
-                "NFR-06 interactive completion output did not contain every verified candidate "
-                f"exactly once: observed {len(candidate_rows)} rows and "
-                f"{len(set(candidate_rows))} unique of {FIXTURE_FILE_COUNT}"
+        repeated_latencies = []
+        for _ in range(NFR06_SAME_PROCESS_REPEAT_COUNT):
+            session.reset_transcript()
+            repeated = run_interactive_completion_round(
+                session, command_bytes, marker, expected_output
             )
-        if not prompt_render_complete(response, marker):
-            raise RuntimeError("NFR-06 completion did not return to a fully rendered prompt")
+            repeated_latencies.append(float(repeated["latency_ms"]))
         return {
-            "latency_ms": (end_ns - started_ns) / 1_000_000,
+            "latency_ms": first["latency_ms"],
             "trigger": "Enter on an already-visible complete -C command",
-            "candidate_count": FIXTURE_FILE_COUNT,
-            "output_bytes": len(expected_output),
-            "output_sha256": hashlib.sha256(expected_output).hexdigest(),
-            "response_bytes": len(response),
-            "prompt_cursor_restored": CURSOR_RESTORE in response,
-            "prompt_render_complete_detected": PROMPT_CURSOR_SHAPE in response,
-            "observed_candidate_count": len(candidate_rows),
-            "cursor_queries": session.responses_sent,
+            "candidate_count": first["candidate_count"],
+            "output_bytes": first["output_bytes"],
+            "output_sha256": first["output_sha256"],
+            "response_bytes": first["response_bytes"],
+            "prompt_cursor_restored": first["prompt_cursor_restored"],
+            "prompt_render_complete_detected": first["prompt_render_complete_detected"],
+            "observed_candidate_count": first["observed_candidate_count"],
+            "cursor_queries": first["cursor_queries"],
+            "same_process_repeat_latencies_ms": repeated_latencies,
         }
     finally:
         session.close()
@@ -820,6 +855,24 @@ def run_target_group(
         "uptime_before": load_before,
         "uptime_after": load_after,
     }
+    if metric == "NFR-06":
+        repeat_values = [
+            float(latency)
+            for row in rows
+            for latency in row["target"].get("same_process_repeat_latencies_ms", [])
+        ]
+        expected_repeat_count = samples * NFR06_SAME_PROCESS_REPEAT_COUNT
+        if len(repeat_values) != expected_repeat_count:
+            raise ValueError(
+                "NFR-06 did not produce the configured same-process repeat count: "
+                f"expected {expected_repeat_count}, got {len(repeat_values)}"
+            )
+        summary["same_process_repeat"] = {
+            "first_completion_per_process": True,
+            "repeats_per_process": NFR06_SAME_PROCESS_REPEAT_COUNT,
+            "measured_samples": len(repeat_values),
+            **stats(repeat_values),
+        }
     stream.write(json.dumps(summary, sort_keys=True) + "\n")
     stream.flush()
     return summary

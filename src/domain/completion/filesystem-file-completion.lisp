@@ -136,9 +136,13 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
                           (char= (char name-prefix 0) #\.))
                      (char/= (char name 0) #\.))
                  (%candidate-match-stage name-prefix name))
-        (let* ((raw-text (concatenate 'string
-                                      (%file-completion-query-directory-prefix query)
-                                      name))
+        (let* ((directory-prefix
+                 (%file-completion-query-directory-prefix query))
+               (raw-text
+                 (if (and (eq kind :file)
+                          (string= directory-prefix ""))
+                     name
+                     (concatenate 'string directory-prefix name)))
                (text (if (eq kind :directory)
                          (%ensure-directory-candidate-suffix raw-text)
                          raw-text)))

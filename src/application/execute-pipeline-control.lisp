@@ -358,7 +358,7 @@ following the data/logic separation principle."
 (defun %execute-reader-sequence-node-in-context
     (context ast stage-evaluator &optional command-failure-policy)
   (let ((previous-separator nil)
-        (last-value nil)
+        (output nil)
         (last-status (shell-context-last-exit-code context))
         (last-result nil))
     (dolist (entry (nshell.domain.parsing:sequence-node-command-separators ast))
@@ -393,15 +393,16 @@ following the data/logic separation principle."
                   (t
                    (execute-reader-ast-in-context
                     context command stage-evaluator)))
-              (setf last-value value
-                    last-status status
+              (when value
+                (push value output))
+              (setf last-status status
                     last-result pipeline-result)
               (%record-last-exit-code context status))))
         (setf previous-separator separator)
         (when (or *loop-control-signal*
                   (not (shell-context-running context)))
           (return))))
-    (values last-value
+    (values (apply (function concatenate) (quote string) (nreverse output))
             last-status
             (or last-result
                 (make-pipeline-execution-result last-status nil nil)))))

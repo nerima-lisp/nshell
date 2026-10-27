@@ -932,7 +932,6 @@
   (let* ((*command-test-position-p*
           (and (not *command-failure-handler-active-p*)
                (or (eq position :test)
-                   (eq position :value)
                    (eq position :status-value))))
          (*command-stage-reader-result* reader-result)
          (*command-stage-lexical-environment* lexical-environment)

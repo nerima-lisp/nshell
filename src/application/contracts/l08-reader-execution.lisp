@@ -24,7 +24,27 @@
    execute-reader-ast-in-context))
 (defun execute-reader-ast-in-context
     (context ast stage-evaluator &optional command-failure-policy)
-  (cond ((nshell.domain.parsing:sequence-node-p ast) (%execute-reader-sequence-node-in-context context ast stage-evaluator command-failure-policy)) ((or (nshell.domain.parsing:command-node-p ast) (nshell.domain.parsing:pipeline-node-p ast)) (%reader-execute-foreground-in-context context ast stage-evaluator)) (t (error (quote command-execution-plan-error) :source-span (and (nshell.domain.parsing::ast-node-p ast) (nshell.domain.parsing:ast-node-span ast)) :operation :dispatch :cause (make-condition (quote simple-error) :format-control "Unsupported reader AST node." :format-arguments nil)))))
+  (multiple-value-bind (value status result)
+      (cond
+        ((nshell.domain.parsing:sequence-node-p ast)
+         (%execute-reader-sequence-node-in-context
+          context ast stage-evaluator command-failure-policy))
+        ((or (nshell.domain.parsing:command-node-p ast)
+             (nshell.domain.parsing:pipeline-node-p ast))
+         (%reader-execute-foreground-in-context
+          context ast stage-evaluator))
+        (t
+         (error (quote command-execution-plan-error)
+                :source-span
+                (and (nshell.domain.parsing::ast-node-p ast)
+                     (nshell.domain.parsing:ast-node-span ast))
+                :operation :dispatch
+                :cause
+                (make-condition (quote simple-error)
+                                :format-control "Unsupported reader AST node."
+                                :format-arguments nil))))
+    (%record-last-exit-code context status)
+    (values value status result)))
 
 (defstruct (%reader-execution-state
              (:constructor %make-reader-execution-state ()))

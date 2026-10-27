@@ -71,6 +71,9 @@
           (setf *last-exit-code* (or code 0))
           (when (and (= *last-exit-code* 127)
                      command-not-found-command)
+            (unless (eq *error-output* *standard-output*)
+              (format t "nshell: ~a: command not found~%"
+                      command-not-found-command))
             (let ((corrections
                     (%repl-command-corrections command-not-found-command)))
               (when corrections

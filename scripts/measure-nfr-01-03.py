@@ -23,10 +23,10 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Callable
 
-from wp_perf_nfr_thresholds import NFR_THRESHOLDS
+from nfr_thresholds import NFR_THRESHOLDS
 
 
-PROMPT_PREFIX = "__WP_PERF_PROMPT_"
+PROMPT_PREFIX = "__NSHELL_NFR_PROMPT_"
 CPR_QUERY = b"\x1b[6n"
 CPR_RESPONSE = b"\x1b[1;1R"
 CONTROL_ITERATIONS = " ".join(str(index) for index in range(1, 1_001))
@@ -324,7 +324,7 @@ def nfr01_arms(binary: Path, timeout: float) -> dict[str, Callable[[], dict[str,
     control_marker = f"{PROMPT_PREFIX}{os.urandom(8).hex()}__"
 
     def nshell_action() -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="wp-perf-nfr01-") as directory:
+        with tempfile.TemporaryDirectory(prefix="nshell-nfr01-") as directory:
             home = Path(directory)
             env = runtime_environment(home, target_marker)
             return prompt_startup(
@@ -332,7 +332,7 @@ def nfr01_arms(binary: Path, timeout: float) -> dict[str, Callable[[], dict[str,
             )
 
     def shell_action() -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="wp-perf-nfr01-sh-") as directory:
+        with tempfile.TemporaryDirectory(prefix="nshell-nfr01-sh-") as directory:
             home = Path(directory)
             env = runtime_environment(home, control_marker)
             return prompt_startup(
@@ -344,7 +344,7 @@ def nfr01_arms(binary: Path, timeout: float) -> dict[str, Callable[[], dict[str,
 
 def nfr02_arms(binary: Path, timeout: float) -> dict[str, Callable[[], dict[str, Any]]]:
     def timed(command: list[str]) -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="wp-perf-nfr02-") as directory:
+        with tempfile.TemporaryDirectory(prefix="nshell-nfr02-") as directory:
             env = runtime_environment(Path(directory))
             return command_timing(command, env, timeout)
 
@@ -358,12 +358,12 @@ def nfr03_arms(
     binary: Path, input_path: Path, timeout: float
 ) -> dict[str, Callable[[], dict[str, Any]]]:
     def target() -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="wp-perf-nfr03-") as directory:
+        with tempfile.TemporaryDirectory(prefix="nshell-nfr03-") as directory:
             env = runtime_environment(Path(directory))
             return command_timing([str(binary)], env, timeout, input_path)
 
     def control() -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="wp-perf-nfr03-sh-") as directory:
+        with tempfile.TemporaryDirectory(prefix="nshell-nfr03-sh-") as directory:
             env = runtime_environment(Path(directory))
             return command_timing(["/bin/sh", "-c", CONTROL_SCRIPT], env, timeout)
 

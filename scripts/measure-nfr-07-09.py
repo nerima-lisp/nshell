@@ -22,7 +22,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Callable
 
-from wp_perf_nfr_thresholds import NFR_THRESHOLDS
+from nfr_thresholds import NFR_THRESHOLDS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +68,17 @@ def uptime_snapshot() -> dict[str, Any]:
         "load_average": [float(value) for value in match.groups()] if match else None,
         "exit_status": completed.returncode,
     }
+
+
+def page_size_metadata() -> dict[str, Any]:
+    candidates = ("SC_PAGE_SIZE", "SC_PAGESIZE")
+    name = next((candidate for candidate in candidates if candidate in os.sysconf_names), None)
+    if name is None:
+        return {"page_size_bytes": None, "page_size_error": "sysconf page-size key is unavailable"}
+    try:
+        return {"page_size_bytes": int(os.sysconf(name))}
+    except (OSError, ValueError) as exc:
+        return {"page_size_bytes": None, "page_size_error": f"{type(exc).__name__}: {exc}"}
 
 
 def append_log(path: Path, title: str, body: str) -> None:
@@ -948,7 +959,11 @@ def main() -> int:
     args.log.write_text("", encoding="utf-8")
     report: dict[str, Any] = {
         "revision": args.revision,
-        "host": {"platform": platform.platform(), "machine": platform.machine()},
+        "host": {
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            **page_size_metadata(),
+        },
         "load_average_source": "uptime before and after each operation",
         "operations": [],
         "gaps": [],
@@ -968,17 +983,19 @@ def main() -> int:
         )
     statuses = [item["status"] for item in report["operations"]]
     report["status"] = (
-        "success"
-        if statuses and all(status == "success" for status in statuses)
+        "error"
+        if not statuses or any(status == "error" for status in statuses)
+        else "fail"
+        if any(status == "fail" for status in statuses)
         else "warning"
-        if statuses and all(status in ("success", "warning") for status in statuses)
-        else "error"
+        if any(status == "warning" for status in statuses)
+        else "success"
     )
     args.output.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"report: {args.output}")
     print(f"log: {args.log}")
     print(f"status: {report['status']}")
-    return 0 if report["status"] == "success" else 1
+    return 0 if report["status"] in {"success", "warning"} else 1
 
 
 if __name__ == "__main__":

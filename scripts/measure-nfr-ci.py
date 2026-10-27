@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from wp_perf_nfr_thresholds import NFR_THRESHOLDS
+from nfr_thresholds import NFR_THRESHOLDS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,21 +126,23 @@ def result_from_04_06(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
     value = float(target["p99_ms"] if statistic == "p99" else target["median_ms"])
     if bool(summary.get("target_threshold_met")) != (value <= threshold):
         raise ValueError(f"NFR-{nfr} measurement summary disagrees with its threshold comparison")
+    details = {
+        "target": target,
+        "context": summary.get("context"),
+        "git_prompt_enabled": summary.get("git_prompt_enabled"),
+    }
+    if "control" in summary:
+        details["control"] = summary["control"]
     return make_result(
         nfr,
         metric={
             "04": "blank Enter to next prompt median, worst of Git and non-Git contexts",
-            "05": "1,000-character redraw p99",
-            "06": "20,000-entry completion median",
+            "05": "1,000-character keypress-to-prompt-and-buffer-redraw p99",
+            "06": "20,000-entry interactive completion median, Enter-to-results-and-prompt",
         }[nfr],
         value=value,
         sample_count=int(summary["measured_samples"]),
-        details={
-            "target": target,
-            "control": summary.get("control"),
-            "context": summary.get("context"),
-            "git_prompt_enabled": summary.get("git_prompt_enabled"),
-        },
+        details=details,
     )
 
 
@@ -148,6 +150,9 @@ def result_from_07(report_path: Path) -> dict[str, Any]:
     if not report_path.is_file():
         raise ValueError("NFR-07 measurement report is missing")
     report = json.loads(report_path.read_text(encoding="utf-8"))
+    report_status = report.get("status")
+    if report_status not in {"success", "fail"}:
+        raise ValueError(f"NFR-07 source report is not a valid completed measurement: {report_status!r}")
     operations = report.get("operations")
     if not isinstance(operations, list):
         raise ValueError("NFR-07 report has no operations list")
@@ -186,7 +191,8 @@ def result_from_07(report_path: Path) -> dict[str, Any]:
             "rss_kib_samples": rss_kib,
             "control_median_mib": control.get("rss_mib_median"),
             "control_limit_met": control.get("limit_met"),
-            "source_report_status": report.get("status"),
+            "source_report_status": report_status,
+            "page_size_bytes": report.get("host", {}).get("page_size_bytes"),
         },
     )
     return result
@@ -248,7 +254,7 @@ def build_summary(
                 "",
                 "NFR-06 suggestion-key response (diagnostic, no separate numeric requirement): "
                 f"target p99 {display_number(diagnostic['target_p99_ms'])} ms; "
-                f"plain-context control p99 {display_number(diagnostic['control_p99_ms'])} ms; "
+                f"plain-fixture p99 {display_number(diagnostic['plain_fixture_p99_ms'])} ms; "
                 f"paired p99 delta {display_number(diagnostic['paired_sequence_p99_delta_p99_ms'])} ms.",
             ]
         )
@@ -317,7 +323,7 @@ def main() -> int:
     results: dict[str, dict[str, Any]] = {}
     diagnostic = None
     py = sys.executable
-    script_01_03 = str(ROOT / "scripts/measure-wp-perf-nfr-01-03.py")
+    script_01_03 = str(ROOT / "scripts/measure-nfr-01-03.py")
     input_path = output_dir / "nfr03-input.sh"
     target_iterations = " ".join(str(index) for index in range(1, 1_001))
     input_path.write_text(
@@ -357,9 +363,9 @@ def main() -> int:
             errors[nfr] = str(exc)
 
     try:
-        with tempfile.TemporaryDirectory(prefix="wp-nfr-plain-") as plain_dir, tempfile.TemporaryDirectory(
-            prefix="wp-nfr-completion-"
-        ) as completion_dir, tempfile.TemporaryDirectory(prefix="wp-nfr-git-") as git_dir:
+        with tempfile.TemporaryDirectory(prefix="nshell-nfr-plain-") as plain_dir, tempfile.TemporaryDirectory(
+            prefix="nshell-nfr-completion-"
+        ) as completion_dir, tempfile.TemporaryDirectory(prefix="nshell-nfr-git-") as git_dir:
             subprocess.run(["git", "init", "--quiet", git_dir], check=True)
             completion_fixture = Path(completion_dir)
             for index in range(20_000):
@@ -367,7 +373,7 @@ def main() -> int:
             raw_path = output_dir / "nfr-04-06.jsonl"
             command = [
                 py,
-                str(ROOT / "scripts/measure-wp-perf-nfr-04-06.py"),
+                str(ROOT / "scripts/measure-nfr-04-06.py"),
                 "--binary",
                 str(binary),
                 "--from",
@@ -426,7 +432,7 @@ def main() -> int:
             diagnostic = {
                 "nfr": "NFR-06 suggestion-key responsiveness",
                 "target_p99_ms": float(key_rows[0]["target"]["p99_ms"]),
-                "control_p99_ms": float(key_rows[0]["control"]["p99_ms"]),
+                "plain_fixture_p99_ms": float(key_rows[0]["plain_fixture"]["p99_ms"]),
                 "paired_sequence_p99_delta_median_ms": float(
                     key_rows[0]["paired_sequence_p99_delta_median_ms"]
                 ),
@@ -445,7 +451,7 @@ def main() -> int:
         "NFR-07",
         [
             py,
-            str(ROOT / "scripts/measure-wp-perf-nfr-07-09.py"),
+            str(ROOT / "scripts/measure-nfr-07-09.py"),
             "--mode",
             "nfr07",
             "--binary",

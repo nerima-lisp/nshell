@@ -1,4 +1,4 @@
-name: WP NFR performance
+name: NFR performance measurements
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wp-nfr-performance-${{ github.ref }}
+  group: nshell-performance-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -50,7 +50,7 @@ jobs:
       - name: Measure NFR-01 through NFR-07
         run: >-
           nix develop .#scenarios -c python3
-          scripts/measure-wp-perf-nfr-ci.py
+          scripts/measure-nfr-ci.py
           --binary "$RUNNER_TEMP/nshell-nfr-binary/bin/nshell"
           --output-dir "$RUNNER_TEMP/nshell-nfr-results"
           --system "${{ matrix.system }}"
@@ -74,7 +74,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: nshell-wp-nfr-${{ matrix.system }}
+          name: nshell-performance-${{ matrix.system }}
           path: ${{ runner.temp }}/nshell-nfr-results
           if-no-files-found: warn
           retention-days: 90

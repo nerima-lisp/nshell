@@ -28,7 +28,7 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-from wp_perf_nfr_thresholds import NFR_THRESHOLDS
+from nfr_thresholds import NFR_THRESHOLDS
 
 
 DEFAULT_BUFFER_SIZES = (1000,)
@@ -36,6 +36,7 @@ PROMPT_TIMEOUT_SECONDS = 15
 OUTPUT_TIMEOUT_SECONDS = 5
 CPR_QUERY = b"\x1b[6n"
 CPR_RESPONSE = b"\x1b[1;1R"
+CURSOR_RESTORE = b"\x1b8"
 BRACKETED_PASTE_START = b"\x1b[200~"
 BRACKETED_PASTE_END = b"\x1b[201~"
 ANSI_SEQUENCE_RE = re.compile(rb"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-_])")
@@ -66,13 +67,27 @@ def visible_terminal_text(data: bytes) -> bytes:
     return ANSI_SEQUENCE_RE.sub(b"", data)
 
 
-def rendered_x_count(data: bytes, start: int, marker: bytes, control_shell: bool) -> int:
+def prompt_render_complete(
+    output: bytes,
+    marker: bytes,
+    *,
+    require_cursor_restore: bool = True,
+) -> bool:
+    marker_start = output.rfind(marker)
+    if marker_start < 0:
+        return False
+    if not require_cursor_restore:
+        return True
+    marker_end = marker_start + len(marker)
+    return output.find(CURSOR_RESTORE, marker_end) >= 0
+
+
+def rendered_x_count(data: bytes, start: int, marker: bytes) -> int:
     output = data[start:]
-    if not control_shell:
-        marker_index = output.rfind(marker)
-        if marker_index < 0:
-            return -1
-        output = output[marker_index + len(marker):]
+    marker_index = output.rfind(marker)
+    if marker_index < 0:
+        return -1
+    output = output[marker_index + len(marker):]
     return visible_terminal_text(output).count(b"x")
 
 
@@ -249,6 +264,46 @@ class PtySession:
             raise RuntimeError(f"PTY exited before expected output; tail={bytes(self.data[-800:])!r}")
         return time.monotonic_ns()
 
+    def wait_for_completion_render(
+        self,
+        expected_outputs: tuple[bytes, ...],
+        start: int,
+        marker: bytes,
+        timeout_seconds: float = OUTPUT_TIMEOUT_SECONDS,
+    ) -> int:
+        if not expected_outputs:
+            raise ValueError("NFR-06 completion requires at least one expected output form")
+        deadline = time.monotonic() + timeout_seconds
+        longest_output = max(map(len, expected_outputs))
+        scan_from = start
+        candidate_end = None
+        while candidate_end is None:
+            matches = [
+                (position, expected)
+                for expected in expected_outputs
+                if (position := self.data.find(expected, scan_from)) >= 0
+            ]
+            if matches:
+                position, expected = min(matches, key=lambda match: match[0])
+                candidate_end = position + len(expected)
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"NFR-06 completion output timed out; tail={bytes(self.data[-800:])!r}")
+            scan_from = max(start, len(self.data) - longest_output + 1)
+            self._read_once(remaining)
+
+        while True:
+            marker_start = self.data.rfind(marker, candidate_end)
+            if marker_start >= candidate_end and self.data.find(
+                CURSOR_RESTORE, marker_start + len(marker)
+            ) >= 0:
+                return time.monotonic_ns()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"NFR-06 completion prompt timed out; tail={bytes(self.data[-800:])!r}")
+            self._read_once(remaining)
+
     def pump_for(self, duration_seconds: float) -> None:
         deadline = time.monotonic() + duration_seconds
         while time.monotonic() < deadline:
@@ -365,13 +420,25 @@ def run_prompt_sample(
     try:
         session.wait_for_marker(marker)
         session.pump_for(settle_seconds)
+        response_start = len(session.data)
+        markers_before = session.data.count(marker)
         start_ns = time.monotonic_ns()
-        os.write(session.master, b"\r")
-        end_ns = session.wait_for_marker(marker, occurrence=2)
+        if os.write(session.master, b"\r") != 1:
+            raise RuntimeError("NFR-04 Enter key was not fully written to the PTY")
+        end_ns = session.wait_for_output(
+            lambda data: prompt_render_complete(
+                data[response_start:],
+                marker,
+                require_cursor_restore=not control_shell,
+            )
+        )
         return {
             "latency_ms": (end_ns - start_ns) / 1_000_000,
             "cursor_queries": session.responses_sent,
+            "prompt_markers_before": markers_before,
             "prompt_markers_seen": session.data.count(marker),
+            "fresh_prompt_seen": marker in session.data[response_start:],
+            "prompt_cursor_restored": CURSOR_RESTORE in session.data[response_start:],
         }
     finally:
         session.close()
@@ -383,54 +450,55 @@ def run_redraw_sample(
     home_root: Path,
     marker_text: str,
     buffer_length: int,
-    control_shell: bool,
     settle_seconds: float,
 ) -> dict[str, object]:
     marker = marker_text.encode()
     home = home_root / f"home-{uuid.uuid4().hex}"
-    env = child_environment(home, marker_text) if not control_shell else child_environment(home)
-    if control_shell:
-        env["PS1"] = marker_text + " "
-        argv = [str(executable), "-i"]
-    else:
-        argv = [str(executable)]
+    env = child_environment(home, marker_text)
+    argv = [str(executable)]
     session = PtySession(argv, cwd, env)
-    buffer = b"x" * buffer_length
+    preloaded_length = buffer_length - 1
+    preloaded_buffer = b"x" * preloaded_length
     try:
         session.wait_for_marker(marker)
         session.pump_for(settle_seconds)
         input_start = len(session.data)
-        os.write(session.master, BRACKETED_PASTE_START + buffer + BRACKETED_PASTE_END)
-        # Each key redraws the line, so cumulative character counts can reach
-        # the target length before the complete input has been rendered.
-        session.wait_for_output(
-            lambda data: rendered_x_count(data, input_start, marker, control_shell) == buffer_length,
-            timeout_seconds=OUTPUT_TIMEOUT_SECONDS,
-        )
+        if preloaded_buffer:
+            os.write(
+                session.master,
+                BRACKETED_PASTE_START + preloaded_buffer + BRACKETED_PASTE_END,
+            )
+            session.wait_for_output(
+                lambda data: rendered_x_count(data, input_start, marker) == preloaded_length,
+                timeout_seconds=OUTPUT_TIMEOUT_SECONDS,
+            )
         session.pump_for(0.05)
         response_start = len(session.data)
         start_ns = time.monotonic_ns()
-        os.write(session.master, b"\x0c")  # Ctrl-L clears and redraws the current line.
+        if os.write(session.master, b"x") != 1:
+            raise RuntimeError("NFR-05 keypress was not fully written to the PTY")
         end_ns = session.wait_for_output(
             lambda data: (
-                marker in data[response_start:]
-                and rendered_x_count(data, response_start, marker, control_shell) == buffer_length
+                prompt_render_complete(data[response_start:], marker)
+                and rendered_x_count(data, response_start, marker) == buffer_length
             ),
             timeout_seconds=OUTPUT_TIMEOUT_SECONDS,
         )
         response = bytes(session.data[response_start:])
         visible_response = visible_terminal_text(response)
-        response_buffer_characters = rendered_x_count(
-            session.data, response_start, marker, control_shell
-        )
+        response_buffer_characters = rendered_x_count(session.data, response_start, marker)
         if (
-            marker not in visible_response
+            not prompt_render_complete(response, marker)
+            or marker not in visible_response
             or response_buffer_characters != buffer_length
         ):
-            raise RuntimeError("NFR-05 redraw did not reproduce the prompt and full input buffer")
+            raise RuntimeError("NFR-05 keypress did not redraw the prompt and full input buffer")
         return {
             "latency_ms": (end_ns - start_ns) / 1_000_000,
+            "keypress": "x",
+            "preloaded_buffer_characters": preloaded_length,
             "redrawn_prompt_seen": marker in visible_response,
+            "prompt_cursor_restored": CURSOR_RESTORE in response,
             "redrawn_buffer_characters": response_buffer_characters,
             "response_bytes": len(response),
             "cursor_queries": session.responses_sent,
@@ -444,50 +512,51 @@ def verify_redraw_support(
     cwd: Path,
     home_root: Path,
     marker_text: str,
-    control_shell: bool,
 ) -> dict[str, object]:
     marker = marker_text.encode()
     home = home_root / f"home-{uuid.uuid4().hex}"
-    env = child_environment(home, marker_text) if not control_shell else child_environment(home)
-    if control_shell:
-        env["PS1"] = marker_text + " "
-        argv = [str(executable), "-i"]
-    else:
-        argv = [str(executable)]
+    env = child_environment(home, marker_text)
+    argv = [str(executable)]
     probe_length = 32
-    probe_buffer = b"x" * probe_length
+    preloaded_length = probe_length - 1
+    probe_buffer = b"x" * preloaded_length
     session = PtySession(argv, cwd, env)
     try:
         session.wait_for_marker(marker)
         session.pump_for(0.05)
         input_start = len(session.data)
-        os.write(
-            session.master,
-            BRACKETED_PASTE_START + probe_buffer + BRACKETED_PASTE_END,
-        )
-        session.wait_for_output(
-            lambda data: rendered_x_count(data, input_start, marker, control_shell) == probe_length
-        )
+        if probe_buffer:
+            os.write(
+                session.master,
+                BRACKETED_PASTE_START + probe_buffer + BRACKETED_PASTE_END,
+            )
+            session.wait_for_output(
+                lambda data: rendered_x_count(data, input_start, marker) == preloaded_length
+            )
         session.pump_for(0.05)
         response_start = len(session.data)
-        os.write(session.master, b"\x0c")
+        os.write(session.master, b"x")
         session.wait_for_output(
             lambda data: (
-                marker in data[response_start:]
-                and rendered_x_count(data, response_start, marker, control_shell) == probe_length
+                prompt_render_complete(data[response_start:], marker)
+                and rendered_x_count(data, response_start, marker) == probe_length
             )
         )
         response = bytes(session.data[response_start:])
         visible_response = visible_terminal_text(response)
-        response_buffer_characters = rendered_x_count(
-            session.data, response_start, marker, control_shell
-        )
-        if marker not in visible_response or response_buffer_characters != probe_length:
-            raise RuntimeError("NFR-05 redraw preflight did not reproduce the prompt and full input buffer")
+        response_buffer_characters = rendered_x_count(session.data, response_start, marker)
+        if (
+            not prompt_render_complete(response, marker)
+            or marker not in visible_response
+            or response_buffer_characters != probe_length
+        ):
+            raise RuntimeError("NFR-05 preflight keypress did not redraw the prompt and full input buffer")
         return {
             "supported": True,
+            "trigger": "one-character insertion",
             "probe_buffer_length": probe_length,
             "redrawn_prompt_seen": marker in visible_response,
+            "prompt_cursor_restored": CURSOR_RESTORE in response,
             "redrawn_buffer_characters": response_buffer_characters,
             "response_bytes": len(response),
             "cursor_queries": session.responses_sent,
@@ -502,16 +571,14 @@ def completion_command(binary: Path, fixture: Path, prefix: str) -> list[str]:
     return [str(binary), "--no-config", "--command", command_line]
 
 
-def run_completion_sample(
+def completion_reference_output(
     binary: Path,
     fixture: Path,
     prefix: str,
     home_root: Path,
-    expected_output: bytes,
-) -> dict[str, object]:
+) -> bytes:
     home = home_root / f"home-{uuid.uuid4().hex}"
     env = child_environment(home)
-    started_ns = time.monotonic_ns()
     result = subprocess.run(
         completion_command(binary, fixture, prefix),
         cwd=fixture,
@@ -519,7 +586,6 @@ def run_completion_sample(
         check=False,
         capture_output=True,
     )
-    elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
     if result.returncode != 0 or result.stderr:
         raise RuntimeError(
             f"completion command failed: status={result.returncode}, stderr={result.stderr[-500:]!r}"
@@ -530,14 +596,65 @@ def run_completion_sample(
             f"completion returned {len(rows)} rows and {len(set(rows))} unique rows; "
             f"expected {FIXTURE_FILE_COUNT} of each"
         )
-    if result.stdout != expected_output:
-        raise RuntimeError("completion output differed from the verified reference output")
-    return {
-        "latency_ms": elapsed_ms,
-        "candidate_count": len(rows),
-        "output_bytes": len(result.stdout),
-        "output_sha256": hashlib.sha256(result.stdout).hexdigest(),
-    }
+    return result.stdout
+
+
+def run_interactive_completion_sample(
+    binary: Path,
+    fixture: Path,
+    prefix: str,
+    home_root: Path,
+    expected_output: bytes,
+    settle_seconds: float,
+) -> dict[str, object]:
+    marker_text = f"NSHELL_NFR06_{uuid.uuid4().hex}_PROMPT"
+    marker = marker_text.encode()
+    home = home_root / f"home-{uuid.uuid4().hex}"
+    session = PtySession(
+        [str(binary), "--no-config"],
+        fixture,
+        child_environment(home, marker_text),
+    )
+    command_bytes = completion_command(binary, fixture, prefix)[-1].encode()
+    pty_expected_output = expected_output.replace(b"\n", b"\r\n")
+    paste = BRACKETED_PASTE_START + command_bytes + BRACKETED_PASTE_END
+    try:
+        session.wait_for_marker(marker)
+        session.pump_for(settle_seconds)
+        input_start = len(session.data)
+        if os.write(session.master, paste) != len(paste):
+            raise RuntimeError("NFR-06 completion command was not fully written to the PTY")
+        session.wait_for_output(
+            lambda data: command_bytes in strip_terminal_sequences(data[input_start:])
+        )
+        session.pump_for(0.05)
+        response_start = len(session.data)
+        started_ns = time.monotonic_ns()
+        if os.write(session.master, b"\r") != 1:
+            raise RuntimeError("NFR-06 completion trigger was not fully written to the PTY")
+
+        end_ns = session.wait_for_completion_render(
+            (expected_output, pty_expected_output),
+            response_start,
+            marker,
+        )
+        response = bytes(session.data[response_start:])
+        if expected_output not in response.replace(b"\r\n", b"\n"):
+            raise RuntimeError("NFR-06 interactive completion output differed from its verified reference")
+        if not prompt_render_complete(response, marker):
+            raise RuntimeError("NFR-06 completion did not return to a fully rendered prompt")
+        return {
+            "latency_ms": (end_ns - started_ns) / 1_000_000,
+            "trigger": "Enter on an already-visible complete -C command",
+            "candidate_count": FIXTURE_FILE_COUNT,
+            "output_bytes": len(expected_output),
+            "output_sha256": hashlib.sha256(expected_output).hexdigest(),
+            "response_bytes": len(response),
+            "prompt_cursor_restored": CURSOR_RESTORE in response,
+            "cursor_queries": session.responses_sent,
+        }
+    finally:
+        session.close()
 
 
 def run_suggestion_key_sample(
@@ -546,7 +663,7 @@ def run_suggestion_key_sample(
     home_root: Path,
     settle_seconds: float,
 ) -> dict[str, object]:
-    marker_text = f"WP_PERF_NFR06_{uuid.uuid4().hex}_PROMPT"
+    marker_text = f"NSHELL_NFR06_{uuid.uuid4().hex}_PROMPT"
     marker = marker_text.encode()
     home = home_root / f"home-{uuid.uuid4().hex}"
     session = PtySession([str(binary)], cwd, child_environment(home, marker_text))
@@ -604,6 +721,65 @@ def stats(values: list[float]) -> dict[str, float]:
         "p99_ms": percentile_nearest_rank(values, 0.99),
         "max_ms": max(values),
     }
+
+
+def run_target_group(
+    stream,
+    metric: str,
+    context: dict[str, object],
+    samples: int,
+    warmups: int,
+    threshold_ms: float,
+    acceptance_statistic: str,
+    target_runner: Callable[[], dict[str, object]],
+) -> dict[str, object]:
+    load_before = uptime_record()
+    stream.write(json.dumps({
+        "record": "group-start",
+        "metric": metric,
+        **context,
+        "uptime": load_before,
+    }, sort_keys=True) + "\n")
+    stream.flush()
+
+    rows: list[dict[str, object]] = []
+    for index in range(warmups + samples):
+        target = target_runner()
+        row = {
+            "record": "sample",
+            "metric": metric,
+            **context,
+            "sample": index + 1,
+            "warmup": index < warmups,
+            "target": target,
+        }
+        stream.write(json.dumps(row, sort_keys=True) + "\n")
+        stream.flush()
+        if index >= warmups:
+            rows.append(row)
+
+    load_after = uptime_record()
+    target_values = [float(row["target"]["latency_ms"]) for row in rows]
+    target_stats = stats(target_values)
+    acceptance_value = (
+        target_stats["median_ms"] if acceptance_statistic == "median" else target_stats["p99_ms"]
+    )
+    summary = {
+        "record": "group-summary",
+        "metric": metric,
+        **context,
+        "measured_samples": samples,
+        "warmups": warmups,
+        "acceptance_statistic": acceptance_statistic,
+        "threshold_ms": threshold_ms,
+        "target_threshold_met": acceptance_value <= threshold_ms,
+        "target": target_stats,
+        "uptime_before": load_before,
+        "uptime_after": load_after,
+    }
+    stream.write(json.dumps(summary, sort_keys=True) + "\n")
+    stream.flush()
+    return summary
 
 
 def run_group(
@@ -705,7 +881,7 @@ def run_suggestion_key_group(
     for index in range(warmups + samples):
         pair, order = run_pair(target_runner, control_runner, order_rng)
         target_p99 = float(pair["target"]["sequence_stats"]["p99_ms"])
-        control_p99 = float(pair["control"]["sequence_stats"]["p99_ms"])
+        plain_fixture_p99 = float(pair["control"]["sequence_stats"]["p99_ms"])
         row = {
             "record": "sample",
             "metric": metric,
@@ -714,8 +890,8 @@ def run_suggestion_key_group(
             "warmup": index < warmups,
             "execution_order": order,
             "target": pair["target"],
-            "control": pair["control"],
-            "paired_sequence_p99_delta_ms": target_p99 - control_p99,
+            "plain_fixture": pair["control"],
+            "paired_sequence_p99_delta_ms": target_p99 - plain_fixture_p99,
         }
         stream.write(json.dumps(row, sort_keys=True) + "\n")
         stream.flush()
@@ -728,14 +904,14 @@ def run_suggestion_key_group(
         for row in rows
         for event in row["target"]["keypresses"]
     ]
-    control_latencies = [
+    plain_fixture_latencies = [
         float(event["raw_keypress_to_visible_buffer_ms"])
         for row in rows
-        for event in row["control"]["keypresses"]
+        for event in row["plain_fixture"]["keypresses"]
     ]
     sequence_p99_deltas = [float(row["paired_sequence_p99_delta_ms"]) for row in rows]
     target_stats = stats(target_latencies)
-    control_stats = stats(control_latencies)
+    plain_fixture_stats = stats(plain_fixture_latencies)
     summary = {
         "record": "group-summary",
         "metric": metric,
@@ -743,10 +919,10 @@ def run_suggestion_key_group(
         "measured_sequences": samples,
         "keypress_samples_per_fixture": len(target_latencies),
         "warmups": warmups,
-        "criterion": "raw p99 keypress-to-visible-buffer latency and target-minus-plain-control p99 delta",
+            "criterion": "diagnostic p99 per-key latency to visible buffer in the 20,000-entry and plain fixtures",
         "target": target_stats,
-        "control": control_stats,
-        "control_delta_p99_ms": target_stats["p99_ms"] - control_stats["p99_ms"],
+        "plain_fixture": plain_fixture_stats,
+        "plain_fixture_delta_p99_ms": target_stats["p99_ms"] - plain_fixture_stats["p99_ms"],
         "paired_sequence_p99_delta_median_ms": statistics.median(sequence_p99_deltas),
         "paired_sequence_p99_delta_p99_ms": percentile_nearest_rank(sequence_p99_deltas, 0.99),
         "specified_nfr06_keypress_p99_threshold_ms": None,
@@ -769,49 +945,32 @@ def run_completion_group(
     home_root: Path,
     samples: int,
     warmups: int,
-    order_rng: random.Random,
+    settle_seconds: float,
 ) -> dict[str, object]:
-    command = completion_command(binary, completion_fixture, prefix)
-    preflight = subprocess.run(
-        command,
-        cwd=completion_fixture,
-        env=child_environment(home_root / f"home-{uuid.uuid4().hex}"),
-        check=False,
-        capture_output=True,
+    expected_output = completion_reference_output(binary, completion_fixture, prefix, home_root)
+    target = lambda: run_interactive_completion_sample(
+        binary,
+        completion_fixture,
+        prefix,
+        home_root,
+        expected_output,
+        settle_seconds,
     )
-    if preflight.returncode != 0 or preflight.stderr:
-        raise RuntimeError(
-            "completion preflight failed: "
-            f"status={preflight.returncode}, stderr={preflight.stderr[-500:]!r}"
-        )
-    reference_rows = preflight.stdout.splitlines()
-    if len(reference_rows) != FIXTURE_FILE_COUNT or len(set(reference_rows)) != FIXTURE_FILE_COUNT:
-        raise RuntimeError(
-            f"completion preflight returned {len(reference_rows)} rows and "
-            f"{len(set(reference_rows))} unique rows; expected {FIXTURE_FILE_COUNT}"
-        )
-    expected_output = preflight.stdout
-    target = lambda: run_completion_sample(
-        binary, completion_fixture, prefix, home_root, expected_output
-    )
-    control = lambda: run_completion_sample(
-        binary, completion_fixture, prefix, home_root, expected_output
-    )
-    return run_group(
+    return run_target_group(
         stream,
         "NFR-06",
         {
             "completion_entries": FIXTURE_FILE_COUNT,
             "completion_prefix": prefix,
-            "command": command,
+            "completion_command": completion_command(binary, completion_fixture, prefix)[-1],
+            "measurement_boundary": "PTY Enter write to all expected candidates and the next fully rendered prompt",
+            "reference_output_bytes": len(expected_output),
         },
         samples,
         warmups,
         NFR_THRESHOLDS["06"]["limit"],
         "median",
         target,
-        control,
-        order_rng,
     )
 
 
@@ -837,7 +996,7 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
     output_path.parent.mkdir(parents=True, exist_ok=True)
     summaries: list[dict[str, object]] = []
     order_rng = random.Random(args.seed)
-    with tempfile.TemporaryDirectory(prefix="wp-perf-nfr-04-06-") as temp:
+    with tempfile.TemporaryDirectory(prefix="nshell-nfr-04-06-") as temp:
         home_root = Path(temp)
         metadata = {
             "record": "metadata",
@@ -856,22 +1015,12 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                 if control_shell is not None
                 else None
             ),
-            "nfr05_action": "Ctrl-L-to-full-line-redraw after preloading the selected buffer length",
-            "nfr05_control": (
-                "randomized A/A arm using the same binary and 1000-character buffer"
-                if args.start_from in ("nfr04", "nfr05")
-                else None
-            ),
-            "nfr05_control_binary": (
-                str(binary) if args.start_from in ("nfr04", "nfr05") else None
-            ),
-            "nfr06_control": (
-                "randomized A/A arm using the same binary, command, and 20,000-entry fixture"
-                if args.start_from in ("nfr04", "nfr06")
-                else None
-            ),
+            "nfr05_action": "write one character to a buffer preloaded to one character below the selected length",
+            "nfr05_measurement_boundary": "keypress PTY write to the fresh prompt, cursor restore, and full buffer in PTY output",
+            "nfr06_action": "press Enter on an already-visible complete -C command in a live nshell PTY",
+            "nfr06_measurement_boundary": "Enter PTY write to all expected candidates and the next prompt cursor restore",
             "nfr06_suggestion_key_metric": "raw per-key latency from writing one character to observing the full typed prefix in subsequent PTY output",
-            "nfr06_suggestion_key_control": "same binary and typed sequence in the plain fixture directory",
+            "nfr06_suggestion_key_plain_fixture": "same binary and typed sequence in the plain fixture directory",
             "nfr06_suggestion_key_sequence": SUGGESTION_KEY_SEQUENCE,
             "terminal_size": {"rows": 24, "columns": 100},
             "percentile": "nearest-rank p99",
@@ -883,22 +1032,14 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
 
             if args.start_from in ("nfr04", "nfr05"):
                 redraw_preflight = {
-                    "record": "control-preflight",
+                    "record": "preflight",
                     "metric": "NFR-05",
-                    "trigger": "Ctrl-L-to-full-line-redraw",
+                    "trigger": "one-character insertion into a preloaded buffer",
                     "target": verify_redraw_support(
                         binary,
                         plain_fixture,
                         home_root,
-                        f"W5PT_{uuid.uuid4().hex}",
-                        control_shell=False,
-                    ),
-                    "control": verify_redraw_support(
-                        binary,
-                        plain_fixture,
-                        home_root,
-                        f"W5PC_{uuid.uuid4().hex}",
-                        control_shell=False,
+                        f"NSHELL_NFR05_PREFLIGHT_{uuid.uuid4().hex}",
                     ),
                 }
                 stream.write(json.dumps(redraw_preflight, sort_keys=True) + "\n")
@@ -909,7 +1050,7 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                 if args.start_from == "nfr04"
                 else ()
             ):
-                prompt = f"WP_PERF_NFR04_{uuid.uuid4().hex}_PROMPT"
+                prompt = f"NSHELL_NFR04_{uuid.uuid4().hex}_PROMPT"
                 target = lambda cwd=cwd, prompt=prompt, git_enabled=git_enabled: run_prompt_sample(
                     binary,
                     cwd,
@@ -942,36 +1083,28 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                 ))
 
             for buffer_length in (buffer_sizes if args.start_from in ("nfr04", "nfr05") else ()):
-                prompt = f"WP_PERF_NFR05_{uuid.uuid4().hex}_PROMPT"
+                prompt = f"NSHELL_NFR05_{uuid.uuid4().hex}_PROMPT"
                 target = lambda buffer_length=buffer_length, prompt=prompt: run_redraw_sample(
                     binary,
                     plain_fixture,
                     home_root,
                     prompt,
                     buffer_length,
-                    control_shell=False,
                     settle_seconds=args.settle_ms / 1000,
                 )
-                control = lambda buffer_length=buffer_length, prompt=prompt: run_redraw_sample(
-                    binary,
-                    plain_fixture,
-                    home_root,
-                    prompt,
-                    buffer_length,
-                    control_shell=False,
-                    settle_seconds=args.settle_ms / 1000,
-                )
-                summaries.append(run_group(
+                summaries.append(run_target_group(
                     stream,
                     "NFR-05",
-                    {"buffer_length": buffer_length, "trigger": "Ctrl-L-to-full-line-redraw"},
+                    {
+                        "buffer_length": buffer_length,
+                        "trigger": "one-character insertion after preloading buffer_length minus one characters",
+                        "measurement_boundary": "keypress PTY write to fresh prompt, cursor restore, and full buffer in PTY output",
+                    },
                     args.samples,
                     args.warmups,
                     NFR_THRESHOLDS["05"]["limit"],
                     "p99",
                     target,
-                    control,
-                    order_rng,
                 ))
 
             prefix = str(fixtures["completion_prefix"])
@@ -984,7 +1117,7 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                     home_root,
                     args.samples,
                     args.warmups,
-                    order_rng,
+                    args.settle_ms / 1000,
                 ))
 
             if args.start_from != "nfr05":
@@ -1016,9 +1149,9 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Measure NFR-04 blank-Enter latency, NFR-05 Ctrl-L-to-full-line-redraw p99, and "
-            "NFR-06 completion latency and suggestion key responsiveness. Each group records uptime before and after "
-            "and paired same-host controls."
+            "Measure NFR-04 blank-Enter-to-prompt latency, NFR-05 keypress-to-full-buffer-redraw p99, and "
+            "NFR-06 interactive completion latency and suggestion key responsiveness. "
+            "Absolute NFR-05 and NFR-06 target timings are not adjusted by controls."
         )
     )
     parser.add_argument("--binary", required=True, help="nshell executable to measure")

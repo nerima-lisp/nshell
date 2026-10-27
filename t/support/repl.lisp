@@ -22,6 +22,8 @@
          (nshell.presentation::*config* (nshell.domain.configuration:default-config))
          (nshell.presentation::*kb* (nshell.domain.completion:make-empty-knowledge-base))
          (nshell.presentation::*input-state* nil)
+         (nshell.presentation::*repl-filesystem*
+           (nshell.infrastructure.acl:make-host-filesystem))
          (nshell.presentation::*assistant-turn-generation* 0)
          (nshell.presentation::*assistant-turn-started-at* nil)
          (nshell.presentation::*assistant-last-event-at* nil)

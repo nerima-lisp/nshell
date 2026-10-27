@@ -128,7 +128,7 @@ wrapped line's other rows on screen as stale duplicates."
 (defun refresh-current-input-state-suggestion (&optional (text (input-state-buffer *input-state*)))
   (let ((completion-path
           (nshell.domain.environment:env-get (ensure-environment) "PATH"))
-        (filesystem (nshell.infrastructure.acl:make-host-filesystem)))
+        (filesystem *repl-filesystem*))
     (setf (input-state-suggestion *input-state*)
           (apply #'compute-suggestion *history*
                  text

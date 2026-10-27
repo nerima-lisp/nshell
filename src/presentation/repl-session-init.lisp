@@ -175,6 +175,7 @@ controls history reads and writes. PRIVATE-P prevents this session's commands
 and assistant state from being written. When HISTORY-P is true, existing
 history remains available in private mode."
   (setf *boundaries* (make-real-boundary-context)
+        *repl-filesystem* (nshell.infrastructure.acl:make-host-filesystem)
         *running* t
         *last-exit-code* 0
         *pipefail* nil

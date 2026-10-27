@@ -9,13 +9,9 @@ gap as the NIL history in builtin-commands-history.lisp."
   (or (shell-context-knowledge-base context)
       (setf (shell-context-knowledge-base context)
             (nshell.domain.completion:make-empty-knowledge-base))))
-
 (defun %complete-do-complete (context line)
-  "Print each completion candidate for LINE on its own line (fish's `complete
--C`, the scriptable completion entry point). A NIL knowledge base falls back
-to PATH/filesystem candidates rather than crashing -- see the TYPECASE in
-%COMPLETION-CANDIDATES (candidate-routing.lisp) -- so no lazy KB creation is
-needed here the way the mutating `-c`/`-e` paths below need one."
+  "Print each completion candidate for LINE on its own line. A NIL knowledge base falls back
+  to PATH and filesystem candidates, so this scriptable entry point does not need to create one."
   (let* ((environment (shell-context-environment context))
          (path (and environment (nshell.domain.environment:env-get environment "PATH")))
          (variable-names
@@ -27,6 +23,10 @@ needed here the way the mutating `-c`/`-e` paths below need one."
          (directory (nshell.infrastructure.acl:current-working-directory))
          (home-directory
            (and environment (nshell.domain.environment:env-get environment "HOME")))
+         (compute-sidecar-path (host-kit:getenv "NSHELL_NFR06_CANDIDATE_COMPUTE_SIDECAR"))
+         (compute-duration-ticks nil)
+         (output-preparation-duration-ticks 0)
+         (compute-time-units internal-time-units-per-second)
          (process-ids nil)
          (registry (shell-context-process-registry context))
          (candidates
@@ -41,21 +41,56 @@ needed here the way the mutating `-c`/`-e` paths below need one."
                       (when (and (integerp pid) (plusp pid))
                         (push (princ-to-string pid) process-ids)))))
                 registry))
-             (nshell.domain.completion:complete
-              (shell-context-knowledge-base context)
-              line
-              :path path
-              :filesystem (shell-context-filesystem context)
-              :alias-table (shell-context-alias-table context)
-              :function-table (shell-context-function-table context)
-              :variable-names variable-names
-              :directory directory
-              :home-directory home-directory
-              :process-ids (remove-duplicates process-ids :test #'string=)))))
-    (values (when candidates
-              (format nil "~{~a~%~}"
-                      (mapcar #'nshell.domain.completion:candidate-text candidates)))
-            0)))
+             (if compute-sidecar-path
+                 (let ((started-at (get-internal-real-time)))
+                   (prog1
+                       (nshell.domain.completion:complete
+                        (shell-context-knowledge-base context)
+                        line
+                        :path path
+                        :filesystem (shell-context-filesystem context)
+                        :alias-table (shell-context-alias-table context)
+                        :function-table (shell-context-function-table context)
+                        :variable-names variable-names
+                        :directory directory
+                        :home-directory home-directory
+                        :process-ids (remove-duplicates process-ids :test (function string=)))
+                     (setf compute-duration-ticks
+                           (- (get-internal-real-time) started-at))))
+                 (nshell.domain.completion:complete
+                  (shell-context-knowledge-base context)
+                  line
+                  :path path
+                  :filesystem (shell-context-filesystem context)
+                  :alias-table (shell-context-alias-table context)
+                  :function-table (shell-context-function-table context)
+                  :variable-names variable-names
+                  :directory directory
+                  :home-directory home-directory
+                  :process-ids (remove-duplicates process-ids :test (function string=))))))
+         (output
+           (when candidates
+             (if compute-sidecar-path
+                 (let ((started-at (get-internal-real-time)))
+                   (prog1
+                       (format nil "~{~a~%~}"
+                               (mapcar (function nshell.domain.completion:candidate-text)
+                                       candidates))
+                     (setf output-preparation-duration-ticks
+                           (- (get-internal-real-time) started-at))))
+                 (format nil "~{~a~%~}"
+                         (mapcar (function nshell.domain.completion:candidate-text)
+                                 candidates))))))
+    (when compute-sidecar-path
+      (with-open-file (stream compute-sidecar-path
+                              :direction :output
+                              :if-exists :supersede
+                              :if-does-not-exist :create)
+        (format stream "~D ~D ~D~%"
+                compute-duration-ticks
+                output-preparation-duration-ticks
+                compute-time-units)))
+    (values output 0)))
 
 
 (defun %complete-upsert-command (kb command flags long-options short-options arguments description)

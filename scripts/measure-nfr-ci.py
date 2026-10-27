@@ -148,6 +148,66 @@ def result_from_04_06(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def nfr06_phase_timing_from_jsonl(path: Path) -> dict[str, Any]:
+    records = read_jsonl(path)
+    metadata_rows = [row for row in records if row.get("record") == "metadata"]
+    summaries = [
+        row for row in records
+        if row.get("record") == "group-summary" and row.get("metric") == "NFR-06"
+    ]
+    if len(metadata_rows) != 1 or len(summaries) != 1:
+        raise ValueError("NFR-06 phase output must contain one metadata row and one completion summary")
+    protocol = metadata_rows[0].get("nfr06_candidate_compute_diagnostics")
+    required_boundaries = (
+        "candidate_compute_boundary",
+        "candidate_output_preparation_boundary",
+        "candidate_output_to_prompt_boundary",
+    )
+    if not isinstance(protocol, dict) or any(
+        not isinstance(protocol.get(boundary), str) for boundary in required_boundaries
+    ):
+        raise ValueError("NFR-06 phase output is missing its diagnostic protocol metadata")
+    summary = summaries[0]
+    if int(summary.get("measured_samples", -1)) != NFR04_06_SAMPLES:
+        raise ValueError("NFR-06 phase output did not produce the configured first-completion samples")
+    repeats = summary.get("same_process_repeat")
+    if (
+        not isinstance(repeats, dict)
+        or int(repeats.get("repeats_per_process", -1)) != 3
+        or int(repeats.get("measured_samples", -1)) != NFR04_06_SAMPLES * 3
+    ):
+        raise ValueError("NFR-06 phase output did not produce the configured same-process repeats")
+    timing = summary.get("candidate_compute_phase_timing")
+    if not isinstance(timing, dict):
+        raise ValueError("NFR-06 phase output has no candidate-compute timing")
+    first = timing.get("first_completion")
+    repeated = timing.get("same_process_repeats")
+    if not isinstance(first, dict) or not isinstance(repeated, dict):
+        raise ValueError("NFR-06 phase output is missing first or repeat timing")
+    if (
+        int(first.get("measured_samples", -1)) != NFR04_06_SAMPLES
+        or int(repeated.get("measured_samples", -1)) != NFR04_06_SAMPLES * 3
+    ):
+        raise ValueError("NFR-06 phase timing sample counts do not match the configured samples")
+    for phase in (first, repeated):
+        for key in (
+            "candidate_compute",
+            "candidate_output_preparation",
+            "candidate_output_to_prompt",
+        ):
+            values = phase.get(key)
+            if not isinstance(values, dict) or not math.isfinite(float(values.get("median_ms", math.nan))):
+                raise ValueError(f"NFR-06 phase output is missing a finite {key} median")
+    return {
+        "source": path.name,
+        "measurement_samples": NFR04_06_SAMPLES,
+        "repeats_per_process": 3,
+        "first_completion": first,
+        "same_process_repeats": repeated,
+        "protocol": protocol,
+    }
+
+
 def result_from_07(report_path: Path) -> dict[str, Any]:
     if not report_path.is_file():
         raise ValueError("NFR-07 measurement report is missing")
@@ -250,7 +310,8 @@ def build_summary(
         if status == "ERROR":
             status += f": {result['error']}"
         lines.append(f"| {result['nfr']} | {value} | {threshold} | **{status}** |")
-    repeat = rows["NFR-06"]["details"].get("same_process_repeat")
+    nfr06_details = rows["NFR-06"].get("details", {})
+    repeat = nfr06_details.get("same_process_repeat")
     if repeat is not None:
         lines.extend(
             [
@@ -264,6 +325,28 @@ def build_summary(
                 f"({repeat['repeats_per_process']} per process).",
             ]
         )
+    phase_timing = nfr06_details.get("candidate_compute_phase_timing")
+    if phase_timing is not None:
+        first = phase_timing["first_completion"]
+        repeated = phase_timing["same_process_repeats"]
+        lines.extend(
+            [
+                "",
+                "NFR-06 phase timing (separately instrumented diagnostic run):",
+                f"first completion, candidate calculation median {display_number(first['candidate_compute']['median_ms'])} ms; "
+                f"candidate text preparation median {display_number(first['candidate_output_preparation']['median_ms'])} ms; "
+                f"visible candidate output through prompt restoration median {display_number(first['candidate_output_to_prompt']['median_ms'])} ms "
+                f"({first['measured_samples']} samples).",
+                f"same-process repeats, candidate calculation median {display_number(repeated['candidate_compute']['median_ms'])} ms; "
+                f"candidate text preparation median {display_number(repeated['candidate_output_preparation']['median_ms'])} ms; "
+                f"visible candidate output through prompt restoration median {display_number(repeated['candidate_output_to_prompt']['median_ms'])} ms "
+                f"({repeated['measured_samples']} repeats).",
+                "Candidate calculation and text preparation use SBCL internal time. Visible output timing uses the driver's monotonic clock from the first expected candidate row observed in PTY output to the fully restored prompt; it excludes pre-output dispatch and candidate computation and includes PTY output and prompt restoration. "
+                "This diagnostic runs separately from the NFR-06 gate and its phases are not additive to the Enter-to-prompt latency.",
+            ]
+        )
+    elif "phase_timing_error" in rows["NFR-06"]:
+        lines.extend(["", f"NFR-06 phase timing diagnostic failed: {rows['NFR-06']['phase_timing_error']}"])
     if diagnostic is not None:
         lines.extend(
             [
@@ -310,7 +393,10 @@ def write_outputs(
     summary = build_summary(results, diagnostic, system, revision or "unknown")
     summary_path = output_dir / "summary.md"
     summary_path.write_text(summary, encoding="utf-8")
-    return all(result["status"] == "PASS" for result in results)
+    return all(
+        result["status"] == "PASS" and result.get("phase_timing_status", "PASS") == "PASS"
+        for result in results
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -458,6 +544,41 @@ def main() -> int:
                 "status": "INFO",
             }
             results["06"]["details"]["suggestion_key_diagnostic"] = diagnostic
+            phase_path = output_dir / "nfr-06-phase-diagnostics.jsonl"
+            phase_command = [
+                py,
+                str(ROOT / "scripts/measure-nfr-04-06.py"),
+                "--binary",
+                str(binary),
+                "--from",
+                "nfr06",
+                "--samples",
+                str(NFR04_06_SAMPLES),
+                "--warmups",
+                str(NFR04_06_WARMUPS),
+                "--plain-fixture",
+                plain_dir,
+                "--completion-fixture",
+                str(completion_fixture),
+                "--nfr06-candidate-compute-diagnostics",
+                "--output",
+                str(phase_path),
+            ]
+            try:
+                code, error = run_command(
+                    "NFR-06 calculation and render phase diagnostics",
+                    phase_command,
+                    logs_dir / "nfr-06-phase-diagnostics.log",
+                )
+                if error:
+                    raise ValueError(error)
+                if code != 0:
+                    raise ValueError(f"phase diagnostic command exited with status {code}")
+                results["06"]["details"]["candidate_compute_phase_timing"] = nfr06_phase_timing_from_jsonl(phase_path)
+                results["06"]["phase_timing_status"] = "PASS"
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                results["06"]["phase_timing_error"] = str(exc)
+                results["06"]["phase_timing_status"] = "ERROR"
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as exc:
         for nfr in ("04", "05", "06"):
             errors[nfr] = str(exc)

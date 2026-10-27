@@ -90,6 +90,41 @@ grow it without bound.")
 
 (defun cached-subdirectories (directory)
   (%cached-directory-listing :subdirectories directory #'host-kit:subdirectories))
+(defun read-regular-file-bytes (pathname byte-limit)
+  (when (and (integerp byte-limit) (plusp byte-limit))
+    (let ((fd nil)
+          (stream nil))
+      (unwind-protect
+           (handler-case
+               (let ((path (namestring (pathname pathname))))
+                 (when (sb-posix:s-isreg
+                        (sb-posix:stat-mode (sb-posix:lstat path)))
+                   (setf fd
+                         (sb-posix:open
+                          path
+                          (logior sb-posix:o-rdonly
+                                  sb-posix:o-nofollow
+                                  sb-posix:o-nonblock)))
+                   (let ((stat (sb-posix:fstat fd)))
+                     (when (sb-posix:s-isreg (sb-posix:stat-mode stat))
+                       (setf stream
+                             (sb-sys:make-fd-stream
+                              fd :input t
+                              :element-type (quote (unsigned-byte 8))
+                              :auto-close t))
+                       (setf fd nil)
+                       (let* ((limit (min byte-limit 4096))
+                              (bytes
+                                (make-array limit
+                                            :element-type
+                                            (quote (unsigned-byte 8)))))
+                         (let ((count (read-sequence bytes stream))) (subseq bytes 0 count)))))))
+             (sb-posix:syscall-error () nil)
+             (stream-error () nil))
+        (when stream
+          (ignore-errors (close stream)))
+        (when fd
+          (ignore-errors (sb-posix:close fd)))))))
 
 (progn
   (defun %filesystem-completion-symlink-target-kind (entry)

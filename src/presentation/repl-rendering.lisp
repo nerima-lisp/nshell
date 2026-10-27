@@ -52,61 +52,99 @@
          (candidates (and state (input-state-last-candidates state)))
          (pager (and state (input-state-completion-pager state)))
          (row-budget (%completion-pager-row-budget))
-         (terminal-width (terminal-width)))
-    (when (and candidates
-               (null pager)
-               (> (completion-render-line-count
-                   candidates
-                   :terminal-width terminal-width)
-                  row-budget))
-      (let* ((base-buffer (or (input-state-completion-base-buffer state)
-                              (input-state-buffer state)))
-             (base-cursor (or (input-state-completion-base-cursor state)
-                              (input-state-cursor-pos state)))
-             (candidate-index (input-state-completion-index state))
-             (selected-index
-               (if (and (<= 0 candidate-index)
-                        (< candidate-index (length candidates)))
-                   candidate-index
-                   0)))
-        (setf *input-state*
-              (copy-input-state-with state :completion-base-buffer base-buffer :completion-base-cursor base-cursor :completion-pager (list :query "" :index selected-index) :suggestion :clear)
-              state *input-state*
-              pager (input-state-completion-pager state))))
-    (when candidates
-      (let* ((pager-active-p (not (null pager)))
-             (visible-candidates
-               (if pager-active-p
-                   (completion-pager-filtered-candidates state)
-                   candidates))
-             (count (length visible-candidates))
-             (selected-index
-               (if pager-active-p
-                   (if (plusp count)
-                       (max 0 (min (1- count)
-                                   (getf pager :index 0)))
-                       0)
-                   (input-state-completion-index state)))
-             (query (and pager-active-p (getf pager :query "")))
-             (footer
-               (when pager-active-p
-                 (format nil "~a~d/~d  arrows move, Enter accepts, Esc/Ctrl-C cancels"
-                         (if (string= query "")
-                             ""
-                             (format nil "Filter: ~a | " query))
-                         (if (plusp count) (1+ selected-index) 0)
-                         count))))
-        (setf *completion-rendered-lines*
-              (%render-transient-output-below-prompt
-               (lambda ()
-                 (render-completions
-                  visible-candidates
-                  :selected-index selected-index
-                  :terminal-width terminal-width
-                  :max-rows row-budget
-                  :footer footer
-                  :empty-message (when pager-active-p "No matches")
-                  :theme (nshell.domain.configuration:config-theme *config*)))))))))
+         (terminal-width (terminal-width))
+         (candidate-index (and state (input-state-completion-index state)))
+         (selected-candidate-index
+           (and candidates
+                (if (and (integerp candidate-index)
+                         (<= 0 candidate-index)
+                         (< candidate-index (length candidates)))
+                    candidate-index
+                    0)))
+         (pager-was-active-p (not (null pager))))
+    (flet ((preview-for (preview-candidates preview-index)
+             (let ((candidate
+                     (and (integerp preview-index)
+                          (<= 0 preview-index)
+                          (< preview-index (length preview-candidates))
+                          (nth preview-index preview-candidates))))
+               (when (and candidate
+                          (eq (%candidate-kind candidate) :file))
+                 (format-file-preview-lines
+                  (nshell.infrastructure.acl:read-regular-file-bytes
+                   (%candidate-text candidate) 4096)
+                  :max-lines 2
+                  :max-width terminal-width)))))
+      (let ((initial-preview
+              (unless pager-was-active-p
+                (preview-for candidates selected-candidate-index))))
+        (when (and candidates
+                   (null pager)
+                   (> (completion-render-line-count
+                       candidates
+                       :terminal-width terminal-width
+                       :preview-lines
+                       (%completion-preview-visible-lines
+                        initial-preview (length candidates) nil row-budget))
+                      row-budget))
+          (let* ((base-buffer (or (input-state-completion-base-buffer state)
+                                  (input-state-buffer state)))
+                 (base-cursor (or (input-state-completion-base-cursor state)
+                                  (input-state-cursor-pos state)))
+                 (selected-index
+                   (or selected-candidate-index 0)))
+            (setf *input-state*
+                  (copy-input-state-with
+                   state
+                   :completion-base-buffer base-buffer
+                   :completion-base-cursor base-cursor
+                   :completion-pager (list :query "" :index selected-index)
+                   :suggestion :clear)
+                  state *input-state*
+                  pager (input-state-completion-pager state))))
+        (when candidates
+          (let* ((pager-active-p (not (null pager)))
+                 (visible-candidates
+                   (if pager-active-p
+                       (completion-pager-filtered-candidates state)
+                       candidates))
+                 (count (length visible-candidates))
+                 (selected-index
+                   (if pager-active-p
+                       (if (plusp count)
+                           (max 0 (min (1- count)
+                                       (getf pager :index 0)))
+                           0)
+                       (if (and (integerp candidate-index)
+                                (<= 0 candidate-index)
+                                (< candidate-index count))
+                           candidate-index
+                           (if (plusp count) 0 nil))))
+                 (preview-lines
+                   (if pager-was-active-p
+                       (preview-for visible-candidates selected-index)
+                       initial-preview))
+                 (query (and pager-active-p (getf pager :query "")))
+                 (footer
+                   (when pager-active-p
+                     (format nil "~a~d/~d  arrows move, Enter accepts, Esc/Ctrl-C cancels"
+                             (if (string= query "")
+                                 ""
+                                 (format nil "Filter: ~a | " query))
+                             (if (plusp count) (1+ selected-index) 0)
+                             count))))
+            (setf *completion-rendered-lines*
+                  (%render-transient-output-below-prompt
+                   (lambda ()
+                     (render-completions
+                      visible-candidates
+                      :selected-index selected-index
+                      :terminal-width terminal-width
+                      :max-rows row-budget
+                      :footer footer
+                      :empty-message (when pager-active-p "No matches")
+                      :preview-lines preview-lines
+                      :theme (nshell.domain.configuration:config-theme *config*)))))))))))
 
 (defun %render-edit-buffer-line
     (line absolute-start theme selection-start selection-end matching-spans

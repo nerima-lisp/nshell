@@ -31,7 +31,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
            #:external-command-environment
            #:current-environment-entries #:current-environment-value
            #:current-working-directory
-           #:map-path-command-directories #:make-host-filesystem
+           #:map-path-command-directories #:make-host-filesystem #:read-regular-file-bytes
            #:clear-directory-listing-cache
            #:spawn-pipeline #:spawn-pipeline-async #:wait-job
            #:spawn-process-substitution

@@ -236,6 +236,165 @@
         (expect (search "arrows move" output) :to-be-falsy)
         (expect (<= nshell.presentation::*completion-rendered-lines* 23)
                 :to-be-truthy))))
+  (it "completion-rendering-previews-first-file-without-an-index"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((path (merge-pathnames "preview.txt" directory))
+             (candidates
+               (list (nshell.domain.completion:make-candidate
+                      (namestring path) :kind :file)
+                     (nshell.domain.completion:make-candidate
+                      "later-command" :kind :command))))
+        (host-kit:write-file-string
+         (format nil "first body~%second body~%") path)
+        (with-repl-test-state
+          (let* ((nshell.presentation::*input-state*
+                   (nshell.presentation:make-input-state
+                    :buffer "preview " :last-candidates candidates))
+                 (nshell.presentation::*prompt-rendered-lines* 1)
+                 (nshell.presentation::*prompt-rendered-cursor-row* 0)
+                 (nshell.infrastructure.terminal:*terminal-color-depth* :truecolor)
+                 (output
+                   (with-fixed-terminal-size (24 80)
+                     (capture-standard-output
+                       (nshell.presentation::%render-current-completion-results)))))
+            (expect (search "first body" output) :to-be-truthy)
+            (expect (search "second body" output) :to-be-truthy)
+            (expect (search (format nil "~C[7m∙ " #\Esc) output) :to-be-truthy)
+            (expect (>= nshell.presentation::*completion-rendered-lines* 3) :to-be-truthy))))))
+  (it "completion-rendering-includes-preview-lines-in-pager-budget"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((path (merge-pathnames "preview.txt" directory))
+             (long-text (make-string 72 :initial-element #\x))
+             (candidates
+               (cons (nshell.domain.completion:make-candidate
+                      (namestring path) :kind :file)
+                     (loop for index from 1 to 5
+                           collect
+                           (nshell.domain.completion:make-candidate
+                            (format nil "candidate-~d-~a" index long-text)
+                            :kind :command))))
+             (grid-lines
+               (nshell.presentation::completion-render-line-count
+                candidates :terminal-width 80))
+             (row-budget nil))
+        (host-kit:write-file-string
+         (format nil "preview-one~%preview-two") path)
+        (with-repl-test-state
+          (let* ((nshell.presentation::*input-state*
+                   (nshell.presentation:make-input-state
+                    :buffer "preview " :last-candidates candidates))
+                 (nshell.presentation::*prompt-rendered-lines* 1)
+                 (nshell.presentation::*prompt-rendered-cursor-row* 0)
+                 (output
+                   (with-fixed-terminal-size (8 80)
+                     (setf row-budget
+                           (nshell.presentation::%completion-pager-row-budget))
+                     (expect (<= grid-lines row-budget) :to-be-truthy)
+                     (expect (> (+ grid-lines 2) row-budget) :to-be-truthy)
+                     (capture-standard-output
+                       (nshell.presentation::%render-current-completion-results)))))
+            (expect (nshell.presentation::input-state-completion-pager
+                     nshell.presentation::*input-state*)
+                    :to-be-truthy)
+            (expect (search "preview-one" output) :to-be-truthy)
+            (expect (search "preview-two" output) :to-be-truthy)
+            (expect (search "arrows move" output) :to-be-truthy)
+            (expect (<= nshell.presentation::*completion-rendered-lines*
+                        row-budget)
+                    :to-be-truthy))))))
+  (it "file-preview-formatting-bounds-lines-and-width"
+    (let* ((bytes
+             (sb-ext:string-to-octets
+              (format nil "alpha~%bravo~%charlie") :external-format :utf-8))
+           (lines
+             (nshell.presentation::format-file-preview-lines
+              bytes :max-lines 2 :max-width 4)))
+      (expect 2 :to-equal (length lines))
+      (expect (every (lambda (line)
+                       (<= (nshell.presentation::%string-visible-width line) 4))
+                     lines) :to-be-truthy)))
+  (it "file-preview-formatting-escapes-bidi-and-line-separator-controls"
+    (let* ((text
+             (coerce
+              (list #\A (code-char #x202e)
+                    #\B (code-char #x2066)
+                    #\C (code-char #x2028)
+                    #\D (code-char #x2029)
+                    #\E)
+              (quote string)))
+           (lines
+             (nshell.presentation::format-file-preview-lines
+              (sb-ext:string-to-octets text :external-format :utf-8)
+              :max-lines 3
+              :max-width 80))
+           (line (first lines)))
+      (expect 1 :to-equal (length lines))
+      (expect (loop for escape in (list "\\u202e"
+                                        "\\u2066"
+                                        "\\u2028"
+                                        "\\u2029")
+                    always (search escape line))
+              :to-be-truthy)
+      (expect (loop for code in (list #x202e #x2066 #x2028 #x2029)
+                    always (null (position (code-char code) line)))
+              :to-be-truthy)))
+  (it "file-preview-formatting-escapes-controls-and-rejects-binary"
+    (let* ((control-bytes
+             (make-array
+              9 :element-type (quote (unsigned-byte 8))
+              :initial-contents (list #x41 #x1b #x42 #x09 #x43 #x7f #x44 #xc2 #x85)))
+           (lines
+             (nshell.presentation::format-file-preview-lines
+              control-bytes :max-lines 3 :max-width 80))
+           (line (first lines))
+           (nul-bytes
+             (make-array
+              3 :element-type (quote (unsigned-byte 8))
+              :initial-contents (list #x41 #x00 #x42)))
+           (invalid-utf8
+             (make-array
+              2 :element-type (quote (unsigned-byte 8))
+              :initial-contents (list #xc3 #x28))))
+      (expect 1 :to-equal (length lines))
+      (expect (search "\\x1b" line) :to-be-truthy)
+      (expect nil :to-equal (position #\Tab line))
+      (expect (loop for character across line
+                    for code = (char-code character)
+                    always (and (>= code #x20)
+                                (not (<= #x7f code #x9f)))) :to-be-truthy)
+      (expect (let ((before-tab (position #\B line))
+                    (after-tab (position #\C line)))
+                (and before-tab after-tab
+                     (> after-tab (1+ before-tab))
+                     (loop for index from (1+ before-tab) below after-tab
+                           always (char= (char line index) #\Space)))) :to-be-truthy)
+      (expect nil :to-equal
+              (nshell.presentation::format-file-preview-lines
+               nul-bytes :max-lines 3 :max-width 80))
+      (expect nil :to-equal
+              (nshell.presentation::format-file-preview-lines
+               invalid-utf8 :max-lines 3 :max-width 80))))
+  (it "completion-rendering-skips-preview-for-command-and-directory"
+    (host-kit:with-temporary-directory (directory)
+      (let ((path (merge-pathnames "preview.txt" directory)))
+        (host-kit:write-file-string "preview-only-body" path)
+        (loop for kind in (list :command :directory)
+              do (with-repl-test-state
+                   (let* ((nshell.presentation::*input-state*
+                            (nshell.presentation:make-input-state
+                             :buffer "preview "
+                             :completion-index 0
+                             :last-candidates
+                             (list (nshell.domain.completion:make-candidate
+                                    (namestring path) :kind kind))))
+                          (nshell.presentation::*prompt-rendered-lines* 1)
+                          (nshell.presentation::*prompt-rendered-cursor-row* 0)
+                          (output
+                            (with-fixed-terminal-size (24 80)
+                              (capture-standard-output
+                                (nshell.presentation::%render-current-completion-results)))))
+                     (expect nil :to-equal
+                             (search "preview-only-body" output))))))))
 
   (it "completion-rendering-pads-wide-candidates-to-column-width"
     (let* ((candidates (list (nshell.domain.completion:make-candidate

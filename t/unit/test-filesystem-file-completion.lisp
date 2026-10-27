@@ -198,4 +198,65 @@
                 :to-equal
                 (completion-texts
                  (nshell.domain.completion:complete
-                  kb "cat st" :filesystem *completion-test-filesystem*)))))))
+                  kb "cat st" :filesystem *completion-test-filesystem*))))))
+  (it "regular-file-preview-reader-bounds-byte-prefix"
+    (host-kit:with-temporary-directory (directory)
+      (let ((path (merge-pathnames "preview.txt" directory)))
+        (host-kit:write-file-string "small" path)
+        (let ((bytes (nshell.infrastructure.acl:read-regular-file-bytes path 8)))
+          (expect "small" :to-equal
+                  (sb-ext:octets-to-string bytes :external-format :utf-8)))
+        (host-kit:write-file-string
+         (make-string 100000 :initial-element #\x) path)
+        (let ((bytes (nshell.infrastructure.acl:read-regular-file-bytes path 5)))
+          (expect 5 :to-equal (length bytes))
+          (expect "xxxxx" :to-equal
+                  (sb-ext:octets-to-string bytes :external-format :utf-8))))))
+  (it "regular-file-preview-reader-rejects-directories"
+    (host-kit:with-temporary-directory (directory)
+      (expect nil :to-equal
+              (nshell.infrastructure.acl:read-regular-file-bytes directory 8))))
+  (it "regular-file-preview-reader-rejects-permission-denied-files"
+    (host-kit:with-temporary-directory (directory)
+      (let ((path (merge-pathnames "private.txt" directory)))
+        (host-kit:write-file-string "private" path)
+        (unwind-protect
+             (progn
+               (sb-posix:chmod (namestring path) #o000)
+               (expect nil :to-equal
+                       (nshell.infrastructure.acl:read-regular-file-bytes
+                        path 8)))
+          (sb-posix:chmod (namestring path) #o600)))))
+  (it "regular-file-preview-reader-rejects-symlinks"
+    (host-kit:with-temporary-directory (directory)
+      (let ((target (merge-pathnames "target.txt" directory))
+            (link (merge-pathnames "preview-link.txt" directory)))
+        (host-kit:write-file-string "target" target)
+        (host-kit:create-symbolic-link target link)
+        (expect nil :to-equal
+                (nshell.infrastructure.acl:read-regular-file-bytes link 8)))))
+  (it "regular-file-preview-reader-does-not-block-on-fifo"
+    (host-kit:with-temporary-directory (directory)
+      (let ((path (merge-pathnames "preview.fifo" directory))
+            (finished-p nil)
+            (result :not-finished)
+            (reader-thread nil))
+        (sb-posix:mkfifo (namestring path) #o600)
+        (unwind-protect
+             (progn
+               (setf reader-thread
+                     (sb-thread:make-thread
+                      (lambda ()
+                        (setf result
+                              (handler-case
+                                  (nshell.infrastructure.acl:read-regular-file-bytes
+                                   path 8)
+                                (error (condition) condition))
+                              finished-p t))))
+               (sb-thread:join-thread reader-thread :timeout 1)
+               (expect finished-p :to-be-truthy)
+               (expect nil :to-equal result))
+          (when (and reader-thread
+                     (sb-thread:thread-alive-p reader-thread))
+            (sb-thread:terminate-thread reader-thread)
+            (sb-thread:join-thread reader-thread)))))))

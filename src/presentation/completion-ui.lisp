@@ -99,34 +99,62 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
            (and (plusp max-rows)
                 (or (> max-rows 1)
                     (zerop candidate-count))))))
-(defun %completion-render-line-count (columns formatted &key max-rows footer-p)
-  (let* ((total-rows (if formatted
-                         (ceiling (length formatted) columns)
-                         0))
+(defun %completion-preview-visible-lines (preview-lines candidate-count footer-p max-rows)
+  (if (or (null preview-lines)
+          (zerop candidate-count))
+      nil
+      (let* ((preview-limit
+               (if max-rows
+                   (max 0
+                        (- max-rows
+                           (if (plusp candidate-count) 1 0)
+                           (if (%completion-footer-visible-p
+                                candidate-count footer-p max-rows)
+                               1
+                               0)))
+                   (length preview-lines))))
+        (subseq preview-lines
+                0
+                (min (length preview-lines) preview-limit)))))
+(defun %completion-render-line-count (columns formatted &key max-rows footer-p preview-lines)
+  (let* ((candidate-count (length formatted))
+         (visible-preview-lines
+           (%completion-preview-visible-lines
+            preview-lines candidate-count footer-p max-rows))
+         (candidate-max-rows
+           (and max-rows
+                (max 0 (- max-rows (length visible-preview-lines)))))
+         (total-rows
+           (if formatted
+               (ceiling candidate-count columns)
+               0))
          (footer-lines
-          (if (%completion-footer-visible-p
-               (length formatted)
-               footer-p
-               max-rows)
-              1
-              0))
-         (content-limit (if max-rows
-                            (max 0 (- max-rows footer-lines))
-                            total-rows)))
-    (+ (min total-rows content-limit) footer-lines)))
+           (if (%completion-footer-visible-p
+                candidate-count footer-p candidate-max-rows)
+               1
+               0))
+         (content-limit
+           (if candidate-max-rows
+               (max 0 (- candidate-max-rows footer-lines))
+               total-rows)))
+    (+ (min total-rows content-limit)
+       footer-lines
+       (length visible-preview-lines))))
 
 (defun completion-render-line-count (candidates
                                       &key
                                         (terminal-width (terminal-width))
                                         max-rows
-                                        footer-p)
+                                        footer-p
+                                        preview-lines)
   (multiple-value-bind (columns column-width formatted)
       (%compute-columns candidates :terminal-width terminal-width)
     (declare (ignore column-width))
     (%completion-render-line-count columns
                                    formatted
                                    :max-rows max-rows
-                                   :footer-p footer-p)))
+                                   :footer-p footer-p
+                                   :preview-lines preview-lines)))
 
 (defun render-completions (candidates
                            &key
@@ -135,14 +163,23 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
                            (theme (nshell.domain.configuration:default-theme))
                            max-rows
                            footer
-                           empty-message)
+                           empty-message
+                           preview-lines)
   (multiple-value-bind (columns column-width formatted)
       (%compute-columns candidates :terminal-width terminal-width)
     (let* ((candidate-count (length candidates))
-           (footer-visible-p (%completion-footer-visible-p candidate-count footer max-rows))
+           (visible-preview-lines
+             (%completion-preview-visible-lines
+              preview-lines candidate-count footer max-rows))
+           (candidate-max-rows
+             (and max-rows
+                  (max 0 (- max-rows (length visible-preview-lines)))))
+           (footer-visible-p
+             (%completion-footer-visible-p
+              candidate-count footer candidate-max-rows))
            (total-rows (if formatted (ceiling candidate-count columns) 0))
-           (content-budget (if max-rows
-                               (max 0 (- max-rows
+           (content-budget (if candidate-max-rows
+                               (max 0 (- candidate-max-rows
                                          (if footer-visible-p 1 0)))
                              (max total-rows (if empty-message 1 0))))
            (visible-rows (min total-rows content-budget))
@@ -152,18 +189,19 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
                                 selected-index))
            (selected-row (if selected-index
                              (floor selected-index columns)
-                           0))
+                             0))
            (start-row (if (plusp visible-rows)
                           (max 0
                                (min (- total-rows visible-rows)
                                     (- selected-row
                                        (floor (1- visible-rows) 2))))
-                        0))
+                          0))
            (empty-row-p (and (zerop candidate-count)
                              empty-message
                              (plusp content-budget)))
            (rendered-lines (+ visible-rows
                               (if empty-row-p 1 0)
+                              (length visible-preview-lines)
                               (if footer-visible-p 1 0)))
            (content-width (max 1
                                (- column-width
@@ -184,19 +222,22 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
                                    (%pad-to-visible-width visible-item column-width)
                                    :completion-selected
                                    theme)
-                                (if (string= visible-item item)
-                                    (format t "~a"
-                                            (%pad-styled-cell
-                                             (%format-candidate-styled candidate theme)
-                                             item
-                                             column-width))
-                                  (format t "~a"
-                                          (%pad-to-visible-width
-                                           visible-item column-width)))))
+                                  (if (string= visible-item item)
+                                      (format t "~a"
+                                              (%pad-styled-cell
+                                               (%format-candidate-styled candidate theme)
+                                               item
+                                               column-width))
+                                      (format t "~a"
+                                              (%pad-to-visible-width
+                                               visible-item column-width)))))
                      (format t "~%"))))
         (when empty-row-p
           (format t "~a~%"
                   (%truncate-string-to-width empty-message terminal-width)))
+        (dolist (line visible-preview-lines)
+          (format t "~a~%"
+                  (%truncate-string-to-width line terminal-width)))
         (when footer-visible-p
           (format t "~a~%"
                   (%truncate-string-to-width footer terminal-width)))

@@ -68,11 +68,11 @@
      (%file-completion-prefix-projection-directory-prefix projection)
      (%file-completion-prefix-projection-file-prefix projection))))
 
-(defun %file-completion-directory-pathname (directory-prefix)
-  "Return a pathname suitable for listing DIRECTORY-PREFIX."
-  (pathname (if (string= directory-prefix "")
-                "./"
-                directory-prefix)))
+(defun %file-completion-directory-string (directory-prefix)
+  "Return a directory string suitable for listing DIRECTORY-PREFIX."
+  (if (string= directory-prefix "")
+      "./"
+      directory-prefix))
 
 (defun %safe-file-completion-list (fn directory)
   "Call filesystem capability FN for DIRECTORY, returning NIL on failure."
@@ -89,7 +89,7 @@
 (define-value-struct %file-completion-query
   ((directory-prefix "" :type string)
    (name-prefix "" :type string)
-   (directory #p"./" :type pathname)
+   (directory "./" :type string)
    (include-files t :type boolean)
    (include-directories t :type boolean))
   :public-accessors nil
@@ -122,7 +122,7 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
     (%make-file-completion-query
      directory-prefix
      name-prefix
-     (%file-completion-directory-pathname
+     (%file-completion-directory-string
       (%expand-tilde-directory-prefix directory-prefix home-directory))
      include-files
      include-directories)))
@@ -204,6 +204,9 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
                    include-files
                    include-directories
                    :home-directory home-directory))
+           (legacy-directory
+            (unless (functionp completion-entries-fn)
+              (pathname (%file-completion-query-directory query))))
            (candidates (%make-empty-filesystem-candidate-set)))
       (if (functionp completion-entries-fn)
           (setf candidates
@@ -219,14 +222,14 @@ carrying its own trailing slash (%ENSURE-DIRECTORY-CANDIDATE-SUFFIX)."
                   (%add-file-completion-entries
                    (%safe-file-completion-list
                     subdirectories-fn
-                    (%file-completion-query-directory query))
+                    legacy-directory)
                    :directory query candidates)))
           (when (%file-completion-query-include-files query)
             (setf candidates
                   (%add-file-completion-entries
                    (%safe-file-completion-list
                     directory-files-fn
-                    (%file-completion-query-directory query))
+                    legacy-directory)
                    :file query candidates)))))
       (%filesystem-candidate-set-candidates candidates))))
 

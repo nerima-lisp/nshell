@@ -9,6 +9,7 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
+      "NSHELL_READER": "sexp",
       "NSHELL_PROMPT": "SCENARIO_J18-approx-completion-candidate-preview> "
     },
     "home": "home",
@@ -33,7 +34,15 @@
   "steps": [
     {
       "type": "keys",
-      "text": "true; echo J18_$((1+1))"
+      "text": "(true)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "(printf \"J18_%d\" ,(+ 1 1))"
     },
     {
       "type": "key",
@@ -57,8 +66,15 @@
       "key": "C-c"
     },
     {
+      "type": "wait_screen",
+      "excludes": [
+        "J18_FILE_PREVIEW_CONTENT"
+      ],
+      "timeout_seconds": 5
+    },
+    {
       "type": "keys",
-      "text": "echo J18_AFTER_$((1+1))"
+      "text": "(printf \"J18_AFTER_%d\" ,(+ 1 1))"
     },
     {
       "type": "key",
@@ -91,8 +107,5 @@
     },
     "exit_code": 0
   },
-  "load_config": true,
-  "expected_failure": {
-    "reason": "Plan FR-024 defers candidate previews to P6; no implementation WP is assigned."
-  }
+  "load_config": true
 }

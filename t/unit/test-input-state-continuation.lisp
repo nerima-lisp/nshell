@@ -30,8 +30,7 @@
                   (nshell.presentation:input-state-cursor-pos continued-state)))))
   (it "K04-incomplete-parenthesis-enters-continuation-before-cancel"
     (cl-weave:expect-assertions 7)
-    (let ((nshell.presentation::*repl-new-reader-route-enabled-p* t))
-      (let* ((source "(touch K04_SHOULD_NOT_EXIST")
+    (let* ((source "(touch K04_SHOULD_NOT_EXIST")
              (cursor (length source))
              (scan-result
                (nshell.presentation::%repl-input-scan-result
@@ -58,7 +57,7 @@
             (expect "" :to-equal
                     (nshell.presentation:input-state-buffer cancelled-state))
             (expect 0 :to-equal
-                    (nshell.presentation:input-state-cursor-pos cancelled-state)))))))
+                    (nshell.presentation:input-state-cursor-pos cancelled-state))))))
 
   (it "e03-complete-and-invalid-enter-leave-buffer-for-execute-handler"
     (dolist (case '(("echo > out" :complete)

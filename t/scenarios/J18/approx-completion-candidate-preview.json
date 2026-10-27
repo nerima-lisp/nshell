@@ -9,7 +9,6 @@
     "variables": {
       "PATH": "/usr/bin:/bin",
       "TERM": "xterm-256color",
-      "NSHELL_READER": "sexp",
       "NSHELL_PROMPT": "SCENARIO_J18-approx-completion-candidate-preview> "
     },
     "home": "home",

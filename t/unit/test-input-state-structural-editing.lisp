@@ -3,15 +3,14 @@
 (describe "input-state-structural-editing-tests"
   (it "sexp-navigation-moves-forward-backward-and-between-list-levels"
     (let ((state (input-state :buffer "(list alpha beta)" :cursor-pos 6)))
-      (let ((nshell.presentation::*repl-new-reader-route-enabled-p* nil))
-        (with-reduced-input-state (forward forward-output)
+      (with-reduced-input-state (forward forward-output)
             (reduce-once state :alt-ctrl-f)
           (is-input-state forward :buffer "(list alpha beta)" :cursor-pos 11)
           (expect :redraw :to-be forward-output)
           (with-reduced-input-state (backward backward-output)
               (reduce-once forward :alt-ctrl-b)
             (is-input-state backward :buffer "(list alpha beta)" :cursor-pos 6)
-            (expect :redraw :to-be backward-output))))
+            (expect :redraw :to-be backward-output)))
       (with-reduced-input-state (entered enter-output)
           (reduce-once (input-state :buffer "(list alpha beta)" :cursor-pos 0)
                        :alt-ctrl-d)

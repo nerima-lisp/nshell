@@ -209,35 +209,25 @@ wrapped line's other rows on screen as stale duplicates."
           (%assistant-payload-field payload "content"))))))
 
 (defun %assistant-proposal-assessment (text)
-  (if (%repl-new-reader-route-enabled-p)
-      (handler-case
-          (let ((reader-results
-                  (nshell.domain.parsing:read-submission
-                   text
-                   :reader-context (%repl-reader-context-for-source text))))
-            (if (and
-                 reader-results
-                 (every
-                  (function nshell.domain.parsing:reader-result-p)
-                  reader-results))
-                (values
-                 :classified
-                 (nshell.feature.assistant:classify-ast reader-results)
-                 nil)
-                (values :parse-error nil
-                        (format nil "解釈できない提案: ~a" text))))
-        (nshell.domain.parsing:sexp-reader-error ()
-          (values :parse-error nil
-                  (format nil "解釈できない提案: ~a" text))))
-      (let ((result (nshell.domain.parsing:parse-command-line text)))
-        (if (nshell.domain.parsing:parse-complete-p result)
+  (handler-case
+      (let ((reader-results
+              (nshell.domain.parsing:read-submission
+               text
+               :reader-context (%repl-reader-context-for-source text))))
+        (if (and
+             reader-results
+             (every
+              (function nshell.domain.parsing:reader-result-p)
+              reader-results))
             (values
              :classified
-             (nshell.feature.assistant:classify-ast
-              (nshell.domain.parsing:parse-result-ast result))
+             (nshell.feature.assistant:classify-ast reader-results)
              nil)
             (values :parse-error nil
-                    (format nil "解釈できない提案: ~a" text))))))
+                    (format nil "解釈できない提案: ~a" text))))
+    (nshell.domain.parsing:sexp-reader-error ()
+      (values :parse-error nil
+              (format nil "解釈できない提案: ~a" text)))))
 
 (defun %assistant-explain-text (payload)
   (labels ((payload-text (value)
@@ -1122,48 +1112,6 @@ wrapped line's other rows on screen as stale duplicates."
                  (let ((*capture-command-output-p* t))
                    (%process-execute-output-event)))))))))
 
-(defun %execute-command-line-legacy (text)
-  (if (%assistant-proposal-confirmation-required-p)
-      (%confirm-assistant-proposal)
-      (handler-case
-          (if (string= text "")
-              (%execute-empty-input)
-              (multiple-value-bind (expanded-text expansion-error)
-                  (nshell.domain.history:history-expand-line *history* text)
-                (if expansion-error
-                    (with-reset-rendered-prompt-state-and-prompt-cont
-                     (progn
-                      (format t "~%nshell: ~a~%" expansion-error)
-                      (setf *osc133-state* :none))
-                     (%set-command-failure-state 2))
-                    (nshell.domain.parsing:with-parsed-command-line-case
-                     (result ast expanded-text)
-                     (:complete
-                      (%execute-complete-command
-                       (if (nshell.application:function-definition-line-p
-                            expanded-text)
-                           (make-source-text-request expanded-text)
-                           ast)
-                       expanded-text))
-                     (:error
-                      (%execute-parse-error result))
-                     (:incomplete
-                      (%execute-incomplete-command result))
-                     (:empty
-                      (%execute-empty-input))))))
-        (nshell.infrastructure.terminal:terminal-mode-operation-failed (condition)
-          (format *error-output* "~%nshell: ~a~%" condition)
-          (%set-command-failure-state 1)
-          (setf *running* nil)
-          +repl-exit+)
-        (storage-condition ()
-          (with-reset-rendered-prompt-state-and-prompt-cont
-            (format t "~%nshell: storage exhausted~%")
-            (%set-command-failure-state 1)))
-        (error (condition)
-               (with-reset-rendered-prompt-state-and-prompt-cont
-                (format t "~%nshell error: ~a~%" condition)
-                (%set-command-failure-state 1))))))
 (defun %execute-new-reader-command-line (text)
   (if (every (lambda (character)
                (find character (list #\Space #\Tab #\Newline #\Return)))
@@ -1222,28 +1170,24 @@ wrapped line's other rows on screen as stale duplicates."
                      (%evaluate-repl-reader-submission
                       expanded-text reader-context))))))))))))
   (defun %execute-command-line (text)
-    (cond
-      ((%assistant-proposal-confirmation-required-p)
-       (%confirm-assistant-proposal))
-      ((%repl-new-reader-route-enabled-p)
-       (handler-case
-           (%execute-new-reader-command-line text)
-         (nshell.infrastructure.terminal:terminal-mode-operation-failed
-             (condition)
-           (format *error-output* "~%nshell: ~a~%" condition)
-           (%set-command-failure-state 1)
-           (setf *running* nil)
-           +repl-exit+)
-         (storage-condition ()
-           (with-reset-rendered-prompt-state-and-prompt-cont
-             (format t "~%nshell: storage exhausted~%")
-             (%set-command-failure-state 1)))
-         (error (condition)
-           (with-reset-rendered-prompt-state-and-prompt-cont
-             (format t "~%nshell error: ~a~%" condition)
-             (%set-command-failure-state 1)))))
-      (t
-       (%execute-command-line-legacy text))))
+    (if (%assistant-proposal-confirmation-required-p)
+        (%confirm-assistant-proposal)
+        (handler-case
+            (%execute-new-reader-command-line text)
+          (nshell.infrastructure.terminal:terminal-mode-operation-failed
+              (condition)
+            (format *error-output* "~%nshell: ~a~%" condition)
+            (%set-command-failure-state 1)
+            (setf *running* nil)
+            +repl-exit+)
+          (storage-condition ()
+            (with-reset-rendered-prompt-state-and-prompt-cont
+              (format t "~%nshell: storage exhausted~%")
+              (%set-command-failure-state 1)))
+          (error (condition)
+            (with-reset-rendered-prompt-state-and-prompt-cont
+              (format t "~%nshell error: ~a~%" condition)
+              (%set-command-failure-state 1))))))
 
   (defun %process-execute-output-event ()
     (clear-rendered-completions)

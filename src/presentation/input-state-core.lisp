@@ -1,15 +1,7 @@
 ;;; Core data model for the pure REPL input reducer.
 
 (in-package #:nshell.presentation)
-(progn
-  (defvar *repl-new-reader-route-enabled-p* t)
-  (declaim (ftype function
-                  %repl-new-reader-route-enabled-p
-                  %repl-reader-context-for-source
-                  %repl-input-scan-result))
-  (defun %repl-new-reader-route-enabled-p ()
-    (or *repl-new-reader-route-enabled-p*
-        (equal "sexp" (uiop:getenv "NSHELL_READER")))))
+(declaim (ftype function %repl-reader-context-for-source %repl-input-scan-result))
 (defconstant +editor-indent-width+ 2)
 
 (defmacro define-input-state-constructor (fields)

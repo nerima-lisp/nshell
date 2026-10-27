@@ -173,6 +173,10 @@
           nshell_saved_shlvl=$SHLVL
           nix_darwin_environment=
 
+          # Login profiles may call system commands before they finish setting PATH.
+          PATH="''${PATH:+$PATH:}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          export PATH
+
           if [ -r /etc/zshenv ]; then
             while IFS= read -r line; do
               case "$line" in

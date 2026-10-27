@@ -671,7 +671,10 @@ def run_interactive_completion_sample(
         )
         response = bytes(session.data[response_start:])
         expected_candidates = set(expected_output.splitlines())
-        visible_lines = visible_terminal_text(response).replace(b"\r\n", b"\n").splitlines()
+        visible_lines = [
+            visible_terminal_text(line).rstrip(b"\r")
+            for line in response.splitlines()
+        ]
         candidate_rows = [line for line in visible_lines if line in expected_candidates]
         if len(candidate_rows) != FIXTURE_FILE_COUNT or set(candidate_rows) != expected_candidates:
             raise RuntimeError(

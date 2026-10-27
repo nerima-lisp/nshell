@@ -21,10 +21,18 @@ grow it without bound.")
 (defun clear-directory-listing-cache ()
   (clrhash *directory-listing-cache*))
 
+(defun %directory-listing-path-string (directory)
+  (if (stringp directory)
+      (cond
+        ((string= directory "") "./")
+        ((char= (char directory (1- (length directory))) (code-char 47)) directory)
+        (t (concatenate (quote string) directory "/")))
+      (namestring (host-kit:ensure-directory-pathname directory))))
+
 (defun %directory-listing-stamp (directory)
   (ignore-errors
     (let ((path (sb-posix::filename
-                 (host-kit:ensure-directory-pathname directory))))
+                 (%directory-listing-path-string directory))))
       ;; On 64-bit Linux and Darwin, the long after each st_mtime/st_ctime
       ;; seconds field is the corresponding tv_nsec value.
       #+(and 64-bit (or darwin linux))
@@ -57,10 +65,9 @@ grow it without bound.")
                       ctime-nanoseconds)))))
       #-(and 64-bit (or darwin linux))
       nil))))
-
 (defun %directory-listing-cache-key (kind directory)
   (cons kind (ignore-errors
-              (namestring (host-kit:ensure-directory-pathname directory)))))
+              (%directory-listing-path-string directory))))
 
 (defun %cached-directory-listing (kind directory reader &optional entry-valid-p)
   (let ((key (%directory-listing-cache-key kind directory)))
@@ -272,31 +279,28 @@ grow it without bound.")
            (getf entry-batch :symlink-target-kinds)))
 
   (defun %filesystem-completion-entry-batch (directory)
-    (let* ((directory-path
-             (if (stringp directory)
-                 (if (and (plusp (length directory))
-                          (char= (char directory (1- (length directory))) #\/))
-                     directory
-                     (concatenate 'string directory "/"))
-                 (namestring (host-kit:ensure-directory-pathname directory))))
+    (let* ((directory-path (%directory-listing-path-string directory))
            (directories nil)
            (files nil)
            (unknown nil)
            (symlink-target-kinds nil))
       (labels ((entry-path (name)
                  (concatenate 'string directory-path name))
-               (entry-kind (path type-hint)
+               (entry-kind (name type-hint)
                  (case type-hint
-                   (4 :directory)
-                   (8 :regular-file)
+                   (4 (values :directory nil))
+                   (8 (values :regular-file nil))
                    (otherwise
-                    (let ((mode (sb-posix:stat-mode (sb-posix:lstat path))))
-                      (cond
-                        ((sb-posix:s-isreg mode) :regular-file)
-                        ((sb-posix:s-isdir mode) :directory)
-                        ((sb-posix:s-islnk mode) :symbolic-link)
-                        (t :unknown))))))
-               (record-entry (name kind)
+                    (let* ((path (entry-path name))
+                           (mode (sb-posix:stat-mode (sb-posix:lstat path))))
+                      (values
+                       (cond
+                         ((sb-posix:s-isreg mode) :regular-file)
+                         ((sb-posix:s-isdir mode) :directory)
+                         ((sb-posix:s-islnk mode) :symbolic-link)
+                         (t :unknown))
+                       path)))))
+               (record-entry (name kind path)
                  (case kind
                    (:directory
                     (push
@@ -309,13 +313,14 @@ grow it without bound.")
                       :name name :kind :regular-file)
                      files))
                    (:symbolic-link
-                    (let* ((path (entry-path name))
-                           (target-kind
+                    (let* ((target-kind
                              (%filesystem-completion-symlink-target-kind path))
                            (entry
                              (nshell.domain.filesystem:make-filesystem-completion-entry
                               :name name :kind :symbolic-link
-                              :target-kind (if (eq target-kind :other) :unknown target-kind))))
+                              :target-kind (if (eq target-kind :other)
+                                               :unknown
+                                               target-kind))))
                       (push (cons path target-kind) symlink-target-kinds)
                       (cond
                         ((eq target-kind :directory)
@@ -345,10 +350,10 @@ grow it without bound.")
                                  #'string<
                                  :key #'car)))
                           (dolist (record entries)
-                            (record-entry
-                             (car record)
-                             (entry-kind (entry-path (car record))
-                                         (cdr record)))))
+                            (let ((name (car record)))
+                              (multiple-value-bind (kind path)
+                                  (entry-kind name (cdr record))
+                                (record-entry name kind path)))))
                      (sb-posix:closedir stream)))))
         (visit-entries)
         (list :entries (append (nreverse directories)

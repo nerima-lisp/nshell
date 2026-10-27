@@ -23,6 +23,31 @@
                                                    *completion-test-filesystem*))))
           (expect (member "file.txt" texts :test #'string=) :to-be-truthy)
           (expect (member "feature" texts :test #'string=) :to-be-truthy)))))
+  (it "preserves pathname arguments to legacy listing callbacks"
+    "The legacy listing callbacks keep receiving pathnames when completion entries are unavailable."
+    (let ((directories nil)
+          (filesystem
+            (nshell.domain.filesystem:make-filesystem
+             :directory-files
+             (lambda (directory)
+               (push directory directories)
+               (list #p"prefixed-file"))
+             :subdirectories
+             (lambda (directory)
+               (push directory directories)
+               (list #p"prefixed-directory/"))
+             :executable-p (constantly nil))))
+      (let ((candidates
+              (nshell.domain.completion::%file-candidates-from-directory
+               filesystem "sub/pre")))
+        (expect 2 :to-equal (count-if (function pathnamep) directories))
+        (expect (list "sub/" "sub/")
+                :to-equal
+                (mapcar (function namestring) (nreverse directories)))
+        (expect (list "sub/prefixed-directory/" "sub/prefixed-file")
+                :to-equal
+                (mapcar (function nshell.domain.completion:candidate-text)
+                        candidates)))))
   (it "hidden-entry-visibility-follows-the-basename-prefix"
     "Dot entries stay hidden for empty prefixes and appear for dot prefixes."
     (with-test-filesystem

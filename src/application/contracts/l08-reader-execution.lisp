@@ -397,10 +397,11 @@
            (dispatch-kind
              (nshell.application:evaluated-command-stage-dispatch-kind
               evaluated-stage))
-           ;; Source-function call scopes must not replace a sibling stage's context.
+           ;; Function stages must not replace a sibling stage's context.
            (context
              (stage-context
-             (and (eq dispatch-kind :source-function)
+             (and (or (eq dispatch-kind :source-function)
+                  (eq dispatch-kind :shell-function))
                   (not single-stage-p))))
            (nshell.infrastructure.acl:*exported-environment*
              (%context-exported-environment-strings context))

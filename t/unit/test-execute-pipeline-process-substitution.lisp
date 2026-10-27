@@ -224,10 +224,6 @@
               (nshell.domain.parsing:read-submission
                source :reader-context :auto)))
            (context (make-test-shell-context :execution-strategy :os-pipes)))
-      (setf (nshell.application:shell-context-environment context)
-            (nshell.domain.environment:env-set
-             (nshell.application:shell-context-environment context)
-             "PATH" "/usr/bin:/bin" nil))
       (multiple-value-bind (output status)
           (nshell.application:evaluate-reader-result-in-context
            context reader-result)

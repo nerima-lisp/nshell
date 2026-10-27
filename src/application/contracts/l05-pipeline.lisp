@@ -235,6 +235,7 @@
                      history-file-mutations-enabled-p)
                    (nshell.infrastructure.persistence::*history-file-path-override*
                      history-file-path-override)
+                   (*foreground-terminal-runner* nil)
                    (*function-call-depth* function-call-depth))
                (unwind-protect
                     (handler-case

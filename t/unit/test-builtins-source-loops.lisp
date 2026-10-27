@@ -7,6 +7,13 @@
                                      (list "(defun argv-greet (&rest argv) (echo hi $argv))"
                                            "(argv-greet \"world\" \"and\" \"friends\")"))
         (format nil "hi world and friends~%")))
+  (it "sexp-defun-dispatches-bare-source-command-with-rest-arguments"
+    "S-expression defun registers for bare command dispatch and receives all rest arguments."
+    (with-builtins-source-ok
+        (output code context
+                (list "(defun argv-command (&rest argv) (echo bare $argv))"
+                      "argv-command first second"))
+      (format nil "bare first second~%")))
 
   (it "function-argv-indexing-selects-single-argument"
     "$argv[N] selects the Nth (1-based) argument in an S-expression function."

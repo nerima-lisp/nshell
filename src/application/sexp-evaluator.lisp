@@ -1386,18 +1386,42 @@
       (error "A user function name must be unqualified: ~S" name))
     (%find-user-symbol (or source-name (symbol-name name)))))
 
-(defun %eval-defun-form (form reader-result)
+(defun %eval-defun-form (context form reader-result)
   (destructuring-bind (operator name lambda-list &rest body) form
     (declare (ignore operator))
-    (let* ((function-name (%resolve-user-function-name reader-result name))
-           (function (%make-evaluator-function lambda-list body reader-result)))
-      (setf (symbol-function function-name) function)
-      (multiple-value-bind (documentation declarations executable-body)
-          (%ordinary-function-body-parts
-           body reader-result)
-        (declare (ignore declarations executable-body))
-        (setf (documentation function-name 'function) documentation))
-      function-name)))
+    (multiple-value-bind (source-name escaped-p ignored-package-qualifier)
+        (%reader-symbol-origin-info reader-result name)
+      (declare (ignore ignored-package-qualifier))
+      (let* ((function-name (%resolve-user-function-name reader-result name))
+             (shell-function-name (or source-name (symbol-name name)))
+             (materialized-lambda-list
+               (%materialize-reader-form lambda-list reader-result))
+             (evaluator-function
+               (%make-evaluator-function lambda-list body reader-result)))
+        (setf (symbol-function function-name) evaluator-function)
+        (multiple-value-bind (documentation declarations executable-body)
+            (%ordinary-function-body-parts body reader-result)
+          (declare (ignore declarations executable-body))
+          (setf (documentation function-name 'function) documentation))
+        (register-shell-function
+         (context-shell-function-registry context)
+         shell-function-name
+         (make-shell-function-binding
+          (lambda (call-context evaluated-command-args call-position)
+            (let ((*current-user-evaluator-context* call-context)
+                  (*current-user-evaluator-position* call-position)
+                  (*interactive-top-level-p* nil)
+                  (*command-test-position-p* nil))
+              (apply evaluator-function
+                     (mapcar
+                      #'nshell.domain.parsing:evaluated-command-arg-value
+                      evaluated-command-args))))
+          materialized-lambda-list
+          shell-function-name
+          (nshell.domain.parsing:reader-result-source-path reader-result)
+          (%source-form-span form reader-result))
+         :escaped-p escaped-p)
+        function-name))))
 
 (defun %eval-defmacro-form (form reader-result)
   (let ((*package* (find-package "NSHELL.USER")))
@@ -1661,7 +1685,7 @@
        (%eval-special-form context form reader-result lexical-environment
                            position))
       ((eq operator 'cl:defun)
-       (%eval-defun-form form reader-result))
+       (%eval-defun-form context form reader-result))
       ((eq operator 'cl:defmacro)
        (%eval-defmacro-form form reader-result))
       ((and (eq operator 'nshell.user::define-shell-function)

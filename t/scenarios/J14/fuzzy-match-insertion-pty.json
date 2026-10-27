@@ -20,7 +20,7 @@
     "files": [
       {
         "path": "home/.config/nshell/init.lisp",
-        "content": "complete -c scenario-search -a status\nfunction scenario-search; echo \"J14_SEARCH_LINE<scenario-search $argv>\"; end\n"
+        "content": "complete -c scenario-search -a status\n(defun scenario-search (&rest argv) (echo J14_SEARCH_LINE $argv))\n"
       }
     ]
   },
@@ -39,7 +39,7 @@
     },
     {
       "type": "wait",
-      "contains": "J14_SEARCH_LINE<scenario-search status>",
+      "contains": "J14_SEARCH_LINE status",
       "timeout_seconds": 10
     },
     {
@@ -57,7 +57,7 @@
   ],
   "expected": {
     "stream": {
-      "contains": ["J14_SEARCH_LINE<scenario-search status>"]
+      "contains": ["J14_SEARCH_LINE status"]
     },
     "exit_code": 0
   },

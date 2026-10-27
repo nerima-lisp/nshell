@@ -184,7 +184,7 @@ which are skipped rather than parsed."
     (values (apply #'concatenate 'string (nreverse output)) code)))
 
 (progn
-  (defun %source-new-reader-route-enabled-p ()
+  (defun %source-reader-opted-in-p ()
     (equal "sexp" (uiop:getenv "NSHELL_READER")))
 
   (defun %source-reader-scan-result (context source)
@@ -453,6 +453,6 @@ which are skipped rather than parsed."
       "Execute source LINES in CONTEXT through the application source use case."
       (let ((*interactive-top-level-p*
              (if source-path nil *interactive-top-level-p*)))
-        (if (and source-path (%source-new-reader-route-enabled-p))
+        (if (and source-path (%source-reader-opted-in-p))
             (%source-lines-with-reader context lines source-path)
           (%source-lines context lines source-path)))))

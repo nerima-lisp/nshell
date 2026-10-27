@@ -37,6 +37,7 @@ OUTPUT_TIMEOUT_SECONDS = 5
 CPR_QUERY = b"\x1b[6n"
 CPR_RESPONSE = b"\x1b[1;1R"
 CURSOR_RESTORE = b"\x1b8"
+PROMPT_CURSOR_SHAPE = b"\x1b[0 q"
 BRACKETED_PASTE_START = b"\x1b[200~"
 BRACKETED_PASTE_END = b"\x1b[201~"
 ANSI_SEQUENCE_RE = re.compile(rb"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-_])")
@@ -79,7 +80,13 @@ def prompt_render_complete(
     if not require_cursor_restore:
         return True
     marker_end = marker_start + len(marker)
-    return output.find(CURSOR_RESTORE, marker_end) >= 0
+    cursor_restore = output.find(CURSOR_RESTORE, marker_end)
+    if cursor_restore < 0:
+        return False
+    return output.find(
+        PROMPT_CURSOR_SHAPE,
+        cursor_restore + len(CURSOR_RESTORE),
+    ) >= 0
 
 
 def rendered_x_count(data: bytes, start: int, marker: bytes) -> int:
@@ -266,37 +273,60 @@ class PtySession:
 
     def wait_for_completion_render(
         self,
-        expected_outputs: tuple[bytes, ...],
+        expected_output: bytes,
         start: int,
         marker: bytes,
         timeout_seconds: float = OUTPUT_TIMEOUT_SECONDS,
     ) -> int:
-        if not expected_outputs:
-            raise ValueError("NFR-06 completion requires at least one expected output form")
+        expected_rows = expected_output.splitlines()
+        expected_candidates = set(expected_rows)
+        if len(expected_candidates) != FIXTURE_FILE_COUNT:
+            raise ValueError("NFR-06 reference output does not contain 20,000 unique candidates")
         deadline = time.monotonic() + timeout_seconds
-        longest_output = max(map(len, expected_outputs))
-        scan_from = start
-        candidate_end = None
-        while candidate_end is None:
-            matches = [
-                (position, expected)
-                for expected in expected_outputs
-                if (position := self.data.find(expected, scan_from)) >= 0
-            ]
-            if matches:
-                position, expected = min(matches, key=lambda match: match[0])
-                candidate_end = position + len(expected)
+        scan_offset = start
+        pending = b""
+        pending_start = start
+        seen_candidates: set[bytes] = set()
+        candidate_end = start
+        while len(seen_candidates) < len(expected_candidates):
+            chunk = pending + bytes(self.data[scan_offset:])
+            scan_offset = len(self.data)
+            if chunk:
+                chunk_start = pending_start
+                lines = chunk.split(b"\n")
+                if chunk.endswith(b"\n"):
+                    pending = b""
+                    lines = lines[:-1]
+                else:
+                    pending = lines.pop()
+                pending_start = chunk_start + len(chunk) - len(pending)
+                for line in lines:
+                    candidate = visible_terminal_text(line).rstrip(b"\r")
+                    if candidate in expected_candidates:
+                        seen_candidates.add(candidate)
+                        candidate_end = max(candidate_end, chunk_start + len(line.rstrip(b"\r")))
+                    chunk_start += len(line) + 1
+            if len(seen_candidates) == len(expected_candidates):
                 break
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise TimeoutError(f"NFR-06 completion output timed out; tail={bytes(self.data[-800:])!r}")
-            scan_from = max(start, len(self.data) - longest_output + 1)
+                raise TimeoutError(
+                    "NFR-06 completion output timed out after observing "
+                    f"{len(seen_candidates)} of {len(expected_candidates)} candidates; "
+                    f"tail={bytes(self.data[-800:])!r}"
+                )
             self._read_once(remaining)
 
         while True:
             marker_start = self.data.rfind(marker, candidate_end)
-            if marker_start >= candidate_end and self.data.find(
-                CURSOR_RESTORE, marker_start + len(marker)
+            cursor_restore = (
+                self.data.find(CURSOR_RESTORE, marker_start + len(marker))
+                if marker_start >= candidate_end
+                else -1
+            )
+            if cursor_restore >= 0 and self.data.find(
+                PROMPT_CURSOR_SHAPE,
+                cursor_restore + len(CURSOR_RESTORE),
             ) >= 0:
                 return time.monotonic_ns()
             remaining = deadline - time.monotonic()
@@ -439,6 +469,7 @@ def run_prompt_sample(
             "prompt_markers_seen": session.data.count(marker),
             "fresh_prompt_seen": marker in session.data[response_start:],
             "prompt_cursor_restored": CURSOR_RESTORE in session.data[response_start:],
+            "prompt_render_complete_detected": PROMPT_CURSOR_SHAPE in session.data[response_start:],
         }
     finally:
         session.close()
@@ -499,6 +530,7 @@ def run_redraw_sample(
             "preloaded_buffer_characters": preloaded_length,
             "redrawn_prompt_seen": marker in visible_response,
             "prompt_cursor_restored": CURSOR_RESTORE in response,
+            "prompt_render_complete_detected": PROMPT_CURSOR_SHAPE in response,
             "redrawn_buffer_characters": response_buffer_characters,
             "response_bytes": len(response),
             "cursor_queries": session.responses_sent,
@@ -616,7 +648,6 @@ def run_interactive_completion_sample(
         child_environment(home, marker_text),
     )
     command_bytes = completion_command(binary, fixture, prefix)[-1].encode()
-    pty_expected_output = expected_output.replace(b"\n", b"\r\n")
     paste = BRACKETED_PASTE_START + command_bytes + BRACKETED_PASTE_END
     try:
         session.wait_for_marker(marker)
@@ -634,13 +665,20 @@ def run_interactive_completion_sample(
             raise RuntimeError("NFR-06 completion trigger was not fully written to the PTY")
 
         end_ns = session.wait_for_completion_render(
-            (expected_output, pty_expected_output),
+            expected_output,
             response_start,
             marker,
         )
         response = bytes(session.data[response_start:])
-        if expected_output not in response.replace(b"\r\n", b"\n"):
-            raise RuntimeError("NFR-06 interactive completion output differed from its verified reference")
+        expected_candidates = set(expected_output.splitlines())
+        visible_lines = visible_terminal_text(response).replace(b"\r\n", b"\n").splitlines()
+        candidate_rows = [line for line in visible_lines if line in expected_candidates]
+        if len(candidate_rows) != FIXTURE_FILE_COUNT or set(candidate_rows) != expected_candidates:
+            raise RuntimeError(
+                "NFR-06 interactive completion output did not contain every verified candidate "
+                f"exactly once: observed {len(candidate_rows)} rows and "
+                f"{len(set(candidate_rows))} unique of {FIXTURE_FILE_COUNT}"
+            )
         if not prompt_render_complete(response, marker):
             raise RuntimeError("NFR-06 completion did not return to a fully rendered prompt")
         return {
@@ -651,6 +689,8 @@ def run_interactive_completion_sample(
             "output_sha256": hashlib.sha256(expected_output).hexdigest(),
             "response_bytes": len(response),
             "prompt_cursor_restored": CURSOR_RESTORE in response,
+            "prompt_render_complete_detected": PROMPT_CURSOR_SHAPE in response,
+            "observed_candidate_count": len(candidate_rows),
             "cursor_queries": session.responses_sent,
         }
     finally:

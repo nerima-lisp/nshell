@@ -95,7 +95,9 @@ Autosuggestions use prefixes only because they insert text the user did not type
             (not (%candidate-description-present-p current)))))))
 
 (defun %merge-candidates (&rest candidate-lists)
-  (let ((cells-by-text (make-hash-table :test #'equal))
+  (let ((cells-by-text (make-hash-table :test #'equal
+                                        :size (loop for candidates in candidate-lists
+                                                    sum (length candidates))))
         (results nil))
     (labels ((merge-candidate (candidate)
                (let* ((text (candidate-text candidate))

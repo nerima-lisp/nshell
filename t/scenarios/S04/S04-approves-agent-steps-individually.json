@@ -45,6 +45,19 @@
       "timeout_seconds": 10
     },
     {
+      "type": "check_side_effects",
+      "files": [
+        {
+          "path": "S04_FIRST",
+          "exists": false
+        },
+        {
+          "path": "S04_SECOND",
+          "exists": false
+        }
+      ]
+    },
+    {
       "type": "key",
       "key": "Enter"
     },

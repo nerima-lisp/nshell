@@ -54,10 +54,11 @@
 (defun %run-terminal-command (context command args)
   (let ((process (nshell.infrastructure.acl:%spawn-terminal-command command args)))
     (unless process
+      (write-string
+       (nshell.infrastructure.acl:%external-command-not-found-message command)
+       *error-output*)
       (return-from %run-terminal-command
-        (values
-         (nshell.infrastructure.acl:%external-command-not-found-message command)
-         127)))
+        (values nil 127)))
     (let ((pgid (nshell.infrastructure.acl:process-pid process)))
       (unwind-protect
            (progn

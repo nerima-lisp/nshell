@@ -68,10 +68,11 @@ MAX-OUTPUT-CHARS is supplied, excess stdout is drained and discarded."
             (multiple-value-bind (resolved-cmd environment)
                 (%prepare-external-command cmd)
               (unless resolved-cmd
+                (%report-external-command-not-found cmd)
                 (return-from run-external-capture
                   (if max-output-chars
-                      (values (%external-command-not-found-message cmd) 127 nil)
-                      (values (%external-command-not-found-message cmd) 127))))
+                      (values "" 127 nil)
+                      (values "" 127))))
               (let* ((separate-stderr-p (and *redirected-stderr* t))
                      (input (and *redirected-stdin* *standard-input*))
                      (timeout (ensure-timeout-seconds

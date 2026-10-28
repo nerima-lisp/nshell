@@ -22,6 +22,9 @@
   },
   "expected": {
     "stdout": {
+      "equals": ""
+    },
+    "stderr": {
       "contains": [
         "command not found",
         "echo"

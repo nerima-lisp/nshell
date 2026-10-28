@@ -362,9 +362,7 @@
                                (lambda ()
                                  (write-string
                                   (nshell.infrastructure.acl::%external-command-not-found-message command)
-                                  (if (= count 1)
-                                      *standard-output*
-                                      *error-output*))))))))
+                                  *error-output*)))))))
                      ((:builtin :shell-function :source-function)
                       (let ((stage-to-dispatch stage)
                             (stage-io-to-dispatch stage-io)

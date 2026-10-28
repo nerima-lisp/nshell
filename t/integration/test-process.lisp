@@ -637,11 +637,16 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
       (expect (= 0 exit) :to-be-falsy)))
 
   (it "run-external-capture-nonexistent"
-    "Nonexistent command capture returns an error exit code and message."
-    (multiple-value-bind (output exit)
-        (nshell.infrastructure.acl:run-external-capture "nonexistent_cmd_xyz" '())
-      (expect (= 0 exit) :to-be-falsy)
-      (expect (search "nonexistent_cmd_xyz" output) :to-be-truthy)))
+    "Nonexistent command capture reports a diagnostic on stderr and an error exit code."
+    (let ((stderr (make-string-output-stream)))
+      (let ((*error-output* stderr))
+        (multiple-value-bind (output exit)
+            (nshell.infrastructure.acl:run-external-capture "nonexistent_cmd_xyz" nil)
+          (expect 127 :to-equal exit)
+          (expect "" :to-equal output)
+          (expect (format nil "nshell: nonexistent_cmd_xyz: command not found~%")
+                  :to-equal
+                  (get-output-stream-string stderr))))))
 
   (it "spawn-async-inherits-output-when-unredirected"
     "Unredirected background processes should not leave an unread output pipe."

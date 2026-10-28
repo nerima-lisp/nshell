@@ -1124,7 +1124,31 @@ path must be converted from a pathname before being appended."
                    (capture-process-output-event :execute)))
                (expect 127 :to-equal nshell.presentation::*last-exit-code*)
                (expect command :to-equal command-seen))
-          (nshell.application:clear-shell-hooks :command-not-found))))))
+          (nshell.application:clear-shell-hooks :command-not-found)))))
+  (it "routes-command-resolution-diagnostic-and-suggestion-to-stderr-once"
+    (with-repl-test-state
+      (nshell.presentation::seed-repl-completion-knowledge-base
+       nshell.presentation::*kb*)
+      (repl-test-set-env "PATH" "/__nshell_c04_empty_path__")
+      (let ((error-stream (make-string-output-stream))
+            (output nil))
+        (with-repl-input-state (:buffer "gti" :cursor-pos 3)
+          (let ((*error-output* error-stream)
+                (nshell.presentation::*history-persistence-enabled-p* nil))
+            (setf output (capture-process-output-event :execute))))
+        (let ((error-output (get-output-stream-string error-stream)))
+          (labels ((appears-once-p (needle text)
+                     (let ((position (search needle text)))
+                       (and position
+                            (null (search needle text
+                                          :start2 (1+ position)))))))
+            (expect 127 :to-equal nshell.presentation::*last-exit-code*)
+            (expect nil :to-be (search "nshell: gti: command not found" output))
+            (expect nil :to-be (search "nshell: did you mean: git" output))
+            (expect t :to-be
+                    (appears-once-p "nshell: gti: command not found" error-output))
+            (expect t :to-be
+                    (appears-once-p "nshell: did you mean: git" error-output))))))))
 
 (describe "failure-explain-lifecycle-tests"
   (it "keeps-the-explain-mark-only-for-the-latest-failed-command"

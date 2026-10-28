@@ -750,7 +750,7 @@ wrapped line's other rows on screen as stale duplicates."
                  (let ((corrections (%repl-command-corrections
                                      *command-not-found-command*)))
                    (when corrections
-                     (format t "nshell: did you mean: ~{~a~^, ~}?~%" corrections)))
+                     (format *error-output* "nshell: did you mean: ~{~a~^, ~}?~%" corrections)))
                  (setf *command-not-found-fallback-text* text
                        *preserve-transient-panel-on-next-prompt-p* t
                        *transient-panel-content* '("⌃] で AI に聞く")))
@@ -762,8 +762,7 @@ wrapped line's other rows on screen as stale duplicates."
                        (or *last-command-output*
                            (format nil "nshell: ~a: command not found~%"
                                    *command-not-found-command*))
-                       *command-not-found-fallback-text* nil)
-                 (write-string *last-command-output*))
+                       *command-not-found-fallback-text* nil))
                (when (and *history-persistence-enabled-p*
                           (not (and (plusp (length text))
                                     (char= (char text 0) #\Space))))

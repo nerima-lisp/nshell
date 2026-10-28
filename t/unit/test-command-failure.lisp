@@ -260,29 +260,37 @@
                             :test #'string=)
                     :to-be-truthy))
           (expect 0 :to-equal spawn-count)))))
-  (it "batch diagnostics suggest known commands and preserve status 127 without spawning"
+  (it "batch diagnostics suggest known commands on stderr and preserve status 127 without spawning"
       (with-repl-test-state
        (nshell.presentation::seed-repl-completion-knowledge-base
         nshell.presentation::*kb*)
        (repl-test-set-env "PATH" "/__nshell_c04_empty_path__")
        (let ((spawn-count 0)
              (code nil)
-             (printed nil))
-         (setf printed
+             (stdout nil)
+             (stderr (make-string-output-stream)))
+         (setf stdout
                (with-output-to-string (*standard-output*)
-                 (let ((*error-output* *standard-output*))
+                 (let ((*error-output* stderr))
                    (with-rebound-function
-                    (nshell.infrastructure.acl::%spawn-posix-process
-                     (lambda (&rest arguments)
-                       (declare (ignore arguments))
-                       (incf spawn-count)
-                       (error "batch missing-command suggestions must not spawn processes")))
-                    (setf code
-                          (nshell.presentation::%run-batch-source-lines
-                           (list "gti")))))))
-         (expect 127 :to-equal code)
-         (expect 127 :to-equal nshell.presentation::*last-exit-code*)
-         (expect (search "nshell: gti: command not found" printed) :to-be-truthy)
-         (expect (search "nshell: did you mean: git" printed) :to-be-truthy)
-         (expect 0 :to-equal spawn-count)))))
+                       (nshell.infrastructure.acl::%spawn-posix-process
+                        (lambda (&rest arguments)
+                          (declare (ignore arguments))
+                          (incf spawn-count)
+                          (error "batch missing-command suggestions must not spawn processes")))
+                     (setf code
+                           (nshell.presentation::%run-batch-source-lines
+                            (list "gti")))))))
+         (let ((printed-error (get-output-stream-string stderr)))
+           (labels ((appears-once-p (needle)
+                      (let ((position (search needle printed-error)))
+                        (and position
+                             (null (search needle printed-error
+                                           :start2 (1+ position)))))))
+             (expect 127 :to-equal code)
+             (expect 127 :to-equal nshell.presentation::*last-exit-code*)
+             (expect "" :to-equal stdout)
+             (expect t :to-be (appears-once-p "nshell: gti: command not found"))
+             (expect t :to-be (appears-once-p "nshell: did you mean: git"))
+             (expect 0 :to-equal spawn-count)))))))
 

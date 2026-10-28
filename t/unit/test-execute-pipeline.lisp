@@ -1810,7 +1810,7 @@ process; those children still need the shell's exported variables."
       (expect (nshell.infrastructure.acl:external-command-environment)
               :to-be-truthy)))
 
-  (it "reader-missing-command-keeps-standalone-stdout-out-of-pipelines"
+  (it "reader-missing-command-reports-on-stderr"
     (cl-weave:expect-assertions 7)
     (flet ((evaluate-reader-source (context source)
              (handler-case
@@ -1842,8 +1842,8 @@ process; those children still need the shell's exported variables."
                     (declare (ignore value))
                     (setf standalone-status status)))))
         (expect 127 :to-equal standalone-status)
-        (expect diagnostic :to-equal standalone-output)
-        (expect "" :to-equal (get-output-stream-string standalone-error))
+        (expect "" :to-equal standalone-output)
+        (expect diagnostic :to-equal (get-output-stream-string standalone-error))
         (let* ((pipeline-context
                  (make-test-shell-context
                   :environment (nshell.domain.environment:make-default-environment)))

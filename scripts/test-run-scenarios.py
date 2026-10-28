@@ -403,6 +403,48 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(scenario["preconditions"]["file_sets"][0]["count"], 20_000)
         self.assertEqual(scenario["timeout_seconds"], 180)
 
+    def test_l02_branch_probe_redraws_without_submitting_empty_input(self) -> None:
+        stream = bytearray(b"L02_PROMPT")
+        prompt = b"L02_PROMPT"
+        branch = b"nshell-l02-benchmark"
+        cursor = len(stream)
+        writes: list[bytes] = []
+        wait_calls = 0
+
+        def wait_for_prompt(*_args: Any) -> tuple[int, int]:
+            nonlocal wait_calls
+            wait_calls += 1
+            stream.extend(prompt)
+            if wait_calls == 2:
+                stream.extend(branch)
+            return len(stream), 0
+
+        with (
+            patch.object(runner.time, "monotonic", return_value=100.0),
+            patch.object(runner.time, "sleep"),
+            patch.object(
+                runner,
+                "_write_pty",
+                side_effect=lambda _fd, data, _scenario_id: writes.append(data),
+            ),
+            patch.object(runner, "_wait_pty_text", side_effect=wait_for_prompt),
+        ):
+            result_cursor = runner._verify_benchmark_branch(
+                "L02-git-prompt-responsiveness",
+                7,
+                stream,
+                "nshell-l02-benchmark",
+                prompt,
+                cursor,
+                10.0,
+                200.0,
+                [0],
+            )
+
+        self.assertEqual(writes, [b"x", b"\x7f"])
+        self.assertIn(branch, stream)
+        self.assertEqual(result_cursor, len(stream))
+
     def test_l02_benchmark_validation_rejects_weakened_measurement_protocol(self) -> None:
         scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/L02/git-prompt-responsiveness.json"
         original = json.loads(scenario_path.read_text(encoding="utf-8"))

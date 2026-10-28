@@ -1981,21 +1981,9 @@ def _run_benchmark_sample(scenario: dict[str, Any], binary: Path, cwd: Path,
         )
         post_command_prompt_ms = (prompt_ns - command_start_ns) / 1_000_000
         if verify_branch:
-            branch_marker = branch.encode("utf-8")
-            branch_deadline = min(scenario_deadline, time.monotonic() + timeout)
-            cursor = prompt_end
-            while branch_marker not in stream and time.monotonic() < branch_deadline:
-                _write_pty(fd, b"\n", scenario["id"])
-                cursor, _ = _wait_pty_text(
-                    scenario["id"], fd, stream, cursor, prompt_bytes,
-                    timeout, branch_deadline, query_responses,
-                )
-                if branch_marker not in stream:
-                    time.sleep(min(0.05, max(0, branch_deadline - time.monotonic())))
-            _require(
-                branch_marker in stream,
-                f"{scenario['id']}: Git branch {branch!r} was not shown when available; "
-                f"PTY tail: {bytes(stream[-2000:]).decode('utf-8', errors='replace')!r}",
+            _verify_benchmark_branch(
+                scenario["id"], fd, stream, branch, prompt_bytes, prompt_end,
+                timeout, scenario_deadline, query_responses,
             )
         return {
             "startup": startup_ms,
@@ -2056,6 +2044,42 @@ def _benchmark_verdict(groups: list[list[float]], threshold: float) -> str:
     if "inconclusive" in states or len(set(states)) > 1:
         return "inconclusive"
     return states[0]
+
+
+def _verify_benchmark_branch(
+    scenario_id: str,
+    fd: int,
+    stream: bytearray,
+    branch: str,
+    prompt_bytes: bytes,
+    cursor: int,
+    timeout: float,
+    scenario_deadline: float,
+    query_responses: list[int],
+) -> int:
+    branch_marker = branch.encode("utf-8")
+    branch_deadline = min(scenario_deadline, time.monotonic() + timeout)
+    while branch_marker not in stream and time.monotonic() < branch_deadline:
+        time.sleep(min(0.05, max(0, branch_deadline - time.monotonic())))
+        if branch_marker in stream:
+            break
+        # Empty input resets the Git status cache; edit redraws let its worker finish.
+        _write_pty(fd, b"x", scenario_id)
+        cursor, _ = _wait_pty_text(
+            scenario_id, fd, stream, cursor, prompt_bytes,
+            timeout, branch_deadline, query_responses,
+        )
+        _write_pty(fd, b"\x7f", scenario_id)
+        cursor, _ = _wait_pty_text(
+            scenario_id, fd, stream, cursor, prompt_bytes,
+            timeout, branch_deadline, query_responses,
+        )
+    _require(
+        branch_marker in stream,
+        f"{scenario_id}: Git branch {branch!r} was not shown when available; "
+        f"PTY tail: {bytes(stream[-2000:]).decode('utf-8', errors='replace')!r}",
+    )
+    return cursor
 
 
 def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, list[str]]:

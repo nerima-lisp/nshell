@@ -116,13 +116,17 @@
             (process-output-event output-event))))))
 
 (defun %process-input-event (event)
-  (let ((input-state-before *input-state*))
+  (let ((input-state-before (progn
+                              (when (and (nshell.domain.input:key-event-p event)
+                                         (eq :char (nshell.domain.input:key-event-type event)))
+                                (%nfr05-diagnostic-begin))
+                              *input-state*)))
     (handler-case
         (progn
           (when (and *rerun-confirmation-pending-p*
                      (nshell.infrastructure.acl:consume-terminal-resize-p))
             (return-from %process-input-event
-              (%render-prompt-after-terminal-resize)))
+                         (%render-prompt-after-terminal-resize)))
           (multiple-value-bind (new-state output-event)
               (reduce-input-state *input-state* event)
             (when (and (eq *assistant-command-origin* :proposal)
@@ -141,15 +145,17 @@
                 (setf *osc133-state* :none))
               (setf *assistant-last-cancel-at* nil
                     *input-state* new-state))
-            (process-output-event output-event)))
+            (progn
+              (%nfr05-diagnostic-set-output-event output-event)
+              (process-output-event output-event))))
       (storage-condition ()
-        (setf *input-state* input-state-before)
-        (with-cleared-rendered-completions-and-reset-prompt-cont
-          (format t "~%nshell: storage exhausted; input was preserved~%")))
+                         (setf *input-state* input-state-before)
+                         (with-cleared-rendered-completions-and-reset-prompt-cont
+                          (format t "~%nshell: storage exhausted; input was preserved~%")))
       (error ()
-        (setf *input-state* input-state-before)
-        (with-cleared-rendered-completions-and-reset-prompt-cont
-          (format t "~%nshell: input processing failed; input was preserved~%"))))))
+             (setf *input-state* input-state-before)
+             (with-cleared-rendered-completions-and-reset-prompt-cont
+              (format t "~%nshell: input processing failed; input was preserved~%"))))))
 
 (defun %handle-pending-shell-termination ()
   (let ((status (nshell.infrastructure.acl:consume-shell-termination-status)))

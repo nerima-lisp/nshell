@@ -16,7 +16,7 @@
               :config *config*
               :knowledge-base *kb*
               :environment (ensure-environment)
-              :filesystem *repl-filesystem*
+              :filesystem (nshell.infrastructure.acl:make-host-filesystem)
               :job-monitor nshell.application:*job-monitor*
               :alias-table *aliases*
               :abbreviation-table *abbreviations*

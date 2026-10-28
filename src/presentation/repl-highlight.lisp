@@ -7,7 +7,6 @@
 
 (defvar *repl-highlight-path-cache* (make-hash-table :test #'equal)
   "Memoizes PATH lookups for %REPL-COMMAND-KIND, keyed by command name.")
-(defvar *repl-filesystem* nil)
 
 (defvar *repl-highlight-path-cache-key* nil
   "The PATH string *REPL-HIGHLIGHT-PATH-CACHE* was built against.")
@@ -74,7 +73,7 @@ directory listing so a correction never walks PATH itself."
        (mapcar (lambda (candidate)
                  (nshell.domain.completion:candidate-text candidate))
                (nshell.domain.completion:%command-candidates-from-path
-                path "" *repl-filesystem*))))))
+                path "" (nshell.infrastructure.acl:make-host-filesystem)))))))
 
 (defun %repl-table-names (table)
   (when (hash-table-p table)

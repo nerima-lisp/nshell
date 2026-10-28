@@ -737,7 +737,7 @@
            (completion-path
              (nshell.domain.environment:env-get (ensure-environment) "PATH"))
            (filesystem
-             *repl-filesystem*))
+             (nshell.infrastructure.acl:make-host-filesystem)))
       (when (and (not command-position-p) (plusp (length command)))
         (%warm-command-completion-help-path
          *kb*

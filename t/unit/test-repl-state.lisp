@@ -333,63 +333,6 @@
                      (nshell.domain.filesystem:filesystem-executable-p filesystem)
                      nil)
                     :to-be-falsy))))))
-  (it "suggestion-refreshes-reuse-the-session-filesystem"
-    "Suggestion refreshes retain one adapter for PATH cache reuse."
-    (let ((directory-reads 0)
-          (cache-hits 0)
-          (adapter-creations 0))
-      (nshell.domain.completion::%invalidate-path-command-cache)
-      (unwind-protect
-           (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
-                   (constantly 1))
-                 (nshell.domain.completion::*path-command-cache-clock-fn*
-                   (constantly 0d0)))
-             (with-repl-test-state
-               (repl-test-set-env "PATH" "/mock")
-               (setf nshell.presentation::*input-state*
-                     (nshell.presentation:make-input-state :buffer "cache-"))
-               (with-test-path-filesystem
-                   ((lambda (directory)
-                      (declare (ignore directory))
-                      (incf directory-reads)
-                      (list #p"/mock/cache-tool"))
-                    (constantly t))
-                 (let ((filesystem *completion-test-filesystem*))
-                   (let ((nshell.presentation::*repl-filesystem* filesystem))
-                     (let ((original-cache-get
-                             (symbol-function
-                              'nshell.domain.completion::%path-command-directory-cache-get))
-                           (original-filesystem-constructor
-                             (symbol-function
-                              'nshell.infrastructure.acl:make-host-filesystem)))
-                       (with-temporary-functions
-                           (('nshell.domain.completion::%path-command-directory-cache-get
-                             (lambda (key stamp now)
-                               (multiple-value-bind (entries foundp)
-                                   (funcall original-cache-get key stamp now)
-                                 (when foundp
-                                   (incf cache-hits))
-                                 (values entries foundp))))
-                            ('nshell.infrastructure.acl:make-host-filesystem
-                             (lambda ()
-                               (incf adapter-creations)
-                               (funcall original-filesystem-constructor))))
-                         (expect (eq filesystem
-                                     (nshell.application:shell-context-filesystem
-                                      (nshell.presentation::%make-repl-shell-context)))
-                                 :to-be-truthy)
-                         (nshell.presentation::refresh-current-input-state-suggestion)
-                         (expect "tool" :to-equal
-                                 (nshell.presentation::input-state-suggestion
-                                  nshell.presentation::*input-state*))
-                         (nshell.presentation::refresh-current-input-state-suggestion)
-                         (expect "tool" :to-equal
-                                 (nshell.presentation::input-state-suggestion
-                                  nshell.presentation::*input-state*))
-                         (expect 1 :to-equal directory-reads)
-                         (expect 1 :to-equal cache-hits)
-                         (expect 0 :to-equal adapter-creations))))))))
-        (nshell.domain.completion::%invalidate-path-command-cache))))
   (it "vi-mode-flag-values-control-mode" "The vi-mode environment flag accepts explicit truthy values and rejects disabled values." (expect (nshell.presentation::%vi-mode-flag-enabled-p nil) :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "") :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "0") :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "false") :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "no") :to-be-falsy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "1") :to-be-truthy) (expect (nshell.presentation::%vi-mode-flag-enabled-p "yes") :to-be-truthy))
   (it "repl-filesystem-boundary-uses-host-kit"
     "The REPL filesystem boundary distinguishes files from directories."

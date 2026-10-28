@@ -1651,8 +1651,10 @@ def _p12_consumer_fixture(path: Path) -> Path:
         )
     }
     allowed = {
+        ("asdf", "find-system"),
         ("asdf", "load-asd"),
         ("asdf", "load-system"),
+        ("asdf", "system-source-file"),
         ("uiop", "ensure-directory-pathname"),
         ("uiop", "getenv"),
         ("nshell.domain.parsing", "parse-command-line"),

@@ -9,8 +9,10 @@
     "stdout": {
       "ordered_contains": [
         "P12 candidate source version=",
+        "P12_SOURCE_ROOT_OK",
         "P12_API_OK",
         "P12 previous source version=",
+        "P12_SOURCE_ROOT_OK",
         "P12_API_OK"
       ]
     },

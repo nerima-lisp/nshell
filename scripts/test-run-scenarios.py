@@ -281,8 +281,8 @@ class ScenarioRunnerTests(unittest.TestCase):
             candidate = (runner.ROOT.resolve(), "0.6.6", "a" * 40)
             previous = (previous_root.resolve(), "0.6.5", "b" * 40)
             results = [
-                subprocess.CompletedProcess([], 0, "P12_API_OK\n", ""),
-                subprocess.CompletedProcess([], 0, "P12_API_OK\n", ""),
+                subprocess.CompletedProcess([], 0, "P12_SOURCE_ROOT_OK\nP12_API_OK\n", ""),
+                subprocess.CompletedProcess([], 0, "P12_SOURCE_ROOT_OK\nP12_API_OK\n", ""),
             ]
             with (
                 mock.patch.object(runner, "_source_root_details", side_effect=[candidate, previous]),

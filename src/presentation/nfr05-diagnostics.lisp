@@ -4,7 +4,7 @@
   (defvar *nfr05-diagnostic-path* nil)
   (defvar *nfr05-diagnostic-active-p* nil)
   (defvar *nfr05-diagnostic-started-at* nil)
-  (defvar *nfr05-diagnostic-gc-count* 0)
+  (defvar *nfr05-diagnostic-gc-count* (cons 0 nil))
   (defvar *nfr05-diagnostic-gc-count-start* 0)
   (defvar *nfr05-diagnostic-gc-time-start* 0)
   (defvar *nfr05-diagnostic-stage-ticks* nil)
@@ -91,7 +91,7 @@
        (finish-output (%nfr05-timing-output-target stream)))))
 
   (defun %nfr05-after-gc ()
-    (sb-ext:atomic-incf *nfr05-diagnostic-gc-count*))
+    (sb-ext:atomic-incf (car *nfr05-diagnostic-gc-count*)))
 
   (defun %nfr05-enable-diagnostics ()
     (setf *nfr05-diagnostic-path*
@@ -127,7 +127,7 @@
                   "{\"schema_version\":1,\"record\":\"nfr05-render-diagnostic\",\"output_event\":~s,\"render_wall_ns\":~d,\"gc_count\":~d,\"gc_time_ns\":~d,\"gc_time_source\":\"sb-ext:*gc-run-time* process CPU time\",\"suggestion_ns\":~d,\"grapheme_geometry_ns\":~d,\"display_width_ns\":~d,\"terminal_write_ns\":~d,\"terminal_flush_ns\":~d,\"lock_wait_ns\":null,\"lock_wait_source\":\"not measured in process; see paired native capture\",\"command_execution_requested\":false}~%"
                   (%nfr05-event-name)
                   render-wall-ns
-                  (- (sb-ext:atomic-incf *nfr05-diagnostic-gc-count* 0)
+                  (- (sb-ext:atomic-incf (car *nfr05-diagnostic-gc-count*) 0)
                      *nfr05-diagnostic-gc-count-start*)
                   (%nfr05-ticks-to-ns
                    (- sb-ext:*gc-run-time* *nfr05-diagnostic-gc-time-start*))

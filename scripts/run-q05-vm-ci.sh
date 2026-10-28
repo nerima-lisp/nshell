@@ -173,7 +173,7 @@ qemu-system-x86_64 \
   -machine q35 \
   -cpu host \
   -smp 2 \
-  -m 4096 \
+  -m 8192 \
   -drive "file=$q05_workspace/client.qcow2,if=virtio,format=qcow2" \
   -drive "file=$q05_workspace/seed.iso,if=virtio,format=raw,readonly=on" \
   -netdev "user,id=management,hostfwd=tcp:127.0.0.1:${q05_ssh_port}-:22" \
@@ -232,6 +232,9 @@ git init --initial-branch=q05-ci
 git -c user.name='Q05 CI' -c user.email='q05-ci@invalid.example' add -A
 git -c user.name='Q05 CI' -c user.email='q05-ci@invalid.example' \
   commit --quiet -m 'Q05 candidate source snapshot'
+free -h
+df -h /
+nproc
 
 curl --fail --location --silent --show-error https://nixos.org/nix/install \
   --output /tmp/install-nix.sh
@@ -240,8 +243,16 @@ sh /tmp/install-nix.sh --no-daemon
 export NIX_CONFIG='experimental-features = nix-command flakes'
 nix run nixpkgs#cachix -- use takeokunn-nshell
 nix run nixpkgs#cachix -- use nix-community
-nix build --print-build-logs .#packages.x86_64-linux.default \
-  --out-link /tmp/nshell-q05
+if nix build --print-build-logs --max-jobs 1 --cores 1 \
+  .#packages.x86_64-linux.default --out-link /tmp/nshell-q05; then
+  :
+else
+  build_status=$?
+  free -h
+  df -h /
+  sudo dmesg --ctime | tail -n 80 || true
+  exit "$build_status"
+fi
 test -x /tmp/nshell-q05/bin/nshell
 mkdir -p /tmp/q05-home /mnt/q05
 sudo mount -t nfs -o vers=4,proto=tcp 192.168.56.10:/ /mnt/q05

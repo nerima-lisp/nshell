@@ -204,9 +204,10 @@ spawns, so a stage's assignment reaches that stage's process alone.")
 
 (defun execute-pipeline (pipeline-ast &key filesystem)
   "Execute a pipeline AST using OS-level pipes. Returns the last process exit code."
-  (let ((commands (if (nshell.domain.parsing:pipeline-node-p pipeline-ast)
-                      (nshell.domain.parsing:pipeline-node-commands pipeline-ast)
-                      (list pipeline-ast))))
+  (let* ((pipeline-p (nshell.domain.parsing:pipeline-node-p pipeline-ast))
+         (commands (if pipeline-p
+                       (nshell.domain.parsing:pipeline-node-commands pipeline-ast)
+                     (list pipeline-ast))))
     (let ((context (%make-pipeline-shell-context :filesystem filesystem)))
       (multiple-value-bind (expanded-commands error resources)
           (%expand-command-nodes-in-context context commands)
@@ -216,11 +217,28 @@ spawns, so a stage's assignment reaches that stage's process alone.")
           (return-from execute-pipeline 127))
         (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
                (clean-commands
-                 (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
-                  redirect-split))
+                (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
+                 redirect-split))
                (redirects
-                 (nshell.domain.parsing:command-list-redirect-split-result-redirects
-                  redirect-split)))
+                (let ((stage-redirects
+                       (nshell.domain.parsing:command-list-redirect-split-result-redirects
+                        redirect-split)))
+                  (if pipeline-p
+                      (let ((edges
+                             (nshell.domain.parsing:pipeline-node-edges
+                              pipeline-ast)))
+                        (if edges
+                            (loop for redirects in stage-redirects
+                                  for edge in (append edges (list nil))
+                                  collect
+                                  (if (and edge
+                                           (eq :pipe-stderr-to-stdout
+                                               (nshell.domain.parsing:pipeline-edge-kind
+                                                edge)))
+                                      (append redirects (list (cons :2>&1 nil)))
+                                    redirects))
+                          stage-redirects))
+                    stage-redirects))))
           (if (and resources
                    (some (lambda (cmd) (%shell-internal-command-p context cmd))
                          clean-commands))
@@ -231,16 +249,16 @@ spawns, so a stage's assignment reaches that stage's process alone.")
                   "is not supported for internal commands")
                  *error-output*)
                 127)
-              (if resources
-                  (nth-value
-                   1
-                   (%execute-os-pipeline-with-process-substitutions
-                    clean-commands redirects resources
-                    (shell-context-pipefail-p context)))
-                  (nshell.infrastructure.acl:spawn-pipeline
-                   clean-commands
-                   :redirects redirects
-                   :pipefail-p (shell-context-pipefail-p context)))))))))
+            (if resources
+                (nth-value
+                 1
+                 (%execute-os-pipeline-with-process-substitutions
+                  clean-commands redirects resources
+                  (shell-context-pipefail-p context)))
+              (nshell.infrastructure.acl:spawn-pipeline
+               clean-commands
+               :redirects redirects
+               :pipefail-p (shell-context-pipefail-p context)))))))))
 
 (defun execute-pipeline-use-case (pipeline &key filesystem)
   (or (execute-pipeline pipeline :filesystem filesystem) 0))

@@ -11,6 +11,31 @@
 (defun line (text)
   (concatenate 'string text (string #\Newline)))
 
+(defun pty-test-read-available (fd &key (timeout-usec 500000) (limit 4096))
+  (let ((buffer (make-array limit :element-type '(unsigned-byte 8))))
+    (sb-alien:with-alien ((read-fds (sb-alien:struct sb-unix:fd-set)))
+      (sb-unix:fd-zero (sb-alien:addr read-fds))
+      (sb-unix:fd-set fd (sb-alien:addr read-fds))
+      (multiple-value-bind (ready errno)
+          (sb-unix:unix-fast-select (1+ fd) (sb-alien:addr read-fds) nil nil 0 timeout-usec)
+        (declare (ignore errno))
+        (when (and ready (plusp ready) (sb-unix:fd-isset fd (sb-alien:addr read-fds)))
+          (let ((count (ignore-errors
+                         (nshell.infrastructure.acl:pty-read fd buffer limit))))
+            (when (and count (plusp count))
+              (octets->string buffer count))))))))
+
+(defun pty-test-read-until (fd needle &key (attempts 20) (sleep-seconds 0.05))
+  (let ((output ""))
+    (dotimes (i attempts output)
+      (let ((chunk (pty-test-read-available fd)))
+        (when chunk
+          (setf output (concatenate 'string output chunk))
+          (when (search needle output :test #'char-equal)
+            (return output)))
+        (unless chunk
+          (sleep sleep-seconds))))))
+
 (defmacro with-open-pty ((master slave slave-name) &body body)
   "Bind a raw PTY pair and close both descriptors after BODY."
   `(multiple-value-bind (,master ,slave ,slave-name)
@@ -394,24 +419,16 @@
                "/bin/cat"
                '())))
         (unwind-protect
-             (let ((master (nshell.infrastructure.acl:pty-process-master-fd process))
-                   (buffer (make-array 128 :element-type '(unsigned-byte 8)))
-                   (received (make-array 0 :element-type 'character
-                                           :adjustable t :fill-pointer 0)))
+             (let ((master (nshell.infrastructure.acl:pty-process-master-fd process)))
                (expect (integerp master) :to-be-truthy)
                (expect (length (line "master-to-slave")) :to-equal
                        (nshell.infrastructure.acl:pty-write
                         master
                         (line "master-to-slave")))
-               (loop repeat 8
-                     until (search "master-to-slave" received)
-                     do (let ((count (nshell.infrastructure.acl:pty-read
-                                      master buffer (length buffer))))
-                          (loop for index below count
-                                do (vector-push-extend
-                                    (code-char (aref buffer index))
-                                    received)))
-               (expect (search "master-to-slave" received) :to-be-truthy))
+               (expect (search "master-to-slave"
+                               (pty-test-read-until master "master-to-slave")
+                               :test #'char-equal)
+                       :to-be-truthy)
           (unless (member (nshell.infrastructure.acl:pty-process-status process)
                           '(:exited :signaled))
             (ignore-errors

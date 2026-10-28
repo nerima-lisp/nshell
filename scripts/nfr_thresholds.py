@@ -6,6 +6,8 @@ NFR_THRESHOLDS = {
     "03": {"limit": 5_000.0, "unit": "ms", "statistic": "median"},
     "04": {"limit": 60.0, "unit": "ms", "statistic": "median"},
     "05": {"limit": 16.0, "unit": "ms", "statistic": "p99"},
+    # NFR-06 covers Tab through the initial 20,000-entry pager page. Full
+    # `complete -C` output is diagnostic and has no NFR-06 timing threshold.
     "06": {"limit": 100.0, "unit": "ms", "statistic": "median"},
     "07": {"limit": 150.0, "unit": "MB", "statistic": "median"},
 }

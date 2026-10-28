@@ -58,6 +58,32 @@ jobs:
           --system "${{ matrix.system }}"
           --revision "$GITHUB_SHA"
 
+      - name: Diagnose NFR-05 redraw stages and native waits
+        if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' }}
+        env:
+          NFR05_DIAGNOSTIC_BINARY: ${{ runner.temp }}/nshell-nfr-binary/bin/nshell
+          NFR05_DIAGNOSTIC_OUTPUT: ${{ runner.temp }}/nshell-nfr-results/nfr05-diagnostics
+        run: |
+          if [ "${{ matrix.system }}" = "x86_64-linux" ] && ! command -v strace >/dev/null; then
+            if sudo -n apt-get update && sudo -n apt-get install -y strace; then
+              echo "Installed strace for the isolated NFR-05 native capture."
+            else
+              echo "strace installation unavailable; stage diagnostics will still be collected." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          nix develop .#scenarios -c python3 scripts/measure-nfr05-diagnostics.py \
+            --binary "$NFR05_DIAGNOSTIC_BINARY" \
+            --output-dir "$NFR05_DIAGNOSTIC_OUTPUT"
+
+      - name: Upload NFR-05 diagnostic pass
+        if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nshell-nfr05-diagnostics-${{ matrix.system }}
+          path: ${{ runner.temp }}/nshell-nfr-results/nfr05-diagnostics
+          if-no-files-found: warn
+          retention-days: 90
+
       - name: Profile NFR-06 CPU
         if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' }}
         env:

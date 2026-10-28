@@ -1,5 +1,4 @@
 (in-package #:nshell.presentation)
-
 ;; PREVIEW-PROMPT-FORMAT reads the live session's exit code, duration, and
 ;; config; REPL-STATE-DATA.LISP, which DEFVARs them, loads after this file in
 ;; the ASDF serial order, so they need a forward SPECIAL declaration here to
@@ -43,12 +42,12 @@ as two-column glyphs even when GRAPHEME-WIDTH returns one."
         width)))
 
 (defun %string-visible-width (text)
-  "Return TEXT's terminal width, using grapheme widths outside printable ASCII."
-  (if (loop for char across text
-            always (<= #x20 (char-code char) #x7e))
-      (length text)
-      (loop for grapheme in (cl-tty-kit:string-graphemes text)
-            sum (%grapheme-visible-width grapheme))))
+  "Return the terminal width of TEXT measured one grapheme at a time."
+  (%nfr05-diagnostic-measure
+   :display-width
+   (lambda ()
+     (loop for grapheme in (cl-tty-kit:string-graphemes text)
+           sum (%grapheme-visible-width grapheme)))))
 
 (defun %segments-visible-width (segments)
   (loop for segment in segments

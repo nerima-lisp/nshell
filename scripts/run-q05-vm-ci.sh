@@ -6,6 +6,7 @@ readonly q05_server_address="192.168.56.10"
 readonly q05_client_address="192.168.56.11"
 readonly q05_image_name="ubuntu-24.04-server-cloudimg-amd64.img"
 readonly q05_image_base="https://cloud-images.ubuntu.com/releases/noble/release"
+readonly q05_vm_disk_size="32G"
 q05_workspace="$(mktemp -d "${RUNNER_TEMP:?}/nshell-q05-vm.XXXXXX")"
 readonly q05_workspace
 readonly q05_results="${RUNNER_TEMP}/nshell-q05-results"
@@ -111,12 +112,17 @@ fi
 printf '%s  %s\n' "$q05_expected_hash" "$q05_workspace/${q05_image_name}" | sha256sum --check
 
 qemu-img create -f qcow2 -F qcow2 \
-  -b "$q05_workspace/${q05_image_name}" "$q05_workspace/client.qcow2"
+  -b "$q05_workspace/${q05_image_name}" \
+  "$q05_workspace/client.qcow2" "$q05_vm_disk_size"
 ssh-keygen -q -t ed25519 -N '' -f "$q05_workspace/id_ed25519"
 q05_ssh_port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 
 cat > "$q05_workspace/user-data" <<EOF
 #cloud-config
+growpart:
+  mode: auto
+  devices: ['/']
+resize_rootfs: true
 users:
   - default
   - name: ubuntu
@@ -207,6 +213,7 @@ if [[ "$q05_ssh_ready" != true ]]; then
   exit 1
 fi
 q05_ssh 'sudo cloud-init status --wait'
+q05_ssh 'df -h /; available_bytes="$(df -B1 --output=avail / | tail -n 1)"; if [ "$available_bytes" -lt 17179869184 ]; then echo "Q05 guest root filesystem has less than 16 GiB available after cloud-init growth." >&2; exit 1; fi'
 q05_ssh 'ip -brief address; ip route get 192.168.56.10; id'
 
 git -C "$GITHUB_WORKSPACE" archive --format=tar "$GITHUB_SHA" \

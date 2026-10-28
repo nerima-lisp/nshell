@@ -435,7 +435,7 @@
                              (cl:null
                               (nshell.domain.completion::rule-knowledge-base-%rulebase-cache
                                nshell.presentation::*kb*)))))
-                 (cl:funcall input-original event)))
+                 (cl:funcall input-original event))))
     (cl:setf (cl:symbol-function render-symbol)
              (cl:lambda ()
                (cl:multiple-value-prog1
@@ -457,7 +457,7 @@
                                (cl:if cache-after 1 0))
                       nshell.user::*nfr06-v2-measurements*))
                    (sb-thread:signal-semaphore
-                    nshell.user::*nfr06-v2-render-done*))))))))
+                    nshell.user::*nfr06-v2-render-done*)))))))
 
 (nshell.user::nfr06-v2-write-file "init.ready" "completion wrapper installed")
 (cl:format cl:*standard-output* "NFR06_V2_READY~%")

@@ -77,12 +77,14 @@
                      (completion-cycle-edit-for-selection selection))
                     :complete))))))
 (defun completion-pager-filtered-candidates (state)
-  (let ((query (getf (input-state-completion-pager state) :query "")))
-    (remove-if-not
-     (lambda (candidate)
-       (or (string= query "")
-           (search query (%candidate-text candidate) :test #'char-equal)))
-     (input-state-last-candidates state))))
+  (let* ((query (getf (input-state-completion-pager state) :query ""))
+         (candidates (input-state-last-candidates state)))
+    (if (string= query "")
+        candidates
+        (remove-if-not
+         (lambda (candidate)
+           (search query (%candidate-text candidate) :test #'char-equal))
+         candidates))))
 (defun reduce-completion-pager-input-state (state key-event)
   (let* ((pager (input-state-completion-pager state))
          (query (getf pager :query ""))

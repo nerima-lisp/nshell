@@ -105,6 +105,60 @@
             (funcall continuation)
             (expect rendered :to-be-truthy))))))
 
+  (it "read-key-cont-skips-ignored-terminal-events-during-failure-explanation"
+    "Cursor-position responses leave the last-command explanation available."
+    (with-repl-test-state
+      (let ((events (list (input-key-event :ignore)
+                          (input-key-event :char #\x)))
+            (reads 0))
+        (setf nshell.presentation::*failure-explain-available-p* t)
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                (incf reads)
+                (pop events))))
+          (let ((continuation (nshell.presentation::read-key-cont)))
+            (expect (functionp continuation) :to-be-truthy)
+            (let ((next (funcall continuation)))
+              (expect (functionp next) :to-be-truthy)
+              (expect t :to-be nshell.presentation::*failure-explain-available-p*)
+              (expect 2 :to-equal reads)))))))
+  (it "read-key-cont-skips-ignored-terminal-events-during-rerun-confirmation"
+    "Non-key terminal responses leave a pending rerun confirmation intact."
+    (with-repl-test-state
+      (let ((events (list (input-key-event :ignore)
+                          (input-key-event :char #\n)))
+            (reads 0)
+            (processed nil))
+        (setf nshell.presentation::*rerun-confirmation-pending-p* t
+              nshell.presentation::*rerun-command-assessment* :assessment)
+        (with-temporary-functions
+            (('nshell.infrastructure.acl:consume-terminal-resize-p
+              (lambda () nil))
+             ('nshell.infrastructure.terminal:read-key-event
+              (lambda (&key interrupt-predicate)
+                (declare (ignore interrupt-predicate))
+                (incf reads)
+                (pop events)))
+             ('nshell.presentation::%process-input-event
+              (lambda (event) (push event processed))))
+          (let ((continuation (nshell.presentation::read-key-cont)))
+            (expect (functionp continuation) :to-be-truthy)
+            (let ((next (funcall continuation)))
+              (expect (functionp next) :to-be-truthy)
+              (expect 2 :to-equal reads)
+              (expect t :to-be nshell.presentation::*rerun-confirmation-pending-p*)
+              (expect :assessment :to-equal
+                      nshell.presentation::*rerun-command-assessment*)
+              (expect nil :to-equal processed)
+              (funcall next)
+              (expect 1 :to-equal (length processed))
+              (expect :char :to-equal
+                      (nshell.domain.input:key-event-type (first processed)))))))))
+
   (it "read-key-cont-passes-the-sigint-predicate"
     "The REPL passes pending SIGINT detection into terminal input."
     (with-repl-test-state

@@ -213,12 +213,13 @@
               (when (functionp *assistant-model-event-handler*)
                 (funcall *assistant-model-event-handler* raw-event)))
             (read-key-cont)))
+         ((and event
+               (eq :ignore (nshell.domain.input:key-event-type event)))
+          (if (getf (nshell.domain.input:key-event-data event) :terminal-resize)
+              (lambda () (%render-prompt-after-terminal-resize))
+              (lambda () (read-key-cont))))
          ((and event *rerun-confirmation-pending-p*)
           (lambda () (%process-input-event event)))
-         ((and event
-               (eq :ignore (nshell.domain.input:key-event-type event))
-               (getf (nshell.domain.input:key-event-data event) :terminal-resize))
-          (lambda () (%render-prompt-after-terminal-resize)))
          ((and event *command-not-found-fallback-text*)
           (lambda () (%process-command-not-found-fallback-event event)))
          ((and event (%transient-panel-expand-event-p event))

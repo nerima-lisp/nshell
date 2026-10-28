@@ -126,18 +126,21 @@ wrapped line's other rows on screen as stale duplicates."
                     internal-time-units-per-second)))))
 
 (defun refresh-current-input-state-suggestion (&optional (text (input-state-buffer *input-state*)))
-  (let ((completion-path
-          (nshell.domain.environment:env-get (ensure-environment) "PATH"))
-        (filesystem *repl-filesystem*))
-    (setf (input-state-suggestion *input-state*)
-          (apply #'compute-suggestion *history*
-                 text
-                 :knowledge-base *kb*
-                 :path completion-path
-                 :filesystem filesystem
-                 :alias-table *aliases*
-                 :function-table *functions*
-                 (repl-completion-environment-arguments)))))
+  (%nfr05-diagnostic-measure
+   :suggestion
+   (lambda ()
+     (let ((completion-path
+            (nshell.domain.environment:env-get (ensure-environment) "PATH"))
+           (filesystem *repl-filesystem*))
+       (setf (input-state-suggestion *input-state*)
+             (apply #'compute-suggestion *history*
+                    text
+                    :knowledge-base *kb*
+                    :path completion-path
+                    :filesystem filesystem
+                    :alias-table *aliases*
+                    :function-table *functions*
+                    (repl-completion-environment-arguments)))))))
 
 (defun %assistant-boundary-ok-p (result)
   (eq :ok (nshell.feature.assistant:assistant-boundary-status result)))

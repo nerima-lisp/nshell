@@ -273,105 +273,116 @@
         (format t "~C" #\Return))))
 
 (defun render-prompt-cont ()
-  (let ((transient-panel-content
-          (when *preserve-transient-panel-on-next-prompt-p*
-            *transient-panel-content*)))
-    (setf *preserve-transient-panel-on-next-prompt-p* nil)
-    (when (or (%handle-pending-shell-termination)
-              (not *running*))
-      (return-from render-prompt-cont +repl-exit+))
-    (reap-background-jobs)
-    (%export-prompt-state)
-    (clear-rendered-transient-panel)
-    (clear-rendered-search-results)
-    (clear-rendered-prompt)
-    (when *prompt-hook-pending-p*
-      (setf *prompt-hook-pending-p* nil)
-      (nshell.application:run-shell-hooks
-       :prompt (boundary-current-directory) *last-exit-code*))
-    (%ensure-rendered-prompt-origin)
-    (let* ((terminal-width (terminal-width))
-           (prompt-width
-             (progn
-               (when (and *interactive-terminal-installed-p*
-                          (eq *osc133-state* :none))
-                 (%emit-terminal-integration-sequence
-                  :osc7
-                  (boundary-current-directory)
-                  (boundary-hostname))
-                 (%emit-terminal-integration-sequence :osc133 "A")
-                 (setf *osc133-state* :prompt))
-               (render-prompt *config* *last-exit-code*
-                              :last-command-duration-ms *last-command-duration-ms*
-                              :failure-explain-p *failure-explain-available-p*
-                              :terminal-width terminal-width
-                              :window-title-p
-                              (and *interactive-terminal-installed-p*
-                                   (eq *osc133-state* :prompt)))))
-           (text (input-state-buffer *input-state*))
-           (cursor-position (input-state-cursor-pos *input-state*))
-           (reader-context (%repl-reader-context-for-source text))
-           (scan-result
-             (when (eq reader-context :sexp)
-               (%repl-input-scan-result text cursor-position reader-context)))
-           (highlight-scan-result
-             (and (eq reader-context :sexp) scan-result))
-           (theme (nshell.domain.configuration:config-theme *config*))
-           (suggestion (input-state-suggestion *input-state*))
-           (ask-suffix (when (member (input-state-mode *input-state*)
-                                     '(:ask :ask-waiting)
-                                     :test #'eq)
-                        "ask>"))
-           (selection-range (%active-mouse-selection-range))
-           (matching-spans (%active-matching-delimiter-spans scan-result)))
-      (when ask-suffix
-        (format t " ")
-        (%write-styled ask-suffix :prompt-assistant theme)
-        (incf prompt-width (1+ (%string-visible-width ask-suffix))))
-      (progn
-        (when (eq *osc133-state* :prompt)
-          (%emit-terminal-integration-sequence :osc133 "B")
-          (setf *osc133-state* :input))
-        (render-edit-buffer
-         text theme
-         :selection-start (first selection-range)
-         :selection-end (second selection-range)
-         :matching-spans matching-spans
-         :scan-result highlight-scan-result
-         :cursor-position cursor-position))
-      (when (and suggestion (> (length suggestion) 0))
-        (%write-styled suggestion :autosuggestion theme))
-      (%move-cursor-to-rendered-position text
-                                         (input-state-cursor-pos *input-state*)
-                                         prompt-width
-                                         suggestion
-                                         nil
-                                         :terminal-width terminal-width)
-      (let ((cursor-position
-              (%rendered-buffer-position text
-                                         (input-state-cursor-pos *input-state*)
-                                         prompt-width
-                                         :terminal-width terminal-width)))
-        (setf *prompt-rendered-lines*
-              (%rendered-buffer-line-count text
-                                           :suggestion suggestion
-                                           :search-suffix nil
-                                           :terminal-width terminal-width
-                                           :prompt-width prompt-width)
-              *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
-              *prompt-rendered-terminal-width* terminal-width
-              *prompt-rendered-prompt-width* prompt-width)))
-    (when transient-panel-content
-      (render-transient-panel transient-panel-content
-                              :terminal-width (terminal-width)))
-    (progn
-      (when (eq (input-state-mode *input-state*) :search)
-        (render-current-history-search-panel))
-      (%render-current-completion-results))
-    (when *interactive-terminal-installed-p*
-      (if *vi-mode-enabled*
-          (nshell.infrastructure.terminal:ansi-set-vi-mode-cursor-shape
-           (eq (input-state-mode *input-state*) :insert))
-          (write-string (cl-tty-kit:ansi-set-cursor-style :default))))
-    (finish-output)
-    (lambda () (read-key-cont))))
+  (%nfr05-with-timed-terminal-output
+   (lambda ()
+     (let ((transient-panel-content
+            (when *preserve-transient-panel-on-next-prompt-p*
+              *transient-panel-content*)))
+       (setf *preserve-transient-panel-on-next-prompt-p* nil)
+       (when (or (%handle-pending-shell-termination)
+                 (not *running*))
+         (return-from render-prompt-cont +repl-exit+))
+       (reap-background-jobs)
+       (%export-prompt-state)
+       (clear-rendered-transient-panel)
+       (clear-rendered-search-results)
+       (clear-rendered-prompt)
+       (when *prompt-hook-pending-p*
+         (setf *prompt-hook-pending-p* nil)
+         (nshell.application:run-shell-hooks
+          :prompt (boundary-current-directory) *last-exit-code*))
+       (%ensure-rendered-prompt-origin)
+       (let* ((terminal-width (terminal-width))
+              (prompt-width
+               (progn
+                 (when (and *interactive-terminal-installed-p*
+                            (eq *osc133-state* :none))
+                   (%emit-terminal-integration-sequence
+                    :osc7
+                    (boundary-current-directory)
+                    (boundary-hostname))
+                   (%emit-terminal-integration-sequence :osc133 "A")
+                   (setf *osc133-state* :prompt))
+                 (render-prompt *config* *last-exit-code*
+                                :last-command-duration-ms *last-command-duration-ms*
+                                :failure-explain-p *failure-explain-available-p*
+                                :terminal-width terminal-width
+                                :window-title-p
+                                (and *interactive-terminal-installed-p*
+                                     (eq *osc133-state* :prompt)))))
+              (text (input-state-buffer *input-state*))
+              (cursor-position (input-state-cursor-pos *input-state*))
+              (reader-context (%repl-reader-context-for-source text))
+              (scan-result
+               (when (eq reader-context :sexp)
+                 (%repl-input-scan-result text cursor-position reader-context)))
+              (highlight-scan-result
+               (and (eq reader-context :sexp) scan-result))
+              (theme (nshell.domain.configuration:config-theme *config*))
+              (suggestion (input-state-suggestion *input-state*))
+              (ask-suffix (when (member (input-state-mode *input-state*)
+                                        '(:ask :ask-waiting)
+                                        :test #'eq)
+                            "ask>"))
+              (selection-range (%active-mouse-selection-range))
+              (matching-spans (%active-matching-delimiter-spans scan-result)))
+         (when ask-suffix
+           (format t " ")
+           (%write-styled ask-suffix :prompt-assistant theme)
+           (incf prompt-width (1+ (%string-visible-width ask-suffix))))
+         (progn
+           (when (eq *osc133-state* :prompt)
+             (%emit-terminal-integration-sequence :osc133 "B")
+             (setf *osc133-state* :input))
+           (render-edit-buffer
+            text theme
+            :selection-start (first selection-range)
+            :selection-end (second selection-range)
+            :matching-spans matching-spans
+            :scan-result highlight-scan-result
+            :cursor-position cursor-position))
+         (when (and suggestion (> (length suggestion) 0))
+           (%write-styled suggestion :autosuggestion theme))
+         (%nfr05-diagnostic-measure
+          :grapheme-geometry
+          (lambda ()
+            (%move-cursor-to-rendered-position text
+                                               (input-state-cursor-pos *input-state*)
+                                               prompt-width
+                                               suggestion
+                                               nil
+                                               :terminal-width terminal-width)))
+         (let ((cursor-position
+                (%nfr05-diagnostic-measure
+                 :grapheme-geometry
+                 (lambda ()
+                   (%rendered-buffer-position text
+                                              (input-state-cursor-pos *input-state*)
+                                              prompt-width
+                                              :terminal-width terminal-width)))))
+           (setf *prompt-rendered-lines*
+                 (%nfr05-diagnostic-measure
+                  :grapheme-geometry
+                  (lambda ()
+                    (%rendered-buffer-line-count text
+                                                 :suggestion suggestion
+                                                 :search-suffix nil
+                                                 :terminal-width terminal-width
+                                                 :prompt-width prompt-width)))
+                 *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
+                 *prompt-rendered-terminal-width* terminal-width
+                 *prompt-rendered-prompt-width* prompt-width)))
+       (when transient-panel-content
+         (render-transient-panel transient-panel-content
+                                 :terminal-width (terminal-width)))
+       (progn
+         (when (eq (input-state-mode *input-state*) :search)
+           (render-current-history-search-panel))
+         (%render-current-completion-results))
+       (when *interactive-terminal-installed-p*
+         (if *vi-mode-enabled*
+             (nshell.infrastructure.terminal:ansi-set-vi-mode-cursor-shape
+              (eq (input-state-mode *input-state*) :insert))
+           (write-string (cl-tty-kit:ansi-set-cursor-style :default))))
+       (finish-output)
+       (lambda () (read-key-cont))))))

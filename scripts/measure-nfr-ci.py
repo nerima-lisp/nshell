@@ -426,12 +426,8 @@ def main() -> int:
     diagnostic = None
     py = sys.executable
     script_01_03 = str(ROOT / "scripts/measure-nfr-01-03.py")
-    input_path = output_dir / "nfr03-input.sh"
-    target_iterations = " ".join(str(index) for index in range(1, 1_001))
-    input_path.write_text(
-        f"for i in {target_iterations}; /usr/bin/true; end\n",
-        encoding="utf-8",
-    )
+    input_path = output_dir / "nfr03-input.sexp"
+    input_path.write_text("(dotimes (i 1000) (^true))\n", encoding="utf-8")
 
     for nfr, samples in (("01", NFR01_02_SAMPLES), ("02", NFR01_02_SAMPLES), ("03", NFR03_SAMPLES)):
         raw_path = output_dir / f"nfr-{nfr}.jsonl"

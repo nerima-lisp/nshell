@@ -80,13 +80,15 @@
                 (preview-for candidates selected-candidate-index))))
         (when (and candidates
                    (null pager)
-                   (> (completion-render-line-count
-                       candidates
-                       :terminal-width terminal-width
-                       :preview-lines
-                       (%completion-preview-visible-lines
-                        initial-preview (length candidates) nil row-budget))
-                      row-budget))
+                   (or (> (length candidates)
+                          (* row-budget (max 1 terminal-width)))
+                       (> (completion-render-line-count
+                           candidates
+                           :terminal-width terminal-width
+                           :preview-lines
+                           (%completion-preview-visible-lines
+                            initial-preview (length candidates) nil row-budget))
+                          row-budget)))
           (let* ((base-buffer (or (input-state-completion-base-buffer state)
                                   (input-state-buffer state)))
                  (base-cursor (or (input-state-completion-base-cursor state)

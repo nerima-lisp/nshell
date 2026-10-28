@@ -43,9 +43,12 @@ as two-column glyphs even when GRAPHEME-WIDTH returns one."
         width)))
 
 (defun %string-visible-width (text)
-  "Return the terminal width of TEXT measured one grapheme at a time."
-  (loop for grapheme in (cl-tty-kit:string-graphemes text)
-        sum (%grapheme-visible-width grapheme)))
+  "Return TEXT's terminal width, using grapheme widths outside printable ASCII."
+  (if (loop for char across text
+            always (<= #x20 (char-code char) #x7e))
+      (length text)
+      (loop for grapheme in (cl-tty-kit:string-graphemes text)
+            sum (%grapheme-visible-width grapheme))))
 
 (defun %segments-visible-width (segments)
   (loop for segment in segments

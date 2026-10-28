@@ -46,6 +46,9 @@ ANSI_SEQUENCE_RE = re.compile(rb"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x
 FIXTURE_FILE_COUNT = 20_000
 SUGGESTION_KEY_SEQUENCE = "source item-"
 CHILD_REAP_TIMEOUT_SECONDS = 0.5
+NFR06_TERMINAL_SIZE = (10, 80)
+NFR06_VISIBLE_CANDIDATE_COUNT = 28
+COMPLETION_PAGER_FOOTER = b"arrows move, Enter accepts, Esc/Ctrl-C cancels"
 
 
 def uptime_record() -> dict[str, object]:
@@ -220,7 +223,13 @@ def child_environment(
 
 
 class PtySession:
-    def __init__(self, argv: list[str], cwd: Path, env: dict[str, str]):
+    def __init__(
+        self,
+        argv: list[str],
+        cwd: Path,
+        env: dict[str, str],
+        terminal_size: tuple[int, int] = (24, 100),
+    ):
         self.data = bytearray()
         self.responses_sent = 0
         self.argv = argv
@@ -234,7 +243,8 @@ class PtySession:
             except OSError as error:
                 os.write(2, f"cannot exec {argv[0]}: {error}\n".encode())
                 os._exit(127)
-        fcntl.ioctl(self.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
+        rows, columns = terminal_size
+        fcntl.ioctl(self.master, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
 
     def _read_once(self, timeout_seconds: float) -> bool:
         ready, _, _ = select.select([self.master], [], [], max(0.0, timeout_seconds))
@@ -764,6 +774,8 @@ def run_interactive_completion_sample(
         session.pump_for(settle_seconds)
         if candidate_compute_diagnostics:
             candidate_compute_sidecar.unlink(missing_ok=True)
+
+
         first = run_interactive_completion_round(
             session,
             command_bytes,
@@ -829,6 +841,88 @@ def run_interactive_completion_sample(
             session.close()
         if candidate_compute_diagnostics:
             candidate_compute_sidecar.unlink(missing_ok=True)
+
+
+def run_interactive_completion_tab_sample(
+    binary: Path,
+    fixture: Path,
+    prefix: str,
+    home_root: Path,
+    expected_candidates: list[bytes],
+    settle_seconds: float,
+) -> dict[str, object]:
+    if len(expected_candidates) != FIXTURE_FILE_COUNT:
+        raise RuntimeError("NFR-06 Tab sample reference output has an invalid row count")
+    expected_first = expected_candidates[0]
+    expected_last = expected_candidates[-1]
+    expected_initial_page = expected_candidates[:NFR06_VISIBLE_CANDIDATE_COUNT]
+    marker_text = f"NSHELL_NFR06_{uuid.uuid4().hex}_PROMPT"
+    marker = marker_text.encode()
+    home = home_root / f"home-{uuid.uuid4().hex}"
+    session = PtySession(
+        [str(binary), "--no-config"],
+        fixture,
+        child_environment(home, marker_text),
+        terminal_size=NFR06_TERMINAL_SIZE,
+    )
+    command_bytes = f"cat {shlex.quote(prefix)}".encode()
+    try:
+        session.wait_for_marker(marker)
+        session.pump_for(settle_seconds)
+        paste = BRACKETED_PASTE_START + command_bytes + BRACKETED_PASTE_END
+        input_start = len(session.data)
+        if os.write(session.master, paste) != len(paste):
+            raise RuntimeError("NFR-06 Tab command was not fully written to the PTY")
+        session.wait_for_output(
+            lambda data: command_bytes in strip_terminal_sequences(data[input_start:])
+        )
+        session.pump_for(0.05)
+
+        response_start = len(session.data)
+        started_ns = time.monotonic_ns()
+        if os.write(session.master, b"\t") != 1:
+            raise RuntimeError("NFR-06 Tab trigger was not fully written to the PTY")
+
+        def initial_page_visible(data: bytes) -> bool:
+            visible = visible_terminal_text(data[response_start:])
+            return (
+                COMPLETION_PAGER_FOOTER in visible
+                and b"1/20000" in visible
+                and re.findall(rb"item-\d{5}", visible) == expected_initial_page
+            )
+
+        end_ns = session.wait_for_output(initial_page_visible)
+        response = bytes(session.data[response_start:])
+        visible_response = visible_terminal_text(response)
+        visible_candidates = re.findall(rb"item-\d{5}", visible_response)
+        if visible_candidates != expected_initial_page:
+            raise RuntimeError("NFR-06 Tab sample did not render the expected initial candidate page")
+
+        followup_start = len(session.data)
+        if os.write(session.master, b"x") != 1:
+            raise RuntimeError("NFR-06 follow-up filter key was not fully written to the PTY")
+        session.wait_for_output(
+            lambda data: (
+                b"Filter: x" in visible_terminal_text(data[followup_start:])
+                and b"No matches" in visible_terminal_text(data[followup_start:])
+            )
+        )
+        return {
+            "latency_ms": (end_ns - started_ns) / 1_000_000,
+            "trigger": "Tab on an already-visible file-completion command",
+            "candidate_count": FIXTURE_FILE_COUNT,
+            "terminal_rows": NFR06_TERMINAL_SIZE[0],
+            "terminal_columns": NFR06_TERMINAL_SIZE[1],
+            "visible_candidate_count": len(visible_candidates),
+            "first_candidate_visible": expected_first.decode("utf-8"),
+            "last_candidate_hidden": expected_last not in visible_candidates,
+            "pager_total_visible": b"1/20000" in visible_response,
+            "followup_filter_key_accepted": True,
+            "response_bytes": len(response),
+            "cursor_queries": session.responses_sent,
+        }
+    finally:
+        session.close()
 
 
 def run_suggestion_key_sample(
@@ -952,23 +1046,27 @@ def run_target_group(
         "uptime_after": load_after,
     }
     if metric == "NFR-06":
-        repeat_values = [
-            float(latency)
-            for row in rows
-            for latency in row["target"].get("same_process_repeat_latencies_ms", [])
+        repeat_rows = [
+            row for row in rows if "same_process_repeat_latencies_ms" in row["target"]
         ]
-        expected_repeat_count = samples * NFR06_SAME_PROCESS_REPEAT_COUNT
-        if len(repeat_values) != expected_repeat_count:
-            raise ValueError(
-                "NFR-06 did not produce the configured same-process repeat count: "
-                f"expected {expected_repeat_count}, got {len(repeat_values)}"
-            )
-        summary["same_process_repeat"] = {
-            "first_completion_per_process": True,
-            "repeats_per_process": NFR06_SAME_PROCESS_REPEAT_COUNT,
-            "measured_samples": len(repeat_values),
-            **stats(repeat_values),
-        }
+        if repeat_rows:
+            repeat_values = [
+                float(latency)
+                for row in repeat_rows
+                for latency in row["target"]["same_process_repeat_latencies_ms"]
+            ]
+            expected_repeat_count = samples * NFR06_SAME_PROCESS_REPEAT_COUNT
+            if len(repeat_rows) != samples or len(repeat_values) != expected_repeat_count:
+                raise ValueError(
+                    "NFR-06 did not produce the configured same-process repeat count: "
+                    f"expected {expected_repeat_count}, got {len(repeat_values)}"
+                )
+            summary["same_process_repeat"] = {
+                "first_completion_per_process": True,
+                "repeats_per_process": NFR06_SAME_PROCESS_REPEAT_COUNT,
+                "measured_samples": len(repeat_values),
+                **stats(repeat_values),
+            }
         if rows and "candidate_compute_duration_ms" in rows[0]["target"]:
             first_compute_values = [
                 float(row["target"]["candidate_compute_duration_ms"]) for row in rows
@@ -1186,17 +1284,25 @@ def run_completion_group(
     samples: int,
     warmups: int,
     settle_seconds: float,
-    candidate_compute_diagnostics: bool = False,
 ) -> dict[str, object]:
     expected_output = completion_reference_output(binary, completion_fixture, prefix, home_root)
-    target = lambda: run_interactive_completion_sample(
+    expected_candidates = sorted(
+        path.name.encode("utf-8")
+        for path in completion_fixture.iterdir()
+        if path.is_file() and path.name.startswith(prefix)
+    )
+    if len(expected_candidates) != FIXTURE_FILE_COUNT:
+        raise RuntimeError(
+            f"NFR-06 Tab fixture returned {len(expected_candidates)} matching files, "
+            f"expected {FIXTURE_FILE_COUNT}"
+        )
+    target = lambda: run_interactive_completion_tab_sample(
         binary,
         completion_fixture,
         prefix,
         home_root,
-        expected_output,
+        expected_candidates,
         settle_seconds,
-        candidate_compute_diagnostics,
     )
     return run_target_group(
         stream,
@@ -1204,8 +1310,9 @@ def run_completion_group(
         {
             "completion_entries": FIXTURE_FILE_COUNT,
             "completion_prefix": prefix,
-            "completion_command": completion_command(binary, completion_fixture, prefix)[-1],
-            "measurement_boundary": "PTY Enter write to all expected candidates and the next fully rendered prompt",
+            "completion_command": f"cat {prefix}",
+            "measurement_boundary": "PTY Tab write to the initial candidate page and its 20,000-entry pager footer",
+            "terminal_size": {"rows": NFR06_TERMINAL_SIZE[0], "columns": NFR06_TERMINAL_SIZE[1]},
             "reference_output_bytes": len(expected_output),
         },
         samples,
@@ -1214,6 +1321,133 @@ def run_completion_group(
         "median",
         target,
     )
+
+
+def run_complete_c_output_diagnostic_group(
+    stream,
+    binary: Path,
+    completion_fixture: Path,
+    prefix: str,
+    home_root: Path,
+    samples: int,
+    warmups: int,
+    settle_seconds: float,
+    candidate_compute_diagnostics: bool = False,
+) -> dict[str, object]:
+    expected_output = completion_reference_output(binary, completion_fixture, prefix, home_root)
+    target_runner = lambda: run_interactive_completion_sample(
+        binary,
+        completion_fixture,
+        prefix,
+        home_root,
+        expected_output,
+        settle_seconds,
+        candidate_compute_diagnostics,
+    )
+    context = {
+        "completion_entries": FIXTURE_FILE_COUNT,
+        "completion_prefix": prefix,
+        "completion_command": completion_command(binary, completion_fixture, prefix)[-1],
+        "measurement_boundary": "PTY Enter write to all expected candidates and the next fully rendered prompt",
+        "reference_output_bytes": len(expected_output),
+        "diagnostic_only": True,
+        "threshold_ms": None,
+    }
+    load_before = uptime_record()
+    stream.write(json.dumps({
+        "record": "group-start",
+        "metric": "complete-C output diagnostic",
+        **context,
+        "uptime": load_before,
+    }, sort_keys=True) + "\n")
+    stream.flush()
+
+    rows: list[dict[str, object]] = []
+    for index in range(warmups + samples):
+        target = target_runner()
+        row = {
+            "record": "sample",
+            "metric": "complete-C output diagnostic",
+            **context,
+            "sample": index + 1,
+            "warmup": index < warmups,
+            "target": target,
+        }
+        stream.write(json.dumps(row, sort_keys=True) + "\n")
+        stream.flush()
+        if index >= warmups:
+            rows.append(row)
+
+    repeat_values = [
+        float(value)
+        for row in rows
+        for value in row["target"].get("same_process_repeat_latencies_ms", [])
+    ]
+    expected_repeat_count = samples * NFR06_SAME_PROCESS_REPEAT_COUNT
+    if len(repeat_values) != expected_repeat_count:
+        raise ValueError(
+            "complete-C diagnostic did not produce the configured same-process repeat count: "
+            f"expected {expected_repeat_count}, got {len(repeat_values)}"
+        )
+    first_values = [float(row["target"]["latency_ms"]) for row in rows]
+    summary: dict[str, object] = {
+        "record": "group-summary",
+        "metric": "complete-C output diagnostic",
+        **context,
+        "measured_samples": samples,
+        "warmups": warmups,
+        "first_completion_per_process": stats(first_values),
+        "same_process_repeat": {
+            "repeats_per_process": NFR06_SAME_PROCESS_REPEAT_COUNT,
+            "measured_samples": len(repeat_values),
+            **stats(repeat_values),
+        },
+        "uptime_before": load_before,
+        "uptime_after": uptime_record(),
+    }
+    if candidate_compute_diagnostics:
+        first = [row["target"] for row in rows]
+        phase_names = (
+            "candidate_compute_duration_ms",
+            "candidate_output_preparation_duration_ms",
+            "candidate_output_to_prompt_ms",
+        )
+        first_phase_values = {
+            name: [float(row[name]) for row in first]
+            for name in phase_names
+        }
+        repeat_phase_values = {
+            name: [
+                float(value)
+                for row in rows
+                for value in row["target"].get(repeat_key, [])
+            ]
+            for name, repeat_key in (
+                (phase_names[0], "same_process_repeat_candidate_compute_durations_ms"),
+                (phase_names[1], "same_process_repeat_candidate_output_preparation_durations_ms"),
+                (phase_names[2], "same_process_repeat_candidate_output_to_prompt_durations_ms"),
+            )
+        }
+        if any(len(values) != samples for values in first_phase_values.values()) or any(
+            len(values) != expected_repeat_count for values in repeat_phase_values.values()
+        ):
+            raise ValueError("complete-C diagnostic phase timing data is incomplete")
+
+        def phase_stats(values: dict[str, list[float]], count: int) -> dict[str, object]:
+            return {
+                "measured_samples": count,
+                "candidate_compute": stats(values[phase_names[0]]),
+                "candidate_output_preparation": stats(values[phase_names[1]]),
+                "candidate_output_to_prompt": stats(values[phase_names[2]]),
+            }
+
+        summary["candidate_compute_phase_timing"] = {
+            "first_completion": phase_stats(first_phase_values, samples),
+            "same_process_repeats": phase_stats(repeat_phase_values, expected_repeat_count),
+        }
+    stream.write(json.dumps(summary, sort_keys=True) + "\n")
+    stream.flush()
+    return summary
 
 
 def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[str, object]]:
@@ -1259,12 +1493,16 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
             ),
             "nfr05_action": "write one character to a buffer preloaded to one character below the selected length",
             "nfr05_measurement_boundary": "keypress PTY write to the fresh prompt, cursor restore, and full buffer in PTY output",
-            "nfr06_action": "press Enter on an already-visible complete -C command in a live nshell PTY",
-            "nfr06_measurement_boundary": "Enter PTY write to all expected candidates and the next prompt cursor restore",
+            "nfr06_action": "press Tab on a file-completion prefix in a live nshell PTY",
+            "nfr06_measurement_boundary": "Tab PTY write to the initial candidate page and its 20,000-entry pager footer",
             "nfr06_suggestion_key_metric": "raw per-key latency from writing one character to observing the full typed prefix in subsequent PTY output",
             "nfr06_suggestion_key_plain_fixture": "same binary and typed sequence in the plain fixture directory",
             "nfr06_suggestion_key_sequence": SUGGESTION_KEY_SEQUENCE,
             "terminal_size": {"rows": 24, "columns": 100},
+            "nfr06_completion_terminal_size": {
+                "rows": NFR06_TERMINAL_SIZE[0],
+                "columns": NFR06_TERMINAL_SIZE[1],
+            },
             "percentile": "nearest-rank p99",
         }
         if args.nfr06_candidate_compute_diagnostics:
@@ -1359,6 +1597,16 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
             prefix = str(fixtures["completion_prefix"])
             if args.start_from in ("nfr04", "nfr06"):
                 summaries.append(run_completion_group(
+                    stream,
+                    binary,
+                    completion_fixture,
+                    prefix,
+                    home_root,
+                    args.samples,
+                    args.warmups,
+                    args.settle_ms / 1000,
+                ))
+                summaries.append(run_complete_c_output_diagnostic_group(
                     stream,
                     binary,
                     completion_fixture,

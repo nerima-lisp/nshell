@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure repeated interactive NFR-06 completion commands with gated sb-sprof."""
+"""Profile interactive NFR-06 Tab completion with gated sb-sprof."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MEASURE_SCRIPT = ROOT / "scripts/measure-nfr-04-06.py"
+CONTROLLER_TEMPLATE = ROOT / "scripts/profile-nfr06-controller.lisp"
 OUT = Path(os.environ["NFR06_PROFILE_OUTPUT"]).resolve()
 FIXTURE = Path(os.environ["NFR06_PROFILE_FIXTURE"]).resolve()
 BINARY = Path(os.environ["NFR06_PROFILE_BINARY"]).resolve()
@@ -27,11 +28,32 @@ MAX_SAMPLES = 100000
 REQUEST_TIMEOUT = 60.0
 
 
-def profile_sbcl_home() -> Path:
-    executable = shutil.which("sbcl")
+def profile_sbcl_home(binary: Path) -> Path:
+    def store_executable(text: str, suffix: str) -> Path | None:
+        for token in text.split():
+            candidate = token.strip('"')
+            if candidate.startswith("/nix/store/") and candidate.endswith(suffix):
+                return Path(candidate)
+        return None
+
+    with binary.open("rb") as stream:
+        is_script = stream.read(2) == b"#!"
+    executable = None
+    if is_script:
+        wrapper_text = binary.read_text(encoding="utf-8", errors="replace")
+        runtime_wrapper = store_executable(wrapper_text, "/bin/.nshell-wrapped")
+        if runtime_wrapper is not None:
+            runtime_text = runtime_wrapper.read_text(encoding="utf-8", errors="replace")
+            executable = store_executable(runtime_text, "/bin/sbcl")
+            if executable is None:
+                raise RuntimeError(f"could not resolve the SBCL executable from {runtime_wrapper}")
+        else:
+            executable = store_executable(wrapper_text, "/bin/sbcl")
     if executable is None:
-        raise RuntimeError("could not find the SBCL executable on PATH")
-    executable = Path(executable).resolve()
+        executable_text = shutil.which("sbcl")
+        if executable_text is None:
+            raise RuntimeError("could not find the SBCL executable on PATH")
+        executable = Path(executable_text).resolve()
     home = executable.parent.parent / "lib" / "sbcl"
     if not (home / "contrib" / "sb-sprof.fasl").is_file():
         raise RuntimeError(f"sb-sprof contrib not found under SBCL_HOME: {home}")
@@ -74,9 +96,11 @@ def wait_for_text(path: Path, timeout: float = REQUEST_TIMEOUT) -> str:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if path.is_file():
-            return path.read_text(encoding="utf-8").strip()
+            text = path.read_text(encoding="utf-8").strip()
+            if text:
+                return text
         time.sleep(0.002)
-    raise TimeoutError(f"timed out waiting for {path}")
+    raise TimeoutError(f"timed out waiting for non-empty {path}")
 
 
 def wait_for_matching_text(path: Path, expected: str, timeout: float = REQUEST_TIMEOUT) -> str:
@@ -238,447 +262,7 @@ def controller_source(
         if mode == "cpu"
         else f":mode :alloc :alloc-interval {ALLOC_INTERVAL} :max-samples {MAX_SAMPLES}"
     )
-    source = r'''(cl:pushnew
-  (cl:symbol-function
-   (cl:find-symbol "MODULE-PROVIDE-CONTRIB" :sb-impl))
-  sb-ext:*module-provider-functions*)
-(cl:require :sb-sprof)
-(cl:defparameter nshell.user::*nfr06-v2-command* __COMMAND__)
-(cl:defparameter nshell.user::*nfr06-v2-control-dir* __CONTROL__)
-(cl:defparameter nshell.user::*nfr06-v2-graph-path* __GRAPH__)
-(cl:progn
-  (cl:defparameter nshell.user::*nfr06-v2-target-graph-path* __TARGET_GRAPH__)
-  (cl:defparameter nshell.user::*nfr06-v2-target-flat-path* __TARGET_FLAT__))
-(cl:defparameter nshell.user::*nfr06-v2-flat-path* __FLAT__)
-(cl:defparameter nshell.user::*nfr06-v2-metrics-path* __METRICS__)
-(cl:defparameter nshell.user::*nfr06-v2-iterations* __ITERATIONS__)
-(cl:defparameter nshell.user::*nfr06-v2-mode* __MODE__)
-(cl:defparameter nshell.user::*nfr06-v2-main-thread* (sb-thread:main-thread))
-(cl:defparameter nshell.user::*nfr06-v2-controller-thread* nil)
-(cl:defparameter nshell.user::*nfr06-v2-window-threads* nil)
-(cl:defparameter nshell.user::*nfr06-v2-profiled-workers* nil)
-(cl:defparameter nshell.user::*nfr06-v2-thread-ids* (cl:make-hash-table :test 'cl:eq))
-(cl:defparameter nshell.user::*nfr06-v2-next-thread-id* 0)
-(cl:defparameter nshell.user::*nfr06-v2-render-done* (sb-thread:make-semaphore :name "nfr06 render done"))
-(cl:defparameter nshell.user::*nfr06-v2-profile-active* nil)
-(cl:defparameter nshell.user::*nfr06-v2-window-open* nil)
-(cl:defparameter nshell.user::*nfr06-v2-window-index* nil)
-(cl:defparameter nshell.user::*nfr06-v2-enter-count* 0)
-(cl:defparameter nshell.user::*nfr06-v2-target-count* 0)
-(cl:defparameter nshell.user::*nfr06-v2-enter-sequence* nil)
-(cl:defparameter nshell.user::*nfr06-v2-target-sequence* nil)
-(cl:defparameter nshell.user::*nfr06-v2-measurements* nil)
-
-(cl:defun nshell.user::nfr06-v2-path (name)
-  (cl:concatenate 'cl:string nshell.user::*nfr06-v2-control-dir* "/" name))
-
-(cl:defun nshell.user::nfr06-v2-write-file (name text)
-  (cl:with-open-file (stream (nshell.user::nfr06-v2-path name)
-                             :direction :output :if-exists :supersede
-                             :if-does-not-exist :create)
-    (cl:write-line text stream)))
-
-(cl:defun nshell.user::nfr06-v2-read-file (name)
-  (cl:with-open-file (stream (nshell.user::nfr06-v2-path name) :direction :input)
-    (cl:read-line stream nil "")))
-
-(cl:defun nshell.user::nfr06-v2-worker-thread-p (thread)
-  (cl:let ((name (sb-thread:thread-name thread))
-           (prefix "nshell pipeline stage "))
-    (cl:and (cl:stringp name)
-            (cl:>= (cl:length name) (cl:length prefix))
-            (cl:string= prefix name :end2 (cl:length prefix)))))
-
-(cl:defun nshell.user::nfr06-v2-await-sampling-enabled (thread index)
-  (cl:loop repeat 2000
-           until (cl:= (sb-thread::%symbol-value-in-thread
-                        'sb-thread::*sprof-enable* thread)
-                       1)
-           do (cl:sleep 0.001)
-           finally (cl:when (cl:/= (sb-thread::%symbol-value-in-thread
-                                    'sb-thread::*sprof-enable* thread)
-                                   1)
-                     (cl:error "thread ~A did not enable sampling at index ~D"
-                               (sb-thread:thread-name thread) index))))
-
-(cl:defun nshell.user::nfr06-v2-start-window-thread (thread index)
-  (cl:unless (cl:member thread nshell.user::*nfr06-v2-window-threads* :test #'cl:eq)
-    (sb-sprof:start-sampling thread)
-    (nshell.user::nfr06-v2-await-sampling-enabled thread index)
-    (cl:push thread nshell.user::*nfr06-v2-window-threads*)
-    (cl:when (nshell.user::nfr06-v2-worker-thread-p thread)
-      (cl:pushnew thread nshell.user::*nfr06-v2-profiled-workers* :test #'cl:eq)))
-  thread)
-
-(cl:defun nshell.user::nfr06-v2-discover-workers (index)
-  (cl:dolist (thread (sb-thread:list-all-threads))
-    (cl:when (cl:and (sb-thread:thread-alive-p thread)
-                     (nshell.user::nfr06-v2-worker-thread-p thread))
-      (nshell.user::nfr06-v2-start-window-thread thread index))))
-
-(cl:defun nshell.user::nfr06-v2-stop-window-threads ()
-  (cl:dolist (thread nshell.user::*nfr06-v2-window-threads*)
-    (sb-sprof:stop-sampling thread))
-  (cl:setf nshell.user::*nfr06-v2-window-threads* cl:nil))
-
-(cl:defun nshell.user::nfr06-v2-thread-id (thread)
-  (cl:or (cl:gethash thread nshell.user::*nfr06-v2-thread-ids*)
-         (cl:setf (cl:gethash thread nshell.user::*nfr06-v2-thread-ids*)
-                  (cl:incf nshell.user::*nfr06-v2-next-thread-id*))))
-
-(cl:defun nshell.user::nfr06-v2-filter-samples (samples predicate)
-  (cl:let ((selected cl:nil)
-           (total-length 0)
-           (trace-count 0))
-    (sb-sprof:map-traces
-     (cl:lambda (thread trace)
-       (cl:when (cl:funcall predicate thread)
-         (cl:destructuring-bind (source start end) trace
-           (cl:push (cl:list thread source start end) selected)
-           (cl:incf total-length (- end start))
-           (cl:incf trace-count))))
-     samples)
-    (cl:let ((filtered (cl:copy-structure samples))
-             (vector (cl:make-array total-length))
-             (sampled-threads
-               (cl:remove-if-not
-                (cl:lambda (entry) (cl:funcall predicate (cl:first entry)))
-                (sb-sprof::samples-sampled-threads samples)))
-             (index 0))
-      (cl:dolist (entry (cl:nreverse selected))
-        (cl:destructuring-bind (thread source start end) entry
-          (cl:let ((new-end (+ index (- end start))))
-            (cl:setf (cl:aref vector index) (cl:cons 'sb-sprof::trace-start new-end)
-                     (cl:aref vector (cl:1+ index)) thread)
-            (cl:replace vector source :start1 (+ index 2) :start2 (+ start 2) :end2 end)
-            (cl:setf index new-end))))
-      (cl:setf (sb-sprof::samples-vector filtered) vector
-               (sb-sprof::samples-trace-count filtered) trace-count
-               (sb-sprof::samples-unique-trace-count filtered) trace-count
-               (sb-sprof::samples-sampled-threads filtered) sampled-threads)
-      filtered)))
-
-(cl:defun nshell.user::nfr06-v2-vector-trace-count (samples)
-  (cl:let* ((vector (sb-sprof::samples-vector samples))
-            (vector-length (cl:length vector))
-            (index 0)
-            (count 0))
-    (cl:loop while (cl:< index vector-length)
-             do (cl:let ((marker (cl:aref vector index)))
-                  (cl:unless (cl:and (cl:consp marker)
-                                     (cl:eq (cl:car marker) 'sb-sprof::trace-start)
-                                     (cl:integerp (cl:cdr marker))
-                                     (cl:< index (cl:cdr marker))
-                                     (cl:<= (cl:cdr marker) vector-length))
-                    (cl:error "invalid raw sample trace marker at index ~D" index))
-                  (cl:incf count)
-                  (cl:setf index (cl:cdr marker))))
-    count))
-
-(cl:defun nshell.user::nfr06-v2-write-thread-counts ()
-  (cl:let* ((counts (cl:make-hash-table :test 'cl:eq))
-            (threads (cl:remove-duplicates
-                      (cl:append (cl:list nshell.user::*nfr06-v2-main-thread*
-                                           nshell.user::*nfr06-v2-controller-thread*)
-                                 nshell.user::*nfr06-v2-profiled-workers*)
-                      :test #'cl:eq))
-            (samples (cl:symbol-value (cl:find-symbol "*SAMPLES*" :sb-sprof)))
-            (vector (sb-sprof::samples-vector samples))
-            (raw-vector-count
-              (nshell.user::nfr06-v2-vector-trace-count samples))
-            (map-trace-count 0))
-    (sb-sprof:map-traces
-     (cl:lambda (thread trace)
-       (cl:declare (cl:ignore trace))
-       (cl:pushnew thread threads :test #'cl:eq)
-       (cl:incf map-trace-count)
-       (cl:incf (cl:gethash thread counts 0)))
-     samples)
-    (cl:with-open-file (stream (cl:concatenate 'cl:string
-                                                nshell.user::*nfr06-v2-control-dir*
-                                                "/thread-counts.csv")
-                               :direction :output :if-exists :supersede
-                               :if-does-not-exist :create)
-      (cl:write-line "thread_id,thread,role,samples" stream)
-      (cl:dolist (thread threads)
-        (cl:format stream "~D,~A,~A,~D~%"
-                   (nshell.user::nfr06-v2-thread-id thread)
-                   (sb-thread:thread-name thread)
-                   (cl:cond ((cl:eq thread nshell.user::*nfr06-v2-main-thread*) "main")
-                            ((cl:eq thread nshell.user::*nfr06-v2-controller-thread*) "controller")
-                            ((nshell.user::nfr06-v2-worker-thread-p thread) "pipeline-worker")
-                            (cl:t "other"))
-                   (cl:gethash thread counts 0))))
-    (nshell.user::nfr06-v2-write-file
-     "sample-counts.txt"
-     (cl:format cl:nil
-                "sb_sprof_stop_counter=~D~%raw_vector_trace_count=~D~%map_traces_count=~D~%samples_vector_length=~D~%"
-                (sb-sprof::samples-trace-count samples)
-                raw-vector-count
-                map-trace-count
-                (cl:length vector)))))
-
-(cl:defun nshell.user::nfr06-v2-write-metrics ()
-  (cl:unless (cl:and (cl:= nshell.user::*nfr06-v2-enter-count*
-                            nshell.user::*nfr06-v2-iterations*)
-                     (cl:= nshell.user::*nfr06-v2-target-count*
-                            nshell.user::*nfr06-v2-iterations*)
-                     (cl:= (cl:length nshell.user::*nfr06-v2-measurements*)
-                            nshell.user::*nfr06-v2-iterations*))
-    (cl:error "profile operation counts mismatch: Enter=~D target=~D metrics=~D expected=~D"
-              nshell.user::*nfr06-v2-enter-count*
-              nshell.user::*nfr06-v2-target-count*
-              (cl:length nshell.user::*nfr06-v2-measurements*)
-              nshell.user::*nfr06-v2-iterations*))
-  (cl:with-open-file (stream nshell.user::*nfr06-v2-metrics-path*
-                             :direction :output :if-exists :supersede
-                             :if-does-not-exist :create)
-    (cl:format stream "# input_enter_count=~D~%# target_call_count=~D~%# input_enter_sequence=~{~D~^,~}~%# target_call_sequence=~{~D~^,~}~%"
-                nshell.user::*nfr06-v2-enter-count*
-                nshell.user::*nfr06-v2-target-count*
-                (cl:nreverse nshell.user::*nfr06-v2-enter-sequence*)
-                (cl:nreverse nshell.user::*nfr06-v2-target-sequence*))
-    (cl:write-line "iteration,bytes_cons,gc_run_delta_ticks,cache_before,cache_after" stream)
-    (cl:dolist (row (cl:nreverse nshell.user::*nfr06-v2-measurements*))
-      (cl:format stream "~D,~D,~D,~D,~D~%"
-                 (cl:first row) (cl:second row) (cl:third row)
-                 (cl:fourth row) (cl:fifth row)))))
-
-(cl:defun nshell.user::nfr06-v2-start-profile ()
-  (sb-ext:gc :full cl:t)
-  (sb-sprof:reset)
-  (sb-sprof:start-profiling __PROFILE_OPTIONS__ :threads :all)
-  (cl:setf nshell.user::*nfr06-v2-profile-active* cl:t)
-  (cl:dolist (thread (sb-thread:list-all-threads))
-    (sb-sprof:stop-sampling thread))
-  (nshell.user::nfr06-v2-write-file
-   "start.ack"
-   (cl:format cl:nil "started mode=~A profile-threads=all controller-thread=~A controller-is-main=~A target-thread=~A main-sampling=off worker-sampling=off"
-              nshell.user::*nfr06-v2-mode*
-              (sb-thread:thread-name sb-thread:*current-thread*)
-              (cl:eq sb-thread:*current-thread* (sb-thread:main-thread))
-               (sb-thread:thread-name nshell.user::*nfr06-v2-main-thread*))))
-
-(cl:defun nshell.user::nfr06-v2-target-window (index)
-  (cl:when nshell.user::*nfr06-v2-window-open*
-    (cl:error "target window already open"))
-  (cl:setf nshell.user::*nfr06-v2-window-index* index
-           nshell.user::*nfr06-v2-window-open* cl:t
-           nshell.user::*nfr06-v2-window-threads* cl:nil)
-  (nshell.user::nfr06-v2-start-window-thread nshell.user::*nfr06-v2-main-thread* index)
-  (nshell.user::nfr06-v2-discover-workers index)
-  (cl:let ((sample-start-ticks (cl:get-internal-real-time)))
-  (nshell.user::nfr06-v2-write-file
-   "window-start.ack"
-   (cl:format cl:nil "started index=~D sample-start-ticks=~D sampled-thread-count=~D sampled-workers=~{~A~^|~} controller-thread=~A controller-is-main=~A target-thread=~A"
-              index
-              sample-start-ticks
-              (cl:length nshell.user::*nfr06-v2-window-threads*)
-              (cl:mapcar #'sb-thread:thread-name
-                         (cl:remove-if-not #'nshell.user::nfr06-v2-worker-thread-p
-                                           nshell.user::*nfr06-v2-window-threads*))
-              (sb-thread:thread-name sb-thread:*current-thread*)
-              (cl:eq sb-thread:*current-thread* (sb-thread:main-thread))
-              (sb-thread:thread-name nshell.user::*nfr06-v2-main-thread*)))
-  (cl:let ((rendered
-             (cl:let ((deadline (+ (cl:get-internal-real-time)
-                                   (cl:floor (* __RENDER_TIMEOUT_SECONDS__ cl:internal-time-units-per-second)))))
-               (cl:loop while (cl:< (cl:get-internal-real-time) deadline)
-                        do (cl:when (sb-thread:wait-on-semaphore
-                                     nshell.user::*nfr06-v2-render-done* :timeout 0.002)
-                             (cl:return cl:t))
-                           (nshell.user::nfr06-v2-discover-workers index)))))
-  (cl:unless rendered
-    (nshell.user::nfr06-v2-stop-window-threads)
-    (cl:setf nshell.user::*nfr06-v2-window-open* cl:nil)
-    (cl:error "completion render semaphore timed out at index ~D" index))
-  (cl:let ((render-done-ticks (cl:get-internal-real-time))
-           (window-thread-snapshot (cl:copy-list nshell.user::*nfr06-v2-window-threads*)))
-  (nshell.user::nfr06-v2-stop-window-threads)
-  (cl:setf nshell.user::*nfr06-v2-window-open* cl:nil)
-  (cl:let ((sample-stop-ticks (cl:get-internal-real-time)))
-  (nshell.user::nfr06-v2-write-file
-   "window-stop.ack"
-   (cl:format cl:nil "stopped index=~D sample-start-ticks=~D render-done-ticks=~D sample-stop-ticks=~D ticks-per-second=~D sampled-workers=~{~A~^|~} controller-thread=~A controller-is-main=~A target-thread=~A"
-              index
-              sample-start-ticks
-              render-done-ticks
-              sample-stop-ticks
-              cl:internal-time-units-per-second
-              (cl:mapcar #'sb-thread:thread-name
-                         (cl:remove-if-not #'nshell.user::nfr06-v2-worker-thread-p
-                                           window-thread-snapshot))
-              (sb-thread:thread-name sb-thread:*current-thread*)
-              (cl:eq sb-thread:*current-thread* (sb-thread:main-thread))
-               (sb-thread:thread-name nshell.user::*nfr06-v2-main-thread*))))))))
-
-(cl:defun nshell.user::nfr06-v2-stop-profile ()
-  (cl:when nshell.user::*nfr06-v2-window-open*
-    (cl:error "cannot stop profile while target window is open"))
-  (sb-sprof:stop-profiling)
-  (cl:let ((samples (cl:symbol-value (cl:find-symbol "*SAMPLES*" :sb-sprof))))
-    (cl:unless (cl:plusp (cl:length (sb-sprof::samples-vector samples)))
-      (cl:multiple-value-bind (vector unique-trace-count sampled-threads)
-          (sb-sprof::convert-raw-data)
-        (cl:setf (sb-sprof::samples-vector samples) vector
-                 (sb-sprof::samples-unique-trace-count samples) unique-trace-count
-                 (sb-sprof::samples-sampled-threads samples) sampled-threads)))
-    (cl:let* ((raw-vector-count
-                (nshell.user::nfr06-v2-vector-trace-count samples))
-              (report-samples (cl:copy-structure samples)))
-      (cl:setf (sb-sprof::samples-trace-count report-samples) raw-vector-count)
-      (nshell.user::nfr06-v2-write-thread-counts)
-      (cl:let ((call-graph
-                 (sb-sprof::make-call-graph-1 report-samples most-positive-fixnum)))
-        (cl:with-open-file (stream nshell.user::*nfr06-v2-graph-path*
-                                   :direction :output :if-exists :supersede
-                                   :if-does-not-exist :create)
-          (sb-sprof:report :type :graph :call-graph call-graph :stream stream
-                           :min-percent 0 :show-progress cl:nil))
-        (cl:with-open-file (stream nshell.user::*nfr06-v2-flat-path*
-                                   :direction :output :if-exists :supersede
-                                   :if-does-not-exist :create)
-          (sb-sprof:report :type :flat :call-graph call-graph :stream stream
-                           :min-percent 0 :show-progress cl:nil)))))
-  (cl:let* ((samples (cl:symbol-value (cl:find-symbol "*SAMPLES*" :sb-sprof)))
-          (target-samples
-            (nshell.user::nfr06-v2-filter-samples
-             samples
-             (cl:lambda (thread)
-               (cl:or (cl:eq thread nshell.user::*nfr06-v2-main-thread*)
-                      (nshell.user::nfr06-v2-worker-thread-p thread)))))
-          (target-count (sb-sprof::samples-trace-count target-samples)))
-  (cl:when (cl:plusp target-count)
-    (cl:let ((target-graph
-               (sb-sprof::make-call-graph-1 target-samples most-positive-fixnum)))
-      (cl:progn
-  (cl:with-open-file
-      (stream nshell.user::*nfr06-v2-target-graph-path*
-              :direction :output :if-exists :supersede :if-does-not-exist :create)
-    (sb-sprof:report :type :graph :call-graph target-graph :stream stream
-                     :min-percent 0 :show-progress cl:nil))
-  (cl:with-open-file
-      (stream nshell.user::*nfr06-v2-target-flat-path*
-              :direction :output :if-exists :supersede :if-does-not-exist :create)
-    (sb-sprof:report :type :flat :call-graph target-graph :stream stream
-                     :min-percent 0 :show-progress cl:nil)))))
-  (nshell.user::nfr06-v2-write-file
-   "target-samples.ack"
-   (cl:format cl:nil "target-samples=~D target-workers=~{~A~^|~}"
-              target-count
-              (cl:mapcar #'sb-thread:thread-name
-                         (cl:remove-if-not #'nshell.user::nfr06-v2-worker-thread-p
-                                           nshell.user::*nfr06-v2-profiled-workers*)))))
-  (nshell.user::nfr06-v2-write-metrics)
-  (cl:setf nshell.user::*nfr06-v2-profile-active* cl:nil)
-  (nshell.user::nfr06-v2-write-file
-   "stop.ack"
-   (cl:format cl:nil "stopped controller-thread=~A controller-is-main=~A target-count=~D"
-              (sb-thread:thread-name sb-thread:*current-thread*)
-              (cl:eq sb-thread:*current-thread* (sb-thread:main-thread))
-              nshell.user::*nfr06-v2-target-count*)))
-
-(cl:defun nshell.user::nfr06-v2-controller ()
-  (cl:handler-case
-      (cl:progn
-        (nshell.user::nfr06-v2-write-file
-         "controller.ready"
-         (cl:format cl:nil "ready controller-thread=~A controller-is-main=~A target-thread=~A"
-                    (sb-thread:thread-name sb-thread:*current-thread*)
-                    (cl:eq sb-thread:*current-thread* (sb-thread:main-thread))
-                    (sb-thread:thread-name nshell.user::*nfr06-v2-main-thread*)))
-        (cl:loop
-          (cl:when (cl:probe-file (nshell.user::nfr06-v2-path "start.req"))
-            (cl:delete-file (nshell.user::nfr06-v2-path "start.req"))
-            (nshell.user::nfr06-v2-start-profile))
-          (cl:when (cl:and nshell.user::*nfr06-v2-profile-active*
-                           (cl:probe-file (nshell.user::nfr06-v2-path "window-start.req")))
-            (cl:let ((index (cl:parse-integer
-                             (nshell.user::nfr06-v2-read-file "window-start.req"))))
-              (cl:delete-file (nshell.user::nfr06-v2-path "window-start.req"))
-              (nshell.user::nfr06-v2-target-window index)))
-          (cl:when (cl:and nshell.user::*nfr06-v2-profile-active*
-                           (cl:probe-file (nshell.user::nfr06-v2-path "stop.req")))
-            (cl:delete-file (nshell.user::nfr06-v2-path "stop.req"))
-            (nshell.user::nfr06-v2-stop-profile))
-          (cl:when (cl:probe-file (nshell.user::nfr06-v2-path "shutdown.req"))
-            (cl:delete-file (nshell.user::nfr06-v2-path "shutdown.req"))
-            (cl:return))
-          (cl:sleep 0.002))
-        (nshell.user::nfr06-v2-write-file
-         "controller.stopped"
-         (cl:format cl:nil "stopped controller-thread=~A controller-is-main=~A"
-                    (sb-thread:thread-name sb-thread:*current-thread*)
-                    (cl:eq sb-thread:*current-thread* (sb-thread:main-thread)))))
-    (cl:error (condition)
-      (cl:when nshell.user::*nfr06-v2-profile-active*
-        (cl:ignore-errors
-          (nshell.user::nfr06-v2-stop-window-threads)
-          (cl:setf nshell.user::*nfr06-v2-window-open* cl:nil)
-          (nshell.user::nfr06-v2-stop-profile)))
-      (nshell.user::nfr06-v2-write-file
-       "controller.error"
-       (cl:format cl:nil "type=~A condition=~A" (cl:type-of condition) condition)))))
-
-
-
-(cl:setf nshell.user::*nfr06-v2-controller-thread*
-         (sb-thread:make-thread #'nshell.user::nfr06-v2-controller
-                                :name "nfr06-v2-controller"))
-
-(cl:let* ((package (cl:find-package "NSHELL.PRESENTATION"))
-          (input-symbol (cl:find-symbol "%PROCESS-INPUT-EVENT" package))
-          (input-original (cl:symbol-function input-symbol))
-          (complete-symbol (cl:find-symbol "%EXECUTE-COMPLETE-COMMAND" package))
-          (complete-original (cl:symbol-function complete-symbol)))
-  (cl:setf (cl:symbol-function input-symbol)
-           (cl:lambda (event)
-             (cl:when (cl:and (cl:eq :enter (nshell.domain.input:key-event-type event))
-                              (cl:string= (nshell.presentation::input-state-buffer
-                                           nshell.presentation::*input-state*)
-                                          nshell.user::*nfr06-v2-command*))
-               (cl:incf nshell.user::*nfr06-v2-enter-count*)
-               (cl:push nshell.user::*nfr06-v2-enter-count*
-                        nshell.user::*nfr06-v2-enter-sequence*))
-             (cl:funcall input-original event)))
-  (cl:setf (cl:symbol-function complete-symbol)
-           (cl:lambda (ast text &optional evaluator)
-             (cl:if (cl:string= text nshell.user::*nfr06-v2-command*)
-                    (cl:let* ((index (cl:incf nshell.user::*nfr06-v2-target-count*))
-                              (bytes-before (sb-ext:get-bytes-consed))
-                              (gc-before sb-ext:*gc-run-time*)
-                              (cache-before
-                                (cl:not (cl:null
-                                  (nshell.domain.completion::rule-knowledge-base-%rulebase-cache
-                                   nshell.presentation::*kb*))))
-                              (continuation
-                                (cl:funcall complete-original ast text evaluator)))
-                      (cl:push index nshell.user::*nfr06-v2-target-sequence*)
-                      (cl:unless (cl:and nshell.user::*nfr06-v2-window-open*
-                                         (cl:= nshell.user::*nfr06-v2-window-index*
-                                               (cl:1- index)))
-                        (cl:error "target completion outside its controller window: index=~D window=~S"
-                                  index nshell.user::*nfr06-v2-window-index*))
-                      (cl:lambda ()
-                        (cl:multiple-value-prog1
-                            (cl:funcall continuation)
-                          (cl:let* ((bytes-cons (- (sb-ext:get-bytes-consed) bytes-before))
-                                    (gc-delta (- sb-ext:*gc-run-time* gc-before))
-                                    (cache-after
-                                      (cl:not (cl:null
-                                        (nshell.domain.completion::rule-knowledge-base-%rulebase-cache
-                                         nshell.presentation::*kb*)))))
-                            (cl:push (cl:list index bytes-cons gc-delta
-                                              (cl:if cache-before 1 0)
-                                              (cl:if cache-after 1 0))
-                                     nshell.user::*nfr06-v2-measurements*)
-                            (sb-thread:signal-semaphore nshell.user::*nfr06-v2-render-done*)))))
-                    (cl:funcall complete-original ast text evaluator)))))
-
-(nshell.user::nfr06-v2-write-file "init.ready" "completion wrapper installed")
-(cl:format cl:*standard-output* "NFR06_V2_READY~%")
-(cl:finish-output cl:*standard-output*)
-'''
+    source = CONTROLLER_TEMPLATE.read_text(encoding="utf-8")
     replacements = {
         "__COMMAND__": json.dumps(command),
         "__CONTROL__": json.dumps(str(control)),
@@ -746,52 +330,53 @@ def wait_for_controller_ready(session, control: Path, start: int,
     raise TimeoutError("profile controller readiness timed out")
 
 
-def wait_for_validated_render(session, module, control: Path, start: int, marker: bytes,
-                              expected_output: bytes, expected: list[bytes], expected_set: set[bytes],
-                              expected_hash: str, timeout: float) -> dict[str, object]:
-    # Match the NFR harness while draining the PTY; validate candidate order after the prompt returns.
-    render_timing = session.wait_for_completion_render(
-        start, marker, timeout_seconds=timeout
-    )
-    prompt_asserted_ns = int(render_timing["prompt_render_complete_ns"])
-    error = controller_error(control)
-    if error:
-        raise RuntimeError(f"profile controller failed: {error}")
-
-    response = bytes(session.data[start:])
-    rows = [
-        line
-        for raw_line in response.splitlines()
-        if (line := module.visible_terminal_text(raw_line).rstrip(b"\r")) in expected_set
+def wait_for_tab_page(
+    session,
+    module,
+    start: int,
+    expected_first: bytes,
+    expected_last: bytes,
+    timeout: float,
+    iteration: int,
+) -> dict[str, object]:
+    expected_initial_page = [
+        f"item-{index:05d}".encode()
+        for index in range(module.NFR06_VISIBLE_CANDIDATE_COUNT)
     ]
-    if len(rows) != len(expected) or rows != expected or set(rows) != expected_set:
-        raise RuntimeError(
-            f"candidate parity mismatch rows={len(rows)} unique={len(set(rows))} "
-            f"expected={len(expected)}"
+
+    def initial_page_visible(data: bytes) -> bool:
+        visible = module.visible_terminal_text(data)
+        return (
+            module.COMPLETION_PAGER_FOOTER in visible
+            and b"1/20000" in visible
+            and re.findall(rb"item-\d{5}", visible) == expected_initial_page
         )
-    starts = [m.start() for m in re.finditer(rb"\x1b\]133;C\x1b\\", response)]
-    ends = [m.start() for m in re.finditer(rb"\x1b\]133;D;0\x1b\\", response)]
-    if len(starts) != 1 or len(ends) != 1:
-        raise RuntimeError(f"expected one OSC 133 C/D frame, got C={len(starts)} D;0={len(ends)}")
-    output_hash = hashlib.sha256(b"\n".join(rows) + b"\n").hexdigest()
-    if output_hash != expected_hash:
-        raise RuntimeError(f"candidate output hash mismatch: {output_hash}")
-    if not module.prompt_render_complete(response, marker):
-        raise RuntimeError("completion prompt or cursor restoration assertion failed")
-    if response.rfind(marker) <= response.rfind(b"\x1b]133;D;0\x1b\\"):
-        raise RuntimeError("completion prompt marker preceded command-frame completion")
+
+    page_asserted_ns = wait_for_output_since(
+        session,
+        start,
+        initial_page_visible,
+        timeout,
+        "initial Tab completion page",
+        iteration,
+    )
+    response = bytes(session.data[start:])
+    visible = module.visible_terminal_text(response)
+    visible_candidates = re.findall(rb"item-\d{5}", visible)
+    if visible_candidates != expected_initial_page:
+        raise RuntimeError(
+            "Tab profiler did not render the expected initial candidate page: "
+            f"visible_count={len(visible_candidates)} "
+            f"expected_count={len(expected_initial_page)}"
+        )
     return {
-        "osc133_c": len(starts),
-        "osc133_d0": len(ends),
-        "candidate_count": len(rows),
-        "candidate_unique": len(set(rows)),
-        "output_sha256": output_hash,
-        "prompt_render_complete": True,
-        "cursor_restore": True,
+        "first_candidate_visible": expected_first.decode("utf-8"),
+        "last_candidate_hidden": expected_last not in visible_candidates,
+        "visible_candidate_count": len(visible_candidates),
+        "pager_total_visible": b"1/20000" in visible,
+        "pager_footer_visible": module.COMPLETION_PAGER_FOOTER in visible,
         "response_bytes": len(response),
-        "first_command_frame_seen_ns": None,
-        "first_command_end_seen_ns": None,
-        "prompt_asserted_ns": prompt_asserted_ns,
+        "page_asserted_ns": page_asserted_ns,
     }
 
 
@@ -903,7 +488,7 @@ def main() -> int:
     module = measurement_module()
     marker_text = f"NSHELL_NFR06_GATE_{uuid.uuid4().hex.upper()}_PROMPT"
     marker = marker_text.encode()
-    command = module.completion_command(BINARY, FIXTURE, "item-")[-1]
+    command = "cat item-"
     graph = run_dir / f"{args.mode}.graph.txt"
     target_graph = run_dir / f"{args.mode}.target.graph.txt"
     target_flat = run_dir / f"{args.mode}.target.flat.txt"
@@ -927,7 +512,7 @@ def main() -> int:
     )
     home = run_dir / "home"
     env = module.child_environment(home, marker_text)
-    sbcl_home = profile_sbcl_home()
+    sbcl_home = profile_sbcl_home(BINARY)
     env["SBCL_HOME"] = str(sbcl_home)
     env["NSHELL_READER"] = "sexp"
     expected_output = module.completion_reference_output(
@@ -936,7 +521,12 @@ def main() -> int:
     expected = expected_output.splitlines()
     expected_set = set(expected)
     expected_hash = hashlib.sha256(expected_output).hexdigest()
-    session = module.PtySession([str(BINARY), "--no-config"], FIXTURE, env)
+    session = module.PtySession(
+        [str(BINARY), "--no-config"],
+        FIXTURE,
+        env,
+        terminal_size=module.NFR06_TERMINAL_SIZE,
+    )
     install_incremental_cursor_query_handler(session, module)
     session_closed = False
     profile_started = False
@@ -999,29 +589,52 @@ def main() -> int:
         controller_ready = wait_for_text(control / "controller.ready")
         if "controller-is-main=NIL" not in controller_ready:
             raise RuntimeError(f"controller is not a distinct thread: {controller_ready}")
+        expected_first = Path(os.fsdecode(expected[0])).name.encode()
+        expected_last = Path(os.fsdecode(expected[-1])).name.encode()
+        paste = module.BRACKETED_PASTE_START + command.encode() + module.BRACKETED_PASTE_END
+        wait_phase = "command echo"
+        input_start = len(session.data)
+        if os.write(session.master, paste) != len(paste):
+            raise RuntimeError("command paste was incomplete")
+        wait_for_output_since(
+            session,
+            input_start,
+            lambda data: command.encode() in module.strip_terminal_sequences(data),
+            20,
+            wait_phase,
+            0,
+        )
+        session.pump_for(0.02)
         start_ack = start_profile(control, args.timeout)
         profile_started = True
 
-        paste = module.BRACKETED_PASTE_START + command.encode() + module.BRACKETED_PASTE_END
         for index in range(args.iterations):
             active_iteration = index + 1
             iteration_deadline = time.monotonic() + args.timeout
-            wait_phase = "command echo"
-            write_progress(
-                run_dir, args.mode, active_iteration, args.iterations, len(records), wait_phase
-            )
-            input_start = len(session.data)
-            if os.write(session.master, paste) != len(paste):
-                raise RuntimeError(f"operation {active_iteration}: command paste was incomplete")
-            wait_for_output_since(
-                session,
-                input_start,
-                lambda data: command.encode() in module.strip_terminal_sequences(data),
-                remaining_seconds(iteration_deadline, active_iteration, wait_phase),
-                wait_phase,
-                active_iteration,
-            )
-            session.pump_for(0.02)
+            if index > 0:
+                wait_phase = "pager dismissal"
+                write_progress(
+                    run_dir, args.mode, active_iteration, args.iterations, len(records), wait_phase
+                )
+                dismissal_start = len(session.data)
+                if os.write(session.master, b"\x1b") != 1:
+                    raise RuntimeError(
+                        f"operation {active_iteration}: Escape write was incomplete"
+                    )
+                wait_for_output_since(
+                    session,
+                    dismissal_start,
+                    lambda data: (
+                        command.encode() in module.strip_terminal_sequences(data)
+                        and module.COMPLETION_PAGER_FOOTER
+                        not in module.visible_terminal_text(data)
+                    ),
+                    remaining_seconds(iteration_deadline, active_iteration, wait_phase),
+                    wait_phase,
+                    active_iteration,
+                )
+                session.pump_for(0.02)
+
             arm_request_ns = time.monotonic_ns()
             wait_phase = "controller window start"
             write_progress(
@@ -1034,20 +647,22 @@ def main() -> int:
             )
             arm_ack_ns = time.monotonic_ns()
             response_start = len(session.data)
-            enter_started = time.monotonic_ns()
-            if os.write(session.master, b"\r") != 1:
-                raise RuntimeError(f"operation {active_iteration}: Enter write was incomplete")
-            enter_written_ns = time.monotonic_ns()
-            wait_phase = "completion render and output validation"
+            tab_started_ns = time.monotonic_ns()
+            if os.write(session.master, b"\t") != 1:
+                raise RuntimeError(f"operation {active_iteration}: Tab write was incomplete")
+            tab_written_ns = time.monotonic_ns()
+            wait_phase = "initial candidate page"
             write_progress(
                 run_dir, args.mode, active_iteration, args.iterations, len(records), wait_phase
             )
-            output_assertions = wait_for_validated_render(
-                session, module, control, response_start, marker, expected_output,
-                expected,
-                expected_set,
-                expected_hash,
+            output_assertions = wait_for_tab_page(
+                session,
+                module,
+                response_start,
+                expected_first,
+                expected_last,
                 remaining_seconds(iteration_deadline, active_iteration, wait_phase),
+                active_iteration,
             )
             wait_phase = "controller window stop"
             write_progress(
@@ -1059,40 +674,38 @@ def main() -> int:
                 remaining_seconds(iteration_deadline, active_iteration, wait_phase),
             )
             window_ack_ns = time.monotonic_ns()
-            records.append({
-                "iteration": index + 1,
-                "enter_writes": 1,
-                "enter_bytes": 1,
-                "arm_request_ns": arm_request_ns,
-                "arm_ack_ns": arm_ack_ns,
-                "enter_write_start_ns": enter_started,
-                "enter_write_complete_ns": enter_written_ns,
-                "arm_ack_to_enter_ms": (enter_started - arm_ack_ns) / 1_000_000,
-                "enter_to_first_osc_c_ms": (
-                    (output_assertions["first_command_frame_seen_ns"] - enter_started) / 1_000_000
-                    if output_assertions["first_command_frame_seen_ns"] is not None else None
-                ),
-                "enter_to_first_osc_d_ms": (
-                    (output_assertions["first_command_end_seen_ns"] - enter_started) / 1_000_000
-                    if output_assertions["first_command_end_seen_ns"] is not None else None
-                ),
-                "enter_to_prompt_asserted_ms": (
-                    output_assertions["prompt_asserted_ns"] - enter_started
-                ) / 1_000_000,
-                "prompt_asserted_to_window_ack_ms": (
-                    window_ack_ns - output_assertions["prompt_asserted_ns"]
-                ) / 1_000_000,
-                "controller_window_start": arm_ack,
-                "controller_window_stop": window_ack,
-                "output_assertions": output_assertions,
-                "latency_ms": (time.monotonic_ns() - enter_started) / 1_000_000,
-            })
+            records.append(
+                {
+                    "iteration": index + 1,
+                    "trigger": "Tab",
+                    "input_writes": 1,
+                    "input_bytes": 1,
+                    "arm_request_ns": arm_request_ns,
+                    "arm_ack_ns": arm_ack_ns,
+                    "tab_write_start_ns": tab_started_ns,
+                    "tab_write_complete_ns": tab_written_ns,
+                    "arm_ack_to_tab_ms": (tab_started_ns - arm_ack_ns) / 1_000_000,
+                    "tab_to_initial_page_ms": (
+                        output_assertions["page_asserted_ns"] - tab_started_ns
+                    )
+                    / 1_000_000,
+                    "controller_window_start": arm_ack,
+                    "controller_window_stop": window_ack,
+                    "output_assertions": {
+                        key: value
+                        for key, value in output_assertions.items()
+                        if key != "page_asserted_ns"
+                    },
+                    "latency_ms": (
+                        output_assertions["page_asserted_ns"] - tab_started_ns
+                    )
+                    / 1_000_000,
+                }
+            )
             wait_phase = "iteration complete"
             write_progress(
                 run_dir, args.mode, active_iteration, args.iterations, len(records), wait_phase
             )
-            if index + 1 < args.iterations:
-                session.pump_for(0.02)
 
         active_iteration = 0
         wait_phase = "profile report generation"
@@ -1191,6 +804,17 @@ def main() -> int:
         controller_stopped = wait_for_text(control / "controller.stopped")
         if "controller-is-main=NIL" not in controller_stopped:
             raise RuntimeError(f"controller did not stop off-main: {controller_stopped}")
+        clear_input_start = len(session.data)
+        if os.write(session.master, b"\x03") != 1:
+            raise RuntimeError("Ctrl-C input-clear write was incomplete")
+        session.wait_for_output(
+            lambda data: module.prompt_render_complete(data, marker),
+            timeout_seconds=20,
+        )
+        if command.encode() in module.visible_terminal_text(
+            bytes(session.data[clear_input_start:])
+        ):
+            raise RuntimeError("input command remained visible after Ctrl-C")
         exit_status = graceful_exit(session)
         session_closed = True
         if exit_status != 0:
@@ -1211,8 +835,8 @@ def main() -> int:
             "nshell_exit_status": exit_status,
             "controller_ready": controller_ready,
             "controller_stopped": controller_stopped,
-            "profile_boundary": "controller starts main plus pipeline-worker sampling before Enter, discovers and starts new pipeline workers while waiting, and stops all window threads immediately on the completion continuation render semaphore; Python parity and prompt/cursor checks remain post-assertions",
-            "cache_policy": "fresh nshell process; no warmup and no cache clear, preserving cold first completion",
+            "profile_boundary": "controller samples the main and pipeline worker threads from target Tab input-event entry through render-prompt-cont completion, including pager rendering and finish-output; PTY assertions verify the first page",
+            "cache_policy": "one fresh nshell process; the complete -C reference preflight warms filesystem cache outside the measured session; rulebase-cache presence is recorded before and after each measured Tab",
         })
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0

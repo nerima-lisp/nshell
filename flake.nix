@@ -502,7 +502,7 @@
               runHook preBuild
               $CC -O2 -fPIC -shared native/pty.c \
                 -o libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary} \
-                ${ctx.pkgs.lib.optionalString ctx.pkgs.stdenv.isLinux "-lutil"}
+                ${ctx.pkgs.lib.optionalString ctx.pkgs.stdenv.hostPlatform.isLinux "-lutil"}
               runHook postBuild
             '';
             installPhase = ''

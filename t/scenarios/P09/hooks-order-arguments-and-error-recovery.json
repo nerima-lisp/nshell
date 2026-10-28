@@ -1,0 +1,147 @@
+{
+  "id": "P09-hooks-order-arguments-and-error-recovery",
+  "uc": [
+    "P09"
+  ],
+  "mode": "pty",
+  "load_config": true,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NO_COLOR": "1",
+      "P09_ALIVE": "P09_SESSION_ALIVE",
+      "NSHELL_PROMPT": "P09> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 100,
+      "rows": 30
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "(nshell.application:register-shell-hook\n :PROMPT\n (lambda (directory status)\n   (format t \"P09_PROMPT ~a status=~a~%\"\n           (or (car (last (pathname-directory (pathname directory)))) \"unknown\")\n           status)))\n\n(nshell.application:register-shell-hook\n :PREEXEC\n (lambda (text)\n   (format t \"P09_PREEXEC ~a~%\" text)))\n\n(nshell.application:register-shell-hook\n :CD\n (lambda (old-directory new-directory)\n   (format t \"P09_CD ~a -> ~a~%\"\n           (or (car (last (pathname-directory\n                           (pathname (concatenate 'string old-directory \"/\")))))\n               \"unknown\")\n           (or (car (last (pathname-directory\n                           (pathname (concatenate 'string new-directory \"/\")))))\n               \"unknown\"))))\n\n(nshell.application:register-shell-hook\n :COMMAND-NOT-FOUND\n (lambda (name)\n   (format t \"P09_COMMAND_NOT_FOUND ~a~%\" name)))\n\n(nshell.application:register-shell-hook\n :POSTEXEC\n (lambda (text status duration)\n   (when (string= text \"false\")\n     (error \"P09_EXPECTED_HOOK_ERROR\"))\n   (format t \"P09_POSTEXEC ~a status=~a duration=~a~%\"\n           text status duration)))\n\n(nshell.application:register-shell-hook\n :POSTEXEC\n (lambda (text status duration)\n   (format t \"P09_POSTEXEC_CONTINUED ~a status=~a duration=~a~%\"\n           text status duration)))\n"
+      },
+      {
+        "path": "work/p09-target/.keep",
+        "content": ""
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "wait",
+      "contains": "P09_PROMPT work status=0",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "true"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P09_POSTEXEC_CONTINUED true status=0 duration=",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "cd p09-target"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P09_POSTEXEC_CONTINUED cd p09-target status=0 duration=",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "p09_missing"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P09_POSTEXEC_CONTINUED p09_missing status=127 duration=",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "false"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P09_POSTEXEC_CONTINUED false status=1 duration=",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "echo \"$P09_ALIVE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "P09_POSTEXEC_CONTINUED echo \"$P09_ALIVE\" status=0 duration=",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "ordered_contains": [
+        "P09_PROMPT work status=0",
+        "P09_PREEXEC true",
+        "P09_POSTEXEC true status=0 duration=",
+        "P09_PROMPT work status=0",
+        "P09_PREEXEC cd p09-target",
+        "P09_CD work -> p09-target",
+        "P09_POSTEXEC cd p09-target status=0 duration=",
+        "P09_PROMPT p09-target status=0",
+        "P09_PREEXEC p09_missing",
+        "P09_COMMAND_NOT_FOUND p09_missing",
+        "P09_POSTEXEC_CONTINUED p09_missing status=127 duration=",
+        "P09_PROMPT p09-target status=127",
+        "P09_PREEXEC false",
+        "nshell: postexec hook failed: P09_EXPECTED_HOOK_ERROR",
+        "P09_POSTEXEC_CONTINUED false status=1 duration=",
+        "P09_PROMPT p09-target status=1",
+        "P09_PREEXEC echo \"$P09_ALIVE\"",
+        "P09_POSTEXEC_CONTINUED echo \"$P09_ALIVE\" status=0 duration="
+      ],
+      "contains": [
+        "P09_SESSION_ALIVE"
+      ]
+    },
+    "exit_code": 0
+  }
+}

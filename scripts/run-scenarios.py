@@ -4,16 +4,24 @@
 from __future__ import annotations
 
 import argparse
+import errno
+import fcntl
 import json
+import math
 import os
+import platform
+import pty
 import re
 import select
 import shlex
 import shutil
 import signal
+import statistics
 import stat
+import struct
 import subprocess
 import sys
+import termios
 import tempfile
 import time
 import uuid
@@ -27,11 +35,19 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SCENARIO_DIR = ROOT / "t" / "scenarios"
 EXPECTED_SCENARIOS_FILE = "expected-scenarios.json"
 MAX_TIMEOUT_SECONDS = 60
+MAX_BENCHMARK_TIMEOUT_SECONDS = 180
 MAX_INPUT_DELAY_SECONDS = 1.0
 MAX_REPEAT = 10
 MAX_OUTPUT_BYTES = 1_048_576
+MAX_SCENARIO_TMPDIR_BYTES = 128 * 1024 * 1024
 MAX_FILE_SET_FILES = 20_000
 MAX_FILE_SET_CONTENT_BYTES = 1_024
+L02_FILE_COUNT = 20_000
+L02_WARMUPS = 5
+L02_SAMPLES = 30
+L02_RUNS = 2
+L02_STARTUP_MAX_MS = 150
+L02_EMPTY_ENTER_MAX_MS = 60
 ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 TMUX_KEY = re.compile(r"[A-Za-z0-9+-]+\Z")
 SHIFTED_KEY_TEXT = {
@@ -295,7 +311,15 @@ def _verify_expected_scenarios(directory: Path, scenarios_by_path: dict[Path, di
                  f"{scenario_path}: uc was {sorted(scenario['uc'])}, expected {sorted(expected['uc'])}")
 
 
-def _load_scenarios(directory: Path, mode: str, selected_ids: set[str]) -> list[dict[str, Any]]:
+def _load_scenarios(
+    directory: Path,
+    mode: str,
+    selected_ids: set[str],
+    excluded_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    excluded_ids = excluded_ids or set()
+    _require(not (selected_ids & excluded_ids),
+             "scenario ids cannot be both selected and excluded")
     scenarios: list[dict[str, Any]] = []
     scenarios_by_path: dict[Path, dict[str, Any]] = {}
     ids: set[str] = set()
@@ -313,12 +337,17 @@ def _load_scenarios(directory: Path, mode: str, selected_ids: set[str]) -> list[
         scenarios_by_path[path.resolve()] = scenario
         if mode != "all" and scenario["mode"] != mode:
             continue
+        if scenario_id in excluded_ids:
+            continue
         if selected_ids and scenario_id not in selected_ids:
             continue
         scenarios.append(scenario)
 
     missing_ids = selected_ids - ids
     _require(not missing_ids, f"unknown scenario id(s): {', '.join(sorted(missing_ids))}")
+    missing_excluded_ids = excluded_ids - ids
+    _require(not missing_excluded_ids,
+             f"unknown excluded scenario id(s): {', '.join(sorted(missing_excluded_ids))}")
     if mode == "all" and not selected_ids:
         _verify_expected_scenarios(directory.resolve(), scenarios_by_path)
     _require(scenarios, "scenario selection is empty")
@@ -327,11 +356,17 @@ def _load_scenarios(directory: Path, mode: str, selected_ids: set[str]) -> list[
 
 def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
     scenario_id = scenario.get("id", path.name)
-    _require(scenario.get("mode") in ("batch", "pty"), f"{scenario_id}: mode must be batch or pty")
+    _require(scenario.get("mode") in ("batch", "pty", "benchmark", "source", "api"),
+             f"{scenario_id}: mode must be batch, pty, benchmark, source, or api")
     load_config = scenario.get("load_config", False)
     _require(isinstance(load_config, bool), f"{scenario_id}: load_config must be a boolean")
     _require(not load_config or scenario["mode"] == "pty",
              f"{scenario_id}: load_config is supported only for pty scenarios")
+    requires_bounded_tmpdir = scenario.get("requires_bounded_tmpdir", False)
+    _require(isinstance(requires_bounded_tmpdir, bool),
+             f"{scenario_id}: requires_bounded_tmpdir must be a boolean")
+    _require(not requires_bounded_tmpdir or scenario["mode"] == "pty",
+             f"{scenario_id}: requires_bounded_tmpdir is supported only for pty scenarios")
     private_mode = scenario.get("private_mode", False)
     _require(isinstance(private_mode, bool), f"{scenario_id}: private_mode must be a boolean")
     _require(not private_mode or scenario["mode"] == "pty",
@@ -460,7 +495,28 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         _require(not any(parent in fixture_paths for parent in file_path.parents),
                  f"{scenario_id}: a precondition file path is also a directory")
 
-    if scenario["mode"] == "batch":
+    if scenario["mode"] == "source":
+        source_checks = scenario.get("source_checks")
+        _require(isinstance(source_checks, list) and source_checks,
+                 f"{scenario_id}: source_checks must be a non-empty array")
+        for check in source_checks:
+            _require(isinstance(check, dict),
+                     f"{scenario_id}: each source check must be an object")
+            _require(set(check) <= {"path", "equals", "contains", "ordered_contains", "excludes"},
+                     f"{scenario_id}: source check has unsupported fields")
+            _relative_path(
+                Path(__file__).resolve().parent.parent,
+                check.get("path"),
+                f"{scenario_id}: source check path",
+            )
+            _require(any(key in check for key in ("equals", "contains", "ordered_contains", "excludes")),
+                     f"{scenario_id}: each source check must assert file contents")
+    elif scenario["mode"] == "api":
+        _require(
+            not any(field in scenario for field in ("source_checks", "invocation", "steps", "sessions", "benchmark")),
+            f"{scenario_id}: api scenarios do not accept mode-specific runner fixtures",
+        )
+    elif scenario["mode"] == "batch":
         invocation = scenario.get("invocation")
         _require(isinstance(invocation, dict), f"{scenario_id}: invocation must be an object")
         kind = invocation.get("kind")
@@ -477,7 +533,7 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                      f"{scenario_id}: argv invocation.arguments must be an array of strings")
             _require("stdin" not in invocation or isinstance(invocation["stdin"], str),
                      f"{scenario_id}: argv invocation.stdin must be a string")
-    else:
+    elif scenario["mode"] == "pty":
         arguments = scenario.get("arguments")
         _require(arguments is None or (isinstance(arguments, list)
                                       and all(isinstance(arg, str) for arg in arguments)),
@@ -495,7 +551,7 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                 _require(
                     kind in (
                         "keys", "paste", "key", "wait", "wait_input", "wait_screen",
-                        "wait_exit", "resize",
+                        "wait_exit", "resize", "check_side_effects",
                     ),
                     f"{scenario_id}: unsupported pty step type {kind!r}",
                 )
@@ -523,6 +579,19 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                     key = step.get("key")
                     _require(isinstance(key, str) and TMUX_KEY.fullmatch(key),
                              f"{scenario_id}: invalid tmux key {key!r}")
+                if kind == "check_side_effects":
+                    files = step.get("files")
+                    _require(isinstance(files, list) and files,
+                             f"{scenario_id}: check_side_effects requires a non-empty files array")
+                    for effect in files:
+                        _require(isinstance(effect, dict),
+                                 f"{scenario_id}: each checked file must be an object")
+                        _require(set(effect) == {"path", "exists"},
+                                 f"{scenario_id}: checked files require only path and exists")
+                        _relative_path(Path("/scenario"), effect.get("path"),
+                                       f"{scenario_id}: checked file")
+                        _require(isinstance(effect["exists"], bool),
+                                 f"{scenario_id}: checked file exists must be boolean")
                 if kind in ("wait", "wait_input"):
                     _require(isinstance(step.get("contains"), str) and step["contains"],
                              f"{scenario_id}: {kind} requires a non-empty contains string")
@@ -550,6 +619,65 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
                 and all(step["type"] != "wait_exit" for step in steps[:-1]),
                 f"{scenario_id}: end pty steps with wait or wait_exit, and make wait_exit last",
             )
+    else:
+        benchmark = scenario.get("benchmark")
+        _require(isinstance(benchmark, dict), f"{scenario_id}: benchmark must be an object")
+        _require(
+            set(benchmark) == {
+                "repository", "dirty_file", "file_count", "warmups", "samples", "runs",
+                "startup_max_ms", "empty_enter_max_ms", "interaction_timeout_seconds",
+                "prompt_prefix", "ready_marker",
+            },
+            f"{scenario_id}: benchmark fields are incomplete or unsupported",
+        )
+        repository = _relative_path(
+            Path("/scenario"), benchmark["repository"], f"{scenario_id}: benchmark.repository"
+        )
+        dirty_file = _relative_path(
+            repository, benchmark["dirty_file"], f"{scenario_id}: benchmark.dirty_file"
+        )
+        _require(benchmark["file_count"] == L02_FILE_COUNT,
+                 f"{scenario_id}: benchmark.file_count must be {L02_FILE_COUNT}")
+        fixture_count = sum(
+            file_set["count"]
+            for file_set in preconditions.get("file_sets", [])
+            if _relative_path(Path("/scenario"), file_set["directory"],
+                              f"{scenario_id}: file-set directory").is_relative_to(repository)
+        )
+        _require(fixture_count >= L02_FILE_COUNT,
+                 f"{scenario_id}: benchmark requires at least {L02_FILE_COUNT} generated repository files")
+        _require(dirty_file in fixture_paths,
+                 f"{scenario_id}: benchmark.dirty_file must be a generated precondition file")
+        _require(environment.get("cwd", "work") == benchmark["repository"],
+                 f"{scenario_id}: environment.cwd must equal benchmark.repository")
+        for name, required in (
+            ("warmups", L02_WARMUPS),
+            ("samples", L02_SAMPLES),
+            ("runs", L02_RUNS),
+        ):
+            value = benchmark[name]
+            _require(isinstance(value, int) and not isinstance(value, bool) and value == required,
+                     f"{scenario_id}: benchmark.{name} must be {required}")
+        for name, required in (
+            ("startup_max_ms", L02_STARTUP_MAX_MS),
+            ("empty_enter_max_ms", L02_EMPTY_ENTER_MAX_MS),
+        ):
+            value = benchmark[name]
+            _require(
+                isinstance(value, (int, float)) and not isinstance(value, bool)
+                and math.isfinite(value) and value == required,
+                f"{scenario_id}: benchmark.{name} must be {required}",
+            )
+        interaction_timeout = benchmark["interaction_timeout_seconds"]
+        _require(isinstance(interaction_timeout, (int, float))
+                 and not isinstance(interaction_timeout, bool)
+                 and math.isfinite(interaction_timeout)
+                 and 0 < interaction_timeout <= MAX_TIMEOUT_SECONDS,
+                 f"{scenario_id}: benchmark.interaction_timeout_seconds must be in (0, {MAX_TIMEOUT_SECONDS}]")
+        for name in ("prompt_prefix", "ready_marker"):
+            value = benchmark[name]
+            _require(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]+", value),
+                     f"{scenario_id}: benchmark.{name} must be a plain marker")
 
     expected_failure = scenario.get("expected_failure")
     if expected_failure is not None:
@@ -561,12 +689,17 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         _require(platform is None or platform in ("linux", "darwin"),
                  f"{scenario_id}: expected_failure.platform must be linux or darwin")
     _require(isinstance(scenario.get("expected"), dict), f"{scenario_id}: expected must be an object")
+    timeout_limit = (
+        MAX_BENCHMARK_TIMEOUT_SECONDS
+        if scenario["mode"] == "benchmark"
+        else MAX_TIMEOUT_SECONDS
+    )
     timeout = scenario.get("timeout_seconds", 30)
     _require(
         isinstance(timeout, (int, float))
         and not isinstance(timeout, bool)
-        and 0 < timeout <= MAX_TIMEOUT_SECONDS,
-        f"{scenario_id}: timeout_seconds must be in (0, {MAX_TIMEOUT_SECONDS}]",
+        and 0 < timeout <= timeout_limit,
+        f"{scenario_id}: timeout_seconds must be in (0, {timeout_limit}]",
     )
     if scenario["mode"] == "pty":
         total_input_delay = sum(
@@ -591,7 +724,11 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
             session_environment["variables"] = session_variables
             session_scenario["environment"] = session_environment
             _validate_pty_match_sources(session_scenario)
-    output_checks = {"stdout", "stderr"} if scenario["mode"] == "batch" else {"stream", "screen"}
+    output_checks = (
+        set() if scenario["mode"] == "source"
+        else {"stdout", "stderr"} if scenario["mode"] in ("batch", "benchmark", "api")
+        else {"stream", "screen"}
+    )
     effects = expected.get("side_effects", {})
     _require(isinstance(effects, dict), f"{scenario_id}: side_effects must be an object")
     has_effect_check = bool(effects.get("files")) or effects.get("history") is not None
@@ -745,7 +882,10 @@ def _tmux_key_echo_sources(key: str) -> list[str]:
     return sources
 
 
-def _environment(scenario: dict[str, Any], root: Path) -> tuple[dict[str, str], Path, Path]:
+def _environment(
+    scenario: dict[str, Any], root: Path, scenario_binary: Path | None = None,
+    cwd_override: Path | None = None,
+) -> tuple[dict[str, str], Path, Path]:
     settings = scenario.get("environment", {})
     home = _relative_path(root, settings.get("home", "home"), f"{scenario['id']}: home")
     cwd = _relative_path(root, settings.get("cwd", "work"), f"{scenario['id']}: cwd")
@@ -760,6 +900,10 @@ def _environment(scenario: dict[str, Any], root: Path) -> tuple[dict[str, str], 
         home / ".local" / "state",
     ):
         directory.mkdir(parents=True, exist_ok=True)
+    if cwd_override is not None:
+        _require(cwd_override.is_absolute() and cwd_override.is_dir(),
+                 f"{scenario['id']}: scenario cwd override must be an existing absolute directory")
+        cwd = cwd_override.resolve()
     env = {
         "HOME": str(home),
         "PATH": "/usr/bin:/bin",
@@ -774,8 +918,11 @@ def _environment(scenario: dict[str, Any], root: Path) -> tuple[dict[str, str], 
     }
     env.update(settings.get("variables", {}))
     extra_path = os.environ.get("NSHELL_SCENARIO_EXTRA_PATH")
-    if scenario["mode"] == "batch" and extra_path and settings.get("append_extra_path", True):
+    append_extra_path = settings.get("append_extra_path", scenario["mode"] == "batch")
+    if extra_path and append_extra_path:
         env["PATH"] = os.pathsep.join((env["PATH"], extra_path))
+    if scenario_binary is not None and append_extra_path:
+        env["PATH"] = os.pathsep.join((env["PATH"], str(scenario_binary.parent)))
     return env, home, cwd
 
 
@@ -1212,11 +1359,14 @@ class TmuxSession:
             raise cleanup_error
 
 
-def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, list[str]]:
+def _run_pty(
+    scenario: dict[str, Any], binary: Path, temporary_root: Path | None = None,
+    cwd_override: Path | None = None,
+) -> tuple[str, str, int, list[str]]:
     _require(shutil.which("tmux") is not None, f"{scenario['id']}: tmux is required for PTY scenarios")
-    with tempfile.TemporaryDirectory(prefix="nshell-scenario-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="nshell-scenario-", dir=temporary_root) as temporary:
         root = Path(temporary)
-        env, home, cwd = _environment(scenario, root)
+        env, home, cwd = _environment(scenario, root, binary, cwd_override)
         _write_preconditions(scenario, root)
         with _read_only_directory_modes(scenario, root):
             sessions: list[tuple[TmuxSession, dict[str, Any]]] = []
@@ -1240,7 +1390,7 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                     session.deadline = time.monotonic() + session.deadline_seconds
 
                 for session, spec in sessions:
-                    for step in spec["steps"]:
+                    for step_index, step in enumerate(spec["steps"], start=1):
                         kind = step["type"]
                         if kind == "keys":
                             session.send_text(step["text"])
@@ -1250,6 +1400,14 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                             session.send_key(step["key"])
                         elif kind == "resize":
                             session.resize(step["columns"], step["rows"])
+                        elif kind == "check_side_effects":
+                            _assert_side_effects(
+                                {"side_effects": {"files": step["files"]}},
+                                cwd,
+                                home,
+                                failures,
+                                f"{scenario['id']} step {step_index}",
+                            )
                         elif kind == "wait":
                             session.wait_for(
                                 step["contains"],
@@ -1296,16 +1454,63 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                     scenario, stream, screen, exit_code, home, cwd
                 ))
             finally:
-                for session, _ in reversed(sessions):
-                    session.close()
+                try:
+                    for session, _ in reversed(sessions):
+                        session.close()
+                finally:
+                    _cleanup_scenario_tmux_servers(root, scenario["id"])
             return stream, screen, exit_code, failures
+
+
+def _cleanup_scenario_tmux_servers(root: Path, scenario_id: str) -> None:
+    socket_paths = []
+    for directory in root.rglob("tmux-*"):
+        if not directory.is_dir():
+            continue
+        for path in directory.iterdir():
+            try:
+                if stat.S_ISSOCK(path.lstat().st_mode):
+                    socket_paths.append(path)
+            except FileNotFoundError:
+                continue
+
+    environment = os.environ.copy()
+    environment.pop("TMUX", None)
+    environment.pop("TMUX_PANE", None)
+    for path in socket_paths:
+        try:
+            result = subprocess.run(
+                ["tmux", "-f", "/dev/null", "-S", str(path), "kill-server"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=environment,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ScenarioError(
+                f"{scenario_id}: could not clean up tmux server at {path}: {error}"
+            ) from error
+        if result.returncode == 0:
+            continue
+        message = result.stderr.decode("utf-8", errors="replace").strip()
+        if ("no server running on " in message
+                or ("error connecting to " in message
+                    and ("No such file or directory" in message
+                         or "Connection refused" in message))):
+            continue
+        raise ScenarioError(
+            f"{scenario_id}: could not clean up tmux server at {path}: {message}"
+        )
 
 
 def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code: int,
                     home: Path, cwd: Path) -> list[str]:
     expected = scenario["expected"]
     failures: list[str] = []
-    if scenario["mode"] == "batch":
+    if scenario["mode"] == "source":
+        pass
+    elif scenario["mode"] in ("batch", "benchmark", "api"):
         stdout, stderr = first, second
         _assert_text("stdout", stdout, expected.get("stdout"), failures)
         _assert_text("stderr", stderr, expected.get("stderr"), failures)
@@ -1319,12 +1524,647 @@ def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code
     return failures
 
 
-def _run_once(scenario: dict[str, Any], binary: Path) -> tuple[str, str]:
+def _run_source(scenario: dict[str, Any]) -> tuple[str, str, int, list[str]]:
+    source_root = Path(__file__).resolve().parent.parent
+    failures: list[str] = []
+    checked_paths: list[str] = []
+    for check in scenario["source_checks"]:
+        path = _relative_path(source_root, check["path"],
+                              f"{scenario['id']}: source check path")
+        _require(path.is_file(), f"{scenario['id']}: source check is not a regular file: {check['path']}")
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise ScenarioError(f"{scenario['id']}: could not read source file {check['path']!r}: {error}") from error
+        text_check = {key: check[key] for key in ("equals", "contains", "ordered_contains", "excludes")
+                      if key in check}
+        _assert_text(f"source file {check['path']!r}", content, text_check, failures)
+        checked_paths.append(check["path"])
+    output = "\n".join(checked_paths)
+    failures.extend(_check_expected(scenario, output, "", 0, source_root, source_root))
+    return output, "", 0, failures
+
+def _source_revision(root: Path, label: str) -> str:
+    git = shutil.which("git")
+    jj_workspace = (root / ".jj").exists()
+    if git is not None and not jj_workspace:
+        try:
+            top_level = subprocess.run(
+                [git, "-C", str(root), "rev-parse", "--show-toplevel"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ScenarioError(f"{label}: could not inspect Git source root") from error
+        if top_level.returncode == 0:
+            git_root = Path(top_level.stdout.strip()).resolve()
+            _require(
+                git_root == root,
+                f"{label}: source directory is not the Git repository root",
+            )
+            try:
+                revision = subprocess.run(
+                    [git, "-C", str(root), "rev-parse", "--verify", "HEAD^{commit}"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired) as error:
+                raise ScenarioError(f"{label}: could not read Git source revision") from error
+            _require(revision.returncode == 0, f"{label}: Git source revision is unavailable")
+            return revision.stdout.strip()
+
+    jj = shutil.which("jj")
+    if jj is not None:
+        try:
+            revision = subprocess.run(
+                [
+                    jj,
+                    "--repository",
+                    str(root),
+                    "log",
+                    "--no-graph",
+                    "--ignore-working-copy",
+                    "-r",
+                    "@",
+                    "-T",
+                    "commit_id",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ScenarioError(f"{label}: could not inspect Jujutsu source root") from error
+        if revision.returncode == 0:
+            return revision.stdout.strip()
+
+    raise ScenarioError(f"{label}: source root has no readable Git or Jujutsu revision")
+
+
+def _source_root_details(root: Path, label: str) -> tuple[Path, str, str]:
+    try:
+        resolved = root.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ScenarioError(f"{label}: source root does not exist: {root}") from error
+    _require(resolved.is_dir(), f"{label}: source root is not a directory: {resolved}")
+    system_file = resolved / "nshell.asd"
+    _require(system_file.is_file(), f"{label}: source root has no nshell.asd: {resolved}")
+    try:
+        source = system_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        raise ScenarioError(f"{label}: could not read nshell.asd") from error
+    version = re.search(r'(?m)^\s*:version\s+"([^"]+)"', source)
+    _require(version is not None, f"{label}: nshell.asd has no literal system version")
+    revision = _source_revision(resolved, label)
+    _require(
+        re.fullmatch(r"[0-9a-fA-F]{40,64}", revision) is not None,
+        f"{label}: source revision is not a full hexadecimal commit ID",
+    )
+    return resolved, version.group(1), revision.lower()
+
+
+def _p12_consumer_fixture(path: Path) -> Path:
+    fixture = _relative_path(ROOT, str(path), "P12 consumer fixture")
+    _require(fixture.is_file(), f"P12 consumer fixture is not a regular file: {path}")
+    try:
+        content = fixture.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        raise ScenarioError("P12 consumer fixture could not be read as UTF-8") from error
+
+    references = {
+        (package.lower(), symbol.lower())
+        for package, symbol in re.findall(
+            r"\b([A-Za-z0-9.-]+):([A-Za-z0-9*+!?<>=/_-]+)",
+            content,
+            flags=re.IGNORECASE,
+        )
+    }
+    allowed = {
+        ("asdf", "load-asd"),
+        ("asdf", "load-system"),
+        ("uiop", "ensure-directory-pathname"),
+        ("uiop", "getenv"),
+        ("nshell.domain.parsing", "parse-command-line"),
+        ("nshell.domain.parsing", "parse-complete-p"),
+        ("nshell.domain.parsing", "parse-result-ast"),
+    }
+    _require(
+        not re.search(r"\b[A-Za-z0-9.-]+::", content),
+        "P12 consumer fixture must use external symbols with single-colon references",
+    )
+    _require(
+        references <= allowed
+        and {
+            ("nshell.domain.parsing", symbol)
+            for symbol in ("parse-command-line", "parse-complete-p", "parse-result-ast")
+        } <= references,
+        "P12 consumer fixture must use only the documented public parser symbols",
+    )
+    return fixture
+
+
+def _run_p12_api(
+    scenario: dict[str, Any],
+    previous_root: Path,
+    consumer_fixture: Path,
+    sbcl: Path,
+) -> tuple[str, str, int, list[str]]:
+    candidate = _source_root_details(ROOT, f"{scenario['id']}: candidate")
+    previous = _source_root_details(previous_root, f"{scenario['id']}: previous release")
+    _require(candidate[0] != previous[0], f"{scenario['id']}: source roots must be separate directories")
+    _require(candidate[2] != previous[2], f"{scenario['id']}: source revisions must be different")
+    fixture = _p12_consumer_fixture(consumer_fixture)
+
+    output: list[str] = []
+    errors: list[str] = []
+    failures: list[str] = []
+    for label, details in (("candidate", candidate), ("previous", previous)):
+        root, version, revision = details
+        environment = os.environ.copy()
+        environment["NSHELL_ROOT"] = str(root)
+        try:
+            result = subprocess.run(
+                [str(sbcl), "--noinform", "--disable-debugger", "--script", str(fixture)],
+                cwd=ROOT,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=scenario.get("timeout_seconds", 30),
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise ScenarioTimeout(
+                f"{scenario['id']}: {label} SBCL consumer timed out"
+            ) from error
+        except OSError as error:
+            raise ScenarioError(f"{scenario['id']}: could not start SBCL for {label}") from error
+
+        output.append(
+            f"P12 {label} source version={version} revision={revision} exit={result.returncode}"
+        )
+        output.append(result.stdout.rstrip())
+        if result.stderr:
+            errors.append(f"P12 {label} SBCL stderr:\n{result.stderr.rstrip()}")
+            if result.returncode != 0:
+                failures.append(f"{label} SBCL stderr: {result.stderr.rstrip()}")
+        if result.returncode != 0:
+            failures.append(f"{label} SBCL consumer exited with status {result.returncode}")
+
+    stdout = "\n".join(part for part in output if part) + "\n"
+    stderr = "\n".join(errors)
+    exit_code = 1 if failures else 0
+    failures.extend(_check_expected(scenario, stdout, stderr, exit_code, ROOT, ROOT))
+    return stdout, stderr, exit_code, failures
+
+
+def _run_benchmark_git(command: list[str], cwd: Path, env: dict[str, str], scenario_id: str) -> bytes:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ScenarioError(f"{scenario_id}: Git fixture command failed: {error}") from error
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        raise ScenarioError(f"{scenario_id}: Git fixture command exited {result.returncode}: {stderr}")
+    return result.stdout
+
+
+def _prepare_benchmark_repository(scenario: dict[str, Any], cwd: Path,
+                                  env: dict[str, str]) -> tuple[str, int]:
+    benchmark = scenario["benchmark"]
+    git = shutil.which("git")
+    _require(git is not None, f"{scenario['id']}: git is required for benchmark scenarios")
+    git_env = env.copy()
+    git_env["GIT_CONFIG_GLOBAL"] = os.devnull
+    git_env["GIT_CONFIG_NOSYSTEM"] = "1"
+    git_command = [git]
+    _run_benchmark_git(
+        [
+            *git_command, "-c", "init.templateDir=/dev/null",
+            "-c", "init.defaultBranch=nshell-l02-benchmark", "init", "--quiet",
+        ],
+        cwd, git_env, scenario["id"],
+    )
+    _run_benchmark_git([*git_command, "add", "--all"], cwd, git_env, scenario["id"])
+    _run_benchmark_git(
+        [
+            *git_command, "-c", "user.name=Scenario", "-c", "user.email=scenario@example.invalid",
+            "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fixture",
+        ],
+        cwd, git_env, scenario["id"],
+    )
+    tracked = _run_benchmark_git([*git_command, "ls-files", "-z"], cwd, git_env, scenario["id"])
+    tracked_count = len([path for path in tracked.split(b"\0") if path])
+    _require(
+        tracked_count >= benchmark["file_count"],
+        f"{scenario['id']}: Git fixture has {tracked_count} tracked files, expected at least "
+        f"{benchmark['file_count']}",
+    )
+    branch = _run_benchmark_git(
+        [*git_command, "branch", "--show-current"], cwd, git_env, scenario["id"]
+    ).decode("utf-8", errors="replace").strip()
+    _require(bool(branch), f"{scenario['id']}: Git fixture has no current branch")
+    dirty_file = _relative_path(cwd, benchmark["dirty_file"], f"{scenario['id']}: dirty file")
+    _require(dirty_file.is_file(), f"{scenario['id']}: dirty file is not a regular file")
+    _run_benchmark_git(
+        [*git_command, "ls-files", "--error-unmatch", benchmark["dirty_file"]],
+        cwd, git_env, scenario["id"],
+    )
+    with dirty_file.open("ab") as output:
+        output.write(b"dirty\n")
+    status = _run_benchmark_git(
+        [*git_command, "status", "--short", "--untracked-files=no"], cwd, git_env, scenario["id"]
+    )
+    _require(bool(status.strip()), f"{scenario['id']}: Git fixture did not become dirty")
+    return branch, tracked_count
+
+
+def _write_pty(fd: int, data: bytes, scenario_id: str) -> None:
+    remaining = memoryview(data)
+    while remaining:
+        try:
+            written = os.write(fd, remaining)
+        except OSError as error:
+            raise ScenarioError(f"{scenario_id}: PTY input failed: {error}") from error
+        _require(written > 0, f"{scenario_id}: PTY input stopped before all bytes were written")
+        remaining = remaining[written:]
+
+
+def _wait_pty_text(scenario_id: str, fd: int, stream: bytearray, start: int,
+                   needle: bytes, interaction_timeout: float, scenario_deadline: float,
+                   query_responses: list[int]) -> tuple[int, int]:
+    deadline = min(scenario_deadline, time.monotonic() + interaction_timeout)
+    while True:
+        position = stream.find(needle, start)
+        if position >= 0:
+            return position + len(needle), time.monotonic_ns()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            excerpt = bytes(stream[-2000:]).decode("utf-8", errors="replace")
+            raise ScenarioTimeout(
+                f"{scenario_id}: timed out waiting for {needle.decode('utf-8', errors='replace')!r}; "
+                f"PTY tail: {excerpt!r}"
+            )
+        readable, _, _ = select.select([fd], [], [], min(remaining, 0.1))
+        if not readable:
+            continue
+        try:
+            chunk = os.read(fd, 65536)
+        except OSError as error:
+            if error.errno == errno.EIO:
+                chunk = b""
+            else:
+                raise ScenarioError(f"{scenario_id}: PTY output failed: {error}") from error
+        if not chunk:
+            excerpt = bytes(stream[-2000:]).decode("utf-8", errors="replace")
+            raise ScenarioError(f"{scenario_id}: nshell exited before the next marker; PTY tail: {excerpt!r}")
+        stream.extend(chunk)
+        _require(len(stream) <= MAX_OUTPUT_BYTES, f"{scenario_id}: PTY output limit exceeded")
+        terminal_queries = stream.count(b"\x1b[6n")
+        while query_responses[0] < terminal_queries:
+            _write_pty(fd, b"\x1b[1;1R", scenario_id)
+            query_responses[0] += 1
+
+
+def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
+    try:
+        _write_pty(fd, b"exit\n", scenario_id)
+    except ScenarioError:
+        pass
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline:
+        try:
+            waited, status = os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+            return
+        if waited == pid:
+            _require(os.waitstatus_to_exitcode(status) == 0,
+                     f"{scenario_id}: nshell exited non-zero after the benchmark")
+            return
+        time.sleep(0.02)
+    try:
+        _write_pty(fd, b"\x04", scenario_id)
+    except ScenarioError:
+        pass
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline:
+        try:
+            waited, _ = os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+            return
+        if waited == pid:
+            return
+        time.sleep(0.02)
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline:
+        try:
+            waited, _ = os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+            return
+        if waited == pid:
+            return
+        time.sleep(0.02)
+    raise ScenarioTimeout(f"{scenario_id}: nshell could not be reaped within its benchmark cleanup budget")
+
+
+def _run_benchmark_sample(scenario: dict[str, Any], binary: Path, cwd: Path,
+                          env: dict[str, str], branch: str, run_number: int,
+                          sample_number: int, scenario_deadline: float,
+                          verify_branch: bool = False) -> dict[str, float]:
+    benchmark = scenario["benchmark"]
+    timeout = benchmark["interaction_timeout_seconds"]
+    prompt_marker = f"{benchmark['prompt_prefix']}-{run_number}-{sample_number}"
+    run_env = env.copy()
+    run_env["NSHELL_PROMPT"] = f"{prompt_marker} {{path}}{{git}} "
+    start_ns = time.monotonic_ns()
+    try:
+        pid, fd = pty.fork()
+    except OSError as error:
+        raise ScenarioError(f"{scenario['id']}: could not create PTY: {error}") from error
+    if pid == 0:
+        try:
+            os.chdir(cwd)
+            os.execve(str(binary), [str(binary), "--no-config"], run_env)
+        except BaseException as error:
+            try:
+                os.write(2, f"could not exec nshell: {error}\n".encode("utf-8", errors="replace"))
+            finally:
+                os._exit(127)
+    stream = bytearray()
+    query_responses = [0]
+    try:
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
+        prompt_bytes = prompt_marker.encode("utf-8")
+        startup_end, startup_ns = _wait_pty_text(
+            scenario["id"], fd, stream, 0, prompt_bytes, timeout, scenario_deadline, query_responses
+        )
+        startup_ms = (startup_ns - start_ns) / 1_000_000
+
+        enter_start_ns = time.monotonic_ns()
+        _write_pty(fd, b"\n", scenario["id"])
+        _, enter_ns = _wait_pty_text(
+            scenario["id"], fd, stream, startup_end, prompt_bytes,
+            timeout, scenario_deadline, query_responses,
+        )
+        empty_enter_ms = (enter_ns - enter_start_ns) / 1_000_000
+
+        command = "echo " + benchmark["ready_marker"]
+        command_start = len(stream)
+        key_start_ns = time.monotonic_ns()
+        _write_pty(fd, command.encode("utf-8"), scenario["id"])
+        command_echo_end, key_echo_ns = _wait_pty_text(
+            scenario["id"], fd, stream, command_start,
+            benchmark["ready_marker"].encode("utf-8"),
+            timeout, scenario_deadline, query_responses,
+        )
+        key_echo_ms = (key_echo_ns - key_start_ns) / 1_000_000
+
+        command_start_ns = time.monotonic_ns()
+        _write_pty(fd, b"\n", scenario["id"])
+        ready_end, ready_ns = _wait_pty_text(
+            scenario["id"], fd, stream, command_echo_end,
+            benchmark["ready_marker"].encode("utf-8"),
+            timeout, scenario_deadline, query_responses,
+        )
+        command_ms = (ready_ns - command_start_ns) / 1_000_000
+        prompt_end, prompt_ns = _wait_pty_text(
+            scenario["id"], fd, stream, ready_end, prompt_bytes,
+            timeout, scenario_deadline, query_responses,
+        )
+        post_command_prompt_ms = (prompt_ns - command_start_ns) / 1_000_000
+        if verify_branch:
+            branch_marker = branch.encode("utf-8")
+            branch_deadline = min(scenario_deadline, time.monotonic() + timeout)
+            cursor = prompt_end
+            while branch_marker not in stream and time.monotonic() < branch_deadline:
+                _write_pty(fd, b"\n", scenario["id"])
+                cursor, _ = _wait_pty_text(
+                    scenario["id"], fd, stream, cursor, prompt_bytes,
+                    timeout, branch_deadline, query_responses,
+                )
+                if branch_marker not in stream:
+                    time.sleep(min(0.05, max(0, branch_deadline - time.monotonic())))
+            _require(
+                branch_marker in stream,
+                f"{scenario['id']}: Git branch {branch!r} was not shown when available; "
+                f"PTY tail: {bytes(stream[-2000:]).decode('utf-8', errors='replace')!r}",
+            )
+        return {
+            "startup": startup_ms,
+            "empty_enter": empty_enter_ms,
+            "key_echo": key_echo_ms,
+            "command_output": command_ms,
+            "post_command_prompt": post_command_prompt_ms,
+        }
+    finally:
+        try:
+            _finish_benchmark_child(pid, fd, scenario["id"])
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
+def _benchmark_range(values: list[float]) -> str:
+    return (
+        f"median={statistics.median(values):.3f}ms "
+        f"range={min(values):.3f}..{max(values):.3f}ms"
+    )
+
+
+def _benchmark_binary_version(binary: Path, cwd: Path, env: dict[str, str],
+                              scenario_id: str) -> str:
+    try:
+        result = subprocess.run(
+            [str(binary), "--version"],
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ScenarioError(f"{scenario_id}: could not read nshell build version: {error}") from error
+    _require(result.returncode == 0,
+             f"{scenario_id}: nshell --version exited {result.returncode}")
+    version = result.stdout.decode("utf-8", errors="replace").strip()
+    _require(bool(version), f"{scenario_id}: nshell --version produced no output")
+    return version.replace("\n", " ")
+
+
+def _benchmark_verdict(groups: list[list[float]], threshold: float) -> str:
+    states = []
+    for values in groups:
+        minimum, maximum = min(values), max(values)
+        if minimum <= threshold < maximum:
+            states.append("inconclusive")
+        elif maximum <= threshold:
+            states.append("pass")
+        else:
+            states.append("fail")
+    if "inconclusive" in states or len(set(states)) > 1:
+        return "inconclusive"
+    return states[0]
+
+
+def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, list[str]]:
+    with tempfile.TemporaryDirectory(prefix="nshell-scenario-") as temporary:
+        root = Path(temporary)
+        env, home, cwd = _environment(scenario, root)
+        _write_preconditions(scenario, root)
+        version = _benchmark_binary_version(binary, cwd, env, scenario["id"])
+        benchmark = scenario["benchmark"]
+        branch, tracked_count = _prepare_benchmark_repository(scenario, cwd, env)
+        deadline = time.monotonic() + scenario.get(
+            "timeout_seconds", MAX_BENCHMARK_TIMEOUT_SECONDS
+        )
+        _run_benchmark_sample(
+            scenario, binary, cwd, env, branch, 0, 0, deadline, verify_branch=True,
+        )
+        groups: list[dict[str, list[float]]] = []
+        for run_number in range(1, benchmark["runs"] + 1):
+            for sample_number in range(1, benchmark["warmups"] + 1):
+                _run_benchmark_sample(
+                    scenario, binary, cwd, env, branch, run_number,
+                    -sample_number, deadline,
+                )
+            values = {
+                "startup": [],
+                "empty_enter": [],
+                "key_echo": [],
+                "command_output": [],
+                "post_command_prompt": [],
+            }
+            for sample_number in range(1, benchmark["samples"] + 1):
+                sample = _run_benchmark_sample(
+                    scenario, binary, cwd, env, branch, run_number,
+                    sample_number, deadline,
+                )
+                for metric, value in sample.items():
+                    values[metric].append(value)
+            groups.append(values)
+
+        lines = [
+            f"L02 build={version} platform={sys.platform} machine={platform.machine()} "
+            f"tracked_files={tracked_count} branch={branch} "
+            f"warmups={benchmark['warmups']} samples={benchmark['samples']} runs={benchmark['runs']}"
+        ]
+        lines.append(f"L02 branch_probe=visible branch={branch}")
+        for index, values in enumerate(groups, 1):
+            lines.append(
+                f"L02 run={index} startup {_benchmark_range(values['startup'])}; "
+                f"empty_enter {_benchmark_range(values['empty_enter'])}; "
+                f"key_echo {_benchmark_range(values['key_echo'])}; "
+                f"command_output {_benchmark_range(values['command_output'])}; "
+                f"post_command_prompt {_benchmark_range(values['post_command_prompt'])}"
+            )
+        startup_verdict = _benchmark_verdict(
+            [group["startup"] for group in groups], benchmark["startup_max_ms"]
+        )
+        enter_verdict = _benchmark_verdict(
+            [group["empty_enter"] for group in groups], benchmark["empty_enter_max_ms"]
+        )
+        outcome = "PASS" if startup_verdict == enter_verdict == "pass" else "FAIL"
+        if startup_verdict == "inconclusive" or enter_verdict == "inconclusive":
+            outcome = "INCONCLUSIVE"
+        lines.append(
+            f"L02 result={outcome} startup={startup_verdict} "
+            f"empty_enter={enter_verdict}"
+        )
+        failures = _check_expected(scenario, "\n".join(lines), "", 0, home, cwd)
+        if outcome != "PASS":
+            failures.append(f"L02 benchmark verdict was {outcome}")
+        return "\n".join(lines) + "\n", "", 0, failures
+
+
+def _run_once(
+    scenario: dict[str, Any],
+    binary: Path,
+    *,
+    previous_source_root: Path | None = None,
+    consumer_fixture: Path | None = None,
+    sbcl: Path | None = None,
+    temporary_root: Path | None = None,
+    cwd_override: Path | None = None,
+) -> tuple[str, str]:
     expected_failure = scenario.get("expected_failure")
     if expected_failure is not None and expected_failure.get("platform", sys.platform) != sys.platform:
         expected_failure = None
     try:
-        _, _, _, failures = _run_batch(scenario, binary) if scenario["mode"] == "batch" else _run_pty(scenario, binary)
+        if scenario.get("requires_bounded_tmpdir", False):
+            _require(temporary_root is not None,
+                     f"{scenario['id']}: pass --scenario-temp-dir ID=PATH for its bounded filesystem")
+        if scenario["mode"] == "batch":
+            _require(cwd_override is None,
+                     f"{scenario['id']}: --scenario-cwd only supports PTY scenarios")
+            first, second, _, failures = _run_batch(scenario, binary)
+        elif scenario["mode"] == "pty":
+            first, second, _, failures = _run_pty(
+                scenario, binary, temporary_root, cwd_override
+            )
+        elif scenario["mode"] == "benchmark":
+            _require(cwd_override is None,
+                     f"{scenario['id']}: --scenario-cwd only supports PTY scenarios")
+            first, second, _, failures = _run_benchmark(scenario, binary)
+        elif scenario["mode"] == "source":
+            _require(cwd_override is None,
+                     f"{scenario['id']}: --scenario-cwd only supports PTY scenarios")
+            first, second, _, failures = _run_source(scenario)
+        else:
+            _require(cwd_override is None,
+                     f"{scenario['id']}: --scenario-cwd only supports PTY scenarios")
+            _require(previous_source_root is not None, "P12 previous source root is required")
+            _require(consumer_fixture is not None, "P12 consumer fixture is required")
+            _require(sbcl is not None, "P12 SBCL executable is required")
+            first, second, _, failures = _run_p12_api(
+                scenario, previous_source_root, consumer_fixture, sbcl
+            )
     except ScenarioTimeout as error:
         if expected_failure is None:
             raise
@@ -1334,32 +2174,199 @@ def _run_once(scenario: dict[str, Any], binary: Path) -> tuple[str, str]:
             return "XFAIL", f"{expected_failure['reason']} Failed: {'; '.join(failures)}"
         return "XPASS", f"expected failure now satisfies all assertions: {expected_failure['reason']}"
     if failures:
-        return "FAIL", "; ".join(failures)
+        detail = "; ".join(failures)
+        if scenario["mode"] in ("benchmark", "api"):
+            detail += f"\n{first.strip()}"
+        return "FAIL", detail
+    if scenario["mode"] in ("benchmark", "api"):
+        return "PASS", first.strip()
     return "PASS", ""
+
+
+def _parse_scenario_binary_overrides(specifications: list[str], selected_ids: set[str]) -> dict[str, Path]:
+    overrides: dict[str, Path] = {}
+    for specification in specifications:
+        _require("=" in specification, "--scenario-binary must use ID=PATH")
+        scenario_id, raw_path = specification.split("=", 1)
+        _require(bool(scenario_id) and bool(raw_path), "--scenario-binary must use ID=PATH")
+        _require(scenario_id in selected_ids,
+                 f"--scenario-binary ID is not selected: {scenario_id}")
+        _require(scenario_id not in overrides,
+                 f"duplicate --scenario-binary for {scenario_id}")
+        binary = Path(raw_path).resolve()
+        _require(binary.is_file() and binary.stat().st_size > 0 and os.access(binary, os.X_OK),
+                 f"--scenario-binary must be a non-empty executable file: {binary}")
+        overrides[scenario_id] = binary
+    return overrides
+
+
+def _parse_scenario_temp_dir_overrides(
+    specifications: list[str], scenarios: list[dict[str, Any]],
+) -> dict[str, Path]:
+    scenarios_by_id = {scenario["id"]: scenario for scenario in scenarios}
+    overrides: dict[str, Path] = {}
+    for specification in specifications:
+        _require("=" in specification, "--scenario-temp-dir must use ID=PATH")
+        scenario_id, raw_path = specification.split("=", 1)
+        _require(bool(scenario_id) and bool(raw_path), "--scenario-temp-dir must use ID=PATH")
+        scenario = scenarios_by_id.get(scenario_id)
+        _require(scenario is not None,
+                 f"--scenario-temp-dir ID is not selected: {scenario_id}")
+        _require(scenario["mode"] == "pty",
+                 f"--scenario-temp-dir only supports PTY scenarios: {scenario_id}")
+        _require(scenario_id not in overrides,
+                 f"duplicate --scenario-temp-dir for {scenario_id}")
+        candidate = Path(raw_path)
+        _require(candidate.is_absolute(),
+                 f"--scenario-temp-dir PATH must be absolute: {raw_path}")
+        _require(not candidate.is_symlink() and candidate.is_dir(),
+                 f"--scenario-temp-dir must be a real directory: {raw_path}")
+        directory = candidate.resolve(strict=True)
+        _require(os.access(directory, os.W_OK),
+                 f"--scenario-temp-dir must be writable: {directory}")
+        filesystem = os.statvfs(directory)
+        capacity = filesystem.f_frsize * filesystem.f_blocks
+        _require(
+            0 < capacity <= MAX_SCENARIO_TMPDIR_BYTES,
+            f"--scenario-temp-dir filesystem must have capacity at most "
+            f"{MAX_SCENARIO_TMPDIR_BYTES} bytes: {directory} ({capacity} bytes)",
+        )
+        _require(
+            not any(directory.glob("nshell-scenario-*")),
+            f"--scenario-temp-dir contains leftover scenario directories: {directory}",
+        )
+        overrides[scenario_id] = directory
+    required = {
+        scenario["id"] for scenario in scenarios
+        if scenario.get("requires_bounded_tmpdir", False)
+    }
+    missing = required - overrides.keys()
+    _require(not missing,
+             f"scenario(s) require --scenario-temp-dir ID=PATH: {', '.join(sorted(missing))}")
+    return overrides
+
+
+def _parse_scenario_cwd_overrides(
+    specifications: list[str], scenarios: list[dict[str, Any]],
+) -> dict[str, Path]:
+    scenarios_by_id = {scenario["id"]: scenario for scenario in scenarios}
+    overrides: dict[str, Path] = {}
+    for specification in specifications:
+        _require("=" in specification, "--scenario-cwd must use ID=PATH")
+        scenario_id, raw_path = specification.split("=", 1)
+        _require(bool(scenario_id) and bool(raw_path), "--scenario-cwd must use ID=PATH")
+        scenario = scenarios_by_id.get(scenario_id)
+        _require(scenario is not None,
+                 f"--scenario-cwd ID is not selected: {scenario_id}")
+        _require(scenario["mode"] == "pty",
+                 f"--scenario-cwd only supports PTY scenarios: {scenario_id}")
+        _require(scenario_id not in overrides,
+                 f"duplicate --scenario-cwd for {scenario_id}")
+        path = Path(raw_path)
+        _require(path.is_absolute(), f"--scenario-cwd path must be absolute: {raw_path!r}")
+        try:
+            resolved = path.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise ScenarioError(f"--scenario-cwd path is unavailable: {raw_path!r}") from error
+        _require(resolved.is_dir(), f"--scenario-cwd path must be a directory: {raw_path!r}")
+        overrides[scenario_id] = resolved
+    return overrides
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", required=True, type=Path, help="path to the nshell executable")
+    parser.add_argument("--binary", type=Path, help="path to the nshell executable")
     parser.add_argument("--scenario-dir", type=Path, default=DEFAULT_SCENARIO_DIR)
-    parser.add_argument("--mode", choices=("all", "batch", "pty"), default="all")
+    parser.add_argument(
+        "--mode",
+        choices=("all", "batch", "pty", "benchmark", "source", "api"),
+        default="all",
+    )
     parser.add_argument("--scenario-id", action="append", default=[])
+    parser.add_argument("--exclude-scenario-id", action="append", default=[])
+    parser.add_argument("--scenario-binary", action="append", default=[], metavar="ID=PATH",
+                        help="use an alternate nshell executable for one selected scenario")
+    parser.add_argument("--scenario-temp-dir", action="append", default=[], metavar="ID=PATH",
+                        help="use an empty bounded filesystem directory for one PTY scenario")
+    parser.add_argument("--scenario-cwd", action="append", default=[], metavar="ID=PATH",
+                        help="run one PTY scenario from an existing absolute directory")
+    parser.add_argument("--p12-previous-root", type=Path,
+                        help="source root of the immediately preceding supported release")
+    parser.add_argument("--p12-consumer-fixture", type=Path,
+                        help="repository-relative external API consumer script")
+    parser.add_argument("--sbcl", type=Path, help="SBCL executable for api scenarios")
     parser.add_argument("--repeat", type=int, default=1)
     arguments = parser.parse_args()
 
     if not 1 <= arguments.repeat <= MAX_REPEAT:
         parser.error(f"--repeat must be between 1 and {MAX_REPEAT}")
-    binary = arguments.binary.resolve()
-    if not binary.is_file() or binary.stat().st_size == 0 or not os.access(binary, os.X_OK):
+    binary = arguments.binary.resolve() if arguments.binary is not None else None
+    if binary is not None and (
+        not binary.is_file() or binary.stat().st_size == 0 or not os.access(binary, os.X_OK)
+    ):
         parser.error(f"--binary must be a non-empty executable file: {binary}")
 
     try:
-        scenarios = _load_scenarios(arguments.scenario_dir.resolve(), arguments.mode, set(arguments.scenario_id))
+        scenarios = _load_scenarios(
+            arguments.scenario_dir.resolve(), arguments.mode, set(arguments.scenario_id),
+            set(arguments.exclude_scenario_id),
+        )
+        if arguments.repeat != 1 and any(scenario["mode"] == "benchmark" for scenario in scenarios):
+            parser.error("benchmark scenarios manage their own repeated runs; use --repeat 1")
+        api_selected = any(scenario["mode"] == "api" for scenario in scenarios)
+        _require(
+            binary is not None or all(scenario["mode"] == "api" for scenario in scenarios),
+            "--binary is required when selecting non-api scenarios",
+        )
+        previous_source_root: Path | None = None
+        consumer_fixture: Path | None = None
+        sbcl: Path | None = None
+        if api_selected:
+            _require(arguments.p12_previous_root is not None,
+                     "--p12-previous-root is required when selecting api scenarios")
+            _require(arguments.p12_consumer_fixture is not None,
+                     "--p12-consumer-fixture is required when selecting api scenarios")
+            previous_source_root = arguments.p12_previous_root
+            consumer_fixture = arguments.p12_consumer_fixture
+            _p12_consumer_fixture(consumer_fixture)
+            sbcl_value = str(arguments.sbcl.resolve()) if arguments.sbcl is not None else shutil.which("sbcl")
+            _require(sbcl_value is not None, "SBCL was not found; pass --sbcl")
+            sbcl = Path(sbcl_value).resolve()
+            _require(
+                sbcl.is_file() and sbcl.stat().st_size > 0 and os.access(sbcl, os.X_OK),
+                f"--sbcl must be a non-empty executable file: {sbcl}",
+            )
+        else:
+            _require(arguments.p12_previous_root is None,
+                     "--p12-previous-root requires an api scenario")
+            _require(arguments.p12_consumer_fixture is None,
+                     "--p12-consumer-fixture requires an api scenario")
+            _require(arguments.sbcl is None, "--sbcl requires an api scenario")
+
+        scenario_binaries = _parse_scenario_binary_overrides(
+            arguments.scenario_binary, {scenario["id"] for scenario in scenarios}
+        )
+        scenario_temp_dirs = _parse_scenario_temp_dir_overrides(
+            arguments.scenario_temp_dir, scenarios
+        )
+        scenario_cwds = _parse_scenario_cwd_overrides(arguments.scenario_cwd, scenarios)
+        _require(
+            not scenario_binaries or binary is not None,
+            "--scenario-binary requires --binary",
+        )
         summary = {"PASS": 0, "XFAIL": 0, "XPASS": 0, "FAIL": 0}
         for scenario in scenarios:
             for iteration in range(1, arguments.repeat + 1):
                 try:
-                    status, detail = _run_once(scenario, binary)
+                    status, detail = _run_once(
+                        scenario,
+                        scenario_binaries.get(scenario["id"], binary or Path()),
+                        previous_source_root=previous_source_root,
+                        consumer_fixture=consumer_fixture,
+                        sbcl=sbcl,
+                        temporary_root=scenario_temp_dirs.get(scenario["id"]),
+                        cwd_override=scenario_cwds.get(scenario["id"]),
+                    )
                 except ScenarioError as error:
                     status, detail = "FAIL", str(error)
                 summary[status] += 1
@@ -1379,7 +2386,6 @@ def main() -> int:
     except ScenarioError as error:
         print(f"SCENARIO_ERROR: {error}", file=sys.stderr)
         return 2
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

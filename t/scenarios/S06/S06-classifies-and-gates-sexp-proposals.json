@@ -1,0 +1,133 @@
+{
+  "id": "S06-classifies-and-gates-sexp-proposals",
+  "uc": [
+    "S06"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "./:/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "S06> ",
+      "NSHELL_AI_COMMAND": "fixture-ai",
+      "S06_MARKER": "S06_SHELL_ALIVE"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/fixture-ai",
+        "executable": true,
+        "content": "#!/bin/sh\ncount_file=\"$HOME/.s06-request-count\"\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' 'S06 local assistant fixture 1.0'\n  exit 0\nfi\nwhile IFS= read -r line; do\n  case \"$line\" in\n    *'\"content\":\"\"'*)\n      printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'\n      continue ;;\n    *'\"request_id\":\"nshell-bootstrap-interrupt\"'*)\n      printf '%s\\n' '{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"nshell-bootstrap-interrupt\",\"response\":{\"still_queued\":[]}}}'\n      printf '%s\\n' '{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[]}}'\n      printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true}'\n      continue ;;\n  esac\n  n=0\n  if [ -r \"$count_file\" ]; then IFS= read -r n < \"$count_file\"; fi\n  n=$((n + 1))\n  printf '%s\\n' \"$n\" > \"$count_file\"\n  if [ \"$n\" -eq 1 ]; then\n    command='(^cat S06_DELETE_TARGET/marker)'\n    reason='S06 harmless S-expression fixture'\n  else\n    command=\"(^rm -rf $PWD/S06_DELETE_TARGET)\"\n    reason='S06 scoped recursive-delete fixture'\n  fi\n  printf '%s\\n' \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"$command\\\"}]}}\"\n  printf '%s\\n' \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\",\\\"structured_output\\\":{\\\"command\\\":\\\"$command\\\",\\\"reason\\\":\\\"$reason\\\",\\\"risk\\\":\\\"low\\\"}}\"\ndone\n"
+      },
+      {
+        "path": "work/S06_DELETE_TARGET/marker",
+        "content": "S06 protected marker\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "\u001D"
+    },
+    {
+      "type": "keys",
+      "text": "Return the exact harmless proposal (^cat S06_DELETE_TARGET/marker)"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "AI proposal [safe]",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S06 protected marker",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "\u001D"
+    },
+    {
+      "type": "keys",
+      "text": "Recursively delete exactly S06_DELETE_TARGET under the current working directory"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "AI proposal [block]",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "printf '%s\\n' \"$S06_MARKER\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S06_SHELL_ALIVE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "AI proposal [safe]",
+        "S06 protected marker",
+        "AI proposal [block]",
+        "S06_SHELL_ALIVE",
+        "Goodbye!"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "S06_DELETE_TARGET/marker",
+          "exists": true,
+          "content": {
+            "equals": "S06 protected marker\n"
+          }
+        }
+      ]
+    }
+  }
+}

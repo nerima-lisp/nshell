@@ -11,8 +11,9 @@ in its `uc` array.
 
 ## Scenario format
 
-Every scenario JSON file must define `id`, a `uc` array, `mode` (`batch` or
-`pty`), and an `expected` object. `environment` and `preconditions` are optional.
+Every scenario JSON file must define `id`, a `uc` array, `mode` (`batch`,
+`pty`, `benchmark`, `source`, or `api`), and an `expected` object.
+`environment` and `preconditions` are optional.
 The runner creates an isolated temporary root for each scenario execution.
 Paths in `environment.home`, `environment.cwd`, and
 `preconditions.files[].path` are relative to that root.
@@ -30,8 +31,9 @@ The runner defaults `environment.home` and `environment.cwd` to `home` and
 Keys in `environment.variables` override matching variables in the runner's
 default environment, which is defined in `scripts/run-scenarios.py`.
 If you set `NSHELL_SCENARIO_EXTRA_PATH` in the environment before launching the
-runner, batch scenarios append it to `PATH` by default. Set
-`environment.append_extra_path` to `false` when a scenario must keep its
+runner, batch scenarios append it to `PATH` by default. PTY scenarios keep their
+controlled `PATH` unless `environment.append_extra_path` is set to `true`. Set
+`environment.append_extra_path` to `false` when a batch scenario must keep its
 explicit `PATH`, such as a command-not-found check.
 If `preconditions.files` is omitted, no precondition files are created. Each
 file entry requires a relative `path` and can include string `content`, which
@@ -51,6 +53,28 @@ limited to 20,000, and each name is limited to 255 UTF-8 bytes. Shared file
 content is limited to 1,024 UTF-8 bytes. Paths must stay within the scenario
 root. Fixture paths cannot be duplicated or make one fixture path the parent
 directory of another.
+
+The `benchmark` mode is reserved for L02. It creates a disposable Git repository
+with 20,000 tracked files, checks startup and empty-Enter latency through a PTY,
+and records five warmups plus 30 samples in each of two runs. Each run reports
+the median and full sample range for startup, empty Enter, key echo, command
+output, and the next prompt. Startup and Enter pass only when every sample range
+stays at or below the manual thresholds in both runs; a range that crosses a
+threshold or disagreeing runs is inconclusive. A separate L02 PTY scenario uses
+a fake Git status command that sleeps beyond the application's probe timeout and
+checks that input and command output remain responsive.
+
+The `source` mode reads files under the repository root and checks their text.
+Each `source_checks` entry has a repository-relative `path` and at least one of
+`equals`, `contains`, `ordered_contains`, or `excludes`. It supports source and
+documentation checks without invoking nshell or changing host configuration.
+Paths that resolve outside the repository are rejected.
+
+The `api` mode is used by P12. It runs the same Common Lisp consumer fixture in
+separate SBCL processes against the candidate and previous-release source roots.
+Both processes must load the system and use the documented public symbols. Select
+this mode with `--p12-previous-root`, `--p12-consumer-fixture`, and `--sbcl`;
+API scenarios do not use `--binary`.
 
 Batch scenarios select `invocation.kind` as `command`, `stdin`, `script`, or
 `argv`. The `command` kind passes command text to `nshell --command`; `stdin`
@@ -175,14 +199,38 @@ fields:
 `id` is the scenario's ID, `uc` is its use-case ID array, and `path` is the
 scenario JSON path relative to `t/scenarios/`.
 
-The runner's `--mode all` option selects both scenario modes. An unfiltered
+The runner's `--mode all` option selects every scenario mode. An unfiltered
 run (`--mode all` with no `--scenario-id`) checks the exact scenario count,
 IDs, UC mapping, and file paths against this manifest.
-`--mode` defaults to `all`. `--mode batch`, `--mode pty`, and any
-`--scenario-id` selection skip the full-corpus comparison. Update the manifest
-when adding, removing, renaming, or remapping a scenario. The runner checks
-each manifest `uc` array against the corresponding scenario's `uc` array,
-without regard to array order.
+`--mode` defaults to `all`. Filtered `--mode batch`, `--mode pty`,
+`--mode benchmark`, `--mode source`, `--mode api`, and any
+`--scenario-id` selection skip the full-corpus comparison. An unfiltered
+`--mode all` run that includes API scenarios also needs the P12 source-root,
+consumer-fixture, and SBCL options. Update the manifest when adding, removing,
+renaming, or remapping a scenario. The runner checks each manifest `uc` array
+against the corresponding scenario's `uc` array, without regard to array order.
+Repeat `--exclude-scenario-id ID` to omit selected cases from a larger run; each
+excluded ID must exist in the selected scenario directory, and exclusions
+cannot overlap explicit `--scenario-id` selections. Use this only when another
+workflow job supplies the scenario's required external fixture. The Scenario
+corpus workflow excludes Q05's three NFS cases from its ordinary PTY matrix and
+runs them in a dedicated Linux client-VM job.
+Use `--scenario-binary ID=PATH` to run a selected scenario with a dedicated
+executable while the remaining scenarios use `--binary`. The override must name
+an ID in the current selection and point to a non-empty executable file.
+Use `--scenario-cwd ID=PATH` to start one selected PTY case in an existing
+absolute directory, including one outside the runner's temporary root. This
+does not change the scenario JSON's `environment.cwd`, fixture root, or home
+directory; it is intended for external filesystems such as Q05's NFS mount.
+Use `--scenario-temp-dir ID=PATH` to place one selected PTY scenario's isolated
+root on a bounded filesystem. The path must be an absolute, writable,
+non-symlink directory on a filesystem with total capacity at most 128 MiB. It
+must not contain leftover `nshell-scenario-*` directories. The runner creates
+and removes its temporary root there. Scenarios with
+`requires_bounded_tmpdir: true` fail before execution unless this option is
+provided; Q07 uses this guard. Its bounded PTY fixture fills only the mounted
+test volume, submits a long no-op line so the history append needs another disk
+allocation, then checks the reported error and a later recovery marker.
 
 Each scenario's top-level `timeout_seconds` defaults to 30 seconds for batch
 and 45 seconds for PTY. Each PTY `wait`, `wait_screen`, and `wait_exit` step has its own
@@ -287,5 +335,10 @@ Run the runner tests from the repository root with:
 nix develop .#scenarios -c python3 scripts/test-run-scenarios.py
 ```
 
-The workflow runs PTY scenarios with `--mode pty --repeat 3` on both Linux and
-Apple Silicon macOS.
+The workflow runs ordinary PTY scenarios with `--mode pty --repeat 3` on both
+Linux and Apple Silicon macOS. Q05 runs separately on an Ubuntu runner that
+exports NFS over a test-only TAP interface to an Ubuntu QEMU client with a
+separate management interface. The client builds the candidate binary locally
+and records three baseline trials plus ten 500 ms delayed trials for each of
+the prompt, filesystem-completion, and glob cases. The job uploads its trial
+records and logs as an artifact.

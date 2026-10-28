@@ -7,6 +7,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import socket
 import stat
 import subprocess
 import sys
@@ -172,6 +173,335 @@ def _multi_pty_scenario(scenario_id: str = "shared-pty") -> dict[str, Any]:
 
 
 class ScenarioRunnerTests(unittest.TestCase):
+    def test_pty_cleanup_stops_nested_scenario_tmux_servers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="d09-", dir="/tmp") as temporary:
+            root = Path(temporary)
+            socket_path = root / "tmp" / "tmux-501" / "d09"
+            socket_path.parent.mkdir(parents=True)
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server_socket:
+                server_socket.bind(str(socket_path))
+                with (
+                    patch.dict(runner.os.environ,
+                               {"TMUX": "parent-session", "TMUX_PANE": "%1"}, clear=True),
+                    patch.object(
+                        runner.subprocess,
+                        "run",
+                        return_value=subprocess.CompletedProcess([], 0, b"", b""),
+                    ) as run,
+                ):
+                    runner._cleanup_scenario_tmux_servers(root, "nested-tmux")
+
+            arguments, options = run.call_args
+            self.assertEqual(
+                arguments[0],
+                ["tmux", "-f", "/dev/null", "-S", str(socket_path), "kill-server"],
+            )
+            self.assertNotIn("TMUX", options["env"])
+            self.assertNotIn("TMUX_PANE", options["env"])
+
+    def test_t02_source_scenario_checks_login_shell_guidance(self) -> None:
+        scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/T02/etc-shells-guidance.json"
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+
+        runner._validate_scenario(scenario, scenario_path)
+        status, detail = runner._run_once(scenario, Path("/not-used-by-source-scenarios"))
+
+        self.assertEqual(status, "PASS")
+        self.assertEqual(detail, "")
+
+    def test_source_scenario_rejects_paths_outside_the_repository(self) -> None:
+        scenario = {
+            "id": "source-path-escape",
+            "uc": ["T02"],
+            "mode": "source",
+            "source_checks": [{"path": "../outside.md", "contains": ["text"]}],
+            "expected": {"exit_code": 0},
+        }
+
+        with self.assertRaisesRegex(runner.ScenarioError, "escapes its scenario directory"):
+            runner._validate_scenario(scenario, Path("source-path-escape.json"))
+
+    def test_p12_scenario_and_consumer_use_only_the_documented_public_api(self) -> None:
+        scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/P12/public-api-stability.json"
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+        fixture = RUNNER_PATH.parents[1] / "t/scenarios/P12/public-api-consumer.lisp"
+
+        runner._validate_scenario(scenario, scenario_path)
+        self.assertEqual(scenario["mode"], "api")
+        self.assertEqual(scenario["uc"], ["P12"])
+        self.assertEqual(
+            runner._p12_consumer_fixture(Path("t/scenarios/P12/public-api-consumer.lisp")),
+            fixture.resolve(),
+        )
+
+    def test_p12_source_root_requires_a_version_and_full_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "nshell.asd").write_text('(asdf:defsystem "nshell"\n  :version "0.6.5")\n',
+                                             encoding="utf-8")
+            with mock.patch.object(runner, "_source_revision", return_value="a" * 40):
+                self.assertEqual(
+                    runner._source_root_details(root, "previous release"),
+                    (root.resolve(), "0.6.5", "a" * 40),
+                )
+            with mock.patch.object(runner, "_source_revision", return_value="not-a-revision"):
+                with self.assertRaisesRegex(runner.ScenarioError, "full hexadecimal commit ID"):
+                    runner._source_root_details(root, "previous release")
+
+            (root / "nshell.asd").unlink()
+            with self.assertRaisesRegex(runner.ScenarioError, "no nshell.asd"):
+                runner._source_root_details(root, "previous release")
+
+    def test_p12_jj_workspace_uses_its_own_revision_inside_another_git_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / ".jj").mkdir()
+            completed = subprocess.CompletedProcess([], 0, "b" * 40, "")
+            with (
+                mock.patch.object(
+                    runner.shutil,
+                    "which",
+                    side_effect=lambda command: f"/usr/bin/{command}",
+                ),
+                mock.patch.object(runner.subprocess, "run", return_value=completed) as run,
+            ):
+                revision = runner._source_revision(root, "previous release")
+
+        self.assertEqual(revision, "b" * 40)
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0][1], "--repository")
+        self.assertEqual(run.call_args.args[0][2], str(root))
+
+    def test_p12_api_runs_same_consumer_in_separate_processes_for_both_roots(self) -> None:
+        scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/P12/public-api-stability.json"
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+        fixture = Path("t/scenarios/P12/public-api-consumer.lisp")
+        with tempfile.TemporaryDirectory() as temporary:
+            previous_root = Path(temporary)
+            candidate = (runner.ROOT.resolve(), "0.6.6", "a" * 40)
+            previous = (previous_root.resolve(), "0.6.5", "b" * 40)
+            results = [
+                subprocess.CompletedProcess([], 0, "P12_API_OK\n", ""),
+                subprocess.CompletedProcess([], 0, "P12_API_OK\n", ""),
+            ]
+            with (
+                mock.patch.object(runner, "_source_root_details", side_effect=[candidate, previous]),
+                mock.patch.object(runner.subprocess, "run", side_effect=results) as run,
+            ):
+                stdout, stderr, exit_code, failures = runner._run_p12_api(
+                    scenario, previous_root, fixture, Path("/sbcl")
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(failures, [])
+        self.assertEqual(stderr, "")
+        self.assertEqual(run.call_count, 2)
+        first_call, second_call = run.call_args_list
+        self.assertEqual(first_call.args[0], second_call.args[0])
+        self.assertEqual(first_call.kwargs["env"]["NSHELL_ROOT"], str(candidate[0]))
+        self.assertEqual(second_call.kwargs["env"]["NSHELL_ROOT"], str(previous[0]))
+        self.assertIn("P12 candidate source version=0.6.6", stdout)
+        self.assertIn("P12 previous source version=0.6.5", stdout)
+        self.assertEqual(stdout.count("P12_API_OK"), 2)
+
+    def test_p12_api_rejects_reusing_the_candidate_revision(self) -> None:
+        scenario = {
+            "id": "p12-same-revision",
+            "uc": ["P12"],
+            "mode": "api",
+            "expected": {"stdout": {"contains": ["P12_API_OK"]}, "exit_code": 0},
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            previous_root = Path(temporary)
+            candidate = (runner.ROOT.resolve(), "0.6.6", "a" * 40)
+            previous = (previous_root.resolve(), "0.6.5", "a" * 40)
+            with (
+                mock.patch.object(runner, "_source_root_details", side_effect=[candidate, previous]),
+                mock.patch.object(runner.subprocess, "run") as run,
+            ):
+                with self.assertRaisesRegex(runner.ScenarioError, "source revisions must be different"):
+                    runner._run_p12_api(
+                        scenario,
+                        previous_root,
+                        Path("t/scenarios/P12/public-api-consumer.lisp"),
+                        Path("/sbcl"),
+                    )
+
+        run.assert_not_called()
+
+    def test_p12_api_child_failure_produces_a_failed_scenario(self) -> None:
+        scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/P12/public-api-stability.json"
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as temporary:
+            previous_root = Path(temporary)
+            candidate = (runner.ROOT.resolve(), "0.6.6", "a" * 40)
+            previous = (previous_root.resolve(), "0.6.5", "b" * 40)
+            results = [
+                subprocess.CompletedProcess([], 0, "P12_API_OK\n", ""),
+                subprocess.CompletedProcess([], 9, "consumer failed\n", "failure\n"),
+            ]
+            with (
+                mock.patch.object(runner, "_source_root_details", side_effect=[candidate, previous]),
+                mock.patch.object(runner.subprocess, "run", side_effect=results),
+            ):
+                _, _, exit_code, failures = runner._run_p12_api(
+                    scenario,
+                    previous_root,
+                    Path("t/scenarios/P12/public-api-consumer.lisp"),
+                    Path("/sbcl"),
+                )
+
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any("previous SBCL consumer exited with status 9" in failure
+                            for failure in failures))
+        self.assertTrue(any("previous SBCL stderr: failure" in failure for failure in failures))
+        self.assertTrue(any("exit code was 1, expected 0" in failure for failure in failures))
+
+    def test_p12_api_cli_requires_previous_root_and_consumer_fixture(self) -> None:
+        scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/P12/public-api-stability.json"
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scenario_dir = root / "scenarios"
+            _write_json(scenario_dir / "P12/public-api.json", scenario)
+            binary = root / "nshell"
+            binary.write_text("placeholder", encoding="utf-8")
+            binary.chmod(0o755)
+            output = io.StringIO()
+            error_output = io.StringIO()
+            argv = [
+                "run-scenarios.py",
+                "--binary",
+                str(binary),
+                "--scenario-dir",
+                str(scenario_dir),
+                "--mode",
+                "api",
+                "--scenario-id",
+                scenario["id"],
+            ]
+            with (
+                mock.patch.object(sys, "argv", argv),
+                contextlib.redirect_stdout(output),
+                contextlib.redirect_stderr(error_output),
+            ):
+                exit_code = runner.main()
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("--p12-previous-root is required", error_output.getvalue())
+
+    def test_l02_benchmark_scenario_declares_the_required_fixture_and_sample_counts(self) -> None:
+        scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/L02/git-prompt-responsiveness.json"
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+
+        runner._validate_scenario(scenario, scenario_path)
+
+        self.assertEqual(scenario["benchmark"]["file_count"], 20_000)
+        self.assertEqual(scenario["benchmark"]["warmups"], 5)
+        self.assertEqual(scenario["benchmark"]["samples"], 30)
+        self.assertEqual(scenario["benchmark"]["runs"], 2)
+        self.assertEqual(scenario["preconditions"]["file_sets"][0]["count"], 20_000)
+        self.assertEqual(scenario["timeout_seconds"], 180)
+
+    def test_l02_benchmark_validation_rejects_weakened_measurement_protocol(self) -> None:
+        scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/L02/git-prompt-responsiveness.json"
+        original = json.loads(scenario_path.read_text(encoding="utf-8"))
+        invalid_values = (
+            ("file_count", 19_999, "file_count must be 20000"),
+            ("warmups", 4, "warmups must be 5"),
+            ("samples", 29, "samples must be 30"),
+            ("runs", 1, "runs must be 2"),
+            ("startup_max_ms", 151, "startup_max_ms must be 150"),
+            ("empty_enter_max_ms", float("nan"), "empty_enter_max_ms must be 60"),
+            ("interaction_timeout_seconds", float("inf"), "interaction_timeout_seconds"),
+        )
+
+        for field, value, message in invalid_values:
+            with self.subTest(field=field):
+                scenario = json.loads(json.dumps(original))
+                scenario["benchmark"][field] = value
+                with self.assertRaisesRegex(runner.ScenarioError, message):
+                    runner._validate_scenario(scenario, scenario_path)
+
+        scenario = json.loads(json.dumps(original))
+        scenario["timeout_seconds"] = 181
+        with self.assertRaisesRegex(runner.ScenarioError, "timeout_seconds must be in \(0, 180\]"):
+            runner._validate_scenario(scenario, scenario_path)
+
+    def test_l02_benchmark_verdict_uses_sample_ranges_and_repeat_agreement(self) -> None:
+        self.assertEqual(runner._benchmark_verdict([[100, 140], [110, 149]], 150), "pass")
+        self.assertEqual(runner._benchmark_verdict([[150, 150], [149, 150]], 150), "pass")
+        self.assertEqual(runner._benchmark_verdict([[151, 170], [160, 180]], 150), "fail")
+        self.assertEqual(runner._benchmark_verdict([[149, 151], [140, 145]], 150), "inconclusive")
+        self.assertEqual(runner._benchmark_verdict([[140, 145], [151, 160]], 150), "inconclusive")
+
+    def test_bounded_tmpdir_requires_a_small_empty_pty_filesystem(self) -> None:
+        scenario = {
+            "id": "Q07-bounded-filesystem",
+            "mode": "pty",
+            "requires_bounded_tmpdir": True,
+        }
+        with self.assertRaisesRegex(runner.ScenarioError, "require --scenario-temp-dir"):
+            runner._parse_scenario_temp_dir_overrides([], [scenario])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            small_filesystem = mock.Mock(f_frsize=4096, f_blocks=8192)
+            with patch.object(runner.os, "statvfs", return_value=small_filesystem):
+                parsed = runner._parse_scenario_temp_dir_overrides(
+                    [f"Q07-bounded-filesystem={directory}"], [scenario]
+                )
+            self.assertEqual(parsed, {"Q07-bounded-filesystem": directory.resolve()})
+
+            large_filesystem = mock.Mock(f_frsize=4096, f_blocks=65536)
+            with patch.object(runner.os, "statvfs", return_value=large_filesystem):
+                with self.assertRaisesRegex(runner.ScenarioError, "capacity at most"):
+                    runner._parse_scenario_temp_dir_overrides(
+                        [f"Q07-bounded-filesystem={directory}"], [scenario]
+                    )
+
+            with self.assertRaisesRegex(runner.ScenarioError, "leftover scenario directories"):
+                (directory / "nshell-scenario-leftover").mkdir()
+                with patch.object(runner.os, "statvfs", return_value=small_filesystem):
+                    runner._parse_scenario_temp_dir_overrides(
+                        [f"Q07-bounded-filesystem={directory}"], [scenario]
+                    )
+
+        batch = _batch_scenario("Q07-batch", "Q07")
+        batch["requires_bounded_tmpdir"] = True
+        with self.assertRaisesRegex(runner.ScenarioError, "only for pty"):
+            runner._validate_scenario(batch, Path("Q07.json"))
+
+        with self.assertRaisesRegex(runner.ScenarioError, "pass --scenario-temp-dir"):
+            runner._run_once(scenario, Path("/bin/true"))
+
+    def test_scenario_binary_override_requires_selected_id_and_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "nshell-q03"
+            binary.write_text("binary", encoding="utf-8")
+            binary.chmod(0o755)
+
+            parsed = runner._parse_scenario_binary_overrides(
+                [f"Q03-real-heap={binary}"], {"Q03-real-heap"}
+            )
+
+            self.assertEqual(parsed, {"Q03-real-heap": binary.resolve()})
+            for specifications, selected_ids in (
+                ([str(binary)], {"Q03-real-heap"}),
+                ([f"Q03-real-heap={binary}", f"Q03-real-heap={binary}"], {"Q03-real-heap"}),
+                ([f"Q03-real-heap={binary}"], set()),
+            ):
+                with self.subTest(specifications=specifications, selected_ids=selected_ids):
+                    with self.assertRaises(runner.ScenarioError):
+                        runner._parse_scenario_binary_overrides(specifications, selected_ids)
+
+            non_executable = Path(temporary) / "not-executable"
+            non_executable.write_text("binary", encoding="utf-8")
+            with self.assertRaises(runner.ScenarioError):
+                runner._parse_scenario_binary_overrides(
+                    [f"Q03-real-heap={non_executable}"], {"Q03-real-heap"}
+                )
+
     def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
         scenario = _batch_scenario("batch-extra-path")
         scenario["environment"]["variables"] = {"PATH": "bin:/usr/bin:/bin"}
@@ -206,6 +536,36 @@ class ScenarioRunnerTests(unittest.TestCase):
                 env, _, _ = runner._environment(scenario, Path(temporary))
 
         self.assertEqual(env["PATH"], "/usr/bin:/bin")
+
+    def test_pty_environment_can_append_extra_path_explicitly(self) -> None:
+        scenario = _pty_scenario(
+            "pty-extra-path-opt-in",
+            [{"type": "wait_exit"}],
+            {"exit_code": 0},
+        )
+        scenario["environment"]["variables"]["PATH"] = "/usr/bin:/bin"
+        scenario["environment"]["append_extra_path"] = True
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.dict(runner.os.environ, {"NSHELL_SCENARIO_EXTRA_PATH": "/nix/nshell/bin"}):
+                env, _, _ = runner._environment(scenario, Path(temporary))
+
+        self.assertEqual(env["PATH"], f"/usr/bin:/bin{runner.os.pathsep}/nix/nshell/bin")
+
+    def test_pty_environment_can_append_candidate_binary_for_nested_shells(self) -> None:
+        scenario = _pty_scenario(
+            "pty-nested-nshell-path",
+            [{"type": "wait_exit"}],
+            {"exit_code": 0},
+        )
+        scenario["environment"]["variables"]["PATH"] = "/usr/bin:/bin"
+        scenario["environment"]["append_extra_path"] = True
+        binary = Path("/nix/store/candidate/bin/nshell")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            env, _, _ = runner._environment(scenario, Path(temporary), binary)
+
+        self.assertEqual(env["PATH"], f"/usr/bin:/bin{runner.os.pathsep}/nix/store/candidate/bin")
 
     def test_load_config_controls_no_config_argument(self) -> None:
         binary = Path("/nix/store/nshell/bin/nshell")
@@ -355,6 +715,70 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(exit_code, 23)
         self.assertEqual(failures, [])
 
+    def test_pty_check_side_effects_observes_state_before_later_step(self) -> None:
+        class FakeSession:
+            def __init__(self, _scenario: dict[str, Any], _binary: Path, _root: Path,
+                         _env: dict[str, str], cwd: Path):
+                self.cwd = cwd
+                self.stream = bytearray()
+                self.deadline_seconds = 45
+                self.deadline = 0.0
+
+            def wait_for(self, _text: str, _start: int, _timeout: float) -> int:
+                (self.cwd / "approved").write_text("yes", encoding="utf-8")
+                return 0
+
+            def wait_exit(self, _timeout: float) -> int:
+                return 0
+
+            def drain(self) -> None:
+                pass
+
+            def capture_screen(self) -> str:
+                return ""
+
+            def close(self) -> None:
+                pass
+
+        scenario = _pty_scenario(
+            "live-side-effect-check",
+            [
+                {"type": "check_side_effects", "files": [{"path": "approved", "exists": False}]},
+                {"type": "wait", "contains": "APPROVAL_PROMPT"},
+                {"type": "wait_exit"},
+            ],
+            {"exit_code": 0, "side_effects": {"files": [{"path": "approved", "exists": True}]}},
+        )
+
+        with patch.object(runner, "TmuxSession", FakeSession), \
+                patch.object(runner.shutil, "which", return_value="tmux"):
+            _, _, exit_code, failures = runner._run_pty(scenario, Path("/unused/nshell"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(failures, [])
+
+        scenario["steps"][0]["files"][0]["exists"] = True
+        with patch.object(runner, "TmuxSession", FakeSession), \
+                patch.object(runner.shutil, "which", return_value="tmux"):
+            _, _, exit_code, failures = runner._run_pty(scenario, Path("/unused/nshell"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("existence was False, expected True", failures[0])
+
+    def test_pty_check_side_effects_validates_file_expectations(self) -> None:
+        scenario = _pty_scenario(
+            "invalid-live-side-effect-check",
+            [
+                {"type": "check_side_effects", "files": [{"path": "../escaped", "exists": False}]},
+                {"type": "wait_exit"},
+            ],
+            {"exit_code": 0},
+        )
+
+        with self.assertRaisesRegex(runner.ScenarioError, "checked file"):
+            self._load_one(scenario, "invalid-live-side-effect-check.json")
+
     def test_tmux_resize_invokes_window_resize(self) -> None:
         session = runner.TmuxSession.__new__(runner.TmuxSession)
         session.pane = "%7"
@@ -445,7 +869,7 @@ class ScenarioRunnerTests(unittest.TestCase):
             patch.object(session, "_capture", return_value="STALE_INPUT"),
             patch.object(session, "_read") as read,
         ):
-            with self.assertRaisesRegex(runner.ScenarioTimeout, "current screen:\\nSTALE_INPUT"):
+            with self.assertRaisesRegex(runner.ScenarioTimeout, "current screen:\nSTALE_INPUT"):
                 session.wait_for_screen(None, 0.2, ["STALE_INPUT"])
 
         read.assert_not_called()
@@ -1158,6 +1582,43 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual([scenario["id"] for scenario in batch_only], ["batch-only"])
         self.assertEqual([scenario["id"] for scenario in id_only], ["pty-only"])
+
+    def test_filtered_selection_excludes_only_named_scenarios(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            first = _batch_scenario("first")
+            second = _batch_scenario("second")
+            _write_json(directory / "C01/first.json", first)
+            _write_json(directory / "C01/second.json", second)
+
+            selected = runner._load_scenarios(directory, "batch", set(), {"first"})
+            with self.assertRaisesRegex(runner.ScenarioError, "unknown excluded scenario id"):
+                runner._load_scenarios(directory, "batch", set(), {"missing"})
+            with self.assertRaisesRegex(runner.ScenarioError, "both selected and excluded"):
+                runner._load_scenarios(directory, "batch", {"first"}, {"first"})
+
+        self.assertEqual([scenario["id"] for scenario in selected], ["second"])
+
+    def test_scenario_cwd_override_requires_a_selected_pty_and_existing_absolute_directory(self) -> None:
+        scenario = _pty_scenario("external-cwd", [{"type": "wait_exit"}], {"exit_code": 0})
+        batch = _batch_scenario("batch-cwd")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            working = root / "external"
+            working.mkdir()
+            overrides = runner._parse_scenario_cwd_overrides(
+                [f"external-cwd={working}"], [scenario]
+            )
+
+            self.assertEqual(overrides, {"external-cwd": working.resolve()})
+            for specification, candidates, message in (
+                ("external-cwd=relative", [scenario], "must be absolute"),
+                (f"external-cwd={root / 'missing'}", [scenario], "unavailable"),
+                (f"batch-cwd={working}", [batch], "only supports PTY"),
+            ):
+                with self.subTest(specification=specification):
+                    with self.assertRaisesRegex(runner.ScenarioError, message):
+                        runner._parse_scenario_cwd_overrides([specification], candidates)
 
     def test_file_set_fixture_validation_rejects_unsafe_or_unbounded_values(self) -> None:
         valid = _batch_scenario("file-set-valid")

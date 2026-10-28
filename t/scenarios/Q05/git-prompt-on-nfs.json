@@ -1,0 +1,30 @@
+{
+  "id": "Q05-nfs-git-prompt",
+  "uc": ["Q05"],
+  "mode": "pty",
+  "timeout_seconds": 60,
+  "wait_for_prompt": false,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "{path} {git} Q05_PROMPT> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {"columns": 100, "rows": 24}
+  },
+  "preconditions": {"files": []},
+  "steps": [
+    {"type": "keys", "text": "printf 'Q05_%s\\n' OK"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "Q05_OK", "timeout_seconds": 60},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit", "timeout_seconds": 10}
+  ],
+  "expected": {
+    "stream": {"contains": ["/mnt/q05/git", "q05-branch", "Q05_OK"]},
+    "exit_code": 0
+  }
+}

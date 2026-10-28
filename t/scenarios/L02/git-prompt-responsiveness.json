@@ -1,0 +1,48 @@
+{
+  "id": "L02-git-prompt-responsiveness",
+  "uc": [
+    "L02"
+  ],
+  "mode": "benchmark",
+  "timeout_seconds": 180,
+  "environment": {
+    "home": "home",
+    "cwd": "work/repository"
+  },
+  "preconditions": {
+    "files": [],
+    "file_sets": [
+      {
+        "directory": "work/repository/files",
+        "prefix": "tracked-",
+        "suffix": ".txt",
+        "count": 20000,
+        "content": "tracked\n"
+      }
+    ]
+  },
+  "benchmark": {
+    "repository": "work/repository",
+    "dirty_file": "files/tracked-00000.txt",
+    "file_count": 20000,
+    "warmups": 5,
+    "samples": 30,
+    "runs": 2,
+    "startup_max_ms": 150,
+    "empty_enter_max_ms": 60,
+    "interaction_timeout_seconds": 10,
+    "prompt_prefix": "L02_PROMPT",
+    "ready_marker": "L02_READY"
+  },
+  "expected": {
+    "exit_code": 0,
+    "stdout": {
+      "contains": [
+        "tracked_files=20000",
+        "L02 result=PASS",
+        "key_echo",
+        "command_output"
+      ]
+    }
+  }
+}

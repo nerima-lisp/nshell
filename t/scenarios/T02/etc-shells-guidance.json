@@ -1,0 +1,23 @@
+{
+  "id": "T02-etc-shells-guidance",
+  "uc": [
+    "T02"
+  ],
+  "mode": "source",
+  "timeout_seconds": 10,
+  "source_checks": [
+    {
+      "path": "docs/src/getting-started.md",
+      "contains": [
+        "nshell_path=\"$(command -v nshell)\"",
+        "grep -Fxq \"$nshell_path\" /etc/shells",
+        "sudo tee -a /etc/shells",
+        "grep -Fx \"$nshell_path\" /etc/shells",
+        "chsh -s \"$nshell_path\""
+      ]
+    }
+  ],
+  "expected": {
+    "exit_code": 0
+  }
+}

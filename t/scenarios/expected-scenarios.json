@@ -1662,6 +1662,143 @@
         "G02"
       ],
       "path": "G02/vi-insert-escape-e-same-write.json"
+    },
+    {
+      "id": "T02-etc-shells-guidance",
+      "uc": [
+        "T02"
+      ],
+      "path": "T02/etc-shells-guidance.json"
+    },
+    {
+      "id": "A11-nested-nshell-session",
+      "uc": ["A11"],
+      "path": "A11/nested-nshell-session.json"
+    },
+    {
+      "id": "D09-tmux-attach-session",
+      "uc": ["D09"],
+      "path": "D09/tmux-attach-session.json"
+    },
+    {
+      "id": "F04-ctrl-quit-stops-cat-and-shell-recovers",
+      "uc": ["F04"],
+      "path": "F04/ctrl-quit-stops-cat-and-shell-recovers.json"
+    },
+    {
+      "id": "F11-16-color-sgr",
+      "uc": ["F11"],
+      "path": "F11/16-color-sgr.json"
+    },
+    {
+      "id": "F11-256-color-sgr",
+      "uc": ["F11"],
+      "path": "F11/256-color-sgr.json"
+    },
+    {
+      "id": "F11-no-color-sgr",
+      "uc": ["F11"],
+      "path": "F11/no-color-sgr.json"
+    },
+    {
+      "id": "F11-truecolor-sgr",
+      "uc": ["F11"],
+      "path": "F11/truecolor-sgr.json"
+    },
+    {
+      "id": "F13-startup-cursor-report-is-consumed",
+      "uc": ["F13"],
+      "path": "F13/startup-cursor-report-is-consumed.json"
+    },
+    {
+      "id": "L02-git-prompt-responsiveness",
+      "uc": ["L02"],
+      "path": "L02/git-prompt-responsiveness.json"
+    },
+    {
+      "id": "L02-slow-git-status-does-not-block-input",
+      "uc": ["L02"],
+      "path": "L02/slow-git-status-does-not-block-input.json"
+    },
+    {
+      "id": "P09-hooks-order-arguments-and-error-recovery",
+      "uc": ["P09"],
+      "path": "P09/hooks-order-arguments-and-error-recovery.json"
+    },
+    {
+      "id": "P12-public-api-stability",
+      "uc": ["P12"],
+      "path": "P12/public-api-stability.json"
+    },
+    {
+      "id": "Q03-real-heap-exhaustion",
+      "uc": ["Q03"],
+      "path": "Q03/Q03-real-heap-exhaustion.json"
+    },
+    {
+      "id": "Q05-nfs-filesystem-completion",
+      "uc": ["Q05"],
+      "path": "Q05/filesystem-completion-on-nfs.json"
+    },
+    {
+      "id": "Q05-nfs-git-prompt",
+      "uc": ["Q05"],
+      "path": "Q05/git-prompt-on-nfs.json"
+    },
+    {
+      "id": "Q05-nfs-glob-expansion",
+      "uc": ["Q05"],
+      "path": "Q05/glob-expansion-on-nfs.json"
+    },
+    {
+      "id": "Q07-history-write-failure-on-bounded-filesystem",
+      "uc": ["Q07"],
+      "path": "Q07/history-write-failure-on-bounded-filesystem.json"
+    },
+    {
+      "id": "Q08-fault-injected-key-handler-preserves-input",
+      "uc": ["Q08"],
+      "path": "Q08/fault-injected-key-handler-preserves-input.json"
+    },
+    {
+      "id": "Q08-normal-key-handler-remains-usable",
+      "uc": ["Q08"],
+      "path": "Q08/normal-key-handler-remains-usable.json"
+    },
+    {
+      "id": "S02-enter-approves-proposal",
+      "uc": ["S02"],
+      "path": "S02/S02-enter-approves-proposal.json"
+    },
+    {
+      "id": "S02-proposal-awaits-approval",
+      "uc": ["S02"],
+      "path": "S02/S02-proposal-awaits-approval.json"
+    },
+    {
+      "id": "S03-explains-last-failure",
+      "uc": ["S03"],
+      "path": "S03/S03-explains-last-failure.json"
+    },
+    {
+      "id": "S04-approves-agent-steps-individually",
+      "uc": ["S04"],
+      "path": "S04/S04-approves-agent-steps-individually.json"
+    },
+    {
+      "id": "S06-classifies-and-gates-sexp-proposals",
+      "uc": ["S06"],
+      "path": "S06/S06-classifies-and-gates-sexp-proposals.json"
+    },
+    {
+      "id": "T01-platform-support-matches-flake",
+      "uc": ["T01"],
+      "path": "T01/platform-support-matches-flake.json"
+    },
+    {
+      "id": "T06-copied-release-bundle-pty-smoke",
+      "uc": ["T06"],
+      "path": "T06/copied-release-bundle-pty-smoke.json"
     }
   ]
 }

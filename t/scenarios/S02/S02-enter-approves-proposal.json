@@ -1,0 +1,127 @@
+{
+  "id": "S02-enter-approves-proposal",
+  "uc": [
+    "S02"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "./:/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "S02_APPROVAL> ",
+      "NSHELL_AI_COMMAND": "fixture-ai"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/fixture-ai",
+        "executable": true,
+        "content": "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' 'S02 local assistant fixture 1.0'\n  exit 0\nfi\nwhile IFS= read -r line; do\n  case \"$line\" in\n    *'\"content\":\"\"'*)\n      printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'\n      continue ;;\n    *'\"request_id\":\"nshell-bootstrap-interrupt\"'*)\n      printf '%s\\n' '{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"nshell-bootstrap-interrupt\",\"response\":{\"still_queued\":[]}}}'\n      printf '%s\\n' '{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[]}}'\n      printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true}'\n      continue ;;\n  esac\n  printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"(^touch S02_APPROVED)\"}]}}'\n  printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"structured_output\":{\"command\":\"(^touch S02_APPROVED)\",\"reason\":\"S02 local fixture\",\"risk\":\"low\"}}'\ndone\n"
+      },
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "(nshell.application:register-shell-hook\n :POSTEXEC\n (lambda (text status duration)\n   (format t \"S02_PROPOSAL_COMMAND_FINISHED status=~a~%\" status)))\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "\u001D"
+    },
+    {
+      "type": "keys",
+      "text": "Create a file named S02_APPROVED"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "AI proposal",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait_screen",
+      "contains": "(^touch S02_APPROVED)",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "check_side_effects",
+      "files": [
+        {
+          "path": "S02_APPROVED",
+          "exists": false
+        }
+      ]
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "AI proposal requires confirmation; press Enter again to execute.",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S02_PROPOSAL_COMMAND_FINISHED status=0",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "check_side_effects",
+      "files": [
+        {
+          "path": "S02_APPROVED",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "AI proposal",
+        "(^touch S02_APPROVED)",
+        "Goodbye!",
+        "S02_PROPOSAL_COMMAND_FINISHED status=0"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "S02_APPROVED",
+          "exists": true
+        }
+      ]
+    }
+  },
+  "load_config": true
+}

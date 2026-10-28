@@ -1,0 +1,72 @@
+{
+  "id": "F04-ctrl-quit-stops-cat-and-shell-recovers",
+  "uc": [
+    "F04"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.3,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "F04_MARKER": "F04_SHELL_OK",
+      "NSHELL_PROMPT": "F04> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "cat"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "keys",
+      "text": "\u001c"
+    },
+    {
+      "type": "keys",
+      "text": "printf '%s\\n' \"$F04_MARKER\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "F04_SHELL_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "F04_SHELL_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

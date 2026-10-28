@@ -1,0 +1,68 @@
+{
+  "id": "F13-startup-cursor-report-is-consumed",
+  "uc": [
+    "F13"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "F13_VALUE": "F13_OK",
+      "NSHELL_PROMPT": "F13> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo \"$F13_VALUE\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "F13_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "\u001b[6n",
+        "F13_OK"
+      ],
+      "excludes": [
+        "\u001b[1;1R"
+      ]
+    },
+    "screen": {
+      "excludes": [
+        "R"
+      ]
+    },
+    "exit_code": 0
+  }
+}

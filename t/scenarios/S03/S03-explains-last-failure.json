@@ -1,0 +1,104 @@
+{
+  "id": "S03-explains-last-failure",
+  "uc": [
+    "S03"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "./:/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "S03> ",
+      "NSHELL_RIGHT_PROMPT": "{exit}",
+      "NSHELL_AI_COMMAND": "fixture-ai",
+      "S03_MARKER": "S03_SHELL_ALIVE"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/fixture-ai",
+        "executable": true,
+        "content": "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' 'S03 local assistant fixture 1.0'\n  exit 0\nfi\nwhile IFS= read -r line; do\n  case \"$line\" in\n    *'\"content\":\"\"'*)\n      printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'\n      continue ;;\n    *'\"request_id\":\"nshell-bootstrap-interrupt\"'*)\n      printf '%s\\n' '{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"nshell-bootstrap-interrupt\",\"response\":{\"still_queued\":[]}}}'\n      printf '%s\\n' '{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[]}}'\n      printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true}'\n      continue ;;\n  esac\n  printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"The last command was false; it exited with status 1.\"}]}}'\n  printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"structured_output\":{\"explanation\":\"The last command was false; it exited with status 1.\",\"next_steps\":[{\"command\":\"touch S03_UNAPPROVED\"}]}}'\ndone\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "false"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_screen",
+      "contains": "[1 · ?]",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "\u001D"
+    },
+    {
+      "type": "wait",
+      "contains": "The last command was false; it exited with status 1.",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-c"
+    },
+    {
+      "type": "keys",
+      "text": "printf '%s\\n' \"$S03_MARKER\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S03_SHELL_ALIVE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "The last command was false; it exited with status 1.",
+        "S03_SHELL_ALIVE",
+        "Goodbye!"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "S03_UNAPPROVED",
+          "exists": false
+        }
+      ]
+    }
+  }
+}

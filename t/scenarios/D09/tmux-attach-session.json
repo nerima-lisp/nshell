@@ -1,0 +1,216 @@
+{
+  "id": "D09-tmux-attach-session",
+  "uc": [
+    "D09"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "append_extra_path": true,
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "D09_PARENT_READY> ",
+      "D09_DETACH_RETURN_TEXT": "D09_PARENT_AFTER_DETACH",
+      "D09_CHILD_EXIT_RETURN_TEXT": "D09_PARENT_AFTER_CHILD_EXIT",
+      "D09_OUTER_SHELL_TEXT": "D09_OUTER_SHELL_READY",
+      "D09_OUTER_PROMPT": "D09_OUTER_READY> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "(nshell.application:register-shell-hook\n :PROMPT\n (lambda (directory status)\n   (format t \"D09_PARENT_PROMPT~%\")))\n"
+      },
+      {
+        "path": "home/d09-child-init.lisp",
+        "content": "(nshell.application:register-shell-hook\n :PROMPT\n (lambda (directory status)\n   (format t \"D09_CHILD_PROMPT_READY~%\")))\n"
+      },
+      {
+        "path": "home/d09-session-command.sh",
+        "executable": true,
+        "content": "#!/bin/sh\nenv NSHELL_PROMPT=\"D09_CHILD_READY> \" nshell --config ../home/d09-child-init.lisp\nprintf '%s\\n' \"$D09_OUTER_SHELL_TEXT\"\nexec env PS1=\"$D09_OUTER_PROMPT\" /bin/sh -i\n"
+      }
+    ]
+  },
+  "timeout_seconds": 60,
+  "steps": [
+    {
+      "type": "wait",
+      "contains": "D09_PARENT_PROMPT",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "env -u TMUX -u TMUX_PANE TMUX_TMPDIR=../tmp tmux -f /dev/null -L d09 new-session -d -s d09 ../home/d09-session-command.sh"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D09_PARENT_PROMPT",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "env -u TMUX -u TMUX_PANE TMUX_TMPDIR=../tmp tmux -f /dev/null -L d09 attach-session -t d09; printf '%s\\n' \"$D09_DETACH_RETURN_TEXT\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_screen",
+      "contains": "[d09]",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait",
+      "contains": "D09_CHILD_PROMPT_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "printf 'D09_INITIAL_%s\\n' ATTACH_OK"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D09_INITIAL_ATTACH_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "C-b"
+    },
+    {
+      "type": "key",
+      "key": "d"
+    },
+    {
+      "type": "wait",
+      "contains": "D09_PARENT_AFTER_DETACH",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "env -u TMUX -u TMUX_PANE TMUX_TMPDIR=../tmp tmux -f /dev/null -L d09 attach-session -t d09; printf '%s\\n' \"$D09_CHILD_EXIT_RETURN_TEXT\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_screen",
+      "contains": "[d09]",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait_screen",
+      "contains": "D09_INITIAL_ATTACH_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "printf 'D09_%s_OK\\n' ATTACH"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D09_ATTACH_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D09_OUTER_SHELL_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait_screen",
+      "contains": "D09_OUTER_READY>",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "printf 'D09_SESSION_%s\\n' LIVE"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D09_SESSION_LIVE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D09_PARENT_AFTER_CHILD_EXIT",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "printf 'D09_PARENT_%s\\n' OK"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "D09_PARENT_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "ordered_contains": [
+        "D09_INITIAL_ATTACH_OK",
+        "D09_ATTACH_OK",
+        "D09_SESSION_LIVE",
+        "D09_PARENT_OK"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true
+}

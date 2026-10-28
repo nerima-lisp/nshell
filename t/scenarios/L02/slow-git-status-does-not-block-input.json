@@ -1,0 +1,84 @@
+{
+  "id": "L02-slow-git-status-does-not-block-input",
+  "uc": [
+    "L02"
+  ],
+  "mode": "pty",
+  "timeout_seconds": 10,
+  "wait_for_prompt": false,
+  "environment": {
+    "home": "home",
+    "cwd": "work/repository",
+    "variables": {
+      "NSHELL_PROMPT": "L02_SLOW_PROMPT {git} ",
+      "PATH": "git-probe:/usr/bin:/bin",
+      "NSHELL_L02_GIT_LOG": "git-probe/calls.log",
+      "NSHELL_L02_OUTPUT": "L02_SLOW_GIT_OUTPUT"
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/repository/git-probe/git",
+        "executable": true,
+        "content": "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$NSHELL_L02_GIT_LOG\"\n[ \"$1\" = \"-C\" ] || exit 2\nshift 2\ncase \"$1\" in\n  rev-parse) printf 'nshell-l02-slow\\n' ;;\n  status) exec /bin/sleep 2 ;;\n  *) exit 2 ;;\nesac\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $NSHELL_L02_OUTPUT"
+    },
+    {
+      "type": "wait_input",
+      "contains": "echo $NSHELL_L02_OUTPUT",
+      "timeout_seconds": 0.5
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "L02_SLOW_GIT_OUTPUT",
+      "timeout_seconds": 0.5
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "wait_input",
+      "contains": "exit",
+      "timeout_seconds": 0.5
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 5
+    }
+  ],
+  "expected": {
+    "exit_code": 0,
+    "stream": {
+      "contains": [
+        "L02_SLOW_GIT_OUTPUT"
+      ]
+    },
+    "side_effects": {
+      "files": [
+        {
+          "path": "git-probe/calls.log",
+          "contains": [
+            "rev-parse --abbrev-ref HEAD",
+            "status --porcelain"
+          ]
+        }
+      ]
+    }
+  }
+}

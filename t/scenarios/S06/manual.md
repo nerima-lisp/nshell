@@ -2,8 +2,8 @@
 
 ## Procedure
 
-1. Use a temporary home and an authenticated test provider. Press `Ctrl-]`, request the exact harmless proposal `(^printf S06_SAFE_OK)`, and press Enter to submit the request.
-2. Verify that nshell displays an executable safety classification. Press Enter to approve it and confirm that `S06_SAFE_OK` appears.
+1. Use a temporary home and an authenticated test provider. Create `S06_DELETE_TARGET/marker` containing `S06 protected marker`, then press `Ctrl-]` and request the harmless proposal `(^cat S06_DELETE_TARGET/marker)`. Press Enter to submit the request.
+2. Verify that nshell displays an executable safety classification. Press Enter to approve it and confirm that `S06 protected marker` appears.
 3. Create a temporary directory and a marker file inside it. Request a recursive delete of that exact marker directory, substituting its full temporary path into `(^rm -rf /temporary/test/path)`. Inspect the classification and stop the task without approving it. Never execute this proposal; if it runs accidentally, its target must be only the marker directory created for this check.
 
 ## Pass condition

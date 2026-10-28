@@ -33,6 +33,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Checkout previous supported release (P12)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 35473e96831aed44654e3523f8e965a9a395ed86
+          path: previous-nshell
+          persist-credentials: false
+
       - uses: ./.github/actions/nix-setup
         with:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
@@ -43,6 +50,92 @@ jobs:
           nix build --print-build-logs
           ".#packages.${{ matrix.system }}.default"
           --out-link "$RUNNER_TEMP/nshell-scenario-binary"
+
+      - name: Compare public API against previous release (P12)
+        run: >-
+          nix develop .#default -c bash -c
+          "python3 -B scripts/run-scenarios.py --scenario-dir t/scenarios/P12
+          --mode api
+          --scenario-id P12-public-api-stability
+          --p12-previous-root previous-nshell
+          --p12-consumer-fixture t/scenarios/P12/public-api-consumer.lisp
+          --sbcl \"\$(command -v sbcl)\""
+
+      - name: Run source scenarios
+        run: >-
+          nix develop .#scenarios -c python3 scripts/run-scenarios.py
+          --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"
+          --mode source
+
+      - name: Run Git prompt responsiveness benchmark (L02)
+        run: >-
+          nix develop .#scenarios -c python3 -B scripts/run-scenarios.py
+          --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"
+          --mode benchmark
+          --scenario-id L02-git-prompt-responsiveness
+
+      - name: Verify temporary Nix profile install (T01)
+        run: |
+          set -euo pipefail
+          profile_dir="$(mktemp -d "$RUNNER_TEMP/nshell-profile.XXXXXX")"
+          trap 'rm -rf "$profile_dir"' EXIT
+          profile="$profile_dir/profile"
+          nix profile install --profile "$profile" ".#default"
+          test -x "$profile/bin/nshell"
+          nshell_path="$(PATH="$profile/bin:$PATH" /bin/sh -c 'command -v nshell')"
+          test "$nshell_path" = "$profile/bin/nshell"
+          version_output="$("$nshell_path" --version)"
+          test -n "$version_output"
+          printf '%s\n' "$version_output"
+
+      - name: Build Linux release bundle (T06)
+        if: ${{ matrix.system == 'x86_64-linux' }}
+        run: >-
+          nix build --print-build-logs
+          ".#releaseBundle"
+          --out-link "$RUNNER_TEMP/nshell-release-bundle"
+
+      - name: Verify Linux release bundle (T06)
+        if: ${{ matrix.system == 'x86_64-linux' }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/nshell-release-bundle"
+          perl scripts/verify-release-bundle.pl "$bundle"
+          perl scripts/test-release-pty.pl "$bundle"
+
+      - name: Verify copied Linux release bundle (T06)
+        if: ${{ matrix.system == 'x86_64-linux' }}
+        run: |
+          set -euo pipefail
+          scratch="$(mktemp -d "$RUNNER_TEMP/nshell-release-copy.XXXXXX")"
+          trap 'rm -rf "$scratch"' EXIT
+          bundle_dir="$(readlink -f "$RUNNER_TEMP/nshell-release-bundle")"
+          mkdir -p "$scratch/copied-bundle" "$scratch/home" "$scratch/tmp"
+          cp -a "$bundle_dir/." "$scratch/copied-bundle/"
+          env -i \
+            HOME="$scratch/home" \
+            TMPDIR="$scratch/tmp" \
+            PATH=/usr/bin:/bin \
+            TERM=xterm \
+            "$scratch/copied-bundle/bin/nshell" --version
+          perl scripts/test-release-pty.pl "$scratch/copied-bundle"
+          nix develop .#scenarios -c python3 -B scripts/run-scenarios.py \
+            --binary "$scratch/copied-bundle/bin/nshell" \
+            --scenario-dir t/scenarios/T06 \
+            --mode pty \
+            --scenario-id T06-copied-release-bundle-pty-smoke
+
+      - name: Build Q03 heap-exhaustion binary
+        run: >-
+          nix build --print-build-logs
+          ".#packages.${{ matrix.system }}.q03"
+          --out-link "$RUNNER_TEMP/nshell-q03-scenario-binary"
+
+      - name: Build Q08 fault-injected binary
+        run: >-
+          nix build --print-build-logs
+          ".#packages.${{ matrix.system }}.q08-fault-injected"
+          --out-link "$RUNNER_TEMP/nshell-q08-fault-injected-binary"
 
       - name: Run J05 PTY scenario before batch check
         if: ${{ matrix.run_batch_check }}
@@ -61,8 +154,59 @@ jobs:
           --out-link "$RUNNER_TEMP/nshell-scenario-check"
 
       - name: Run PTY scenarios
-        run: >-
-          nix develop .#scenarios -c python3 scripts/run-scenarios.py
-          --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"
-          --repeat 3
-          --mode pty
+        run: |
+          set -euo pipefail
+          q07_image="$RUNNER_TEMP/nshell-q07.sparseimage"
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            q07_tmp_root="/Volumes/NShellQ07"
+            if [[ -e "$q07_tmp_root" ]]; then
+              echo "Q07 mountpoint already exists: $q07_tmp_root" >&2
+              exit 1
+            fi
+            hdiutil create -size 16m -fs HFS+ -volname NShellQ07 -type SPARSE "$q07_image"
+            hdiutil attach -nobrowse -noverify "$q07_image"
+            trap 'hdiutil detach "$q07_tmp_root"' EXIT
+          else
+            q07_tmp_root="/mnt/nshell-q07"
+            if mountpoint -q "$q07_tmp_root"; then
+              echo "Q07 mountpoint is already mounted: $q07_tmp_root" >&2
+              exit 1
+            fi
+            truncate -s 16M "$q07_image"
+            sudo mkfs.ext4 -F "$q07_image"
+            sudo mkdir -p "$q07_tmp_root"
+            sudo mount -o loop "$q07_image" "$q07_tmp_root"
+            trap 'sudo umount "$q07_tmp_root"' EXIT
+            sudo chown "$(id -u):$(id -g)" "$q07_tmp_root"
+          fi
+          nix develop .#scenarios -c python3 -B scripts/run-scenarios.py \
+            --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell" \
+            --scenario-binary "Q03-real-heap-exhaustion=$RUNNER_TEMP/nshell-q03-scenario-binary/bin/nshell" \
+            --scenario-binary "Q08-fault-injected-key-handler-preserves-input=$RUNNER_TEMP/nshell-q08-fault-injected-binary/bin/nshell-q08-fault-injected" \
+            --scenario-temp-dir "Q07-history-write-failure-on-bounded-filesystem=$q07_tmp_root" \
+            --exclude-scenario-id Q05-nfs-git-prompt \
+            --exclude-scenario-id Q05-nfs-filesystem-completion \
+            --exclude-scenario-id Q05-nfs-glob-expansion \
+            --repeat 3 \
+            --mode pty
+
+  q05-nfs:
+    name: Q05 NFS responsiveness (Ubuntu client VM)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build isolated NFS client VM and run Q05 trials
+        run: bash scripts/run-q05-vm-ci.sh
+
+      - name: Upload Q05 trial evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nshell-q05-${{ github.run_id }}
+          path: ${{ runner.temp }}/nshell-q05-results
+          if-no-files-found: warn
+          retention-days: 90

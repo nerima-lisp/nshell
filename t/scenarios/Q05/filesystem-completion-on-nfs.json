@@ -1,0 +1,34 @@
+{
+  "id": "Q05-nfs-filesystem-completion",
+  "uc": ["Q05"],
+  "mode": "pty",
+  "timeout_seconds": 60,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "Q05_COMPLETION_PROMPT> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {"columns": 120, "rows": 24}
+  },
+  "preconditions": {"files": []},
+  "steps": [
+    {"type": "keys", "text": "ls /mnt/q05/completion/complete-probe-"},
+    {"type": "key", "key": "Tab"},
+    {"type": "key", "key": "Tab"},
+    {"type": "wait", "contains": "complete-probe-a", "timeout_seconds": 60},
+    {"type": "key", "key": "Enter"},
+    {"type": "keys", "text": "printf 'Q05_%s\\n' OK"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait", "contains": "Q05_OK", "timeout_seconds": 60},
+    {"type": "keys", "text": "exit"},
+    {"type": "key", "key": "Enter"},
+    {"type": "wait_exit", "timeout_seconds": 10}
+  ],
+  "expected": {
+    "stream": {"contains": ["complete-probe-a", "complete-probe-b", "Q05_OK"]},
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "id": "T06-copied-release-bundle-pty-smoke",
+  "uc": [
+    "T06"
+  ],
+  "mode": "pty",
+  "timeout_seconds": 10,
+  "environment": {
+    "home": "home",
+    "cwd": "work",
+    "variables": {
+      "NSHELL_PROMPT": "T06_RELEASE> ",
+      "T06_MARKER": "T06_RELEASE_OK"
+    }
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $T06_MARKER"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "T06_RELEASE_OK",
+      "timeout_seconds": 5
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 5
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "T06_RELEASE_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

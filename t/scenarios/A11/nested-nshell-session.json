@@ -1,0 +1,115 @@
+{
+  "id": "A11-nested-nshell-session",
+  "uc": [
+    "A11"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "append_extra_path": true,
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "A11_PARENT> "
+    },
+    "home": "home",
+    "cwd": "work"
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/a11-child-marker",
+        "content": "A11_CHILD_OK\n"
+      },
+      {
+        "path": "work/a11-parent-marker",
+        "content": "A11_PARENT_OK\n"
+      },
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "(nshell.application:register-shell-hook\n :PROMPT\n (lambda (directory status)\n   (format t \"A11_PROMPT_READY~%\")))\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "wait",
+      "contains": "A11_PROMPT_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "env NSHELL_PROMPT='A11_CHILD_READY> ' nshell"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "A11_PROMPT_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "cat a11-child-marker"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "A11_CHILD_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "A11_PROMPT_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "cat a11-parent-marker"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "A11_PARENT_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "ordered_contains": [
+        "A11_CHILD_OK",
+        "A11_PARENT_OK"
+      ]
+    },
+    "exit_code": 0
+  },
+  "load_config": true
+}

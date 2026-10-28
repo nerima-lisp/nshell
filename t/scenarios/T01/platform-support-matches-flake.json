@@ -1,0 +1,29 @@
+{
+  "id": "T01-platform-support-matches-flake",
+  "uc": [
+    "T01"
+  ],
+  "mode": "source",
+  "timeout_seconds": 10,
+  "source_checks": [
+    {
+      "path": "flake.nix",
+      "contains": [
+        "systems = [",
+        "\"x86_64-linux\"",
+        "\"aarch64-darwin\""
+      ]
+    },
+    {
+      "path": "docs/src/getting-started.md",
+      "contains": [
+        "Apple Silicon macOS (`aarch64-darwin`) and x86-64 Linux",
+        "`x86_64-linux`",
+        "It does not declare an Intel macOS target."
+      ]
+    }
+  ],
+  "expected": {
+    "exit_code": 0
+  }
+}

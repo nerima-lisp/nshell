@@ -1,0 +1,124 @@
+{
+  "id": "S04-approves-agent-steps-individually",
+  "uc": [
+    "S04"
+  ],
+  "mode": "pty",
+  "input_delay_seconds": 0.12,
+  "environment": {
+    "variables": {
+      "PATH": "./:/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "S04> ",
+      "NSHELL_AI_COMMAND": "fixture-ai",
+      "NSHELL_AI_MAX_STEPS": "2",
+      "S04_MARKER": "S04_SHELL_ALIVE"
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/fixture-ai",
+        "executable": true,
+        "content": "#!/bin/sh\ncount_file=\"$HOME/.s04-request-count\"\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' 'S04 local assistant fixture 1.0'\n  exit 0\nfi\nwhile IFS= read -r line; do\n  case \"$line\" in\n    *'\"content\":\"\"'*)\n      printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"tools\":[\"StructuredOutput\"],\"mcp_servers\":[]}'\n      continue ;;\n    *'\"request_id\":\"nshell-bootstrap-interrupt\"'*)\n      printf '%s\\n' '{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"nshell-bootstrap-interrupt\",\"response\":{\"still_queued\":[]}}}'\n      printf '%s\\n' '{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[]}}'\n      printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true}'\n      continue ;;\n  esac\n  n=0\n  if [ -r \"$count_file\" ]; then IFS= read -r n < \"$count_file\"; fi\n  n=$((n + 1))\n  printf '%s\\n' \"$n\" > \"$count_file\"\n  case \"$n\" in\n    1) command='(^touch S04_FIRST)' ;;\n    2) command='(^touch S04_SECOND)' ;;\n    *) command='(^printf S04_UNEXPECTED_THIRD_STEP)' ;;\n  esac\n  printf '%s\\n' \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"$command\\\"}]}}\"\n  printf '%s\\n' \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\",\\\"structured_output\\\":{\\\"command\\\":\\\"$command\\\",\\\"reason\\\":\\\"S04 local fixture\\\",\\\"risk\\\":\\\"low\\\"}}\"\ndone\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "agent \"run the two prepared steps\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "(^touch S04_FIRST)",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "(^touch S04_SECOND)",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "check_side_effects",
+      "files": [
+        {
+          "path": "S04_FIRST",
+          "exists": true
+        },
+        {
+          "path": "S04_SECOND",
+          "exists": false
+        }
+      ]
+    },
+    {
+      "type": "key",
+      "key": "s"
+    },
+    {
+      "type": "keys",
+      "text": "printf '%s\\n' \"$S04_MARKER\""
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "S04_SHELL_ALIVE",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "contains": [
+        "step 1/2",
+        "(^touch S04_FIRST)",
+        "step 2/2",
+        "(^touch S04_SECOND)",
+        "S04_SHELL_ALIVE",
+        "Goodbye!"
+      ]
+    },
+    "exit_code": 0,
+    "side_effects": {
+      "files": [
+        {
+          "path": "S04_FIRST",
+          "exists": true
+        },
+        {
+          "path": "S04_SECOND",
+          "exists": false
+        }
+      ]
+    }
+  }
+}

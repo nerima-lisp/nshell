@@ -1,0 +1,19 @@
+{
+  "id": "P12-public-api-stability",
+  "uc": [
+    "P12"
+  ],
+  "mode": "api",
+  "timeout_seconds": 60,
+  "expected": {
+    "stdout": {
+      "ordered_contains": [
+        "P12 candidate source version=",
+        "P12_API_OK",
+        "P12 previous source version=",
+        "P12_API_OK"
+      ]
+    },
+    "exit_code": 0
+  }
+}

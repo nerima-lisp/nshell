@@ -8,10 +8,14 @@ in section 8, and the phase dependencies in section 9; the plan remains the
 source of truth for the catalog and its measurement methodology.
 
 The S-expression reader is the default for interactive submissions and source
-files. Bare command lines remain command-entry sugar and use the shared reader.
-The legacy Fish reader and parser remain in the source tree pending WP-X01b
-cleanup. This note records the contracts used by the current default input
-path.
+files. Bare command lines remain command-entry sugar. The bare-line path in
+`sexp-reader.lisp` uses the shared tokenizer to build command, pipeline, and
+sequence ASTs. The shared tokenizer and command-line parser remain for bare-line
+input and other live `parse-command-line` callers. WP-X01 completed the
+default-reader cutover.
+WP-X01b removed the old REPL reader route and `NSHELL_READER` opt-in, and
+deleted the unused prototype S-expression reader module. This note records the
+contracts used by the current default input path.
 
 Fish is an interaction-quality reference for editing, completion, and
 responsiveness, not a syntax or compatibility target. The new surface syntax
@@ -474,11 +478,8 @@ under [Head resolution](#head-resolution-and-user-package).
 Bare-line input accepts adjacent `^cmd` and stores the same force-external
 flag; `^ cmd` is invalid. The marker is removed from the executable name and is
 not a positional argument.
-`sexp-reader-prototype-command-metadata` is a prototype-only struct with
-`command-node` and `force-external-p` slots. The prototype returns it as a
-second value: a list with one entry per command stage, in source order, whose
-`command-node` slot references the corresponding AST node. The boolean remains
-for existing prototype callers; production consumers read the AST slot.
+The force-external request is stored on `command-node.force-external-p`; the
+production reader does not use a separate command-metadata wrapper.
 
 ## Errors
 
@@ -708,26 +709,25 @@ predicates. Context extraction is replaced; the new scanner supplies the
 structural facts used to populate the existing `completion-context` contract
 described under [Shared depth scanner](#shared-depth-scanner).
 
-## Contracts for the prototype and follow-on work
+## Reader contracts and P5 acceptance
 
-P2 is the reader design gate, and WP-L00b owns its closure. It passes when the
-prototype produces existing command and pipeline nodes, existing execution
-tests pass without expectation changes, and the shared contracts below are
-fixed. P3 and P4 start after P2 passes. P3 implements the language core; P4
-implements syntax-dependent interactive features. P5 defines the acceptance
-gate for the reader switch. WP-X01 completed the switch; the S-expression
-reader is now the default input path. The gate requires every P0 and P1 use
-case in the acceptance catalog to pass on
-both Linux and macOS. The catalog covers launch and login, external-tool
+P2 was the reader design gate, and WP-L00b owned its shared contracts. P3 and
+P4 started after those contracts were fixed. P5 defined the acceptance gate
+for the reader switch; the criteria below record that gate. WP-X01 completed
+the switch, and WP-X01b removed the old REPL reader route and `NSHELL_READER`
+opt-in and deleted the unused prototype S-expression reader module. The
+S-expression reader is the default input path. The gate required every P0 and
+P1 use case in the acceptance catalog to pass on both Linux and macOS. The
+catalog covered launch and login, external-tool
 invocation, command execution, interactive programs, job control, terminal
 and signal handling, line editing, history, suggestions, completion,
 highlighting and diagnostics, prompts, directories, variables and environment,
 S-expression language behavior, configuration and extensions, robustness, AI
-regressions, and distribution and operations. No use case is excluded because
-its implementation belongs to another WP. P5 also requires every NFR-01
-through NFR-09 target below and no unresolved independent-verification (T3)
-findings. Measure timing targets on an idle Apple Silicon Darwin host and Linux
-CI using the project acceptance plan's methodology; report NFR-05 using its
+regressions, and distribution and operations. No use case was excluded because
+its implementation belonged to another WP. The gate also required every
+NFR-01 through NFR-09 target below and no unresolved independent-verification
+(T3) findings. The project acceptance plan specified measuring timing targets
+on an idle Apple Silicon Darwin host and Linux CI, with NFR-05 reported by its
 p99 criterion.
 
 | NFR | P5 target |
@@ -1795,14 +1795,17 @@ parallel without changing the signatures above.
 
 WP-L00b owns the shared AST definitions and this contract. The table covers
 P3/P4 consumers of these shared types. WP-X01 completed the default-reader
-switch; WP-X01b removes the legacy Fish reader. These ownership boundaries
-prevent parallel WPs from rebuilding shared structures:
+switch. WP-X01b removed the old REPL reader route and `NSHELL_READER` opt-in,
+and deleted the unused prototype S-expression reader module. The shared
+tokenizer and parser remain for bare-line command-island parsing and its live
+callers. These ownership boundaries prevent parallel WPs from rebuilding
+shared structures:
 
 | WP | Owned files | Types or definitions it may add | Extension rule |
 |---|---|---|---|
 | R02 | WP-R02-owned `posix_spawn` infrastructure files and tests; that WP selects their exact paths | The NFR-03 process-spawn implementation (1,000 external commands in ≤5 s) | Land the `posix_spawn` layer before L05 changes pipeline spawning. |
 | L00b | `src/domain/parsing/ast.lisp`, `src/domain/parsing/ast-arguments.lisp`, `t/unit/test-sexp-ast-contracts.lisp`, `src/package-user.lisp`, AST exports in `src/package-domain.lisp`, nshell.asd entries for L00b-owned files, and package exports for L00b-owned symbols | Shared AST types, `NSHELL.USER` package creation, and the common interface condition/helper | L00b fixes shared type names, constructor validation, and AST accessors/tests. It creates `NSHELL.USER` during package-definition loading before L01. L00b owns only `src/application/contracts/wp-interface-errors.lisp` among interface skeleton files; each other interface file belongs to the WP in its name. |
-| L01 | `src/domain/parsing/sexp-reader.lisp`, `src/domain/parsing/sexp-scanner.lisp`, `src/domain/parsing/sexp-reader-prototype.lisp`, shared AST changes in `src/domain/parsing/ast.lisp` and `src/domain/parsing/ast-arguments.lisp`, the AST export in `src/package-domain.lisp`, matching reader/scanner and shared-AST tests, and `nshell.asd` entries | `reader-result` (`form`, `source`, `source-span`, `form-span-map`, `source-path`, `source-map`, `symbol-origins`), `sexp-reader-error` (`source-span`, `source-path`, `source-map`, `cause`), `scan-token`, `scan-result`, `delimiter-frame`, `delimiter-pair`, reader-private types; `command-form->ast`; `command-node.environment-assignments` | `sexp-reader.lisp` owns context-free `read-submission`, bare-line tokenization and spans, and source-backed AST construction. L01 places the reader/scanner API and type skeletons in its first commit. It preserves each unquoted island word spelling and explicitly sets `command-arg.expand-p`; it does not infer eligibility from quote-style. The caller supplies active `head-classifier`; the helper does not reclassify the already-classified outer command, evaluate arguments, or expand macros. Pipeline and process-substitution stages must be command-island forms. The scanner owns the editor full-buffer structural scan, `next-indent` calculation, and matching scanner tests; it does not construct AST. Construct shared AST values through WP-L00b accessors and constructors. L01 is the only follow-on WP allowed to amend shared AST files; it must first document any new field and accessor, including the bare-line assignment prefix. |
+| L01 | `src/domain/parsing/sexp-reader.lisp`, `src/domain/parsing/sexp-scanner.lisp`, shared AST changes in `src/domain/parsing/ast.lisp` and `src/domain/parsing/ast-arguments.lisp`, the AST export in `src/package-domain.lisp`, matching reader/scanner and shared-AST tests, and `nshell.asd` entries | `reader-result` (`form`, `source`, `source-span`, `form-span-map`, `source-path`, `source-map`, `symbol-origins`), `sexp-reader-error` (`source-span`, `source-path`, `source-map`, `cause`), `scan-token`, `scan-result`, `delimiter-frame`, `delimiter-pair`, reader-private types; `command-form->ast`; `command-node.environment-assignments` | `sexp-reader.lisp` owns context-free `read-submission` and source-backed S-expression AST construction. Bare-line tokenization uses the shared tokenizer and preserves source spans; `parse-command-line` builds the shell command AST for bare-line and compatibility callers. L01 placed the reader/scanner API and type skeletons in its first commit. It preserves each unquoted island word spelling and explicitly sets `command-arg.expand-p`; it does not infer eligibility from quote-style. The caller supplies active `head-classifier`; the helper does not reclassify the already-classified outer command, evaluate arguments, or expand macros. Pipeline and process-substitution stages must be command-island forms. The scanner owns the editor full-buffer structural scan, `next-indent` calculation, and matching scanner tests; it does not construct AST. Construct shared AST values through WP-L00b accessors and constructors. L01 is the only follow-on WP allowed to amend shared AST files; it must first document any new field and accessor, including the bare-line assignment prefix. |
 | L02 | `src/application/sexp-evaluator.lisp`, `src/application/contracts/l02-evaluator.lisp`, evaluator data files, evaluator tests, and `nshell.asd` entries | `evaluated-command-stage`; `evaluate-reader-result-in-context`; `evaluate-command-stage-in-context`; `classify-sexp-head`; `command-macro-syntax-error` and `sexp-evaluation-syntax-error` in `nshell.application` | Use `evaluated-command-arg`, registry accessors, and `reader-result.form-span-map` for macro origins; copy both `expand-p` and `glob-p` only from source `command-arg` values, leaving evaluated values ineligible. Pass `reader-result.source` to source-backed AST conversion. Expose the side-effect-free classifier to L01 and E03; classify via `peek-shell-function` so scanning never autoloads, and resolve again at evaluation time after earlier forms may have changed the active shell scope. Evaluate stage arguments and redirect values once, then pass a stage-evaluator closure to L08's `execute-reader-ast-in-context`; report its plan errors at their source spans. Do not evaluate forms during scanning. |
 | L03 | `src/application/contracts/l03-builtin.lisp`, `src/application/builtin-runtime.lisp`, `data/application/builtin-spec-data.lisp`, `src/application/execute-pipeline-expansion.lisp`, `src/application/execute-command-substitution.lisp`, `src/application/builtins.lisp`, matching tests, and `nshell.asd` entries | `builtin-binding` and builtin dispatch types; `command-argv-strings`; C13 globbing and C14 tilde/brace expansion | Own `register-builtin`, `lookup-builtin-binding`, `dispatch-builtin`, and `command-argv-strings`. At argv conversion, expand only marked source arguments in brace, tilde, glob order using `expand-p` and `glob-p`; evaluated values and `:value` builtin arguments do not expand. Own C13 and C14. Keep `+builtin-registry-specs+`, its installer, and `lookup-builtin` handler semantics for bare-line command execution; register S-expression bindings in the separate table. Own the command-substitution implementation and its value path. Consume AST through accessors; do not edit AST definitions. |
 | L04 | `src/application/contracts/l04-command-failure.lisp`, `src/application/command-failed.lisp` and failure-policy files, `src/presentation/contracts/l04-command-failure.lisp`, `src/presentation/repl-output-handlers.lisp` restart wrapper, restart-mode data and tests | `command-failed` and condition-policy types; the three special variables in `nshell.application` | Owns condition slots, policy, and `call-with-command-failure-restarts(thunk)`. The application and presentation contract files hold the initial skeletons; the presentation implementation may live in `repl-output-handlers.lisp`. Consume the pipeline result interface supplied by L05; do not change pipeline or AST structures or E03-owned submission functions. |
@@ -1840,13 +1843,27 @@ Function ownership in the editor is explicit: E03 owns
 
 Every owner may add private value types in its owned files. A WP that needs a field on a shared type must state the field, type, reader, and consumer in this note, then ask L01 for the sole AST-file amendment. Other WPs use the resulting accessor and constructor; they do not copy, subclass, or redefine the shared struct. The same rule applies to scanner and registry types: their owner adds fields and accessors before consumers depend on them.
 
-### Prototype and migration boundary
+### Bare-line parser and migration boundary
 
-The prototype at `src/domain/parsing/sexp-reader-prototype.lisp` remains separate from the production reader and does not determine the default input path. Its tests document the command and pipeline AST boundary; production scanner, reader, and evaluator tests cover the default path. WP-L00b adds AST fields with defaults that preserve existing constructor behavior.
+`src/domain/parsing/sexp-reader.lisp` and `src/domain/parsing/sexp-scanner.lisp`
+implement the default S-expression reader and editor scan. The shared
+`tokenizer-*.lisp` modules tokenize bare-line command islands and provide the
+token and span data reused by the S-expression reader. The `parser-*.lisp`,
+`control-flow*.lisp`, and `parse-result.lisp` modules build and describe the
+shell command AST used by `parse-command-line`. Live callers include source
+processing, pipeline stages and control, completion, and highlighting.
+`parser-shell-redirect.lisp` lowers redirects for the pipeline shell wrapper;
+`ast-redirect-split.lisp` splits typed command redirects before pipeline
+execution. These modules remain for their live command-island and execution
+callers. WP-X01b removed the old REPL reader route and `NSHELL_READER` opt-in,
+and deleted the separate prototype S-expression reader and its prototype-only
+tests.
 
-The prototype tests the command and pipeline AST boundary. It records legacy escaped-symbol glob eligibility, keeps argument-position `|` and `|&` literal, and sets `command-node.force-external-p`. It does not implement the production scanner, package resolution, command-island redirect extraction, or typed `|&` edges.
-
-The migration order was L01 reader/scanner, L02 evaluator, then parallel L03/L04/L06/L07, followed by L05/L08. P4 consumers implemented against the scanner and AST contracts after L01. WP-X01 completed the default-reader cutover.
+The migration order was L01 reader/scanner, L02 evaluator, then parallel
+L03/L04/L06/L07, followed by L05/L08. P4 consumers implemented against the
+scanner and AST contracts after L01. WP-X01 completed the default-reader
+cutover, and WP-X01b removed the old REPL reader route, its opt-in variable,
+and the unused prototype S-expression reader module.
 
 ## History and abbreviation handoff
 

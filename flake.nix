@@ -467,22 +467,30 @@
           '';
         };
 
-      ptyHelperFor =
+      ptyBootstrapFor =
         ctx:
         ctx.pkgs.stdenv.mkDerivation {
-          pname = "cl-process-kit-pty";
-          version = ctx.cl.fromAsdSystem "${cl-process-kit}/cl-process-kit.asd";
+          pname = "nshell-pty-bootstrap";
+          version = ctx.cl.fromAsdSystem "${./nshell.asd}";
           dontUnpack = true;
           buildPhase = ''
             runHook preBuild
-            $CC -O2 -fPIC -shared ${cl-process-kit}/native/pty.c -o libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}
+            $CC -std=c11 -O2 -Wall -Wextra -Werror ${./src/infrastructure/acl/pty-exec-bootstrap.c} -o nshell-pty-bootstrap
             runHook postBuild
           '';
           installPhase = ''
             runHook preInstall
-            install -Dm755 libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary} "$out/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}"
+            install -Dm755 nshell-pty-bootstrap "$out/bin/nshell-pty-bootstrap"
             runHook postInstall
           '';
+        };
+
+      ptyBootstrapPathFor = ctx: "${ptyBootstrapFor ctx}/bin/nshell-pty-bootstrap";
+
+      ptyBootstrapEnvironmentFor =
+        ctx:
+        ctx.pkgs.lib.optionalAttrs ctx.pkgs.stdenv.hostPlatform.isDarwin {
+          NSHELL_PTY_BOOTSTRAP = ptyBootstrapPathFor ctx;
         };
 
       # The delivered binary plus its human-readable release metadata.
@@ -504,6 +512,9 @@
           buildCommand = previous.buildCommand + ''
             wrapProgram "$out/bin/nshell" --inherit-argv0 \
               --run ${deliveryRun} \
+              ${ctx.pkgs.lib.optionalString
+                ctx.pkgs.stdenv.hostPlatform.isDarwin
+                "--set NSHELL_PTY_BOOTSTRAP ${ptyBootstrapPathFor ctx}"} \
               --prefix PATH : ${ctx.pkgs.lib.makeBinPath [ (spawnHelperFor ctx) ]}
             mkdir -p "$out/share/man/man1" "$out/LICENSES"
             cp ${./README.md} "$out/README.md"
@@ -789,12 +800,16 @@
       # cl-prolog-kit, whose whole source tree is already on the registry above.
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
 
-      packageArgs = ctx: {
-        nativeBuildInputs = [
-          (spawnHelperFor ctx)
-          ctx.pkgs.coreutils
-        ];
-      };
+      packageArgs = ctx:
+        {
+          nativeBuildInputs = [
+            (spawnHelperFor ctx)
+            ctx.pkgs.coreutils
+          ] ++ ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
+            (ptyBootstrapFor ctx)
+          ];
+        }
+        // ptyBootstrapEnvironmentFor ctx;
 
       # Drives the test checks from this one number, so the contributor-facing
       # gate and CI cannot drift apart. Bounded so a hung suite fails in half an hour
@@ -883,8 +898,14 @@
           app = ctx.cl.mkApp { drv = delivery; };
           testApp = ctx.pkgs.writeShellApplication {
             name = "nshell-test";
-            runtimeInputs = [ (spawnHelperFor ctx) ];
+            runtimeInputs = [ (spawnHelperFor ctx) ]
+              ++ ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
+                (ptyBootstrapFor ctx)
+              ];
             text = ''
+              ${ctx.pkgs.lib.optionalString
+                ctx.pkgs.stdenv.hostPlatform.isDarwin
+                "export NSHELL_PTY_BOOTSTRAP=${ptyBootstrapPathFor ctx}"}
               exec ${ctx.generated.apps.test.program} "$@"
             '';
           };
@@ -903,7 +924,7 @@
 
           checks.default = ctx.generated.checks.default.overrideAttrs (previous: {
             nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.coreutils ];
-          });
+          } // ptyBootstrapEnvironmentFor ctx);
 
           # The generated shell, plus the aliases this repository's loop is
           # written in terms of. Appended to the preset's own shellHook rather
@@ -913,7 +934,6 @@
           devShells.default = ctx.generated.devShells.default.overrideAttrs (previous: {
             TZDIR = "${ctx.pkgs.tzdata}/share/zoneinfo";
             CL_PROCESS_KIT_SPAWN = "${spawnHelperFor ctx}/bin/cl-process-kit-spawn";
-            CL_PROCESS_KIT_PTY_LIBRARY = "${ptyHelperFor ctx}/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}";
             shellHook = previous.shellHook + ''
               export NSHELL_ROOT=$PWD
               alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'
@@ -927,7 +947,7 @@
               echo "  sbcl  - Interactive Common Lisp (with cl-weave)"
               echo ""
             '';
-          });
+          } // ptyBootstrapEnvironmentFor ctx);
 
         };
 
@@ -965,23 +985,23 @@
             # The focused cl-weave completion suite (nshell/weave), through the
             # same script a developer runs locally. `checks.default` covers
             # run-tests.lisp and is generated.
-            weave = ctx.cl.mkScriptCheck {
+            weave = (ctx.cl.mkScriptCheck {
               drv = ctx.package;
               entryPoint = "scripts/weave.lisp";
               name = "nshell-weave-suite";
               timeoutSeconds = 1800;
-            };
+            }).overrideAttrs (_: ptyBootstrapEnvironmentFor ctx);
 
             # Generate the sb-cover report and enforce the configured source
             # expression minimum. The report also records the distance from
             # the aspirational 100% target without making an unsupported
             # claim that structural sb-cover forms are executable.
-            coverage = ctx.cl.mkScriptCheck {
+            coverage = (ctx.cl.mkScriptCheck {
               drv = ctx.package;
               entryPoint = "scripts/coverage.lisp";
               name = "nshell-src-coverage";
               timeoutSeconds = 1800;
-            };
+            }).overrideAttrs (_: ptyBootstrapEnvironmentFor ctx);
 
             # Keep every Lisp source structurally readable before the more
             # expensive ASDF checks run. This is the same paredit executable

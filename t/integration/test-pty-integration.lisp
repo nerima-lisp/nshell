@@ -419,3 +419,41 @@
                (expect (null status) :to-be-falsy)
                (expect (second status) :to-be :stopped)))
         (pty-test-close-process pty))))))
+#+darwin
+(describe "darwin-pty-inherited-fd"
+  (it "closes unrelated descriptors before executing the target"
+    "CLOEXEC_DEFAULT keeps arbitrary parent descriptors out of PTY targets."
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (let ((original-fd (sb-posix:open "/dev/null" sb-posix:o-rdonly))
+            (probe-fd nil)
+            (pty nil))
+        (unwind-protect
+             (progn
+               (setf probe-fd
+                     (sb-posix:fcntl
+                      original-fd
+                      nshell.infrastructure.acl::+spawn-f-dupfd+
+                      16))
+               (sb-posix:close original-fd)
+               (setf original-fd nil)
+               (sb-posix:fcntl probe-fd sb-posix:f-setfd 0)
+               (setf pty
+                     (nshell.infrastructure.acl:pty-spawn
+                      "/bin/sh"
+                      (list "-c"
+                            (format nil
+                                    "if ( : <&~d ) 2>/dev/null; then printf pty-fd-open; else printf pty-fd-closed; fi"
+                                    probe-fd))))
+               (let ((output
+                       (pty-test-read-until
+                        (nshell.infrastructure.acl:pty-process-master-fd pty)
+                        "pty-fd-")))
+                 (expect (search "pty-fd-closed" output) :to-be-truthy)
+                 (expect (search "pty-fd-open" output) :to-be-falsy))
+               (expect :exited :to-be
+                       (nshell.infrastructure.acl:pty-process-wait pty)))
+          (pty-test-close-process pty)
+          (when original-fd
+            (ignore-errors (sb-posix:close original-fd)))
+          (when probe-fd
+            (ignore-errors (sb-posix:close probe-fd))))))))

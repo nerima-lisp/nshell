@@ -28,7 +28,7 @@
   "arguments": [
     "-l",
     "-c",
-      "case \":$PATH:\" in *:/r04-login-profile:*) ;; *) exit 89 ;; esac; printf 'LOGIN_PATH_OK\\n'"
+      "command -v env >/dev/null || exit 90; case \":$PATH:\" in *:/r04-login-profile:*) ;; *) exit 89 ;; esac; printf 'LOGIN_PATH_OK\\n'"
   ],
   "steps": [
     {

@@ -956,6 +956,7 @@
           devShells.scenarios = ctx.pkgs.mkShell {
             nativeBuildInputs = [
               ctx.pkgs.python3
+              ctx.pkgs.sbcl
               ctx.pkgs.tmux
             ];
           };

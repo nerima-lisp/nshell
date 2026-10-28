@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import sys
 import time
 import uuid
@@ -26,17 +27,11 @@ MAX_SAMPLES = 100000
 REQUEST_TIMEOUT = 60.0
 
 
-def profile_sbcl_home(binary: Path) -> Path:
-    wrapped_binary = binary.resolve().parent / ".nshell-wrapped"
-    if not wrapped_binary.is_file():
-        raise RuntimeError(f"nshell wrapper does not exist: {wrapped_binary}")
-    match = re.search(
-        r'exec -a "\$0" "([^"\n]+/bin/sbcl)"\s+--noinform --core ',
-        wrapped_binary.read_text(encoding="utf-8"),
-    )
-    if match is None:
-        raise RuntimeError(f"could not find the SBCL executable in {wrapped_binary}")
-    executable = Path(match.group(1)).resolve()
+def profile_sbcl_home() -> Path:
+    executable = shutil.which("sbcl")
+    if executable is None:
+        raise RuntimeError("could not find the SBCL executable on PATH")
+    executable = Path(executable).resolve()
     home = executable.parent.parent / "lib" / "sbcl"
     if not (home / "contrib" / "sb-sprof.fasl").is_file():
         raise RuntimeError(f"sb-sprof contrib not found under SBCL_HOME: {home}")
@@ -932,7 +927,7 @@ def main() -> int:
     )
     home = run_dir / "home"
     env = module.child_environment(home, marker_text)
-    sbcl_home = profile_sbcl_home(BINARY)
+    sbcl_home = profile_sbcl_home()
     env["SBCL_HOME"] = str(sbcl_home)
     env["NSHELL_READER"] = "sexp"
     expected_output = module.completion_reference_output(

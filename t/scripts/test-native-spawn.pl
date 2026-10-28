@@ -85,7 +85,7 @@ while (my $line = <$log>) {
 close $log or die $!;
 is(scalar keys %calls, 2, 'concurrent invocations use distinct private tmp parents');
 ok($isolated, 'upstream helper uses the exclusive parent as both TMPDIR and cwd');
-is_deeply([sort values %calls], [9, 9], 'each real upstream test executes all nine helper scenarios');
+is_deeply([sort values %calls], [10, 10], 'each real upstream test executes all ten helper scenarios');
 ok(!(grep { -e $_ } keys %calls), 'both private parents are removed after success');
 ok(-f "$root/sentinel", 'unrelated parent content is preserved');
 

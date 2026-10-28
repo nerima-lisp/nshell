@@ -1818,6 +1818,30 @@ def _write_pty(fd: int, data: bytes, scenario_id: str) -> None:
         remaining = remaining[written:]
 
 
+def _read_pty_available(scenario_id: str, fd: int, stream: bytearray,
+                        timeout: float, query_responses: list[int]) -> bool:
+    readable, _, _ = select.select([fd], [], [], timeout)
+    if not readable:
+        return False
+    try:
+        chunk = os.read(fd, 65536)
+    except OSError as error:
+        if error.errno == errno.EIO:
+            chunk = b""
+        else:
+            raise ScenarioError(f"{scenario_id}: PTY output failed: {error}") from error
+    if not chunk:
+        excerpt = bytes(stream[-2000:]).decode("utf-8", errors="replace")
+        raise ScenarioError(f"{scenario_id}: nshell exited before the next marker; PTY tail: {excerpt!r}")
+    stream.extend(chunk)
+    _require(len(stream) <= MAX_OUTPUT_BYTES, f"{scenario_id}: PTY output limit exceeded")
+    terminal_queries = stream.count(b"\x1b[6n")
+    while query_responses[0] < terminal_queries:
+        _write_pty(fd, b"\x1b[1;1R", scenario_id)
+        query_responses[0] += 1
+    return True
+
+
 def _wait_pty_text(scenario_id: str, fd: int, stream: bytearray, start: int,
                    needle: bytes, interaction_timeout: float, scenario_deadline: float,
                    query_responses: list[int]) -> tuple[int, int]:
@@ -1833,25 +1857,9 @@ def _wait_pty_text(scenario_id: str, fd: int, stream: bytearray, start: int,
                 f"{scenario_id}: timed out waiting for {needle.decode('utf-8', errors='replace')!r}; "
                 f"PTY tail: {excerpt!r}"
             )
-        readable, _, _ = select.select([fd], [], [], min(remaining, 0.1))
-        if not readable:
-            continue
-        try:
-            chunk = os.read(fd, 65536)
-        except OSError as error:
-            if error.errno == errno.EIO:
-                chunk = b""
-            else:
-                raise ScenarioError(f"{scenario_id}: PTY output failed: {error}") from error
-        if not chunk:
-            excerpt = bytes(stream[-2000:]).decode("utf-8", errors="replace")
-            raise ScenarioError(f"{scenario_id}: nshell exited before the next marker; PTY tail: {excerpt!r}")
-        stream.extend(chunk)
-        _require(len(stream) <= MAX_OUTPUT_BYTES, f"{scenario_id}: PTY output limit exceeded")
-        terminal_queries = stream.count(b"\x1b[6n")
-        while query_responses[0] < terminal_queries:
-            _write_pty(fd, b"\x1b[1;1R", scenario_id)
-            query_responses[0] += 1
+        _read_pty_available(
+            scenario_id, fd, stream, min(remaining, 0.1), query_responses
+        )
 
 
 def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
@@ -1982,8 +1990,8 @@ def _run_benchmark_sample(scenario: dict[str, Any], binary: Path, cwd: Path,
         post_command_prompt_ms = (prompt_ns - command_start_ns) / 1_000_000
         if verify_branch:
             _verify_benchmark_branch(
-                scenario["id"], fd, stream, branch, prompt_bytes, prompt_end,
-                timeout, scenario_deadline, query_responses,
+                scenario["id"], fd, stream, branch, timeout,
+                scenario_deadline, query_responses,
             )
         return {
             "startup": startup_ms,
@@ -2051,12 +2059,10 @@ def _verify_benchmark_branch(
     fd: int,
     stream: bytearray,
     branch: str,
-    prompt_bytes: bytes,
-    cursor: int,
     timeout: float,
     scenario_deadline: float,
     query_responses: list[int],
-) -> int:
+) -> None:
     branch_marker = branch.encode("utf-8")
     branch_deadline = min(scenario_deadline, time.monotonic() + timeout)
     while branch_marker not in stream and time.monotonic() < branch_deadline:
@@ -2065,21 +2071,17 @@ def _verify_benchmark_branch(
             break
         # Empty input resets the Git status cache; edit redraws let its worker finish.
         _write_pty(fd, b"x", scenario_id)
-        cursor, _ = _wait_pty_text(
-            scenario_id, fd, stream, cursor, prompt_bytes,
-            timeout, branch_deadline, query_responses,
-        )
         _write_pty(fd, b"\x7f", scenario_id)
-        cursor, _ = _wait_pty_text(
-            scenario_id, fd, stream, cursor, prompt_bytes,
-            timeout, branch_deadline, query_responses,
-        )
+        remaining = branch_deadline - time.monotonic()
+        if remaining > 0:
+            _read_pty_available(
+                scenario_id, fd, stream, min(remaining, 0.05), query_responses
+            )
     _require(
         branch_marker in stream,
         f"{scenario_id}: Git branch {branch!r} was not shown when available; "
         f"PTY tail: {bytes(stream[-2000:]).decode('utf-8', errors='replace')!r}",
     )
-    return cursor
 
 
 def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, list[str]]:

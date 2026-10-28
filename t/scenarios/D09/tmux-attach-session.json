@@ -70,7 +70,7 @@
       "timeout_seconds": 10
     },
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "D09_CHILD_PROMPT_READY",
       "timeout_seconds": 10
     },

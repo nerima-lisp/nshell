@@ -403,39 +403,27 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(scenario["preconditions"]["file_sets"][0]["count"], 20_000)
         self.assertEqual(scenario["timeout_seconds"], 180)
 
-    def test_l02_branch_probe_redraws_without_submitting_empty_input(self) -> None:
+    def test_l02_branch_probe_drains_output_without_prompt_redraw(self) -> None:
         stream = bytearray(b"L02_PROMPT")
-        prompt = b"L02_PROMPT"
         branch = b"nshell-l02-benchmark"
-        cursor = len(stream)
         writes: list[bytes] = []
-        wait_calls = 0
-
-        def wait_for_prompt(*_args: Any) -> tuple[int, int]:
-            nonlocal wait_calls
-            wait_calls += 1
-            stream.extend(prompt)
-            if wait_calls == 2:
-                stream.extend(branch)
-            return len(stream), 0
 
         with (
             patch.object(runner.time, "monotonic", return_value=100.0),
             patch.object(runner.time, "sleep"),
+            patch.object(runner.select, "select", return_value=([7], [], [])),
+            patch.object(runner.os, "read", return_value=branch),
             patch.object(
                 runner,
                 "_write_pty",
                 side_effect=lambda _fd, data, _scenario_id: writes.append(data),
             ),
-            patch.object(runner, "_wait_pty_text", side_effect=wait_for_prompt),
         ):
-            result_cursor = runner._verify_benchmark_branch(
+            runner._verify_benchmark_branch(
                 "L02-git-prompt-responsiveness",
                 7,
                 stream,
                 "nshell-l02-benchmark",
-                prompt,
-                cursor,
                 10.0,
                 200.0,
                 [0],
@@ -443,7 +431,6 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual(writes, [b"x", b"\x7f"])
         self.assertIn(branch, stream)
-        self.assertEqual(result_cursor, len(stream))
 
     def test_l02_benchmark_validation_rejects_weakened_measurement_protocol(self) -> None:
         scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/L02/git-prompt-responsiveness.json"
@@ -605,9 +592,13 @@ class ScenarioRunnerTests(unittest.TestCase):
         binary = Path("/nix/store/candidate/bin/nshell")
 
         with tempfile.TemporaryDirectory() as temporary:
-            env, _, _ = runner._environment(scenario, Path(temporary), binary)
+            with patch.dict(runner.os.environ, {"NSHELL_SCENARIO_EXTRA_PATH": "/nix/tools/bin"}):
+                env, _, _ = runner._environment(scenario, Path(temporary), binary)
 
-        self.assertEqual(env["PATH"], f"/usr/bin:/bin{runner.os.pathsep}/nix/store/candidate/bin")
+        self.assertEqual(
+            env["PATH"],
+            f"/usr/bin:/bin{runner.os.pathsep}/nix/tools/bin{runner.os.pathsep}/nix/store/candidate/bin",
+        )
 
     def test_load_config_controls_no_config_argument(self) -> None:
         binary = Path("/nix/store/nshell/bin/nshell")

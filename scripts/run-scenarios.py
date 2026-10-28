@@ -1807,6 +1807,13 @@ def _prepare_benchmark_repository(scenario: dict[str, Any], cwd: Path,
     return branch, tracked_count
 
 
+def _prefer_benchmark_git(env: dict[str, str], scenario_id: str) -> None:
+    git = shutil.which("git")
+    _require(git is not None, f"{scenario_id}: git is required for benchmark scenarios")
+    git_directory = os.path.abspath(os.path.dirname(git))
+    env["PATH"] = os.pathsep.join((git_directory, env["PATH"]))
+
+
 def _write_pty(fd: int, data: bytes, scenario_id: str) -> None:
     remaining = memoryview(data)
     while remaining:
@@ -1862,6 +1869,24 @@ def _wait_pty_text(scenario_id: str, fd: int, stream: bytearray, start: int,
         )
 
 
+def _signal_benchmark_child(pid: int, signal_number: int) -> None:
+    try:
+        child_group = os.getpgid(pid)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        child_group = None
+    if child_group is not None and child_group != os.getpgrp():
+        try:
+            os.killpg(child_group, signal_number)
+        except (ProcessLookupError, PermissionError):
+            pass
+    try:
+        os.kill(pid, signal_number)
+    except ProcessLookupError:
+        pass
+
+
 def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
     try:
         _write_pty(fd, b"exit\n", scenario_id)
@@ -1886,14 +1911,7 @@ def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
         os.close(fd)
     except OSError:
         pass
-    try:
-        os.killpg(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
+    _signal_benchmark_child(pid, signal.SIGTERM)
     deadline = time.monotonic() + 0.5
     while time.monotonic() < deadline:
         try:
@@ -1903,14 +1921,7 @@ def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
         if waited == pid:
             return
         time.sleep(0.02)
-    try:
-        os.killpg(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+    _signal_benchmark_child(pid, signal.SIGKILL)
     deadline = time.monotonic() + 0.5
     while time.monotonic() < deadline:
         try:
@@ -2122,6 +2133,7 @@ def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, in
         root = Path(temporary)
         env, home, cwd = _environment(scenario, root)
         _write_preconditions(scenario, root)
+        _prefer_benchmark_git(env, scenario["id"])
         version = _benchmark_binary_version(binary, cwd, env, scenario["id"])
         benchmark = scenario["benchmark"]
         branch, tracked_count = _prepare_benchmark_repository(scenario, cwd, env)

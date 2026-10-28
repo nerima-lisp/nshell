@@ -404,6 +404,38 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertTrue(scenario["environment"]["append_extra_path"])
         self.assertEqual(scenario["timeout_seconds"], 180)
 
+    def test_l02_child_prefers_the_git_used_by_the_fixture(self) -> None:
+        environment = {"PATH": "/usr/bin:/bin:/nix/store/git/bin"}
+        with patch.object(runner.shutil, "which", return_value="/nix/store/git/bin/git"):
+            runner._prefer_benchmark_git(environment, "L02-git-prompt-responsiveness")
+
+        self.assertEqual(
+            environment["PATH"],
+            f"/nix/store/git/bin{runner.os.pathsep}/usr/bin:/bin:/nix/store/git/bin",
+        )
+
+    def test_benchmark_child_signal_falls_back_when_group_signal_is_denied(self) -> None:
+        with (
+            patch.object(runner.os, "getpgid", return_value=42),
+            patch.object(runner.os, "getpgrp", return_value=7),
+            patch.object(runner.os, "killpg", side_effect=PermissionError),
+            patch.object(runner.os, "kill") as kill_pid,
+        ):
+            runner._signal_benchmark_child(42, runner.signal.SIGTERM)
+
+        kill_pid.assert_called_once_with(42, runner.signal.SIGTERM)
+
+    def test_benchmark_child_signal_falls_back_when_group_lookup_is_denied(self) -> None:
+        with (
+            patch.object(runner.os, "getpgid", side_effect=PermissionError),
+            patch.object(runner.os, "killpg") as kill_group,
+            patch.object(runner.os, "kill") as kill_pid,
+        ):
+            runner._signal_benchmark_child(42, runner.signal.SIGTERM)
+
+        kill_group.assert_not_called()
+        kill_pid.assert_called_once_with(42, runner.signal.SIGTERM)
+
     def test_l02_branch_probe_drains_output_without_prompt_redraw(self) -> None:
         stream = bytearray(b"L02_PROMPT")
         branch = b"nshell-l02-benchmark"

@@ -47,7 +47,7 @@ q05_cleanup() {
   if [[ "$q05_nfs_was_active" == false ]]; then
     sudo systemctl stop nfs-kernel-server || true
   fi
-  rm -rf "$q05_workspace"
+  sudo rm -rf "$q05_workspace"
   exit "$q05_exit_status"
 }
 trap q05_cleanup EXIT
@@ -74,6 +74,7 @@ sudo apt-get install --yes --no-install-recommends \
   nfs-kernel-server \
   qemu-system-x86 \
   qemu-utils
+sudo install -d -m 0755 /etc/exports.d
 
 mkdir -p "$q05_export/git" "$q05_export/completion" "$q05_export/glob"
 touch \

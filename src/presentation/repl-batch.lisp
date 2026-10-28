@@ -3,8 +3,7 @@
 
 (defun %initialize-batch-state ()
   "Reset the global shell state for a non-interactive (batch or script) run."
-  (setf *repl-filesystem* (nshell.infrastructure.acl:make-host-filesystem)
-        *running* t
+  (setf *running* t
         *last-exit-code* 0
         *pipefail* nil
         *last-command-duration-ms* nil

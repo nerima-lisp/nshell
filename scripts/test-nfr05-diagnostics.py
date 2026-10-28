@@ -163,6 +163,109 @@ class Nfr05DiagnosticTests(unittest.TestCase):
         self.assertEqual(missing_time_event["origin_evidence"], "insufficient-time-evidence")
         self.assertEqual(parsed["futex_wait_redraw_overlap_ns_sum"], 20_000)
 
+    def test_strace_pairs_interleaved_unfinished_syscalls_by_tid_and_correlates_entry_intervals(self) -> None:
+        trace = "\n".join(
+            (
+                "[pid 21] 100.000010 futex(0x1, FUTEX_WAIT_PRIVATE, 2, NULL <unfinished ...>",
+                "[pid 22] 100.000020 rt_sigprocmask(SIG_BLOCK, NULL, NULL, 8) <unfinished ...>",
+                "[pid 23] 100.000030 futex(0x2, FUTEX_WAIT_PRIVATE, 2, NULL <unfinished ...>",
+                "[pid 21] 100.000050 <... futex resumed>) = 0 <0.000040>",
+                " > /nix/store/sbcl/libsbcl.so(sb_thread_wait_21+0x1) [0x21]",
+                "[pid 22] 100.000060 <... rt_sigprocmask resumed>) = 0 <0.000040>",
+                " > /nix/store/sbcl/libsbcl.so(gc_stop_the_world_22+0x1) [0x22]",
+                "[pid 23] 100.000070 <... futex resumed>) = 0 <0.000040>",
+                " > /nix/store/sbcl/libsbcl.so(sb_thread_wait_23+0x1) [0x23]",
+            )
+        )
+        parsed = DIAGNOSTICS._parse_strace_trace(trace)
+        DIAGNOSTICS.correlate_strace_events(
+            parsed,
+            {
+                "keypress_realtime_ns": 100_000_025_000,
+                "redraw_complete_realtime_ns": 100_000_060_000,
+            },
+        )
+
+        futex_events = parsed["futex_wait"]["events"]
+        self.assertEqual(parsed["futex_wait"]["count"], 2)
+        self.assertEqual(parsed["futex_wait"]["duration_ns_total"], 80_000)
+        self.assertEqual(parsed["futex_wait_redraw_overlap_ns_sum"], 55_000)
+        self.assertEqual(
+            [(event["trace_pid_tid"], event["timestamp_realtime_ns"], event["duration_ns"]) for event in futex_events],
+            [(21, 100_000_010_000, 40_000), (23, 100_000_030_000, 40_000)],
+        )
+        self.assertEqual([event["redraw_overlap_ns"] for event in futex_events], [25_000, 30_000])
+        self.assertIn("sb_thread_wait_21", futex_events[0]["stack"][0])
+        self.assertIn("sb_thread_wait_23", futex_events[1]["stack"][0])
+
+        mask_events = parsed["signal_mask"]["events"]
+        self.assertEqual(parsed["signal_mask"]["count"], 1)
+        self.assertEqual(parsed["signal_mask"]["duration_ns_total"], 40_000)
+        self.assertEqual(parsed["signal_mask"]["redraw_overlap_ns_sum"], 35_000)
+        self.assertEqual(mask_events[0]["trace_pid_tid"], 22)
+        self.assertEqual(mask_events[0]["timestamp_realtime_ns"], 100_000_020_000)
+        self.assertEqual(mask_events[0]["resume_timestamp_realtime_ns"], 100_000_060_000)
+        self.assertEqual(mask_events[0]["redraw_overlap_ns"], 35_000)
+        self.assertIn("gc_stop_the_world_22", mask_events[0]["stack"][0])
+
+    def test_strace_unmatched_events_keep_only_observed_timestamps_and_durations(self) -> None:
+        parsed = DIAGNOSTICS._parse_strace_trace(
+            "\n".join(
+                (
+                    "[pid 31] 101.000010 futex(0x1, FUTEX_WAIT_PRIVATE, 2, NULL <unfinished ...>",
+                    "[pid 32] 101.000050 <... rt_sigprocmask resumed>) = 0 <0.000010>",
+                    " > /nix/store/sbcl/libsbcl.so(gc_stop_the_world_32+0x1) [0x32]",
+                    "[pid 33] 101.000060 <... futex resumed>) = 0 <0.000005>",
+                )
+            )
+        )
+        DIAGNOSTICS.correlate_strace_events(
+            parsed,
+            {
+                "keypress_realtime_ns": 101_000_000_000,
+                "redraw_complete_realtime_ns": 101_000_100_000,
+            },
+        )
+
+        self.assertEqual(len(parsed["unmatched_events"]), 3)
+        unfinished = next(
+            event for event in parsed["unmatched_events"] if event["event_status"] == "unfinished-unmatched"
+        )
+        resumed = next(
+            event
+            for event in parsed["unmatched_events"]
+            if event["syscall"] == "rt_sigprocmask"
+        )
+        resumed_futex = next(
+            event for event in parsed["unmatched_events"] if event["syscall"] == "futex"
+        )
+        self.assertEqual(unfinished["event_status"], "unfinished-unmatched")
+        self.assertEqual(unfinished["trace_pid_tid"], 31)
+        self.assertEqual(unfinished["timestamp_realtime_ns"], 101_000_010_000)
+        self.assertIsNone(unfinished["duration_ns"])
+        self.assertIsNone(unfinished["redraw_overlap_ns"])
+        self.assertEqual(
+            unfinished["redraw_overlap_status"], "missing-event-timestamp-or-duration"
+        )
+
+        self.assertEqual(resumed["event_status"], "resumed-unmatched")
+        self.assertEqual(resumed["trace_pid_tid"], 32)
+        self.assertIsNone(resumed["timestamp_realtime_ns"])
+        self.assertEqual(resumed["resume_timestamp_realtime_ns"], 101_000_050_000)
+        self.assertEqual(resumed["duration_ns"], 10_000)
+        self.assertIsNone(resumed["redraw_overlap_ns"])
+        self.assertEqual(
+            resumed["redraw_overlap_status"], "missing-event-timestamp-or-duration"
+        )
+        self.assertEqual(resumed_futex["event_status"], "resumed-unmatched")
+        self.assertIsNone(resumed_futex["timestamp_realtime_ns"])
+        self.assertEqual(resumed_futex["resume_timestamp_realtime_ns"], 101_000_060_000)
+        self.assertEqual(resumed_futex["duration_ns"], 5_000)
+        self.assertEqual(parsed["futex_wait"]["count"], 1)
+        self.assertEqual(parsed["futex_wait"]["duration_ns_total"], 0)
+        self.assertEqual(parsed["signal_mask"]["count"], 1)
+        self.assertEqual(parsed["signal_mask"]["duration_ns_total"], 10_000)
+
     def test_low_overhead_strace_filter_labels_omitted_terminal_syscalls(self) -> None:
         trace_syscalls = set(DIAGNOSTICS.NFR05_STRACE_SYSCALLS.split(","))
         self.assertTrue({"futex", "futex_waitv", "rt_sigprocmask"}.issubset(trace_syscalls))

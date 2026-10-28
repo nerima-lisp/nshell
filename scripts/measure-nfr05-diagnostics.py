@@ -182,47 +182,129 @@ def _parse_strace_trace(text: str) -> dict[str, object]:
         r"pselect6|epoll_wait|epoll_pwait|epoll_pwait2|write|writev|ioctl|wait4|waitid|"
         r"clone|clone3|fork|vfork|execve|execveat)\("
     )
+    resumed_re = re.compile(
+        r"^\s*(?:\[pid\s+(?P<bracket_pid>\d+)\]\s+|(?P<plain_pid>\d+)\s+)?"
+        r"(?:(?P<timestamp>\d+(?:\.\d+)?)\s+)?"
+        r"<\.\.\.\s*(?P<name>futex|futex_waitv|rt_sigprocmask|rt_sigreturn|read|readv|poll|ppoll|select|"
+        r"pselect6|epoll_wait|epoll_pwait|epoll_pwait2|write|writev|ioctl|wait4|waitid|"
+        r"clone|clone3|fork|vfork|execve|execveat)\s+resumed>"
+    )
     duration_re = re.compile(r"<(?P<seconds>\d+(?:\.\d+)?)>\s*$")
     lines = text.splitlines()
     calls: list[dict[str, object]] = []
-    for index, line in enumerate(lines):
-        match = call_re.match(line)
-        if match is None:
-            continue
-        name = match.group("name")
-        if name == "futex" and not re.search(r"FUTEX_(?:WAIT|LOCK_PI)", line):
-            continue
-        duration = duration_re.search(line)
-        duration_ns = (
-            int(Decimal(duration.group("seconds")) * 1_000_000_000)
-            if duration
+
+    def parse_time(value: str | None) -> tuple[str | None, int | None]:
+        return (
+            (value, int(Decimal(value) * 1_000_000_000))
+            if value is not None
+            else (None, None)
+        )
+
+    def parse_duration(line: str) -> int | None:
+        match = duration_re.search(line)
+        return (
+            int(Decimal(match.group("seconds")) * 1_000_000_000)
+            if match is not None
             else None
         )
-        timestamp = match.group("timestamp")
-        timestamp_ns = (
-            int(Decimal(timestamp) * 1_000_000_000)
-            if timestamp is not None
-            else None
-        )
+
+    def parse_tid(match: re.Match[str]) -> int | None:
+        value = match.group("bracket_pid") or match.group("plain_pid")
+        return int(value) if value else None
+
+    def stack_after(index: int) -> list[str]:
         stack: list[str] = []
         for frame in lines[index + 1 :]:
             if not frame.lstrip().startswith(">"):
                 break
             stack.append(frame.strip())
-        calls.append(
-            {
+        return stack[:8]
+
+    pending: dict[tuple[int, str], list[dict[str, object]]] = {}
+    unmatched_events: list[dict[str, object]] = []
+    for index, line in enumerate(lines):
+        match = call_re.match(line)
+        if match is not None:
+            name = match.group("name")
+            if name == "futex" and not re.search(r"FUTEX_(?:WAIT|LOCK_PI)", line):
+                continue
+            timestamp, timestamp_ns = parse_time(match.group("timestamp"))
+            tid = parse_tid(match)
+            record = {
                 "syscall": name,
-                "trace_pid_tid": int(
-                    match.group("bracket_pid") or match.group("plain_pid")
-                )
-                if match.group("bracket_pid") or match.group("plain_pid")
-                else None,
+                "trace_pid_tid": tid,
                 "timestamp_realtime": timestamp,
                 "timestamp_realtime_ns": timestamp_ns,
+                "duration_ns": parse_duration(line),
+                "stack": stack_after(index),
+                "event_status": "complete",
+            }
+            if "<unfinished ...>" in line:
+                record.update(
+                    {
+                        "duration_ns": None,
+                        "stack": [],
+                        "event_status": "unfinished-unmatched",
+                    }
+                )
+                if tid is None:
+                    unmatched_events.append(record)
+                else:
+                    pending.setdefault((tid, name), []).append(record)
+                continue
+            calls.append(record)
+            continue
+
+        resumed = resumed_re.match(line)
+        if resumed is None:
+            continue
+        name = resumed.group("name")
+        tid = parse_tid(resumed)
+        resume_timestamp, resume_timestamp_ns = parse_time(resumed.group("timestamp"))
+        duration_ns = parse_duration(line)
+        pending_key = (tid, name) if tid is not None else None
+        pending_records = pending.get(pending_key) if pending_key is not None else None
+        pending_record = pending_records.pop() if pending_records else None
+        if pending_key is not None and pending_records == []:
+            del pending[pending_key]
+        if pending_record is None:
+            record = {
+                "syscall": name,
+                "trace_pid_tid": tid,
+                "timestamp_realtime": None,
+                "timestamp_realtime_ns": None,
+                "resume_timestamp_realtime": resume_timestamp,
+                "resume_timestamp_realtime_ns": resume_timestamp_ns,
                 "duration_ns": duration_ns,
-                "stack": stack[:8],
+                "stack": stack_after(index),
+                "event_status": "resumed-unmatched",
+            }
+            unmatched_events.append(record)
+            continue
+
+        pending_record.update(
+            {
+                "duration_ns": duration_ns,
+                "resume_timestamp_realtime": resume_timestamp,
+                "resume_timestamp_realtime_ns": resume_timestamp_ns,
+                "stack": stack_after(index),
+                "event_status": "resumed",
             }
         )
+        calls.append(pending_record)
+
+    unmatched_events.extend(
+        record for pending_records in pending.values() for record in pending_records
+    )
+    # Without its entry, a resumed futex cannot be classified as a wait operation.
+    calls.extend(
+        event
+        for event in unmatched_events
+        if not (
+            event["syscall"] == "futex"
+            and event["event_status"] == "resumed-unmatched"
+        )
+    )
 
     def call_group(names: set[str], *, retain_all_events: bool = False) -> dict[str, object]:
         records = [call for call in calls if call["syscall"] in names]
@@ -259,6 +341,7 @@ def _parse_strace_trace(text: str) -> dict[str, object]:
         "terminal_waits": terminal_waits,
         "terminal_syscalls": call_group({"write", "writev", "ioctl"}),
         "process_activity": process_events,
+        "unmatched_events": unmatched_events,
     }
 
 

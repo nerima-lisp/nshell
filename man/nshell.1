@@ -12,11 +12,15 @@ nshell \- an interactive shell with an S-expression command language
 .IR PATH ]
 .RB [ \-\-no\-history ]
 .RB [ \-\-private ]
-.RB [ \-c
+.RB [ \-\-mcp ]
+.RB [ \-c | \-\-shell-command
 .IR SHELL_COMMAND
 .RI [ ARGS .\|.\|.]]
 .RB [ \-\-command
 .IR COMMAND
+.RI [ ARGS .\|.\|.]]
+.RI [ SCRIPT
+.RI [ ARGS .\|.\|.]]
 .SH DESCRIPTION
 .B nshell
 provides real-time syntax highlighting, history-aware autosuggestions,
@@ -26,14 +30,20 @@ When started with standard input connected to a terminal,
 .B nshell
 runs an interactive read-eval-print loop. Otherwise it reads commands from
 standard input in batch mode. With
-.BR \-c ,
+.BR \-c / \-\-shell-command ,
 it delegates the command and its trailing arguments to
 .BR /bin/sh .
 With
 .BR \-\-command ,
-it executes a single nshell
-.I COMMAND
-and exits.
+it executes a single nshell command and passes trailing arguments as
+.BR $argv .
+With a positional
+.IR SCRIPT ,
+it runs the script and passes trailing arguments as
+.BR $argv .
+The
+.B \-\-mcp
+option runs the stdio MCP server.
 .PP
 This manual describes the default branch. The published v0.6.6 release
 predates the S-expression command language documented here.
@@ -45,16 +55,26 @@ Print a usage summary and exit.
 .BR \-V ", " \-\-version
 Print version information and exit.
 .TP
-.BI \-c " SHELL_COMMAND " "[ARGS...]"
+.BR \-c ", " \-\-shell-command
+.IR SHELL_COMMAND
+.RI [ ARGS .\|.\|.]
 Delegate
 .I SHELL_COMMAND
 and its trailing arguments to
 .BR /bin/sh .
 .TP
-.BI \-\-command " COMMAND"
+.BI \-\-command " COMMAND " "[ARGS...]"
 Execute
 .I COMMAND
-once in nshell batch mode and exit with its status.
+once in nshell batch mode, set the trailing arguments as
+.BR $argv ,
+and exit with its status.
+.TP
+.BI "SCRIPT " "[ARGS...]"
+Run
+.I SCRIPT
+in nshell batch mode with the trailing arguments in
+.BR $argv .
 .TP
 .BR \-l ", " \-\-login
 Load the login environment before starting nshell or delegating a command.
@@ -88,6 +108,9 @@ Unless
 is also set, an interactive session reads existing history without saving its
 commands. Private mode also suppresses local assistant transcript, snapshot,
 and audit persistence.
+.TP
+.B \-\-mcp
+Run the standard-input/standard-output MCP server.
 .SH KEY BINDINGS
 The default Emacs-style bindings use \fBC\-\fR for Ctrl
 and \fBM\-\fR for Alt (Meta).

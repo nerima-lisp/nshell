@@ -24,6 +24,20 @@ To install it in your user profile instead, run:
 nix --extra-experimental-features 'nix-command flakes' profile install github:nerima-lisp/nshell
 ```
 
+To register nshell as a login shell, first install it in your profile, then add
+the profile command's absolute path to `/etc/shells`:
+
+```sh
+nshell_path="$(command -v nshell)"
+printf '%s\n' "$nshell_path"
+grep -Fxq "$nshell_path" /etc/shells || printf '%s\n' "$nshell_path" | sudo tee -a /etc/shells
+grep -Fx "$nshell_path" /etc/shells
+```
+
+Check that the path printed by `command -v` is the profile executable you
+installed. After the entry appears in `/etc/shells`, you can select that same
+path with `chsh -s "$nshell_path"` if you want nshell to be your login shell.
+
 Type `exit` to return to your existing shell.
 
 ## Enter an expression or a command

@@ -944,6 +944,14 @@
         let
           delivery = deliveryFor ctx;
           bin = "${delivery}/bin/nshell";
+          q08FaultSource = ctx.pkgs.runCommand "nshell-q08-fault-source" {
+            nativeBuildInputs = [
+              ctx.pkgs.python3
+              paredit-cli.packages.${ctx.system}.default
+            ];
+          } ''
+            python3 ${./t/scenarios/Q08/prepare-fault-source.py} ${ctx.src} "$out"
+          '';
         in
         {
           # The release workflows use an explicit artifact name while the
@@ -955,11 +963,29 @@
           # why the two cannot be the same derivation.
           packages.releaseBundle = releaseBundleFor ctx;
 
+          # Q03 uses a real storage-condition without imposing a process-wide
+          # address-space limit. Keep its small dynamic space in a separate
+          # executable so the default deliverable retains its normal capacity.
+          packages.q03 = ctx.cl.mkExecutable {
+            args = ctx.lispDerivationArgs;
+            dynamicSpaceSize = 256;
+            programPath = "src/nshell";
+          };
+
+          packages.q08-fault-injected = ctx.cl.mkExecutable {
+            args = ctx.lispDerivationArgs // {
+              pname = "nshell-q08-fault-injected";
+              src = q08FaultSource;
+            };
+            programPath = "src/nshell";
+          };
+
           devShells.scenarios = ctx.pkgs.mkShell {
-            nativeBuildInputs = [
-              ctx.pkgs.python3
-              ctx.pkgs.sbcl
+            nativeBuildInputs = with ctx.pkgs; [ python3 sbcl tmux coreutils bash ];
+            NSHELL_SCENARIO_EXTRA_PATH = ctx.pkgs.lib.makeBinPath [
               ctx.pkgs.tmux
+              ctx.pkgs.coreutils
+              ctx.pkgs.bash
             ];
           };
 
@@ -1032,7 +1058,9 @@
                   set -euo pipefail
 
                   python3 ${self}/scripts/test-run-scenarios.py
+                  python3 ${self}/scripts/test-run-q05-trials.py
                   python3 ${self}/scripts/run-scenarios.py --binary ${bin} --mode batch
+                  python3 ${self}/scripts/run-scenarios.py --binary ${bin} --mode source
                   touch "$out"
                 '';
 

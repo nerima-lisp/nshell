@@ -1,0 +1,77 @@
+{
+  "id": "Q08-fault-injected-key-handler-preserves-input",
+  "uc": [
+    "Q08"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "Q08-debug> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "ordered_contains": [
+        "input processing failed; input was preserved",
+        "Q08_OK"
+      ],
+      "excludes": [
+        "Q08_TEST_CONDITION",
+        "Backtrace",
+        "#S("
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo Q08_"
+    },
+    {
+      "type": "key",
+      "key": "C-f"
+    },
+    {
+      "type": "wait",
+      "contains": "input processing failed; input was preserved",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "OK"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q08_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

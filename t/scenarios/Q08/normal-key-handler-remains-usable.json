@@ -1,0 +1,69 @@
+{
+  "id": "Q08-normal-key-handler-remains-usable",
+  "uc": [
+    "Q08"
+  ],
+  "mode": "pty",
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "Q08_NORMAL_MARKER": "Q08_NORMAL_OK",
+      "NSHELL_PROMPT": "Q08-normal> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "expected": {
+    "stream": {
+      "contains": [
+        "Q08_NORMAL_OK"
+      ],
+      "excludes": [
+        "input processing failed; input was preserved",
+        "Q08_TEST_CONDITION",
+        "Backtrace",
+        "#S("
+      ]
+    },
+    "exit_code": 0
+  },
+  "steps": [
+    {
+      "type": "key",
+      "key": "C-f"
+    },
+    {
+      "type": "keys",
+      "text": "echo $Q08_NORMAL_MARKER"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q08_NORMAL_OK",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ]
+}

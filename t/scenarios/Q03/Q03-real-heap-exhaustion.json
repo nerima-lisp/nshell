@@ -1,0 +1,105 @@
+{
+  "id": "Q03-real-heap-exhaustion",
+  "uc": ["Q03"],
+  "mode": "pty",
+  "timeout_seconds": 60,
+  "environment": {
+    "variables": {
+      "PATH": "/usr/bin:/bin",
+      "TERM": "xterm-256color",
+      "NSHELL_PROMPT": "Q03> "
+    },
+    "home": "home",
+    "cwd": "work",
+    "terminal_size": {
+      "columns": 80,
+      "rows": 24
+    }
+  },
+  "preconditions": {
+    "files": []
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "(format t \"Q03_DYNAMIC_SPACE_BYTES=~d~%\" (sb-ext:dynamic-space-size))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q03_DYNAMIC_SPACE_BYTES=268435456",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "(let ((probe (list))) (dotimes (index 10) (setq probe (cons (make-string 1024 :INITIAL-ELEMENT #\\x) probe))) (format t \"Q03_ALLOCATOR_PREFLIGHT=~d~%\" (length probe)))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q03_ALLOCATOR_PREFLIGHT=10",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "(if (= (sb-ext:dynamic-space-size) 268435456) (progn (make-string 268435456 :INITIAL-ELEMENT #\\x) (format t \"~a~a~%\" \"Q03_ALLOCATION_COMPLETED_\" \"UNEXPECTEDLY\")) (error \"Q03 test binary does not have a 256 MiB dynamic space\"))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "nshell: storage exhausted",
+      "timeout_seconds": 15
+    },
+    {
+      "type": "keys",
+      "text": "echo Q03_RECOVERED_$((1+1))"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q03_RECOVERED_2",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "stream": {
+      "ordered_contains": [
+        "Q03_DYNAMIC_SPACE_BYTES=268435456",
+        "Heap exhausted during allocation",
+        "nshell: storage exhausted",
+        "Q03_RECOVERED_2"
+      ],
+      "excludes": [
+        "Q03_ALLOCATION_COMPLETED_UNEXPECTEDLY",
+        "Backtrace",
+        "#S(",
+        "fatal error encountered"
+      ]
+    },
+    "exit_code": 0
+  }
+}

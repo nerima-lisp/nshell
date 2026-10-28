@@ -86,28 +86,29 @@
           *path-command-cache-ttl-seconds*)))
 
 (defun %path-command-directory-cache-get (key stamp now)
-  (%with-path-command-directory-cache-lock
-    (let ((entry (gethash key *path-command-directory-cache*)))
-      (if (%path-command-directory-cache-valid-p entry stamp now)
-          (values (copy-list
-                   (%path-command-directory-cache-entry-entries entry))
-                  t)
-          (values nil nil)))))
+  (multiple-value-bind (entries foundp)
+      (%with-path-command-directory-cache-lock
+        (let ((entry (gethash key *path-command-directory-cache*)))
+          (if (%path-command-directory-cache-valid-p entry stamp now)
+              (values (%path-command-directory-cache-entry-entries entry) t)
+              (values nil nil))))
+    (values (if foundp (copy-list entries) nil) foundp)))
 
 (defun %path-command-directory-cache-generation ()
   (%with-path-command-directory-cache-lock
     *path-command-directory-cache-generation*))
 
 (defun %path-command-directory-cache-put (key generation stamp now entries)
-  (%with-path-command-directory-cache-lock
-    (when (= generation *path-command-directory-cache-generation*)
-      (when (>= (hash-table-count *path-command-directory-cache*)
-                *path-command-cache-limit*)
-        (clrhash *path-command-directory-cache*))
-      (setf (gethash key *path-command-directory-cache*)
-            (%make-path-command-directory-cache-entry
-             stamp now (copy-list entries)))))
-  entries)
+  (let ((entry
+          (%make-path-command-directory-cache-entry
+           stamp now (copy-list entries))))
+    (%with-path-command-directory-cache-lock
+      (when (= generation *path-command-directory-cache-generation*)
+        (when (>= (hash-table-count *path-command-directory-cache*)
+                  *path-command-cache-limit*)
+          (clrhash *path-command-directory-cache*))
+        (setf (gethash key *path-command-directory-cache*) entry)))
+    entries))
 
 (defun %list-path-command-directory (directory filesystem)
   (let* ((directory-files-fn

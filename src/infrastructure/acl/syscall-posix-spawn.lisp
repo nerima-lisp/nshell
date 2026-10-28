@@ -217,13 +217,15 @@
   process))
 
 (defun %wait-native-process (process &optional check-for-stopped)
-  (loop for status = (native-process-status process)
+  (loop with poll-interval = 0.001
+        for status = (native-process-status process)
         when (or (%native-process-terminal-status-p status)
                  (and check-for-stopped (eq status :stopped)))
           do (when (%native-process-terminal-status-p status)
                (%finish-native-process-copiers process))
              (return status)
-        do (sb-sys:serve-all-events 0.01)))
+        do (sb-sys:serve-all-events poll-interval)
+           (setf poll-interval (min 0.01 (* 2 poll-interval)))))
 
 (defun %native-process-alive-p (process)
   (let ((status (native-process-status process)))

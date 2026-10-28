@@ -901,3 +901,25 @@
       (expect processes :to-equal waited)
       (expect :completed :to-be (nshell.domain.execution:job-state job))
       (expect nil :to-be (gethash job-id registry))))
+  (it "native-process-wait-backs-off-event-polling"
+    (let ((statuses '(:running :running :running :running :running :running :exited))
+          (timeouts nil)
+          (finished 0))
+      (sb-ext:without-package-locks
+        (with-temporary-functions
+            (('nshell.infrastructure.acl::native-process-status
+              (lambda (process)
+                (expect :process :to-be process)
+                (pop statuses)))
+             ('sb-sys:serve-all-events
+              (lambda (timeout)
+                (push timeout timeouts)))
+             ('nshell.infrastructure.acl::%finish-native-process-copiers
+              (lambda (process)
+                (expect :process :to-be process)
+                (incf finished))))
+          (expect :exited :to-be
+                  (nshell.infrastructure.acl::%wait-native-process :process))))
+      (expect '(0.001 0.002 0.004 0.008 0.01 0.01)
+              :to-equal (nreverse timeouts))
+      (expect 1 :to-equal finished)))

@@ -39,7 +39,7 @@
   "timeout_seconds": 60,
   "steps": [
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "D09_PARENT_PROMPT",
       "timeout_seconds": 10
     },

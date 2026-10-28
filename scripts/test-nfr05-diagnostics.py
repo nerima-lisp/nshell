@@ -22,19 +22,29 @@ SPEC.loader.exec_module(DIAGNOSTICS)
 
 def diagnostic_record(**overrides: object) -> dict[str, object]:
     record: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "record": "nfr05-render-diagnostic",
         "output_event": "redraw",
         "render_wall_ns": 10,
         "gc_count": 0,
         "gc_time_ns": 0,
+        "gc_real_time_ns": 0,
         "suggestion_ns": 1,
+        "suggestion_scan_ns": 1,
+        "suggestion_history_ns": 0,
+        "suggestion_completion_ns": 0,
+        "completion_ran": False,
         "grapheme_geometry_ns": 2,
         "display_width_ns": 3,
+        "input_buffer_render_ns": 4,
         "terminal_write_ns": 4,
         "terminal_flush_ns": 5,
         "lock_wait_ns": None,
         "lock_wait_source": "not measured in process",
+        "stage_timing_relationships": {
+            "suggestion_scan_history_completion_are_nested_within_suggestion": True,
+            "input_buffer_render_includes_work_performed_inside_render_edit_buffer": True,
+        },
         "command_execution_requested": False,
     }
     record.update(overrides)
@@ -45,6 +55,7 @@ class Nfr05DiagnosticTests(unittest.TestCase):
     def test_schema_accepts_required_durations_and_null_lock_measurement(self) -> None:
         record = DIAGNOSTICS.validate_diagnostic_record(diagnostic_record())
         self.assertEqual(record["gc_count"], 0)
+        self.assertEqual(record["gc_real_time_ns"], 0)
         self.assertIsNone(record["lock_wait_ns"])
 
     def test_schema_rejects_missing_or_negative_durations(self) -> None:
@@ -90,6 +101,7 @@ class Nfr05DiagnosticTests(unittest.TestCase):
                 "[pid 12] 100.000050 futex(0x1, FUTEX_WAKE_PRIVATE, 1, NULL) = 1 <0.000001>",
                 "[pid 12] 100.000060 rt_sigprocmask(SIG_BLOCK, NULL, NULL, 8) = 0 <0.000002>",
                 " > /nix/store/sbcl/libsbcl.so(gc_stop_the_world+0x1) [0x3]",
+                "[pid 12] 100.000065 rt_sigreturn({mask=[]}) = 0 <0.000001>",
                 "[pid 12] 100.000070 write(1, \"prompt\", 6) = 6 <0.000003>",
                 " > /nix/store/libc/libc.so.6(write+0x1) [0x4]",
                 "[pid 12] 100.000075 read(0, \"x\", 1) = 1 <0.000004>",
@@ -101,9 +113,17 @@ class Nfr05DiagnosticTests(unittest.TestCase):
         )
         parsed = DIAGNOSTICS._parse_strace_trace(trace)
         self.assertEqual(parsed["lock_wait_ns"], 40_000)
+        self.assertEqual(parsed["lock_wait_scope"], "capture_window")
         self.assertEqual(parsed["futex_wait"]["count"], 1)
+        self.assertEqual(parsed["futex_wait"]["events"][0]["trace_pid_tid"], 12)
+        self.assertEqual(
+            parsed["futex_wait"]["events"][0]["timestamp_realtime_ns"],
+            100_000_000_000,
+        )
+        self.assertEqual(parsed["futex_wait"]["events"][0]["duration_ns"], 40_000)
         self.assertIn("sb_thread_wait", parsed["futex_wait"]["events"][0]["stack"][0])
         self.assertEqual(parsed["signal_mask"]["count"], 1)
+        self.assertEqual(parsed["signal_return"]["count"], 1)
         self.assertEqual(parsed["terminal_syscalls"]["count"], 1)
         self.assertEqual(parsed["terminal_waits"]["count"], 2)
         self.assertIn(
@@ -111,6 +131,53 @@ class Nfr05DiagnosticTests(unittest.TestCase):
             parsed["terminal_waits"]["events"][0]["stack"][0],
         )
         self.assertEqual(parsed["process_activity"]["exec_count"], 1)
+
+    def test_strace_correlation_uses_event_intervals_and_rejects_missing_evidence(self) -> None:
+        parsed = DIAGNOSTICS._parse_strace_trace(
+            "\n".join(
+                (
+                    "[pid 21] 100.000010 futex(0x1, FUTEX_WAIT_PRIVATE, 2, NULL) = 0 <0.000020>",
+                    " > /nix/store/sbcl/libsbcl.so(sb_thread_wait+0x1) [0x1]",
+                    "22 100.000150 rt_sigprocmask(SIG_BLOCK, NULL, NULL, 8) = 0 <0.000010>",
+                    "[pid 23] futex(0x1, FUTEX_WAIT_PRIVATE, 2, NULL) = 0 <0.000020>",
+                )
+            )
+        )
+        event_window = {
+            "keypress_realtime_ns": 100_000_000_000,
+            "redraw_complete_realtime_ns": 100_000_100_000,
+        }
+        DIAGNOSTICS.correlate_strace_events(parsed, event_window)
+        futex_event, missing_time_event = parsed["futex_wait"]["events"]
+        signal_event = parsed["signal_mask"]["events"][0]
+        self.assertEqual(futex_event["trace_pid_tid"], 21)
+        self.assertEqual(futex_event["redraw_overlap_ns"], 20_000)
+        self.assertEqual(futex_event["origin_evidence"], "overlapping-user-stack-candidate")
+        self.assertEqual(signal_event["redraw_overlap_ns"], 0)
+        self.assertEqual(signal_event["redraw_overlap_status"], "outside-redraw-window")
+        self.assertEqual(missing_time_event["redraw_overlap_ns"], None)
+        self.assertEqual(
+            missing_time_event["redraw_overlap_status"],
+            "missing-event-timestamp-or-duration",
+        )
+        self.assertEqual(missing_time_event["origin_evidence"], "insufficient-time-evidence")
+        self.assertEqual(parsed["futex_wait_redraw_overlap_ns_sum"], 20_000)
+
+    def test_low_overhead_strace_filter_labels_omitted_terminal_syscalls(self) -> None:
+        trace_syscalls = set(DIAGNOSTICS.NFR05_STRACE_SYSCALLS.split(","))
+        self.assertTrue({"futex", "futex_waitv", "rt_sigprocmask"}.issubset(trace_syscalls))
+        self.assertTrue({"clone", "execve", "wait4"}.issubset(trace_syscalls))
+        self.assertTrue({"read", "poll", "write", "writev"}.isdisjoint(trace_syscalls))
+        profile = DIAGNOSTICS._mark_untraced_strace_groups(
+            DIAGNOSTICS._parse_strace_trace(
+                "[pid 12] 100.000000 futex(0x1, FUTEX_WAIT_PRIVATE, 2, NULL) = 0 <0.000040>"
+            ),
+            trace_syscalls,
+        )
+        self.assertEqual(profile["terminal_waits"]["status"], "not-traced")
+        self.assertIsNone(profile["terminal_waits"]["count"])
+        self.assertEqual(profile["terminal_syscalls"]["status"], "not-traced")
+        self.assertEqual(profile["signal_return"]["status"], "not-traced")
 
     def test_sample_parser_records_pid_wait_stacks_without_inventing_duration(self) -> None:
         parsed = DIAGNOSTICS.parse_sample_profile_from_text(

@@ -73,17 +73,20 @@
                     (lambda (candidate)
                       (nshell.domain.completion:candidate-prefix-match-p
                        prefix candidate))
-                    (nshell.domain.completion:complete
-                     knowledge-base
-                     input
-                     :path path
-                     :filesystem filesystem
-                     :alias-table alias-table
-                     :function-table function-table
-                     :variable-names variable-names
-                     :directory directory
-                     :home-directory home-directory
-                     :process-ids process-ids)))
+                    (%nfr05-diagnostic-measure
+                     :suggestion-completion
+                     (lambda ()
+                       (nshell.domain.completion:complete
+                        knowledge-base
+                        input
+                        :path path
+                        :filesystem filesystem
+                        :alias-table alias-table
+                        :function-table function-table
+                        :variable-names variable-names
+                        :directory directory
+                        :home-directory home-directory
+                        :process-ids process-ids)))))
                  (text (if (or (null candidates)
                                (some (lambda (candidate)
                                        (member
@@ -119,7 +122,10 @@
   (unless (nshell.domain.parsing:shell-input-blank-p input)
     (let ((scan-result
             (handler-case
-                (nshell.domain.parsing:scan-input input)
+                (%nfr05-diagnostic-measure
+                 :suggestion-scan
+                 (lambda ()
+                   (nshell.domain.parsing:scan-input input)))
               (error () nil))))
       (when (and scan-result
                  (not (eq (nshell.domain.parsing:scan-result-status scan-result)
@@ -137,7 +143,10 @@
                   (nshell.domain.parsing:scan-result-cursor-role scan-result)
                   '(:command-head :argument :redirect-target)
                   :test #'eq))
-        (or (nshell.application:history-suggestion history input :cwd directory)
+        (or (%nfr05-diagnostic-measure
+             :suggestion-history
+             (lambda ()
+               (nshell.application:history-suggestion history input :cwd directory)))
             (completion-suggestion knowledge-base
                                    input
                                    scan-result

@@ -556,6 +556,11 @@ def run_redraw_sample(
         if native_capture is not None:
             finish_native_capture = native_capture(session.pid)
         start_ns = time.monotonic_ns()
+        keypress_realtime_ns = (
+            time.time_ns()
+            if diagnostic_sidecar is not None or native_capture is not None
+            else None
+        )
         if os.write(session.master, b"x") != 1:
             raise RuntimeError("NFR-05 keypress was not fully written to the PTY")
         end_ns = session.wait_for_output(
@@ -564,6 +569,11 @@ def run_redraw_sample(
                 and rendered_x_count(data, response_start, marker) == buffer_length
             ),
             timeout_seconds=OUTPUT_TIMEOUT_SECONDS,
+        )
+        redraw_complete_realtime_ns = (
+            time.time_ns()
+            if diagnostic_sidecar is not None or native_capture is not None
+            else None
         )
         response = bytes(session.data[response_start:])
         visible_response = visible_terminal_text(response)
@@ -596,7 +606,7 @@ def run_redraw_sample(
                     time.sleep(0.001)
                     continue
                 if (
-                    diagnostic.get("schema_version") != 1
+                    diagnostic.get("schema_version") != 2
                     or diagnostic.get("record") != "nfr05-render-diagnostic"
                 ):
                     raise RuntimeError("NFR-05 diagnostic sidecar has an unexpected schema")
@@ -604,30 +614,59 @@ def run_redraw_sample(
                 break
             else:
                 raise TimeoutError("NFR-05 diagnostic sidecar was not written after redraw")
+            result["keypress_realtime_ns"] = keypress_realtime_ns
+            result["redraw_complete_realtime_ns"] = redraw_complete_realtime_ns
         if finish_native_capture is not None:
             native_capture_result = finish_native_capture()
             capture_started_ns = native_capture_result.get("capture_started_monotonic_ns")
             capture_finished_ns = native_capture_result.get("capture_finished_monotonic_ns")
-            if isinstance(capture_started_ns, int) and isinstance(capture_finished_ns, int):
-                overlap_start_ns = max(capture_started_ns, start_ns)
-                overlap_end_ns = min(capture_finished_ns, end_ns)
-                native_capture_result["event_window"] = {
+            if (
+                isinstance(keypress_realtime_ns, int)
+                and isinstance(redraw_complete_realtime_ns, int)
+            ):
+                event_window = {
                     "keypress_monotonic_ns": start_ns,
                     "redraw_complete_monotonic_ns": end_ns,
                     "redraw_duration_ns": end_ns - start_ns,
-                    "capture_started_before_keypress": capture_started_ns <= start_ns,
-                    "capture_finished_after_redraw": capture_finished_ns >= end_ns,
-                    "capture_process_overlap_ns": max(0, overlap_end_ns - overlap_start_ns),
-                    "overlap_evidence": (
-                        "monotonic process start/finish bounds; platform sample stack timestamps "
-                        "are not exposed"
+                    "keypress_realtime_ns": keypress_realtime_ns,
+                    "redraw_complete_realtime_ns": redraw_complete_realtime_ns,
+                    "redraw_realtime_duration_ns": (
+                        redraw_complete_realtime_ns - keypress_realtime_ns
                     ),
+                    "wall_clock_source": "Python time.time_ns sampled adjacent to the keypress and redraw completion",
                 }
+            else:
+                event_window = {
+                    "keypress_monotonic_ns": start_ns,
+                    "redraw_complete_monotonic_ns": end_ns,
+                    "redraw_duration_ns": end_ns - start_ns,
+                    "keypress_realtime_ns": None,
+                    "redraw_complete_realtime_ns": None,
+                    "wall_clock_source": "not recorded",
+                }
+            if isinstance(capture_started_ns, int) and isinstance(capture_finished_ns, int):
+                overlap_start_ns = max(capture_started_ns, start_ns)
+                overlap_end_ns = min(capture_finished_ns, end_ns)
+                event_window.update(
+                    {
+                        "capture_started_before_keypress": capture_started_ns <= start_ns,
+                        "capture_finished_after_redraw": capture_finished_ns >= end_ns,
+                        "capture_process_overlap_ns": max(0, overlap_end_ns - overlap_start_ns),
+                        "overlap_evidence": (
+                            "monotonic process start/finish bounds; platform sample stack timestamps "
+                            "are not exposed"
+                        ),
+                    }
+                )
+            native_capture_result["event_window"] = event_window
             result["native_capture"] = native_capture_result
             diagnostic = result.get("diagnostics")
             if isinstance(diagnostic, dict):
                 if native_capture_result.get("lock_wait_ns") is not None:
                     diagnostic["lock_wait_ns"] = native_capture_result["lock_wait_ns"]
+                diagnostic["lock_wait_scope"] = native_capture_result.get(
+                    "lock_wait_scope", "unavailable"
+                )
                 diagnostic["lock_wait_source"] = native_capture_result.get(
                     "lock_wait_source", "native capture"
                 )

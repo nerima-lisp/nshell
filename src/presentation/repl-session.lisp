@@ -32,6 +32,9 @@ above."
 
 (defun install-interactive-terminal ()
   "Prepare terminal and job control for an interactive session."
+  (setf *interactive-terminal-restore-pgid*
+        (ignore-errors
+          (nshell.infrastructure.acl:get-foreground-pgroup)))
   (ignore-errors
       (progn
         (setf nshell.application:*shell-pgid*
@@ -44,18 +47,18 @@ above."
   (ignore-errors
       (nshell.infrastructure.acl:set-foreground-pgroup
        nshell.application:*shell-pgid*))
-  ;; The ANSI modes are for the line editor, so they are only worth turning on
-  ;; once raw mode is actually in effect.
-  (when (enter-raw-mode-or-report)
-    (when (nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
-      (ignore-errors
-        (progn
-          (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
-          (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
-          (when *mouse-reporting-enabled-p*
-            (nshell.infrastructure.terminal:ansi-enable-sgr-mouse))
-          (finish-output))))
-    t))
+  ;; The ANSI modes are for the line editor, so enable them only after raw mode.
+  (let ((installed-p (enter-raw-mode-or-report)))
+    (when installed-p
+      (when (nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
+        (ignore-errors
+          (progn
+            (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
+            (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
+            (when *mouse-reporting-enabled-p*
+              (nshell.infrastructure.terminal:ansi-enable-sgr-mouse))
+            (finish-output))))
+    installed-p)))
 
 (defun restore-interactive-terminal ()
   "Undo INSTALL-INTERACTIVE-TERMINAL as far as it got. Never signals."
@@ -64,4 +67,12 @@ above."
         (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
         (nshell.infrastructure.terminal:ansi-disable-bracketed-paste)
         (finish-output)))
-  (leave-raw-mode-reporting-failures))
+  (leave-raw-mode-reporting-failures)
+  (let ((pgid *interactive-terminal-restore-pgid*))
+    (setf *interactive-terminal-restore-pgid* nil)
+    (when (and (integerp pgid) (plusp pgid))
+      (handler-case
+          (nshell.infrastructure.acl:set-foreground-pgroup pgid)
+        (error (condition)
+          (report-terminal-failure "cannot restore the foreground process group"
+                                   condition))))))

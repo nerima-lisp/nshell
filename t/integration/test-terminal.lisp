@@ -431,55 +431,65 @@ never undone leaves SGR mouse reporting on in the user's next shell."
 (describe "terminal-lifecycle-seam-tests"
   (it "installs-and-restores-terminal-through-boundary-calls"
     (let ((calls nil)
+          (foreground-groups nil)
           (nshell.application:*shell-pgid* nil)
+          (nshell.presentation::*interactive-terminal-restore-pgid* nil)
           (nshell.presentation::*mouse-reporting-enabled-p* t))
       (with-temporary-function
           ((quote nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
            (lambda () t))
         (with-temporary-functions
-            (('nshell.infrastructure.acl:set-process-group
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :set-process-group calls)))
-           ('nshell.infrastructure.acl:install-signal-handlers
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :install-signal-handlers calls)
-              t))
-           ('nshell.infrastructure.acl:set-foreground-pgroup
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :set-foreground-pgroup calls)))
-           ('nshell.infrastructure.terminal:enable-raw-mode
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :enable-raw-mode calls)
-              t))
-           ('nshell.infrastructure.terminal:restore-terminal-mode
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :restore-terminal-mode calls)
-              t))
-           ('nshell.infrastructure.terminal:ansi-enable-bracketed-paste
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :ansi-enable-bracketed-paste calls)))
-           ('nshell.infrastructure.terminal:ansi-enable-sgr-mouse
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :ansi-enable-sgr-mouse calls)))
-           ('nshell.infrastructure.terminal:ansi-disable-sgr-mouse
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :ansi-disable-sgr-mouse calls)))
-           ('nshell.infrastructure.terminal:ansi-disable-bracketed-paste
-            (lambda (&rest args)
-              (declare (ignore args))
-              (push :ansi-disable-bracketed-paste calls))))
+            (('nshell.infrastructure.acl:get-foreground-pgroup
+              (lambda ()
+                (push :get-foreground-pgroup calls)
+                4242))
+             ('nshell.infrastructure.acl:set-process-group
+              (lambda (&rest args)
+                (declare (ignore args))
+                (push :set-process-group calls)))
+             ('nshell.infrastructure.acl:install-signal-handlers
+              (lambda (&rest args)
+                (declare (ignore args))
+                (push :install-signal-handlers calls)
+                t))
+             ('nshell.infrastructure.acl:set-foreground-pgroup
+              (lambda (pgid)
+                (push pgid foreground-groups)
+                (push :set-foreground-pgroup calls)))
+             ('nshell.infrastructure.terminal:enable-raw-mode
+              (lambda (&rest args)
+                (declare (ignore args))
+                (push :enable-raw-mode calls)
+                t))
+             ('nshell.infrastructure.terminal:restore-terminal-mode
+              (lambda (&rest args)
+                (declare (ignore args))
+                (push :restore-terminal-mode calls)
+                t))
+             ('nshell.infrastructure.terminal:ansi-enable-bracketed-paste
+              (lambda (&rest args)
+                (declare (ignore args))
+                (push :ansi-enable-bracketed-paste calls)))
+             ('nshell.infrastructure.terminal:ansi-enable-sgr-mouse
+              (lambda (&rest args)
+                (declare (ignore args))
+                (push :ansi-enable-sgr-mouse calls)))
+             ('nshell.infrastructure.terminal:ansi-disable-sgr-mouse
+              (lambda (&rest args)
+                (declare (ignore args))
+                (push :ansi-disable-sgr-mouse calls)))
+             ('nshell.infrastructure.terminal:ansi-disable-bracketed-paste
+              (lambda (&rest args)
+                (declare (ignore args))
+                (push :ansi-disable-bracketed-paste calls))))
           (expect t :to-be
                   (nshell.presentation::install-interactive-terminal))
+          (expect 4242 :to-equal
+                  nshell.presentation::*interactive-terminal-restore-pgid*)
           (nshell.presentation::restore-interactive-terminal)))
-      (dolist (call '(:set-process-group
+      (expect 4242 :to-equal (first foreground-groups))
+      (dolist (call '(:get-foreground-pgroup
+                      :set-process-group
                       :install-signal-handlers
                       :set-foreground-pgroup
                       :enable-raw-mode

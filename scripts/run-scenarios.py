@@ -970,6 +970,7 @@ class TmuxSession:
         self.channel = "exit-" + uuid.uuid4().hex[:12]
         self.pane = ""
         self.stream = bytearray()
+        self.pending_wait_start: int | None = None
         self.fifo_fd = -1
         self.server_started = False
         self.exit_waiter: subprocess.Popen[bytes] | None = None
@@ -1008,9 +1009,8 @@ class TmuxSession:
 
             if scenario.get("wait_for_prompt", True):
                 prompt = env["NSHELL_PROMPT"]
-                start = len(self.stream)
                 self.send_key("Enter")
-                self.wait_for(prompt, start, 10)
+                self.wait_for(prompt, self.take_wait_start(), 10)
         except BaseException as error:
             try:
                 self.close()
@@ -1049,24 +1049,33 @@ class TmuxSession:
         return result
 
     def send_text(self, text: str) -> None:
+        self.pending_wait_start = len(self.stream)
         self._tmux(["send-keys", "-l", "-t", self.pane, text])
 
     def send_key(self, key: str) -> None:
+        self.pending_wait_start = len(self.stream)
         self._tmux(["send-keys", "-t", self.pane, key])
 
     def paste(self, text: str) -> None:
         buffer_name = "scenario-" + uuid.uuid4().hex[:10]
         self._tmux(["load-buffer", "-b", buffer_name, "-"], text.encode("utf-8"))
         try:
+            self.pending_wait_start = len(self.stream)
             self._tmux(["paste-buffer", "-p", "-b", buffer_name, "-t", self.pane])
         finally:
             self._tmux(["delete-buffer", "-b", buffer_name])
 
     def resize(self, columns: int, rows: int) -> None:
+        self.pending_wait_start = len(self.stream)
         self._tmux([
             "resize-window", "-t", self.pane,
             "-x", str(columns), "-y", str(rows),
         ])
+
+    def take_wait_start(self) -> int:
+        start = self.pending_wait_start
+        self.pending_wait_start = None
+        return len(self.stream) if start is None else start
 
     def _read(self, timeout: float) -> bytes:
         readable, _, _ = select.select([self.fifo_fd], [], [], timeout)
@@ -1242,7 +1251,11 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                         elif kind == "resize":
                             session.resize(step["columns"], step["rows"])
                         elif kind == "wait":
-                            session.wait_for(step["contains"], len(session.stream), step.get("timeout_seconds", 10))
+                            session.wait_for(
+                                step["contains"],
+                                session.take_wait_start(),
+                                step.get("timeout_seconds", 10),
+                            )
                         elif kind in ("wait_screen", "wait_input"):
                             timeout = step.get("timeout_seconds", 10)
                             if kind == "wait_input":

@@ -81,7 +81,8 @@ PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `paste` sends bracketed paste, `key` sends a key name accepted by tmux
 `send-keys`, such as `Enter` or `C-d`, `resize` changes the pane dimensions,
 and `wait` waits for its `contains` string to appear in captured PTY output
-after the step starts. `wait_screen` polls the visible pane for its `contains`
+since the most recent input or resize action, or from the wait step's start if
+no such action is pending. `wait_screen` polls the visible pane for its `contains`
 string, which can verify an interactive input-line redraw. Both wait steps reject
 markers that could come from input echo or the prompt. A `resize` step requires
 integer `columns` and `rows` values from 1 through 512. `wait_exit` waits for the shell to exit. The optional

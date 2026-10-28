@@ -89,6 +89,9 @@ def _run_main_for_pty_scenario(
         def send_text(self, _text: str) -> None:
             pass
 
+        def take_wait_start(self) -> int:
+            return len(self.stream)
+
         def wait_after_input(self, _delay: float) -> None:
             pass
 
@@ -355,6 +358,8 @@ class ScenarioRunnerTests(unittest.TestCase):
     def test_tmux_resize_invokes_window_resize(self) -> None:
         session = runner.TmuxSession.__new__(runner.TmuxSession)
         session.pane = "%7"
+        session.stream = bytearray()
+        session.pending_wait_start = None
 
         with patch.object(session, "_tmux") as tmux:
             session.resize(90, 31)
@@ -394,6 +399,24 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual(capture.call_count, 2)
         read.assert_called_once_with(0.1)
+
+    def test_pty_wait_uses_output_since_input_was_sent(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.stream = bytearray(b"startup")
+        session.pending_wait_start = None
+        session.pane = "%1"
+        session.scenario = {"id": "wait-after-input"}
+        session.deadline = runner.time.monotonic() + 1
+
+        with patch.object(runner.TmuxSession, "_tmux"):
+            session.send_key("C-c")
+        session.stream.extend(b"\x1b[0 q")
+
+        self.assertEqual(
+            len(b"startup\x1b[0 q"),
+            session.wait_for("\x1b[0 q", session.take_wait_start(), 1),
+        )
+        self.assertEqual(len(session.stream), session.take_wait_start())
 
     def test_tmux_wait_for_screen_polls_until_excluded_text_disappears(self) -> None:
         session = runner.TmuxSession.__new__(runner.TmuxSession)

@@ -33,6 +33,7 @@ from nfr_thresholds import NFR_THRESHOLDS
 
 NFR06_SAME_PROCESS_REPEAT_COUNT = 3
 NFR06_COMPUTE_SIDECAR_ENV = "NSHELL_NFR06_CANDIDATE_COMPUTE_SIDECAR"
+NFR05_DIAGNOSTIC_SIDECAR_ENV = "NSHELL_NFR05_DIAGNOSTIC_SIDECAR"
 DEFAULT_BUFFER_SIZES = (1000,)
 PROMPT_TIMEOUT_SECONDS = 15
 OUTPUT_TIMEOUT_SECONDS = 5
@@ -207,6 +208,7 @@ def child_environment(
     prompt: str | None = None,
     git_prompt: bool = False,
     candidate_compute_sidecar: Path | None = None,
+    nfr05_diagnostic_sidecar: Path | None = None,
 ) -> dict[str, str]:
     for name in ("config", "data", "state", "cache", "tmp"):
         (home / name).mkdir(parents=True, exist_ok=True)
@@ -228,6 +230,8 @@ def child_environment(
         env["NSHELL_PROMPT"] = ("{git} " if git_prompt else "") + prompt
     if candidate_compute_sidecar is not None:
         env[NFR06_COMPUTE_SIDECAR_ENV] = str(candidate_compute_sidecar)
+    if nfr05_diagnostic_sidecar is not None:
+        env[NFR05_DIAGNOSTIC_SIDECAR_ENV] = str(nfr05_diagnostic_sidecar)
     return env
 
 
@@ -514,12 +518,23 @@ def run_redraw_sample(
     marker_text: str,
     buffer_length: int,
     settle_seconds: float,
+    diagnostic_sidecar: Path | None = None,
+    native_capture: Callable[[int], Callable[[], dict[str, object]]] | None = None,
 ) -> dict[str, object]:
     marker = marker_text.encode()
     home = home_root / f"home-{uuid.uuid4().hex}"
-    env = child_environment(home, marker_text)
+    if diagnostic_sidecar is not None:
+        diagnostic_sidecar.parent.mkdir(parents=True, exist_ok=True)
+        diagnostic_sidecar.unlink(missing_ok=True)
+    env = child_environment(
+        home,
+        marker_text,
+        nfr05_diagnostic_sidecar=diagnostic_sidecar,
+    )
     argv = [str(executable)]
     session = PtySession(argv, cwd, env)
+    finish_native_capture = None
+    native_capture_result = None
     preloaded_length = buffer_length - 1
     preloaded_buffer = b"x" * preloaded_length
     try:
@@ -537,6 +552,9 @@ def run_redraw_sample(
             )
         session.pump_for(0.05)
         response_start = len(session.data)
+        responses_before = session.responses_sent
+        if native_capture is not None:
+            finish_native_capture = native_capture(session.pid)
         start_ns = time.monotonic_ns()
         if os.write(session.master, b"x") != 1:
             raise RuntimeError("NFR-05 keypress was not fully written to the PTY")
@@ -556,7 +574,7 @@ def run_redraw_sample(
             or response_buffer_characters != buffer_length
         ):
             raise RuntimeError("NFR-05 keypress did not redraw the prompt and full input buffer")
-        return {
+        result = {
             "latency_ms": (end_ns - start_ns) / 1_000_000,
             "keypress": "x",
             "preloaded_buffer_characters": preloaded_length,
@@ -567,7 +585,56 @@ def run_redraw_sample(
             "response_bytes": len(response),
             "cursor_queries": session.responses_sent,
         }
+        if diagnostic_sidecar is not None:
+            result["cursor_query_count"] = response.count(CPR_QUERY)
+            result["cursor_response_count"] = session.responses_sent - responses_before
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline:
+                try:
+                    diagnostic = json.loads(diagnostic_sidecar.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    time.sleep(0.001)
+                    continue
+                if (
+                    diagnostic.get("schema_version") != 1
+                    or diagnostic.get("record") != "nfr05-render-diagnostic"
+                ):
+                    raise RuntimeError("NFR-05 diagnostic sidecar has an unexpected schema")
+                result["diagnostics"] = diagnostic
+                break
+            else:
+                raise TimeoutError("NFR-05 diagnostic sidecar was not written after redraw")
+        if finish_native_capture is not None:
+            native_capture_result = finish_native_capture()
+            capture_started_ns = native_capture_result.get("capture_started_monotonic_ns")
+            capture_finished_ns = native_capture_result.get("capture_finished_monotonic_ns")
+            if isinstance(capture_started_ns, int) and isinstance(capture_finished_ns, int):
+                overlap_start_ns = max(capture_started_ns, start_ns)
+                overlap_end_ns = min(capture_finished_ns, end_ns)
+                native_capture_result["event_window"] = {
+                    "keypress_monotonic_ns": start_ns,
+                    "redraw_complete_monotonic_ns": end_ns,
+                    "redraw_duration_ns": end_ns - start_ns,
+                    "capture_started_before_keypress": capture_started_ns <= start_ns,
+                    "capture_finished_after_redraw": capture_finished_ns >= end_ns,
+                    "capture_process_overlap_ns": max(0, overlap_end_ns - overlap_start_ns),
+                    "overlap_evidence": (
+                        "monotonic process start/finish bounds; platform sample stack timestamps "
+                        "are not exposed"
+                    ),
+                }
+            result["native_capture"] = native_capture_result
+            diagnostic = result.get("diagnostics")
+            if isinstance(diagnostic, dict):
+                if native_capture_result.get("lock_wait_ns") is not None:
+                    diagnostic["lock_wait_ns"] = native_capture_result["lock_wait_ns"]
+                diagnostic["lock_wait_source"] = native_capture_result.get(
+                    "lock_wait_source", "native capture"
+                )
+        return result
     finally:
+        if finish_native_capture is not None and native_capture_result is None:
+            finish_native_capture()
         session.close()
 
 

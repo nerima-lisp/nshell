@@ -174,56 +174,58 @@ CONFIG-PATH overrides the startup file when LOAD-CONFIG-P is true. HISTORY-P
 controls history reads and writes. PRIVATE-P prevents this session's commands
 and assistant state from being written. When HISTORY-P is true, existing
 history remains available in private mode."
-  (setf *boundaries* (make-real-boundary-context)
-        *repl-filesystem* (nshell.infrastructure.acl:make-host-filesystem)
-        *running* t
-        *last-exit-code* 0
-        *pipefail* nil
-        *last-command-duration-ms* nil
-        *last-command-output* nil
-        *last-command-text* nil
-        *capture-command-output-p* nil
-        *rerun-confirmation-pending-p* nil
-        *rerun-command-assessment* nil
-        *failure-explain-available-p* nil
-        *history-persistence-enabled-p* (and history-p (not private-p))
-        *history-seen-command-texts* (make-hash-table :test #'equal)
-        *history* (history-kit:make-history)
-        *config* (nshell.domain.configuration:default-config)
-        *kb* (nshell.domain.completion:make-empty-knowledge-base)
-        *input-state* (make-repl-input-state)
-        *assistant-turn-generation* 0
-        *assistant-turn-started-at* nil
-        *assistant-last-event-at* nil
-        *assistant-last-cancel-at* nil
-        *last-assistant-model-event* nil
-        *assistant-model-event-handler* nil
-        *assistant-request-kind* nil
-        *assistant-explain-candidates* nil
-        *assistant-explain-candidate-index* 0
-        *agent-session* nil
-        *assistant-session-id* (unless private-p (%new-assistant-session-id))
-        *assistant-pending-transcript* nil
-        nshell.application:*agent-start-handler* #'start-agent-session
-        nshell.application:*ai-reset-handler* #'reset-ai-session
-        nshell.feature.assistant:*assistant-boundaries*
+  (progn
+    (%nfr05-enable-diagnostics)
+    (setf *boundaries* (make-real-boundary-context)
+          *repl-filesystem* (nshell.infrastructure.acl:make-host-filesystem)
+          *running* t
+          *last-exit-code* 0
+          *pipefail* nil
+          *last-command-duration-ms* nil
+          *last-command-output* nil
+          *last-command-text* nil
+          *capture-command-output-p* nil
+          *rerun-confirmation-pending-p* nil
+          *rerun-command-assessment* nil
+          *failure-explain-available-p* nil
+          *history-persistence-enabled-p* (and history-p (not private-p))
+          *history-seen-command-texts* (make-hash-table :test #'equal)
+          *history* (history-kit:make-history)
+          *config* (nshell.domain.configuration:default-config)
+          *kb* (nshell.domain.completion:make-empty-knowledge-base)
+          *input-state* (make-repl-input-state)
+          *assistant-turn-generation* 0
+          *assistant-turn-started-at* nil
+          *assistant-last-event-at* nil
+          *assistant-last-cancel-at* nil
+          *last-assistant-model-event* nil
+          *assistant-model-event-handler* nil
+          *assistant-request-kind* nil
+          *assistant-explain-candidates* nil
+          *assistant-explain-candidate-index* 0
+          *agent-session* nil
+          *assistant-session-id* (unless private-p (%new-assistant-session-id))
+          *assistant-pending-transcript* nil
+          nshell.application:*agent-start-handler* #'start-agent-session
+          nshell.application:*ai-reset-handler* #'reset-ai-session
+          nshell.feature.assistant:*assistant-boundaries*
           (nshell.feature.assistant:make-assistant-boundary-context
            (nshell.feature.assistant:make-assistant-sidecar-boundary))
-        *completion-rendered-lines* 0
-        *prompt-rendered-lines* 0
-        *prompt-rendered-cursor-row* 0
-        *prompt-rendered-terminal-width* +default-terminal-width+
-        *prompt-rendered-prompt-width* 0
-        *prompt-rendered-origin-row* 1
-        *prompt-rendered-origin-column* 1
-        *prompt-rendered-origin-known-p* nil
-        *prompt-hook-pending-p* t
-        *interactive-terminal-installed-p* nil
-        *environment* (nshell.application:seed-shell-status-environment
-                       (nshell.domain.environment:inject-os-environment
-                        (nshell.domain.environment:make-default-environment)
-                        (nshell.infrastructure.acl:current-environment-entries)
-                        (function nshell.infrastructure.acl:current-working-directory))))
+          *completion-rendered-lines* 0
+          *prompt-rendered-lines* 0
+          *prompt-rendered-cursor-row* 0
+          *prompt-rendered-terminal-width* +default-terminal-width+
+          *prompt-rendered-prompt-width* 0
+          *prompt-rendered-origin-row* 1
+          *prompt-rendered-origin-column* 1
+          *prompt-rendered-origin-known-p* nil
+          *prompt-hook-pending-p* t
+          *interactive-terminal-installed-p* nil
+          *environment* (nshell.application:seed-shell-status-environment
+                         (nshell.domain.environment:inject-os-environment
+                          (nshell.domain.environment:make-default-environment)
+                          (nshell.infrastructure.acl:current-environment-entries)
+                          (function nshell.infrastructure.acl:current-working-directory)))))
   (nshell.feature.assistant:reset-assistant-usage)
   (nshell.feature.assistant:reset-assistant-settings)
   (progn
@@ -236,8 +238,8 @@ history remains available in private mode."
         nshell.application:*theme-apply-handler* (function apply-repl-theme)
         nshell.application:*bind-table-handler* (function bind-dispatch-handler)
         nshell.application::*vi-mode-handler*
-          (lambda (enabled)
-            (setf *vi-mode-enabled* (not (null enabled))))
+        (lambda (enabled)
+          (setf *vi-mode-enabled* (not (null enabled))))
         nshell.application:*prompt-format-apply-handler* (function apply-prompt-format)
         nshell.application:*prompt-format-query-handler* (function current-prompt-format)
         nshell.application:*prompt-preview-handler* (function preview-prompt-format))

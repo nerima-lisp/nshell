@@ -345,6 +345,7 @@
    (:file "presentation/input-state-session")
    (:file "presentation/repl-boundaries")
    (:file "presentation/terminal-size")
+   (:file "presentation/nfr05-diagnostics")
    (:file "presentation/prompt-display")
    (:file "presentation/input-state-vertical-navigation")
    (:file "presentation/completion-ui")

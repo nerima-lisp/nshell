@@ -75,7 +75,6 @@ sudo apt-get install --yes --no-install-recommends \
   qemu-system-x86 \
   qemu-utils
 
-sudo chown 1000:1000 "$q05_export"
 mkdir -p "$q05_export/git" "$q05_export/completion" "$q05_export/glob"
 touch \
   "$q05_export/completion/complete-probe-a" \

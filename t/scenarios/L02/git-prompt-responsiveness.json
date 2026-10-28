@@ -7,7 +7,8 @@
   "timeout_seconds": 180,
   "environment": {
     "home": "home",
-    "cwd": "work/repository"
+    "cwd": "work/repository",
+    "append_extra_path": true
   },
   "preconditions": {
     "files": [],

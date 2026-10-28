@@ -401,6 +401,7 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(scenario["benchmark"]["samples"], 30)
         self.assertEqual(scenario["benchmark"]["runs"], 2)
         self.assertEqual(scenario["preconditions"]["file_sets"][0]["count"], 20_000)
+        self.assertTrue(scenario["environment"]["append_extra_path"])
         self.assertEqual(scenario["timeout_seconds"], 180)
 
     def test_l02_branch_probe_drains_output_without_prompt_redraw(self) -> None:
@@ -431,6 +432,47 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual(writes, [b"x", b"\x7f"])
         self.assertIn(branch, stream)
+
+    def test_benchmark_pty_child_observes_size_before_startup(self) -> None:
+        pid, fd = runner._fork_pty_with_size(24, 100)
+        if pid == 0:
+            try:
+                size = runner.os.get_terminal_size(0)
+                runner.os.write(1, f"{size.lines}x{size.columns}\n".encode())
+            finally:
+                runner.os._exit(0)
+
+        output = bytearray()
+        status = None
+        try:
+            while True:
+                ready, _, _ = runner.select.select([fd], [], [], 2)
+                self.assertTrue(ready, "PTY child did not report its startup size")
+                try:
+                    chunk = runner.os.read(fd, 1024)
+                except OSError as error:
+                    if error.errno != runner.errno.EIO:
+                        raise
+                    chunk = b""
+                if not chunk:
+                    break
+                output.extend(chunk)
+            _, status = runner.os.waitpid(pid, 0)
+        finally:
+            runner.os.close(fd)
+            if status is None:
+                try:
+                    runner.os.kill(pid, runner.signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    runner.os.waitpid(pid, 0)
+                except ChildProcessError:
+                    pass
+
+        self.assertIsNotNone(status, "PTY child was not reaped")
+        self.assertEqual(runner.os.waitstatus_to_exitcode(status), 0)
+        self.assertEqual(output.replace(b"\r\n", b"\n"), b"24x100\n")
 
     def test_l02_benchmark_validation_rejects_weakened_measurement_protocol(self) -> None:
         scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/L02/git-prompt-responsiveness.json"
@@ -756,6 +798,9 @@ class ScenarioRunnerTests(unittest.TestCase):
                 self.stream = bytearray()
                 self.deadline_seconds = 45
                 self.deadline = 0.0
+
+            def take_wait_start(self) -> int:
+                return len(self.stream)
 
             def wait_for(self, _text: str, _start: int, _timeout: float) -> int:
                 (self.cwd / "approved").write_text("yes", encoding="utf-8")

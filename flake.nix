@@ -990,11 +990,13 @@
               tmux
               coreutils
               bash
+              git
             ];
             NSHELL_SCENARIO_EXTRA_PATH = ctx.pkgs.lib.makeBinPath [
               ctx.pkgs.tmux
               ctx.pkgs.coreutils
               ctx.pkgs.bash
+              ctx.pkgs.git
             ];
           };
 

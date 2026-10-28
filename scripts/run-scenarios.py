@@ -1923,6 +1923,40 @@ def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
     raise ScenarioTimeout(f"{scenario_id}: nshell could not be reaped within its benchmark cleanup budget")
 
 
+def _fork_pty_with_size(rows: int, columns: int) -> tuple[int, int]:
+    ready_read, ready_write = os.pipe()
+    try:
+        pid, fd = pty.fork()
+    except OSError:
+        os.close(ready_read)
+        os.close(ready_write)
+        raise
+    if pid == 0:
+        os.close(ready_write)
+        try:
+            ready = os.read(ready_read, 1)
+        finally:
+            os.close(ready_read)
+        if ready != b"1":
+            os._exit(127)
+        return pid, fd
+
+    os.close(ready_read)
+    try:
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+        os.write(ready_write, b"1")
+    except OSError:
+        os.close(ready_write)
+        os.close(fd)
+        try:
+            os.waitpid(pid, 0)
+        except ChildProcessError:
+            pass
+        raise
+    os.close(ready_write)
+    return pid, fd
+
+
 def _run_benchmark_sample(scenario: dict[str, Any], binary: Path, cwd: Path,
                           env: dict[str, str], branch: str, run_number: int,
                           sample_number: int, scenario_deadline: float,
@@ -1934,7 +1968,7 @@ def _run_benchmark_sample(scenario: dict[str, Any], binary: Path, cwd: Path,
     run_env["NSHELL_PROMPT"] = f"{prompt_marker} {{path}}{{git}} "
     start_ns = time.monotonic_ns()
     try:
-        pid, fd = pty.fork()
+        pid, fd = _fork_pty_with_size(24, 100)
     except OSError as error:
         raise ScenarioError(f"{scenario['id']}: could not create PTY: {error}") from error
     if pid == 0:
@@ -1949,7 +1983,6 @@ def _run_benchmark_sample(scenario: dict[str, Any], binary: Path, cwd: Path,
     stream = bytearray()
     query_responses = [0]
     try:
-        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
         prompt_bytes = prompt_marker.encode("utf-8")
         startup_end, startup_ns = _wait_pty_text(
             scenario["id"], fd, stream, 0, prompt_bytes, timeout, scenario_deadline, query_responses

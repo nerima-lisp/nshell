@@ -45,14 +45,12 @@ def profile_sbcl_home(binary: Path) -> Path:
         if runtime_wrapper is not None:
             runtime_text = runtime_wrapper.read_text(encoding="utf-8", errors="replace")
             executable = store_executable(runtime_text, "/bin/sbcl")
-            if executable is None:
-                raise RuntimeError(f"could not resolve the SBCL executable from {runtime_wrapper}")
-        else:
+        if executable is None:
             executable = store_executable(wrapper_text, "/bin/sbcl")
     if executable is None:
         executable_text = shutil.which("sbcl")
         if executable_text is None:
-            raise RuntimeError("could not find the SBCL executable on PATH")
+            raise RuntimeError("could not resolve the SBCL executable from wrappers or PATH")
         executable = Path(executable_text).resolve()
     home = executable.parent.parent / "lib" / "sbcl"
     if not (home / "contrib" / "sb-sprof.fasl").is_file():

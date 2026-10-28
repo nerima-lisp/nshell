@@ -43,6 +43,7 @@
 (defvar *prompt-rendered-origin-known-p* nil)
 (defvar *prompt-hook-pending-p* nil)
 (defvar *interactive-terminal-installed-p* nil)
+(defvar *interactive-terminal-restore-pgid* nil)
 (defvar *osc133-state* :none)
 (defvar *mouse-reporting-enabled-p* nil)
 (defvar *environment* nil)

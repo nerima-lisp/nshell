@@ -82,7 +82,7 @@
       flake = false;
     };
     cl-process-kit = {
-      url = "github:nerima-lisp/cl-process-kit/v3.2.0";
+      url = "github:nerima-lisp/cl-process-kit/v3.4.4";
       flake = false;
     };
     cl-regex-kit = {
@@ -417,7 +417,7 @@
             # Share process reaping with the cancellation watcher and execute
             # the complete dependency suite on Linux as well as Darwin.
             patches = [
-              ./nix/patches/cl-process-kit-no-duplicate-monotonic-seconds.patch
+              ./nix/patches/cl-process-kit-poll-interval.patch
               ./nix/patches/cl-process-kit-enable-linux-tests.patch
               ./nix/patches/cl-process-kit-wait-for-timeout-group.patch
             ];

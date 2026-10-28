@@ -348,32 +348,17 @@
                :cursor-position cursor-position))))
          (when (and suggestion (> (length suggestion) 0))
            (%write-styled suggestion :autosuggestion theme))
-         (%nfr05-diagnostic-measure
-          :grapheme-geometry
-          (lambda ()
-            (%move-cursor-to-rendered-position text
-                                               (input-state-cursor-pos *input-state*)
-                                               prompt-width
-                                               suggestion
-                                               nil
-                                               :terminal-width terminal-width)))
-         (let ((cursor-position
-                (%nfr05-diagnostic-measure
-                 :grapheme-geometry
-                 (lambda ()
-                   (%rendered-buffer-position text
-                                              (input-state-cursor-pos *input-state*)
-                                              prompt-width
-                                              :terminal-width terminal-width)))))
-           (setf *prompt-rendered-lines*
-                 (%nfr05-diagnostic-measure
-                  :grapheme-geometry
-                  (lambda ()
-                    (%rendered-buffer-line-count text
-                                                 :suggestion suggestion
-                                                 :search-suffix nil
-                                                 :terminal-width terminal-width
-                                                 :prompt-width prompt-width)))
+         (multiple-value-bind (rendered-lines cursor-position)
+             (%nfr05-diagnostic-measure
+              :grapheme-geometry
+              (lambda ()
+                (%move-cursor-to-rendered-position text
+                                                   cursor-position
+                                                   prompt-width
+                                                   suggestion
+                                                   nil
+                                                   :terminal-width terminal-width)))
+           (setf *prompt-rendered-lines* rendered-lines
                  *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
                  *prompt-rendered-terminal-width* terminal-width
                  *prompt-rendered-prompt-width* prompt-width)))

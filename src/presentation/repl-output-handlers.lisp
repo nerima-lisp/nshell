@@ -1198,16 +1198,20 @@ wrapped line's other rows on screen as stale duplicates."
     (unless (%completion-session-valid-p *input-state*)
       (let* ((base-state *input-state*)
              (base-buffer (input-state-buffer base-state))
-             (base-cursor (input-state-cursor-pos base-state)))
+             (base-cursor (input-state-cursor-pos base-state))
+             (row-budget (%completion-pager-row-budget))
+             (terminal-width (terminal-width)))
         (multiple-value-bind (refreshed-state candidates)
             (%refresh-completion-session-state base-state)
           (setf *input-state*
                 (cond
                   ((null candidates) refreshed-state)
-                  ((> (completion-render-line-count
-                       candidates
-                       :terminal-width (terminal-width))
-                      (%completion-pager-row-budget))
+                  ((or (> (length candidates)
+                           (* row-budget (max 1 terminal-width)))
+                        (> (completion-render-line-count
+                           candidates
+                           :terminal-width terminal-width)
+                           row-budget))
                    (copy-input-state-with
                     base-state
                     :last-candidates candidates

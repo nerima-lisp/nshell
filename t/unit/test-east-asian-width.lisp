@@ -133,7 +133,7 @@
             (nshell.presentation::%apply-east-asian-ambiguous-width))
           (expect cl-tty-kit:*east-asian-ambiguous-wide* :to-be nil)))))
 
-  (it "measures-unicode-graphemes-as-display-units"
+  (it "measures-ascii-and-unicode-display-widths"
     (let ((vs16 "❤️")
           (family "👨‍👩‍👧‍👦")
           (flag "🇯🇵")
@@ -141,6 +141,8 @@
       (dolist (text (list vs16 family flag combining))
         (expect 1 :to-equal
                 (length (cl-tty-kit:string-graphemes text))))
+      (expect 15 :to-equal
+              (nshell.presentation::%string-visible-width "plain ASCII 123"))
       (expect (nshell.presentation::%string-visible-width family) :to-equal 2)
       (expect (nshell.presentation::%string-visible-width vs16) :to-equal 2)
       (expect (nshell.presentation::%string-visible-width flag) :to-equal 2)

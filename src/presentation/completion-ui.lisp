@@ -81,17 +81,33 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
                      (make-string (- width visible) :initial-element #\Space)))))
 
 (defun %compute-columns (candidates &key (terminal-width (terminal-width)) (padding 2))
-  (let* ((formatted (mapcar #'%format-candidate candidates))
-         (padding (min padding (max 0 (1- terminal-width))))
-         (max-cell-width (max 1 (- terminal-width padding)))
-         (max-width (if formatted
-                        (min max-cell-width
-                             (apply #'max
-                                    (mapcar #'%string-visible-width formatted)))
-                        1))
-         (column-width (+ max-width padding))
-         (columns (max 1 (floor terminal-width column-width))))
-    (values columns column-width formatted)))
+  (labels ((candidate-visible-width (candidate)
+             (let* ((kind (%candidate-kind candidate))
+                    (text (%candidate-display-text candidate))
+                    (description (%candidate-description candidate)))
+               (+ (loop for char across (%kind-icon kind)
+                        sum (%char-visible-width char))
+                  1
+                  (%string-visible-width text)
+                  (if (and description (plusp (length description)))
+                      (+ 2 (%string-visible-width description))
+                      0)))))
+    (let* ((padding (min padding (max 0 (1- terminal-width))))
+           (max-cell-width (max 1 (- terminal-width padding)))
+           (max-width
+             (if candidates
+                 (min max-cell-width
+                      (loop with max-width = 1
+                            for candidate in candidates
+                            for width = (candidate-visible-width candidate)
+                            do (setf max-width (max max-width width))
+                               (when (>= max-width max-cell-width)
+                                 (return max-cell-width))
+                            finally (return max-width)))
+                 1))
+           (column-width (+ max-width padding))
+           (columns (max 1 (floor terminal-width column-width))))
+      (values columns column-width))))
 
 (defun %completion-footer-visible-p (candidate-count footer-p max-rows)
   (and footer-p
@@ -116,8 +132,8 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
         (subseq preview-lines
                 0
                 (min (length preview-lines) preview-limit)))))
-(defun %completion-render-line-count (columns formatted &key max-rows footer-p preview-lines)
-  (let* ((candidate-count (length formatted))
+(defun %completion-render-line-count (columns candidates &key max-rows footer-p preview-lines)
+  (let* ((candidate-count (length candidates))
          (visible-preview-lines
            (%completion-preview-visible-lines
             preview-lines candidate-count footer-p max-rows))
@@ -125,7 +141,7 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
            (and max-rows
                 (max 0 (- max-rows (length visible-preview-lines)))))
          (total-rows
-           (if formatted
+           (if (plusp candidate-count)
                (ceiling candidate-count columns)
                0))
          (footer-lines
@@ -147,11 +163,10 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
                                         max-rows
                                         footer-p
                                         preview-lines)
-  (multiple-value-bind (columns column-width formatted)
+  (multiple-value-bind (columns)
       (%compute-columns candidates :terminal-width terminal-width)
-    (declare (ignore column-width))
     (%completion-render-line-count columns
-                                   formatted
+                                   candidates
                                    :max-rows max-rows
                                    :footer-p footer-p
                                    :preview-lines preview-lines)))
@@ -165,7 +180,7 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
                            footer
                            empty-message
                            preview-lines)
-  (multiple-value-bind (columns column-width formatted)
+  (multiple-value-bind (columns column-width)
       (%compute-columns candidates :terminal-width terminal-width)
     (let* ((candidate-count (length candidates))
            (visible-preview-lines
@@ -177,7 +192,9 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
            (footer-visible-p
              (%completion-footer-visible-p
               candidate-count footer candidate-max-rows))
-           (total-rows (if formatted (ceiling candidate-count columns) 0))
+           (total-rows (if (plusp candidate-count)
+                           (ceiling candidate-count columns)
+                           0))
            (content-budget (if candidate-max-rows
                                (max 0 (- candidate-max-rows
                                          (if footer-visible-p 1 0)))
@@ -213,8 +230,8 @@ PLAIN-TEXT since STYLED-TEXT carries SGR bytes that are not visible columns."
                 do (progn
                      (loop for index from (* row columns)
                            below (min candidate-count (* (1+ row) columns))
-                           for item = (nth index formatted)
                            for candidate = (nth index candidates)
+                           for item = (%format-candidate candidate)
                            for visible-item = (%truncate-string-to-width
                                                item content-width)
                            do (if (eql index selected-index)

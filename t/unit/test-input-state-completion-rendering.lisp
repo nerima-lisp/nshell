@@ -236,6 +236,36 @@
         (expect (search "arrows move" output) :to-be-falsy)
         (expect (<= nshell.presentation::*completion-rendered-lines* 23)
                 :to-be-truthy))))
+  (it "completion-event-pages-large-results-before-counting-rows"
+    (with-repl-test-state
+      (let* ((base-state
+               (nshell.presentation:make-input-state :buffer "complete "))
+             (candidates (loop repeat 20000 collect :candidate))
+             (line-count-calls 0))
+        (setf nshell.presentation::*input-state* base-state)
+        (with-temporary-functions
+            (('nshell.presentation::%completion-session-valid-p
+              (lambda (state)
+                (declare (ignore state))
+                nil))
+             ('nshell.presentation::%refresh-completion-session-state
+              (lambda (state)
+                (declare (ignore state))
+                (values base-state candidates)))
+             ('nshell.presentation::%completion-pager-row-budget
+              (lambda () 10))
+             ('nshell.presentation::terminal-width
+              (lambda () 80))
+             ('nshell.presentation::completion-render-line-count
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                (incf line-count-calls)
+                1)))
+          (nshell.presentation::%process-complete-output-event)
+          (expect 0 :to-equal line-count-calls)
+          (expect (nshell.presentation::input-state-completion-pager
+                   nshell.presentation::*input-state*)
+                  :to-be-truthy)))))
   (it "completion-rendering-previews-first-file-without-an-index"
     (host-kit:with-temporary-directory (directory)
       (let* ((path (merge-pathnames "preview.txt" directory))

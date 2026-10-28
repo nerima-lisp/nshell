@@ -44,7 +44,7 @@
        (setf *nfr05-diagnostic-active-p* t
              *nfr05-diagnostic-started-at* (get-internal-real-time)
              *nfr05-diagnostic-gc-count-start*
-             (sb-ext:atomic-incf *nfr05-diagnostic-gc-count* 0)
+             (sb-ext:atomic-incf (car *nfr05-diagnostic-gc-count*) 0)
              *nfr05-diagnostic-gc-time-start* sb-ext:*gc-run-time*
              *nfr05-diagnostic-stage-ticks* (make-hash-table :test #'eq)
              *nfr05-diagnostic-output-event* nil)))

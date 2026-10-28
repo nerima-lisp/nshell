@@ -194,18 +194,60 @@
                  (expect expected :to-equal texts)))
           (nshell.domain.completion::%invalidate-path-command-cache)))))
 
-  (it "path-command-directory-mapper-preserves-order-at-parallel-boundary"
+  (it "path-command-directory-mapper-preserves-order-and-bounds-fanout"
     (flet ((mapped (directories)
              (nshell.infrastructure.acl:map-path-command-directories
               (lambda (directory)
                 (list :mapped directory))
               directories)))
-      (expect '((:mapped :one) (:mapped :two) (:mapped :three))
+      (expect (list (list :mapped :one)
+                    (list :mapped :two)
+                    (list :mapped :three))
               :to-equal
-              (mapped '(:one :two :three)))
-      (expect '((:mapped :one) (:mapped :two) (:mapped :three) (:mapped :four))
+              (mapped (list :one :two :three)))
+      (expect (list (list :mapped :one)
+                    (list :mapped :two)
+                    (list :mapped :three)
+                    (list :mapped :four))
               :to-equal
-              (mapped '(:one :two :three :four)))))
+              (mapped (list :one :two :three :four))))
+    (let* ((directories (loop for index below 9 collect index))
+           (calls (make-array 9 :initial-element 0))
+           (call-lock (sb-thread:make-mutex))
+           (spawn-symbol (find-symbol "SPAWN" "CL-CONCURRENT-KIT"))
+           (original-spawn (symbol-function spawn-symbol))
+           (spawn-count 0)
+           (results nil))
+      (unwind-protect
+           (progn
+             (setf (symbol-function spawn-symbol)
+                   (lambda (scope task)
+                     (incf spawn-count)
+                     (funcall original-spawn scope task)))
+             (setf results
+                   (nshell.infrastructure.acl:map-path-command-directories
+                    (lambda (directory)
+                      (sb-thread:with-mutex (call-lock)
+                        (incf (aref calls directory)))
+                      (list :mapped directory))
+                    directories)))
+        (setf (symbol-function spawn-symbol) original-spawn))
+      (expect 4 :to-equal spawn-count)
+      (expect (loop for index below 9 collect 1)
+              :to-equal
+              (loop for index below 9 collect (aref calls index)))
+      (expect (loop for index below 9 collect (list :mapped index))
+              :to-equal
+              results))
+    (expect (lambda ()
+              (nshell.infrastructure.acl:map-path-command-directories
+               (lambda (directory)
+                 (when (eql directory :fail)
+                   (error "directory mapping failed"))
+                 directory)
+               (list :one :fail :three :four :five :six :seven :eight)))
+            :to-throw
+            (find-symbol "SIMPLE-ERROR" "COMMON-LISP")))
 
   (it "cps-trampoline-execution"
     (let ((results '()))

@@ -737,12 +737,19 @@ p99 criterion.
 | NFR-03 | 1,000 external commands complete in ≤5 s. |
 | NFR-04 | Empty Enter to next prompt: ≤60 ms, including Git-managed directories; fill Git status afterward. |
 | NFR-05 | Key input to redraw: p99 ≤16 ms for buffers up to 1,000 characters. |
-| NFR-06 | Completion in a 20,000-entry directory: ≤100 ms; suggestions do not block key input. |
+| NFR-06 | Tab to the initial pager page in a 20,000-entry directory: median ≤100 ms; suggestions do not block key input. |
 | NFR-07 | Idle RSS: ≤150 MB. |
 | NFR-08 | Fixed-seed fuzzing of 100,000 reader and input-state cases produces zero debugger displays, core dumps, or hangs. |
 | NFR-09 | Coverage remains ≥85% overall and ≥90% for new code. |
 
 These contracts define the shared boundary for P3 and P4.
+
+The NFR-06 CI measurement writes Tab to a PTY after displaying a completion
+prefix, then stops when the ordered initial candidate page, total count, and
+pager footer are visible. It uses 100 fresh-process samples after two warmups
+and compares their median with 100 ms. Full-output `complete -C` timing and
+suggestion-key latency are reported separately; neither is compared with the
+NFR-06 threshold.
 WP-L00b owns the AST definitions in
 `src/domain/parsing/ast.lisp` and `src/domain/parsing/ast-arguments.lisp`;
 follow-on work uses their constructors and accessors. No WP may redefine these

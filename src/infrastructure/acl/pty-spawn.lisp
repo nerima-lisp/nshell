@@ -98,7 +98,7 @@
                        ((zerop count)
                         (return nil))
                        ((= count 4)
-                        (return (sb-alien:deref error-number)))
+                        (return error-number))
                        (t
                         (error "PTY bootstrap error pipe record was truncated")))))))
              (wait-bootstrap-child (pid)
@@ -114,7 +114,7 @@
                          ((= errno sb-posix:echild)
                           (return nil))
                          (t
-                          (error condition))))))))
+                          (error condition)))))))))
       (unless (and bootstrap-path (plusp (length bootstrap-path)))
         (error "NSHELL_PTY_BOOTSTRAP must name the Darwin PTY exec helper"))
       (unwind-protect
@@ -188,7 +188,7 @@
         (when attributes
           (sb-alien:free-alien attributes))
         (when actions
-          (sb-alien:free-alien actions)))))))
+          (sb-alien:free-alien actions))))))
 
 (defun %set-pty-window-size (slave-fd rows cols)
   (let ((winsize (sb-alien:make-alien sb-alien:unsigned-short 4)))

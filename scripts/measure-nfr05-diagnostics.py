@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from decimal import Decimal
 from pathlib import Path
 from typing import Callable
 
@@ -30,9 +31,8 @@ sys.modules[MEASURE_SPEC.name] = MEASURE
 MEASURE_SPEC.loader.exec_module(MEASURE)
 
 NFR05_STRACE_SYSCALLS = (
-    "futex,futex_waitv,rt_sigprocmask,rt_sigreturn,read,readv,poll,ppoll,select,"
-    "pselect6,epoll_wait,epoll_pwait,epoll_pwait2,write,writev,ioctl,wait4,waitid,"
-    "clone,clone3,fork,vfork,execve,execveat"
+    "futex,futex_waitv,rt_sigprocmask,"
+    "clone,clone3,fork,vfork,execve,execveat,wait4,waitid"
 )
 _STRACE_PROBE_CACHE: dict[str, tuple[tuple[str, ...] | None, str | None]] = {}
 _SUDO_PROBE_CACHE: dict[str, tuple[bool, str]] = {}
@@ -40,16 +40,25 @@ DIAGNOSTIC_FIELDS = (
     "render_wall_ns",
     "gc_count",
     "gc_time_ns",
+    "gc_real_time_ns",
     "suggestion_ns",
+    "suggestion_scan_ns",
+    "suggestion_history_ns",
+    "suggestion_completion_ns",
     "grapheme_geometry_ns",
     "display_width_ns",
+    "input_buffer_render_ns",
     "terminal_write_ns",
     "terminal_flush_ns",
 )
 STAGE_FIELDS = (
     "suggestion_ns",
+    "suggestion_scan_ns",
+    "suggestion_history_ns",
+    "suggestion_completion_ns",
     "grapheme_geometry_ns",
     "display_width_ns",
+    "input_buffer_render_ns",
     "terminal_write_ns",
     "terminal_flush_ns",
 )
@@ -58,7 +67,7 @@ STAGE_FIELDS = (
 def validate_diagnostic_record(record: object) -> dict[str, object]:
     if not isinstance(record, dict):
         raise ValueError("NFR-05 diagnostic record must be a JSON object")
-    if record.get("schema_version") != 1 or record.get("record") != "nfr05-render-diagnostic":
+    if record.get("schema_version") != 2 or record.get("record") != "nfr05-render-diagnostic":
         raise ValueError("NFR-05 diagnostic record has an unexpected schema")
     if not isinstance(record.get("output_event"), str):
         raise ValueError("NFR-05 diagnostic output event must be a string")
@@ -66,6 +75,10 @@ def validate_diagnostic_record(record: object) -> dict[str, object]:
         value = record.get(field)
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
             raise ValueError(f"NFR-05 diagnostic {field} must be a nonnegative integer")
+    if not isinstance(record.get("completion_ran"), bool):
+        raise ValueError("NFR-05 diagnostic completion_ran must be a boolean")
+    if not isinstance(record.get("stage_timing_relationships"), dict):
+        raise ValueError("NFR-05 diagnostic stage timing relationships must be an object")
     if record.get("lock_wait_ns") is not None and (
         not isinstance(record["lock_wait_ns"], int)
         or isinstance(record["lock_wait_ns"], bool)
@@ -119,6 +132,7 @@ def summarize_diagnostic_samples(rows: list[dict[str, object]]) -> dict[str, obj
             "render_wall_ns": summary_for("render_wall_ns", samples),
             "gc_count": summary_for("gc_count", samples),
             "gc_time_ns": summary_for("gc_time_ns", samples),
+            "gc_real_time_ns": summary_for("gc_real_time_ns", samples),
             "stages": {field: summary_for(field, samples) for field in STAGE_FIELDS},
         }
 
@@ -138,19 +152,32 @@ def summarize_diagnostic_samples(rows: list[dict[str, object]]) -> dict[str, obj
             "native_sample_count": len(native_rows),
             "median": statistics.median(lock_wait_values),
             "p99_nearest_rank": MEASURE.percentile_nearest_rank(lock_wait_values, 0.99),
+            "scope": "capture_window; may include syscall waits outside the redraw interval",
         } if lock_wait_values else {
             "sample_count": 0,
             "native_sample_count": len(native_rows),
+            "scope": "capture_window",
             "source": "native tracer does not expose syscall wait durations on this platform",
         },
         "lock_wait_note": "each native-traced stage row carries its own platform trace evidence when capture succeeds",
+        "latency_interpretation": (
+            "stage-control is the untraced diagnostic latency with sidecar instrumentation; "
+            "stage-native is profiler-perturbed evidence for syscall attribution only; "
+            "neither is used by the official acceptance gate"
+        ),
+        "stage_timing_relationships": {
+            "suggestion_scan_history_completion_are_nested_within_suggestion": True,
+            "input_buffer_render_includes_work_performed_inside_render_edit_buffer": True,
+            "stage_durations_are_not_additive": True,
+        },
         "acceptance_threshold_ms": None,
     }
 
 
 def _parse_strace_trace(text: str) -> dict[str, object]:
     call_re = re.compile(
-        r"^\s*(?:\[pid\s+\d+\]\s+)?(?:\d+\.\d+\s+)?"
+        r"^\s*(?:\[pid\s+(?P<bracket_pid>\d+)\]\s+|(?P<plain_pid>\d+)\s+)?"
+        r"(?:(?P<timestamp>\d+(?:\.\d+)?)\s+)?"
         r"(?P<name>futex|futex_waitv|rt_sigprocmask|rt_sigreturn|read|readv|poll|ppoll|select|"
         r"pselect6|epoll_wait|epoll_pwait|epoll_pwait2|write|writev|ioctl|wait4|waitid|"
         r"clone|clone3|fork|vfork|execve|execveat)\("
@@ -166,7 +193,17 @@ def _parse_strace_trace(text: str) -> dict[str, object]:
         if name == "futex" and not re.search(r"FUTEX_(?:WAIT|LOCK_PI)", line):
             continue
         duration = duration_re.search(line)
-        seconds = float(duration.group("seconds")) if duration else None
+        duration_ns = (
+            int(Decimal(duration.group("seconds")) * 1_000_000_000)
+            if duration
+            else None
+        )
+        timestamp = match.group("timestamp")
+        timestamp_ns = (
+            int(Decimal(timestamp) * 1_000_000_000)
+            if timestamp is not None
+            else None
+        )
         stack: list[str] = []
         for frame in lines[index + 1 :]:
             if not frame.lstrip().startswith(">"):
@@ -175,22 +212,30 @@ def _parse_strace_trace(text: str) -> dict[str, object]:
         calls.append(
             {
                 "syscall": name,
-                "duration_ns": round(seconds * 1_000_000_000) if seconds is not None else None,
+                "trace_pid_tid": int(
+                    match.group("bracket_pid") or match.group("plain_pid")
+                )
+                if match.group("bracket_pid") or match.group("plain_pid")
+                else None,
+                "timestamp_realtime": timestamp,
+                "timestamp_realtime_ns": timestamp_ns,
+                "duration_ns": duration_ns,
                 "stack": stack[:8],
             }
         )
 
-    def call_group(names: set[str]) -> dict[str, object]:
+    def call_group(names: set[str], *, retain_all_events: bool = False) -> dict[str, object]:
         records = [call for call in calls if call["syscall"] in names]
         durations = [int(call["duration_ns"]) for call in records if call["duration_ns"] is not None]
         return {
             "count": len(records),
             "duration_ns_total": sum(durations),
             "duration_ns_max": max(durations, default=0),
-            "events": records[:5],
+            "duration_scope": "capture_window",
+            "events": records if retain_all_events else records[:5],
         }
 
-    futex = call_group({"futex", "futex_waitv"})
+    futex = call_group({"futex", "futex_waitv"}, retain_all_events=True)
     terminal_waits = call_group(
         {"read", "readv", "poll", "ppoll", "select", "pselect6", "epoll_wait", "epoll_pwait", "epoll_pwait2"}
     )
@@ -202,15 +247,127 @@ def _parse_strace_trace(text: str) -> dict[str, object]:
         "wait_count": sum(call["syscall"] in {"wait4", "waitid"} for call in calls),
         "source": "strace -f syscall trace attached before the keypress",
     }
+    signal_mask = call_group({"rt_sigprocmask"}, retain_all_events=True)
+    signal_return = call_group({"rt_sigreturn"}, retain_all_events=True)
     return {
         "lock_wait_ns": futex["duration_ns_total"],
-        "lock_wait_source": "strace -T FUTEX_WAIT/FUTEX_WAITV syscall durations",
+        "lock_wait_scope": "capture_window",
+        "lock_wait_source": "capture-wide strace -T FUTEX_WAIT/FUTEX_WAITV syscall duration sum",
         "futex_wait": futex,
-        "signal_mask": call_group({"rt_sigprocmask"}),
+        "signal_mask": signal_mask,
+        "signal_return": signal_return,
         "terminal_waits": terminal_waits,
         "terminal_syscalls": call_group({"write", "writev", "ioctl"}),
         "process_activity": process_events,
     }
+
+
+def correlate_strace_events(
+    native_capture: dict[str, object], event_window: dict[str, object]
+) -> dict[str, object]:
+    start_ns = event_window.get("keypress_realtime_ns")
+    end_ns = event_window.get("redraw_complete_realtime_ns")
+    valid_bounds = (
+        isinstance(start_ns, int)
+        and not isinstance(start_ns, bool)
+        and isinstance(end_ns, int)
+        and not isinstance(end_ns, bool)
+        and end_ns >= start_ns
+    )
+    for group_name in ("futex_wait", "signal_mask"):
+        group = native_capture.get(group_name)
+        if not isinstance(group, dict):
+            continue
+        overlap_sum = 0
+        correlated_count = 0
+        events = group.get("events")
+        if not isinstance(events, list):
+            continue
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            timestamp_ns = event.get("timestamp_realtime_ns")
+            duration_ns = event.get("duration_ns")
+            if not valid_bounds:
+                event["redraw_overlap_ns"] = None
+                event["redraw_overlap_status"] = "missing-redraw-wall-clock-bounds"
+                event["origin_evidence"] = "insufficient-time-evidence"
+                continue
+            if (
+                not isinstance(timestamp_ns, int)
+                or isinstance(timestamp_ns, bool)
+                or not isinstance(duration_ns, int)
+                or isinstance(duration_ns, bool)
+            ):
+                event["redraw_overlap_ns"] = None
+                event["redraw_overlap_status"] = "missing-event-timestamp-or-duration"
+                event["origin_evidence"] = "insufficient-time-evidence"
+                continue
+            overlap_ns = max(
+                0,
+                min(int(end_ns), timestamp_ns + duration_ns)
+                - max(int(start_ns), timestamp_ns),
+            )
+            event["redraw_overlap_ns"] = overlap_ns
+            event["redraw_overlap_status"] = "overlap" if overlap_ns else "outside-redraw-window"
+            if overlap_ns:
+                overlap_sum += overlap_ns
+                correlated_count += 1
+                event["origin_evidence"] = (
+                    "overlapping-user-stack-candidate"
+                    if isinstance(event.get("stack"), list) and event["stack"]
+                    else "overlap-without-user-stack"
+                )
+            else:
+                event["origin_evidence"] = "no-redraw-overlap"
+        group["redraw_overlap_ns_sum"] = overlap_sum if valid_bounds else None
+        group["redraw_correlated_event_count"] = correlated_count if valid_bounds else 0
+        group["redraw_overlap_scope"] = "sum of per-event interval overlaps; concurrent calls can overlap"
+    native_capture["redraw_correlation_source"] = (
+        "strace -ttt realtime event timestamps and -T durations compared with Python time.time_ns bounds"
+        if valid_bounds
+        else "unavailable; redraw wall-clock bounds are missing or invalid"
+    )
+    native_capture["futex_wait_redraw_overlap_ns_sum"] = (
+        native_capture.get("futex_wait", {}).get("redraw_overlap_ns_sum")
+        if isinstance(native_capture.get("futex_wait"), dict)
+        else None
+    )
+    return native_capture
+
+
+def _mark_untraced_strace_groups(
+    profile: dict[str, object], trace_syscalls: set[str]
+) -> dict[str, object]:
+    for group_name, syscall_names in (
+        (
+            "terminal_waits",
+            {
+                "read",
+                "readv",
+                "poll",
+                "ppoll",
+                "select",
+                "pselect6",
+                "epoll_wait",
+                "epoll_pwait",
+                "epoll_pwait2",
+            },
+        ),
+        ("terminal_syscalls", {"write", "writev", "ioctl"}),
+        ("signal_return", {"rt_sigreturn"}),
+    ):
+        if syscall_names & trace_syscalls:
+            continue
+        profile[group_name] = {
+            "status": "not-traced",
+            "scope": "excluded from the low-overhead strace -k syscall filter",
+            "count": None,
+            "duration_ns_total": None,
+            "duration_ns_max": None,
+            "events": [],
+        }
+    return profile
 
 
 def parse_strace_profile(path: Path) -> dict[str, object]:
@@ -337,9 +494,9 @@ def _probe_strace(strace: str) -> tuple[tuple[str, ...] | None, str | None]:
     requested = NFR05_STRACE_SYSCALLS.split(",")
     candidates = [
         requested,
-        [name for name in requested if name != "epoll_pwait2"],
         [name for name in requested if name != "futex_waitv"],
-        [name for name in requested if name not in {"futex_waitv", "epoll_pwait2"}],
+        [name for name in requested if name != "clone3"],
+        [name for name in requested if name not in {"futex_waitv", "clone3"}],
     ]
     last_error = "strace -k probe failed"
     for syscalls in candidates:
@@ -394,6 +551,7 @@ class NativeCapture:
             "pid": pid,
             "profile_path": str(self.profile_path),
             "lock_wait_ns": None,
+            "lock_wait_scope": "unavailable",
             "lock_wait_source": "native capture unavailable",
             "attachment_confirmed_before_keypress": False,
         }
@@ -592,7 +750,13 @@ class NativeCapture:
             if not captured:
                 self.result["reason"] = self._stderr_text() or "native profiler produced no usable profile"
             elif self.system == "Linux":
-                self.result.update(parse_strace_profile(self.profile_path))
+                parsed_profile = parse_strace_profile(self.profile_path)
+                self.result.update(
+                    _mark_untraced_strace_groups(
+                        parsed_profile,
+                        set(self.result.get("syscalls", [])),
+                    )
+                )
             else:
                 sample_profile = parse_sample_profile(self.profile_path)
                 target_verified = sample_profile.get("sampled_pid") == self.pid
@@ -800,10 +964,18 @@ def _run_sample(
         raise RuntimeError("NFR-05 diagnostic sample did not verify the marker prompt and 1000-character redraw")
     native_capture_result = result.get("native_capture")
     if isinstance(native_capture_result, dict):
+        event_window = native_capture_result.get("event_window")
+        if platform.system() == "Linux" and isinstance(event_window, dict):
+            correlate_strace_events(native_capture_result, event_window)
+        else:
+            native_capture_result["redraw_correlation_source"] = (
+                "per-event realtime syscall correlation is unavailable for this capture"
+            )
         native_capture_result["terminal_protocol"] = {
             "cursor_query_count": result.get("cursor_query_count"),
             "cursor_response_count": result.get("cursor_response_count"),
             "wait_syscalls": native_capture_result.get("terminal_waits"),
+            "wait_syscall_scope": "capture_window; individual syscall events carry redraw overlap when available",
             "sampled_stack_wait_candidates": native_capture_result.get(
                 "stack_evidence", {}
             ).get("terminal_protocol_wait", []),

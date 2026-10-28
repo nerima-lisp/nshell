@@ -6,7 +6,7 @@
   (defvar *nfr05-diagnostic-started-at* nil)
   (defvar *nfr05-diagnostic-gc-count* (cons 0 nil))
   (defvar *nfr05-diagnostic-gc-count-start* 0)
-  (defvar *nfr05-diagnostic-gc-time-start* 0)
+  (defvar *nfr05-diagnostic-gc-time-start* (cons 0 0))
   (defvar *nfr05-diagnostic-stage-ticks* nil)
   (defvar *nfr05-diagnostic-output-event* nil)
 
@@ -45,7 +45,8 @@
              *nfr05-diagnostic-started-at* (get-internal-real-time)
              *nfr05-diagnostic-gc-count-start*
              (sb-ext:atomic-incf (car *nfr05-diagnostic-gc-count*) 0)
-             *nfr05-diagnostic-gc-time-start* sb-ext:*gc-run-time*
+             *nfr05-diagnostic-gc-time-start*
+             (cons sb-ext:*gc-run-time* sb-ext:*gc-real-time*)
              *nfr05-diagnostic-stage-ticks* (make-hash-table :test #'eq)
              *nfr05-diagnostic-output-event* nil)))
 
@@ -118,26 +119,36 @@
     (when (and *nfr05-diagnostic-active-p* *nfr05-diagnostic-path*)
       (let ((render-wall-ns
               (%nfr05-ticks-to-ns
-               (- (get-internal-real-time) *nfr05-diagnostic-started-at*))))
+               (- (get-internal-real-time) *nfr05-diagnostic-started-at*)))
+            (completion-ran-p
+              (nth-value 1 (gethash :suggestion-completion *nfr05-diagnostic-stage-ticks*))))
         (with-open-file (stream *nfr05-diagnostic-path*
                                 :direction :output
                                 :if-exists :supersede
                                 :if-does-not-exist :create)
           (format stream
-                  "{\"schema_version\":1,\"record\":\"nfr05-render-diagnostic\",\"output_event\":~s,\"render_wall_ns\":~d,\"gc_count\":~d,\"gc_time_ns\":~d,\"gc_time_source\":\"sb-ext:*gc-run-time* process CPU time\",\"suggestion_ns\":~d,\"grapheme_geometry_ns\":~d,\"display_width_ns\":~d,\"terminal_write_ns\":~d,\"terminal_flush_ns\":~d,\"lock_wait_ns\":null,\"lock_wait_source\":\"not measured in process; see paired native capture\",\"command_execution_requested\":false}~%"
+                  "{\"schema_version\":2,\"record\":\"nfr05-render-diagnostic\",\"output_event\":~s,\"render_wall_ns\":~d,\"gc_count\":~d,\"gc_time_ns\":~d,\"gc_real_time_ns\":~d,\"gc_time_source\":\"sb-ext:*gc-run-time* process CPU time\",\"gc_real_time_source\":\"sb-ext:*gc-real-time* GC real time\",\"suggestion_ns\":~d,\"suggestion_scan_ns\":~d,\"suggestion_history_ns\":~d,\"suggestion_completion_ns\":~d,\"completion_ran\":~:[false~;true~],\"grapheme_geometry_ns\":~d,\"display_width_ns\":~d,\"input_buffer_render_ns\":~d,\"terminal_write_ns\":~d,\"terminal_flush_ns\":~d,\"stage_timing_relationships\":{\"suggestion_substages_inclusive_of_suggestion_ns\":true,\"input_buffer_render_includes_work_performed_inside_render_edit_buffer\":true,\"stage_durations_are_not_additive\":true},\"lock_wait_ns\":null,\"lock_wait_scope\":\"unavailable\",\"lock_wait_source\":\"not measured in process; see paired native capture\",\"command_execution_requested\":false}~%"
                   (%nfr05-event-name)
                   render-wall-ns
                   (- (sb-ext:atomic-incf (car *nfr05-diagnostic-gc-count*) 0)
                      *nfr05-diagnostic-gc-count-start*)
                   (%nfr05-ticks-to-ns
-                   (- sb-ext:*gc-run-time* *nfr05-diagnostic-gc-time-start*))
+                   (- sb-ext:*gc-run-time* (car *nfr05-diagnostic-gc-time-start*)))
+                  (%nfr05-ticks-to-ns
+                   (- sb-ext:*gc-real-time* (cdr *nfr05-diagnostic-gc-time-start*)))
                   (%nfr05-diagnostic-stage-ns :suggestion)
+                  (%nfr05-diagnostic-stage-ns :suggestion-scan)
+                  (%nfr05-diagnostic-stage-ns :suggestion-history)
+                  (%nfr05-diagnostic-stage-ns :suggestion-completion)
+                  completion-ran-p
                   (%nfr05-diagnostic-stage-ns :grapheme-geometry)
                   (%nfr05-diagnostic-stage-ns :display-width)
+                  (%nfr05-diagnostic-stage-ns :input-buffer-render)
                   (%nfr05-diagnostic-stage-ns :terminal-write)
                   (%nfr05-diagnostic-stage-ns :terminal-flush)))
         (setf *nfr05-diagnostic-active-p* nil
               *nfr05-diagnostic-started-at* nil
+              *nfr05-diagnostic-gc-time-start* (cons 0 0)
               *nfr05-diagnostic-stage-ticks* nil
               *nfr05-diagnostic-output-event* nil))))
 )

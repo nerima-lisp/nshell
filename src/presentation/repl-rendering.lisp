@@ -336,13 +336,16 @@
            (when (eq *osc133-state* :prompt)
              (%emit-terminal-integration-sequence :osc133 "B")
              (setf *osc133-state* :input))
-           (render-edit-buffer
-            text theme
-            :selection-start (first selection-range)
-            :selection-end (second selection-range)
-            :matching-spans matching-spans
-            :scan-result highlight-scan-result
-            :cursor-position cursor-position))
+           (%nfr05-diagnostic-measure
+            :input-buffer-render
+            (lambda ()
+              (render-edit-buffer
+               text theme
+               :selection-start (first selection-range)
+               :selection-end (second selection-range)
+               :matching-spans matching-spans
+               :scan-result highlight-scan-result
+               :cursor-position cursor-position))))
          (when (and suggestion (> (length suggestion) 0))
            (%write-styled suggestion :autosuggestion theme))
          (%nfr05-diagnostic-measure

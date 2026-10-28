@@ -118,10 +118,10 @@
          (source (asdf:system-source-file system))
          (script (merge-pathnames "t/native-spawn-test.sh" source)))
     (unless (and (dependency-store-path-p source)
-                 (string= "3.2.0" (asdf:component-version system))
+                 (string= "3.4.4" (asdf:component-version system))
                  (probe-file script)
                  (dependency-store-path-p (truename script)))
-      (error "Pinned cl-process-kit 3.2.0 native test source is unavailable"))
+      (error "Pinned cl-process-kit 3.4.4 native test source is unavailable"))
     (write-line (namestring (truename script)))))
 
 (defun dependency-test-main (system)

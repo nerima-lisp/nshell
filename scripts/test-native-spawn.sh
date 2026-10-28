@@ -18,10 +18,10 @@ if [[ $native_source != /nix/store/*/t/native-spawn-test.sh || ! -f $native_sour
   echo 'native-spawn source error: expected a nonempty pinned Nix store script' >&2
   exit 2
 fi
-# cl-process-kit 3.2.0, revision 44fc4281e5f7e97d662180aa15e23349b7ed7a5d.
+# cl-process-kit 3.4.4, revision f763ab2ef16f86785d5692dff974eca6d8b9e70a.
 # Refuse a substituted or empty upstream test rather than accepting its exit alone.
 native_digest=$(sha256sum -- "$native_source")
-if [[ ${native_digest%% *} != 1cada2f6fbbc6dec58db8ef0e099cfb39c20d1e230d1c27b0d0091cefe112d8a ]]; then
+if [[ ${native_digest%% *} != 35c14f80fd99a637b398b2283d285f4fc968f8bf0d0c627587ea60935a1ea2d5 ]]; then
   echo 'native-spawn source error: pinned upstream test digest differs' >&2
   exit 2
 fi

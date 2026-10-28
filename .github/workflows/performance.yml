@@ -123,6 +123,12 @@ jobs:
         shell: bash
         env:
           BASE_REVISION: ${{ steps.nfr09-history.outputs.base_revision }}
+          HOME: ${{ runner.temp }}/nshell-nfr09-home
+          XDG_CACHE_HOME: ${{ runner.temp }}/nshell-nfr09-cache
+          XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-nfr09-config
+          XDG_STATE_HOME: ${{ runner.temp }}/nshell-nfr09-state
+          NSHELL_AI_COMMAND: /nonexistent
+          NSHELL_TEST_PTY: "1"
         run: >-
           nix shell nixpkgs#jujutsu nixpkgs#python3 -c python3
           scripts/measure-nfr-07-09.py

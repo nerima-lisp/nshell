@@ -11,6 +11,7 @@ import platform
 import pty
 import re
 import select
+import shlex
 import signal
 import struct
 import subprocess
@@ -96,6 +97,14 @@ def temporary_parent() -> Path:
     if parent == ROOT or ROOT in parent.parents:
         raise MeasurementError(f"temporary directory is inside the repository: {parent}")
     return parent
+
+
+def command_with_controlling_tty(command: list[str]) -> list[str]:
+    if sys.platform == "darwin":
+        return ["/usr/bin/script", "-q", "/dev/null", *command]
+    if sys.platform.startswith("linux"):
+        return ["/usr/bin/script", "-q", "-e", "-c", shlex.join(command), "/dev/null"]
+    raise MeasurementError(f"controlling-terminal coverage is unsupported on {sys.platform}")
 
 
 def run_process(
@@ -747,6 +756,14 @@ def parse_lcov_new_code(
                 except ValueError:
                     continue
 
+    if not added_lines:
+        return {
+            "status": "unavailable",
+            "reason": "the base-to-target src diff has no added executable lines; the 90% ratio has no denominator",
+            "added_source_files": [],
+            "per_file": {},
+        }
+
     covered = 0
     total = 0
     per_file: dict[str, dict[str, int]] = {}
@@ -780,7 +797,7 @@ def parse_lcov_new_code(
     if total == 0:
         return {
             "status": "unavailable",
-            "reason": "no added executable src lines were found in LCOV data",
+            "reason": "LCOV has no executable line records for added src lines in the base-to-target diff",
             "added_source_files": sorted(added_lines),
             "per_file": per_file,
         }
@@ -820,9 +837,12 @@ def nfr09_operation(
             "NSHELL_COVERAGE_DIR": str(coverage_dir),
             "NSHELL_NFR_COVERAGE_LCOV_PATH": str(lcov_path),
             "NSHELL_COVERAGE_MIN": str(args.coverage_min),
+            "NSHELL_TEST_PTY": "1",
         }
     )
-    command = ["nix", "develop", "-c", "sbcl", "--script", str(runner)]
+    command = command_with_controlling_tty(
+        ["nix", "develop", "-c", "sbcl", "--script", str(runner)]
+    )
     try:
         result = run_process(
             command,
@@ -843,8 +863,9 @@ def nfr09_operation(
     overall_percent = None
     if summary is not None:
         overall_percent = summary.get("expression-percent")
-    lcov_unavailable = "NFR09_LCOV_UNAVAILABLE" in result["stderr"]
-    lcov_available = "NFR09_LCOV_API_AVAILABLE" in result["stderr"]
+    coverage_output = result["stdout"] + result["stderr"]
+    lcov_unavailable = "NFR09_LCOV_UNAVAILABLE" in coverage_output
+    lcov_available = "NFR09_LCOV_API_AVAILABLE" in coverage_output
     overall_passed = (
         isinstance(overall_percent, (int, float))
         and overall_percent >= args.coverage_min

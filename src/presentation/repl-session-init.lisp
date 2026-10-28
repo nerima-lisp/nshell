@@ -156,9 +156,10 @@ set it."
    (nshell.infrastructure.persistence:load-history-file)))
 (defun %refresh-history-from-file ()
   (when (and *history-loading-enabled-p* *history*)
-    (%merge-history-records
-     *history*
-     (nshell.infrastructure.persistence:load-history-file))))
+    (when (%merge-history-records
+           *history*
+           (nshell.infrastructure.persistence:load-history-file))
+      (%refresh-suggestion-history-snapshot))))
 
 (defun %vi-mode-flag-enabled-p (flag)
   (and flag
@@ -175,7 +176,7 @@ controls history reads and writes. PRIVATE-P prevents this session's commands
 and assistant state from being written. When HISTORY-P is true, existing
 history remains available in private mode."
   (progn
-    (%nfr05-enable-diagnostics)
+    (progn (%stop-suggestion-worker) (%nfr05-enable-diagnostics))
     (setf *boundaries* (make-real-boundary-context)
           *repl-filesystem* (nshell.infrastructure.acl:make-host-filesystem)
           *running* t
@@ -254,4 +255,4 @@ history remains available in private mode."
   (%apply-east-asian-ambiguous-width)
   (when history-p
     (%seed-history-from-file *history*))
-  (seed-repl-completion-knowledge-base *kb*))
+  (progn (seed-repl-completion-knowledge-base *kb*) (%refresh-suggestion-history-snapshot)))

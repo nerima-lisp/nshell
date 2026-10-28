@@ -13,7 +13,7 @@
                                            (setf *input-state*
                                                  (make-repl-input-state
                                                   :buffer text :cursor-pos (length text)))
-                                           (refresh-current-input-state-suggestion))
+                                           (%request-current-input-state-suggestion))
                                          (format t "nshell: editor exited with status ~a~%" status)))
                                  (error (condition)
                                         (format t "nshell: editor failed: ~a~%" condition)))))

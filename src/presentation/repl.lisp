@@ -11,7 +11,8 @@
   (let ((*preserve-transient-panel-on-next-prompt-p* t))
     (render-prompt-cont)))
 
-(defun %read-key-event-for-current-mode (interrupt-predicate)
+(defun %read-key-event-for-current-mode (interrupt-predicate
+                                               &optional idle-predicate)
   "Read keys with vi Escape handling whenever a vi editing mode is active."
   (let ((vi-mode-p
           (and *vi-mode-enabled*
@@ -19,12 +20,23 @@
                (member (input-state-mode *input-state*)
                        '(:insert :vi-command :vi-d :vi-c :vi-visual)
                        :test #'eq))))
-    (if vi-mode-p
-        (nshell.infrastructure.terminal:read-key-event
-         :interrupt-predicate interrupt-predicate
-         :vi-mode-p t)
-        (nshell.infrastructure.terminal:read-key-event
-         :interrupt-predicate interrupt-predicate))))
+    (cond
+      ((and vi-mode-p idle-predicate)
+       (nshell.infrastructure.terminal:read-key-event
+        :interrupt-predicate interrupt-predicate
+        :idle-predicate idle-predicate
+        :vi-mode-p t))
+      (vi-mode-p
+       (nshell.infrastructure.terminal:read-key-event
+        :interrupt-predicate interrupt-predicate
+        :vi-mode-p t))
+      (idle-predicate
+       (nshell.infrastructure.terminal:read-key-event
+        :interrupt-predicate interrupt-predicate
+        :idle-predicate idle-predicate))
+      (t
+       (nshell.infrastructure.terminal:read-key-event
+        :interrupt-predicate interrupt-predicate)))))
 
 (defun %assistant-repeat-cancel-event-p (event)
   (let ((last-cancel-at *assistant-last-cancel-at*)
@@ -127,8 +139,15 @@
                      (nshell.infrastructure.acl:consume-terminal-resize-p))
             (return-from %process-input-event
                          (%render-prompt-after-terminal-resize)))
+          (when (%suggestion-acceptance-key-event-p event)
+            (%await-current-suggestion-before-acceptance))
           (multiple-value-bind (new-state output-event)
               (reduce-input-state *input-state* event)
+            (when (and (not (eq output-event :suggest-update))
+                       (or output-event
+                           (not (string= (input-state-buffer input-state-before)
+                                         (input-state-buffer new-state)))))
+              (%invalidate-current-input-suggestion))
             (when (and (eq *assistant-command-origin* :proposal)
                        (not (string= (input-state-buffer *input-state*)
                                      (input-state-buffer new-state))))
@@ -149,13 +168,13 @@
               (%nfr05-diagnostic-set-output-event output-event)
               (process-output-event output-event))))
       (storage-condition ()
-                         (setf *input-state* input-state-before)
-                         (with-cleared-rendered-completions-and-reset-prompt-cont
-                          (format t "~%nshell: storage exhausted; input was preserved~%")))
+        (setf *input-state* input-state-before)
+        (with-cleared-rendered-completions-and-reset-prompt-cont
+          (format t "~%nshell: storage exhausted; input was preserved~%")))
       (error ()
-             (setf *input-state* input-state-before)
-             (with-cleared-rendered-completions-and-reset-prompt-cont
-              (format t "~%nshell: input processing failed; input was preserved~%"))))))
+        (setf *input-state* input-state-before)
+        (with-cleared-rendered-completions-and-reset-prompt-cont
+          (format t "~%nshell: input processing failed; input was preserved~%"))))))
 
 (defun %handle-pending-shell-termination ()
   (let ((status (nshell.infrastructure.acl:consume-shell-termination-status)))
@@ -200,7 +219,10 @@
                         :ignore nil nil (list :terminal-resize t)))
                      (when (nshell.infrastructure.acl:consume-sigint-received-p)
                        t)
-                     (%poll-assistant-model-event)))))
+                     (%poll-assistant-model-event)))
+               (and *interactive-terminal-installed-p*
+                    *suggestion-worker-state*
+                    #'%poll-suggestion-worker-event)))
             (event (unless (nshell.feature.assistant:assistant-model-event-p
                             raw-event)
                      (%map-rendered-mouse-event-to-buffer raw-event))))
@@ -219,6 +241,25 @@
               (when (functionp *assistant-model-event-handler*)
                 (funcall *assistant-model-event-handler* raw-event)))
             (read-key-cont)))
+         ((and event
+               (eq :ignore (nshell.domain.input:key-event-type event))
+               (getf (nshell.domain.input:key-event-data event)
+                     :suggestion-worker-result))
+          (lambda ()
+            (let ((result
+                    (getf (nshell.domain.input:key-event-data event)
+                          :suggestion-worker-result)))
+              (if (%current-suggestion-worker-result-p result)
+                  (if (%suggestion-worker-result-condition result)
+                      (progn
+                        (format *error-output*
+                                "nshell: suggestion calculation failed; input was preserved~%")
+                        (render-prompt-cont))
+                      (progn
+                        (setf (input-state-suggestion *input-state*)
+                              (%suggestion-worker-result-suggestion result))
+                        (render-prompt-cont)))
+                  (read-key-cont)))))
          ((and event *rerun-confirmation-pending-p*)
           (lambda () (%process-input-event event)))
          ((and event
@@ -304,5 +345,7 @@ the next shell could start with SGR mouse reporting still on."
           (unwind-protect
               (ignore-errors (nshell.feature.assistant:assistant-model-stop))
             (restore-interactive-terminal))
-        (%completion-help-drain-workers))
+        (unwind-protect
+            (%stop-suggestion-worker)
+          (%completion-help-drain-workers)))
       (format t "Goodbye!~%"))))

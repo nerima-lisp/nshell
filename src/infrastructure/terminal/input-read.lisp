@@ -147,22 +147,27 @@ The terminator is consumed and not included in the returned text."
                (unread-char prefix *standard-input*)
                (make-key-event :escape)))))))
 
-(defun read-key-event (&key interrupt-predicate vi-mode-p vi-insert-mode-p)
+(defun read-key-event (&key interrupt-predicate idle-predicate
+                           vi-mode-p vi-insert-mode-p)
   "Read and decode one terminal key event from standard input.
 When INTERRUPT-PREDICATE is supplied, poll the stream so a pending signal can
 be converted into a Ctrl-C key event without leaving the main loop blocked in
-READ-CHAR.  Recheck after reading a character and leave it unread when an
-interrupt arrived during the read.  A predicate may return a decoded event to
-deliver it through the same polling path.  When VI-MODE-P or VI-INSERT-MODE-P
-is true, a non-sequence character following ESC is delivered by the next call
-instead of being decoded as Meta."
+READ-CHAR. Recheck after reading a character and leave it unread when an
+interrupt arrived during the read. IDLE-PREDICATE is called only when no
+terminal input is ready; its returned event is delivered through the same path.
+Buffered input takes priority over idle events. A predicate may return a decoded
+event to deliver it through the polling path. When VI-MODE-P or
+VI-INSERT-MODE-P is true, a non-sequence character following ESC is delivered
+by the next call instead of being decoded as Meta."
   (let ((vi-mode-p (or vi-mode-p vi-insert-mode-p)))
-    (if (null interrupt-predicate)
+    (if (and (null interrupt-predicate)
+             (null idle-predicate))
         (let ((ch (read-char *standard-input* nil nil)))
           (when ch
             (decode-character-key ch :vi-mode-p vi-mode-p)))
         (loop
-          for interrupt = (funcall interrupt-predicate)
+          for interrupt = (and interrupt-predicate
+                               (funcall interrupt-predicate))
           when interrupt
             return (if (eq t interrupt)
                        (make-key-event :ctrl-c)
@@ -170,7 +175,9 @@ instead of being decoded as Meta."
           when (listen *standard-input*)
             return (let ((ch (read-char *standard-input* nil nil)))
                      (when ch
-                       (let ((interrupt (funcall interrupt-predicate)))
+                       (let ((interrupt
+                               (and interrupt-predicate
+                                    (funcall interrupt-predicate))))
                          (if interrupt
                              (progn
                                (unread-char ch *standard-input*)
@@ -179,4 +186,8 @@ instead of being decoded as Meta."
                                    interrupt))
                              (decode-character-key
                               ch :vi-mode-p vi-mode-p)))))
+          do (let ((idle-event
+                     (and idle-predicate (funcall idle-predicate))))
+               (when idle-event
+                 (return idle-event)))
           do (sleep 0.001)))))

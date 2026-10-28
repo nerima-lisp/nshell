@@ -446,7 +446,7 @@ wrapped line's other rows on screen as stale duplicates."
 
 (define-output-event-handler %process-ask-cancel-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (refresh-current-input-state-suggestion))
+    (%request-current-input-state-suggestion))
 
 (defun %ask-model-terminal-event-p (event)
   (let ((kind (nshell.feature.assistant:assistant-model-event-kind event)))
@@ -808,10 +808,12 @@ wrapped line's other rows on screen as stale duplicates."
               :osc133
               (format nil "D;~d" recorded-exit-code))
              (setf *osc133-state* :none)))))
-     (unless *agent-session*
-       (setf *assistant-command-origin* :typed
-             *assistant-command-confirmed-p* nil)
-       (setf *input-state* (make-repl-input-state))))))
+     (progn
+       (%refresh-suggestion-history-snapshot)
+       (unless *agent-session*
+         (setf *assistant-command-origin* :typed
+               *assistant-command-confirmed-p* nil)
+         (setf *input-state* (make-repl-input-state)))))))
 
 (defun %execute-parse-error (result)
   (with-reset-rendered-prompt-state-and-prompt-cont
@@ -1231,7 +1233,7 @@ wrapped line's other rows on screen as stale duplicates."
 (define-output-event-handler %process-suggest-update-output-event
     with-cleared-rendered-completions-and-prompt-cont
     (history-kit:history-reset-navigation *history*)
-    (refresh-current-input-state-suggestion))
+    (%request-current-input-state-suggestion))
 
 (define-output-event-handler %process-history-search-output-event
     with-cleared-rendered-completions-and-prompt-cont
@@ -1252,7 +1254,7 @@ wrapped line's other rows on screen as stale duplicates."
       (when entry
         (setf *input-state*
               (make-repl-input-state :buffer entry :cursor-pos (length entry)))
-        (refresh-current-input-state-suggestion))))
+        (%request-current-input-state-suggestion))))
 
 (define-output-event-handler %process-history-next-output-event
     with-cleared-rendered-completions-and-prompt-cont
@@ -1261,7 +1263,7 @@ wrapped line's other rows on screen as stale duplicates."
       (when entry
         (setf *input-state*
               (make-repl-input-state :buffer entry :cursor-pos (length entry)))
-        (refresh-current-input-state-suggestion))))
+        (%request-current-input-state-suggestion))))
 
   (define-output-event-handler %process-clear-screen-output-event
                                with-reset-rendered-prompt-state-and-prompt-cont
@@ -1272,4 +1274,4 @@ wrapped line's other rows on screen as stale duplicates."
   (define-output-event-handler %process-insert-last-argument-output-event
                                with-cleared-rendered-completions-and-prompt-cont
                                (when (eq (insert-history-last-argument) :suggest-update)
-                                 (refresh-current-input-state-suggestion)))
+                                 (%request-current-input-state-suggestion)))

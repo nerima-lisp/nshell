@@ -1,0 +1,9 @@
+--- a/src/communicate.lisp
++++ b/src/communicate.lisp
+@@ -199,5 +199,5 @@
+              (when timed-out-p
+                (ignore-errors (%close-stream-for-copier stdin-stream stdin-feeder)))
+              (unless (process-handle-reaped-p process)
+-               (process-wait process))
++               (process-wait process :poll-interval poll-interval))
+              (when (and cancellation-token

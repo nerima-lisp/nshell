@@ -1,9 +1,10 @@
 --- a/src/communicate.lisp
 +++ b/src/communicate.lisp
-@@ -153,6 +153,16 @@
+@@ -199,8 +199,18 @@
+              (when timed-out-p
                 (ignore-errors (%close-stream-for-copier stdin-stream stdin-feeder)))
-              ;; Share the state lock with the cancellation watcher's reaper.
-              (process-wait process :poll-interval poll-interval)
+              (unless (process-handle-reaped-p process)
+                (process-wait process :poll-interval poll-interval))
 +             ;; Reaping the leader does not wait for SIGKILL delivery to its
 +             ;; descendants. Cleanup uses real time even with an injected clock.
 +             (when (and timed-out-p
@@ -14,9 +15,10 @@
 +                 (with-locked-process-state (state process)
 +                   (setf (%process-state-communication-cleanup-error state) condition))
 +                 (error condition)))
-              (when (and (boundp '*current-cancellation-token*)
-                         (symbol-value '*current-cancellation-token*)
-                         (cancellation-requested-p (symbol-value '*current-cancellation-token*)))
+              (when (and cancellation-token
+                          (cancellation-requested-p cancellation-token))
+                (ignore-errors (%close-stream-for-copier stdin-stream stdin-feeder))
+                (when stdin-feeder (setf (%copier-condition-after-forced-close-p stdin-feeder) t)))
 --- a/src/process-handle.lisp
 +++ b/src/process-handle.lisp
 @@ -17,6 +17,7 @@

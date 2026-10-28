@@ -8,6 +8,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).with_name("nfr_selection.py")
@@ -21,6 +23,11 @@ MEASURE_SPEC = importlib.util.spec_from_file_location("measure_nfr_ci", MEASURE_
 assert MEASURE_SPEC is not None and MEASURE_SPEC.loader is not None
 measure_nfr_ci = importlib.util.module_from_spec(MEASURE_SPEC)
 MEASURE_SPEC.loader.exec_module(measure_nfr_ci)
+DRIVER_PATH = Path(__file__).with_name("measure-nfr-04-06.py")
+DRIVER_SPEC = importlib.util.spec_from_file_location("measure_nfr_04_06", DRIVER_PATH)
+assert DRIVER_SPEC is not None and DRIVER_SPEC.loader is not None
+measure_nfr_04_06 = importlib.util.module_from_spec(DRIVER_SPEC)
+DRIVER_SPEC.loader.exec_module(measure_nfr_04_06)
 
 
 class NfrSelectionTests(unittest.TestCase):
@@ -73,6 +80,46 @@ class NfrSelectionTests(unittest.TestCase):
         self.assertIn("**ERROR: measurement unavailable**", summary)
         self.assertNotIn("| NFR-04 |", summary)
         self.assertNotIn("**PASS**", summary)
+
+    def test_nfr04_only_fixtures_do_not_require_completion_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plain_fixture = root / "plain"
+            git_fixture = root / "git"
+            plain_fixture.mkdir()
+            git_fixture.mkdir()
+            args = measure_nfr_04_06.build_parser().parse_args(
+                [
+                    "--binary",
+                    "/bin/sh",
+                    "--from",
+                    "nfr04-only",
+                    "--samples",
+                    "100",
+                    "--plain-fixture",
+                    str(plain_fixture),
+                    "--git-fixture",
+                    str(git_fixture),
+                    "--output",
+                    str(root / "output.jsonl"),
+                ]
+            )
+            with (
+                patch.object(
+                    measure_nfr_04_06,
+                    "find_git_root",
+                    side_effect=[None, git_fixture.resolve()],
+                ),
+                patch.object(
+                    measure_nfr_04_06.subprocess,
+                    "run",
+                    return_value=SimpleNamespace(stdout="main\\n"),
+                ),
+            ):
+                fixtures = measure_nfr_04_06.validate_fixtures(args)
+
+        self.assertIsNone(fixtures["completion_fixture"])
+        self.assertEqual(fixtures["completion_entries"], 0)
 
     def test_all_summary_keeps_the_full_measurement_table_shape(self) -> None:
         results = [measure_nfr_ci.error_result(nfr, "unavailable") for nfr in nfr_selection.NFR_IDS[:7]]

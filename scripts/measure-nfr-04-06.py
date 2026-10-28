@@ -177,6 +177,7 @@ def validate_fixtures(args: argparse.Namespace) -> dict[str, object]:
         )
         git_branch = branch_result.stdout.strip()
 
+    entries: list[Path] = []
     if completion_fixture is not None:
         entries = list(completion_fixture.iterdir())
         if len(entries) != FIXTURE_FILE_COUNT:
@@ -1460,18 +1461,20 @@ def run_complete_c_output_diagnostic_group(
 
 def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[str, object]]:
     binary = validate_executable(args.binary, "--binary")
-    control_shell = (
-        validate_executable(args.control_binary, "--control-binary")
-        if args.start_from in ("nfr04", "nfr04-only")
-        else None
-    )
+    control_shell = Path(args.control_binary).expanduser().resolve()
+    if args.start_from in ("nfr04", "nfr04-only"):
+        control_shell = validate_executable(args.control_binary, "--control-binary")
     fixtures = validate_fixtures(args)
     plain_fixture = Path(str(fixtures["plain_fixture"]))
-    git_fixture = Path(str(fixtures["git_fixture"])) if fixtures["git_fixture"] is not None else None
+    git_fixture = (
+        Path(str(fixtures["git_fixture"]))
+        if fixtures["git_fixture"] is not None
+        else plain_fixture
+    )
     completion_fixture = (
         Path(str(fixtures["completion_fixture"]))
         if fixtures["completion_fixture"] is not None
-        else None
+        else plain_fixture
     )
     buffer_sizes = tuple(args.buffer_sizes)
     if args.start_from in ("nfr04", "nfr05") and (

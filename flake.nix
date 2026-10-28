@@ -944,14 +944,17 @@
         let
           delivery = deliveryFor ctx;
           bin = "${delivery}/bin/nshell";
-          q08FaultSource = ctx.pkgs.runCommand "nshell-q08-fault-source" {
-            nativeBuildInputs = [
-              ctx.pkgs.python3
-              paredit-cli.packages.${ctx.system}.default
-            ];
-          } ''
-            python3 ${./t/scenarios/Q08/prepare-fault-source.py} ${ctx.src} "$out"
-          '';
+          q08FaultSource =
+            ctx.pkgs.runCommand "nshell-q08-fault-source"
+              {
+                nativeBuildInputs = [
+                  ctx.pkgs.python3
+                  paredit-cli.packages.${ctx.system}.default
+                ];
+              }
+              ''
+                python3 ${./t/scenarios/Q08/prepare-fault-source.py} ${ctx.src} "$out"
+              '';
         in
         {
           # The release workflows use an explicit artifact name while the
@@ -981,7 +984,13 @@
           };
 
           devShells.scenarios = ctx.pkgs.mkShell {
-            nativeBuildInputs = with ctx.pkgs; [ python3 sbcl tmux coreutils bash ];
+            nativeBuildInputs = with ctx.pkgs; [
+              python3
+              sbcl
+              tmux
+              coreutils
+              bash
+            ];
             NSHELL_SCENARIO_EXTRA_PATH = ctx.pkgs.lib.makeBinPath [
               ctx.pkgs.tmux
               ctx.pkgs.coreutils

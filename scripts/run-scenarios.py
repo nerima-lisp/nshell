@@ -1652,7 +1652,9 @@ def _p12_consumer_fixture(path: Path) -> Path:
     }
     allowed = {
         ("asdf", "clear-system"),
+        ("asdf", "clear-source-registry"),
         ("asdf", "find-system"),
+        ("asdf", "initialize-source-registry"),
         ("asdf", "load-asd"),
         ("asdf", "load-system"),
         ("asdf", "system-source-file"),

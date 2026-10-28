@@ -1,6 +1,11 @@
 (require "asdf")
 
 (progn
+  (asdf:clear-source-registry)
+  (asdf:initialize-source-registry
+   `(:source-registry
+     (:directory ,(uiop:ensure-directory-pathname (uiop:getenv "NSHELL_ROOT")))
+     :inherit-configuration))
   (asdf:clear-system "nshell")
   (asdf:load-asd
    (merge-pathnames

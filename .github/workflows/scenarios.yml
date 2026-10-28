@@ -108,7 +108,11 @@ jobs:
         run: |
           set -euo pipefail
           scratch="$(mktemp -d "$RUNNER_TEMP/nshell-release-copy.XXXXXX")"
-          trap 'rm -rf "$scratch"' EXIT
+          cleanup_release_copy() {
+            chmod -R u+w "$scratch" 2>/dev/null || true
+            rm -rf "$scratch"
+          }
+          trap cleanup_release_copy EXIT
           bundle_dir="$(readlink -f "$RUNNER_TEMP/nshell-release-bundle")"
           mkdir -p "$scratch/copied-bundle" "$scratch/home" "$scratch/tmp"
           cp -a "$bundle_dir/." "$scratch/copied-bundle/"

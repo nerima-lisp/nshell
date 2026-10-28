@@ -168,6 +168,7 @@ def runtime_environment(home: Path, prompt: str) -> dict[str, str]:
         "NSHELL_GREETING": "",
         "NSHELL_AI_COMMAND": "/nonexistent",
         "NSHELL_PROMPT": prompt,
+        "NSHELL_E02_HISTORY_DONE": f"NSHELL_E02_HISTORY_DONE_{uuid.uuid4().hex}",
         "PS1": prompt,
     }
 
@@ -181,16 +182,15 @@ def write_all(fd: int, payload: bytes) -> None:
         view = view[written:]
 
 
-def wait_for_prompt(
+def wait_for_marker(
     master: int,
     output: bytearray,
     marker: bytes,
-    target_count: int,
     answered_queries: int,
     timeout: float,
 ) -> tuple[int, int]:
     deadline = time.monotonic() + timeout
-    while output.count(marker) < target_count:
+    while marker not in output:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             tail = bytes(output[-800:]).decode("utf-8", "replace")
@@ -207,14 +207,14 @@ def wait_for_prompt(
             tail = bytes(output[-800:]).decode("utf-8", "replace")
             raise RuntimeError(f"PTY closed before prompt marker; output tail={tail!r}")
         output.extend(chunk)
-        prompt_seen_ns = time.perf_counter_ns() if output.count(marker) >= target_count else None
+        marker_seen_ns = time.perf_counter_ns() if marker in output else None
         query_count = output.count(CPR_QUERY)
         while answered_queries < query_count:
             write_all(master, CPR_RESPONSE)
             answered_queries += 1
-        if prompt_seen_ns is not None:
-            return answered_queries, prompt_seen_ns
-    raise RuntimeError("prompt target was already present before PTY wait")
+        if marker_seen_ns is not None:
+            return answered_queries, marker_seen_ns
+    raise RuntimeError("marker was already present before PTY wait")
 
 
 def terminate_child(pid: int) -> None:
@@ -301,11 +301,10 @@ def measure_pty(
                 os._exit(127)
 
         fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
-        answered_queries, first_prompt_ns = wait_for_prompt(
+        answered_queries, first_prompt_ns = wait_for_marker(
             master,
             output,
             marker.encode("ascii"),
-            1,
             0,
             PROMPT_TIMEOUT_SECONDS,
         )
@@ -321,12 +320,15 @@ def measure_pty(
         }
 
         if verify_history:
-            write_all(master, b"history > e02-loaded-history.txt\n")
-            answered_queries, _ = wait_for_prompt(
+            history_done_marker = env["NSHELL_E02_HISTORY_DONE"].encode("ascii")
+            write_all(
+                master,
+                b'history > e02-loaded-history.txt; echo "$NSHELL_E02_HISTORY_DONE"\r',
+            )
+            answered_queries, _ = wait_for_marker(
                 master,
                 output,
-                marker.encode("ascii"),
-                2,
+                history_done_marker,
                 answered_queries,
                 PROMPT_TIMEOUT_SECONDS,
             )

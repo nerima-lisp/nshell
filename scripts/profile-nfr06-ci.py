@@ -210,8 +210,10 @@ def read_profile_sample_diagnostics(path: Path) -> dict[str, int] | None:
 def validate_profile_sample_counts(
     graph_count: int, diagnostics: dict[str, int], thread_count_total: int
 ) -> None:
+    # SBCL snapshots this counter at stop time, before later traversals of the
+    # materialized samples. Its stop path allows an undelivered SIGPROF, so
+    # retain this value as a diagnostic and validate the materialized views.
     counts = {
-        "sb_sprof_stop_counter": diagnostics["sb_sprof_stop_counter"],
         "graph_header": graph_count,
         "raw_vector": diagnostics["raw_vector_trace_count"],
         "map_traces": diagnostics["map_traces_count"],
@@ -1120,6 +1122,9 @@ def main() -> int:
         result["profile_sample_counts"] = {
             **sample_diagnostics,
             "graph_header_count": sample_count,
+            "stop_counter_minus_graph_header": (
+                sample_diagnostics["sb_sprof_stop_counter"] - sample_count
+            ),
         }
         if sample_count < 2_000:
             raise RuntimeError(f"{args.mode} profile sample count {sample_count} is below 2,000")

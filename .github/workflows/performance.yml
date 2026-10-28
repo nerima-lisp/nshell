@@ -28,6 +28,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
 
       - uses: ./.github/actions/nix-setup
         with:
@@ -68,20 +69,82 @@ jobs:
           scripts/profile-nfr06-ci.py
           --mode cpu --iterations 100
 
+      - name: Measure E02 startup with 10,000 history records
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          logs="$GITHUB_WORKSPACE/.mediator/nshell-work/logs"
+          results="$RUNNER_TEMP/nshell-nfr-results"
+          mkdir -p "$logs" "$results"
+          report="$logs/e02-history-startup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.system }}.json"
+
+          set +e
+          nix develop .#scenarios -c python3 scripts/measure-e02-history-startup.py \
+            --binary "$RUNNER_TEMP/nshell-nfr-binary/bin/nshell" \
+            --system "${{ matrix.system }}" \
+            --output "$report"
+          measure_status=$?
+          set -e
+
+          if [ -f "$report" ]; then
+            cp "$report" "$results/e02-history-startup.json"
+          fi
+          shopt -s nullglob
+          for artifact_dir in "$logs"/"e02-history-startup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.system }}-artifacts-"*; do
+            cp -R "$artifact_dir" "$results/"
+          done
+          shopt -u nullglob
+          exit "$measure_status"
+
+      - name: Prepare NFR-09 revision history
+        id: nfr09-history
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_revision="$(git rev-parse "${GITHUB_SHA}^")"
+          printf 'base_revision=%s\n' "$base_revision" >> "$GITHUB_OUTPUT"
+          nix shell nixpkgs#jujutsu -c jj git init --colocate
+
+      - name: Measure NFR-08
+        if: always()
+        run: >-
+          nix develop .#scenarios -c python3
+          scripts/measure-nfr-07-09.py
+          --mode nfr08
+          --fuzz-target reader
+          --fuzz-target input-state
+          --output "$RUNNER_TEMP/nshell-nfr-results/nfr-08.json"
+          --revision "$GITHUB_SHA"
+
+      - name: Measure NFR-09
+        if: always()
+        shell: bash
+        env:
+          BASE_REVISION: ${{ steps.nfr09-history.outputs.base_revision }}
+        run: >-
+          nix shell nixpkgs#jujutsu nixpkgs#python3 -c python3
+          scripts/measure-nfr-07-09.py
+          --mode nfr09
+          --base-revision "$BASE_REVISION"
+          --output "$RUNNER_TEMP/nshell-nfr-results/nfr-09.json"
+          --revision "$GITHUB_SHA"
+
       - name: Publish NFR job summary
         if: always()
         run: |
           summary="$RUNNER_TEMP/nshell-nfr-results/summary.md"
-          profile_root="$RUNNER_TEMP/nshell-nfr-results/nfr06-profile"
-          if [ -s "$summary" ]; then
-            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
-          else
+          results="$RUNNER_TEMP/nshell-nfr-results"
+          mkdir -p "$results"
+          if [ ! -s "$summary" ]; then
             {
-              echo "# NFR-01 to NFR-07 performance results"
+              echo "# NFR-01 to NFR-09 performance results"
               echo
-              echo "No complete measurement summary was produced. Inspect the build result and partial measurement artifacts."
-            } >> "$GITHUB_STEP_SUMMARY"
+              echo "No complete NFR-01 to NFR-07 summary was produced. Inspect its build result and partial measurement artifacts."
+            } > "$summary"
           fi
+          profile_root="$RUNNER_TEMP/nshell-nfr-results/nfr06-profile"
           profile_result=$(find "$profile_root" -path '*/gate-cpu-*/result.json' -type f -print -quit 2>/dev/null || true)
           if [ -n "$profile_result" ]; then
             python3 - "$profile_result" >> "$GITHUB_STEP_SUMMARY" <<'PY'
@@ -114,6 +177,153 @@ jobs:
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "NFR-06 CPU profile did not produce a validated result; inspect the uploaded profile artifact." >> "$GITHUB_STEP_SUMMARY"
           fi
+          nix develop .#scenarios -c python3 - "$results" "$summary" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          results = Path(sys.argv[1])
+          summary = Path(sys.argv[2])
+
+          def read_report(filename):
+              path = results / filename
+              if not path.is_file():
+                  return None
+              try:
+                  return json.loads(path.read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError):
+                  return None
+
+          def operation(filename, name):
+              report = read_report(filename)
+              if report is None:
+                  return None
+              rows = report.get("operations")
+              if not isinstance(rows, list):
+                  return None
+              return next((row for row in rows if row.get("name") == name), None)
+
+          def status(row):
+              if row is None:
+                  return "ERROR"
+              return {
+                  "success": "PASS",
+                  "fail": "FAIL",
+                  "warning": "WARNING",
+              }.get(row.get("status"), "ERROR")
+
+          def number(value):
+              if isinstance(value, (int, float)) and not isinstance(value, bool):
+                  return f"{value:g}"
+              return "unavailable"
+
+          nfr08 = operation("nfr-08.json", "nfr08_fuzz")
+          nfr08_counts = nfr08.get("counts") if nfr08 else None
+          nfr08_counts = nfr08_counts if isinstance(nfr08_counts, dict) else {}
+          nfr08_debuggers = nfr08.get("debugger_indicators") if nfr08 else None
+          nfr08_dumps = nfr08.get("dump_indicators") if nfr08 else None
+          nfr08_timed_out = nfr08.get("timed_out") if nfr08 else None
+          nfr08_value = (
+              f"reader {number(nfr08_counts.get('reader'))}; "
+              f"input-state {number(nfr08_counts.get('input_state'))}; "
+              f"debugger {len(nfr08_debuggers) if isinstance(nfr08_debuggers, list) else 'unavailable'}; "
+              f"dump {len(nfr08_dumps) if isinstance(nfr08_dumps, list) else 'unavailable'}; "
+              f"timed out {nfr08_timed_out if isinstance(nfr08_timed_out, bool) else 'unavailable'}"
+          )
+          nfr08_limit = (
+              f"{number(nfr08.get('required_input_count_per_target')) if nfr08 else 'unavailable'} each; "
+              "0 debugger/dump; no timeout"
+          )
+
+          nfr09 = operation("nfr-09.json", "nfr09_coverage")
+          new_code = nfr09.get("new_code") if nfr09 else None
+          new_code = new_code if isinstance(new_code, dict) else {}
+          nfr09_value = (
+              f"overall {number(nfr09.get('overall_expression_percent')) if nfr09 else 'unavailable'}%; "
+              f"new code {number(new_code.get('line_percent'))}% "
+              f"({number(new_code.get('covered_lines'))}/{number(new_code.get('executable_added_lines'))} lines)"
+          )
+          nfr09_limit = (
+              f"overall ≥{number(nfr09.get('overall_minimum_percent')) if nfr09 else 'unavailable'}%; "
+              f"new code ≥{number(new_code.get('minimum_percent'))}%"
+          )
+
+          e02 = read_report("e02-history-startup.json")
+          e02_summary = e02.get("summary") if e02 else None
+          e02_summary = e02_summary if isinstance(e02_summary, dict) else {}
+          e02_sample_rows = e02.get("samples") if e02 else None
+          e02_sample_rows = e02_sample_rows if isinstance(e02_sample_rows, list) else []
+          e02_sample_count = e02_summary.get("sample_count")
+          e02_median = e02_summary.get("target_median_ms")
+          e02_threshold_value = e02_summary.get("criterion_threshold_ms")
+          e02_measured = e02 is not None and e02.get("status") == "measured"
+
+          def verifies_e02_history(sample):
+              if not isinstance(sample, dict):
+                  return False
+              arms = sample.get("arms")
+              if not isinstance(arms, dict):
+                  return False
+              target = arms.get("target")
+              if not isinstance(target, dict):
+                  return False
+              history = target.get("history_load_verification")
+              if not isinstance(history, dict):
+                  return False
+              return (
+                  history.get("all_records_loaded_once") is True
+                  and history.get("loaded_record_count") == 10_000
+                  and history.get("expected_record_count") == 10_000
+                  and history.get("missing_record_count") == 0
+                  and history.get("duplicate_record_count") == 0
+              )
+
+          e02_verified_samples = sum(1 for sample in e02_sample_rows if verifies_e02_history(sample))
+          e02_sample_count_valid = (
+              isinstance(e02_sample_count, int)
+              and not isinstance(e02_sample_count, bool)
+              and e02_sample_count == 30
+              and e02.get("warmup_count") == 3
+              and e02_sample_count == e02.get("sample_count")
+              and e02_sample_count == len(e02_sample_rows)
+          )
+          e02_history_valid = (
+              e02_sample_count_valid
+              and e02_verified_samples == e02_sample_count
+          )
+          e02_measurement_valid = (
+              e02_measured
+              and e02_sample_count_valid
+              and isinstance(e02_median, (int, float))
+              and isinstance(e02_threshold_value, (int, float))
+          )
+          if not e02_measurement_valid:
+              e02_status = "ERROR"
+          elif e02_summary.get("threshold_passed") is True and e02_history_valid:
+              e02_status = "PASS"
+          else:
+              e02_status = "FAIL"
+          e02_value = (
+              f"{number(e02_median)} ms median; "
+              f"{e02_verified_samples}/{number(e02_sample_count)} samples verified all 10,000 records once"
+          )
+          e02_threshold = f"≤ {number(e02_threshold_value)} ms"
+          e02_samples = number(e02_sample_count)
+
+          with summary.open("a", encoding="utf-8") as stream:
+              stream.write(
+                  "\n## NFR-08 and NFR-09\n\n"
+                  "| NFR | Measurement | Threshold | Result |\n"
+                  "|---|---|---|---|\n"
+                  f"| NFR-08 | {nfr08_value} | {nfr08_limit} | **{status(nfr08)}** |\n"
+                  f"| NFR-09 | {nfr09_value} | {nfr09_limit} | **{status(nfr09)}** |\n"
+                  "\n## E02 startup with 10,000 history records\n\n"
+                  "| Measurement | Threshold | Samples | Status |\n"
+                  "|---|---:|---:|---|\n"
+                  f"| {e02_value} | {e02_threshold} | {e02_samples} | **{e02_status}** |\n"
+              )
+          PY
+          cat "$summary" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload raw measurements and summary
         if: always()

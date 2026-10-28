@@ -1,6 +1,11 @@
 (require "asdf")
 
-(asdf:load-asd (merge-pathnames "nshell.asd" (uiop:ensure-directory-pathname (uiop:getenv "NSHELL_ROOT"))))
+(progn
+  (asdf:clear-system "nshell")
+  (asdf:load-asd
+   (merge-pathnames
+    "nshell.asd"
+    (uiop:ensure-directory-pathname (uiop:getenv "NSHELL_ROOT")))))
 (progn
   (asdf:load-system "nshell")
   (unless (equal

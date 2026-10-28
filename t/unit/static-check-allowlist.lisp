@@ -7,7 +7,9 @@
       :unless-feature
       :linux)
      ("t/scripts/test-dependency-assertions.lisp"
-      "Standalone dependency assertion entry point invoked with sbcl --script."))
+      "Standalone dependency assertion entry point invoked with sbcl --script.")
+     ("t/scenarios/P12/public-api-consumer.lisp"
+      "Standalone public API consumer fixture loaded directly by the P12 comparison scenario."))
     :layer-violations
     (("src/application/builtin-type-helpers.lisp" :application
                                                   :presentation

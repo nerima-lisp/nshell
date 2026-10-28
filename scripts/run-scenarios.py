@@ -1651,6 +1651,7 @@ def _p12_consumer_fixture(path: Path) -> Path:
         )
     }
     allowed = {
+        ("asdf", "clear-system"),
         ("asdf", "find-system"),
         ("asdf", "load-asd"),
         ("asdf", "load-system"),

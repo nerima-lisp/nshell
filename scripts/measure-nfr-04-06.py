@@ -137,11 +137,18 @@ def find_git_root(path: Path) -> Path | None:
 
 def validate_fixtures(args: argparse.Namespace) -> dict[str, object]:
     plain_fixture = Path(args.plain_fixture).expanduser().resolve()
-    completion_fixture = Path(args.completion_fixture).expanduser().resolve()
-    for fixture, label in (
-        (plain_fixture, "--plain-fixture"),
-        (completion_fixture, "--completion-fixture"),
-    ):
+    completion_fixture = (
+        Path(args.completion_fixture).expanduser().resolve()
+        if args.completion_fixture
+        else None
+    )
+    if args.start_from in ("nfr04", "nfr06", "nfr06-keys") and completion_fixture is None:
+        raise ValueError(f"--completion-fixture is required when --from is {args.start_from}")
+
+    fixture_paths = [(plain_fixture, "--plain-fixture")]
+    if completion_fixture is not None:
+        fixture_paths.append((completion_fixture, "--completion-fixture"))
+    for fixture, label in fixture_paths:
         if not fixture.is_dir():
             raise ValueError(f"{label} must be an existing directory: {fixture}")
         ensure_outside_repository(fixture, label)
@@ -152,9 +159,9 @@ def validate_fixtures(args: argparse.Namespace) -> dict[str, object]:
     git_fixture = None
     git_root = None
     git_branch = None
-    if args.start_from == "nfr04":
+    if args.start_from in ("nfr04", "nfr04-only"):
         if not args.git_fixture:
-            raise ValueError("--git-fixture is required when --from is nfr04")
+            raise ValueError(f"--git-fixture is required when --from is {args.start_from}")
         git_fixture = Path(args.git_fixture).expanduser().resolve()
         if not git_fixture.is_dir():
             raise ValueError(f"--git-fixture must be an existing directory: {git_fixture}")
@@ -170,25 +177,26 @@ def validate_fixtures(args: argparse.Namespace) -> dict[str, object]:
         )
         git_branch = branch_result.stdout.strip()
 
-    entries = list(completion_fixture.iterdir())
-    if len(entries) != FIXTURE_FILE_COUNT:
-        raise ValueError(
-            f"--completion-fixture must contain exactly {FIXTURE_FILE_COUNT} entries; "
-            f"found {len(entries)}"
-        )
-    if any(not entry.is_file() or not entry.name.startswith(args.completion_prefix) for entry in entries):
-        raise ValueError(
-            "all --completion-fixture entries must be files whose names start with "
-            f"{args.completion_prefix!r}"
-        )
+    if completion_fixture is not None:
+        entries = list(completion_fixture.iterdir())
+        if len(entries) != FIXTURE_FILE_COUNT:
+            raise ValueError(
+                f"--completion-fixture must contain exactly {FIXTURE_FILE_COUNT} entries; "
+                f"found {len(entries)}"
+            )
+        if any(not entry.is_file() or not entry.name.startswith(args.completion_prefix) for entry in entries):
+            raise ValueError(
+                "all --completion-fixture entries must be files whose names start with "
+                f"{args.completion_prefix!r}"
+            )
 
     return {
         "plain_fixture": str(plain_fixture),
         "git_fixture": str(git_fixture) if git_fixture is not None else None,
         "git_root": str(git_root) if git_root is not None else None,
         "git_branch": git_branch,
-        "completion_fixture": str(completion_fixture),
-        "completion_entries": len(entries),
+        "completion_fixture": str(completion_fixture) if completion_fixture is not None else None,
+        "completion_entries": len(entries) if completion_fixture is not None else 0,
         "completion_prefix": args.completion_prefix,
     }
 
@@ -1454,13 +1462,17 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
     binary = validate_executable(args.binary, "--binary")
     control_shell = (
         validate_executable(args.control_binary, "--control-binary")
-        if args.start_from == "nfr04"
+        if args.start_from in ("nfr04", "nfr04-only")
         else None
     )
     fixtures = validate_fixtures(args)
     plain_fixture = Path(str(fixtures["plain_fixture"]))
     git_fixture = Path(str(fixtures["git_fixture"])) if fixtures["git_fixture"] is not None else None
-    completion_fixture = Path(str(fixtures["completion_fixture"]))
+    completion_fixture = (
+        Path(str(fixtures["completion_fixture"]))
+        if fixtures["completion_fixture"] is not None
+        else None
+    )
     buffer_sizes = tuple(args.buffer_sizes)
     if args.start_from in ("nfr04", "nfr05") and (
         not buffer_sizes or any(size < 1 or size > 1000 for size in buffer_sizes)
@@ -1534,7 +1546,7 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
 
             for git_enabled, cwd, label in (
                 ((False, plain_fixture, "git-disabled"), (True, git_fixture, "git-enabled"))
-                if args.start_from == "nfr04"
+                if args.start_from in ("nfr04", "nfr04-only")
                 else ()
             ):
                 prompt = f"NSHELL_NFR04_{uuid.uuid4().hex}_PROMPT"
@@ -1618,7 +1630,7 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                     args.nfr06_candidate_compute_diagnostics,
                 ))
 
-            if args.start_from != "nfr05":
+            if args.start_from in ("nfr04", "nfr06", "nfr06-keys"):
                 target = lambda: run_suggestion_key_sample(
                     binary, completion_fixture, home_root, args.settle_ms / 1000
                 )
@@ -1661,9 +1673,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--from",
         dest="start_from",
-        choices=("nfr04", "nfr05", "nfr06", "nfr06-keys"),
+        choices=("nfr04", "nfr04-only", "nfr05", "nfr06", "nfr06-keys"),
         default="nfr04",
-        help="first group to measure; nfr05 measures only redraw, nfr06 skips NFR-04/05, nfr06-keys also skips completion preflight/timing (default: nfr04, all groups)",
+        help="measurement group; nfr04 runs all groups, nfr04-only runs only NFR-04, nfr05 runs only redraw, and nfr06 skips NFR-04/05",
     )
     parser.add_argument(
         "--samples",
@@ -1674,7 +1686,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--warmups", type=int, default=2, help="paired warmup runs per case (default: 2)")
     parser.add_argument("--plain-fixture", required=True, help="existing directory outside the repository and outside Git")
     parser.add_argument("--git-fixture", help="existing directory inside a Git working tree (required when --from is nfr04)")
-    parser.add_argument("--completion-fixture", required=True, help="existing directory with exactly 20,000 item files for NFR-06 completion and key responsiveness")
+    parser.add_argument("--completion-fixture", help="existing directory with exactly 20,000 item files for NFR-06 completion and key responsiveness")
     parser.add_argument("--completion-prefix", default="item-", help="required filename prefix in completion fixture (default: item-)")
     parser.add_argument(
         "--nfr06-candidate-compute-diagnostics",

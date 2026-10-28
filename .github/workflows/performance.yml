@@ -2,6 +2,12 @@ name: NFR performance measurements
 
 on:
   workflow_dispatch:
+    inputs:
+      nfr:
+        description: NFR IDs to measure (all or comma-separated values from 01 through 09)
+        required: true
+        default: all
+        type: string
 
 permissions:
   contents: read
@@ -30,6 +36,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 2
 
+      - name: Validate NFR selection
+        id: nfr-selection
+        env:
+          NFR_SELECTION: ${{ inputs.nfr }}
+        run: python3 scripts/nfr_selection.py "$NFR_SELECTION" --github-output "$GITHUB_OUTPUT"
+
       - uses: ./.github/actions/nix-setup
         with:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
@@ -44,12 +56,14 @@ jobs:
 
       - name: Build nshell
         id: binary
+        if: steps.nfr-selection.outputs.requires_binary == 'true'
         run: >-
           nix build --max-jobs 1 --print-build-logs
           ".#packages.${{ matrix.system }}.default"
           --out-link "$RUNNER_TEMP/nshell-nfr-binary"
 
       - name: Measure NFR-01 through NFR-07
+        if: steps.nfr-selection.outputs.measures_01_07 == 'true'
         run: >-
           nix develop .#scenarios -c python3
           scripts/measure-nfr-ci.py
@@ -57,9 +71,10 @@ jobs:
           --output-dir "$RUNNER_TEMP/nshell-nfr-results"
           --system "${{ matrix.system }}"
           --revision "$GITHUB_SHA"
+          --nfrs "${{ steps.nfr-selection.outputs.selected }}"
 
       - name: Profile NFR-06 CPU
-        if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' }}
+        if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' && steps.nfr-selection.outputs.nfr_06 == 'true' }}
         env:
           NFR06_PROFILE_BINARY: ${{ runner.temp }}/nshell-nfr-binary/bin/nshell
           NFR06_PROFILE_FIXTURE: ${{ runner.temp }}/nshell-nfr06-fixture
@@ -70,7 +85,7 @@ jobs:
           --mode cpu --iterations 100
 
       - name: Measure E02 startup with 10,000 history records
-        if: always()
+        if: ${{ always() && steps.nfr-selection.outputs.all == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -99,7 +114,7 @@ jobs:
 
       - name: Prepare NFR-09 revision history
         id: nfr09-history
-        if: always()
+        if: ${{ always() && steps.nfr-selection.outputs.nfr_09 == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -108,7 +123,7 @@ jobs:
           nix shell nixpkgs#jujutsu -c jj git init --colocate
 
       - name: Measure NFR-08
-        if: always()
+        if: ${{ always() && steps.nfr-selection.outputs.nfr_08 == 'true' }}
         run: >-
           nix develop .#scenarios -c python3
           scripts/measure-nfr-07-09.py
@@ -119,7 +134,7 @@ jobs:
           --revision "$GITHUB_SHA"
 
       - name: Measure NFR-09
-        if: always()
+        if: ${{ always() && steps.nfr-selection.outputs.nfr_09 == 'true' }}
         shell: bash
         env:
           BASE_REVISION: ${{ steps.nfr09-history.outputs.base_revision }}
@@ -139,21 +154,50 @@ jobs:
 
       - name: Publish NFR job summary
         if: always()
+        env:
+          NFR_SELECTION: ${{ steps.nfr-selection.outputs.selected }}
+          NFR_ALL: ${{ steps.nfr-selection.outputs.all }}
         run: |
           summary="$RUNNER_TEMP/nshell-nfr-results/summary.md"
           results="$RUNNER_TEMP/nshell-nfr-results"
           mkdir -p "$results"
-          if [ ! -s "$summary" ]; then
+          if [ -z "$NFR_SELECTION" ]; then
             {
-              echo "# NFR-01 to NFR-09 performance results"
+              echo "# NFR performance results"
               echo
-              echo "No complete NFR-01 to NFR-07 summary was produced. Inspect its build result and partial measurement artifacts."
+              echo "NFR selection validation failed. No NFR measurements were requested."
             } > "$summary"
+          elif [ ! -s "$summary" ]; then
+            if [ "$NFR_ALL" = true ]; then
+              {
+                echo "# NFR-01 to NFR-09 performance results"
+                echo
+                echo "No complete NFR-01 to NFR-07 summary was produced. Inspect its build result and partial measurement artifacts."
+              } > "$summary"
+            else
+              python3 - "$NFR_SELECTION" "$summary" <<'PY'
+          import sys
+          from pathlib import Path
+
+          selected = tuple(sys.argv[1].split(","))
+          selected_display = ", ".join(f"NFR-{nfr}" for nfr in selected)
+          unmeasured = [f"NFR-{nfr}" for nfr in (f"{number:02d}" for number in range(1, 10)) if nfr not in selected]
+          path = Path(sys.argv[2])
+          path.write_text(
+              "# Selected NFR performance results\n\n"
+              f"Selected NFRs: {selected_display}.\n"
+              f"Unselected NFRs were not measured: {', '.join(unmeasured) or 'none'}; E02 was not measured.\n\n"
+              "Selected measurement summary was not produced. Inspect the build and selected measurement artifacts.\n",
+              encoding="utf-8",
+          )
+          PY
+            fi
           fi
           profile_root="$RUNNER_TEMP/nshell-nfr-results/nfr06-profile"
           profile_result=$(find "$profile_root" -path '*/gate-cpu-*/result.json' -type f -print -quit 2>/dev/null || true)
-          if [ -n "$profile_result" ]; then
-            python3 - "$profile_result" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          if [ "$NFR_ALL" = true ] || [[ ",$NFR_SELECTION," == *,06,* ]]; then
+            if [ -n "$profile_result" ]; then
+              python3 - "$profile_result" >> "$GITHUB_STEP_SUMMARY" <<'PY'
           import json
           import sys
           from pathlib import Path
@@ -179,12 +223,14 @@ jobs:
               print("\n".join(flat_rows[:20]))
               print("```")
           PY
-          else
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "NFR-06 CPU profile did not produce a validated result; inspect the uploaded profile artifact." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "NFR-06 CPU profile did not produce a validated result; inspect the uploaded profile artifact." >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
           nix develop .#scenarios -c python3 - "$results" "$summary" <<'PY'
           import json
+          import os
           import sys
           from pathlib import Path
 
@@ -316,18 +362,38 @@ jobs:
           e02_threshold = f"≤ {number(e02_threshold_value)} ms"
           e02_samples = number(e02_sample_count)
 
+          selected_nfrs = set(os.environ["NFR_SELECTION"].split(","))
           with summary.open("a", encoding="utf-8") as stream:
-              stream.write(
-                  "\n## NFR-08 and NFR-09\n\n"
-                  "| NFR | Measurement | Threshold | Result |\n"
-                  "|---|---|---|---|\n"
-                  f"| NFR-08 | {nfr08_value} | {nfr08_limit} | **{status(nfr08)}** |\n"
-                  f"| NFR-09 | {nfr09_value} | {nfr09_limit} | **{status(nfr09)}** |\n"
-                  "\n## E02 startup with 10,000 history records\n\n"
-                  "| Measurement | Threshold | Samples | Status |\n"
-                  "|---|---:|---:|---|\n"
-                  f"| {e02_value} | {e02_threshold} | {e02_samples} | **{e02_status}** |\n"
-              )
+              if os.environ["NFR_ALL"] == "true":
+                  stream.write(
+                      "\n## NFR-08 and NFR-09\n\n"
+                      "| NFR | Measurement | Threshold | Result |\n"
+                      "|---|---|---|---|\n"
+                      f"| NFR-08 | {nfr08_value} | {nfr08_limit} | **{status(nfr08)}** |\n"
+                      f"| NFR-09 | {nfr09_value} | {nfr09_limit} | **{status(nfr09)}** |\n"
+                      "\n## E02 startup with 10,000 history records\n\n"
+                      "| Measurement | Threshold | Samples | Status |\n"
+                      "|---|---:|---:|---|\n"
+                      f"| {e02_value} | {e02_threshold} | {e02_samples} | **{e02_status}** |\n"
+                  )
+              else:
+                  selected_rows = []
+                  if "08" in selected_nfrs:
+                      selected_rows.append(
+                          f"| NFR-08 | {nfr08_value} | {nfr08_limit} | **{status(nfr08)}** |"
+                      )
+                  if "09" in selected_nfrs:
+                      selected_rows.append(
+                          f"| NFR-09 | {nfr09_value} | {nfr09_limit} | **{status(nfr09)}** |"
+                      )
+                  if selected_rows:
+                      stream.write(
+                          "\n## Selected NFR results\n\n"
+                          "| NFR | Measurement | Threshold | Result |\n"
+                          "|---|---|---|---|\n"
+                          + "\n".join(selected_rows)
+                          + "\n"
+                      )
           PY
           cat "$summary" >> "$GITHUB_STEP_SUMMARY"
 

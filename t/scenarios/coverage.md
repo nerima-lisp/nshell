@@ -32,7 +32,7 @@ executable scenarios and manual checks.
 | A08 | direct | 2 | 0 | `t/scenarios/A08/ctrl-d-exits.json`, `t/scenarios/A08/exit-warns-about-job.json` |
 | A09 | approximation, manual | 1 | 1 | `t/scenarios/A09/WP-R01-hup-forwards-to-job.json`, `t/scenarios/A09/manual.md` |
 | A10 | direct | 1 | 0 | `t/scenarios/A10/exec-replaces-shell.json` |
-| A11 | manual | 0 | 1 | `t/scenarios/A11/manual.md` |
+| A11 | direct, manual | 1 | 1 | `t/scenarios/A11/nested-nshell-session.json`, `t/scenarios/A11/manual.md` |
 | A12 | direct | 1 | 0 | `t/scenarios/A12/no-config-skips-startup.json` |
 | A13 | direct | 1 | 0 | `t/scenarios/A13/config-error-keeps-prompt.json` |
 | B01 | direct, manual | 1 | 1 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B01/manual.md` |
@@ -71,7 +71,7 @@ executable scenarios and manual checks.
 | D06 | approximation | 1 | 0 | `t/scenarios/D06/approx-editor-child-tty.json` |
 | D07 | approximation | 1 | 0 | `t/scenarios/D07/approx-password-tty.json` |
 | D08 | approximation | 1 | 0 | `t/scenarios/D08/approx-repl-tty.json` |
-| D09 | manual | 0 | 1 | `t/scenarios/D09/manual.md` |
+| D09 | direct, manual | 1 | 1 | `t/scenarios/D09/tmux-attach-session.json`, `t/scenarios/D09/manual.md` |
 | D10 | approximation | 1 | 0 | `t/scenarios/D10/approx-container-tty.json` |
 | D11 | approximation | 1 | 0 | `t/scenarios/D11/approx-cooked-mode-after-crash.json` |
 | D12 | direct | 1 | 0 | `t/scenarios/D12/ctrl-c-stops-foreground-child.json` |
@@ -87,16 +87,16 @@ executable scenarios and manual checks.
 | F01 | approximation, direct | 2 | 0 | `t/scenarios/F01/approx-cooked-mode-after-crash.json`, `t/scenarios/F01/foreground-child-restores-terminal-output.json` |
 | F02 | manual | 0 | 1 | `t/scenarios/F02/manual.md` |
 | F03 | direct, manual | 1 | 1 | `t/scenarios/F03/WP-R01-sigterm-exit-status.json`, `t/scenarios/F03/manual.md` |
-| F04 | manual | 0 | 1 | `t/scenarios/F04/manual.md` |
+| F04 | direct, manual | 1 | 1 | `t/scenarios/F04/ctrl-quit-stops-cat-and-shell-recovers.json`, `t/scenarios/F04/manual.md` |
 | F05 | approximation, manual | 1 | 1 | `t/scenarios/F05/approx-terminal-title-cwd.json`, `t/scenarios/F05/manual.md` |
 | F06 | approximation | 1 | 0 | `t/scenarios/F06/approx-osc-7-cwd.json` |
 | F07 | approximation | 1 | 0 | `t/scenarios/F07/approx-osc-133-prompt.json` |
 | F08 | approximation | 1 | 0 | `t/scenarios/F08/approx-large-bracketed-paste.json` |
 | F09 | approximation, manual | 1 | 1 | `t/scenarios/F09/approx-mouse-report-default-off.json`, `t/scenarios/F09/manual.md` |
 | F10 | direct | 1 | 0 | `t/scenarios/F10/unicode-grapheme-cursor-edit.json` |
-| F11 | manual | 0 | 1 | `t/scenarios/F11/manual.md` |
+| F11 | direct, manual | 4 | 1 | `t/scenarios/F11/16-color-sgr.json`, `t/scenarios/F11/256-color-sgr.json`, `t/scenarios/F11/no-color-sgr.json`, `t/scenarios/F11/truecolor-sgr.json`, `t/scenarios/F11/manual.md` |
 | F12 | approximation, manual | 1 | 1 | `t/scenarios/F12/approx-term-dumb-command-line.json`, `t/scenarios/F12/manual.md` |
-| F13 | manual | 0 | 1 | `t/scenarios/F13/manual.md` |
+| F13 | direct, manual | 1 | 1 | `t/scenarios/F13/startup-cursor-report-is-consumed.json`, `t/scenarios/F13/manual.md` |
 | G01 | direct, approximation | 8 | 0 | `t/scenarios/G01/case-conversion.json`, `t/scenarios/G01/char-transpose.json`, `t/scenarios/G01/word-forward-motion.json`, `t/scenarios/G01/word-motion-deletion.json`, `t/scenarios/G01/word-transpose.json`, `t/scenarios/G01/approx-emacs-case-transform.json`, `t/scenarios/G01/approx-emacs-transpose.json`, `t/scenarios/G01/approx-emacs-word-delete.json` |
 | G02 | direct, approximation | 10 | 0 | `t/scenarios/G02/delete-a-word.json`, `t/scenarios/G02/delete-inner-word.json`, `t/scenarios/G02/goto-end.json`, `t/scenarios/G02/insert-command-cursor-shape.json`, `t/scenarios/G02/runtime-vi-toggle.json`, `t/scenarios/G02/undo-find-replace-repeat.json`, `t/scenarios/G02/yank-put-inner-word.json`, `t/scenarios/G02/approx-vi-mode-editing.json`, `t/scenarios/G02/vi-e-nfd-grapheme-boundary.json`, `t/scenarios/G02/vi-insert-escape-e-same-write.json` |
 | G03 | direct, manual | 1 | 1 | `t/scenarios/G03/undo-redo.json`, `t/scenarios/G03/manual.md` |
@@ -160,7 +160,7 @@ executable scenarios and manual checks.
 | K07 | direct | 1 | 0 | `t/scenarios/K07/one-line-source-diagnostic.json` |
 | K08 | direct | 1 | 0 | `t/scenarios/K08/macro-expansion-error-location.json` |
 | L01 | direct | 1 | 0 | `t/scenarios/L01/left-and-right-prompt.json` |
-| L02 | manual | 0 | 1 | `t/scenarios/L02/manual.md` |
+| L02 | direct, manual | 2 | 1 | `t/scenarios/L02/git-prompt-responsiveness.json`, `t/scenarios/L02/slow-git-status-does-not-block-input.json`, `t/scenarios/L02/manual.md` |
 | L03 | direct | 1 | 0 | `t/scenarios/L03/status-duration-jobs-prompt-segments.json` |
 | L04 | approximation | 1 | 0 | `t/scenarios/L04/approx-transient-prompt-keeps-current-prompt.json` |
 | L05 | approximation | 1 | 0 | `t/scenarios/L05/approx-custom-prompt-format.json` |
@@ -205,32 +205,32 @@ executable scenarios and manual checks.
 | P06 | direct | 1 | 0 | `t/scenarios/P06/P06-key-binding.json` |
 | P07 | direct | 1 | 0 | `t/scenarios/P07/P07-theme-selection.json` |
 | P08 | approximation | 1 | 0 | `t/scenarios/P08/approx-P08-prompt-format.json` |
-| P09 | manual | 0 | 1 | `t/scenarios/P09/manual.md` |
+| P09 | direct, manual | 1 | 1 | `t/scenarios/P09/hooks-order-arguments-and-error-recovery.json`, `t/scenarios/P09/manual.md` |
 | P10 | direct | 1 | 0 | `t/scenarios/P10/P10-completion-definition.json` |
 | P11 | approximation | 1 | 0 | `t/scenarios/P11/approx-P11-continue-after-config-error.json` |
-| P12 | manual | 0 | 1 | `t/scenarios/P12/manual.md` |
+| P12 | direct, manual | 1 | 1 | `t/scenarios/P12/public-api-stability.json`, `t/scenarios/P12/manual.md` |
 | Q01 | direct | 1 | 0 | `t/scenarios/Q01/Q01-no-debug-dump.json` |
 | Q02 | direct | 1 | 0 | `t/scenarios/Q02/Q02-bounded-recursion-recovery.json` |
-| Q03 | manual | 0 | 1 | `t/scenarios/Q03/manual.md` (real heap exhaustion needs a bounded per-process memory-limit mechanism) |
+| Q03 | direct, manual | 1 | 1 | `t/scenarios/Q03/Q03-real-heap-exhaustion.json`, `t/scenarios/Q03/manual.md` |
 | Q04 | direct | 1 | 0 | `t/scenarios/Q04/Q04-cancel-completion.json` |
-| Q05 | manual | 0 | 1 | `t/scenarios/Q05/manual.md` (slow NFS procedure and pass criteria) |
+| Q05 | direct, manual | 3 | 1 | `t/scenarios/Q05/filesystem-completion-on-nfs.json`, `t/scenarios/Q05/git-prompt-on-nfs.json`, `t/scenarios/Q05/glob-expansion-on-nfs.json`, `t/scenarios/Q05/manual.md` |
 | Q06 | approximation | 1 | 0 | `t/scenarios/Q06/approx-Q06-read-only-home-session.json` |
-| Q07 | manual | 0 | 1 | `t/scenarios/Q07/manual.md` |
-| Q08 | manual | 0 | 1 | `t/scenarios/Q08/manual.md` |
+| Q07 | direct, manual | 1 | 1 | `t/scenarios/Q07/history-write-failure-on-bounded-filesystem.json`, `t/scenarios/Q07/manual.md` |
+| Q08 | direct, manual | 2 | 1 | `t/scenarios/Q08/fault-injected-key-handler-preserves-input.json`, `t/scenarios/Q08/normal-key-handler-remains-usable.json`, `t/scenarios/Q08/manual.md` |
 | S01 | approximation | 1 | 0 | `t/scenarios/S01/approx-S01-ask-mode-cancel.json` |
-| S02 | manual | 0 | 1 | `t/scenarios/S02/manual.md` |
-| S03 | manual | 0 | 1 | `t/scenarios/S03/manual.md` |
-| S04 | manual | 0 | 1 | `t/scenarios/S04/manual.md` |
+| S02 | direct, manual | 2 | 1 | `t/scenarios/S02/S02-enter-approves-proposal.json`, `t/scenarios/S02/S02-proposal-awaits-approval.json`, `t/scenarios/S02/manual.md` |
+| S03 | direct, manual | 1 | 1 | `t/scenarios/S03/S03-explains-last-failure.json`, `t/scenarios/S03/manual.md` |
+| S04 | direct, manual | 1 | 1 | `t/scenarios/S04/S04-approves-agent-steps-individually.json`, `t/scenarios/S04/manual.md` |
 | S05 | direct | 1 | 0 | `t/scenarios/S05/S05-noninteractive-ai-status.json` |
-| S06 | manual | 0 | 1 | `t/scenarios/S06/manual.md` |
+| S06 | direct, manual | 1 | 1 | `t/scenarios/S06/S06-classifies-and-gates-sexp-proposals.json`, `t/scenarios/S06/manual.md` |
 | S07 | approximation | 2 | 0 | `t/scenarios/S07/approx-S07-shell-without-claude.json`, `t/scenarios/S07/cancel-resumes-after-new-request.json` |
-| T01 | manual | 0 | 1 | `t/scenarios/T01/manual.md` |
-| T02 | manual | 0 | 1 | `t/scenarios/T02/manual.md` |
+| T01 | direct, manual | 1 | 1 | `t/scenarios/T01/platform-support-matches-flake.json`, `t/scenarios/T01/manual.md` |
+| T02 | direct, manual | 1 | 1 | `t/scenarios/T02/etc-shells-guidance.json`, `t/scenarios/T02/manual.md` |
 | T03 | approximation | 1 | 0 | `t/scenarios/T03/approx-T03-help-output.json` |
 | T04 | manual | 0 | 1 | `t/scenarios/T04/manual.md` |
 | T05 | direct, approximation | 2 | 0 | `t/scenarios/T05/legacy-history-import-is-idempotent.json`, `t/scenarios/T05/approx-T05-legacy-history-load.json` |
-| T06 | manual | 0 | 1 | `t/scenarios/T06/manual.md` |
+| T06 | direct, manual | 1 | 1 | `t/scenarios/T06/copied-release-bundle-pty-smoke.json`, `t/scenarios/T06/manual.md` |
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 233 | 48 | — |
+| Total | expected corpus | 263 | 48 | — |

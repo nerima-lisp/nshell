@@ -3,7 +3,7 @@
 Run `help` inside nshell for per-command detail, and `type NAME` to check
 whether a name resolves to a builtin, a function, or an external program.
 
-`agent`, `ai`, `alias`, `abbr`, `and`, `bg`, `bind`, `break`, `builtin`, `cd`, `command`,
+`.`, `[`, `agent`, `ai`, `alias`, `abbr`, `and`, `bg`, `bind`, `break`, `builtin`, `cd`, `command`,
 `complete`, `contains`, `continue`, `count`, `dirs`, `disown`, `echo`, `eval`,
 `exec`, `exit`, `export`, `false`, `fg`, `function`, `functions`, `help`,
 `history`, `jobs`, `kill`, `math`, `nextd`, `not`, `or`, `pipeline-graph`,

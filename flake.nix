@@ -487,6 +487,37 @@
 
       ptyBootstrapPathFor = ctx: "${ptyBootstrapFor ctx}/bin/nshell-pty-bootstrap";
 
+      # cl-process-kit/pty-test loads this shared library from its explicit
+      # path at load time, so setting only the dynamic loader search path is not
+      # enough for dependency-suite runs in the dev shell.
+      processKitPtyLibraryFor =
+        ctx:
+        ctx.cl.markNativeLibrary (
+          ctx.pkgs.stdenv.mkDerivation {
+            pname = "cl-process-kit-pty-native";
+            version = ctx.cl.fromAsdSystem "${cl-process-kit}/cl-process-kit.asd";
+            src = cl-process-kit;
+            nativeBuildInputs = [ ctx.pkgs.stdenv.cc ];
+            buildPhase = ''
+              runHook preBuild
+              $CC -O2 -fPIC -shared native/pty.c \
+                -o libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary} \
+                ${ctx.pkgs.lib.optionalString ctx.pkgs.stdenv.isLinux "-lutil"}
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out/lib"
+              cp libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary} "$out/lib/"
+              runHook postInstall
+            '';
+          }
+        );
+
+      processKitPtyLibraryPathFor =
+        ctx:
+        "${processKitPtyLibraryFor ctx}/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}";
+
       ptyBootstrapEnvironmentFor =
         ctx:
         ctx.pkgs.lib.optionalAttrs ctx.pkgs.stdenv.hostPlatform.isDarwin {
@@ -512,9 +543,7 @@
           buildCommand = previous.buildCommand + ''
             wrapProgram "$out/bin/nshell" --inherit-argv0 \
               --run ${deliveryRun} \
-              ${ctx.pkgs.lib.optionalString
-                ctx.pkgs.stdenv.hostPlatform.isDarwin
-                "--set NSHELL_PTY_BOOTSTRAP ${ptyBootstrapPathFor ctx}"} \
+              ${ctx.pkgs.lib.optionalString ctx.pkgs.stdenv.hostPlatform.isDarwin "--set NSHELL_PTY_BOOTSTRAP ${ptyBootstrapPathFor ctx}"} \
               --prefix PATH : ${ctx.pkgs.lib.makeBinPath [ (spawnHelperFor ctx) ]}
             mkdir -p "$out/share/man/man1" "$out/LICENSES"
             cp ${./README.md} "$out/README.md"
@@ -800,12 +829,14 @@
       # cl-prolog-kit, whose whole source tree is already on the registry above.
       lispCheckDependencies = ctx: [ (siblingsFor ctx).clWeave ];
 
-      packageArgs = ctx:
+      packageArgs =
+        ctx:
         {
           nativeBuildInputs = [
             (spawnHelperFor ctx)
             ctx.pkgs.coreutils
-          ] ++ ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
+          ]
+          ++ ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
             (ptyBootstrapFor ctx)
           ];
         }
@@ -898,14 +929,14 @@
           app = ctx.cl.mkApp { drv = delivery; };
           testApp = ctx.pkgs.writeShellApplication {
             name = "nshell-test";
-            runtimeInputs = [ (spawnHelperFor ctx) ]
-              ++ ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
-                (ptyBootstrapFor ctx)
-              ];
+            runtimeInputs = [
+              (spawnHelperFor ctx)
+            ]
+            ++ ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
+              (ptyBootstrapFor ctx)
+            ];
             text = ''
-              ${ctx.pkgs.lib.optionalString
-                ctx.pkgs.stdenv.hostPlatform.isDarwin
-                "export NSHELL_PTY_BOOTSTRAP=${ptyBootstrapPathFor ctx}"}
+              ${ctx.pkgs.lib.optionalString ctx.pkgs.stdenv.hostPlatform.isDarwin "export NSHELL_PTY_BOOTSTRAP=${ptyBootstrapPathFor ctx}"}
               exec ${ctx.generated.apps.test.program} "$@"
             '';
           };
@@ -922,32 +953,41 @@
             program = "${testApp}/bin/nshell-test";
           };
 
-          checks.default = ctx.generated.checks.default.overrideAttrs (previous: {
-            nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.coreutils ];
-          } // ptyBootstrapEnvironmentFor ctx);
+          checks.default = ctx.generated.checks.default.overrideAttrs (
+            previous:
+            {
+              nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.coreutils ];
+            }
+            // ptyBootstrapEnvironmentFor ctx
+          );
 
           # The generated shell, plus the aliases this repository's loop is
           # written in terms of. Appended to the preset's own shellHook rather
           # than replacing it, so the CL_SOURCE_REGISTRY it exports (the
           # derivation's own resolved registry, including check dependencies)
           # is kept.
-          devShells.default = ctx.generated.devShells.default.overrideAttrs (previous: {
-            TZDIR = "${ctx.pkgs.tzdata}/share/zoneinfo";
-            CL_PROCESS_KIT_SPAWN = "${spawnHelperFor ctx}/bin/cl-process-kit-spawn";
-            shellHook = previous.shellHook + ''
-              export NSHELL_ROOT=$PWD
-              alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'
-              alias cov='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'
-              alias weave='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/scripts/weave.lisp"'
-              echo ""
-              echo "nshell development environment"
-              echo "  test  - Run the full nshell suite (cl-weave, nshell/test)"
-              echo "  weave - Run the focused completion suite (nshell/weave)"
-              echo "  cov     - Run the test suite and write HTML coverage to coverage/"
-              echo "  sbcl  - Interactive Common Lisp (with cl-weave)"
-              echo ""
-            '';
-          } // ptyBootstrapEnvironmentFor ctx);
+          devShells.default = ctx.generated.devShells.default.overrideAttrs (
+            previous:
+            {
+              TZDIR = "${ctx.pkgs.tzdata}/share/zoneinfo";
+              CL_PROCESS_KIT_SPAWN = "${spawnHelperFor ctx}/bin/cl-process-kit-spawn";
+              CL_PROCESS_KIT_PTY_LIBRARY = processKitPtyLibraryPathFor ctx;
+              shellHook = previous.shellHook + ''
+                export NSHELL_ROOT=$PWD
+                alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'
+                alias cov='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'
+                alias weave='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/scripts/weave.lisp"'
+                echo ""
+                echo "nshell development environment"
+                echo "  test  - Run the full nshell suite (cl-weave, nshell/test)"
+                echo "  weave - Run the focused completion suite (nshell/weave)"
+                echo "  cov     - Run the test suite and write HTML coverage to coverage/"
+                echo "  sbcl  - Interactive Common Lisp (with cl-weave)"
+                echo ""
+              '';
+            }
+            // ptyBootstrapEnvironmentFor ctx
+          );
 
         };
 
@@ -985,23 +1025,27 @@
             # The focused cl-weave completion suite (nshell/weave), through the
             # same script a developer runs locally. `checks.default` covers
             # run-tests.lisp and is generated.
-            weave = (ctx.cl.mkScriptCheck {
-              drv = ctx.package;
-              entryPoint = "scripts/weave.lisp";
-              name = "nshell-weave-suite";
-              timeoutSeconds = 1800;
-            }).overrideAttrs (_: ptyBootstrapEnvironmentFor ctx);
+            weave =
+              (ctx.cl.mkScriptCheck {
+                drv = ctx.package;
+                entryPoint = "scripts/weave.lisp";
+                name = "nshell-weave-suite";
+                timeoutSeconds = 1800;
+              }).overrideAttrs
+                (_: ptyBootstrapEnvironmentFor ctx);
 
             # Generate the sb-cover report and enforce the configured source
             # expression minimum. The report also records the distance from
             # the aspirational 100% target without making an unsupported
             # claim that structural sb-cover forms are executable.
-            coverage = (ctx.cl.mkScriptCheck {
-              drv = ctx.package;
-              entryPoint = "scripts/coverage.lisp";
-              name = "nshell-src-coverage";
-              timeoutSeconds = 1800;
-            }).overrideAttrs (_: ptyBootstrapEnvironmentFor ctx);
+            coverage =
+              (ctx.cl.mkScriptCheck {
+                drv = ctx.package;
+                entryPoint = "scripts/coverage.lisp";
+                name = "nshell-src-coverage";
+                timeoutSeconds = 1800;
+              }).overrideAttrs
+                (_: ptyBootstrapEnvironmentFor ctx);
 
             # Keep every Lisp source structurally readable before the more
             # expensive ASDF checks run. This is the same paredit executable

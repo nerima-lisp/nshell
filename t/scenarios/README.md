@@ -5,8 +5,9 @@ Each scenario JSON file defines one executable scenario. Keep scenarios under
 below. UC means use case. Get UC IDs from the request that assigns the scenario.
 If the task omits them, ask the person who assigned it before adding the
 scenario.
-For a scenario covering multiple use cases, choose the directory for its
-primary assertion and list every covered ID in its `uc` array.
+For a scenario covering multiple use cases, use the directory for the use case
+whose behavior the primary expected result verifies, and list every covered ID
+in its `uc` array.
 
 ## Scenario format
 
@@ -82,10 +83,14 @@ PTY scenarios use an ordered `steps` array: `keys` sends literal text,
 `send-keys`, such as `Enter` or `C-d`, `resize` changes the pane dimensions,
 and `wait` waits for its `contains` string to appear in captured PTY output
 since the most recent input or resize action, or from the wait step's start if
-no such action is pending. `wait_screen` polls the visible pane for its `contains`
-string, which can verify an interactive input-line redraw. Both wait steps reject
-markers that could come from input echo or the prompt. A `resize` step requires
-integer `columns` and `rows` values from 1 through 512. `wait_exit` waits for the shell to exit. The optional
+no such action is pending. `wait_input` waits for its `contains` string to appear
+in the visible pane after input is sent. `wait_screen` polls the visible pane
+until its optional `contains` string appears and all `excludes` strings are
+absent; it can verify an interactive input-line redraw. `wait` and
+`wait_screen.contains` reject markers that could come from input echo or the
+prompt. `wait_input.contains` must match earlier typed input. A `resize` step
+requires integer `columns` and `rows` values from 1 through 512. `wait_exit`
+waits for the shell to exit. The optional
 top-level `arguments` array passes exact additional arguments to the binary.
 For a single-session scenario, set a non-empty
 `environment.variables.NSHELL_PROMPT` marker that only the prompt displays.
@@ -120,8 +125,10 @@ recognizes are defined in `scripts/run-scenarios.py`. The runner rejects
 required assertion text that could be satisfied by terminal echo or a prompt
 redraw before launching:
 
-- `wait.contains` if an echo from an earlier input step or a prompt redraw
-  contains the entire marker;
+- `wait.contains` or `wait_screen.contains` if an echo from an earlier input
+  step or a prompt redraw contains the entire marker;
+- `wait_input.contains` unless an echo from an earlier input step contains the
+  entire marker;
 - a value in `expected.stream.contains` or `expected.screen.contains` if an
   input echo or prompt redraw contains the entire value;
 - a value in `expected.stream.ordered_contains` or
@@ -134,9 +141,12 @@ redraw before launching:
 such as output, screen, file, or history contents. They are not subject to this
 rejection.
 
-Each PTY step sequence must end with `wait_exit`. `expected.stream` checks output
-captured from the PTY during the run, while `expected.screen` checks the visible
-pane contents at the end.
+Each PTY step sequence must end with `wait` or `wait_exit`; if it includes
+`wait_exit`, that step must be last. `expected.stream` checks output captured
+from the PTY during the run, while `expected.screen` checks the visible pane
+contents at the end. A live session ending with `wait` needs an
+`expected.screen` assertion. An `expected.exit_code` check needs at least one
+session ending with `wait_exit`.
 For a multi-session scenario, each check combines all sessions in `sessions`
 array order, with a newline between sessions. The screen check includes each
 session's final pane.
@@ -231,9 +241,8 @@ home directory or exact machine environment.
   marker that the PTY assertion excludes. A fixture `env` prints `B10_PATH_OK`
   only when PATH contains that entry; the expected PTY stream is exactly
   `B10_PATH_OK` followed by its CRLF line ending, with no startup output or
-  diagnostics. The broader
-  configuration behavior assigned to L07 (public Lisp, scripts, autoload, and
-  hooks) remains outside this fixture.
+  diagnostics. This fixture checks PATH precedence and startup-marker output. It
+  does not cover public Lisp, scripts, autoload entries, or hooks.
 
 ## Run scenarios
 

@@ -68,6 +68,8 @@ jobs:
           --mode source
 
       - name: Run Git prompt responsiveness benchmark (L02)
+        # Darwin is the acceptance platform; preserve Linux timings without gating its corpus.
+        continue-on-error: ${{ matrix.system == 'x86_64-linux' }}
         run: >-
           nix develop .#scenarios -c python3 -B scripts/run-scenarios.py
           --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"

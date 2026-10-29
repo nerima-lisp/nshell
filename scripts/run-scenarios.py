@@ -798,25 +798,116 @@ def _write_preconditions(scenario: dict[str, Any], root: Path) -> None:
             path.write_text(content, encoding="utf-8")
 
 
+
+_SGR_SEQUENCE_RE = re.compile(r"\x1b\[([0-?]*)[ -/]*m")
+_SGR_VISIBILITY_NEUTRAL_CODES = frozenset({
+    0, 1, 2, 3, 4, 9, 21, 22, 23, 24, 25, 27, 28, 29,
+    51, 52, 53, 55, 58, 59, 60, 61, 62, 63, 64, 65, 73, 74, 75,
+})
+
+
+def _sgr_codes(sequence: str) -> list[int] | None:
+    match = _SGR_SEQUENCE_RE.fullmatch(sequence)
+    if match is None:
+        return None
+    parameters = match.group(1).split(";") if match.group(1) else ["0"]
+    codes: list[int] = []
+    index = 0
+    while index < len(parameters):
+        parameter = parameters[index]
+        head = parameter.split(":", 1)[0]
+        if not head:
+            code = 0
+        elif head.isdecimal():
+            code = int(head)
+        else:
+            return None
+        codes.append(code)
+        if code in {38, 48, 58} and ":" not in parameter and index + 1 < len(parameters):
+            mode = parameters[index + 1]
+            if mode == "5":
+                index += 3
+                continue
+            if mode == "2":
+                index += 5
+                continue
+        index += 1
+    return codes
+
+
+def _sgr_sequence_preserves_visibility(sequence: str) -> bool:
+    codes = _sgr_codes(sequence)
+    return codes is not None and all(
+        code in _SGR_VISIBILITY_NEUTRAL_CODES
+        or 30 <= code <= 49
+        or 90 <= code <= 107
+        for code in codes
+    )
+
+
+def _visibility_change_active_before(actual: str, position: int) -> bool:
+    concealed = False
+    blinking = False
+    unknown = False
+    for match in _SGR_SEQUENCE_RE.finditer(actual, 0, position):
+        codes = _sgr_codes(match.group(0))
+        if codes is None:
+            unknown = True
+            continue
+        for code in codes:
+            if code == 0:
+                concealed = False
+                blinking = False
+                unknown = False
+            elif code == 8:
+                concealed = True
+            elif code == 28:
+                concealed = False
+            elif code in {5, 6}:
+                blinking = True
+            elif code == 25:
+                blinking = False
+            elif (
+                code not in _SGR_VISIBILITY_NEUTRAL_CODES
+                and code not in {5, 6, 8}
+                and not 30 <= code <= 49
+                and not 90 <= code <= 107
+            ):
+                unknown = True
+    return concealed or blinking or unknown
+
 def _find_expected_text(
     actual: str,
     expected: str,
     start: int,
     allow_sgr_between_characters: bool,
 ) -> tuple[int, int] | None:
-    index = actual.find(expected, start)
-    if index >= 0:
-        return index, index + len(expected)
+    position = start
+    while True:
+        index = actual.find(expected, position)
+        if index < 0:
+            break
+        if not _visibility_change_active_before(actual, index):
+            return index, index + len(expected)
+        position = index + 1
+
     if not allow_sgr_between_characters or "\x1b[" in expected:
         return None
 
-    sgr = r"\x1b\[[0-?]*[ -/]*m"
-    sgr_gap = rf"(?:{sgr})*"
+    sgr_gap = rf"(?:{_SGR_SEQUENCE_RE.pattern})*"
     pattern = re.compile(
         sgr_gap + sgr_gap.join(re.escape(character) for character in expected)
     )
     match = pattern.search(actual, start)
-    return None if match is None else match.span()
+    while match is not None:
+        matched_sgr = _SGR_SEQUENCE_RE.finditer(match.group(0))
+        if (
+            not _visibility_change_active_before(actual, match.start())
+            and all(_sgr_sequence_preserves_visibility(sgr.group(0)) for sgr in matched_sgr)
+        ):
+            return match.span()
+        match = pattern.search(actual, match.start() + 1)
+    return None
 
 
 def _assert_text(

@@ -201,6 +201,52 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual([], failures)
 
+
+    def test_pty_stream_assertions_reject_sgr_conceal(self) -> None:
+        marker = "I01_HISTORY_SUGGESTION"
+        scenario = _pty_scenario(
+            "concealed-autosuggestion",
+            [],
+            {"stream": {"contains": [marker]}},
+        )
+        concealed_streams = (
+            "I01_HISTORY\x1b[8m_SUGGESTION\x1b[0m",
+            "I01_HISTORY\x1b[0;8m_SUGGESTION\x1b[0m",
+            "\x1b[8mI01_HISTORY_SUGGESTION\x1b[0m",
+        )
+
+        for actual in concealed_streams:
+            with self.subTest(actual=actual):
+                failures = runner._check_expected(
+                    scenario,
+                    actual,
+                    "",
+                    0,
+                    Path("."),
+                    Path("."),
+                )
+                self.assertTrue(any(f"did not contain {marker!r}" in failure for failure in failures))
+
+        visible_after_reveal = runner._check_expected(
+            scenario,
+            f"\x1b[8m\x1b[28m{marker}\x1b[0m",
+            "",
+            0,
+            Path("."),
+            Path("."),
+        )
+        self.assertEqual([], visible_after_reveal)
+
+        color_index_eight = runner._check_expected(
+            scenario,
+            "I01_HISTORY\x1b[38;5;8m_SUGGESTION\x1b[0m",
+            "",
+            0,
+            Path("."),
+            Path("."),
+        )
+        self.assertEqual([], color_index_eight)
+
     def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
         scenario = _batch_scenario("batch-extra-path")
         scenario["environment"]["variables"] = {"PATH": "bin:/usr/bin:/bin"}

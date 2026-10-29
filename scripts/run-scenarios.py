@@ -1934,7 +1934,7 @@ def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
     raise ScenarioTimeout(f"{scenario_id}: nshell could not be reaped within its benchmark cleanup budget")
 
 
-def _fork_pty_with_size(rows: int, columns: int) -> tuple[int, int]:
+def _fork_pty_with_size(rows: int, columns: int) -> tuple[int, int, int | None]:
     ready_read, ready_write = os.pipe()
     try:
         pid, fd = pty.fork()
@@ -1950,11 +1950,12 @@ def _fork_pty_with_size(rows: int, columns: int) -> tuple[int, int]:
             os.close(ready_read)
         if ready != b"1":
             os._exit(127)
-        return pid, fd
+        return pid, fd, None
 
     os.close(ready_read)
     try:
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+        start_ns = time.monotonic_ns()
         os.write(ready_write, b"1")
     except OSError:
         os.close(ready_write)
@@ -1965,7 +1966,7 @@ def _fork_pty_with_size(rows: int, columns: int) -> tuple[int, int]:
             pass
         raise
     os.close(ready_write)
-    return pid, fd
+    return pid, fd, start_ns
 
 
 def _run_benchmark_sample(scenario: dict[str, Any], binary: Path, cwd: Path,
@@ -1977,9 +1978,8 @@ def _run_benchmark_sample(scenario: dict[str, Any], binary: Path, cwd: Path,
     prompt_marker = f"{benchmark['prompt_prefix']}-{run_number}-{sample_number}"
     run_env = env.copy()
     run_env["NSHELL_PROMPT"] = f"{prompt_marker} {{path}}{{git}} "
-    start_ns = time.monotonic_ns()
     try:
-        pid, fd = _fork_pty_with_size(24, 100)
+        pid, fd, start_ns = _fork_pty_with_size(24, 100)
     except OSError as error:
         raise ScenarioError(f"{scenario['id']}: could not create PTY: {error}") from error
     if pid == 0:
@@ -2156,8 +2156,10 @@ def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, in
                 "key_echo": [],
                 "command_output": [],
                 "post_command_prompt": [],
+                "runner_loadavg_1m": [],
             }
             for sample_number in range(1, benchmark["samples"] + 1):
+                values["runner_loadavg_1m"].append(os.getloadavg()[0])
                 sample = _run_benchmark_sample(
                     scenario, binary, cwd, env, branch, run_number,
                     sample_number, deadline,
@@ -2179,6 +2181,15 @@ def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, in
                 f"key_echo {_benchmark_range(values['key_echo'])}; "
                 f"command_output {_benchmark_range(values['command_output'])}; "
                 f"post_command_prompt {_benchmark_range(values['post_command_prompt'])}"
+            )
+            startup_samples = ",".join(format(value, ".3f") for value in values["startup"])
+            enter_samples = ",".join(format(value, ".3f") for value in values["empty_enter"])
+            load_samples = ",".join(
+                format(value, ".2f") for value in values["runner_loadavg_1m"]
+            )
+            lines.append(
+                f"L02 run={index} scored_samples startup_ms=[{startup_samples}] "
+                f"empty_enter_ms=[{enter_samples}] loadavg_1m_before_samples=[{load_samples}]"
             )
         startup_verdict = _benchmark_verdict(
             [group["startup"] for group in groups], benchmark["startup_max_ms"]

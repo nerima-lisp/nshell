@@ -466,7 +466,7 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertIn(branch, stream)
 
     def test_benchmark_pty_child_observes_size_before_startup(self) -> None:
-        pid, fd = runner._fork_pty_with_size(24, 100)
+        pid, fd, _ = runner._fork_pty_with_size(24, 100)
         if pid == 0:
             try:
                 size = runner.os.get_terminal_size(0)
@@ -505,6 +505,31 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertIsNotNone(status, "PTY child was not reaped")
         self.assertEqual(runner.os.waitstatus_to_exitcode(status), 0)
         self.assertEqual(output.replace(b"\r\n", b"\n"), b"24x100\n")
+
+    def test_benchmark_start_timer_follows_pty_setup(self) -> None:
+        events = []
+        with mock.patch.object(runner.os, "pipe", return_value=(10, 11)), \
+             mock.patch.object(runner.pty, "fork", return_value=(12, 13)), \
+             mock.patch.object(
+                 runner.fcntl,
+                 "ioctl",
+                 side_effect=lambda *args: events.append("resize"),
+             ), \
+             mock.patch.object(
+                 runner.time,
+                 "monotonic_ns",
+                 side_effect=lambda: events.append("clock") or 100,
+             ), \
+             mock.patch.object(
+                 runner.os,
+                 "write",
+                 side_effect=lambda *args: events.append("release") or 1,
+             ), \
+             mock.patch.object(runner.os, "close"):
+            pid, fd, start_ns = runner._fork_pty_with_size(24, 100)
+
+        self.assertEqual((pid, fd, start_ns), (12, 13, 100))
+        self.assertEqual(events, ["resize", "clock", "release"])
 
     def test_l02_benchmark_validation_rejects_weakened_measurement_protocol(self) -> None:
         scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/L02/git-prompt-responsiveness.json"

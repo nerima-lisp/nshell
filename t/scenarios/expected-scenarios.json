@@ -1751,6 +1751,11 @@
       "path": "Q05/glob-expansion-on-nfs.json"
     },
     {
+      "id": "Q05-git-probe-timeout-does-not-block-input",
+      "uc": ["Q05"],
+      "path": "Q05/git-probe-timeout-does-not-block-input.json"
+    },
+    {
       "id": "Q07-history-write-failure-on-bounded-filesystem",
       "uc": ["Q07"],
       "path": "Q07/history-write-failure-on-bounded-filesystem.json"

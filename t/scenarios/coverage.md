@@ -213,7 +213,7 @@ executable scenarios and manual checks.
 | Q02 | direct | 1 | 0 | `t/scenarios/Q02/Q02-bounded-recursion-recovery.json` |
 | Q03 | direct, manual | 1 | 1 | `t/scenarios/Q03/Q03-real-heap-exhaustion.json`, `t/scenarios/Q03/manual.md` |
 | Q04 | direct | 1 | 0 | `t/scenarios/Q04/Q04-cancel-completion.json` |
-| Q05 | direct, manual | 3 | 1 | `t/scenarios/Q05/filesystem-completion-on-nfs.json`, `t/scenarios/Q05/git-prompt-on-nfs.json`, `t/scenarios/Q05/glob-expansion-on-nfs.json`, `t/scenarios/Q05/manual.md` |
+| Q05 | direct, manual | 4 | 1 | `t/scenarios/Q05/filesystem-completion-on-nfs.json`, `t/scenarios/Q05/git-prompt-on-nfs.json`, `t/scenarios/Q05/glob-expansion-on-nfs.json`, `t/scenarios/Q05/git-probe-timeout-does-not-block-input.json`, `t/scenarios/Q05/manual.md` |
 | Q06 | approximation | 1 | 0 | `t/scenarios/Q06/approx-Q06-read-only-home-session.json` |
 | Q07 | direct, manual | 1 | 1 | `t/scenarios/Q07/history-write-failure-on-bounded-filesystem.json`, `t/scenarios/Q07/manual.md` |
 | Q08 | direct, manual | 2 | 1 | `t/scenarios/Q08/fault-injected-key-handler-preserves-input.json`, `t/scenarios/Q08/normal-key-handler-remains-usable.json`, `t/scenarios/Q08/manual.md` |

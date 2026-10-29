@@ -1,0 +1,81 @@
+{
+  "id": "Q05-git-probe-timeout-does-not-block-input",
+  "uc": ["Q05"],
+  "mode": "pty",
+  "timeout_seconds": 18,
+  "wait_for_prompt": false,
+  "environment": {
+    "home": "home",
+    "cwd": "work/repository",
+    "variables": {
+      "NSHELL_PROMPT": "Q05_DELAYED_GIT {git} ",
+      "PATH": "git-probe:/usr/bin:/bin",
+      "NSHELL_Q05_GIT_LOG": "git-probe/calls.log",
+      "NSHELL_Q05_OUTPUT": "Q05_GIT_PROBE_RESPONSE"
+    }
+  },
+  "preconditions": {
+    "files": [
+      {
+        "path": "work/repository/git-probe/git",
+        "executable": true,
+        "content": "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$NSHELL_Q05_GIT_LOG\"\n[ \"$1\" = \"-C\" ] || exit 2\nshift 2\ncase \"$1\" in\n  symbolic-ref) exec /bin/sleep 20 ;;\n  *) exit 2 ;;\nesac\n"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "keys",
+      "text": "echo $NSHELL_Q05_OUTPUT"
+    },
+    {
+      "type": "wait_input",
+      "contains": "echo $NSHELL_Q05_OUTPUT",
+      "timeout_seconds": 2
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait",
+      "contains": "Q05_GIT_PROBE_RESPONSE",
+      "timeout_seconds": 2
+    },
+    {
+      "type": "keys",
+      "text": "exit"
+    },
+    {
+      "type": "wait_input",
+      "contains": "exit",
+      "timeout_seconds": 2
+    },
+    {
+      "type": "key",
+      "key": "Enter"
+    },
+    {
+      "type": "wait_exit",
+      "timeout_seconds": 10
+    }
+  ],
+  "expected": {
+    "exit_code": 0,
+    "stream": {
+      "contains": [
+        "Q05_GIT_PROBE_RESPONSE"
+      ]
+    },
+    "side_effects": {
+      "files": [
+        {
+          "path": "git-probe/calls.log",
+          "contains": [
+            "symbolic-ref --quiet --short HEAD"
+          ]
+        }
+      ]
+    }
+  }
+}

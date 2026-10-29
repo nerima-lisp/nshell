@@ -73,6 +73,16 @@ jobs:
       - name: Build Darwin development shell
         run: nix develop --max-jobs 1 .#devShells.aarch64-darwin.default -c true
 
+      - name: Run full test suite in a dev shell with PTY tests enabled
+        env:
+          HOME: ${{ runner.temp }}/nshell-darwin-home
+          XDG_CACHE_HOME: ${{ runner.temp }}/nshell-darwin-cache
+          XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-darwin-config
+          XDG_STATE_HOME: ${{ runner.temp }}/nshell-darwin-state
+          NSHELL_AI_COMMAND: /nonexistent
+          NSHELL_TEST_PTY: "1"
+        run: nix develop -c sbcl --script run-tests.lisp
+
   integration:
     # NOT movable into `checks.*`: this runs the FULL suite in a dev shell
     # rather than the hermetic Nix sandbox, so the cases `nix flake check`

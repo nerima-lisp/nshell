@@ -53,10 +53,15 @@ environment is expected to hide facilities such as /bin/sh, /bin/cat, or PTYs."
 
 (defmacro skip-when-pty-unavailable (reason &body body)
   "Run BODY only when a usable PTY is available outside a hermetic sandbox."
-  `(if (or (in-hermetic-sandbox-p)
-           (not (pty-available-p)))
-       (skip (format nil "~a (skipped in sandbox/unavailable PTY)" ,reason))
-       (progn ,@body)))
+  `(cond
+     ((in-hermetic-sandbox-p)
+      (skip (format nil "~a (skipped in hermetic sandbox)" ,reason)))
+     ((not (pty-available-p))
+      (if (and (host-kit:getenv "CI")
+               (string= (or (host-kit:getenv "NSHELL_TEST_PTY") "") "1"))
+          (error "~a (PTY unavailable in CI)" ,reason)
+          (skip (format nil "~a (skipped in sandbox/unavailable PTY)" ,reason))))
+     (t (progn ,@body))))
 
 (defmacro skip-when-pty-round-trip-unreliable (reason &body body)
   "Run BODY only where raw PTY master/slave round-trip I/O is reliable.

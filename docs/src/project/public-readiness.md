@@ -5,7 +5,7 @@
 nshell targets interactive use. The 0.6 series is a development preview,
 not a POSIX/fish-compatible script interpreter.
 
-## Current release evidence
+## Historical release evidence (v0.6.4)
 
 The published [v0.6.4 release](https://github.com/nerima-lisp/nshell/releases/tag/v0.6.4)
 contains the `x86_64-linux` bundle and SHA-256 checksum. The
@@ -128,11 +128,9 @@ does not supply that runtime coverage.
 
 ## Known Limits and Future Work
 
-- Live AI provider requests are not verified by the linked CI runs. The local
+- The local
   v0.6.5 probe above covers explicit approval, cancellation, and subsequent
   requests with one provider; other providers and failure modes remain unverified.
-- Do not infer complete dependency assertion coverage from suite-level pass
-  counts; the audit gates require separate assertion-level evidence.
 - Broader help-text-driven command discovery remains future work, especially for
   subcommand coverage and non-curated external tools.
 - Mouse selection and clipboard behavior depend on the terminal. No exhaustive

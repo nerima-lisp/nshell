@@ -245,11 +245,18 @@ class NfrSelectionTests(unittest.TestCase):
             "threshold_ms": 16.0,
             "acceptance_statistic": "p99",
             "measured_samples": 100,
-            "target_threshold_met": "false",
+            "target_threshold_met": True,
             "target": {"p99_ms": 10.0},
         }
-        with self.assertRaisesRegex(ValueError, "must include a boolean threshold result"):
-            measure_nfr_ci.result_from_04_06("05", nfr05)
+        malformed_nfr05 = [
+            ({**nfr05, "target_threshold_met": "false"}, "must include a boolean threshold result"),
+            ({**nfr05, "measured_samples": 100.9}, "exactly 100 integer samples"),
+            ({**nfr05, "target": {"p99_ms": True}}, "must be a JSON number"),
+            ({**nfr05, "threshold_ms": "16.0"}, "must be a JSON number"),
+        ]
+        for summary, error in malformed_nfr05:
+            with self.subTest(summary=summary), self.assertRaisesRegex(ValueError, error):
+                measure_nfr_ci.result_from_04_06("05", summary)
 
         nfr04_git_off = {
             "record": "group-summary",
@@ -273,6 +280,24 @@ class NfrSelectionTests(unittest.TestCase):
         self.assertNotIn("04", results)
         self.assertIn("04", metric_errors)
         self.assertIn("must be a boolean", metric_errors["04"])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output_dir = Path(temporary)
+            output_dir.mkdir(exist_ok=True)
+
+            def write_selected_nfr04(label: str, command: list[str], log_path: Path) -> tuple[int, None]:
+                raw_path = Path(command[command.index("--output") + 1])
+                raw_path.write_text(
+                    json.dumps(nfr04_git_off) + "\n" + json.dumps(nfr04_git_on) + "\n",
+                    encoding="utf-8",
+                )
+                return 0, None
+
+            with patch.object(measure_nfr_ci, "run_command", side_effect=write_selected_nfr04):
+                with self.assertRaisesRegex(ValueError, "must be a boolean"):
+                    measure_nfr_ci.measure_nfr_04_06(
+                        "04", Path("/bin/sh"), output_dir, output_dir / "logs"
+                    )
 
 
 if __name__ == "__main__":

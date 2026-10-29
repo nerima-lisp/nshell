@@ -88,6 +88,18 @@ def make_result(
     }
 
 
+def validated_sample_count(value: Any, *, label: str) -> int:
+    if type(value) is not int or value != NFR04_06_SAMPLES:
+        raise ValueError(f"{label} must contain exactly {NFR04_06_SAMPLES} integer samples")
+    return value
+
+
+def validated_measurement_number(value: Any, *, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a JSON number")
+    return float(value)
+
+
 def result_from_01_03(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
     threshold = float(NFR_THRESHOLDS[nfr]["limit"])
     if float(summary["criterion_threshold_ms"]) != threshold:
@@ -116,15 +128,18 @@ def result_from_01_03(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
 
 def result_from_04_06(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
     threshold = float(NFR_THRESHOLDS[nfr]["limit"])
-    if float(summary["threshold_ms"]) != threshold:
+    summary_threshold = validated_measurement_number(summary.get("threshold_ms"), label=f"NFR-{nfr} threshold")
+    if summary_threshold != threshold:
         raise ValueError(f"NFR-{nfr} measurement threshold does not match the CI threshold")
     if summary["acceptance_statistic"] != NFR_THRESHOLDS[nfr]["statistic"]:
         raise ValueError(f"NFR-{nfr} measurement statistic does not match the requirement")
-    if int(summary["measured_samples"]) != NFR04_06_SAMPLES:
-        raise ValueError(f"NFR-{nfr} did not produce the configured sample count")
-    target = summary["target"]
-    statistic = str(summary["acceptance_statistic"])
-    value = float(target["p99_ms"] if statistic == "p99" else target["median_ms"])
+    sample_count = validated_sample_count(summary.get("measured_samples"), label=f"NFR-{nfr}")
+    target = summary.get("target")
+    if not isinstance(target, dict):
+        raise ValueError(f"NFR-{nfr} measurement summary must include target values")
+    statistic = summary["acceptance_statistic"]
+    target_value = target.get("p99_ms" if statistic == "p99" else "median_ms")
+    value = validated_measurement_number(target_value, label=f"NFR-{nfr} target value")
     target_threshold_met = summary.get("target_threshold_met")
     if not isinstance(target_threshold_met, bool):
         raise ValueError(f"NFR-{nfr} measurement summary must include a boolean threshold result")
@@ -147,7 +162,7 @@ def result_from_04_06(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
             "06": "20,000-entry Tab-to-initial-pager median",
         }[nfr],
         value=value,
-        sample_count=int(summary["measured_samples"]),
+        sample_count=sample_count,
         details=details,
     )
 
@@ -199,12 +214,13 @@ def results_from_04_06_summaries(
             if len(complete_c_rows) != 1:
                 raise ValueError("NFR-06 output must contain exactly one complete-C diagnostic")
             complete_c = complete_c_rows[0]
-            if int(complete_c.get("measured_samples", -1)) != NFR04_06_SAMPLES:
-                raise ValueError("complete-C diagnostic did not produce the configured sample count")
+            complete_c_samples = validated_sample_count(
+                complete_c.get("measured_samples"), label="complete-C diagnostic"
+            )
             results["06"]["details"]["complete_c_output_diagnostic"] = {
                 "first_completion_per_process": complete_c["first_completion_per_process"],
                 "same_process_repeat": complete_c["same_process_repeat"],
-                "measured_samples": complete_c["measured_samples"],
+                "measured_samples": complete_c_samples,
                 "candidate_count": complete_c["completion_entries"],
                 "output_bytes": complete_c["reference_output_bytes"],
                 "diagnostic_only": True,
@@ -222,6 +238,9 @@ def results_from_04_06_summaries(
         try:
             if len(key_rows) != 1:
                 raise ValueError("NFR-06 output must contain exactly one suggestion-key diagnostic")
+            key_sample_count = validated_sample_count(
+                key_rows[0].get("measured_sequences"), label="NFR-06 suggestion-key diagnostic"
+            )
             diagnostic = {
                 "nfr": "NFR-06 suggestion-key responsiveness",
                 "target_p99_ms": float(key_rows[0]["target"]["p99_ms"]),
@@ -230,7 +249,7 @@ def results_from_04_06_summaries(
                     key_rows[0]["paired_sequence_p99_delta_median_ms"]
                 ),
                 "paired_sequence_p99_delta_p99_ms": float(key_rows[0]["paired_sequence_p99_delta_p99_ms"]),
-                "sample_count": int(key_rows[0]["measured_sequences"]),
+                "sample_count": key_sample_count,
                 "threshold": None,
                 "status": "INFO",
             }

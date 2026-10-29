@@ -876,6 +876,42 @@ def _visibility_change_active_before(actual: str, position: int) -> bool:
                 unknown = True
     return concealed or blinking or unknown
 
+
+def _visible_screen_text(screen: str) -> str:
+    visible: list[str] = []
+    concealed = False
+    position = 0
+    while position < len(screen):
+        sgr = _SGR_SEQUENCE_RE.match(screen, position)
+        if sgr is not None:
+            codes = _sgr_codes(sgr.group(0))
+            if codes is not None:
+                for code in codes:
+                    if code == 0 or code == 28:
+                        concealed = False
+                    elif code == 8:
+                        concealed = True
+            position = sgr.end()
+            continue
+        if screen.startswith("\x1b[", position):
+            end = position + 2
+            while end < len(screen) and not ("@" <= screen[end] <= "~"):
+                end += 1
+            position = min(end + 1, len(screen))
+            continue
+        if screen[position] == "\x1b":
+            position = min(position + 2, len(screen))
+            continue
+        character = screen[position]
+        if character in "\r\n":
+            visible.append(character)
+        elif concealed:
+            visible.append(" ")
+        else:
+            visible.append(character)
+        position += 1
+    return "".join(visible)
+
 def _find_expected_text(
     actual: str,
     expected: str,
@@ -916,6 +952,7 @@ def _assert_text(
     expected: Any,
     failures: list[str],
     allow_sgr_between_characters: bool = False,
+    visible_screen_snapshots: tuple[str, ...] = (),
 ) -> None:
     if expected is None:
         return
@@ -940,18 +977,39 @@ def _assert_text(
     )
     _require(all(item for item in contains + excludes + ordered_contains),
              f"{label} text checks must be non-empty")
+    visible_screen_texts = tuple(
+        _visible_screen_text(snapshot) for snapshot in visible_screen_snapshots
+    )
     for item in contains:
-        if _find_expected_text(actual, item, 0, allow_sgr_between_characters) is None:
+        if (
+            _find_expected_text(actual, item, 0, allow_sgr_between_characters) is None
+            and not any(item in visible for visible in visible_screen_texts)
+        ):
             failures.append(f"{label} did not contain {item!r}")
     position = 0
     for item in ordered_contains:
         match = _find_expected_text(actual, item, position, allow_sgr_between_characters)
         if match is None:
-            failures.append(f"{label} did not contain {item!r} in the required order")
+            visible_ordered_match = False
+            for visible in visible_screen_texts:
+                visible_position = 0
+                for visible_item in ordered_contains:
+                    visible_match = visible.find(visible_item, visible_position)
+                    if visible_match < 0:
+                        break
+                    visible_position = visible_match + len(visible_item)
+                else:
+                    visible_ordered_match = True
+                    break
+            if not visible_ordered_match:
+                failures.append(f"{label} did not contain {item!r} in the required order")
             break
         position = match[1]
     for item in excludes:
-        if _find_expected_text(actual, item, 0, allow_sgr_between_characters) is not None:
+        if (
+            _find_expected_text(actual, item, 0, allow_sgr_between_characters) is not None
+            or any(item in visible for visible in visible_screen_texts)
+        ):
             failures.append(f"{label} unexpectedly contained {item!r}")
 
 
@@ -1088,6 +1146,7 @@ class TmuxSession:
         self.channel = "exit-" + uuid.uuid4().hex[:12]
         self.pane = ""
         self.stream = bytearray()
+        self.visible_screen_snapshots: list[str] = []
         self.pending_wait_start: int | None = None
         self.fifo_fd = -1
         self.server_started = False
@@ -1309,6 +1368,16 @@ class TmuxSession:
     def capture_screen(self) -> str:
         return self._capture()
 
+    def capture_styled_screen(self) -> str:
+        try:
+            result = self._tmux(["capture-pane", "-e", "-p", "-t", self.pane])
+        except ScenarioError:
+            screen = "<pane no longer available>"
+        else:
+            screen = result.stdout.decode("utf-8", errors="replace")
+        self.visible_screen_snapshots.append(screen)
+        return screen
+
     def close(self) -> None:
         if self.exit_waiter is not None and self.exit_waiter.poll() is None:
             self.exit_waiter.terminate()
@@ -1374,6 +1443,7 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                                 session.take_wait_start(),
                                 step.get("timeout_seconds", 10),
                             )
+                            session.capture_styled_screen()
                         elif kind in ("wait_screen", "wait_input"):
                             timeout = step.get("timeout_seconds", 10)
                             if kind == "wait_input":
@@ -1396,22 +1466,39 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
                                 )
                                 session.drain()
                                 break
+                            session.capture_styled_screen()
                         elif kind == "wait_exit":
                             exit_codes.append(session.wait_exit(step.get("timeout_seconds", 10)))
                             session.drain()
                         if kind in ("keys", "paste", "key"):
-                            session.wait_after_input(
-                                step.get("input_delay_seconds", scenario.get("input_delay_seconds", 0))
+                            input_delay = step.get(
+                                "input_delay_seconds", scenario.get("input_delay_seconds", 0)
                             )
+                            session.wait_after_input(input_delay)
+                            if input_delay > 0:
+                                session.capture_styled_screen()
                 total_output = sum(len(session.stream) for session, _ in sessions)
                 _require(total_output <= MAX_OUTPUT_BYTES, f"{scenario['id']}: PTY output limit exceeded")
                 stream = "\n".join(
                     bytes(session.stream).decode("utf-8", errors="replace") for session, _ in sessions
                 )
                 screen = "\n".join(session.capture_screen() for session, _ in sessions)
+                for session, _ in sessions:
+                    session.capture_styled_screen()
+                visible_screen_snapshots = tuple(
+                    snapshot
+                    for session, _ in sessions
+                    for snapshot in session.visible_screen_snapshots
+                )
                 exit_code = next((code for code in exit_codes if code != 0), exit_codes[-1] if exit_codes else -1)
                 failures.extend(_check_expected(
-                    scenario, stream, screen, exit_code, home, cwd
+                    scenario,
+                    stream,
+                    screen,
+                    exit_code,
+                    home,
+                    cwd,
+                    visible_screen_snapshots=visible_screen_snapshots,
                 ))
             finally:
                 for session, _ in reversed(sessions):
@@ -1421,7 +1508,8 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
 
 
 def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code: int,
-                    home: Path, cwd: Path) -> list[str]:
+                    home: Path, cwd: Path,
+                    visible_screen_snapshots: tuple[str, ...] = ()) -> list[str]:
     expected = scenario["expected"]
     failures: list[str] = []
     if scenario["mode"] == "batch":
@@ -1431,7 +1519,12 @@ def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code
     else:
         stream, screen = first, second
         _assert_text(
-            "PTY stream", stream, expected.get("stream"), failures, allow_sgr_between_characters=True
+            "PTY stream",
+            stream,
+            expected.get("stream"),
+            failures,
+            allow_sgr_between_characters=True,
+            visible_screen_snapshots=visible_screen_snapshots,
         )
         _assert_text("PTY screen", screen, expected.get("screen"), failures)
     if "exit_code" in expected and exit_code != expected["exit_code"]:

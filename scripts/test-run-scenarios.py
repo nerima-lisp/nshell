@@ -75,6 +75,7 @@ def _run_main_for_pty_scenario(
         def __init__(self, session_scenario: dict[str, Any], *_args: Any):
             self.scenario = session_scenario
             self.stream = bytearray()
+            self.visible_screen_snapshots: list[str] = []
             self.deadline_seconds = 45
             self.deadline = 0.0
             self.exit_waiter = mock.Mock()
@@ -121,6 +122,10 @@ def _run_main_for_pty_scenario(
             pass
 
         def capture_screen(self) -> str:
+            return ""
+
+        def capture_styled_screen(self) -> str:
+            self.visible_screen_snapshots.append("")
             return ""
 
         def _capture(self) -> str:
@@ -224,6 +229,7 @@ class ScenarioRunnerTests(unittest.TestCase):
                     0,
                     Path("."),
                     Path("."),
+                    visible_screen_snapshots=(actual,),
                 )
                 self.assertTrue(any(f"did not contain {marker!r}" in failure for failure in failures))
 
@@ -246,6 +252,67 @@ class ScenarioRunnerTests(unittest.TestCase):
             Path("."),
         )
         self.assertEqual([], color_index_eight)
+
+    def test_pty_stream_assertions_use_visible_reverse_video_screen_snapshot(self) -> None:
+        marker = "Verbose output"
+        scenario = _pty_scenario(
+            "reverse-video-completion-description",
+            [],
+            {"stream": {"contains": [marker]}},
+        )
+        screen = f"\x1b[7m{marker}\x1b[0m"
+
+        failures = runner._check_expected(
+            scenario,
+            screen,
+            "",
+            0,
+            Path("."),
+            Path("."),
+            visible_screen_snapshots=(screen,),
+        )
+
+        self.assertEqual([], failures)
+        failures_without_screen_evidence = runner._check_expected(
+            scenario,
+            screen,
+            "",
+            0,
+            Path("."),
+            Path("."),
+        )
+        self.assertTrue(
+            any(f"did not contain {marker!r}" in failure
+                for failure in failures_without_screen_evidence)
+        )
+        self.assertNotIn(marker, runner._visible_screen_text(f"\x1b[8m{marker}\x1b[0m"))
+        self.assertNotIn("AB", runner._visible_screen_text("A\x1b[8mhidden\x1b[0mB"))
+
+    def test_pty_ordered_assertions_do_not_join_separate_screen_snapshots(self) -> None:
+        scenario = _pty_scenario(
+            "ordered-markers-in-separate-screens",
+            [],
+            {"stream": {"ordered_contains": ["FIRST", "SECOND"]}},
+        )
+
+        failures = runner._check_expected(
+            scenario,
+            "\x1b[7mSECOND\x1b[0m then \x1b[7mFIRST\x1b[0m\n"
+            "\x1b[7mSECOND\x1b[0m then \x1b[7mFIRST\x1b[0m",
+            "",
+            0,
+            Path("."),
+            Path("."),
+            visible_screen_snapshots=(
+                "\x1b[7mSECOND then FIRST\x1b[0m",
+                "\x1b[7mSECOND then FIRST\x1b[0m",
+            ),
+        )
+
+        self.assertTrue(
+            any("did not contain 'FIRST' in the required order" in failure
+                for failure in failures)
+        )
 
     def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
         scenario = _batch_scenario("batch-extra-path")
@@ -361,6 +428,7 @@ class ScenarioRunnerTests(unittest.TestCase):
                          env: dict[str, str], cwd: Path):
                 self.scenario = scenario
                 self.stream = bytearray()
+                self.visible_screen_snapshots: list[str] = []
                 self.deadline_seconds = 45
                 self.deadline = 0.0
 
@@ -391,6 +459,10 @@ class ScenarioRunnerTests(unittest.TestCase):
                 pass
 
             def capture_screen(self) -> str:
+                return ""
+
+            def capture_styled_screen(self) -> str:
+                self.visible_screen_snapshots.append("")
                 return ""
 
             def close(self) -> None:
@@ -554,6 +626,7 @@ class ScenarioRunnerTests(unittest.TestCase):
                          env: dict[str, str], cwd: Path):
                 self.scenario = scenario
                 self.stream = bytearray()
+                self.visible_screen_snapshots: list[str] = []
                 self.deadline_seconds = 45
                 self.deadline = 0.0
 
@@ -571,6 +644,10 @@ class ScenarioRunnerTests(unittest.TestCase):
 
             def capture_screen(self) -> str:
                 return "L07 fatal error"
+
+            def capture_styled_screen(self) -> str:
+                self.visible_screen_snapshots.append("")
+                return ""
 
             def close(self) -> None:
                 pass
@@ -648,6 +725,7 @@ class ScenarioRunnerTests(unittest.TestCase):
                 self.scenario = scenario
                 session_name = scenario["id"].rsplit(":", 1)[-1].upper()
                 self.stream = bytearray(f"{session_name}_SESSION_OUTPUT".encode())
+                self.visible_screen_snapshots: list[str] = []
                 self.deadline_seconds = 45
                 self.deadline = 0.0
                 events.append(("start", scenario["id"], root))
@@ -660,6 +738,10 @@ class ScenarioRunnerTests(unittest.TestCase):
                 pass
 
             def capture_screen(self) -> str:
+                return ""
+
+            def capture_styled_screen(self) -> str:
+                self.visible_screen_snapshots.append("")
                 return ""
 
             def close(self) -> None:

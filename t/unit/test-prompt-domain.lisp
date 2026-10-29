@@ -115,25 +115,33 @@ after a non-zero exit code; git no longer appears here."
         (expect "12:34" :to-equal (nshell.domain.prompting:prompt-segment-text (fifth result)))
         (expect :time :to-be (nshell.domain.prompting:prompt-segment-kind (fifth result))))))
 
-  (it "git-status-uses-runner-and-cache"
-    "Git status is executed through the injected runner and cached per directory."
+  (it "git-status-uses-symbolic-ref-for-unborn-branch"
+    "An unborn branch is available before the first commit and is cached."
     (let ((calls nil))
       (nshell.infrastructure.acl:clear-git-status-cache)
       (nshell.infrastructure.acl:with-git-runner
           ((lambda (dir args)
              (declare (ignore dir))
              (push args calls)
-             (values (if (member "rev-parse" args :test #'string=)
-                         (format nil "main~%")
-                         (format nil " M file.lisp~%"))
-                     0)))
-        (multiple-value-bind (branch dirty-p) (nshell.infrastructure.acl:get-git-status "/repo/")
-          (expect "main" :to-equal branch)
-          (expect (null dirty-p) :to-be-falsy))
-        (multiple-value-bind (branch dirty-p) (nshell.infrastructure.acl:get-git-status "/repo/")
-          (expect "main" :to-equal branch)
-          (expect (null dirty-p) :to-be-falsy)))
-      (expect 2 :to-equal (length calls)))))
+             (cond
+               ((equal args (list "symbolic-ref" "--quiet" "--short" "HEAD"))
+                (values (format nil "q05-branch~%") 0))
+               ((equal args (list "status" "--porcelain" "--untracked-files=no"))
+                (values "" 0))
+               (t (values "" 128)))))
+        (multiple-value-bind (branch dirty-p)
+            (nshell.infrastructure.acl:get-git-status "/repo/")
+          (expect "q05-branch" :to-equal branch)
+          (expect dirty-p :to-be-falsy))
+        (multiple-value-bind (branch dirty-p)
+            (nshell.infrastructure.acl:get-git-status "/repo/")
+          (expect "q05-branch" :to-equal branch)
+          (expect dirty-p :to-be-falsy)))
+      (expect 2 :to-equal (length calls))
+      (expect (list "symbolic-ref" "--quiet" "--short" "HEAD")
+              :to-equal (second calls))
+      (expect (list "status" "--porcelain" "--untracked-files=no")
+              :to-equal (first calls)))))
 
 (describe "fr-004-prompt-explain-marker-contracts"
   (it "marks-only-a-nonzero-exit-and-clears-after-a-success"
@@ -181,15 +189,17 @@ after a non-zero exit code; git no longer appears here."
           ((lambda (dir args)
              (declare (ignore dir))
              (push args calls)
-             (values (if (member "rev-parse" args :test (lambda (value item) (string= value item)))
-                         (format nil "HEAD~%")
-                         "")
-                     0)))
+             (values "" (if (member "symbolic-ref" args
+                                    :test (lambda (value item) (string= value item)))
+                            1
+                            0))))
         (multiple-value-bind (branch dirty-p)
             (nshell.infrastructure.acl:get-git-status "/detached/")
           (expect branch :to-be-null)
           (expect dirty-p :to-be-falsy)))
-      (expect 1 :to-equal (length calls))))
+      (expect 1 :to-equal (length calls))
+      (expect (list "symbolic-ref" "--quiet" "--short" "HEAD")
+              :to-equal (first calls))))
   (it "clearing-cache-forces-a-fresh-query"
     (let ((calls 0))
       (nshell.infrastructure.acl:clear-git-status-cache)
@@ -215,7 +225,7 @@ after a non-zero exit code; git no longer appears here."
            (runner
              (lambda (dir args)
                (declare (ignore dir))
-               (if (member "rev-parse" args :test (function string=))
+               (if (member "symbolic-ref" args :test (function string=))
                    (progn
                      (sb-thread:signal-semaphore worker-started)
                      (unless (sb-thread:wait-on-semaphore release-worker :timeout 3)
@@ -285,7 +295,7 @@ after a non-zero exit code; git no longer appears here."
            (old-runner
              (lambda (dir args)
                (declare (ignore dir))
-               (if (member "rev-parse" args :test (function string=))
+               (if (member "symbolic-ref" args :test (function string=))
                    (progn
                      (sb-thread:signal-semaphore old-worker-started)
                      (unless (sb-thread:wait-on-semaphore release-old-worker :timeout 3)
@@ -297,7 +307,7 @@ after a non-zero exit code; git no longer appears here."
            (new-runner
              (lambda (dir args)
                (declare (ignore dir))
-               (values (if (member "rev-parse" args :test (function string=))
+               (values (if (member "symbolic-ref" args :test (function string=))
                            (format nil "new~%")
                            (format nil " M new.lisp~%"))
                        0))))
@@ -435,7 +445,7 @@ after a non-zero exit code; git no longer appears here."
               ((lambda (runner-dir args)
                  (declare (ignore runner-dir))
                  (incf calls)
-                 (if (member "rev-parse" args
+                 (if (member "symbolic-ref" args
                              :test (lambda (value item) (string= value item)))
                      (values output code)
                      (values (format nil " M file.lisp~%") 0))))
@@ -452,7 +462,7 @@ after a non-zero exit code; git no longer appears here."
           ((lambda (runner-dir args)
              (declare (ignore runner-dir))
              (incf calls)
-             (if (member "rev-parse" args
+             (if (member "symbolic-ref" args
                          :test (lambda (value item) (string= value item)))
                  (values (format nil "main~%") 0)
                  (values "" 0))))
@@ -469,7 +479,7 @@ after a non-zero exit code; git no longer appears here."
           ((lambda (runner-dir args)
              (declare (ignore runner-dir))
              (incf calls)
-             (if (member "rev-parse" args
+             (if (member "symbolic-ref" args
                          :test (lambda (value item) (string= value item)))
                  (values (format nil "main~%") 0)
                  (values "status unavailable" 1))))

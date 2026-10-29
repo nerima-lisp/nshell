@@ -121,7 +121,8 @@ when one is bound."
           (values output code)))))
 
 (defun %git-branch-uncached (dir)
-  (multiple-value-bind (out code) (%run-git dir '("rev-parse" "--abbrev-ref" "HEAD"))
+  (multiple-value-bind (out code)
+      (%run-git dir '("symbolic-ref" "--quiet" "--short" "HEAD"))
     (let ((branch
             (when (zerop code)
               (let ((branch (%trim-newline out)))

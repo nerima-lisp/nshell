@@ -172,11 +172,22 @@ def _multi_pty_scenario(scenario_id: str = "shared-pty") -> dict[str, Any]:
 
 
 class ScenarioRunnerTests(unittest.TestCase):
-    def test_pty_stream_assertions_ignore_sgr_inside_visible_text(self) -> None:
+    def test_pty_stream_assertions_tolerate_sgr_and_preserve_style_checks(self) -> None:
         scenario = _pty_scenario(
             "colored-autosuggestion",
             [],
-            {"stream": {"contains": ["I01_HISTORY_SUGGESTION"]}},
+            {
+                "stream": {
+                    "contains": [
+                        "I01_HISTORY_SUGGESTION",
+                        "\x1b[38;5;242m",
+                    ],
+                    "ordered_contains": [
+                        "I01_HISTORY_SUGGESTION",
+                        "\x1b[0m",
+                    ],
+                }
+            },
         )
 
         failures = runner._check_expected(

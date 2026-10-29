@@ -798,7 +798,34 @@ def _write_preconditions(scenario: dict[str, Any], root: Path) -> None:
             path.write_text(content, encoding="utf-8")
 
 
-def _assert_text(label: str, actual: str, expected: Any, failures: list[str]) -> None:
+def _find_expected_text(
+    actual: str,
+    expected: str,
+    start: int,
+    allow_sgr_between_characters: bool,
+) -> tuple[int, int] | None:
+    index = actual.find(expected, start)
+    if index >= 0:
+        return index, index + len(expected)
+    if not allow_sgr_between_characters or "\x1b[" in expected:
+        return None
+
+    sgr = r"\x1b\[[0-?]*[ -/]*m"
+    sgr_gap = rf"(?:{sgr})*"
+    pattern = re.compile(
+        sgr_gap + sgr_gap.join(re.escape(character) for character in expected)
+    )
+    match = pattern.search(actual, start)
+    return None if match is None else match.span()
+
+
+def _assert_text(
+    label: str,
+    actual: str,
+    expected: Any,
+    failures: list[str],
+    allow_sgr_between_characters: bool = False,
+) -> None:
     if expected is None:
         return
     _require(isinstance(expected, dict), f"{label} expectation must be an object")
@@ -823,17 +850,17 @@ def _assert_text(label: str, actual: str, expected: Any, failures: list[str]) ->
     _require(all(item for item in contains + excludes + ordered_contains),
              f"{label} text checks must be non-empty")
     for item in contains:
-        if item not in actual:
+        if _find_expected_text(actual, item, 0, allow_sgr_between_characters) is None:
             failures.append(f"{label} did not contain {item!r}")
     position = 0
     for item in ordered_contains:
-        match = actual.find(item, position)
-        if match < 0:
+        match = _find_expected_text(actual, item, position, allow_sgr_between_characters)
+        if match is None:
             failures.append(f"{label} did not contain {item!r} in the required order")
             break
-        position = match + len(item)
+        position = match[1]
     for item in excludes:
-        if item in actual:
+        if _find_expected_text(actual, item, 0, allow_sgr_between_characters) is not None:
             failures.append(f"{label} unexpectedly contained {item!r}")
 
 
@@ -1301,9 +1328,6 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
             return stream, screen, exit_code, failures
 
 
-def _strip_sgr(text: str) -> str:
-    return re.sub(r"\x1b\[[0-?]*[ -/]*m", "", text)
-
 
 def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code: int,
                     home: Path, cwd: Path) -> list[str]:
@@ -1315,7 +1339,9 @@ def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code
         _assert_text("stderr", stderr, expected.get("stderr"), failures)
     else:
         stream, screen = first, second
-        _assert_text("PTY stream", _strip_sgr(stream), expected.get("stream"), failures)
+        _assert_text(
+            "PTY stream", stream, expected.get("stream"), failures, allow_sgr_between_characters=True
+        )
         _assert_text("PTY screen", screen, expected.get("screen"), failures)
     if "exit_code" in expected and exit_code != expected["exit_code"]:
         failures.append(f"exit code was {exit_code}, expected {expected['exit_code']}")

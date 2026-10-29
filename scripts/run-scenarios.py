@@ -988,13 +988,15 @@ def _assert_text(label: str, actual: str, expected: Any, failures: list[str]) ->
             failures.append(f"{label} unexpectedly contained {item!r}")
 
 
-def _visible_pty_stream_text(stream: str) -> str:
+def _visible_pty_stream_text(stream: str) -> tuple[str, list[int]]:
     visible: list[str] = []
+    visible_positions: list[int] = []
     concealed = False
     position = 0
     for sgr in SGR_SEQUENCE_RE.finditer(stream):
         if not concealed:
-            visible.append(stream[position:sgr.start()])
+            visible.extend(stream[position:sgr.start()])
+            visible_positions.extend(range(position, sgr.start()))
         parameters = sgr.group(1).split(";") if sgr.group(1) else [""]
         index = 0
         while index < len(parameters):
@@ -1019,8 +1021,69 @@ def _visible_pty_stream_text(stream: str) -> str:
             index += 1
         position = sgr.end()
     if not concealed:
-        visible.append(stream[position:])
-    return "".join(visible)
+        visible.extend(stream[position:])
+        visible_positions.extend(range(position, len(stream)))
+    return "".join(visible), visible_positions
+
+
+def _find_pty_stream_text(
+    actual: str,
+    expected: str,
+    start: int,
+    visible: str,
+    visible_positions: list[int],
+) -> tuple[int, int] | None:
+    if "\x1b[" in expected:
+        index = actual.find(expected, start)
+        return None if index < 0 else (index, index + len(expected))
+
+    visible_start = 0
+    while visible_start < len(visible_positions) and visible_positions[visible_start] < start:
+        visible_start += 1
+    index = visible.find(expected, visible_start)
+    if index < 0:
+        return None
+    return visible_positions[index], visible_positions[index + len(expected) - 1] + 1
+
+
+def _assert_pty_stream_text(actual: str, expected: Any, failures: list[str]) -> None:
+    if expected is None:
+        return
+    _require(isinstance(expected, dict), "PTY stream expectation must be an object")
+    visible, visible_positions = _visible_pty_stream_text(actual)
+    if "equals" in expected:
+        _require(isinstance(expected["equals"], str), "PTY stream.equals must be a string")
+        expected_text = expected["equals"]
+        actual_text = actual if "\x1b[" in expected_text else visible
+        if actual_text != expected_text:
+            failures.append("PTY stream did not equal the expected text")
+    contains = expected.get("contains", [])
+    excludes = expected.get("excludes", [])
+    ordered_contains = expected.get("ordered_contains", [])
+    _require(isinstance(contains, list) and all(isinstance(item, str) for item in contains),
+             "PTY stream.contains must be an array of strings")
+    _require(isinstance(excludes, list) and all(isinstance(item, str) for item in excludes),
+             "PTY stream.excludes must be an array of strings")
+    _require(isinstance(ordered_contains, list)
+             and all(isinstance(item, str) for item in ordered_contains),
+             "PTY stream.ordered_contains must be an array of strings")
+    _require("equals" in expected or bool(contains) or bool(excludes) or bool(ordered_contains),
+             "PTY stream expectation must define a non-empty text check")
+    _require(all(item for item in contains + excludes + ordered_contains),
+             "PTY stream text checks must be non-empty")
+    for item in contains:
+        if _find_pty_stream_text(actual, item, 0, visible, visible_positions) is None:
+            failures.append(f"PTY stream did not contain {item!r}")
+    position = 0
+    for item in ordered_contains:
+        match = _find_pty_stream_text(actual, item, position, visible, visible_positions)
+        if match is None:
+            failures.append(f"PTY stream did not contain {item!r} in the required order")
+            break
+        position = match[1]
+    for item in excludes:
+        if _find_pty_stream_text(actual, item, 0, visible, visible_positions) is not None:
+            failures.append(f"PTY stream unexpectedly contained {item!r}")
 
 
 def _assert_side_effects(expected: dict[str, Any], cwd: Path, home: Path,
@@ -1552,7 +1615,7 @@ def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code
         _assert_text("stderr", stderr, expected.get("stderr"), failures)
     else:
         stream, screen = first, second
-        _assert_text("PTY stream", _visible_pty_stream_text(stream), expected.get("stream"), failures)
+        _assert_pty_stream_text(stream, expected.get("stream"), failures)
         _assert_text("PTY screen", screen, expected.get("screen"), failures)
     if "exit_code" in expected and exit_code != expected["exit_code"]:
         failures.append(f"exit code was {exit_code}, expected {expected['exit_code']}")

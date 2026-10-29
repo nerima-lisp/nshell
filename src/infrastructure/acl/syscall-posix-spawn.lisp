@@ -23,6 +23,12 @@
                                 %posix-spawn-file-actions-addclose) sb-alien:int
   (actions sb-sys:system-area-pointer)
   (fd sb-alien:int))
+#+linux
+(sb-alien:define-alien-routine
+ ("posix_spawn_file_actions_addclosefrom_np"
+  %posix-spawn-file-actions-addclosefrom) sb-alien:int
+ (actions sb-sys:system-area-pointer)
+ (fd sb-alien:int))
 (sb-alien:define-alien-routine ("posix_spawn_file_actions_addopen"
                                 %posix-spawn-file-actions-addopen) sb-alien:int
   (actions sb-sys:system-area-pointer)
@@ -537,6 +543,21 @@
     (%spawn-check-result
      "posix_spawn_file_actions_addinherit_np"
      (%posix-spawn-file-actions-addinherit actions fd)))
+  #+linux
+  (if (and (null preserve-fds)
+           (every (lambda (mapping)
+                    (<= 0 (second mapping) 2))
+                  mappings))
+      (%spawn-check-result
+       "posix_spawn_file_actions_addclosefrom_np"
+       (%posix-spawn-file-actions-addclosefrom actions 3))
+      (dolist (fd (%spawn-open-fds))
+        (when (and (>= fd 3)
+                   (not (member fd preserve-fds)))
+          (%spawn-check-result
+           "posix_spawn_file_actions_addclose"
+           (%posix-spawn-file-actions-addclose actions fd)))))
+  #+darwin
   (dolist (fd (%spawn-open-fds))
     (when (and (>= fd 3)
                (not (member fd preserve-fds)))

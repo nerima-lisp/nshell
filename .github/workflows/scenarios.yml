@@ -24,7 +24,7 @@ jobs:
         include:
           - runner: ubuntu-latest
             system: x86_64-linux
-            run_batch_check: false
+            run_batch_check: true
           - runner: macos-15
             system: aarch64-darwin
             run_batch_check: true

@@ -21,7 +21,7 @@
       {
         "path": "work/repository/git-probe/git",
         "executable": true,
-        "content": "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$NSHELL_L02_GIT_LOG\"\n[ \"$1\" = \"-C\" ] || exit 2\nshift 2\ncase \"$1\" in\n  rev-parse) printf 'nshell-l02-slow\\n' ;;\n  status) exec /bin/sleep 2 ;;\n  *) exit 2 ;;\nesac\n"
+        "content": "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$NSHELL_L02_GIT_LOG\"\n[ \"$1\" = \"-C\" ] || exit 2\nshift 2\ncase \"$1\" in\n  symbolic-ref) printf 'nshell-l02-slow\\n' ;;\n  status) exec /bin/sleep 2 ;;\n  *) exit 2 ;;\nesac\n"
       }
     ]
   },
@@ -74,7 +74,7 @@
         {
           "path": "git-probe/calls.log",
           "contains": [
-            "rev-parse --abbrev-ref HEAD",
+            "symbolic-ref --quiet --short HEAD",
             "status --porcelain"
           ]
         }

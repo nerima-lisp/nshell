@@ -125,7 +125,10 @@ def result_from_04_06(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
     target = summary["target"]
     statistic = str(summary["acceptance_statistic"])
     value = float(target["p99_ms"] if statistic == "p99" else target["median_ms"])
-    if bool(summary.get("target_threshold_met")) != (value <= threshold):
+    target_threshold_met = summary.get("target_threshold_met")
+    if not isinstance(target_threshold_met, bool):
+        raise ValueError(f"NFR-{nfr} measurement summary must include a boolean threshold result")
+    if target_threshold_met != (value <= threshold):
         raise ValueError(f"NFR-{nfr} measurement summary disagrees with its threshold comparison")
     details = {
         "target": target,
@@ -147,6 +150,95 @@ def result_from_04_06(nfr: str, summary: dict[str, Any]) -> dict[str, Any]:
         sample_count=int(summary["measured_samples"]),
         details=details,
     )
+
+
+def results_from_04_06_summaries(
+    summaries: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any] | None, dict[str, str], list[str]]:
+    results: dict[str, dict[str, Any]] = {}
+    metric_errors: dict[str, str] = {}
+    diagnostic_errors: list[str] = []
+
+    summaries_04 = [row for row in summaries if row.get("metric") == "NFR-04"]
+    try:
+        if len(summaries_04) != 2:
+            raise ValueError("NFR-04 output must contain Git-on and Git-off summaries")
+        cases: dict[str, float] = {}
+        for row in summaries_04:
+            git_prompt_enabled = row.get("git_prompt_enabled")
+            if not isinstance(git_prompt_enabled, bool):
+                raise ValueError("NFR-04 git_prompt_enabled must be a boolean")
+            case = "git_on_ms" if git_prompt_enabled else "git_off_ms"
+            if case in cases:
+                raise ValueError(f"NFR-04 output has duplicate {case} summary")
+            cases[case] = float(result_from_04_06("04", row)["value"])
+        if set(cases) != {"git_on_ms", "git_off_ms"}:
+            raise ValueError("NFR-04 output is missing a Git-on or Git-off summary")
+        results["04"] = make_result(
+            "04",
+            metric="blank Enter to next prompt median, Git-on and Git-off",
+            value=max(cases.values()),
+            sample_count=NFR04_06_SAMPLES,
+            details={"cases": cases},
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        metric_errors["04"] = str(exc)
+
+    for nfr in ("05", "06"):
+        candidates = [row for row in summaries if row.get("metric") == f"NFR-{nfr}"]
+        try:
+            if len(candidates) != 1:
+                raise ValueError(f"NFR-{nfr} output must contain exactly one criterion summary")
+            results[nfr] = result_from_04_06(nfr, candidates[0])
+        except (ValueError, KeyError, TypeError) as exc:
+            metric_errors[nfr] = str(exc)
+
+    complete_c_rows = [row for row in summaries if row.get("metric") == "complete-C output diagnostic"]
+    if "06" in results:
+        try:
+            if len(complete_c_rows) != 1:
+                raise ValueError("NFR-06 output must contain exactly one complete-C diagnostic")
+            complete_c = complete_c_rows[0]
+            if int(complete_c.get("measured_samples", -1)) != NFR04_06_SAMPLES:
+                raise ValueError("complete-C diagnostic did not produce the configured sample count")
+            results["06"]["details"]["complete_c_output_diagnostic"] = {
+                "first_completion_per_process": complete_c["first_completion_per_process"],
+                "same_process_repeat": complete_c["same_process_repeat"],
+                "measured_samples": complete_c["measured_samples"],
+                "candidate_count": complete_c["completion_entries"],
+                "output_bytes": complete_c["reference_output_bytes"],
+                "diagnostic_only": True,
+            }
+        except (ValueError, KeyError, TypeError) as exc:
+            diagnostic_errors.append(f"NFR-06 complete-C output diagnostic: {exc}")
+
+    diagnostic: dict[str, Any] | None = None
+    key_rows = [
+        row
+        for row in summaries
+        if str(row.get("metric", "")).startswith("NFR-06") and row.get("metric") != "NFR-06"
+    ]
+    if "06" in results:
+        try:
+            if len(key_rows) != 1:
+                raise ValueError("NFR-06 output must contain exactly one suggestion-key diagnostic")
+            diagnostic = {
+                "nfr": "NFR-06 suggestion-key responsiveness",
+                "target_p99_ms": float(key_rows[0]["target"]["p99_ms"]),
+                "plain_fixture_p99_ms": float(key_rows[0]["plain_fixture"]["p99_ms"]),
+                "paired_sequence_p99_delta_median_ms": float(
+                    key_rows[0]["paired_sequence_p99_delta_median_ms"]
+                ),
+                "paired_sequence_p99_delta_p99_ms": float(key_rows[0]["paired_sequence_p99_delta_p99_ms"]),
+                "sample_count": int(key_rows[0]["measured_sequences"]),
+                "threshold": None,
+                "status": "INFO",
+            }
+            results["06"]["details"]["suggestion_key_diagnostic"] = diagnostic
+        except (ValueError, KeyError, TypeError) as exc:
+            diagnostic_errors.append(f"NFR-06 suggestion-key diagnostic: {exc}")
+
+    return results, diagnostic, metric_errors, diagnostic_errors
 
 
 def nfr06_phase_timing_from_jsonl(path: Path) -> dict[str, Any]:
@@ -285,6 +377,7 @@ def display_number(value: float) -> str:
 def build_summary(
     results: list[dict[str, Any]],
     diagnostic: dict[str, Any] | None,
+    diagnostic_errors: list[str],
     system: str,
     revision: str,
     selected_nfrs: tuple[str, ...],
@@ -381,6 +474,9 @@ def build_summary(
                 f"paired p99 delta {display_number(diagnostic['paired_sequence_p99_delta_p99_ms'])} ms.",
             ]
         )
+    if diagnostic_errors:
+        lines.extend(["", "Diagnostic failures:"])
+        lines.extend(f"- ERROR: {error}" for error in diagnostic_errors)
     return "\n".join(lines) + "\n"
 
 
@@ -388,6 +484,7 @@ def write_outputs(
     output_dir: Path,
     results: list[dict[str, Any]],
     diagnostic: dict[str, Any] | None,
+    diagnostic_errors: list[str],
     system: str,
     revision: str | None,
     selected_nfrs: tuple[str, ...],
@@ -413,6 +510,10 @@ def write_outputs(
     records = [metadata, *results]
     if diagnostic is not None:
         records.append({"record": "diagnostic", "schema_version": 1, **diagnostic})
+    records.extend(
+        {"record": "diagnostic-error", "schema_version": 1, "status": "ERROR", "error": error}
+        for error in diagnostic_errors
+    )
     result_path.write_text(
         "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
         encoding="utf-8",
@@ -420,6 +521,7 @@ def write_outputs(
     summary = build_summary(
         results,
         diagnostic,
+        diagnostic_errors,
         system,
         revision or "unknown",
         selected_nfrs,
@@ -427,7 +529,7 @@ def write_outputs(
     )
     summary_path = output_dir / "summary.md"
     summary_path.write_text(summary, encoding="utf-8")
-    return all(
+    return not diagnostic_errors and all(
         result["status"] == "PASS" and result.get("phase_timing_status", "PASS") == "PASS"
         for result in results
     )
@@ -455,11 +557,12 @@ def measure_nfr_04_06(
     binary: Path,
     output_dir: Path,
     logs_dir: Path,
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
+) -> tuple[dict[str, Any], dict[str, Any] | None, list[str]]:
     driver = str(ROOT / "scripts/measure-nfr-04-06.py")
     output_path = output_dir / f"nfr-{nfr}-selected.jsonl"
     start_from = {"04": "nfr04-only", "05": "nfr05", "06": "nfr06"}[nfr]
     diagnostic = None
+    diagnostic_errors: list[str] = []
 
     with tempfile.TemporaryDirectory(prefix=f"nshell-nfr{nfr}-selected-") as temporary:
         fixture_root = Path(temporary)
@@ -498,7 +601,7 @@ def measure_nfr_04_06(
         code, error = run_command(f"NFR-{nfr}", command, logs_dir / f"nfr-{nfr}.log")
         if error:
             raise ValueError(error)
-        if code != 0:
+        if code != 0 and nfr != "06":
             raise ValueError(f"measurement command exited with status {code}")
 
         summaries = [row for row in read_jsonl(output_path) if row.get("record") == "group-summary"]
@@ -508,7 +611,10 @@ def measure_nfr_04_06(
                 raise ValueError("NFR-04 output must contain Git-on and Git-off summaries")
             cases: dict[str, float] = {}
             for row in candidates:
-                case = "git_on_ms" if row.get("git_prompt_enabled") is True else "git_off_ms"
+                git_prompt_enabled = row.get("git_prompt_enabled")
+                if not isinstance(git_prompt_enabled, bool):
+                    raise ValueError("NFR-04 git_prompt_enabled must be a boolean")
+                case = "git_on_ms" if git_prompt_enabled else "git_off_ms"
                 if case in cases:
                     raise ValueError(f"NFR-04 output has duplicate {case} summary")
                 cases[case] = float(result_from_04_06("04", row)["value"])
@@ -534,40 +640,13 @@ def measure_nfr_04_06(
                 raise ValueError("NFR-06 output must contain exactly one criterion summary")
             result = result_from_04_06("06", candidates[0])
 
-            complete_c_rows = [row for row in summaries if row.get("metric") == "complete-C output diagnostic"]
-            if len(complete_c_rows) != 1:
-                raise ValueError("NFR-06 output must contain exactly one complete-C diagnostic")
-            complete_c = complete_c_rows[0]
-            if int(complete_c.get("measured_samples", -1)) != NFR04_06_SAMPLES:
-                raise ValueError("complete-C diagnostic did not produce the configured sample count")
-            result["details"]["complete_c_output_diagnostic"] = {
-                "first_completion_per_process": complete_c["first_completion_per_process"],
-                "same_process_repeat": complete_c["same_process_repeat"],
-                "measured_samples": complete_c["measured_samples"],
-                "candidate_count": complete_c["completion_entries"],
-                "output_bytes": complete_c["reference_output_bytes"],
-                "diagnostic_only": True,
-            }
-
-            key_rows = [
-                row
-                for row in summaries
-                if str(row.get("metric", "")).startswith("NFR-06") and row.get("metric") != "NFR-06"
-            ]
-            if len(key_rows) != 1:
-                raise ValueError("NFR-06 output must contain exactly one suggestion-key diagnostic")
-            diagnostic = {
-                "nfr": "NFR-06 suggestion-key responsiveness",
-                "target_p99_ms": float(key_rows[0]["target"]["p99_ms"]),
-                "plain_fixture_p99_ms": float(key_rows[0]["plain_fixture"]["p99_ms"]),
-                "paired_sequence_p99_delta_median_ms": float(
-                    key_rows[0]["paired_sequence_p99_delta_median_ms"]
-                ),
-                "paired_sequence_p99_delta_p99_ms": float(key_rows[0]["paired_sequence_p99_delta_p99_ms"]),
-                "sample_count": int(key_rows[0]["measured_sequences"]),
-                "threshold": None,
-                "status": "INFO",
-            }
+            selected_results, diagnostic, metric_errors, parse_diagnostic_errors = (
+                results_from_04_06_summaries(summaries)
+            )
+            if "06" in metric_errors:
+                raise ValueError(metric_errors["06"])
+            result = selected_results["06"]
+            diagnostic_errors.extend(parse_diagnostic_errors)
 
             phase_path = output_dir / "nfr-06-phase-diagnostics.jsonl"
             phase_command = [
@@ -589,34 +668,40 @@ def measure_nfr_04_06(
                 "--output",
                 str(phase_path),
             ]
-            try:
-                code, error = run_command(
-                    "complete-C calculation and render phase diagnostics",
-                    phase_command,
-                    logs_dir / "nfr-06-phase-diagnostics.log",
-                )
-                if error:
-                    raise ValueError(error)
-                if code != 0:
-                    raise ValueError(f"phase diagnostic command exited with status {code}")
-                result["details"]["candidate_compute_phase_timing"] = nfr06_phase_timing_from_jsonl(phase_path)
-                result["phase_timing_status"] = "PASS"
-            except (OSError, ValueError, KeyError, TypeError) as exc:
-                result["phase_timing_error"] = str(exc)
-                result["phase_timing_status"] = "ERROR"
+            if code == 0 and not diagnostic_errors:
+                try:
+                    phase_code, phase_error = run_command(
+                        "complete-C calculation and render phase diagnostics",
+                        phase_command,
+                        logs_dir / "nfr-06-phase-diagnostics.log",
+                    )
+                    if phase_error:
+                        raise ValueError(phase_error)
+                    if phase_code != 0:
+                        raise ValueError(f"phase diagnostic command exited with status {phase_code}")
+                    result["details"]["candidate_compute_phase_timing"] = nfr06_phase_timing_from_jsonl(phase_path)
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    diagnostic_errors.append(f"NFR-06 phase timing diagnostic: {exc}")
+            else:
+                diagnostic_errors.append("NFR-06 phase timing diagnostic was not run after an earlier diagnostic failure")
 
-    return result, diagnostic
+        if code != 0:
+            diagnostic_errors.append(f"NFR-{nfr} measurement/diagnostic command exited with status {code}")
+
+    return result, diagnostic, diagnostic_errors
 
 
 def measure_all_nfr_04_06(
     binary: Path,
     output_dir: Path,
     logs_dir: Path,
-) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any] | None, dict[str, str], list[str]]:
     driver = str(ROOT / "scripts/measure-nfr-04-06.py")
     raw_path = output_dir / "nfr-04-06.jsonl"
     results: dict[str, dict[str, Any]] = {}
-    diagnostic = None
+    diagnostic: dict[str, Any] | None = None
+    metric_errors: dict[str, str] = {}
+    diagnostic_errors: list[str] = []
 
     with tempfile.TemporaryDirectory(prefix="nshell-nfr-plain-") as plain_dir, tempfile.TemporaryDirectory(
         prefix="nshell-nfr-completion-"
@@ -648,66 +733,18 @@ def measure_all_nfr_04_06(
         code, error = run_command("NFR-04 through NFR-06", command, logs_dir / "nfr-04-06.log")
         if error:
             raise ValueError(error)
-        if code != 0:
-            raise ValueError(f"measurement command exited with status {code}")
-
         summaries = [row for row in read_jsonl(raw_path) if row.get("record") == "group-summary"]
-        summaries_04 = [row for row in summaries if row.get("metric") == "NFR-04"]
-        if len(summaries_04) != 2:
-            raise ValueError("NFR-04 output must contain Git-on and Git-off summaries")
-        cases: dict[str, float] = {}
-        for row in summaries_04:
-            case = "git_on_ms" if row.get("git_prompt_enabled") is True else "git_off_ms"
-            if case in cases:
-                raise ValueError(f"NFR-04 output has duplicate {case} summary")
-            cases[case] = float(result_from_04_06("04", row)["value"])
-        if set(cases) != {"git_on_ms", "git_off_ms"}:
-            raise ValueError("NFR-04 output is missing a Git-on or Git-off summary")
-        results["04"] = make_result(
-            "04",
-            metric="blank Enter to next prompt median, Git-on and Git-off",
-            value=max(cases.values()),
-            sample_count=NFR04_06_SAMPLES,
-            details={"cases": cases},
-        )
-        for nfr in ("05", "06"):
-            candidates = [row for row in summaries if row.get("metric") == f"NFR-{nfr}"]
-            if len(candidates) != 1:
-                raise ValueError(f"NFR-{nfr} output must contain exactly one criterion summary")
-            results[nfr] = result_from_04_06(nfr, candidates[0])
-
-        complete_c_rows = [row for row in summaries if row.get("metric") == "complete-C output diagnostic"]
-        if len(complete_c_rows) != 1:
-            raise ValueError("NFR-06 output must contain exactly one complete-C diagnostic")
-        complete_c = complete_c_rows[0]
-        if int(complete_c.get("measured_samples", -1)) != NFR04_06_SAMPLES:
-            raise ValueError("complete-C diagnostic did not produce the configured sample count")
-        results["06"]["details"]["complete_c_output_diagnostic"] = {
-            "first_completion_per_process": complete_c["first_completion_per_process"],
-            "same_process_repeat": complete_c["same_process_repeat"],
-            "measured_samples": complete_c["measured_samples"],
-            "candidate_count": complete_c["completion_entries"],
-            "output_bytes": complete_c["reference_output_bytes"],
-            "diagnostic_only": True,
-        }
-        key_rows = [
-            row
-            for row in summaries
-            if str(row.get("metric", "")).startswith("NFR-06") and row.get("metric") != "NFR-06"
-        ]
-        if len(key_rows) != 1:
-            raise ValueError("NFR-06 output must contain exactly one suggestion-key diagnostic")
-        diagnostic = {
-            "nfr": "NFR-06 suggestion-key responsiveness",
-            "target_p99_ms": float(key_rows[0]["target"]["p99_ms"]),
-            "plain_fixture_p99_ms": float(key_rows[0]["plain_fixture"]["p99_ms"]),
-            "paired_sequence_p99_delta_median_ms": float(key_rows[0]["paired_sequence_p99_delta_median_ms"]),
-            "paired_sequence_p99_delta_p99_ms": float(key_rows[0]["paired_sequence_p99_delta_p99_ms"]),
-            "sample_count": int(key_rows[0]["measured_sequences"]),
-            "threshold": None,
-            "status": "INFO",
-        }
-        results["06"]["details"]["suggestion_key_diagnostic"] = diagnostic
+        results, diagnostic, metric_errors, diagnostic_errors = results_from_04_06_summaries(summaries)
+        if code != 0:
+            if len(results) == 3:
+                diagnostic_errors.insert(
+                    0,
+                    f"NFR-04 through NFR-06 measurement/diagnostic command exited with status {code}",
+                )
+            else:
+                for nfr in ("04", "05", "06"):
+                    if nfr not in results and nfr not in metric_errors:
+                        metric_errors[nfr] = f"group summary was not written before command exited with status {code}"
 
         phase_path = output_dir / "nfr-06-phase-diagnostics.jsonl"
         phase_command = [
@@ -729,23 +766,22 @@ def measure_all_nfr_04_06(
             "--output",
             str(phase_path),
         ]
-        try:
-            code, error = run_command(
-                "complete-C calculation and render phase diagnostics",
-                phase_command,
-                logs_dir / "nfr-06-phase-diagnostics.log",
-            )
-            if error:
-                raise ValueError(error)
-            if code != 0:
-                raise ValueError(f"phase diagnostic command exited with status {code}")
-            results["06"]["details"]["candidate_compute_phase_timing"] = nfr06_phase_timing_from_jsonl(phase_path)
-            results["06"]["phase_timing_status"] = "PASS"
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            results["06"]["phase_timing_error"] = str(exc)
-            results["06"]["phase_timing_status"] = "ERROR"
+        if code == 0 and "06" in results:
+            try:
+                phase_code, phase_error = run_command(
+                    "complete-C calculation and render phase diagnostics",
+                    phase_command,
+                    logs_dir / "nfr-06-phase-diagnostics.log",
+                )
+                if phase_error:
+                    raise ValueError(phase_error)
+                if phase_code != 0:
+                    raise ValueError(f"phase diagnostic command exited with status {phase_code}")
+                results["06"]["details"]["candidate_compute_phase_timing"] = nfr06_phase_timing_from_jsonl(phase_path)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                diagnostic_errors.append(f"NFR-06 phase timing diagnostic: {exc}")
 
-    return results, diagnostic
+    return results, diagnostic, metric_errors, diagnostic_errors
 
 
 def main() -> int:
@@ -769,6 +805,7 @@ def main() -> int:
     errors: dict[str, str] = {}
     results: dict[str, dict[str, Any]] = {}
     diagnostic = None
+    diagnostic_errors: list[str] = []
     py = sys.executable
     script_01_03 = str(ROOT / "scripts/measure-nfr-01-03.py")
 
@@ -813,8 +850,12 @@ def main() -> int:
     selected_04_06 = set(selected_nfrs).intersection(("04", "05", "06"))
     if selected_04_06 == {"04", "05", "06"}:
         try:
-            grouped_results, diagnostic = measure_all_nfr_04_06(binary, output_dir, logs_dir)
+            grouped_results, diagnostic, metric_errors, grouped_diagnostic_errors = measure_all_nfr_04_06(
+                binary, output_dir, logs_dir
+            )
             results.update(grouped_results)
+            errors.update(metric_errors)
+            diagnostic_errors.extend(grouped_diagnostic_errors)
         except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as exc:
             for nfr in ("04", "05", "06"):
                 errors[nfr] = str(exc)
@@ -823,8 +864,11 @@ def main() -> int:
             if nfr not in ("04", "05", "06"):
                 continue
             try:
-                result, nfr_diagnostic = measure_nfr_04_06(nfr, binary, output_dir, logs_dir)
+                result, nfr_diagnostic, nfr_diagnostic_errors = measure_nfr_04_06(
+                    nfr, binary, output_dir, logs_dir
+                )
                 results[nfr] = result
+                diagnostic_errors.extend(nfr_diagnostic_errors)
                 if nfr_diagnostic is not None:
                     diagnostic = nfr_diagnostic
             except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as exc:
@@ -868,6 +912,7 @@ def main() -> int:
         output_dir,
         measured_results,
         diagnostic,
+        diagnostic_errors,
         args.system,
         args.revision,
         selected_nfrs,

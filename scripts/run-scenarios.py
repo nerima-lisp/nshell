@@ -975,8 +975,11 @@ def _assert_text(
         "equals" in expected or bool(contains) or bool(excludes) or bool(ordered_contains),
         f"{label} expectation must define a non-empty text check",
     )
-    _require(all(item for item in contains + excludes + ordered_contains),
-             f"{label} text checks must be non-empty")
+    _require(
+        all(item and not item.isspace()
+            for item in contains + excludes + ordered_contains),
+        f"{label} text checks must contain non-whitespace text",
+    )
     visible_screen_texts = tuple(
         _visible_screen_text(snapshot) for snapshot in visible_screen_snapshots
     )
@@ -1372,9 +1375,8 @@ class TmuxSession:
         try:
             result = self._tmux(["capture-pane", "-e", "-p", "-t", self.pane])
         except ScenarioError:
-            screen = "<pane no longer available>"
-        else:
-            screen = result.stdout.decode("utf-8", errors="replace")
+            return "<pane no longer available>"
+        screen = result.stdout.decode("utf-8", errors="replace")
         self.visible_screen_snapshots.append(screen)
         return screen
 

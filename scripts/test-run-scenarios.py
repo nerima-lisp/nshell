@@ -314,6 +314,39 @@ class ScenarioRunnerTests(unittest.TestCase):
                 for failure in failures)
         )
 
+    def test_pty_text_assertions_reject_whitespace_only_markers(self) -> None:
+        for key in ("contains", "excludes", "ordered_contains"):
+            with self.subTest(key=key):
+                scenario = _pty_scenario(
+                    "whitespace-only-marker",
+                    [],
+                    {"stream": {key: [" "]}},
+                )
+                with self.assertRaisesRegex(
+                    runner.ScenarioError,
+                    "must contain non-whitespace text",
+                ):
+                    runner._check_expected(
+                        scenario,
+                        "",
+                        "",
+                        0,
+                        Path("."),
+                        Path("."),
+                        visible_screen_snapshots=("\x1b[8msecret\x1b[0m",),
+                    )
+
+    def test_capture_styled_screen_does_not_record_error_sentinel_as_evidence(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.pane = "%1"
+        session.visible_screen_snapshots = []
+
+        with patch.object(session, "_tmux", side_effect=runner.ScenarioError("pane vanished")):
+            screen = session.capture_styled_screen()
+
+        self.assertEqual("<pane no longer available>", screen)
+        self.assertEqual([], session.visible_screen_snapshots)
+
     def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
         scenario = _batch_scenario("batch-extra-path")
         scenario["environment"]["variables"] = {"PATH": "bin:/usr/bin:/bin"}

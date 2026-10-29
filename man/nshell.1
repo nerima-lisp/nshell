@@ -6,6 +6,7 @@ nshell \- an interactive shell with an S-expression command language
 .RB [ \-\-help ]
 .RB [ \-\-version ]
 .RB [ \-i | \-\-interactive ]
+.RB [ \-e | \-\-errexit ]
 .RB [ \-l | \-\-login ]
 .RB [ \-\-no\-config ]
 .RB [ \-\-config
@@ -82,6 +83,9 @@ Load the login environment before starting nshell or delegating a command.
 .BR \-i ", " \-\-interactive
 Force the interactive line editor, even when standard input is not a
 terminal.
+.TP
+.BR \-e ", " \-\-errexit
+Exit after a command failure.
 .TP
 .B \-\-no\-config
 Do not load the interactive startup file.
@@ -189,9 +193,10 @@ literals stay literal; value escapes do not interpolate into string text.
 .EE
 .RE
 .PP
-Every evaluated form has value, stream, or test position. Value position
-returns a Lisp value. Stream position reads or writes bytes. A direct command
-in test position uses its exit status as a boolean.
+Forms use value, stream, or test position. Value position returns a Lisp value.
+Stream position reads or writes bytes. A direct command in test position uses
+its exit status as a boolean. A direct command used as an operand to Common Lisp
+= supplies its exit status as an integer.
 .PP
 In bare-line input, \fB|\fR connects byte streams. In an S-expression pipeline,
 \fB(| ...)\fR connects byte streams and \fB->\fR passes structured values
@@ -339,17 +344,6 @@ data remain readable, and the reader resumes at a later valid record frame
 when one is present. On the next successful append, nshell repairs the file
 with valid unique records, adds the command if it is not already present, and
 discards damaged data.
-.PP
-Use
-.B \-\-no\-history
-to disable history reads and writes, including in-session history recording.
-Use
-.B \-\-private
-to keep existing history available without saving this session's commands;
-unless
-.B \-\-no\-history
-is also set. Private mode also suppresses local assistant transcript, snapshot,
-and audit persistence.
 .SH ENVIRONMENT
 .TP
 .B XDG_CONFIG_HOME
@@ -364,6 +358,18 @@ An absolute path selects
 .I $XDG_DATA_HOME/nshell/history
 as the history file. If unset, empty, or relative, nshell uses
 .IR ~/.local/share/nshell/history .
+.TP
+.B XDG_STATE_HOME
+When non-empty, assistant state files are stored under
+.I $XDG_STATE_HOME/nshell/ .
+If unset or empty, nshell uses
+.IR ~/.nshell/ .
+.TP
+.B NSHELL_HISTORY_PRIVATE
+Enables private mode for interactive sessions when set to a non-empty value
+other than 0, false, or no (case-insensitive). Private mode reads existing
+history without saving commands and suppresses local assistant transcript,
+snapshot, and audit persistence.
 .TP
 .B NSHELL_VI_MODE
 When set to a non-empty value other than 0, false, or no (case-insensitive),

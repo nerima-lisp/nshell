@@ -42,6 +42,7 @@ MAX_OUTPUT_BYTES = 1_048_576
 MAX_SCENARIO_TMPDIR_BYTES = 128 * 1024 * 1024
 MAX_FILE_SET_FILES = 20_000
 MAX_FILE_SET_CONTENT_BYTES = 1_024
+SGR_SEQUENCE_RE = re.compile(r"\x1b\[([0-?]*)([ -/]*)m")
 L02_FILE_COUNT = 20_000
 L02_WARMUPS = 5
 L02_SAMPLES = 30
@@ -987,6 +988,41 @@ def _assert_text(label: str, actual: str, expected: Any, failures: list[str]) ->
             failures.append(f"{label} unexpectedly contained {item!r}")
 
 
+def _visible_pty_stream_text(stream: str) -> str:
+    visible: list[str] = []
+    concealed = False
+    position = 0
+    for sgr in SGR_SEQUENCE_RE.finditer(stream):
+        if not concealed:
+            visible.append(stream[position:sgr.start()])
+        parameters = sgr.group(1).split(";") if sgr.group(1) else [""]
+        index = 0
+        while index < len(parameters):
+            field = parameters[index]
+            head = field.split(":", 1)[0]
+            if head and not head.isdecimal():
+                concealed = True
+                break
+            code = int(head) if head else 0
+            if code in {38, 48, 58} and ":" not in field and index + 1 < len(parameters):
+                mode = parameters[index + 1].split(":", 1)[0]
+                if mode == "5":
+                    index += 3
+                    continue
+                if mode == "2":
+                    index += 5
+                    continue
+            if code == 0 or code == 28:
+                concealed = False
+            elif code == 8:
+                concealed = True
+            index += 1
+        position = sgr.end()
+    if not concealed:
+        visible.append(stream[position:])
+    return "".join(visible)
+
+
 def _assert_side_effects(expected: dict[str, Any], cwd: Path, home: Path,
                          failures: list[str], scenario_id: str) -> None:
     side_effects = expected.get("side_effects", {})
@@ -1247,10 +1283,7 @@ class TmuxSession:
             pass
 
     def _capture(self) -> str:
-        try:
-            result = self._tmux(["capture-pane", "-p", "-t", self.pane])
-        except ScenarioError:
-            return "<pane no longer available>"
+        result = self._tmux(["capture-pane", "-p", "-t", self.pane])
         return result.stdout.decode("utf-8", errors="replace")
 
     def wait_for(self, text: str, start: int, timeout: float) -> int:
@@ -1519,7 +1552,7 @@ def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code
         _assert_text("stderr", stderr, expected.get("stderr"), failures)
     else:
         stream, screen = first, second
-        _assert_text("PTY stream", stream, expected.get("stream"), failures)
+        _assert_text("PTY stream", _visible_pty_stream_text(stream), expected.get("stream"), failures)
         _assert_text("PTY screen", screen, expected.get("screen"), failures)
     if "exit_code" in expected and exit_code != expected["exit_code"]:
         failures.append(f"exit code was {exit_code}, expected {expected['exit_code']}")

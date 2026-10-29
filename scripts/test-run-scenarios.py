@@ -172,6 +172,24 @@ def _multi_pty_scenario(scenario_id: str = "shared-pty") -> dict[str, Any]:
 
 
 class ScenarioRunnerTests(unittest.TestCase):
+    def test_pty_stream_assertions_ignore_sgr_inside_visible_text(self) -> None:
+        scenario = _pty_scenario(
+            "colored-autosuggestion",
+            [],
+            {"stream": {"contains": ["I01_HISTORY_SUGGESTION"]}},
+        )
+
+        failures = runner._check_expected(
+            scenario,
+            "I01_HISTORY\x1b[38;5;242m_SUGGESTION\x1b[0m",
+            "",
+            0,
+            Path("."),
+            Path("."),
+        )
+
+        self.assertEqual([], failures)
+
     def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
         scenario = _batch_scenario("batch-extra-path")
         scenario["environment"]["variables"] = {"PATH": "bin:/usr/bin:/bin"}

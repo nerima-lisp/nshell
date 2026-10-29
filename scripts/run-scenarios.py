@@ -1301,6 +1301,10 @@ def _run_pty(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, lis
             return stream, screen, exit_code, failures
 
 
+def _strip_sgr(text: str) -> str:
+    return re.sub(r"\x1b\[[0-?]*[ -/]*m", "", text)
+
+
 def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code: int,
                     home: Path, cwd: Path) -> list[str]:
     expected = scenario["expected"]
@@ -1311,7 +1315,7 @@ def _check_expected(scenario: dict[str, Any], first: str, second: str, exit_code
         _assert_text("stderr", stderr, expected.get("stderr"), failures)
     else:
         stream, screen = first, second
-        _assert_text("PTY stream", stream, expected.get("stream"), failures)
+        _assert_text("PTY stream", _strip_sgr(stream), expected.get("stream"), failures)
         _assert_text("PTY screen", screen, expected.get("screen"), failures)
     if "exit_code" in expected and exit_code != expected["exit_code"]:
         failures.append(f"exit code was {exit_code}, expected {expected['exit_code']}")

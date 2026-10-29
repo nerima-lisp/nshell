@@ -67,9 +67,9 @@ jobs:
           --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"
           --mode source
 
-      - name: Record Git prompt responsiveness benchmark (L02)
+      - name: Run Git prompt responsiveness benchmark (L02)
         id: l02
-        # Defer L02 acceptance until WP-NFR0103-2 lands; retain Darwin measurements for comparison.
+        # Run the full corpus before the Darwin L02 gate reports an inconclusive result.
         continue-on-error: true
         run: >-
           nix develop .#scenarios -c python3 -B scripts/run-scenarios.py
@@ -196,6 +196,12 @@ jobs:
             --exclude-scenario-id Q05-nfs-glob-expansion \
             --repeat 3 \
             --mode pty
+
+      - name: Enforce Darwin L02 benchmark result
+        if: ${{ always() && matrix.system == 'aarch64-darwin' && steps.l02.outcome != 'success' }}
+        run: |
+          echo "Darwin L02 benchmark ended with outcome: ${{ steps.l02.outcome }}" >&2
+          exit 1
 
   q05-nfs:
     name: Q05 NFS responsiveness (Ubuntu client VM)

@@ -19,6 +19,7 @@
    "With a SCRIPT file argument, nshell runs the script (ARGS become $argv).~%")
   (format stream "~%Options:~%")
   (format stream "  -i, --interactive  Force the interactive line editor.~%")
+  (format stream "  -e, --errexit      Exit after a command failure.~%")
   (format stream "  -l, --login        Load the login environment.~%")
   (format stream "  -c, --shell-command  Delegate COMMAND and ARGS to /bin/sh.~%")
   (format stream "      --command      Execute COMMAND in nshell batch mode.~%")

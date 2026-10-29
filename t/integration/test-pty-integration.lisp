@@ -393,4 +393,49 @@
                             '(:stopped))))
                (expect (null status) :to-be-falsy)
                (expect (second status) :to-be :stopped)))
-        (pty-test-close-process pty))))))
+        (pty-test-close-process pty)))))
+  (it "pty-spawn-without-new-session-runs-child"
+    "A PTY child can run when it joins the parent's session."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "requires a usable PTY"
+      (let ((pty nil))
+        (unwind-protect
+             (progn
+               (setf pty
+                     (nshell.infrastructure.acl:pty-spawn
+                      "/bin/sh" '("-c" "printf pty-no-new-session")
+                      :new-session-p nil))
+               (expect (search "pty-no-new-session"
+                               (pty-test-read-until
+                                (nshell.infrastructure.acl:pty-process-master-fd pty)
+                                "pty-no-new-session"))
+                       :to-be-truthy)
+               (expect :exited :to-be
+                       (nshell.infrastructure.acl:pty-process-wait pty)))
+          (pty-test-close-process pty)))))
+  #+darwin
+  (it "darwin-pty-bootstrap-propagates-error-pipe-read-failure"
+    "A non-EINTR error-pipe read failure is propagated."
+    (let ((original-spawn-pipe
+            (symbol-function 'nshell.infrastructure.acl::%spawn-pipe))
+          (failure nil))
+      (with-rebound-function
+          (nshell.infrastructure.acl::%spawn-pipe
+           (lambda ()
+             (multiple-value-bind (read-fd write-fd)
+                 (funcall original-spawn-pipe)
+               (sb-posix:close read-fd)
+               (values read-fd write-fd))))
+        (setf failure
+              (handler-case
+                  (progn
+                    (nshell.infrastructure.acl:pty-spawn
+                     "/bin/sleep" '("60"))
+                    nil)
+                (error (condition) condition)))
+        (expect (and failure
+                     (search "error pipe read failed"
+                             (princ-to-string failure)))
+                :to-be-truthy)))))

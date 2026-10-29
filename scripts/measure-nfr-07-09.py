@@ -100,10 +100,11 @@ def temporary_parent() -> Path:
 
 
 def command_with_controlling_tty(command: list[str]) -> list[str]:
+    shell_command = f"exec {shlex.join(command)} </dev/null"
     if sys.platform == "darwin":
-        return ["/usr/bin/script", "-q", "/dev/null", *command]
+        return ["/usr/bin/script", "-q", "/dev/null", "/bin/sh", "-c", shell_command]
     if sys.platform.startswith("linux"):
-        return ["/usr/bin/script", "-q", "-e", "-c", shlex.join(command), "/dev/null"]
+        return ["/usr/bin/script", "-q", "-e", "-c", shell_command, "/dev/null"]
     raise MeasurementError(f"controlling-terminal coverage is unsupported on {sys.platform}")
 
 

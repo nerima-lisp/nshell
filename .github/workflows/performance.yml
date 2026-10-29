@@ -8,6 +8,21 @@ on:
         required: true
         default: all
         type: string
+      source_revision:
+        description: nshell source revision to build (defaults to the workflow revision)
+        required: false
+        default: ""
+        type: string
+      nfr05_diagnostics:
+        description: Collect same-redraw in-process diagnostics; the resulting latency is instrumented
+        required: false
+        default: false
+        type: boolean
+      nfr05_native_capture:
+        description: Run the separate native sample or strace diagnostic pass
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -36,6 +51,22 @@ jobs:
           persist-credentials: false
           fetch-depth: 2
 
+      - name: Resolve source revision
+        id: source
+        env:
+          REQUESTED_SOURCE_REVISION: ${{ inputs.source_revision }}
+        run: |
+          revision="${REQUESTED_SOURCE_REVISION:-$GITHUB_SHA}"
+          printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ steps.source.outputs.revision }}
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Validate NFR selection
         id: nfr-selection
         env:
@@ -57,6 +88,7 @@ jobs:
       - name: Build nshell
         id: binary
         if: steps.nfr-selection.outputs.requires_binary == 'true'
+        working-directory: source
         run: >-
           nix build --max-jobs 1 --print-build-logs
           ".#packages.${{ matrix.system }}.default"
@@ -64,17 +96,26 @@ jobs:
 
       - name: Measure NFR-01 through NFR-07
         if: steps.nfr-selection.outputs.measures_01_07 == 'true'
-        run: >-
-          nix develop .#scenarios -c python3
-          scripts/measure-nfr-ci.py
-          --binary "$RUNNER_TEMP/nshell-nfr-binary/bin/nshell"
-          --output-dir "$RUNNER_TEMP/nshell-nfr-results"
-          --system "${{ matrix.system }}"
-          --revision "$GITHUB_SHA"
-          --nfrs "${{ steps.nfr-selection.outputs.selected }}"
+        shell: bash
+        env:
+          SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          NFR05_DIAGNOSTICS: ${{ inputs.nfr05_diagnostics }}
+          NFR_SELECTION: ${{ steps.nfr-selection.outputs.selected }}
+        run: |
+          args=(
+            --binary "$RUNNER_TEMP/nshell-nfr-binary/bin/nshell"
+            --output-dir "$RUNNER_TEMP/nshell-nfr-results"
+            --system "${{ matrix.system }}"
+            --revision "$SOURCE_REVISION"
+            --nfrs "$NFR_SELECTION"
+          )
+          if [ "$NFR05_DIAGNOSTICS" = "true" ]; then
+            args+=(--nfr05-diagnostics)
+          fi
+          nix develop .#scenarios -c python3 scripts/measure-nfr-ci.py "${args[@]}"
 
       - name: Diagnose NFR-05 redraw stages and native waits
-        if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' }}
+        if: ${{ always() && !cancelled() && inputs.nfr05_native_capture == true && steps.nfr-selection.outputs.nfr_05 == 'true' && steps.binary.outcome == 'success' }}
         env:
           NFR05_DIAGNOSTIC_BINARY: ${{ runner.temp }}/nshell-nfr-binary/bin/nshell
           NFR05_DIAGNOSTIC_OUTPUT: ${{ runner.temp }}/nshell-nfr-results/nfr05-diagnostics
@@ -91,7 +132,7 @@ jobs:
             --output-dir "$NFR05_DIAGNOSTIC_OUTPUT"
 
       - name: Upload NFR-05 diagnostic pass
-        if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' }}
+        if: ${{ always() && !cancelled() && inputs.nfr05_native_capture == true && steps.nfr-selection.outputs.nfr_05 == 'true' && steps.binary.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: nshell-nfr05-diagnostics-${{ matrix.system }}

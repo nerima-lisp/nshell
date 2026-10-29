@@ -43,6 +43,31 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def validate_nfr05_diagnostic_join(sample_path: Path, diagnostic_path: Path) -> int:
+    sample_rows = [
+        row
+        for row in read_jsonl(sample_path)
+        if row.get("record") == "sample" and row.get("metric") == "NFR-05"
+    ]
+    diagnostic_rows = [
+        row
+        for row in read_jsonl(diagnostic_path)
+        if row.get("record") == "nfr05-sample-diagnostic"
+    ]
+    sample_ids = [row.get("sample_id") for row in sample_rows]
+    diagnostic_ids = [row.get("sample_id") for row in diagnostic_rows]
+    expected_count = NFR04_06_SAMPLES + NFR04_06_WARMUPS
+    if (
+        len(sample_rows) != expected_count
+        or len(diagnostic_rows) != expected_count
+        or any(not isinstance(sample_id, str) or not sample_id for sample_id in sample_ids)
+        or len(set(sample_ids)) != expected_count
+        or diagnostic_ids != sample_ids
+    ):
+        raise ValueError("NFR-05 per-event diagnostic sample IDs do not join one-to-one")
+    return expected_count
+
+
 def run_command(label: str, command: list[str], log_path: Path) -> tuple[int | None, str | None]:
     print(f"Starting {label}", flush=True)
     try:
@@ -440,6 +465,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--system", default=os.environ.get("NFR_SYSTEM", platform.system()))
     parser.add_argument("--revision", default=os.environ.get("GITHUB_SHA"))
     parser.add_argument("--nfrs", default="all", help="all or comma-separated NFR IDs from 01 through 09")
+    parser.add_argument(
+        "--nfr05-diagnostics",
+        action="store_true",
+        help="collect same-redraw NFR-05 render diagnostics; latency is instrumented",
+    )
     args = parser.parse_args()
     try:
         selected = parse_nfr_selection(args.nfrs)
@@ -447,6 +477,8 @@ def parse_args() -> argparse.Namespace:
         parser.error(f"--nfrs: {error}")
     if not set(selected).intersection(RESULT_IDS):
         parser.error("--nfrs must include at least one NFR from 01 through 07 for this measurement runner")
+    if args.nfr05_diagnostics and selected != ("05",):
+        parser.error("--nfr05-diagnostics requires --nfrs 05")
     return args
 
 
@@ -455,9 +487,16 @@ def measure_nfr_04_06(
     binary: Path,
     output_dir: Path,
     logs_dir: Path,
+    *,
+    nfr05_diagnostics: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     driver = str(ROOT / "scripts/measure-nfr-04-06.py")
     output_path = output_dir / f"nfr-{nfr}-selected.jsonl"
+    nfr05_diagnostic_path = (
+        output_dir / "nfr-05-sample-diagnostics.jsonl"
+        if nfr == "05" and nfr05_diagnostics
+        else None
+    )
     start_from = {"04": "nfr04-only", "05": "nfr05", "06": "nfr06"}[nfr]
     diagnostic = None
 
@@ -482,6 +521,8 @@ def measure_nfr_04_06(
             "--output",
             str(output_path),
         ]
+        if nfr05_diagnostic_path is not None:
+            command.extend(("--nfr05-diagnostics-output", str(nfr05_diagnostic_path)))
 
         if nfr == "04":
             git_fixture = fixture_root / "git"
@@ -500,6 +541,9 @@ def measure_nfr_04_06(
             raise ValueError(error)
         if code != 0:
             raise ValueError(f"measurement command exited with status {code}")
+
+        if nfr05_diagnostic_path is not None:
+            validate_nfr05_diagnostic_join(output_path, nfr05_diagnostic_path)
 
         summaries = [row for row in read_jsonl(output_path) if row.get("record") == "group-summary"]
         if nfr == "04":
@@ -526,6 +570,13 @@ def measure_nfr_04_06(
             if len(candidates) != 1:
                 raise ValueError("NFR-05 output must contain exactly one criterion summary")
             result = result_from_04_06("05", candidates[0])
+            if nfr05_diagnostic_path is not None:
+                result["details"]["per_event_diagnostics"] = {
+                    "sample_file": output_path.name,
+                    "diagnostics_file": nfr05_diagnostic_path.name,
+                    "joined_samples_including_warmups": NFR04_06_SAMPLES + NFR04_06_WARMUPS,
+                    "latency_is_instrumented": True,
+                }
         else:
             if completion_fixture is None:
                 raise ValueError("NFR-06 completion fixture was not created")
@@ -823,7 +874,13 @@ def main() -> int:
             if nfr not in ("04", "05", "06"):
                 continue
             try:
-                result, nfr_diagnostic = measure_nfr_04_06(nfr, binary, output_dir, logs_dir)
+                result, nfr_diagnostic = measure_nfr_04_06(
+                    nfr,
+                    binary,
+                    output_dir,
+                    logs_dir,
+                    nfr05_diagnostics=args.nfr05_diagnostics,
+                )
                 results[nfr] = result
                 if nfr_diagnostic is not None:
                     diagnostic = nfr_diagnostic

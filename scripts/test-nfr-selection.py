@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -31,6 +32,139 @@ DRIVER_SPEC.loader.exec_module(measure_nfr_04_06)
 
 
 class NfrSelectionTests(unittest.TestCase):
+    def test_nfr05_diagnostic_join_requires_matching_ids_for_all_samples(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sample_path = root / "samples.jsonl"
+            diagnostic_path = root / "diagnostics.jsonl"
+            sample_ids = [f"sample-{index}" for index in range(102)]
+            sample_path.write_text(
+                "".join(
+                    json.dumps(
+                        {"record": "sample", "metric": "NFR-05", "sample_id": sample_id}
+                    )
+                    + "\n"
+                    for sample_id in sample_ids
+                ),
+                encoding="utf-8",
+            )
+            diagnostic_path.write_text(
+                "".join(
+                    json.dumps(
+                        {
+                            "record": "nfr05-sample-diagnostic",
+                            "sample_id": sample_id,
+                        }
+                    )
+                    + "\n"
+                    for sample_id in sample_ids
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                measure_nfr_ci.validate_nfr05_diagnostic_join(sample_path, diagnostic_path),
+                102,
+            )
+
+            diagnostic_path.write_text(
+                diagnostic_path.read_text(encoding="utf-8").replace("sample-101", "mismatch"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "do not join one-to-one"):
+                measure_nfr_ci.validate_nfr05_diagnostic_join(sample_path, diagnostic_path)
+
+    def test_nfr05_diagnostics_flag_requires_exact_nfr05_selection(self) -> None:
+        arguments = [
+            "measure-nfr-ci.py",
+            "--binary",
+            "/bin/sh",
+            "--output-dir",
+            "/tmp/nfr05-output",
+            "--nfrs",
+            "05",
+            "--nfr05-diagnostics",
+        ]
+        with patch.object(sys, "argv", arguments):
+            parsed = measure_nfr_ci.parse_args()
+        self.assertTrue(parsed.nfr05_diagnostics)
+
+        with patch.object(sys, "argv", [*arguments[:-2], "all", "--nfr05-diagnostics"]):
+            with self.assertRaises(SystemExit):
+                measure_nfr_ci.parse_args()
+
+    def test_ci_measurement_passes_diagnostics_and_joins_the_same_redraw_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output_dir = Path(temporary) / "output"
+            logs_dir = output_dir / "logs"
+            output_dir.mkdir()
+            logs_dir.mkdir()
+            sample_ids = [f"sample-{index}" for index in range(102)]
+            captured: dict[str, list[str]] = {}
+
+            def fake_run_command(label, command, log_path):
+                captured["command"] = command
+                output_path = Path(command[command.index("--output") + 1])
+                diagnostic_path = Path(
+                    command[command.index("--nfr05-diagnostics-output") + 1]
+                )
+                output_records = [
+                    {
+                        "record": "sample",
+                        "metric": "NFR-05",
+                        "sample_id": sample_id,
+                    }
+                    for sample_id in sample_ids
+                ]
+                output_records.append(
+                    {
+                        "record": "group-summary",
+                        "metric": "NFR-05",
+                        "threshold_ms": measure_nfr_ci.NFR_THRESHOLDS["05"]["limit"],
+                        "acceptance_statistic": "p99",
+                        "measured_samples": measure_nfr_ci.NFR04_06_SAMPLES,
+                        "target_threshold_met": True,
+                        "target": {"median_ms": 8.0, "p99_ms": 12.0},
+                    }
+                )
+                output_path.write_text(
+                    "".join(json.dumps(row) + "\n" for row in output_records),
+                    encoding="utf-8",
+                )
+                diagnostic_path.write_text(
+                    "".join(
+                        json.dumps(
+                            {
+                                "record": "nfr05-sample-diagnostic",
+                                "sample_id": sample_id,
+                            }
+                        )
+                        + "\n"
+                        for sample_id in sample_ids
+                    ),
+                    encoding="utf-8",
+                )
+                return 0, None
+
+            with patch.object(measure_nfr_ci, "run_command", side_effect=fake_run_command):
+                result, diagnostic = measure_nfr_ci.measure_nfr_04_06(
+                    "05",
+                    Path("/bin/sh"),
+                    output_dir,
+                    logs_dir,
+                    nfr05_diagnostics=True,
+                )
+
+        self.assertIsNone(diagnostic)
+        self.assertEqual(
+            captured["command"][captured["command"].index("--nfr05-diagnostics-output") + 1],
+            str(output_dir / "nfr-05-sample-diagnostics.jsonl"),
+        )
+        self.assertEqual(
+            result["details"]["per_event_diagnostics"]["joined_samples_including_warmups"],
+            102,
+        )
+
     def test_all_selects_every_nfr(self) -> None:
         self.assertEqual(nfr_selection.parse_nfr_selection("all"), nfr_selection.NFR_IDS)
 

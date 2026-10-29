@@ -525,6 +525,7 @@ def run_redraw_sample(
     settle_seconds: float,
     diagnostic_sidecar: Path | None = None,
     native_capture: Callable[[int], Callable[[], dict[str, object]]] | None = None,
+    sample_id: str | None = None,
 ) -> dict[str, object]:
     marker = marker_text.encode()
     home = home_root / f"home-{uuid.uuid4().hex}"
@@ -600,6 +601,8 @@ def run_redraw_sample(
             "response_bytes": len(response),
             "cursor_queries": session.responses_sent,
         }
+        if sample_id is not None:
+            result["sample_id"] = sample_id
         if diagnostic_sidecar is not None:
             result["cursor_query_count"] = response.count(CPR_QUERY)
             result["cursor_response_count"] = session.responses_sent - responses_before
@@ -615,6 +618,8 @@ def run_redraw_sample(
                     or diagnostic.get("record") != "nfr05-render-diagnostic"
                 ):
                     raise RuntimeError("NFR-05 diagnostic sidecar has an unexpected schema")
+                if sample_id is not None:
+                    diagnostic["sample_id"] = sample_id
                 result["diagnostics"] = diagnostic
                 break
             else:
@@ -1119,8 +1124,11 @@ def run_target_group(
     warmups: int,
     threshold_ms: float,
     acceptance_statistic: str,
-    target_runner: Callable[[], dict[str, object]],
+    target_runner: Callable[..., dict[str, object]],
+    diagnostic_output_path: Path | None = None,
 ) -> dict[str, object]:
+    if diagnostic_output_path is not None and metric != "NFR-05":
+        raise ValueError("NFR-05 per-event diagnostics require the NFR-05 target group")
     load_before = uptime_record()
     stream.write(json.dumps({
         "record": "group-start",
@@ -1131,16 +1139,57 @@ def run_target_group(
     stream.flush()
 
     rows: list[dict[str, object]] = []
+    sample_ids: set[str] = set()
     for index in range(warmups + samples):
-        target = target_runner()
+        sample_number = index + 1
+        warmup = index < warmups
+        sample_id = None
+        if diagnostic_output_path is not None:
+            sample_id = uuid.uuid4().hex
+            while sample_id in sample_ids:
+                sample_id = uuid.uuid4().hex
+            sample_ids.add(sample_id)
+        target = target_runner(sample_id) if sample_id is not None else target_runner()
+        diagnostics: dict[str, object] | None = None
+        latency_ms = target.get("latency_ms")
+        if sample_id is not None:
+            candidate_diagnostics = target.get("diagnostics")
+            if (
+                target.get("sample_id") != sample_id
+                or not isinstance(candidate_diagnostics, dict)
+                or candidate_diagnostics.get("sample_id") != sample_id
+                or not isinstance(latency_ms, (int, float))
+            ):
+                raise RuntimeError("NFR-05 diagnostic sample ID does not match its redraw event")
+            diagnostics = candidate_diagnostics
         row = {
             "record": "sample",
             "metric": metric,
             **context,
-            "sample": index + 1,
-            "warmup": index < warmups,
+            "sample": sample_number,
+            "warmup": warmup,
             "target": target,
         }
+        if sample_id is not None:
+            row["sample_id"] = sample_id
+        if diagnostic_output_path is not None:
+            if sample_id is None or diagnostics is None or not isinstance(latency_ms, (int, float)):
+                raise RuntimeError("NFR-05 diagnostic record is missing its redraw event data")
+            diagnostic_row = {
+                "record": "nfr05-sample-diagnostic",
+                "schema_version": 1,
+                "metric": metric,
+                "sample_id": sample_id,
+                "sample": sample_number,
+                "warmup": warmup,
+                "context": context,
+                "latency_ms": latency_ms,
+                "keypress_realtime_ns": target.get("keypress_realtime_ns"),
+                "redraw_complete_realtime_ns": target.get("redraw_complete_realtime_ns"),
+                "diagnostics": diagnostics,
+            }
+            with diagnostic_output_path.open("a", encoding="utf-8") as diagnostic_stream:
+                diagnostic_stream.write(json.dumps(diagnostic_row, sort_keys=True) + "\n")
         stream.write(json.dumps(row, sort_keys=True) + "\n")
         stream.flush()
         if index >= warmups:
@@ -1595,6 +1644,19 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
     if args.start_from in ("nfr04", "nfr05") and len(set(buffer_sizes)) != len(buffer_sizes):
         raise ValueError("--buffer-sizes values must be unique")
 
+    nfr05_diagnostic_output = (
+        Path(args.nfr05_diagnostics_output).expanduser().resolve()
+        if args.nfr05_diagnostics_output is not None
+        else None
+    )
+    if nfr05_diagnostic_output is not None:
+        if args.start_from != "nfr05":
+            raise ValueError("--nfr05-diagnostics-output requires --from nfr05")
+        if nfr05_diagnostic_output == output_path:
+            raise ValueError("NFR-05 diagnostics output must differ from the sample output")
+        nfr05_diagnostic_output.parent.mkdir(parents=True, exist_ok=True)
+        nfr05_diagnostic_output.write_text("", encoding="utf-8")
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     summaries: list[dict[str, object]] = []
     order_rng = random.Random(args.seed)
@@ -1631,6 +1693,14 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
             },
             "percentile": "nearest-rank p99",
         }
+        if nfr05_diagnostic_output is not None:
+            metadata["nfr05_per_event_diagnostics"] = {
+                "sample_id_scope": "unique for every warmup and measured redraw in this run",
+                "output": str(nfr05_diagnostic_output),
+                "instrumentation": "same-event nshell render sidecar read by run_redraw_sample; stage timing and diagnostic sidecar writing are active",
+                "latency_interpretation": "instrumented diagnostic latency, not unperturbed official NFR-05 p99",
+                "coverage_limit": "does not record suggestion-worker execution time or in-process lock wait",
+            }
         if args.nfr06_candidate_compute_diagnostics:
             metadata["nfr06_candidate_compute_diagnostics"] = {
                 "candidate_compute_boundary": "get-internal-real-time immediately before the domain completion:complete call through its return; excludes candidate-text assembly and PTY rendering",
@@ -1697,14 +1767,23 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
 
             for buffer_length in (buffer_sizes if args.start_from in ("nfr04", "nfr05") else ()):
                 prompt = f"NSHELL_NFR05_{uuid.uuid4().hex}_PROMPT"
-                target = lambda buffer_length=buffer_length, prompt=prompt: run_redraw_sample(
-                    binary,
-                    plain_fixture,
-                    home_root,
-                    prompt,
-                    buffer_length,
-                    settle_seconds=args.settle_ms / 1000,
-                )
+
+                def redraw_target(sample_id: str | None = None, buffer_length=buffer_length, prompt=prompt):
+                    diagnostic_sidecar = (
+                        home_root / f"nfr05-render-{sample_id}.json"
+                        if sample_id is not None
+                        else None
+                    )
+                    return run_redraw_sample(
+                        binary,
+                        plain_fixture,
+                        home_root,
+                        prompt,
+                        buffer_length,
+                        settle_seconds=args.settle_ms / 1000,
+                        diagnostic_sidecar=diagnostic_sidecar,
+                        sample_id=sample_id,
+                    )
                 summaries.append(run_target_group(
                     stream,
                     "NFR-05",
@@ -1717,7 +1796,8 @@ def run_measurements(args: argparse.Namespace, output_path: Path) -> list[dict[s
                     args.warmups,
                     NFR_THRESHOLDS["05"]["limit"],
                     "p99",
-                    target,
+                    redraw_target,
+                    diagnostic_output_path=nfr05_diagnostic_output,
                 ))
 
             prefix = str(fixtures["completion_prefix"])
@@ -1808,6 +1888,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="opt in to per-trial candidate-computation timing and post-completion phase diagnostics",
     )
     parser.add_argument(
+        "--nfr05-diagnostics-output",
+        help="write same-redraw diagnostic JSONL with a sample_id for each NFR-05 sample; enables render-stage timing and diagnostic writes, so p99 is instrumented rather than unperturbed",
+    )
+    parser.add_argument(
         "--buffer-sizes",
         type=int,
         nargs="+",
@@ -1834,6 +1918,8 @@ def main() -> int:
         parser.error("--completion-prefix must not be empty")
     if args.nfr06_candidate_compute_diagnostics and args.start_from not in ("nfr04", "nfr06"):
         parser.error("--nfr06-candidate-compute-diagnostics requires an NFR-06 completion run")
+    if args.nfr05_diagnostics_output and args.start_from != "nfr05":
+        parser.error("--nfr05-diagnostics-output requires --from nfr05")
     try:
         output_path = Path(args.output).expanduser().resolve()
         summaries = run_measurements(args, output_path)

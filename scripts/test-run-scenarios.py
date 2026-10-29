@@ -347,6 +347,54 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual("<pane no longer available>", screen)
         self.assertEqual([], session.visible_screen_snapshots)
 
+    def test_expected_screen_rejects_concealed_marker_from_tmux_capture(self) -> None:
+        marker = "CONCEALED_MARKER"
+        scenario = _pty_scenario(
+            "concealed-screen-marker",
+            [],
+            {"screen": {"contains": [marker]}},
+        )
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.pane = "%1"
+        session._tmux = mock.Mock(
+            return_value=subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=b"\x1b[8mCONCEALED_MARKER\x1b[0m\n"
+            )
+        )
+
+        screen = session._capture()
+        failures = runner._check_expected(
+            scenario, "", screen, 0, Path("."), Path(".")
+        )
+
+        self.assertEqual("                \n", screen)
+        self.assertTrue(any(f"PTY screen did not contain {marker!r}" in failure
+                            for failure in failures))
+        session._tmux.assert_called_once_with(
+            ["capture-pane", "-e", "-p", "-t", "%1"]
+        )
+
+    def test_expected_screen_does_not_use_capture_failure_as_evidence(self) -> None:
+        marker = "PANE_CAPTURE_SENTINEL"
+        scenario = _pty_scenario(
+            "capture-failure-is-not-screen-evidence",
+            [],
+            {"screen": {"contains": [marker]}},
+        )
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.pane = "%1"
+
+        with patch.object(session, "_tmux", side_effect=runner.ScenarioError("pane vanished")):
+            screen = session._capture()
+
+        failures = runner._check_expected(
+            scenario, "", screen, 0, Path("."), Path(".")
+        )
+
+        self.assertEqual("", screen)
+        self.assertTrue(any(f"PTY screen did not contain {marker!r}" in failure
+                            for failure in failures))
+
     def test_batch_environment_appends_extra_path_after_scenario_path(self) -> None:
         scenario = _batch_scenario("batch-extra-path")
         scenario["environment"]["variables"] = {"PATH": "bin:/usr/bin:/bin"}

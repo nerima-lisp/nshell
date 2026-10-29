@@ -1278,10 +1278,10 @@ class TmuxSession:
 
     def _capture(self) -> str:
         try:
-            result = self._tmux(["capture-pane", "-p", "-t", self.pane])
+            result = self._tmux(["capture-pane", "-e", "-p", "-t", self.pane])
         except ScenarioError:
-            return "<pane no longer available>"
-        return result.stdout.decode("utf-8", errors="replace")
+            return ""
+        return _visible_screen_text(result.stdout.decode("utf-8", errors="replace"))
 
     def wait_for(self, text: str, start: int, timeout: float) -> int:
         self._validate_timeout(timeout, self.scenario["id"])

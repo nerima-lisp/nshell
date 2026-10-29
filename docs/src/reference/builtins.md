@@ -99,9 +99,10 @@ text into them.
 (echo $example ,(+ 2 3))
 ```
 
-Every evaluated form has value, stream, or test position. Value position
-returns a Lisp value. Stream position reads or writes bytes. A direct command
-in test position uses its exit status as a boolean.
+Forms use value, stream, or test position. Value position returns a Lisp value.
+Stream position reads or writes bytes. A direct command in test position uses
+its exit status as a boolean. A direct command used as an operand to Common Lisp
+`=` supplies its exit status as an integer.
 
 In bare-line input, `|` connects byte streams. In an S-expression pipeline,
 `(| ...)` connects byte streams and `->` passes structured values between

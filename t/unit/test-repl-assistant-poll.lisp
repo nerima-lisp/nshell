@@ -91,6 +91,8 @@
         (with-temporary-functions
             (('nshell.infrastructure.acl:consume-terminal-resize-p
               (lambda () nil))
+             ('nshell.infrastructure.acl:consume-git-status-update-p
+              (lambda () nil))
              ('nshell.feature.assistant:assistant-model-poll
               (lambda (generation)
                 (setf polled-generation generation)

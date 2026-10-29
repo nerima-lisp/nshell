@@ -34,7 +34,7 @@
   "steps": [
     {
       "type": "keys",
-      "text": "env NSHELL_PROMPT='A11_CHILD_READY> ' nshell"
+      "text": "env NSHELL_PROMPT='A11_CHILD_READY> {path} ' nshell"
     },
     {
       "type": "key",
@@ -43,6 +43,11 @@
     {
       "type": "wait",
       "contains": "A11_PROMPT_READY",
+      "timeout_seconds": 10
+    },
+    {
+      "type": "wait_screen",
+      "contains": "/work",
       "timeout_seconds": 10
     },
     {

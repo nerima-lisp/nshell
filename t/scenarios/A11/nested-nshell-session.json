@@ -33,11 +33,6 @@
   },
   "steps": [
     {
-      "type": "wait",
-      "contains": "A11_PROMPT_READY",
-      "timeout_seconds": 10
-    },
-    {
       "type": "keys",
       "text": "env NSHELL_PROMPT='A11_CHILD_READY> ' nshell"
     },
@@ -105,6 +100,7 @@
   "expected": {
     "stream": {
       "ordered_contains": [
+        "A11_PROMPT_READY",
         "A11_CHILD_OK",
         "A11_PARENT_OK"
       ]

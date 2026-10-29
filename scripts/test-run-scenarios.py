@@ -211,6 +211,35 @@ class ScenarioRunnerTests(unittest.TestCase):
                 )
                 self.assertTrue(any(f"did not contain {marker!r}" in failure for failure in failures))
 
+    def test_pty_stream_assertions_keep_explicit_sgr_checks_raw(self) -> None:
+        scenario = _pty_scenario(
+            "explicit-sgr-assertion",
+            [],
+            {"stream": {"contains": ["VISIBLE_MARKER", "\x1b[38;5;"]}},
+        )
+
+        failures = runner._check_expected(
+            scenario,
+            "VISIBLE_\x1b[38;5;75mMARKER",
+            "",
+            0,
+            Path("."),
+            Path("."),
+        )
+
+        self.assertEqual([], failures)
+
+        failures = runner._check_expected(
+            scenario,
+            "VISIBLE_MARKER [38;5;75m",
+            "",
+            0,
+            Path("."),
+            Path("."),
+        )
+
+        self.assertTrue(any("did not contain '\\x1b[38;5;'" in failure for failure in failures))
+
     def test_tmux_capture_failure_is_not_screen_evidence(self) -> None:
         session = runner.TmuxSession.__new__(runner.TmuxSession)
         session.pane = "%1"

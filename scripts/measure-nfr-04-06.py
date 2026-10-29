@@ -50,6 +50,7 @@ CHILD_REAP_TIMEOUT_SECONDS = 0.5
 NFR06_TERMINAL_SIZE = (10, 80)
 NFR06_VISIBLE_CANDIDATE_COUNT = 28
 COMPLETION_PAGER_FOOTER = b"arrows move, Enter accepts, Esc/Ctrl-C cancels"
+NFR06_FILE_CANDIDATE_RE = re.compile(rb"\xe2\x88\x99 (item-\d{5})(?=[ \r\n]|\Z)")
 
 
 def uptime_record() -> dict[str, object]:
@@ -72,6 +73,10 @@ def percentile_nearest_rank(values: list[float], percentile: float) -> float:
 
 def visible_terminal_text(data: bytes) -> bytes:
     return ANSI_SEQUENCE_RE.sub(b"", data)
+
+
+def nfr06_candidate_ids(visible_text: bytes) -> list[bytes]:
+    return NFR06_FILE_CANDIDATE_RE.findall(visible_text)
 
 
 def prompt_render_complete(
@@ -1003,13 +1008,13 @@ def run_interactive_completion_tab_sample(
             return (
                 COMPLETION_PAGER_FOOTER in visible
                 and b"1/20000" in visible
-                and re.findall(rb"item-\d{5}", visible) == expected_initial_page
+                and nfr06_candidate_ids(visible) == expected_initial_page
             )
 
         end_ns = session.wait_for_output(initial_page_visible)
         response = bytes(session.data[response_start:])
         visible_response = visible_terminal_text(response)
-        visible_candidates = re.findall(rb"item-\d{5}", visible_response)
+        visible_candidates = nfr06_candidate_ids(visible_response)
         if visible_candidates != expected_initial_page:
             raise RuntimeError("NFR-06 Tab sample did not render the expected initial candidate page")
 

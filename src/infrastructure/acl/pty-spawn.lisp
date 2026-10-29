@@ -104,8 +104,15 @@
       (handler-case
           (progn
             (%set-pty-window-size slave-fd rows cols)
-            (let* ((pid (%pty-posix-spawn program args environment slave-name
-                                          new-session-p))
+            (let* ((pid #+darwin
+                         (if new-session-p
+                             (%pty-darwin-bootstrap-spawn
+                              program args environment slave-name)
+                             (%pty-posix-spawn
+                              program args environment slave-name nil))
+                       #+linux
+                         (%pty-posix-spawn
+                          program args environment slave-name new-session-p))
                    (pgid pid))
               (%pty-close-fd slave-fd)
               (setf slave-fd nil
@@ -119,8 +126,7 @@
           (when master-stream
             (ignore-errors (close master-stream)))
           (pty-close master-fd slave-fd)
-          (error condition)))))
-)
+          (error condition))))))
 
 (defun %pty-output-tee (process output)
   (let ((buffer (make-array 4096 :element-type '(unsigned-byte 8)))

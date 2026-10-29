@@ -132,3 +132,130 @@
     (error ()
       (%signal-pty-child-ready ready-fd +pty-child-ready-error+)
       (%pty-child-fail))))
+#+darwin
+(defun %pty-darwin-bootstrap-spawn (program args environment slave-name)
+  (let ((bootstrap-path (current-environment-value "NSHELL_PTY_BOOTSTRAP"))
+        (read-fd nil)
+        (write-fd nil)
+        (actions nil)
+        (attributes nil)
+        (argv nil)
+        (envp nil)
+        (pid-storage nil)
+        (actions-initialized-p nil)
+        (attributes-initialized-p nil)
+        (child-pid nil)
+        (handoff-complete-p nil))
+    (labels ((read-bootstrap-error (fd)
+               (sb-alien:with-alien ((error-number sb-alien:int))
+                 (let ((offset 0)
+                       (eof-p nil)
+                       (pointer (sb-alien:alien-sap
+                                 (sb-alien:addr error-number))))
+                   (loop until (or eof-p (= offset 4))
+                         do (multiple-value-bind (count errno)
+                                (sb-unix:unix-read
+                                 fd
+                                 (sb-sys:sap+ pointer offset)
+                                 (- 4 offset))
+                              (cond
+                                ((null count)
+                                 (unless (= errno sb-posix:eintr)
+                                   (error "PTY bootstrap error pipe read failed (errno ~d)"
+                                          errno)))
+                                ((zerop count)
+                                 (if (zerop offset)
+                                     (setf eof-p t)
+                                     (error "PTY bootstrap error pipe record was truncated")))
+                                (t
+                                 (incf offset count)))))
+                   (unless eof-p
+                     error-number))))
+             (wait-bootstrap-child (pid)
+               (loop
+                 (handler-case
+                     (return
+                       (sb-thread:with-mutex (*native-process-waitpid-lock*)
+                         (sb-posix:waitpid pid 0)))
+                   (sb-posix:syscall-error (condition)
+                     (let ((errno (sb-posix:syscall-errno condition)))
+                       (cond
+                         ((= errno sb-posix:eintr))
+                         ((= errno sb-posix:echild)
+                          (return nil))
+                         (t
+                          (error condition)))))))))
+      (unless (and bootstrap-path (plusp (length bootstrap-path)))
+        (error "NSHELL_PTY_BOOTSTRAP must name the Darwin PTY exec helper"))
+      (unwind-protect
+           (progn
+             (multiple-value-setq (read-fd write-fd) (%spawn-pipe))
+             (setf argv
+                   (%spawn-c-string-vector
+                    (append (list bootstrap-path
+                                  slave-name
+                                  (format nil "~d" write-fd)
+                                  program)
+                            args))
+                   envp (%spawn-c-string-vector environment)
+                   actions
+                   (sb-alien:make-alien sb-alien:unsigned-long
+                                        +spawn-opaque-storage-words+)
+                   attributes
+                   (sb-alien:make-alien sb-alien:unsigned-long
+                                        +spawn-opaque-storage-words+)
+                   pid-storage (sb-alien:make-alien sb-alien:int))
+             (%spawn-check-result
+              "posix_spawn_file_actions_init"
+              (%posix-spawn-file-actions-init (sb-alien:alien-sap actions)))
+             (setf actions-initialized-p t)
+             (%spawn-check-result
+              "posix_spawnattr_init"
+              (%posix-spawnattr-init (sb-alien:alien-sap attributes)))
+             (setf attributes-initialized-p t)
+             (%spawn-add-file-actions
+              (sb-alien:alien-sap actions)
+              nil
+              (list write-fd))
+             (%spawn-configure-attributes
+              (sb-alien:alien-sap attributes)
+              nil
+              nil)
+             (%spawn-check-result
+              "posix_spawn"
+              (%posix-spawn
+               (sb-alien:alien-sap pid-storage)
+               bootstrap-path
+               (sb-alien:alien-sap actions)
+               (sb-alien:alien-sap attributes)
+               (sb-alien:alien-sap argv)
+               (sb-alien:alien-sap envp)))
+             (setf child-pid (sb-alien:deref pid-storage))
+             (sb-posix:close write-fd)
+             (setf write-fd nil)
+             (let ((error-number (read-bootstrap-error read-fd)))
+               (when error-number
+                 (wait-bootstrap-child child-pid)
+                 (setf handoff-complete-p t)
+                 (error "PTY bootstrap failed (errno ~d)" error-number))
+               (setf handoff-complete-p t)
+               child-pid))
+        (when (and child-pid (not handoff-complete-p))
+          (ignore-errors (sb-posix:kill child-pid sb-unix:sigkill))
+          (ignore-errors (wait-bootstrap-child child-pid)))
+        (when read-fd
+          (%pty-close-fd read-fd))
+        (when write-fd
+          (%pty-close-fd write-fd))
+        (when attributes-initialized-p
+          (%posix-spawnattr-destroy (sb-alien:alien-sap attributes)))
+        (when actions-initialized-p
+          (%posix-spawn-file-actions-destroy (sb-alien:alien-sap actions)))
+        (when pid-storage
+          (sb-alien:free-alien pid-storage))
+        (%spawn-free-c-string-vector argv)
+        (%spawn-free-c-string-vector envp)
+        (when attributes
+          (sb-alien:free-alien attributes))
+        (when actions
+          (sb-alien:free-alien actions))))))

@@ -173,6 +173,52 @@ def _multi_pty_scenario(scenario_id: str = "shared-pty") -> dict[str, Any]:
 
 
 class ScenarioRunnerTests(unittest.TestCase):
+    def test_pty_stream_assertions_ignore_visible_sgr_and_color_index_eight(self) -> None:
+        marker = "I01_HISTORY_SUGGESTION"
+        scenario = _pty_scenario(
+            "styled-autosuggestion",
+            [],
+            {"stream": {"contains": [marker]}},
+        )
+
+        for actual in (
+            "I01_HISTORY\x1b[38;5;242m_SUGGESTION\x1b[0m",
+            "I01_HISTORY\x1b[38;5;8m_SUGGESTION\x1b[0m",
+            f"\x1b[8m\x1b[28m{marker}\x1b[0m",
+        ):
+            with self.subTest(actual=actual):
+                failures = runner._check_expected(
+                    scenario, actual, "", 0, Path("."), Path(".")
+                )
+                self.assertEqual([], failures)
+
+    def test_pty_stream_assertions_reject_concealed_marker(self) -> None:
+        marker = "I01_HISTORY_SUGGESTION"
+        scenario = _pty_scenario(
+            "concealed-autosuggestion",
+            [],
+            {"stream": {"contains": [marker]}},
+        )
+
+        for actual in (
+            "I01_HISTORY\x1b[8m_SUGGESTION\x1b[0m",
+            "I01_HISTORY\x1b[0;8m_SUGGESTION\x1b[0m",
+            f"\x1b[8m{marker}\x1b[0m",
+        ):
+            with self.subTest(actual=actual):
+                failures = runner._check_expected(
+                    scenario, actual, "", 0, Path("."), Path(".")
+                )
+                self.assertTrue(any(f"did not contain {marker!r}" in failure for failure in failures))
+
+    def test_tmux_capture_failure_is_not_screen_evidence(self) -> None:
+        session = runner.TmuxSession.__new__(runner.TmuxSession)
+        session.pane = "%1"
+
+        with patch.object(session, "_tmux", side_effect=runner.ScenarioError("pane vanished")):
+            with self.assertRaisesRegex(runner.ScenarioError, "pane vanished"):
+                session._capture()
+
     def test_pty_cleanup_stops_nested_scenario_tmux_servers(self) -> None:
         with tempfile.TemporaryDirectory(prefix="d09-", dir="/tmp") as temporary:
             root = Path(temporary)

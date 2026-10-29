@@ -254,7 +254,8 @@ else
   exit "$build_status"
 fi
 test -x /tmp/nshell-q05/bin/nshell
-mkdir -p /tmp/q05-home /mnt/q05
+mkdir -p /tmp/q05-home
+sudo mkdir -p /mnt/q05
 sudo mount -t nfs -o vers=4,proto=tcp 192.168.56.10:/ /mnt/q05
 git -C /mnt/q05/git init --initial-branch=q05-branch
 test -f /mnt/q05/completion/complete-probe-a

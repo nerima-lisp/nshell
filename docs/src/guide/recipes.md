@@ -244,9 +244,9 @@ protocol and is not emitted by this harness. Eligibility therefore supports
 only this minimal noninteractive fixture and is not evidence about interactive
 use, completion, or cold startup.
 
-`nix flake check` runs the verifier self-test without a timing threshold, so CI
-rejects malformed evidence without turning host performance noise into a flaky
-gate. Failed or incomplete comparison groups remain ineligible. Even eligible
+Run `perl scripts/verify-benchmark-jsonl.pl --self-test` to exercise the JSONL
+verifier without running a benchmark. `nix flake check` does not run this
+self-test. Failed or incomplete comparison groups remain ineligible. Even eligible
 fixture results do not by themselves establish a broad "world-fastest" claim.
 
 ## Add a test

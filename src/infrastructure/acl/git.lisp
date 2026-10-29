@@ -1,6 +1,6 @@
 (in-package #:nshell.infrastructure.acl)
 
-(defparameter *git-command-timeout* 1
+(defparameter *git-command-timeout* 5
   "Seconds a git prompt probe may run before it is abandoned. The prompt must
 never block on a slow, networked, or hung repository, so branch/status queries
 are bounded well below *EXTERNAL-COMMAND-TIMEOUT*; on timeout the segment simply

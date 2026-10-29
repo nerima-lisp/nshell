@@ -23,6 +23,7 @@ CASES = {
 SUMMARY = re.compile(
     r"SCENARIO_SUMMARY selected=1 runs=1 pass=1 xfail=0 xpass=0 fail=0"
 )
+NETEM_DELAY = re.compile(r"(?m)^qdisc\s+netem\b[^\n]*\bdelay\s+500ms(?:\s|$)")
 BASELINE_TRIALS = 1
 DELAYED_TRIALS = 10
 
@@ -179,7 +180,7 @@ def _main() -> int:
         else:
             qdisc_applied = True
             observed = _run(["sudo", "tc", "qdisc", "show", "dev", arguments.interface])
-            if observed.returncode != 0 or "netem delay 500ms" not in observed.stdout:
+            if observed.returncode != 0 or NETEM_DELAY.search(observed.stdout) is None:
                 record["setup_errors"].append(
                     f"500ms netem was not observed on {arguments.interface}: {observed.stdout.strip()}"
                 )

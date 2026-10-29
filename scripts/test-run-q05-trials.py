@@ -19,6 +19,16 @@ SPEC.loader.exec_module(q05)
 
 
 class Q05TrialTests(unittest.TestCase):
+    def test_netem_delay_check_accepts_tc_output_with_qdisc_handle(self) -> None:
+        output = "qdisc netem 8001: root refcnt 2 limit 1000 delay 500ms\n"
+        self.assertIsNotNone(q05.NETEM_DELAY.search(output))
+        self.assertIsNone(
+            q05.NETEM_DELAY.search("qdisc netem 8001: root delay 100ms\n")
+        )
+        self.assertIsNone(
+            q05.NETEM_DELAY.search("qdisc fq_codel 0: root delay 500ms\n")
+        )
+
     def test_trial_matrix_has_three_baseline_and_thirty_delayed_fresh_processes(self) -> None:
         self.assertEqual(len(q05.CASES), 3)
         self.assertEqual(

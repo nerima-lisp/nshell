@@ -64,10 +64,10 @@ synchronously for deterministic tests."
 (defun %trim-newline (text)
   (string-right-trim '(#\Newline #\Return #\Space #\Tab) text))
 
-(defun %run-git (dir args)
-  "Run git ARGS in DIR with a bounded native subprocess. A timeout, launch
-failure, or any error returns empty output and status 1. Delegates to *GIT-RUNNER*
-when one is bound."
+(defun %run-git (dir args &key (timeout-seconds *git-command-timeout*))
+  "Run git ARGS in DIR with a bounded native subprocess. TIMEOUT-SECONDS overrides
+the default. Timeout, launch failure, or any error returns empty output and status
+1. Delegates to *GIT-RUNNER* when one is bound."
   (if *git-runner*
       (funcall *git-runner* dir args)
       (let ((started (get-internal-real-time))
@@ -84,7 +84,7 @@ when one is bound."
                       (let ((output (make-string-output-stream))
                             (error-output (make-string-output-stream))
                             (timeout (ensure-timeout-seconds
-                                      *git-command-timeout* "git command timeout")))
+                                      timeout-seconds "git command timeout")))
                         (let ((process
                                 (%spawn-in-own-process-group
                                  program

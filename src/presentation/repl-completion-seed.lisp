@@ -3,18 +3,21 @@
 
 ;;; Keep process I/O outside the domain by supplying Git-backed hooks
 ;;; for completion requests that carry the current directory.
+;;; These listers run synchronously on Tab, so they use a one-second bound.
 
 (defun %seed-git-branch-lister (directory)
   (multiple-value-bind (output exit-code)
       (nshell.infrastructure.acl:%run-git
-       directory '("for-each-ref" "--format=%(refname:short)" "refs/heads/"))
+       directory '("for-each-ref" "--format=%(refname:short)" "refs/heads/")
+       :timeout-seconds 1)
     (when (zerop exit-code)
       (nshell.domain.completion:%git-output-lines output))))
 
 (defun %seed-git-modified-path-lister (directory)
   (multiple-value-bind (output exit-code)
       (nshell.infrastructure.acl:%run-git
-       directory '("status" "--porcelain" "--untracked-files=no"))
+       directory '("status" "--porcelain" "--untracked-files=no")
+       :timeout-seconds 1)
     (when (zerop exit-code)
       (nshell.domain.completion:%git-porcelain-status-paths output))))
 

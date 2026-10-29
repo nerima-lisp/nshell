@@ -8,6 +8,14 @@ Batch commands do not load the interactive startup file. When the default path
 is used, nshell ignores a legacy `~/.nshellrc` with a one-line notice. If the
 startup file has a syntax error, nshell reports it and continues to the prompt.
 
+## Private sessions
+
+Set `NSHELL_HISTORY_PRIVATE` to a non-empty value other than `0`, `false`, or
+`no` (case-insensitive), or pass `--private`, to enable private mode in an
+interactive session. The session reads existing history without saving
+commands and suppresses local assistant transcript, snapshot, and audit
+persistence. `--no-history` disables history reads and writes for the session.
+
 ## Shell hooks
 
 Register hooks from the startup file with

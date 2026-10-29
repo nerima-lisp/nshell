@@ -34,7 +34,7 @@
   },
   "steps": [
     {
-      "type": "wait",
+      "type": "wait_screen",
       "contains": "P09_PROMPT work status=0",
       "timeout_seconds": 10
     },

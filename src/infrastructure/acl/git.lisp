@@ -16,6 +16,26 @@ subprocess object with separate spawn/output/exit-code hooks.")
   "Directory keyed cache of git prompt status.")
 (defvar *git-status-updated-p* nil "Whether a Git status worker published a prompt update.")
 (defvar *git-status-cache-lock* (sb-thread:make-mutex :name "git prompt status cache"))
+(defvar *git-status-diagnostic-lock* (sb-thread:make-mutex :name "git status diagnostic log"))
+(defun %git-diagnostic (event &rest properties)
+  (let ((path (current-environment-value "NSHELL_GIT_STATUS_DIAGNOSTICS")))
+    (when (and path (not (string= path "")))
+      (handler-case
+          (sb-thread:with-mutex (*git-status-diagnostic-lock*)
+            (with-open-file (stream path :direction :output
+                                           :if-exists :append
+                                           :if-does-not-exist :create)
+              (write (list* :time-ms
+                            (round (* (get-internal-real-time) 1000)
+                                   internal-time-units-per-second)
+                            :event event properties)
+                     :stream stream :escape t)
+              (terpri stream)
+              (finish-output stream)))
+        (error (condition)
+          (format *error-output* "NSHELL_GIT_STATUS_DIAGNOSTIC_ERROR condition=~s~%"
+                  (type-of condition))
+          (finish-output *error-output*))))))
 (defvar *git-status-worker-launcher* nil
   "Optional test hook for scheduling a Git status worker.")
 
@@ -33,54 +53,89 @@ synchronously for deterministic tests."
     (setf *git-status-updated-p* nil)))
 (defun consume-git-status-update-p ()
   "Return and clear whether a Git status worker published a prompt update."
-  (sb-thread:with-mutex (*git-status-cache-lock*)
-    (prog1 *git-status-updated-p*
-      (setf *git-status-updated-p* nil))))
+  (let ((updated-p
+          (sb-thread:with-mutex (*git-status-cache-lock*)
+            (prog1 *git-status-updated-p*
+              (setf *git-status-updated-p* nil)))))
+    (when updated-p
+      (%git-diagnostic :consume-update :consumed t))
+    updated-p))
 
 (defun %trim-newline (text)
   (string-right-trim '(#\Newline #\Return #\Space #\Tab) text))
 
 (defun %run-git (dir args)
   "Run git ARGS in DIR with a bounded native subprocess. A timeout, launch
-failure, or any error yields (values \"\" 1). Delegates to *GIT-RUNNER* when
-one is bound."
+failure, or any error returns empty output and status 1. Delegates to *GIT-RUNNER*
+when one is bound."
   (if *git-runner*
       (funcall *git-runner* dir args)
-      (handler-case
-          (let* ((environment (current-environment-entries))
-                 (program (%resolve-external-command "git" environment)))
-            (unless program
-              (return-from %run-git (values "" 1)))
-            (let ((output (make-string-output-stream))
-                  (error-output (make-string-output-stream))
-                  (timeout (ensure-timeout-seconds
-                            *git-command-timeout* "git command timeout")))
-              (let ((process
-                      (%spawn-in-own-process-group
-                       program
-                       (list* "-C"
-                              (namestring (host-kit:ensure-directory-pathname dir))
-                              args)
-                       environment nil :stream :error :stream)))
-                (multiple-value-bind (exit timed-out-p)
-                    (%wait-process-with-output
-                     process output timeout (lambda () 124) error-output)
-                  (if timed-out-p
-                      (values "" 1)
-                      (values (get-output-stream-string output)
-                              (or exit 1)))))))
-        (error () (values "" 1)))))
+      (let ((started (get-internal-real-time))
+            (timed-out-p nil)
+            (failure nil))
+        (multiple-value-bind (output code)
+            (handler-case
+                (let* ((environment (current-environment-entries))
+                       (program (%resolve-external-command "git" environment)))
+                  (if (null program)
+                      (progn
+                        (setf failure :missing-git)
+                        (values "" 1))
+                      (let ((output (make-string-output-stream))
+                            (error-output (make-string-output-stream))
+                            (timeout (ensure-timeout-seconds
+                                      *git-command-timeout* "git command timeout")))
+                        (let ((process
+                                (%spawn-in-own-process-group
+                                 program
+                                 (list* "-C"
+                                        (namestring (host-kit:ensure-directory-pathname dir))
+                                        args)
+                                 environment nil :stream :error :stream)))
+                          (multiple-value-bind (exit did-time-out)
+                              (%wait-process-with-output
+                               process output timeout (lambda () 124) error-output)
+                            (setf timed-out-p did-time-out)
+                            (when did-time-out
+                              (setf failure :timeout))
+                            (if did-time-out
+                                (values "" 1)
+                                (values (get-output-stream-string output)
+                                        (or exit 1))))))))
+              (error (condition)
+                (setf failure (type-of condition))
+                (values "" 1)))
+          (when (and (null failure) (not (zerop code)))
+            (setf failure :nonzero-exit))
+          (%git-diagnostic
+           :probe
+           :kind (first args)
+           :args args
+           :cwd (namestring (host-kit:ensure-directory-pathname dir))
+           :elapsed-ms (round (* (- (get-internal-real-time) started) 1000)
+                              internal-time-units-per-second)
+           :exit-code code
+           :timed-out timed-out-p
+           :failure failure
+           :output-length (length output))
+          (values output code)))))
 
 (defun %git-branch-uncached (dir)
   (multiple-value-bind (out code) (%run-git dir '("rev-parse" "--abbrev-ref" "HEAD"))
-    (when (zerop code)
-      (let ((branch (%trim-newline out)))
-        (unless (or (string= branch "") (string= branch "HEAD"))
-          branch)))))
+    (let ((branch
+            (when (zerop code)
+              (let ((branch (%trim-newline out)))
+                (unless (or (string= branch "") (string= branch "HEAD"))
+                  branch)))))
+      (%git-diagnostic :branch-result :branch branch :exit-code code)
+      branch)))
 
 (defun %git-dirty-uncached (dir)
   (multiple-value-bind (out code) (%run-git dir '("status" "--porcelain" "--untracked-files=no"))
-    (and (zerop code) (> (length (%trim-newline out)) 0))))
+    (let ((dirty-p
+            (and (zerop code) (> (length (%trim-newline out)) 0))))
+      (%git-diagnostic :dirty-result :dirty dirty-p :exit-code code)
+      dirty-p)))
 (defvar *git-status-worker-threads* nil)
 (defvar *git-status-worker-lock*
   (sb-thread:make-mutex :name "git prompt status workers"))
@@ -138,12 +193,16 @@ one is bound."
         (setf pending (cons :pending nil)
               (gethash key *git-status-cache*) pending)))
     (labels ((publish (branch dirty-p)
-               (sb-thread:with-mutex (*git-status-cache-lock*)
-                 (when (eq (gethash key *git-status-cache*) pending)
-                   (setf (gethash key *git-status-cache*)
-                         (list branch dirty-p)
-                         *git-status-updated-p*
-                         t))))
+               (let ((accepted-p
+                       (sb-thread:with-mutex (*git-status-cache-lock*)
+                         (when (eq (gethash key *git-status-cache*) pending)
+                           (setf (gethash key *git-status-cache*)
+                                 (list branch dirty-p)
+                                 *git-status-updated-p*
+                                 t)))))
+                 (%git-diagnostic :publish :cwd key :accepted accepted-p
+                                  :branch branch :dirty dirty-p)
+                 accepted-p))
              (read-current ()
                (sb-thread:with-mutex (*git-status-cache-lock*)
                  (multiple-value-bind (entry present-p)
@@ -159,9 +218,11 @@ one is bound."
              (values nil nil nil)
              (values (first cached) (second cached) t)))
         (t
+         (%git-diagnostic :worker-scheduled :cwd key)
          (let* ((runner *git-runner*)
                 (worker
                   (lambda ()
+                    (%git-diagnostic :worker-started :cwd key)
                     (let ((*git-runner* runner))
                       (let* ((branch
                                (handler-case
@@ -172,11 +233,18 @@ one is bound."
                                     (handler-case
                                         (%git-dirty-uncached key)
                                       (error () nil)))))
+                        (%git-diagnostic :worker-completed :cwd key
+                                         :branch branch :dirty dirty-p)
                         (publish branch dirty-p))))))
            (if *git-status-worker-launcher*
                (funcall *git-status-worker-launcher* worker)
                (handler-case
                    (unless (%start-git-status-worker worker)
+                     (%git-diagnostic :worker-start-failed :cwd key
+                                      :reason :draining)
                      (publish nil nil))
-                 (error () (publish nil nil))))
+                 (error (condition)
+                   (%git-diagnostic :worker-start-failed :cwd key
+                                    :reason (type-of condition))
+                   (publish nil nil))))
            (read-current)))))))

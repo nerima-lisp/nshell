@@ -917,6 +917,9 @@ def _environment(
         "XDG_STATE_HOME": str(home / ".local" / "state"),
     }
     env.update(settings.get("variables", {}))
+    git_diagnostics = os.environ.get("NSHELL_GIT_STATUS_DIAGNOSTICS")
+    if git_diagnostics:
+        env["NSHELL_GIT_STATUS_DIAGNOSTICS"] = git_diagnostics
     extra_path = os.environ.get("NSHELL_SCENARIO_EXTRA_PATH")
     append_extra_path = settings.get("append_extra_path", scenario["mode"] == "batch")
     if extra_path and append_extra_path:

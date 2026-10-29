@@ -269,7 +269,8 @@ python3 scripts/run-q05-trials.py \
   --server-interface q05tap0 \
   --interface test0 \
   --output-dir "$q05_results" \
-  --candidate-revision "$q05_revision"
+  --candidate-revision "$q05_revision" \
+  --git-diagnostics
 EOF
 chmod 700 "$q05_workspace/guest-run.sh"
 q05_ssh 'mkdir -p /tmp/q05-results'

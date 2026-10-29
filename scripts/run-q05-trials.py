@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import subprocess
 import sys
@@ -34,10 +35,13 @@ def _atomic_json(path: Path, value: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def _run(command: list[str], *, timeout: float = 30) -> subprocess.CompletedProcess[str]:
+def _run(
+    command: list[str], *, timeout: float = 30, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
         cwd=ROOT,
+        env=env,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -55,6 +59,7 @@ def _trial(
     binary: Path,
     scenario_dir: Path,
     log_dir: Path,
+    git_diagnostics: bool = False,
 ) -> dict[str, Any]:
     command = [
         sys.executable,
@@ -70,9 +75,17 @@ def _trial(
         "--scenario-cwd",
         f"{scenario_id}={scenario_cwd}",
     ]
+    trial_environment = None
+    if git_diagnostics:
+        diagnostic_dir = log_dir.parent / "diagnostics"
+        diagnostic_dir.mkdir(exist_ok=True)
+        diagnostic_path = diagnostic_dir / f"{phase}-{name}-trial-{number:02d}.sexp"
+        diagnostic_path.unlink(missing_ok=True)
+        trial_environment = os.environ.copy()
+        trial_environment["NSHELL_GIT_STATUS_DIAGNOSTICS"] = str(diagnostic_path)
     started = time.monotonic()
     try:
-        completed = _run(command, timeout=65)
+        completed = _run(command, timeout=65, env=trial_environment)
         output = completed.stdout
         exit_code = completed.returncode
         timed_out = False
@@ -137,6 +150,7 @@ def _main() -> int:
     parser.add_argument("--interface", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--candidate-revision", required=True)
+    parser.add_argument("--git-diagnostics", action="store_true")
     arguments = parser.parse_args()
 
     binary = arguments.binary.resolve(strict=True)
@@ -164,7 +178,7 @@ def _main() -> int:
         for number in range(1, BASELINE_TRIALS + 1):
             result = _trial(
                 "baseline", name, number, scenario_id, scenario_cwd,
-                binary, scenario_dir, log_dir,
+                binary, scenario_dir, log_dir, arguments.git_diagnostics,
             )
             record["trials"].append(result)
             _atomic_json(result_path, record)
@@ -191,7 +205,7 @@ def _main() -> int:
                 for number in range(1, DELAYED_TRIALS + 1):
                     result = _trial(
                         "delayed", name, number, scenario_id, scenario_cwd,
-                        binary, scenario_dir, log_dir,
+                        binary, scenario_dir, log_dir, arguments.git_diagnostics,
                     )
                     record["trials"].append(result)
                     _atomic_json(result_path, record)

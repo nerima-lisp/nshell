@@ -194,6 +194,9 @@
                         :ignore nil nil (list :terminal-resize t)))
                      (when (nshell.infrastructure.acl:consume-sigint-received-p)
                        t)
+                     (when (nshell.infrastructure.acl:consume-git-status-update-p)
+                       (nshell.domain.input:make-key-event
+                        :ignore nil nil (list :git-status-update t)))
                      (%poll-assistant-model-event)))))
             (event (unless (nshell.feature.assistant:assistant-model-event-p
                             raw-event)
@@ -215,9 +218,14 @@
             (read-key-cont)))
          ((and event
                (eq :ignore (nshell.domain.input:key-event-type event)))
-          (if (getf (nshell.domain.input:key-event-data event) :terminal-resize)
-              (lambda () (%render-prompt-after-terminal-resize))
-              (lambda () (read-key-cont))))
+          (cond
+            ((getf (nshell.domain.input:key-event-data event) :terminal-resize)
+             (lambda () (%render-prompt-after-terminal-resize)))
+            ((getf (nshell.domain.input:key-event-data event) :git-status-update)
+             (lambda ()
+               (let ((*preserve-transient-panel-on-next-prompt-p* t))
+                 (render-prompt-cont))))
+            (t (lambda () (read-key-cont)))))
          ((and event *rerun-confirmation-pending-p*)
           (lambda () (%process-input-event event)))
          ((and event *command-not-found-fallback-text*)

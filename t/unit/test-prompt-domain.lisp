@@ -256,7 +256,12 @@ after a non-zero exit code; git no longer appears here."
              (sb-thread:join-thread lookup-thread)
              (when worker-thread
                (sb-thread:join-thread worker-thread))
-             (setf worker-thread nil)
+             (progn
+              (expect (nshell.infrastructure.acl:consume-git-status-update-p)
+                      :to-be-truthy)
+              (expect (not (nshell.infrastructure.acl:consume-git-status-update-p))
+                      :to-be-truthy)
+              (setf worker-thread nil))
              (setf lookup-thread nil)
              (multiple-value-bind (branch dirty-p ready-p)
                  (nshell.infrastructure.acl:get-git-status "/async-prompt/")

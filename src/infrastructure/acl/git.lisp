@@ -14,6 +14,7 @@ subprocess object with separate spawn/output/exit-code hooks.")
 
 (defvar *git-status-cache* (make-hash-table :test #'equal)
   "Directory keyed cache of git prompt status.")
+(defvar *git-status-updated-p* nil "Whether a Git status worker published a prompt update.")
 (defvar *git-status-cache-lock* (sb-thread:make-mutex :name "git prompt status cache"))
 (defvar *git-status-worker-launcher* nil
   "Optional test hook for scheduling a Git status worker.")
@@ -28,7 +29,13 @@ synchronously for deterministic tests."
 (defun clear-git-status-cache ()
   "Clear all cached git prompt status."
   (sb-thread:with-mutex (*git-status-cache-lock*)
-    (clrhash *git-status-cache*)))
+    (clrhash *git-status-cache*)
+    (setf *git-status-updated-p* nil)))
+(defun consume-git-status-update-p ()
+  "Return and clear whether a Git status worker published a prompt update."
+  (sb-thread:with-mutex (*git-status-cache-lock*)
+    (prog1 *git-status-updated-p*
+      (setf *git-status-updated-p* nil))))
 
 (defun %trim-newline (text)
   (string-right-trim '(#\Newline #\Return #\Space #\Tab) text))
@@ -134,7 +141,9 @@ one is bound."
                (sb-thread:with-mutex (*git-status-cache-lock*)
                  (when (eq (gethash key *git-status-cache*) pending)
                    (setf (gethash key *git-status-cache*)
-                         (list branch dirty-p)))))
+                         (list branch dirty-p)
+                         *git-status-updated-p*
+                         t))))
              (read-current ()
                (sb-thread:with-mutex (*git-status-cache-lock*)
                  (multiple-value-bind (entry present-p)

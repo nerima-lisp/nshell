@@ -16,6 +16,7 @@
   },
   "preconditions": {"files": []},
   "steps": [
+    {"type": "wait", "contains": "q05-branch", "timeout_seconds": 60},
     {"type": "keys", "text": "printf 'Q05_%s\\n' OK"},
     {"type": "key", "key": "Enter"},
     {"type": "wait", "contains": "Q05_OK", "timeout_seconds": 60},

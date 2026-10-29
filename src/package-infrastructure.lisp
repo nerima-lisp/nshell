@@ -126,7 +126,7 @@ line editor has a single place to import them from.")
             #:detect-east-asian-ambiguous-wide-p
             #:key-event #:key-event-p #:make-key-event
             #:key-event-type #:key-event-char #:key-event-number
-            #:key-event-data))
+            #:key-event-data #:controlling-terminal-p))
 
 (defpackage #:nshell.infrastructure.persistence
   (:documentation

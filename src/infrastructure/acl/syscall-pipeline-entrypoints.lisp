@@ -6,14 +6,15 @@
                                   preserve-fds
                                   (pipefail-p nil)
                                   after-spawn
-                                  stage-environments)
+                                  stage-environments
+                                  skip-start-barrier-p)
   "Execute COMMANDS connected by OS-level pipes and return status values.
 
 The first value is the pipeline exit code.  The second value is a list of
 per-stage exit codes in source order."
   (multiple-value-bind (redirects pipes)
       (%prepare-pipeline commands redirects)
-    (let ((redirect-streams nil) (owned-procs nil) (complete nil))
+    (let ((skip-start-barrier-p (and skip-start-barrier-p (= 1 (length commands)) (null after-spawn))) (redirect-streams nil) (owned-procs nil) (complete nil))
       (unwind-protect
            (multiple-value-bind (procs pgid updated-streams spawn-error-code)
                (%pipeline-spawn-loop
@@ -23,14 +24,16 @@ per-stage exit codes in source order."
                 :preserve-fds preserve-fds
                 :after-spawn after-spawn
                 :stage-environments stage-environments
-                :error-sentinel 127)
+                :error-sentinel 127
+                :skip-start-barrier-p skip-start-barrier-p)
              (setf redirect-streams updated-streams owned-procs procs)
              (multiple-value-prog1
                  (if spawn-error-code
                      (progn
                        (%abort-pipeline procs pipes)
                        (values spawn-error-code (list spawn-error-code)))
-                     (%run-synchronous-pipeline procs pgid pipes pipefail-p))
+                     (%run-synchronous-pipeline
+                      procs pgid pipes pipefail-p skip-start-barrier-p))
                (setf complete t)))
         (unless complete (%abort-pipeline owned-procs pipes))
         (%close-pipeline-redirect-streams redirect-streams)

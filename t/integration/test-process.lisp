@@ -924,6 +924,21 @@ when *STANDARD-OUTPUT* is not an interactive terminal."
               (list failed succeeded))))
       (expect 7 :to-equal pipefail-status)
       (expect 0 :to-equal last-stage-status)))
+  (it "spawn-pipeline-skips-start-barrier-for-single-command"
+    "A noninteractive single-stage pipeline runs the resolved command directly."
+    (let* ((command
+             (%process-test-sbcl-command-node
+              "(write-string \"direct-start\")"))
+           (output nil)
+           (status nil))
+      (setf output
+            (capture-standard-output
+              (setf status
+                    (nshell.infrastructure.acl:spawn-pipeline
+                     (list command)
+                     :skip-start-barrier-p t))))
+      (expect 0 :to-equal status)
+      (expect "direct-start" :to-equal output)))
 
   (it "spawn-pipeline-cleans-up-started-processes-after-spawn-failure"
     "A later stage spawn failure should not block on output from already-started stages."

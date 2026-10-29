@@ -28,7 +28,8 @@
     (values redirects (%make-pipeline-pipes count))))
 
 (defun %run-pipeline-command (cmd args input output error-output environment resolved-cmd
-                              &key preserve-fds pgid input-source-owned-p)
+                              &key preserve-fds pgid input-source-owned-p
+                                skip-start-barrier-p)
   (if resolved-cmd
       (let ((proc nil)
             (input-source-transferred-p nil)
@@ -36,26 +37,30 @@
         (unwind-protect
              (multiple-value-bind (process transferred-p)
                  (%spawn-external-command
-                  "/bin/sh"
-                  (append
-                   (list "-c"
-                         "kill -STOP $$; exec \"$@\""
-                         "nshell-pipeline"
-                         resolved-cmd)
-                   args)
-                  environment
-                  :input input
-                  :output output
-                  :error error-output
-                  :process-group (or pgid :new)
-                  :preserve-fds preserve-fds
-                  :input-source-owned-p input-source-owned-p)
+                 (if skip-start-barrier-p resolved-cmd "/bin/sh")
+                 (if skip-start-barrier-p
+                     args
+                     (append
+                      (list "-c"
+                            "kill -STOP $$; exec \"$@\""
+                            "nshell-pipeline"
+                            resolved-cmd)
+                      args))
+                 environment
+                 :input input
+                 :output output
+                 :error error-output
+                 :process-group (or pgid :new)
+                 :preserve-fds preserve-fds
+                 :input-source-owned-p input-source-owned-p)
                (setf proc process
                      input-source-transferred-p transferred-p)
-               (process-wait proc t)
-               (unless (and (eq :stopped (process-status proc))
-                            (= (or pgid (process-pid proc))
-                               (sb-posix:getpgid (process-pid proc))))
+               (unless skip-start-barrier-p
+                 (process-wait proc t))
+               (unless (or skip-start-barrier-p
+                          (and (eq :stopped (process-status proc))
+                               (= (or pgid (process-pid proc))
+                                  (sb-posix:getpgid (process-pid proc)))))
                  (error "Pipeline stage did not reach its process-group barrier"))
                (setf complete t)
                (return-from %run-pipeline-command
@@ -71,9 +76,10 @@
                 (%external-command-not-found-message cmd))
         nil)))
 
-(defun %run-synchronous-pipeline (procs pgid pipes pipefail-p)
+(defun %run-synchronous-pipeline (procs pgid pipes pipefail-p skip-start-barrier-p)
   (flet ((finish-pipeline ()
-           (when pgid (process-continue-group pgid procs))
+           (when (and pgid (not skip-start-barrier-p))
+             (process-continue-group pgid procs))
            (let ((timeout (%foreground-external-command-timeout)))
              (%wait-pipeline-with-output
               procs
@@ -85,14 +91,14 @@
                 124)
               pipefail-p))))
     (%close-pipeline-fds pipes)
-    (if pgid
+    (if (and pgid (not skip-start-barrier-p))
         (%with-foreground-process-group pgid (finish-pipeline))
         (finish-pipeline))))
 
 (defun %spawn-pipeline-stage (cmd-node stage-redirects prev-pipe next-pipe redirect-streams
-                              &key (default-input t)
-                                (default-output :stream)
-                                preserve-fds pgid stage-environment)
+                              &key (default-input t) (default-output :stream)
+                                preserve-fds pgid stage-environment
+                                skip-start-barrier-p)
   (let* ((wrapper-p
           (nshell.domain.parsing:redirects-require-shell-wrapper-p
            stage-redirects))
@@ -130,12 +136,12 @@
                      (progn
                        (%close-unused-next-pipe-writer next-pipe output-pipe-stream)
                        (%run-pipeline-command
-                        cmd effective-args input output error-output environment
-                        effective-cmd
+                        cmd effective-args input output error-output environment effective-cmd
                         :preserve-fds preserve-fds
                         :pgid pgid
                         :input-source-owned-p
-                        (not (null (member input redirect-streams :test #'eq)))))
+                        (not (null (member input redirect-streams :test #'eq)))
+                        :skip-start-barrier-p skip-start-barrier-p))
                    (when input-transferred-p
                      (setf redirect-streams
                            (remove input redirect-streams :test #'eq)))

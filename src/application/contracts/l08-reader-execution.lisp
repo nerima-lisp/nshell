@@ -819,7 +819,8 @@
                           (nshell.infrastructure.acl:spawn-pipeline
                            commands
                            :redirects redirects
-                           :pipefail-p (shell-context-pipefail-p context))))))
+                           :pipefail-p (shell-context-pipefail-p context)
+                           :skip-start-barrier-p (and (= 1 (length commands)) (not (nshell.infrastructure.terminal:controlling-terminal-p))))))))
               (let* ((statuses (or stage-statuses (list status)))
                      (signals (make-list (length statuses) :initial-element nil)))
                 (values

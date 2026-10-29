@@ -11,7 +11,6 @@ import platform
 import pty
 import re
 import select
-import shlex
 import signal
 import struct
 import subprocess
@@ -97,15 +96,6 @@ def temporary_parent() -> Path:
     if parent == ROOT or ROOT in parent.parents:
         raise MeasurementError(f"temporary directory is inside the repository: {parent}")
     return parent
-
-
-def command_with_controlling_tty(command: list[str]) -> list[str]:
-    shell_command = f"exec {shlex.join(command)} </dev/null"
-    if sys.platform == "darwin":
-        return ["/usr/bin/script", "-q", "/dev/null", "/bin/sh", "-c", shell_command]
-    if sys.platform.startswith("linux"):
-        return ["/usr/bin/script", "-q", "-e", "-c", shell_command, "/dev/null"]
-    raise MeasurementError(f"controlling-terminal coverage is unsupported on {sys.platform}")
 
 
 def run_process(
@@ -841,9 +831,7 @@ def nfr09_operation(
             "NSHELL_TEST_PTY": "1",
         }
     )
-    command = command_with_controlling_tty(
-        ["nix", "develop", "-c", "sbcl", "--script", str(runner)]
-    )
+    command = ["nix", "develop", "-c", "sbcl", "--script", str(runner)]
     try:
         result = run_process(
             command,

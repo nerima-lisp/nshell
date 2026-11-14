@@ -130,7 +130,7 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 
 ## 非対話時は決定的に
 
-- TTY でない、または NSHELL_AGENT=1 のとき: 色・プロンプト・ページャ・autosuggest を無効化。U6 の既定環境 (PAGER=cat など) を変えるのは、機械向けモードと NSHELL_AGENT=1 のときだけ
+- 機械向けモード (--json・--serve・MCP) と NSHELL_AGENT=1 のときだけ、色・プロンプト・ページャ・autosuggest を無効にし、U6 の既定環境 (PAGER=cat など) に変える。それ以外のバッチ (TTY でない入力) の挙動は変えない
 - 出力が上限を超えたら先頭と末尾を残して truncated: true。切り詰めの印は英語で固定
 - --json の全出力は `$XDG_CACHE_HOME/nshell/out/<session>/` に保存する。ディレクトリは mkdtemp で 0700 に作り、ファイルは 0600。直近 50 セッション分だけ残し、--private では保存しない
 - --timeout SEC は実行全体の期限。--json の既定は 120 秒で、超えたらプロセスグループごと止めて E_TIMEOUT を返す。既定値は initialize の応答で知らせる。通常のバッチは今のまま (外部コマンドごとに 3600 秒)。停止には既存の SIGTERM → SIGKILL エスカレーションを流用

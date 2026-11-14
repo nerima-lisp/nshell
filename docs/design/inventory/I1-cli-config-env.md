@@ -27,7 +27,7 @@ nshell の起動方法と、ユーザーが設定できるものすべて。
 | -c COMMAND — /bin/sh に委譲 (Lisp 起動前) | [残す] | エディタ等が $SHELL -c を前提にするため維持 (05 の決定事項)。 |
 | --command COMMAND ARGS — nshell で 1 回評価、ARGS は $argv | [残す] | --json / --timeout と組み合わせる機械向けの基本形にする。 |
 | スクリプト実行 — nshell FILE ARGS | [残す] | そのまま。 |
-| stdin からのバッチ — 非 TTY 入力を順に評価 | [残す] | 非対話時の決定的出力ルールを適用。 |
+| stdin からのバッチ — 非 TTY 入力を順に評価 | [残す] | そのまま。非対話時の決定的出力ルールは機械向けモードと NSHELL_AGENT=1 のときだけ適用する (proposal/02)。 |
 | -e / --errexit — 失敗で終了 | [残す] | そのまま。 |
 | -l / --login と -ilc — /etc/profile・nix-darwin・Home Manager を読む | [残す] | VS Code などの環境解決に必要。 |
 | -h / -V — help / version | [残す] | help は spec から生成。 |

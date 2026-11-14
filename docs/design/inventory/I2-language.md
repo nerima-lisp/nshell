@@ -58,5 +58,5 @@
 | here-string — <<< | [残す] | 1 行で済むので維持。 |
 | here-doc — << <<- | [削除候補] | S式の文字列で代替。v0.8 で削除し、実行前に E_UNSUPPORTED_SYNTAX で拒否する。 |
 | 制御構文 — if else for in while case switch begin end | [削除候補] | S式の制御形式に一本化。v0.8 で削除し、実行前に E_UNSUPPORTED_SYNTAX で入力全体を拒否して、同じ意味の S式を示す (L5)。! と not cmd; and cmd2 の形も同じ。 |
-| fish 形式の function … end | [削除候補] | defun に一本化。v0.8 で削除し、E_UNSUPPORTED_SYNTAX で拒否する。 |
+| fish 形式の function … end | [削除候補] | defcmd に一本化 (L5.3)。v0.8 で削除し、E_UNSUPPORTED_SYNTAX で拒否する。 |
 | 前置代入 — FOO=1 cmd | [残す] | そのまま。 |

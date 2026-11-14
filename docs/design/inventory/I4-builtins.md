@@ -39,7 +39,7 @@
 
 | 機能 — 現状 | 判定 | 方針 |
 |---|---|---|
-| function — fish 形式の定義 | [削除候補] | defun に一本化。v0.8 で削除。 |
+| function — fish 形式の定義 | [削除候補] | defcmd に一本化 (L5.3)。v0.8 で削除。 |
 | functions — 定義の一覧・表示 | [残す] | defun・defcmd で定義したものの一覧に。値の位置ではレコード (L4.4)。 |
 | eval / source / . | [残す] | そのまま。 |
 | builtin / command / exec / exit | [残す] | そのまま。 |

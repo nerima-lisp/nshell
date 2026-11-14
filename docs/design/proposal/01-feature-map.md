@@ -40,7 +40,7 @@
 | bare-line の制御構文・here-doc — control-flow + here-doc 約900行 | [削除候補] | if / for / while / here-doc は S式側にあるので二重実装を解消。v0.8 で削除し、bare-line で書かれたら実行前に E_UNSUPPORTED_SYNTAX で拒否して、同じ意味の S式を示す (L5)。 |
 | 値パイプライン -> — where / select / to-json ほか | [残す] | AI 対応の土台。ビルトインがレコードを返すよう拡張する (AI 面を参照)。 |
 | 履歴展開 — !! !$ !-N !?text? !prefix | [簡素化] | !! と !$ のみ残す。残りは Ctrl-R 検索で代替できる。 |
-| alias / abbr — 2つの仕組み | [簡素化] | abbr に一本化し、alias は abbr の互換コマンドとして残す。 |
+| alias / abbr — 2つの仕組み | [簡素化] | 役割を分ける。alias は defcmd と同じくコマンドの定義で、スクリプトでも使える。abbr は対話入力での展開だけで、スクリプトでは展開しない (L2.1)。L2.2 の名前を alias・abbr で再定義すると、v0.8 は警告と nshell migrate で知らせ、v0.9.0 で E_PARSE にする (L2.2)。 |
 
 ### ラインエディタ
 

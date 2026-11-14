@@ -86,7 +86,7 @@
 |---|---|---|
 | bind — 一覧・設定・-e・--reset | [残す] | そのまま。 |
 | complete — -c -f -l -s -a -d -e、-C LINE | [残す] | -C に --json を追加。 |
-| abbr / alias | [簡素化] | abbr に一本化し、alias は互換。 |
+| abbr / alias | [簡素化] | 役割を分ける。alias はコマンドの定義、abbr は対話入力での展開だけで、スクリプトでは展開しない (L2.1)。 |
 | theme — list / use / set / show / reset | [簡素化] | list / use / show のみ。細かい上書きは init.lisp で。 |
 | prompt — show / left / right / preview / reset | [簡素化] | show / preview のみ。設定は init.lisp で。 |
 

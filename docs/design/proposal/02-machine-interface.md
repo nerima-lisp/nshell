@@ -40,7 +40,8 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 ```
 
 - 要求は届いた順に 1 つずつ処理する。
-- 失敗は `{"id":…,"error":{"code":"E_…"}}` の形で返す。
+- 要求そのものを処理できない失敗 (要求の形が不正、未知のメソッド、E_PROTOCOL など) は、トップレベルの `{"id":…,"error":{"code":"E_…"}}` の形で返す。
+- 実行したコマンドの失敗 (E_COMMAND_NOT_FOUND など) は、`result` の envelope (`ok:false`・`status`・`error.code`) で返す (U5、U7 の例)。
 - バックグラウンドジョブの出力はプロトコルの標準出力に出さず、read_output で返す。
 - 人が開いている対話セッションにつなぐときは `--attach [PATH|ID]` を使う (U7)。`--mcp` にも付けられる。
 

@@ -78,7 +78,9 @@ raw mode・幅計算
 
 ## ディレクトリ案
 
-4 層 (domain / application / infrastructure / presentation) を機能単位にまとめ直す。
+4 層 (domain / application / infrastructure / presentation) を機能単位にまとめ直す。どのパッケージも中に `src/<層>/` を持ち、層の向き (domain ← infrastructure ← application ← presentation) の静的チェックは、パスの層名で層を判定する。
+
+再編は P2 の後、P3 と P4 の前に行う。P1 と P4 で新しく書く機械向けのコードは、再編を待たずに最初から `packages/feature/machine/` に、知識ベースは `packages/feature/kb/` に置く。
 
 ```
 packages/
@@ -100,10 +102,13 @@ AGENTS.md
 
 ## 依存 toolkit
 
-削減後に不要になる見込み:
+外す依存は次の 6 つです。
 
-cl-dataflow-kit
+| toolkit | 外す時期と理由 |
+|---|---|
+| cl-process-kit・cl-vcs-kit・cl-tui-kit・cl-log-kit | nshell から参照されていないので、先に外す |
+| cl-dataflow-kit・cl-boundary-kit | コードの変更が要るので、P2 の削除 (pipeline-graph の削除と REPL 境界の簡素化) で外す |
 
-cl-boundary-kit
+cl-boundary-kit をイメージから消すため、cl-concurrent-kit と cl-resilience-kit からもこの依存を外します。どちらも時計の用途だけなので、cl-host-kit の時計に置き換えます。
 
-pipeline-graph の削除と REPL 境界の簡素化に伴うもの。cl-prolog-kit は知識ベースの中核として残します (06)。残りの 16 個は利用箇所を確認して個別に判断します。
+U9 の表やステータスラインは、cl-tty-kit の上に nshell で作ります。文字幅の表を 1 つに保つため、cl-tui-kit は使いません。Ollama との接続には cl-ollama-kit v3 (cl-http-kit 経由) を使い (09)、trust のハッシュには cl-crypto-kit の SHA-256 を使います (08)。cl-prolog-kit は知識ベースの中核として残します (06)。

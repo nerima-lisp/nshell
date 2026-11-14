@@ -39,4 +39,6 @@ nshell 0.8 · ? で AI · F1 ヘルプ · doctor
 - bash / zsh / fish の履歴と alias は nshell import で取り込み (alias は abbr に変換)。起動時には聞かない。
 - F1 はカーソル位置のコマンドやフラグの説明、help はカテゴリ別の索引、help keys はキー一覧。
 - doctor は設定の矛盾・端末のキー・AI の接続を点検し、直し方まで示す。
-- S式に慣れていない人向けに、bare-line の制御構文を打つと S式の書き方を 1 行で示す (L5)。
+- bare-line の制御構文 (if・for・while など) は v0.8 で削除した。打つと実行前に E_UNSUPPORTED_SYNTAX で拒否し、同じ意味の S式を示す (L5)。
+- doctor・init・import・trust・bug-report・explain・migrate は nshell のサブコマンドとして予約し、同名のスクリプトより優先する。同名のスクリプトは `nshell ./doctor` か `nshell -- doctor` で実行する。
+- doctor の AI の点検は、プロバイダのアダプタが出す provider-check を使う (09)。

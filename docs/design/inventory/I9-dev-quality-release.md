@@ -26,7 +26,7 @@
 | リリースバンドル — x86_64-linux、SHA-256、検証スクリプト | [残す] | そのまま。 |
 | Cachix | [残す] | そのまま。 |
 | man ページ・MkDocs | [残す] | builtin spec から生成する部分を増やす。 |
-| toolkit 依存 18 個 | [簡素化] | dataflow / boundary は不要になる見込み。cl-prolog-kit は中核として残す。残りは個別判断。 |
+| toolkit 依存 18 個 | [簡素化] | cl-process-kit・cl-vcs-kit・cl-tui-kit・cl-log-kit・cl-dataflow-kit・cl-boundary-kit の 6 つを外す (04)。cl-concurrent-kit と cl-resilience-kit からも cl-boundary-kit を外す。cl-prolog-kit は中核として残す。 |
 
 ### テスト
 
@@ -37,8 +37,8 @@
 | property-based テスト | [残す] | そのまま。 |
 | PTY 統合テスト — CI の Linux ジョブ | [残す] | そのまま。 |
 | mutation テスト — スコア 1.0 を要求 | [簡素化] | 対象を parser と expansion に絞る。 |
-| 静的チェックと allowlist | [残す] | 層の依存方向の検査を追加。 |
-| シナリオコーパス — 200 件超、run-scenarios.py | [簡素化] | 30〜40 本に精選し --json の golden test へ。 |
+| 静的チェックと allowlist — 層の向き (domain ← infrastructure ← application ← presentation) に反する参照を失敗にする検査を含む | [残す] | そのまま。packages/ の再編後も、パスの層名で層を判定して同じ検査を続ける。 |
+| シナリオコーパス — 200 件超、run-scenarios.py | [簡素化] | PTY 中心の 30〜40 本を残し、batch のものは --json の golden test へ移す。それ以外は 1 本ずつ削除の理由を記録する。 |
 | カバレッジ — 最低 85% | [残す] | そのまま。 |
 | test-fast・golden test — なし | [追加] | 03 を参照。 |
 
@@ -47,7 +47,7 @@
 | 機能 — 現状 | 判定 | 方針 |
 |---|---|---|
 | contracts 層 — L02–L08、C06、E04–E06、WP | [削除候補] | 通常の unit テストへ吸収。 |
-| NFR 計測 — measure-nfr-*.py、profile-nfr06、Q05 の VM 試行 | [削除候補] | 起動時間とキー入力遅延のベンチ 2 本に。 |
-| 競合ベンチ — benchmark-competitors.pl | [削除候補] | 上の 2 本に統合。 |
+| NFR 計測 — measure-nfr-*.py、profile-nfr06、Q05 の VM 試行 | [削除候補] | P0 で作る性能の計測 (08 の 6 項目) に置き換え、置き換えた旧スクリプトだけを消す。fuzz の入力は P5 のために残す。 |
+| 競合ベンチ — benchmark-competitors.pl | [削除候補] | P0 で作る性能の計測に統合。 |
 | 依存の登録と検査スクリプト — dependency registry / assertions | [簡素化] | flake.lock と静的チェックに寄せる。 |
 | AGENTS.md — なし | [追加] | 03 を参照。 |

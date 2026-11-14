@@ -48,16 +48,26 @@
 ```
 classify(C, block, 'ルートの再帰削除') :-
     command(C, rm), flag(C, recursive),
-    operand(C, P), root_path(P), !.
+    operand(C, P), root_path(P).
+classify(C, confirm, 'ディレクトリの再帰削除') :-
+    command(C, rm), flag(C, recursive),
+    operand(C, P), \+ root_path(P).
 classify(C, confirm, '強制 push') :-
-    command(C, git), subcommand(C, push),
-    flag(C, force), !.
+    command(C, git), subcommand(C, push), flag(C, force).
 classify(C, confirm, 'プロジェクト外への書き込み') :-
-    effect(C, writes(P)), \+ inside_project(P), !.
-classify(_, safe, '該当する規則なし').
+    effect(C, writes(P)), \+ inside_project(P).
+classify(C, confirm, '未知のコマンド') :-
+    \+ known_command(C).
+classify(C, safe, '読むだけの既知のコマンド') :-
+    read_only_command(C).
 ```
 
-使うエンジン機能: cut・否定・foreign predicate
+- 規則は findall ですべて評価し、最も高いレベルを採る。同じレベルの規則は、すべて reasons[] に入れる。
+- 判定の基本は、読むだけの既知のコマンド (git status・git log・git diff・ls・cat など) が safe、未知のコマンドが confirm、ルート以外への rm -r が confirm、ルートの再帰削除が block。
+- 規則名は classify/<kebab> (classify/delete-dir など) とし、組み込みの規則は 1 つのデータファイルにまとめる。
+- 判定は Enter のときと explain のときに行う。入力中の危険表示 (U1) は、同じ規則の結果を入力の区間をキーにしてキャッシュして使う。
+
+使うエンジン機能: findall・否定・foreign predicate
 
 ### B. コマンドの効果モデル
 
@@ -81,7 +91,7 @@ pipeline_effects(Pl, Es) :-
 
 追加
 
-失敗したコマンドの status・stderr・文脈から、規則で原因と修正案を出す。決定的で速く、理由も示せる。規則に当たらないときだけ LLM に渡す。AI に規則とテストを書かせやすい。
+失敗したコマンドの status・stderr・文脈から、規則で原因と修正案を出す。決定的で速く、理由も示せる。規則に当たらないときだけ LLM に渡す。AI に規則とテストを書かせやすい。diagnose/typo の 1 本だけは、02 の例 (E_COMMAND_NOT_FOUND の fixes) を golden test として通すため、P1 で先に入れる。
 
 ```
 diagnose(R, fix(New), 'コマンド名の打ち間違い') :-
@@ -117,7 +127,7 @@ next_stage(In, F) :- transforms(F, In, _).
 
 簡素化
 
-コマンドの引数の並びを DCG で書く。入力途中の行を解析すれば「次に来られるもの」が分かり、補完・誤ったフラグのハイライト・排他オプションの検査が 1 つの定義から出る。--help の解析結果もこの形に変換する。
+コマンドの引数の並びを DCG で書く。入力途中の行を解析すれば「次に来られるもの」が分かり、補完・誤ったフラグのハイライト・排他オプションの検査が 1 つの定義から出る。--help の解析結果もこの形に変換する。補完の rulebase は A・B (P1) のものを共用する。--help を実行するコマンドは、今の許可リストとキャッシュのまま変えない。
 
 ```
 git     --> [git], git_sub.
@@ -177,15 +187,17 @@ suggest('git push') :-
 
 ## 性能と安全の注意
 
-- キー入力ごとの問い合わせは、起動時に規則を読み込み済みにし、結果を入力単位でキャッシュする。
+- 文法と組み込みの規則はビルド時にコンパイルする。キー入力の経路ではファイル I/O とプロセス起動をしない。
+- 知識ベースへの問い合わせは入力の区間をキーにしてキャッシュし、推論数と時間の上限を付ける。
 - git やファイルなど外部の状態は foreign predicate で必要なときだけ取り、タイムアウトをかける。
 - call_with_depth_limit と既存の資源上限で暴走を止める。
-- ユーザー規則で安全判定を緩められないよう、block は組み込み規則だけが出せるようにする。
+- プレビューとあいまい検索は非同期で動かし、取り消せるようにする。
+- ユーザー規則は組み込み規則と別の rulebase で評価し、結果を confirm までに抑える。安全判定は緩められず、block は組み込み規則だけが出せる。rules.pl を読むのは P5 (ユーザー規則の制限と同時) で、P1 では仕組みとテスト用の注入だけを作る。
 
 ## 導入順
 
-- 1. A と B (P1 の explain と同時に): 危険度判定を規則に移す。効果が最も大きい。
-- 2. C (P4 の ai why と同時に)。
+- 1. A と B (P1 の explain と同時に): 危険度判定を規則に移す。効果が最も大きい。C の diagnose/typo もここで入れる。
+- 2. C の残り (P4 の ai why と同時に)。
 - 3. D と E (P3 の補完の作り直しで)。
 - 4. F と G: 言語と MCP への公開、doctor。
 

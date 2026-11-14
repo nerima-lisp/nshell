@@ -31,7 +31,7 @@ nshell の起動方法と、ユーザーが設定できるものすべて。
 | -e / --errexit — 失敗で終了 | [残す] | そのまま。 |
 | -l / --login と -ilc — /etc/profile・nix-darwin・Home Manager を読む | [残す] | VS Code などの環境解決に必要。 |
 | -h / -V — help / version | [残す] | help は spec から生成。 |
-| --mcp — stdio MCP サーバ (read_state のみ) | [残す] | ツールを 10 個に拡張 (02・U5)。 |
+| --mcp — stdio MCP サーバ (list_sessions と read_state のみ) | [残す] | ツールを 10 個に拡張 (02・U5)。プロトコルは 2025-06-18 に上げ、list_sessions と read_state は 1 リリースのあいだ非推奨として残す。 |
 | --json / --serve / --timeout — なし | [追加] | 機械向けの入口。02 を参照。 |
 
 ### 設定ファイル

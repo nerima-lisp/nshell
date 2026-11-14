@@ -8,7 +8,7 @@ STEP 1
 
 入力
 
-行頭 ? に続けて自然言語、または Ctrl-]
+行頭の `? ` (? と空白) に続けて自然言語、または Ctrl-]。`?foo` は glob のまま
 
 ›
 
@@ -48,7 +48,7 @@ make: *** No rule to make target 'tset'.  Stop.
 ✗ 2  · ai why で原因を調べる (Alt-W)
 ~/src/nshell main ❯ ai why
   ターゲット名の打ち間違い (規則 diagnose/typo · オフライン)
-╭ fix · ● safe
+╭ fix · ● confirm
 │ make test
 ╰ Enter 実行 · Alt-E 編集 · Tab 説明 · Esc 破棄
 ```
@@ -68,23 +68,23 @@ make: *** No rule to make target 'tset'.  Stop.
 
 AGENTS.md (CLAUDE.md から参照)
 
-目的、ディレクトリ地図、開発コマンド、層の依存方向、テストの書き方、やってはいけないこと (履歴や設定に触れる検証は隔離 HOME で、など) を 1 枚に。
+目的、ディレクトリ地図、開発コマンド、層の依存方向、テストの書き方、やってはいけないこと (履歴や設定に触れる検証は隔離 HOME で、など) を 1 枚に。エージェントが使うコマンドは `nix develop -c sbcl --script …` の形で書き、dev shell の alias (test・weave・cov) は対話シェルでしか動かないので人向けとして書く。隔離には HOME と XDG_CONFIG_HOME・XDG_DATA_HOME・XDG_STATE_HOME・XDG_CACHE_HOME の 5 つと NSHELL_AI_COMMAND=/nonexistent を使う。テストの件数のように時間で変わる数は書かない。AGENTS.md だけを読んだエージェントが、ほかの文書を読まずにビルドと全テストを実行できることを受け入れの条件にする。
 
 速いテスト導線
 
-現在の検証は Nix ビルド前提で最大 5 分。unit だけを 30 秒以内で回す test-fast コマンド (nix develop 内で SBCL を直接起動) を用意し、変更→確認のループを短くする。
+現在の検証は Nix ビルド前提で最大 5 分。unit だけを 30 秒以内で回す test-fast コマンド (nix develop 内で SBCL を直接起動) を用意し、変更→確認のループを短くする。test-fast は `nshell/test-unit` システムとして切り出し、`nshell/test` がそれに依存する形にする (main-test と静的チェックも含める)。30 秒はコンパイル結果がキャッシュ済みのときの時間で、キャッシュなしの時間も併記する。超えたら、測ったうえで重いテストに `:slow` タグを付けて外す。
 
 1 機能 = 1 ディレクトリ
 
-src/ の 4 層と packages/feature/ の混在を、packages/feature/<名前>/ の形に揃える。変更箇所を探す手間が減る。
+src/ の 4 層と packages/feature/ の混在を、packages/feature/<名前>/ の形に揃える。変更箇所を探す手間が減る。どのパッケージも中に `src/<層>/` を持つ。
 
 golden test
 
 --json の出力をスナップショットとして固定。シナリオ JSON コーパスの後継で、人も AI も差分を読みやすい。
 
-層の依存を実際に検査
+層の依存の検査を保つ
 
-現在のトポロジーテストはディレクトリの存在確認のみ。package の use / import を見て逆向き依存を失敗にする。
+層の向きは domain ← infrastructure ← application ← presentation。静的チェック (`t/unit/test-static-checks.lisp`) は、すでにこの向きに反する参照を失敗にしている。各層が参照してはいけない層を表で持ち、シンボルの属するパッケージかファイルのパスから層を決めて照合する。packages/ を組み直したあとも、パスの層名で同じ検査を続ける。
 
 エラーコードと仕様を 1 か所に
 

@@ -37,7 +37,7 @@
 | S式コマンド言語 — sexp-reader / scanner 3.6K行 | [残す] | 中核。reader と scanner の重複ロジックは統合し、エラー位置 (行・列) を構造化して返す。 |
 | 名前解決・置換・値の変換 — head の判定は PATH に依存 | [簡素化] | PATH に依らない固定の順序、引数の ( ) は置換、値の位置は capture などで明示 (言語仕様 L0〜L7)。 |
 | bare-line ショートハンド — tokenizer / parser | [残す] | 単純コマンド・パイプ・リダイレクト・&& \|\| ; & だけを扱う近道として残す (L5)。 |
-| bare-line の制御構文・here-doc — control-flow + here-doc 約900行 | [削除候補] | if / for / while / here-doc は S式側にあるので二重実装を解消。bare-line で書かれたら S式の書き方を提示する。 |
+| bare-line の制御構文・here-doc — control-flow + here-doc 約900行 | [削除候補] | if / for / while / here-doc は S式側にあるので二重実装を解消。v0.8 で削除し、bare-line で書かれたら実行前に E_UNSUPPORTED_SYNTAX で拒否して、同じ意味の S式を示す (L5)。 |
 | 値パイプライン -> — where / select / to-json ほか | [残す] | AI 対応の土台。ビルトインがレコードを返すよう拡張する (AI 面を参照)。 |
 | 履歴展開 — !! !$ !-N !?text? !prefix | [簡素化] | !! と !$ のみ残す。残りは Ctrl-R 検索で代替できる。 |
 | alias / abbr — 2つの仕組み | [簡素化] | abbr に一本化し、alias は abbr の互換コマンドとして残す。 |
@@ -76,6 +76,6 @@
 |   |   |   |
 |---|---|---|
 | contracts 層 (L02–L08 ほか) — 約2,000行 | [削除候補] | 製品コード内の契約チェックは通常のユニットテストへ吸収。 |
-| NFR 計測・ベンチスクリプト — scripts 1.4万行の大半 | [削除候補] | 起動時間とキー入力遅延のベンチ 2 本に絞る。 |
+| NFR 計測・ベンチスクリプト — scripts 1.4万行の大半 | [削除候補] | P0 で作る性能の計測 (08 の 6 項目) に置き換え、置き換えた旧スクリプトだけを消す。fuzz の入力は P5 のために残す。 |
 | シナリオ JSON コーパス — 200件超・約2万行 | [簡素化] | 主要 30〜40 本に精選し、--json モードの golden test に移行。 |
-| toolkit 依存 18個 | [簡素化] | 上記の削減で dataflow / boundary の 2 つは不要になる見込み。cl-prolog-kit は中核として残す。 |
+| toolkit 依存 18個 | [簡素化] | 参照されていない process / vcs / tui / log の 4 つと、上記の削減で不要になる dataflow / boundary の 2 つを外す (04)。cl-prolog-kit は中核として残す。 |

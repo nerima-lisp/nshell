@@ -28,8 +28,9 @@ vi モードは残し、fish の vi キー操作と同じ体験にします。fi
 
 ## 同等であることの確かめ方
 
-- fish の挙動を「キー列 → 入力欄とカーソルの結果」の表として書き出し、そのまま reducer の単体テストにする。input-state は純粋な値なので端末なしで回る。
-- fish のバージョンを固定して差分を確認 (今回の調査は 2026-11-11 の fish main の fish_vi_key_bindings.fish)。
+- 基準は fish 4.9.3 のタグに固定する。
+- fish の挙動を「キー列 → 入力欄とカーソルの結果」の表として書き出し、`t/unit/data/` にデータとして置く。表のヘッダには fish のバージョンと SHA を書く。この表をそのまま reducer の単体テストにする。input-state は純粋な値なので端末なしで回る。
+- tmux で実物の fish を動かして表と照合する CI ジョブを足し、表が fish からずれていないことを確かめる。
 - 日本語などの全角文字・結合文字の上での移動と削除もテストに含める (既存の grapheme 処理を流用)。
 - 既存の vi テスト (約 660 行) は残し、上の表に統合する。
 
@@ -40,7 +41,7 @@ vi モードは残し、fish の vi キー操作と同じ体験にします。fi
 | normal (default) / insert / visual | [あり] | 3 モードと d・c の operator 待ち |
 | replace (R) | [追加] | 上書き入力。Backspace で戻る |
 | replace_one (r) | [あり] | 1 文字置き換え |
-| 初期モード | [追加] | fish と同じく insert で開始。init.lisp で default / visual も選べる |
+| 初期モード | [追加] | fish と同じく insert で開始。init.lisp の vi-initial-mode で default / visual も選べる |
 | Esc | [あり] | normal へ移り 1 文字左へ、補完メニューも閉じる |
 | Ctrl-C (normal) | [変更] | 入力は消える。fish と同じく、そのあと insert へ戻す |
 | set -o vi / NSHELL_VI_MODE | [あり] | 切り替え手段は維持 |
@@ -94,18 +95,20 @@ vi モードは残し、fish の vi キー操作と同じ体験にします。fi
 
 |   |   |   |
 |---|---|---|
-| "*y "+y "*p "+p "*yy | [追加] | システムのクリップボード (OSC 52 / pbcopy / wl-copy)。U8 の clip と共通 |
+| "*y "+y "*p "+p "*yy | [追加] | システムのクリップボード (OSC 52 / pbcopy / wl-copy)。U8 の clip と共通。貼り付け ("*p "+p) はホストの paste コマンドだけを使い、OSC 52 の読み取りはしない |
 
 ### insert モードで共有するキー
 
 |   |   |   |
 |---|---|---|
 | Tab Shift-Tab → Ctrl-F (候補受け入れ) | [あり] |  |
-| Ctrl-N | [追加] | 候補の受け入れ (fish の vi insert と同じ) |
+| Ctrl-N | [追加] | 候補の受け入れ (fish の vi insert と同じ)。bind -M insert で割り当てる |
 | Ctrl-Y Alt-Y Ctrl-U Ctrl-K Ctrl-W Ctrl-L Ctrl-D | [あり] |  |
 | Alt-. Alt-S Alt-E Ctrl-R | [あり] |  |
 | F1 / Alt-H Alt-# | [追加] | コマンドの説明 (U4)・コメント化 |
 | Space ; \| & > で abbr 展開 | [あり] |  |
+
+Alt-↑ と Alt-↓ も fish と同じにする。入力中はカーソル位置の語で履歴を検索し、入力欄が空のときだけブロック間を移動する (U9)。
 
 ### 表示と設定
 
@@ -115,13 +118,13 @@ vi モードは残し、fish の vi キー操作と同じ体験にします。fi
 | モード表示 | [追加] | プロンプトに {vi-mode} セグメント ([N] [I] [V] [R])。fish_mode_prompt 相当 |
 | モード別の bind | [追加] | bind -M insert KEY ACTION のようにモードを指定 |
 | hybrid | [追加] | 全モードで emacs 系のキーも使える設定 (fish_hybrid_key_bindings 相当) |
-| Esc の待ち時間 | [追加] | Alt キーと区別する待ち時間を ms で設定 (fish_escape_delay_ms 相当) |
+| Esc の待ち時間 | [追加] | Alt キーと区別する待ち時間を ms で設定 (fish_escape_delay_ms 相当)。既定は 30ms で、その間に来た ESC と文字は、vi モード中でも Alt として読む |
 
 ### fish に合わせる細部
 
 |   |   |   |
 |---|---|---|
-| 単語の区切り | [変更] | fish と同じく _ を区切りとして扱う (w は foo_bar の _ で止まる) |
+| 単語の区切り | [変更] | fish と同じ区切りにする。_ も区切りとして扱う (w は foo_bar の _ で止まる) |
 | cw | [変更] | fish と同じく dw のあと insert (次の単語の先頭まで消す)。vim の cw は ce |
 | normal での行末 | [あり] | カーソルは最後の文字の上まで (inclusive) |
 

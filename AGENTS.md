@@ -33,14 +33,17 @@ wrong, stop and ask instead of guessing.
 | `src/application/` | evaluator, builtins, pipeline execution, agent mode |
 | `src/infrastructure/` | terminal, persistence, process ACLs, assistant sidecar |
 | `src/presentation/` | REPL, line editor (`input-state-*`, pure reducer), rendering |
-| `packages/` | `core/kernel` and `feature/*` (assistant, command-line, …) |
+| `packages/` | `core/kernel` and `feature/*` (assistant, command-line, …); new machine-interface code goes in `feature/machine/`, the knowledge base in `feature/kb/` |
 | `data/` | declarative tables (builtin spec, key bindings, themes, completion catalogs) |
 | `t/` | `unit/`, `integration/`, `e2e/`, `perf/`, `scenarios/` (JSON), `weave/` |
 | `scripts/` | test runners, coverage, NFR/bench scripts (many slated for removal, see P2) |
 | `docs/src/` | MkDocs user docs · `docs/design/` v0.8 design (not published) |
 
-Layer rule: `domain` ← `application` ← `infrastructure` / `presentation`.
-Never import upward. The static checks in the test suite enforce this.
+Layer rule: `domain` ← `infrastructure` ← `application` ← `presentation`.
+A layer may use the layers to its left, never the ones to its right. The static
+checks in the test suite (`t/unit/test-static-checks.lisp`) enforce this. Every
+package under `packages/` keeps the same `src/<layer>/` directories, and the
+check takes the layer from the path.
 
 ## Build and test
 
@@ -53,20 +56,29 @@ perl -e 'alarm 300; exec @ARGV' nix build .#checks.$(nix eval --raw --impure --e
 nix fmt
 ```
 
-Inside `nix develop`: `test` (full suite, `run-tests.lisp`), `weave`, `cov`.
+Agents run the suites through `nix develop -c`, from the repository root:
+
+```sh
+nix develop -c sbcl --script run-tests.lisp        # full suite (nshell/test)
+nix develop -c sbcl --script scripts/weave.lisp    # completion knowledge-base suite (nshell/weave)
+nix develop -c sbcl --script scripts/coverage.lisp # suite with coverage; set NSHELL_COVERAGE_DIR to choose the output directory
+```
+
+The `test`, `weave` and `cov` aliases that `nix develop` prints are for humans:
+they are defined in the shell hook and exist only in an interactive shell.
 
 Without Nix (e.g. a cloud sandbox where the Nix cache is unreachable):
 
 ```sh
 # 1. SBCL >= 2.6.0 and < 2.6.10 (2.6.10 removed sb-unix:unix-ioctl, which cl-tty-kit uses).
-#    Building 2.6.9 from source with any older SBCL as host takes ~3 minutes:
+#    Build 2.6.9 from source with any older SBCL as host:
 git clone --depth 1 --branch sbcl-2.6.9 https://github.com/sbcl/sbcl && cd sbcl \
   && echo '"2.6.9"' > version.lisp-expr && sh make.sh --prefix=$HOME/sbcl && sh install.sh
 # 2. Clone the nerima-lisp toolkits at the tags pinned in flake.nix into one directory, e.g. ../deps/
 # 3. Run the suite
 export SBCL_HOME=$HOME/sbcl/lib/sbcl PATH=$HOME/sbcl/bin:$PATH
 export CL_SOURCE_REGISTRY="$PWD/../deps//:$PWD/"
-sbcl --script run-tests.lisp        # ~2m40s, ~2,780 tests
+sbcl --script run-tests.lisp
 ```
 
 Known environment-only failures when running as root inside a container
@@ -75,8 +87,18 @@ Known environment-only failures when running as root inside a container
 `process-tests` that check descendant reaping (no init process to reap zombies).
 
 To run a built binary on a script: `nshell FILE.nsh` or `nshell --command '(…)'`.
-Always isolate state when testing: set `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`
-to a temporary directory so you never touch the real history or config.
+
+Always isolate state when testing, so you never touch the real history, config
+or AI provider:
+
+- Point `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and
+  `XDG_CACHE_HOME` at a temporary directory.
+- Set `NSHELL_AI_COMMAND=/nonexistent` so no AI provider is started.
+
+Set `NSHELL_TEST_PTY=1` when the PTY integration tests must run. Without it
+they are skipped inside a Nix build sandbox and wherever a PTY cannot be
+opened; with it and `CI` set, an unavailable PTY fails the test instead of
+skipping it.
 
 ## Working rules
 
@@ -86,7 +108,9 @@ to a temporary directory so you never touch the real history or config.
 - The line editor is a pure reducer over `input-state` values: test it with
   key-sequence → state assertions, no terminal needed.
 - Keep behaviour changes behind the migration rules in
-  `docs/design/language/L7-diff-and-migration.md` (v0.8 warns, next version enforces).
+  `docs/design/language/L7-diff-and-migration.md`. L7 decides per row whether
+  v0.8 switches to the new behaviour or keeps the old one with a warning and a
+  suggested rewrite until v0.9.0.
 - Never run commands that write outside the repository or a temp directory.
   Never commit secrets, history files or `result/`.
 - Commit messages: Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).

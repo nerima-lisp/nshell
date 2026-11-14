@@ -48,7 +48,7 @@ make: *** No rule to make target 'tset'.  Stop.
 
 ~/src/nshell main ❯ ai why
   打ち間違い (規則 diagnose/typo · オフライン)
-  ╭ fix · ● safe
+  ╭ fix · ● confirm
   │ make test
   ╰ Enter 実行 · Alt-E 編集 · Esc 閉じる
 ```
@@ -57,6 +57,6 @@ make: *** No rule to make target 'tset'.  Stop.
 
 - 1 行目: ✗ と何が起きたか。右端にエラーコード (AI 側と同じコード)。
 - 2 行目以降: 位置 (^^^)、正しい例、もしかしての候補。
-- 修正候補が 1 つなら Alt-Enter で入力欄に適用。実行はしない。
+- 修正候補が 1 つなら Alt-Enter で入力欄に適用。修正候補がなければ Alt-Enter は改行を入れる。どちらの場合も実行はしない。
 - 外部コマンドの失敗は出力をそのまま見せ、nshell は最後に ✗ status と次の一手だけを添える。
-- メッセージは英語を既定、LANG が ja なら日本語 (コードは常に英字で同じ)。
+- メッセージは英語を既定、LANG が ja なら日本語 (コードは常に英字で同じ)。日本語の文はメッセージ ID をキーにしたデータ表で持ち、エラーコード一覧の英語と日本語の説明を流用する。

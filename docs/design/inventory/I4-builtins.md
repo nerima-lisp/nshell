@@ -30,8 +30,8 @@
 
 | 機能 — 現状 | 判定 | 方針 |
 |---|---|---|
-| and / or / not — fish 形式 | [削除候補] | bare-line の && \|\| と S式の and / or / not で足りる。 |
-| break / continue — bare-line ループ用 | [削除候補] | bare-line の制御構文と一緒に削除。 |
+| and / or / not — fish 形式 | [削除候補] | bare-line の && \|\| と S式の and / or / not で足りる。v0.8 で削除し、E_UNSUPPORTED_SYNTAX で拒否する。 |
+| break / continue — bare-line ループ用 | [削除候補] | bare-line の制御構文と一緒に v0.8 で削除。 |
 | true / false | [残す] | そのまま。 |
 | test / [ — -e -f -d -n -z = != -eq ほか | [残す] | そのまま。使い方の誤りは status 2。 |
 
@@ -39,7 +39,7 @@
 
 | 機能 — 現状 | 判定 | 方針 |
 |---|---|---|
-| function — fish 形式の定義 | [削除候補] | defun に一本化。 |
+| function — fish 形式の定義 | [削除候補] | defun に一本化。v0.8 で削除。 |
 | functions — 定義の一覧・表示 | [残す] | defun・defcmd で定義したものの一覧に。値の位置ではレコード (L4.4)。 |
 | eval / source / . | [残す] | そのまま。 |
 | builtin / command / exec / exit | [残す] | そのまま。 |
